@@ -3,15 +3,9 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { errorResponses } from "../../schemas/responses";
-import { ServiceUnavailableError } from "../../utils/api-error";
+import { getWidgetAiPrompt } from "@scalius/core/modules/ai";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-const PROMPT_URLS = {
-    widget: "https://text.wrygo.com/home-page-prompt.txt",
-    "landing-page": "https://text.wrygo.com/pages-prompt.txt",
-    collection: "https://text.wrygo.com/collection-prompt.txt"
-};
 
 const getPromptRoute = createRoute({
     method: "get",
@@ -31,36 +25,13 @@ const getPromptRoute = createRoute({
 
 app.openapi(getPromptRoute, async (c) => {
     const { type } = c.req.valid("query");
-    const promptType = type as keyof typeof PROMPT_URLS;
-    const promptUrl = PROMPT_URLS[promptType] || PROMPT_URLS.widget;
+    const db = c.get("db");
+    const systemPrompt = await getWidgetAiPrompt(db, type);
 
-    try {
-        const response = await fetch(promptUrl, {
-            method: "GET",
-            headers: {
-                Accept: "text/plain",
-                "User-Agent": "Scalius-Commerce-Widget-System/1.0"
-            }
-        });
-
-        if (!response.ok) {
-            throw new ServiceUnavailableError(`Failed to fetch system prompt from ${promptUrl}: ${response.status} ${response.statusText}`);
-        }
-
-        const systemPrompt = await response.text();
-
-        if (!systemPrompt || systemPrompt.trim().length === 0) {
-            throw new ServiceUnavailableError("System prompt is empty");
-        }
-
-        return c.text(systemPrompt, 200, {
-            "Content-Type": "text/plain",
-            "Cache-Control": "public, max-age=300"
-        });
-    } catch (error: unknown) {
-        console.error("Error fetching system prompt:", error);
-        throw error;
-    }
+    return c.text(systemPrompt, 200, {
+        "Content-Type": "text/plain",
+        "Cache-Control": "private, max-age=60"
+    });
 });
 
 export { app as adminAiPromptsRoutes };

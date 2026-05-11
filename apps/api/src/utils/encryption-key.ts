@@ -1,8 +1,14 @@
-/**
- * Get encryption key from Cloudflare env bindings.
- * Prefers CREDENTIAL_ENCRYPTION_KEY, falls back to JWT_SECRET.
- */
+import { ServiceUnavailableError } from "./api-error";
+
 export function getEncryptionKey(env: Record<string, unknown>): string | undefined {
     return (env.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
         ?? (env.JWT_SECRET as string | undefined);
+}
+
+export function requireEncryptionKey(env: Record<string, unknown>): string {
+    const key = env.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
+    if (!key) {
+        throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+    }
+    return key;
 }

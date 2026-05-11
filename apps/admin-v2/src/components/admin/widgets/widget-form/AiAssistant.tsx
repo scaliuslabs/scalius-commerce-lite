@@ -32,7 +32,8 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
     isLoadingPrompt,
     handleAiRequest,
     handleCopyPrompt,
-    openRouterModels,
+    activeProvider,
+    aiModels,
     selectedModel,
     setSelectedModel,
     isApiKeySet,
@@ -57,7 +58,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
             >
                 <span className="truncate">
                 {selectedModel
-                    ? openRouterModels.find((model) => model.id === selectedModel)?.name
+                    ? aiModels.find((model) => model.id === selectedModel)?.name || selectedModel
                     : "Select a model..."}
                 </span>
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -73,7 +74,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                 <CommandList>
                     <CommandEmpty>No model found.</CommandEmpty>
                     <CommandGroup>
-                        {openRouterModels
+                        {aiModels
                             .filter(model => model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()))
                             .map((model) => (
                                 <CommandItem
@@ -83,7 +84,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                                         const newModelId = currentValue === selectedModel ? "" : model.id;
                                         setSelectedModel(newModelId);
                                         // Save globally for next widget creation + save to widget's aiContext on form submission
-                                        localStorage.setItem('global_preferred_ai_model', newModelId);
+                                        localStorage.setItem(`global_preferred_ai_model_${activeProvider}`, newModelId);
                                         setIsModelSelectorOpen(false);
                                         setModelSearchQuery("");
                                     }}
@@ -177,7 +178,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
           <div className="space-y-2">
             <Label htmlFor="model">Select AI Model</Label>
             {ModelSelector}
-            {!isApiKeySet && <p className="text-xs text-muted-foreground">Please configure your OpenRouter API key in the widget list page settings.</p>}
+            {!isApiKeySet && <p className="text-xs text-muted-foreground">Configure the active provider in General Settings &gt; Widget AI.</p>}
           </div>
 
           <div className="flex items-center justify-between space-x-2 rounded-md border p-3">
@@ -244,7 +245,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
             <AiContextManager
               context={aiContext}
               selectedModel={selectedModel}
-              supportsVision={openRouterModels.find(m => m.id === selectedModel)?.supportsVision || false}
+              supportsVision={aiModels.find(m => m.id === selectedModel)?.supportsVision || false}
             />
           </div>
 

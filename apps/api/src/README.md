@@ -94,8 +94,8 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/admin/products` | `routes/admin/products.ts` | Product CRUD |
 | `/admin/auth` | `routes/admin/auth-management.ts` | User/session management |
 | `/admin/ai-context` | `routes/admin/ai-context.ts` | AI widget context |
-| `/admin/ai-prompts` | `routes/admin/ai-prompts.ts` | AI prompt management |
-| `/admin/openrouter` | `routes/admin/openrouter.ts` | OpenRouter LLM proxy |
+| `/admin/ai-prompts` | `routes/admin/ai-prompts.ts` | Dashboard-configured AI prompts |
+| `/admin/ai` | `routes/admin/ai.ts` | Widget AI generation via AI SDK providers |
 | `/admin/attributes` | `routes/admin/attributes.ts` | Attribute CRUD |
 | `/admin` | `routes/admin/system-utils.ts` | System utilities |
 | `/admin/settings/delivery-locations` | `routes/admin/settings/delivery-locations.ts` | Location hierarchy CRUD |
@@ -107,7 +107,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | Sub-mount | File | Purpose |
 |---|---|---|
 | `/` (root) | `settings/site.ts` | Site-wide settings (siteSettings table) |
-| `/` (root) | `settings/integrations.ts` | Integration config (email, storage, Firebase, etc.) |
+| `/` (root) | `settings/ai.ts` | Widget AI provider, model, secret, and prompt settings |
 | `/` (root) | `settings/payments.ts` | Payment gateway config (Stripe, SSLCommerz, Polar) |
 | `/` (root) | `settings/system.ts` | System settings (currency, theme, phone) |
 | `/shipping-methods` | `settings/shipping.ts` | Shipping method CRUD |

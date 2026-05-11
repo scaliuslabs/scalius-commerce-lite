@@ -48044,6 +48044,561 @@
         }
       }
     },
+    "/api/v1/admin/settings/media": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get media and image optimization settings",
+        "responses": {
+          "200": {
+            "description": "Media settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "canonicalCdnUrl": {
+                          "type": "string",
+                          "default": ""
+                        },
+                        "allowedImageHosts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "default": []
+                        },
+                        "canonicalHostAliases": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "default": []
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save media and image optimization settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "canonicalCdnUrl": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "allowedImageHosts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": []
+                  },
+                  "canonicalHostAliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Media settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "canonicalCdnUrl": {
+                          "type": "string",
+                          "default": ""
+                        },
+                        "allowedImageHosts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "default": []
+                        },
+                        "canonicalHostAliases": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "default": []
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/settings/seo": {
       "get": {
         "tags": [
@@ -49938,507 +50493,6 @@
         "responses": {
           "200": {
             "description": "Business settings saved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/settings/openrouter": {
-      "get": {
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Get OpenRouter API key status",
-        "responses": {
-          "200": {
-            "description": "API key status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "apiKey": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "apiKey"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Save OpenRouter API key",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "apiKey": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "apiKey"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "API key saved",
             "content": {
               "application/json": {
                 "schema": {
@@ -63337,6 +63391,670 @@
                       "required": [
                         "message"
                       ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/settings/widget-ai": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get widget AI provider and prompt settings",
+        "responses": {
+          "200": {
+            "description": "Widget AI settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Update widget AI provider and prompt settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "activeProvider": {
+                    "type": "string",
+                    "enum": [
+                      "openrouter",
+                      "openai",
+                      "gemini",
+                      "cloudflare"
+                    ]
+                  },
+                  "providers": {
+                    "type": "object",
+                    "properties": {
+                      "openrouter": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "defaultModel": {
+                            "type": "string"
+                          },
+                          "baseUrl": {
+                            "type": "string"
+                          },
+                          "appName": {
+                            "type": "string"
+                          },
+                          "appUrl": {
+                            "type": "string"
+                          },
+                          "accountId": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "openai": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "defaultModel": {
+                            "type": "string"
+                          },
+                          "baseUrl": {
+                            "type": "string"
+                          },
+                          "appName": {
+                            "type": "string"
+                          },
+                          "appUrl": {
+                            "type": "string"
+                          },
+                          "accountId": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "gemini": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "defaultModel": {
+                            "type": "string"
+                          },
+                          "baseUrl": {
+                            "type": "string"
+                          },
+                          "appName": {
+                            "type": "string"
+                          },
+                          "appUrl": {
+                            "type": "string"
+                          },
+                          "accountId": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "cloudflare": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "defaultModel": {
+                            "type": "string"
+                          },
+                          "baseUrl": {
+                            "type": "string"
+                          },
+                          "appName": {
+                            "type": "string"
+                          },
+                          "appUrl": {
+                            "type": "string"
+                          },
+                          "accountId": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "planningTemperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2
+                      },
+                      "generationTemperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2
+                      },
+                      "improvementTemperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2
+                      },
+                      "maxOutputTokens": {
+                        "type": "integer",
+                        "minimum": 512,
+                        "maximum": 64000
+                      },
+                      "stagedGenerationDefault": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "prompts": {
+                    "type": "object",
+                    "properties": {
+                      "widget": {
+                        "type": "string"
+                      },
+                      "landing-page": {
+                        "type": "string"
+                      },
+                      "collection": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "apiKeys": {
+                    "type": "object",
+                    "properties": {
+                      "openrouter": {
+                        "type": "string"
+                      },
+                      "openai": {
+                        "type": "string"
+                      },
+                      "gemini": {
+                        "type": "string"
+                      },
+                      "cloudflare": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "clearApiKeys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "openrouter",
+                        "openai",
+                        "gemini",
+                        "cloudflare"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated widget AI settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {
+                        "nullable": true
+                      }
                     }
                   },
                   "required": [
@@ -77537,15 +78255,31 @@
         }
       }
     },
-    "/api/v1/admin/openrouter/models": {
+    "/api/v1/admin/ai/models": {
       "get": {
         "tags": [
-          "Admin - OpenRouter"
+          "Admin - AI"
         ],
-        "summary": "List available OpenRouter models",
+        "summary": "List available models for the configured AI provider",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "openrouter",
+                "openai",
+                "gemini",
+                "cloudflare"
+              ]
+            },
+            "required": false,
+            "name": "provider",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Model list",
+            "description": "AI model list",
             "content": {
               "application/json": {
                 "schema": {
@@ -77560,37 +78294,23 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "openrouter",
+                            "openai",
+                            "gemini",
+                            "cloudflare"
+                          ]
+                        },
+                        "defaultModel": {
+                          "type": "string"
+                        },
                         "models": {
                           "type": "array",
                           "items": {
                             "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "description": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "context_length": {
-                                "type": "number"
-                              },
-                              "supportsVision": {
-                                "type": "boolean"
-                              },
-                              "modality": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "name",
-                              "supportsVision",
-                              "modality"
-                            ],
+                            "properties": {},
                             "additionalProperties": {
                               "nullable": true
                             }
@@ -77598,6 +78318,8 @@
                         }
                       },
                       "required": [
+                        "provider",
+                        "defaultModel",
                         "models"
                       ]
                     }
@@ -77813,21 +78535,29 @@
         }
       }
     },
-    "/api/v1/admin/openrouter/generate": {
+    "/api/v1/admin/ai/generate": {
       "post": {
         "tags": [
-          "Admin - OpenRouter"
+          "Admin - AI"
         ],
-        "summary": "Generate AI content via OpenRouter",
+        "summary": "Generate widget content with the configured AI provider",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "model": {
+                  "provider": {
                     "type": "string",
-                    "minLength": 1
+                    "enum": [
+                      "openrouter",
+                      "openai",
+                      "gemini",
+                      "cloudflare"
+                    ]
+                  },
+                  "model": {
+                    "type": "string"
                   },
                   "messages": {
                     "type": "array",
@@ -77835,7 +78565,12 @@
                       "type": "object",
                       "properties": {
                         "role": {
-                          "type": "string"
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "user",
+                            "assistant"
+                          ]
                         },
                         "content": {
                           "anyOf": [
@@ -77846,6 +78581,37 @@
                               "type": "array",
                               "items": {
                                 "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "image_url": {
+                                    "type": "object",
+                                    "properties": {
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "url"
+                                    ]
+                                  },
+                                  "image": {
+                                    "type": "string"
+                                  },
+                                  "mediaType": {
+                                    "type": "string"
+                                  },
+                                  "cache_control": {
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
                                 "additionalProperties": {
                                   "nullable": true
                                 }
@@ -77886,10 +78652,7 @@
                       }
                     }
                   }
-                },
-                "required": [
-                  "model"
-                ]
+                }
               }
             }
           }
@@ -77920,6 +78683,11 @@
                     "success",
                     "data"
                   ]
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -78127,21 +78895,29 @@
         }
       }
     },
-    "/api/v1/admin/openrouter/generate-staged": {
+    "/api/v1/admin/ai/generate-staged": {
       "post": {
         "tags": [
-          "Admin - OpenRouter"
+          "Admin - AI"
         ],
-        "summary": "Generate AI content in stages via OpenRouter",
+        "summary": "Generate staged widget content with the configured AI provider",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "model": {
+                  "provider": {
                     "type": "string",
-                    "minLength": 1
+                    "enum": [
+                      "openrouter",
+                      "openai",
+                      "gemini",
+                      "cloudflare"
+                    ]
+                  },
+                  "model": {
+                    "type": "string"
                   },
                   "messages": {
                     "type": "array",
@@ -78149,7 +78925,12 @@
                       "type": "object",
                       "properties": {
                         "role": {
-                          "type": "string"
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "user",
+                            "assistant"
+                          ]
                         },
                         "content": {
                           "anyOf": [
@@ -78160,6 +78941,37 @@
                               "type": "array",
                               "items": {
                                 "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "image_url": {
+                                    "type": "object",
+                                    "properties": {
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "url"
+                                    ]
+                                  },
+                                  "image": {
+                                    "type": "string"
+                                  },
+                                  "mediaType": {
+                                    "type": "string"
+                                  },
+                                  "cache_control": {
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
                                 "additionalProperties": {
                                   "nullable": true
                                 }
@@ -78186,7 +78998,6 @@
                   }
                 },
                 "required": [
-                  "model",
                   "messages"
                 ]
               }
@@ -78209,17 +79020,7 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {
-                        "stage": {
-                          "type": "string"
-                        },
-                        "sectionIndex": {
-                          "type": "number"
-                        },
-                        "totalSections": {
-                          "type": "number"
-                        }
-                      },
+                      "properties": {},
                       "additionalProperties": {
                         "nullable": true
                       }

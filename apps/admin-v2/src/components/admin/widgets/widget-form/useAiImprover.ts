@@ -19,6 +19,7 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
 import { getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
+import { readChatCompletionStream } from "./ai-stream";
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
 import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
@@ -116,7 +117,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       }
 
       // Generate structured prompt for improvement
-      const currentModel = aiGenerator.openRouterModels.find((m: ModelInfo) => m.id === aiGenerator.selectedModel);
+      const currentModel = aiGenerator.aiModels.find((m: ModelInfo) => m.id === aiGenerator.selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
 
       const promptResult = await generateStructuredPrompt({
@@ -135,10 +136,11 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       });
 
       // Call API with structured messages
-      const response = await fetch('/api/openrouter/generate', {
+      const response = await fetch('/api/v1/admin/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: aiGenerator.activeProvider,
           messages: promptResult.messages,
           model: aiGenerator.selectedModel,
           stream: true,
@@ -150,71 +152,62 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         throw new Error(errorData.message || 'Failed to generate content.');
       }
 
-      // Stream and parse response
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let accumulatedJson = '';
+      const accumulatedJson = await readChatCompletionStream(response);
+      setRawOutput(accumulatedJson);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          // Save raw output for debugging
-          setRawOutput(accumulatedJson);
+      // Try tag-based parsing first, then fall back to JSON
+      const tagResult = parseTagBasedResponse(accumulatedJson);
 
-          // Try tag-based parsing first, then fall back to JSON
-          const tagResult = parseTagBasedResponse(accumulatedJson);
+      let improvedContent;
 
-          let improvedContent;
+      if (tagResult.success && tagResult.data) {
+        const validation = validateParsedWidget(tagResult.data);
+        if (!validation.valid) {
+          if (import.meta.env.DEV) console.error('Tag-based validation failed:', validation.error);
+          if (import.meta.env.DEV) console.error('Parsed data:', tagResult.data);
+          throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
+        }
+        improvedContent = tagResult.data as { html: string; css: string };
+      } else {
+        // Fallback to JSON parsing
+        const parsed = parseJSONSafely(accumulatedJson);
+        if (!parsed.success) {
+          if (import.meta.env.DEV) console.error('All parsing strategies failed');
+          if (import.meta.env.DEV) console.error('Tag error:', tagResult.error);
+          if (import.meta.env.DEV) console.error('JSON error:', parsed.error);
+          throw new Error(`Parsing failed: Neither tag-based nor JSON format detected. Check browser console for raw output.`);
+        }
 
-          if (tagResult.success && tagResult.data) {
-            const validation = validateParsedWidget(tagResult.data);
-            if (!validation.valid) {
-              if (import.meta.env.DEV) console.error('Tag-based validation failed:', validation.error);
-              if (import.meta.env.DEV) console.error('Parsed data:', tagResult.data);
-              throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
-            }
-            improvedContent = tagResult.data as { html: string; css: string };
-          } else {
-            // Fallback to JSON parsing
-            const parsed = parseJSONSafely(accumulatedJson);
-            if (!parsed.success) {
-              if (import.meta.env.DEV) console.error('All parsing strategies failed');
-              if (import.meta.env.DEV) console.error('Tag error:', tagResult.error);
-              if (import.meta.env.DEV) console.error('JSON error:', parsed.error);
-              throw new Error(`Parsing failed: Neither tag-based nor JSON format detected. Check browser console for raw output.`);
-            }
+        const validation = validateWidgetJSON(parsed.data);
+        if (!validation.valid) {
+          if (import.meta.env.DEV) console.error('JSON validation failed:', validation.error);
+          if (import.meta.env.DEV) console.error('Parsed data:', parsed.data);
+          throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
+        }
+        improvedContent = parsed.data as { html: string; css: string };
+      }
 
-            const validation = validateWidgetJSON(parsed.data);
-            if (!validation.valid) {
-              if (import.meta.env.DEV) console.error('JSON validation failed:', validation.error);
-              if (import.meta.env.DEV) console.error('Parsed data:', parsed.data);
-              throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
-            }
-            improvedContent = parsed.data as { html: string; css: string };
-          }
+      // Section-specific improvement: merge back into full widget
+      if (targetSection !== undefined && sections.length > 0) {
+        try {
+          // Update the specific section in the sections array
+          const updatedSections = [...sections];
+          const oldSection = updatedSections[targetSection];
+          updatedSections[targetSection] = {
+            ...oldSection,
+            html: improvedContent.html,
+            css: improvedContent.css,
+            timestamp: Date.now(),
+          };
 
-          // Section-specific improvement: merge back into full widget
-          if (targetSection !== undefined && sections.length > 0) {
-            try {
-              // Update the specific section in the sections array
-              const updatedSections = [...sections];
-              const oldSection = updatedSections[targetSection];
-              updatedSections[targetSection] = {
-                ...oldSection,
-                html: improvedContent.html,
-                css: improvedContent.css,
-                timestamp: Date.now(),
-              };
+          // Reconstruct full widget using consistent section reconstruction logic
+          const combinedHtml = `<div class="widget-container">\n${updatedSections
+            .map((s: SectionContent, idx: number) => {
+              const sectionHtml = s.html.split('\n').map((line: string) => '    ' + line).join('\n');
+              return `  <div class="widget-section widget-section-${idx + 1}" data-section="${idx + 1}">\n${sectionHtml}\n  </div>`;
+            }).join('\n')}\n</div>`;
 
-              // Reconstruct full widget using consistent section reconstruction logic
-              const combinedHtml = `<div class="widget-container">\n${updatedSections
-                .map((s: SectionContent, idx: number) => {
-                  const sectionHtml = s.html.split('\n').map((line: string) => '    ' + line).join('\n');
-                  return `  <div class="widget-section widget-section-${idx + 1}" data-section="${idx + 1}">\n${sectionHtml}\n  </div>`;
-                }).join('\n')}\n</div>`;
-
-              const combinedCss = `
+          const combinedCss = `
 /* Widget Container Spacing */
 .widget-container {
   display: flex;
@@ -240,61 +233,38 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
 ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.css}` : '').filter(Boolean).join('\n\n')}
 `;
 
-              setContentToImprove({ html: combinedHtml, css: combinedCss });
+          setContentToImprove({ html: combinedHtml, css: combinedCss });
 
-              // Update the staged generation state immutably
-              aiGenerator.stagedGeneration.updateSections(updatedSections);
+          // Update the staged generation state immutably
+          aiGenerator.stagedGeneration.updateSections(updatedSections);
 
-              // Add to improvement history
-              setImprovementHistory(prev => [...prev, {
-                section: targetSection,
-                prompt: promptToUse,
-                timestamp: Date.now(),
-                modelUsed: aiGenerator.selectedModel,
-              }]);
+          // Add to improvement history
+          setImprovementHistory(prev => [...prev, {
+            section: targetSection,
+            prompt: promptToUse,
+            timestamp: Date.now(),
+            modelUsed: aiGenerator.selectedModel,
+          }]);
 
-              toast.success(SUCCESS_MESSAGES.sectionImproved(targetSection, sections.length));
-            } catch (mergeError: unknown) {
-              if (import.meta.env.DEV) console.error('Failed to merge section:', mergeError);
-              toast.error(ERROR_MESSAGES.sectionMergeFailed);
-              // Fallback: just show the improved section
-              setContentToImprove(improvedContent);
-            }
-          } else {
-            // Whole widget improvement
-            setContentToImprove(improvedContent);
-
-            // Add to improvement history
-            setImprovementHistory(prev => [...prev, {
-              prompt: promptToUse,
-              timestamp: Date.now(),
-              modelUsed: aiGenerator.selectedModel,
-            }]);
-
-            toast.success(SUCCESS_MESSAGES.improved);
-          }
-          break;
+          toast.success(SUCCESS_MESSAGES.sectionImproved(targetSection, sections.length));
+        } catch (mergeError: unknown) {
+          if (import.meta.env.DEV) console.error('Failed to merge section:', mergeError);
+          toast.error(ERROR_MESSAGES.sectionMergeFailed);
+          // Fallback: just show the improved section
+          setContentToImprove(improvedContent);
         }
+      } else {
+        // Whole widget improvement
+        setContentToImprove(improvedContent);
 
-        // Stream parsing logic
-        buffer += decoder.decode(value, { stream: true });
-        let lineEnd;
-        while ((lineEnd = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, lineEnd).trim();
-          buffer = buffer.slice(lineEnd + 1);
+        // Add to improvement history
+        setImprovementHistory(prev => [...prev, {
+          prompt: promptToUse,
+          timestamp: Date.now(),
+          modelUsed: aiGenerator.selectedModel,
+        }]);
 
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') break;
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices[0].delta.content;
-              if (delta) accumulatedJson += delta;
-            } catch (e) {
-              // Ignore partial JSON errors
-            }
-          }
-        }
+        toast.success(SUCCESS_MESSAGES.improved);
       }
 
       return true;

@@ -1,34 +1,13 @@
 /**
- * Centralized AI Configuration
+ * Shared AI generation defaults.
  *
- * This file contains all configurable settings for the AI generation system.
- * Instead of hardcoding values throughout the codebase, all configuration
- * lives here for easy management and testing.
+ * Runtime provider settings and prompt overrides live in the dashboard-managed
+ * settings table. This file only keeps non-secret defaults and UI constants.
  */
 
-// ============================================================================
-// SYSTEM PROMPT CONFIGURATION
-// ============================================================================
+import { AI_PROMPT_TYPES, DEFAULT_AI_PROMPTS } from "./default-prompts";
 
-export const SYSTEM_PROMPT_URLS = {
-  widget: "https://text.wrygo.com/home-page-prompt.txt",
-  "landing-page": "https://text.wrygo.com/pages-prompt.txt",
-  collection: "https://text.wrygo.com/collection-prompt.txt",
-} as const;
-
-export const SYSTEM_PROMPT_FALLBACKS = {
-  widget: `You are an expert web developer creating homepage widgets for e-commerce sites.
-Create beautiful, responsive, conversion-optimized HTML/CSS components.
-Always return valid JSON with "html" and "css" fields.`,
-
-  "landing-page": `You are an expert web developer creating landing pages for e-commerce sites.
-Create full-page, responsive, conversion-optimized HTML/CSS layouts.
-Always return valid JSON with "html" and "css" fields.`,
-
-  collection: `You are an expert web developer creating collection pages for e-commerce sites.
-Create product showcase sections with filters and grids.
-Always return valid JSON with "html" and "css" fields.`,
-} as const;
+export const SYSTEM_PROMPT_FALLBACKS = DEFAULT_AI_PROMPTS;
 
 // Cache TTL for system prompts (5 minutes)
 export const SYSTEM_PROMPT_CACHE_TTL = 300;
@@ -37,15 +16,7 @@ export const SYSTEM_PROMPT_CACHE_TTL = 300;
 // MODEL & PROVIDER CONFIGURATION
 // ============================================================================
 
-export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-
-export const OPENROUTER_HEADERS = {
-  referer: "https://scalius.com",
-  title: "Scalius Commerce",
-} as const;
-
-// REMOVED: No default models - user must always choose
-// Models will be fetched from OpenRouter API and user selects from list
+export const AI_PROVIDER_IDS = ["openrouter", "openai", "gemini", "cloudflare"] as const;
 
 // Model capability thresholds
 export const MODEL_CAPABILITIES = {
@@ -128,7 +99,7 @@ export const PROMPT_INSTRUCTIONS = {
   json: `RESPONSE FORMAT - USE SIMPLE TAGS:
 
 <htmljs>
-<!-- Your HTML code here. Include JavaScript within <script> tags if needed. -->
+<!-- Your HTML code here. Do not include script tags. -->
 </htmljs>
 
 <css>
@@ -139,7 +110,7 @@ IMPORTANT RULES:
 - Use the simple tag format shown above
 - Do NOT wrap in markdown code blocks (\`\`\`html or \`\`\`json)
 - Do NOT use JSON format
-- Include all JavaScript inside <script> tags within the <htmljs> section
+- Do NOT include JavaScript or <script> tags. Widget previews and storefront rendering are HTML/CSS only.
 - Make sure to close all tags properly
 - For multi-section widgets, use <part1>, <part2>, etc. with nested tags`,
 
@@ -211,7 +182,7 @@ export const UI_CONFIG = {
 
 export const ERROR_MESSAGES = {
   // API errors
-  apiKeyMissing: "OpenRouter API key is not configured. Please add it in the widget settings.",
+  apiKeyMissing: "The selected AI provider is not configured. Add the provider credentials in General Settings > Widget AI.",
   modelNotSelected: "Please select an AI model before generating.",
   promptEmpty: "Please enter your prompt first.",
   systemPromptFailed: "Failed to fetch system prompt. Please try again or contact support.",
@@ -351,6 +322,7 @@ export function getTimeout(operation: 'planning' | 'generation' | 'improvement' 
 // TYPE EXPORTS
 // ============================================================================
 
-export type PromptType = keyof typeof SYSTEM_PROMPT_URLS;
+export type PromptType = (typeof AI_PROMPT_TYPES)[number];
+export type WidgetAiProvider = (typeof AI_PROVIDER_IDS)[number];
 export type ModelProvider = 'anthropic' | 'openai' | 'google' | 'default';
 export type OperationType = 'planning' | 'generation' | 'improvement' | 'default';

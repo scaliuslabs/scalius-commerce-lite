@@ -1665,6 +1665,18 @@ export const updateMediaSettings = createServerFn({ method: "POST" })
     return apiPost("/settings/media", data);
   });
 
+export const getWidgetAiSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<Record<string, unknown>>("/settings/widget-ai");
+  },
+);
+
+export const updateWidgetAiSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: Record<string, unknown>) => data)
+  .handler(async ({ data }) => {
+    return apiPost("/settings/widget-ai", data);
+  });
+
 export const getSmsSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/sms");
@@ -1675,18 +1687,6 @@ export const updateSmsSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
   .handler(async ({ data }) => {
     return apiPost("/settings/sms", data);
-  });
-
-export const getOpenRouterSettings = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<Record<string, unknown>>("/settings/openrouter");
-  },
-);
-
-export const updateOpenRouterSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/settings/openrouter", data);
   });
 
 export const getMetaConversionsSettings = createServerFn({

@@ -34,6 +34,7 @@ const EmailSettingsForm = lazy(() => import("./EmailSettingsForm"));
 const AuthSettingsBuilder = lazy(() => import("./AuthSettingsBuilder"));
 const CurrencySettingsBuilder = lazy(() => import("./CurrencySettingsBuilder"));
 const MediaSettingsBuilder = lazy(() => import("./MediaSettingsBuilder"));
+const WidgetAiSettingsBuilder = lazy(() => import("./WidgetAiSettingsBuilder"));
 const AllowedCountriesBuilder = lazy(() => import("./AllowedCountriesBuilder"));
 const ScannerTokenGenerator = lazy(() =>
   import("./ScannerTokenGenerator").then((m) => ({
@@ -66,6 +67,7 @@ const tabs = [
   { value: "email", label: "Email" },
   { value: "currency", label: "Currency" },
   { value: "media", label: "Media" },
+  { value: "widget-ai", label: "Widget AI" },
   { value: "business", label: "Business" },
   { value: "countries", label: "Countries" },
   { value: "auth", label: "Auth & Access" },
@@ -188,6 +190,14 @@ export default function GeneralSettingsPage({
               {mountedTabs.has("media") && (
                 <Suspense fallback={<TabSpinner />}>
                   <MediaSettingsBuilder />
+                </Suspense>
+              )}
+            </TabsContent>
+
+            <TabsContent value="widget-ai" className="mt-0">
+              {mountedTabs.has("widget-ai") && (
+                <Suspense fallback={<TabSpinner />}>
+                  <WidgetAiSettingsBuilder />
                 </Suspense>
               )}
             </TabsContent>

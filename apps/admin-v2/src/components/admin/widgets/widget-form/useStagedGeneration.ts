@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
+import { extractChatCompletionContent } from './ai-stream';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 
@@ -51,6 +52,7 @@ export function useStagedGeneration() {
    * Step 1: Ask LLM to create a generation plan
    */
   const createPlan = useCallback(async (
+    provider: string,
     model: string,
     messages: PromptMessage[]
   ): Promise<GenerationPlan | null> => {
@@ -64,7 +66,7 @@ export function useStagedGeneration() {
 }
 
 Guidelines:
-- Each section should be a complete, standalone HTML div with inline CSS and inline JavaScript
+- Each section should be a complete, standalone HTML div with CSS-only interactions
 - Sections will be rendered progressively, so plan accordingly
 - Typical sections: hero/header, content blocks, CTA, footer
 - For simple widgets: 1-2 sections. For complex: 3-6 sections max
@@ -74,10 +76,11 @@ Respond ONLY with the JSON object, no markdown formatting.`,
     };
 
     try {
-      const response = await fetch("/api/openrouter/generate-staged", {
+      const response = await fetch("/api/v1/admin/ai/generate-staged", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          provider,
           model,
           messages: [...messages, planningPrompt],
           stage: 'plan',
@@ -89,12 +92,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
         throw new Error("Failed to create plan");
       }
 
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error("No content in plan response");
-      }
+      const content = extractChatCompletionContent(await response.json());
 
       const parsed = parseJSONSafely(content);
       if (!parsed.success) {
@@ -124,6 +122,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
    * Step 2: Generate a specific section with full conversation history
    */
   const generateSection = useCallback(async (
+    provider: string,
     model: string,
     messages: PromptMessage[],
     sectionIndex: number,
@@ -150,7 +149,7 @@ Section Description: ${sectionDescription}${previousContext}
 
 Requirements:
 - Use tag-based format with <htmljs> and <css> tags
-- HTML must be a complete, self-contained <div> with inline JavaScript if needed
+- HTML must be a complete, self-contained <div> with no JavaScript or script tags
 - CSS should be scoped to this section
 - This section will be combined with others, so use unique IDs/classes
 - CRITICAL: Match the visual style, colors, fonts, and design of previous sections for consistency
@@ -161,10 +160,11 @@ Respond with the section code in tag format.`,
     };
 
     try {
-      const response = await fetch("/api/openrouter/generate-staged", {
+      const response = await fetch("/api/v1/admin/ai/generate-staged", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          provider,
           model,
           messages: [...messages, sectionPrompt],
           stage: 'generate',
@@ -177,12 +177,7 @@ Respond with the section code in tag format.`,
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error("No content in response");
-      }
+      const content = extractChatCompletionContent(await response.json());
 
       // Try tag-based parsing first, then fall back to JSON
       const tagResult = parseTagBasedResponse(content);
@@ -225,7 +220,7 @@ Respond with the section code in tag format.`,
         const delay = RETRY_DELAY_MS * Math.pow(2, retryAttempt);
         toast.info(`Retrying section ${sectionIndex + 1} in ${delay / 1000}s...`);
         await sleep(delay);
-        return generateSection(model, messages, sectionIndex, sectionDescription, totalSections, previousSections, retryAttempt + 1);
+        return generateSection(provider, model, messages, sectionIndex, sectionDescription, totalSections, previousSections, retryAttempt + 1);
       }
 
       toast.error(`Failed to generate section ${sectionIndex + 1}: ${error instanceof Error ? error.message : String(error)}`);
@@ -237,6 +232,7 @@ Respond with the section code in tag format.`,
    * Main generation orchestrator
    */
   const startStagedGeneration = useCallback(async (
+    provider: string,
     model: string,
     messages: PromptMessage[],
     onSectionComplete?: (section: SectionContent, index: number, total: number) => void
@@ -254,7 +250,7 @@ Respond with the section code in tag format.`,
     try {
       // Phase 1: Create plan
       toast.info("Planning widget structure...");
-      const plan = await createPlan(model, messages);
+      const plan = await createPlan(provider, model, messages);
 
       if (!plan) {
         throw new Error("Failed to create generation plan");
@@ -272,6 +268,7 @@ Respond with the section code in tag format.`,
 
         // Pass all previously generated sections for consistency
         const section = await generateSection(
+          provider,
           model,
           messages,
           i,

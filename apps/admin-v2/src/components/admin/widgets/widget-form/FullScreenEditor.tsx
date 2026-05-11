@@ -37,6 +37,7 @@ import {
   History
 } from 'lucide-react';
 import { cn } from '@scalius/shared/utils';
+import { sanitizeHtml } from '@scalius/shared/html-sanitize';
 import { toast } from 'sonner';
 import { AiContextManager } from './AiContextManager';
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
@@ -364,12 +365,12 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                         </style>
                       </head>
                       <body>
-                        ${content.html}
+                        ${sanitizeHtml(content.html)}
                       </body>
                     </html>
                   ` : ''}
                   className="w-full h-full border-0"
-                  sandbox="allow-scripts allow-same-origin"
+                  sandbox=""
                   title="Widget Preview"
                 />
               </div>
