@@ -129,7 +129,9 @@ const listRoute = createRoute({
             status: z.string().optional().default("all").openapi({ description: "Status filter" }),
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().max(100).default(50).openapi({ description: "Items per page" }),
-            alertStatus: z.string().optional().openapi({ description: "Alert status filter" })
+            alertStatus: z.string().optional().openapi({ description: "Alert status filter" }),
+            sort: z.enum(["productName", "sku", "available"]).optional().default("available").openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
         })
     },
     responses: {
@@ -150,7 +152,9 @@ app.openapi(listRoute, async (c) => {
             status: query.status,
             page: query.page,
             limit: query.limit,
-            alertStatus: query.alertStatus
+            alertStatus: query.alertStatus,
+            sort: query.sort,
+            order: query.order,
         });
         return ok(c, result);
     } catch (error: unknown) {

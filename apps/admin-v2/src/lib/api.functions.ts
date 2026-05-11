@@ -1111,9 +1111,9 @@ export const deleteAnalyticsScript = createServerFn({ method: "POST" })
   });
 
 export const toggleAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .inputValidator((data: { id: string; isActive: boolean }) => data)
   .handler(async ({ data }) => {
-    return apiPost(`/analytics/${data.id}/toggle`);
+    return apiPost(`/analytics/${data.id}/toggle`, { isActive: data.isActive });
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1998,7 +1998,7 @@ export const clearCache = createServerFn({ method: "POST" }).handler(
 export const clearCacheGroup = createServerFn({ method: "POST" })
   .inputValidator((data: { groupName: string }) => data)
   .handler(async ({ data }) => {
-    return apiBasePost(`/cache/clear-${data.groupName}`);
+    return apiBasePost("/cache/clear-group", { groups: [data.groupName] });
   });
 
 // ═══════════════════════════════════════════════════════════════════

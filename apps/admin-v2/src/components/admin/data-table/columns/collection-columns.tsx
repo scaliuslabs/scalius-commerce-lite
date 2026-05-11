@@ -135,25 +135,30 @@ export function getCollectionColumns(
       cell: ({ row }) => {
         const collection = row.original;
         const isDisabled = !!collection.deletedAt || opts.showTrashed;
+        const isTrashed = !!collection.deletedAt || opts.showTrashed;
 
         return (
           <div className="flex items-center gap-2">
-            <Switch
-              checked={collection.isActive}
-              onCheckedChange={(checked) =>
-                opts.onToggleActive(collection.id, checked)
-              }
-              disabled={isDisabled}
-            />
+            {!isTrashed && (
+              <Switch
+                checked={collection.isActive}
+                onCheckedChange={(checked) =>
+                  opts.onToggleActive(collection.id, checked)
+                }
+                disabled={isDisabled}
+              />
+            )}
             <Badge
-              variant={collection.isActive ? "default" : "secondary"}
+              variant={isTrashed ? "secondary" : collection.isActive ? "default" : "secondary"}
               className={
-                collection.isActive
+                isTrashed
+                  ? "bg-muted text-muted-foreground"
+                  : collection.isActive
                   ? "bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-950/50 dark:text-green-400"
                   : "bg-muted text-muted-foreground"
               }
             >
-              {collection.isActive ? "Active" : "Inactive"}
+              {isTrashed ? "Trashed" : collection.isActive ? "Active" : "Inactive"}
             </Badge>
           </div>
         );

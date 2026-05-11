@@ -80,10 +80,9 @@ export function getPageColumns(
     createDateColumn<Page>("updatedAt", "Last Updated"),
     createActionsColumn<Page>({
       showTrashed: opts.showTrashed,
-      onView: (p) =>
-        !opts.showTrashed
-          ? window.open(opts.getStorefrontPath(`/${p.slug}`), "_blank")
-          : undefined,
+      onView: !opts.showTrashed
+        ? (p) => window.open(opts.getStorefrontPath(`/${p.slug}`), "_blank")
+        : undefined,
       onEdit: (p) => opts.onEdit(p.id),
       onDelete: (p) => opts.onDelete(p.id),
       onRestore: (p) => opts.onRestore(p.id),

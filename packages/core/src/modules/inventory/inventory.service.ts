@@ -1,5 +1,5 @@
 import { productVariants, products, inventoryMovements, productLowStockAlerts } from "@scalius/database/schema";
-import { eq, sql, and, isNull, desc, or, like } from "drizzle-orm";
+import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { Database } from "@scalius/database/client";
@@ -13,8 +13,10 @@ export async function getInventoryOverview(db: Database, params: {
     page: number;
     limit: number;
     alertStatus?: string;
+    sort?: string;
+    order?: string;
 }) {
-    const { section, search, status, page, limit, alertStatus } = params;
+    const { section, search, status, page, limit, alertStatus, sort, order } = params;
     const offset = (page - 1) * limit;
 
     if (section === "variants") {
@@ -35,6 +37,15 @@ export async function getInventoryOverview(db: Database, params: {
             ));
         }
 
+        const availableSql = sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`;
+        const sortDirection = order === "desc" ? "desc" : "asc";
+        const orderBy =
+            sort === "productName"
+                ? sortDirection === "desc" ? desc(products.name) : asc(products.name)
+                : sort === "sku"
+                    ? sortDirection === "desc" ? desc(productVariants.sku) : asc(productVariants.sku)
+                    : sortDirection === "desc" ? desc(availableSql) : asc(availableSql);
+
         const variants = await db
             .select({
                 id: productVariants.id,
@@ -46,14 +57,14 @@ export async function getInventoryOverview(db: Database, params: {
                 price: productVariants.price,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
-                available: sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`,
+                available: availableSql,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 version: productVariants.version,
             })
             .from(productVariants)
             .leftJoin(products, eq(products.id, productVariants.productId))
             .where(and(...conditions))
-            .orderBy(sql`(${productVariants.stock} - ${productVariants.reservedStock}) ASC`)
+            .orderBy(orderBy)
             .limit(limit)
             .offset(offset)
             .all();
