@@ -3,7 +3,6 @@
 // Dynamic route for CMS pages
 
 import Layout from "../layouts/Layout.astro";
-import RichContent from "../components/RichContent.astro";
 import { getPageBySlug, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
@@ -13,6 +12,7 @@ import {
 } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 const { slug } = Astro.params;
 
@@ -68,17 +68,17 @@ if (!page) {
 
 const title = page.metaTitle || page.title;
 const description = page.metaDescription || "";
-const isStandaloneShortcodePage = isStandaloneShortcodeContent(
-  page.content || "",
-);
+const sanitizedPageContent = sanitizeHtml(page.content || "");
+const isStandaloneShortcodePage =
+  isStandaloneShortcodeContent(sanitizedPageContent);
 
-let processedContent = page.content;
-if (page.content) {
+let processedContent = sanitizedPageContent;
+if (sanitizedPageContent) {
   try {
-    processedContent = await processShortcodes(page.content);
+    processedContent = await processShortcodes(sanitizedPageContent);
   } catch (error: unknown) {
     console.error(`Error processing shortcodes for page "${slug}":`, error);
-    processedContent = page.content;
+    processedContent = sanitizedPageContent;
   }
 }
 processedContent = optimizeRichContentImages(processedContent);
@@ -103,6 +103,8 @@ const featuredImageAlt =
 // --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
 const storefrontUrl = getRuntimeStorefrontUrl();
 const canonicalUrl = `${storefrontUrl}/${slug}`;
+const richContentClasses =
+  "prose dark:prose-invert prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl";
 ---
 
 <Layout
@@ -154,11 +156,7 @@ const canonicalUrl = `${storefrontUrl}/${slug}`;
         )}
 
         <div class="w-full">
-          <RichContent
-            content={processedContent}
-            processShortcodes={false}
-            className="prose prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl"
-          />
+          <div class={richContentClasses} set:html={processedContent} />
         </div>
 
         <div class="text-center mt-10 pt-6 border-t border-gray-100">

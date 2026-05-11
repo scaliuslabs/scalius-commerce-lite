@@ -7,6 +7,7 @@ import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import {
     createPageSchema,
     updatePageSchema,
@@ -105,19 +106,23 @@ export async function getPageBySlug(db: Database, slug: string) {
  *  then `if (!page) throw new NotFoundError("Page not found");` + `return ok(c, { page });`
  *  This also eliminates unused imports: pages, isNull, eq, and, SQL from drizzle-orm. */
 export async function getPublicPageById(db: Database, id: string) {
-    return db
+    const page = await db
         .select()
         .from(pages)
         .where(and(eq(pages.id, id), eq(pages.isPublished, true), isNull(pages.deletedAt)))
         .get() ?? null;
+
+    return sanitizePageContent(page);
 }
 
 export async function getPublicPageBySlug(db: Database, slug: string) {
-    return db
+    const page = await db
         .select()
         .from(pages)
         .where(and(eq(pages.slug, slug), eq(pages.isPublished, true), isNull(pages.deletedAt)))
         .get() ?? null;
+
+    return sanitizePageContent(page);
 }
 
 export async function getPublicPages(
@@ -154,7 +159,7 @@ export async function getPublicPages(
         .offset(offset);
 
     return {
-        pages: results,
+        pages: results.map(sanitizePageRecord),
         pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
 }
@@ -176,7 +181,7 @@ export async function createPage(db: Database, data: CreatePageInput): Promise<{
     await db.insert(pages).values({
         id: pageId,
         title: data.title,
-        content: data.content,
+        content: sanitizeHtml(data.content),
         slug: data.slug,
         metaTitle: data.metaTitle || null,
         metaDescription: data.metaDescription || null,
@@ -208,7 +213,12 @@ export async function updatePage(db: Database, id: string, data: UpdatePageInput
         if (slugConflict) throw new ConflictError("A page with this slug already exists");
     }
 
-    await db.update(pages).set({ ...data, updatedAt: sql`unixepoch()` }).where(eq(pages.id, id));
+    const updateData = { ...data };
+    if (updateData.content !== undefined) {
+        updateData.content = sanitizeHtml(updateData.content);
+    }
+
+    await db.update(pages).set({ ...updateData, updatedAt: sql`unixepoch()` }).where(eq(pages.id, id));
 }
 
 export async function deletePage(db: Database, id: string): Promise<void> {
@@ -237,4 +247,15 @@ export async function bulkUnpublishPages(db: Database, ids: string[]): Promise<v
 export async function restorePages(db: Database, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     await db.update(pages).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(inArray(pages.id, ids));
+}
+
+function sanitizePageContent<T extends { content: string }>(page: T | null): T | null {
+    return page ? sanitizePageRecord(page) : null;
+}
+
+function sanitizePageRecord<T extends { content: string }>(page: T): T {
+    return {
+        ...page,
+        content: sanitizeHtml(page.content),
+    };
 }

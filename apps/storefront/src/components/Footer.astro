@@ -10,6 +10,7 @@ import type {
 import RecursiveFooterLink from "./RecursiveFooterLink.astro";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 interface Props {
   footerData: FooterData;
@@ -21,7 +22,7 @@ const logo = footerData?.logo || { src: "/logo.svg", alt: "Store Logo" };
 const favicon = footerData?.favicon;
 const tagline = footerData?.tagline || "";
 const description = footerData?.description || "";
-const optimizedDescription = optimizeRichContentImages(description);
+const optimizedDescription = optimizeRichContentImages(sanitizeHtml(description));
 const optimizedFavicon =
   favicon?.src && !favicon.src.endsWith(".svg")
     ? {
