@@ -1698,6 +1698,21 @@ export type GetApiV1WidgetsByIdResponses = {
                 placementRule: string;
                 referenceCollectionId: string | null;
                 sortOrder: number;
+                placements?: Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+                }>;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
                 deletedAt: string | number | unknown;
@@ -1749,6 +1764,21 @@ export type GetApiV1WidgetsActiveHomepageResponses = {
                 placementRule: string;
                 referenceCollectionId: string | null;
                 sortOrder: number;
+                placements?: Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+                }>;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
                 deletedAt: string | number | unknown;
@@ -8586,16 +8616,52 @@ export type GetApiV1AdminWidgetsResponses = {
                 placementRule: string;
                 referenceCollectionId: string | null;
                 sortOrder: number;
+                placements?: Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+                }>;
                 createdAt: number;
                 updatedAt: number;
                 deletedAt: number | null;
-                [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | (number | null);
+                [key: string]: unknown | string | (string | null) | (string | null) | boolean | (string | null) | number | Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+                }> | (number | null) | undefined;
             }>;
             availableCollections: Array<{
                 id: string;
                 name: string;
                 sortOrder: number;
                 type: string;
+                [key: string]: unknown | string | number;
+            }>;
+            availablePages?: Array<{
+                id: string;
+                title: string;
+                slug: string;
+                sortOrder: number;
                 [key: string]: unknown | string | number;
             }>;
         };
@@ -8614,9 +8680,19 @@ export type PostApiV1AdminWidgetsData = {
         } | null;
         isActive?: boolean;
         displayTarget?: 'homepage';
-        placementRule: 'before_collection' | 'after_collection' | 'fixed_top_homepage' | 'fixed_bottom_homepage' | 'standalone';
+        placementRule?: 'before_collection' | 'after_collection' | 'fixed_top_homepage' | 'fixed_bottom_homepage' | 'standalone';
         referenceCollectionId?: string | null;
         sortOrder?: number;
+        placements?: Array<{
+            id?: string;
+            scope?: 'homepage' | 'page' | 'product' | 'category' | 'collection';
+            scopeId?: string | null;
+            slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
+            anchorType?: 'collection' | 'content' | null;
+            anchorId?: string | null;
+            sortOrder?: number;
+            isActive?: boolean;
+        }>;
     };
     path?: never;
     query?: never;
@@ -8700,6 +8776,21 @@ export type PostApiV1AdminWidgetsResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
+            placements?: Array<{
+                id: string;
+                widgetId: string;
+                scope: string;
+                scopeId: string | null;
+                slot: string;
+                anchorType: string | null;
+                anchorId: string | null;
+                sortOrder: number;
+                isActive: boolean;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+            }>;
             createdAt: string | number | unknown;
             updatedAt: string | number | unknown;
             deletedAt: string | number | unknown;
@@ -9186,6 +9277,21 @@ export type GetApiV1AdminWidgetsByIdResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
+            placements?: Array<{
+                id: string;
+                widgetId: string;
+                scope: string;
+                scopeId: string | null;
+                slot: string;
+                anchorType: string | null;
+                anchorId: string | null;
+                sortOrder: number;
+                isActive: boolean;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+            }>;
             createdAt: string | number | unknown;
             updatedAt: string | number | unknown;
             deletedAt: string | number | unknown;
@@ -9208,6 +9314,16 @@ export type PutApiV1AdminWidgetsByIdData = {
         placementRule?: 'before_collection' | 'after_collection' | 'fixed_top_homepage' | 'fixed_bottom_homepage' | 'standalone';
         referenceCollectionId?: string | null;
         sortOrder?: number;
+        placements?: Array<{
+            id?: string;
+            scope?: 'homepage' | 'page' | 'product' | 'category' | 'collection';
+            scopeId?: string | null;
+            slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
+            anchorType?: 'collection' | 'content' | null;
+            anchorId?: string | null;
+            sortOrder?: number;
+            isActive?: boolean;
+        }>;
     };
     path: {
         id: string;
@@ -9293,6 +9409,21 @@ export type PutApiV1AdminWidgetsByIdResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
+            placements?: Array<{
+                id: string;
+                widgetId: string;
+                scope: string;
+                scopeId: string | null;
+                slot: string;
+                anchorType: string | null;
+                anchorId: string | null;
+                sortOrder: number;
+                isActive: boolean;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+            }>;
             createdAt: string | number | unknown;
             updatedAt: string | number | unknown;
             deletedAt: string | number | unknown;
@@ -9544,6 +9675,21 @@ export type PatchApiV1AdminWidgetsByIdToggleStatusResponses = {
             placementRule: string;
             referenceCollectionId: string | null;
             sortOrder: number;
+            placements?: Array<{
+                id: string;
+                widgetId: string;
+                scope: string;
+                scopeId: string | null;
+                slot: string;
+                anchorType: string | null;
+                anchorId: string | null;
+                sortOrder: number;
+                isActive: boolean;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+                [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+            }>;
             createdAt: string | number | unknown;
             updatedAt: string | number | unknown;
             deletedAt: string | number | unknown;
@@ -20542,7 +20688,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;
-                accountId?: string;
+                accountId?: string | '';
             };
             openai?: {
                 enabled?: boolean;
@@ -20550,7 +20696,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;
-                accountId?: string;
+                accountId?: string | '';
             };
             gemini?: {
                 enabled?: boolean;
@@ -20558,7 +20704,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;
-                accountId?: string;
+                accountId?: string | '';
             };
             cloudflare?: {
                 enabled?: boolean;
@@ -20566,7 +20712,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;
-                accountId?: string;
+                accountId?: string | '';
             };
         };
         generation?: {
@@ -25083,6 +25229,7 @@ export type PostApiV1AdminAiGenerateData = {
             mimeType?: string;
             [key: string]: unknown | string | undefined;
         }>;
+        operation?: 'create' | 'improve';
     };
     path?: never;
     query?: never;
@@ -25183,7 +25330,7 @@ export type PostApiV1AdminAiGenerateStagedData = {
                 } | undefined;
             }>;
         }>;
-        stage?: string;
+        stage?: 'plan' | 'generate';
         sectionIndex?: number;
         totalSections?: number;
     };

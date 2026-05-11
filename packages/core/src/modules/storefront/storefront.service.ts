@@ -8,16 +8,14 @@
 import {
   siteSettings,
   collections,
-  widgets,
   heroSliders,
   analytics,
   categories,
   pages,
   settings,
-  WidgetPlacementRule,
   type Analytics,
 } from "@scalius/database/schema";
-import { eq, isNull, and, asc, sql, ne } from "drizzle-orm";
+import { eq, isNull, and, asc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
@@ -25,7 +23,7 @@ import {
 } from "../../integrations/analytics";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
-import { sanitizeWidgetCss, sanitizeWidgetHtml } from "../widgets/widgets.service";
+import { getActiveHomepageWidgets } from "../widgets/widgets.service";
 import type { Database } from "@scalius/database/client";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -101,21 +99,7 @@ export async function getHomepageData(db: Database) {
         and(eq(heroSliders.isActive, true), isNull(heroSliders.deletedAt)),
       ),
 
-    // 2. Active homepage widgets
-    db
-      .select()
-      .from(widgets)
-      .where(
-        and(
-          eq(widgets.isActive, true),
-          eq(widgets.displayTarget, "homepage"),
-          ne(widgets.placementRule, WidgetPlacementRule.STANDALONE),
-          isNull(widgets.deletedAt),
-        ),
-      )
-      .orderBy(asc(widgets.placementRule), asc(widgets.sortOrder)),
-
-    // 3. Active collections (metadata only)
+    // 2. Active collections (metadata only)
     db
       .select({
         id: collections.id,
@@ -130,7 +114,7 @@ export async function getHomepageData(db: Database) {
       .orderBy(collections.sortOrder),
   ]);
 
-  const [seoResults, heroResults, widgetResults, collectionResults] =
+  const [seoResults, heroResults, collectionResults] =
     batchResults;
 
   // Process SEO
@@ -160,26 +144,7 @@ export async function getHomepageData(db: Database) {
     mobile: formatSlider(mobileSlider),
   };
 
-  // Process Widgets
-  const formattedWidgets = (widgetResults as Record<string, unknown>[])
-    .filter((widget) => widget.placementRule !== WidgetPlacementRule.STANDALONE)
-    .map((widget) => ({
-      id: widget.id,
-      name: widget.name,
-      htmlContent:
-        typeof widget.htmlContent === "string"
-          ? sanitizeWidgetHtml(widget.htmlContent)
-          : widget.htmlContent,
-      cssContent:
-        typeof widget.cssContent === "string"
-          ? sanitizeWidgetCss(widget.cssContent)
-          : widget.cssContent,
-      isActive: widget.isActive,
-      displayTarget: widget.displayTarget,
-      placementRule: widget.placementRule,
-      referenceCollectionId: widget.referenceCollectionId,
-      sortOrder: widget.sortOrder,
-    }));
+  const formattedWidgets = await getActiveHomepageWidgets(db);
 
   // === BATCH 2: Products for collections ===
   const parsedCollections = (

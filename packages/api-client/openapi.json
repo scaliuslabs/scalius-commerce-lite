@@ -4938,6 +4938,100 @@
                             "sortOrder": {
                               "type": "number"
                             },
+                            "placements": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "widgetId": {
+                                    "type": "string"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "scopeId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "slot": {
+                                    "type": "string"
+                                  },
+                                  "anchorType": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "anchorId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "sortOrder": {
+                                    "type": "number"
+                                  },
+                                  "isActive": {
+                                    "type": "boolean"
+                                  },
+                                  "createdAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "nullable": true
+                                      }
+                                    ]
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "nullable": true
+                                      }
+                                    ]
+                                  },
+                                  "deletedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "nullable": true
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "widgetId",
+                                  "scope",
+                                  "scopeId",
+                                  "slot",
+                                  "anchorType",
+                                  "anchorId",
+                                  "sortOrder",
+                                  "isActive",
+                                  "createdAt",
+                                  "updatedAt",
+                                  "deletedAt"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -5191,6 +5285,100 @@
                               },
                               "sortOrder": {
                                 "type": "number"
+                              },
+                              "placements": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "widgetId": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string"
+                                    },
+                                    "scopeId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "slot": {
+                                      "type": "string"
+                                    },
+                                    "anchorType": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "anchorId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "sortOrder": {
+                                      "type": "number"
+                                    },
+                                    "isActive": {
+                                      "type": "boolean"
+                                    },
+                                    "createdAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    },
+                                    "updatedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    },
+                                    "deletedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "widgetId",
+                                    "scope",
+                                    "scopeId",
+                                    "slot",
+                                    "anchorType",
+                                    "anchorId",
+                                    "sortOrder",
+                                    "isActive",
+                                    "createdAt",
+                                    "updatedAt",
+                                    "deletedAt"
+                                  ],
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -26019,6 +26207,100 @@
                               "sortOrder": {
                                 "type": "number"
                               },
+                              "placements": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "widgetId": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string"
+                                    },
+                                    "scopeId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "slot": {
+                                      "type": "string"
+                                    },
+                                    "anchorType": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "anchorId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "sortOrder": {
+                                      "type": "number"
+                                    },
+                                    "isActive": {
+                                      "type": "boolean"
+                                    },
+                                    "createdAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    },
+                                    "updatedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    },
+                                    "deletedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "widgetId",
+                                    "scope",
+                                    "scopeId",
+                                    "slot",
+                                    "anchorType",
+                                    "anchorId",
+                                    "sortOrder",
+                                    "isActive",
+                                    "createdAt",
+                                    "updatedAt",
+                                    "deletedAt"
+                                  ],
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
+                              },
                               "createdAt": {
                                 "type": "number"
                               },
@@ -26073,6 +26355,35 @@
                               "name",
                               "sortOrder",
                               "type"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "availablePages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "sortOrder": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "slug",
+                              "sortOrder"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -26344,7 +26655,8 @@
                       "fixed_top_homepage",
                       "fixed_bottom_homepage",
                       "standalone"
-                    ]
+                    ],
+                    "default": "standalone"
                   },
                   "referenceCollectionId": {
                     "type": "string",
@@ -26353,12 +26665,70 @@
                   "sortOrder": {
                     "type": "integer",
                     "default": 0
+                  },
+                  "placements": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "homepage",
+                            "page",
+                            "product",
+                            "category",
+                            "collection"
+                          ],
+                          "default": "homepage"
+                        },
+                        "scopeId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "slot": {
+                          "type": "string",
+                          "enum": [
+                            "top",
+                            "bottom",
+                            "before_content",
+                            "after_content",
+                            "before_collection",
+                            "after_collection"
+                          ],
+                          "default": "top"
+                        },
+                        "anchorType": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "collection",
+                            "content",
+                            null
+                          ]
+                        },
+                        "anchorId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sortOrder": {
+                          "type": "integer",
+                          "default": 0
+                        },
+                        "isActive": {
+                          "type": "boolean",
+                          "default": true
+                        }
+                      }
+                    }
                   }
                 },
                 "required": [
                   "name",
-                  "htmlContent",
-                  "placementRule"
+                  "htmlContent"
                 ]
               }
             }
@@ -26413,6 +26783,100 @@
                         },
                         "sortOrder": {
                           "type": "number"
+                        },
+                        "placements": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "widgetId": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string"
+                              },
+                              "scopeId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "slot": {
+                                "type": "string"
+                              },
+                              "anchorType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "anchorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sortOrder": {
+                                "type": "number"
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "widgetId",
+                              "scope",
+                              "scopeId",
+                              "slot",
+                              "anchorType",
+                              "anchorId",
+                              "sortOrder",
+                              "isActive",
+                              "createdAt",
+                              "updatedAt",
+                              "deletedAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
                         },
                         "createdAt": {
                           "anyOf": [
@@ -27684,6 +28148,100 @@
                         "sortOrder": {
                           "type": "number"
                         },
+                        "placements": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "widgetId": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string"
+                              },
+                              "scopeId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "slot": {
+                                "type": "string"
+                              },
+                              "anchorType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "anchorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sortOrder": {
+                                "type": "number"
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "widgetId",
+                              "scope",
+                              "scopeId",
+                              "slot",
+                              "anchorType",
+                              "anchorId",
+                              "sortOrder",
+                              "isActive",
+                              "createdAt",
+                              "updatedAt",
+                              "deletedAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -28009,7 +28567,8 @@
                       "fixed_top_homepage",
                       "fixed_bottom_homepage",
                       "standalone"
-                    ]
+                    ],
+                    "default": "standalone"
                   },
                   "referenceCollectionId": {
                     "type": "string",
@@ -28018,6 +28577,65 @@
                   "sortOrder": {
                     "type": "integer",
                     "default": 0
+                  },
+                  "placements": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "homepage",
+                            "page",
+                            "product",
+                            "category",
+                            "collection"
+                          ],
+                          "default": "homepage"
+                        },
+                        "scopeId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "slot": {
+                          "type": "string",
+                          "enum": [
+                            "top",
+                            "bottom",
+                            "before_content",
+                            "after_content",
+                            "before_collection",
+                            "after_collection"
+                          ],
+                          "default": "top"
+                        },
+                        "anchorType": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "collection",
+                            "content",
+                            null
+                          ]
+                        },
+                        "anchorId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sortOrder": {
+                          "type": "integer",
+                          "default": 0
+                        },
+                        "isActive": {
+                          "type": "boolean",
+                          "default": true
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -28073,6 +28691,100 @@
                         },
                         "sortOrder": {
                           "type": "number"
+                        },
+                        "placements": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "widgetId": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string"
+                              },
+                              "scopeId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "slot": {
+                                "type": "string"
+                              },
+                              "anchorType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "anchorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sortOrder": {
+                                "type": "number"
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "widgetId",
+                              "scope",
+                              "scopeId",
+                              "slot",
+                              "anchorType",
+                              "anchorId",
+                              "sortOrder",
+                              "isActive",
+                              "createdAt",
+                              "updatedAt",
+                              "deletedAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
                         },
                         "createdAt": {
                           "anyOf": [
@@ -29074,6 +29786,100 @@
                         },
                         "sortOrder": {
                           "type": "number"
+                        },
+                        "placements": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "widgetId": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string"
+                              },
+                              "scopeId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "slot": {
+                                "type": "string"
+                              },
+                              "anchorType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "anchorId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sortOrder": {
+                                "type": "number"
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "widgetId",
+                              "scope",
+                              "scopeId",
+                              "slot",
+                              "anchorType",
+                              "anchorId",
+                              "sortOrder",
+                              "isActive",
+                              "createdAt",
+                              "updatedAt",
+                              "deletedAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
                         },
                         "createdAt": {
                           "anyOf": [
@@ -63872,19 +64678,35 @@
                             "type": "boolean"
                           },
                           "defaultModel": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "baseUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "appName": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 80
                           },
                           "appUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "accountId": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 32,
+                                "pattern": "^[a-f0-9]{32}$/i"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  ""
+                                ]
+                              }
+                            ]
                           }
                         }
                       },
@@ -63895,19 +64717,35 @@
                             "type": "boolean"
                           },
                           "defaultModel": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "baseUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "appName": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 80
                           },
                           "appUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "accountId": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 32,
+                                "pattern": "^[a-f0-9]{32}$/i"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  ""
+                                ]
+                              }
+                            ]
                           }
                         }
                       },
@@ -63918,19 +64756,35 @@
                             "type": "boolean"
                           },
                           "defaultModel": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "baseUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "appName": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 80
                           },
                           "appUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "accountId": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 32,
+                                "pattern": "^[a-f0-9]{32}$/i"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  ""
+                                ]
+                              }
+                            ]
                           }
                         }
                       },
@@ -63941,19 +64795,35 @@
                             "type": "boolean"
                           },
                           "defaultModel": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "baseUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "appName": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 80
                           },
                           "appUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 200
                           },
                           "accountId": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 32,
+                                "pattern": "^[a-f0-9]{32}$/i"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  ""
+                                ]
+                              }
+                            ]
                           }
                         }
                       }
@@ -63991,13 +64861,16 @@
                     "type": "object",
                     "properties": {
                       "widget": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 20000
                       },
                       "landing-page": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 20000
                       },
                       "collection": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 20000
                       }
                     }
                   },
@@ -64005,16 +64878,24 @@
                     "type": "object",
                     "properties": {
                       "openrouter": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
                       },
                       "openai": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
                       },
                       "gemini": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
                       },
                       "cloudflare": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
                       }
                     }
                   },
@@ -77701,13 +78582,15 @@
                     "type": "array",
                     "items": {
                       "type": "string"
-                    }
+                    },
+                    "maxItems": 20
                   },
                   "categoryIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
-                    }
+                    },
+                    "maxItems": 50
                   },
                   "allCategories": {
                     "type": "boolean"
@@ -78651,6 +79534,13 @@
                         "nullable": true
                       }
                     }
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "create",
+                      "improve"
+                    ]
                   }
                 }
               }
@@ -78988,13 +79878,21 @@
                     "minItems": 1
                   },
                   "stage": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "plan",
+                      "generate"
+                    ]
                   },
                   "sectionIndex": {
-                    "type": "number"
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9
                   },
                   "totalSections": {
-                    "type": "number"
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
                   }
                 },
                 "required": [

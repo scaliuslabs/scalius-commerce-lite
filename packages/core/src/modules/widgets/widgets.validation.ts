@@ -3,7 +3,59 @@
 // Imported by admin API routes and WidgetService.
 
 import { z } from "zod";
-import { WidgetPlacementRule } from "@scalius/database/schema";
+import {
+    WidgetPlacementAnchorType,
+    WidgetPlacementRule,
+    WidgetPlacementScope,
+    WidgetPlacementSlot,
+} from "@scalius/database/schema";
+
+export const widgetPlacementInputSchema = z.object({
+    id: z.string().optional(),
+    scope: z.enum([
+        WidgetPlacementScope.HOMEPAGE,
+        WidgetPlacementScope.PAGE,
+        WidgetPlacementScope.PRODUCT,
+        WidgetPlacementScope.CATEGORY,
+        WidgetPlacementScope.COLLECTION,
+    ]).default(WidgetPlacementScope.HOMEPAGE),
+    scopeId: z.string().optional().nullable(),
+    slot: z.enum([
+        WidgetPlacementSlot.TOP,
+        WidgetPlacementSlot.BOTTOM,
+        WidgetPlacementSlot.BEFORE_CONTENT,
+        WidgetPlacementSlot.AFTER_CONTENT,
+        WidgetPlacementSlot.BEFORE_COLLECTION,
+        WidgetPlacementSlot.AFTER_COLLECTION,
+    ]).default(WidgetPlacementSlot.TOP),
+    anchorType: z.enum([
+        WidgetPlacementAnchorType.COLLECTION,
+        WidgetPlacementAnchorType.CONTENT,
+    ]).optional().nullable(),
+    anchorId: z.string().optional().nullable(),
+    sortOrder: z.number().int().optional().default(0),
+    isActive: z.boolean().optional().default(true),
+}).superRefine((placement, ctx) => {
+    if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
+        ctx.addIssue({
+            code: "custom",
+            message: "A scoped page, product, category, or collection placement requires a scopeId.",
+            path: ["scopeId"],
+        });
+    }
+
+    if (
+        (placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
+            placement.slot === WidgetPlacementSlot.AFTER_COLLECTION) &&
+        (!placement.anchorId || placement.anchorType !== WidgetPlacementAnchorType.COLLECTION)
+    ) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Collection-anchored placements require anchorType=collection and anchorId.",
+            path: ["anchorId"],
+        });
+    }
+});
 
 /** Base shape without .refine() so .partial() works for the update schema */
 const widgetBaseSchema = z.object({
@@ -19,9 +71,10 @@ const widgetBaseSchema = z.object({
         WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
         WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
         WidgetPlacementRule.STANDALONE,
-    ]),
+    ]).default(WidgetPlacementRule.STANDALONE),
     referenceCollectionId: z.string().optional().nullable(),
     sortOrder: z.number().int().optional().default(0),
+    placements: z.array(widgetPlacementInputSchema).optional(),
 });
 
 /** Validates that collection-based placement rules have a referenceCollectionId */
@@ -56,3 +109,4 @@ export const updateWidgetSchema = widgetBaseSchema.partial().refine(
 
 export type CreateWidgetInput = z.infer<typeof createWidgetSchema>;
 export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;
+export type WidgetPlacementInput = z.infer<typeof widgetPlacementInputSchema>;

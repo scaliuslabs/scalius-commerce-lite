@@ -396,6 +396,23 @@ export const pageSchema = z
 // ─────────────────────────────────────────
 
 /** Widget — returned by widget service endpoints. */
+export const widgetPlacementSchema = z
+  .object({
+    id: z.string(),
+    widgetId: z.string(),
+    scope: z.string(),
+    scopeId: z.string().nullable(),
+    slot: z.string(),
+    anchorType: z.string().nullable(),
+    anchorId: z.string().nullable(),
+    sortOrder: z.number(),
+    isActive: z.boolean(),
+    createdAt: z.union([z.string(), z.number()]).nullable(),
+    updatedAt: z.union([z.string(), z.number()]).nullable(),
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
+  })
+  .passthrough();
+
 export const widgetSchema = z
   .object({
     id: z.string(),
@@ -408,6 +425,7 @@ export const widgetSchema = z
     placementRule: z.string(),
     referenceCollectionId: z.string().nullable(),
     sortOrder: z.number(),
+    placements: z.array(widgetPlacementSchema).optional(),
     createdAt: z.union([z.string(), z.number()]).nullable(),
     updatedAt: z.union([z.string(), z.number()]).nullable(),
     deletedAt: z.union([z.string(), z.number()]).nullable(),

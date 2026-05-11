@@ -26,7 +26,7 @@ import {
     noContentResponse,
     errorResponses,
 } from "../../schemas/responses";
-import { widgetSchema } from "../../schemas/entities";
+import { widgetPlacementSchema, widgetSchema } from "../../schemas/entities";
 import {
     invalidateGroups,
     triggerStorefrontPurgeForGroups,
@@ -46,6 +46,7 @@ const widgetListItemSchema = z.object({
     placementRule: z.string(),
     referenceCollectionId: z.string().nullable(),
     sortOrder: z.number(),
+    placements: z.array(widgetPlacementSchema).optional(),
     createdAt: z.number(),
     updatedAt: z.number(),
     deletedAt: z.number().nullable(),
@@ -56,6 +57,13 @@ const collectionSummarySchema = z.object({
     name: z.string(),
     sortOrder: z.number(),
     type: z.string(),
+}).passthrough();
+
+const pageSummarySchema = z.object({
+    id: z.string(),
+    title: z.string(),
+    slug: z.string(),
+    sortOrder: z.number(),
 }).passthrough();
 
 const widgetHistoryEntrySchema = z.object({
@@ -95,6 +103,7 @@ const listRoute = createRoute({
                     schema: successEnvelope(z.object({
                         widgets: z.array(widgetListItemSchema),
                         availableCollections: z.array(collectionSummarySchema),
+                        availablePages: z.array(pageSummarySchema).optional(),
                     })),
                 },
             },

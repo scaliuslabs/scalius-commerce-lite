@@ -5,7 +5,12 @@ import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqli
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { collections } from "./products";
-import { WidgetPlacementRule } from "./enums";
+import {
+    WidgetPlacementAnchorType,
+    WidgetPlacementRule,
+    WidgetPlacementScope,
+    WidgetPlacementSlot,
+} from "./enums";
 
 export type PageFeaturedImage = {
     id: string;
@@ -89,6 +94,63 @@ export const widgets = sqliteTable(
     ],
 );
 
+export const widgetPlacements = sqliteTable(
+    "widget_placements",
+    {
+        id: text("id").primaryKey(),
+        widgetId: text("widget_id")
+            .notNull()
+            .references(() => widgets.id, { onDelete: "cascade" }),
+        scope: text("scope", {
+            enum: [
+                WidgetPlacementScope.HOMEPAGE,
+                WidgetPlacementScope.PAGE,
+                WidgetPlacementScope.PRODUCT,
+                WidgetPlacementScope.CATEGORY,
+                WidgetPlacementScope.COLLECTION,
+            ],
+        }).notNull(),
+        scopeId: text("scope_id"),
+        slot: text("slot", {
+            enum: [
+                WidgetPlacementSlot.TOP,
+                WidgetPlacementSlot.BOTTOM,
+                WidgetPlacementSlot.BEFORE_CONTENT,
+                WidgetPlacementSlot.AFTER_CONTENT,
+                WidgetPlacementSlot.BEFORE_COLLECTION,
+                WidgetPlacementSlot.AFTER_COLLECTION,
+            ],
+        }).notNull(),
+        anchorType: text("anchor_type", {
+            enum: [
+                WidgetPlacementAnchorType.COLLECTION,
+                WidgetPlacementAnchorType.CONTENT,
+            ],
+        }),
+        anchorId: text("anchor_id"),
+        sortOrder: integer("sort_order").notNull().default(0),
+        isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+        createdAt: integer("created_at", { mode: "timestamp" })
+            .notNull()
+            .default(UNIX_NOW),
+        updatedAt: integer("updated_at", { mode: "timestamp" })
+            .notNull()
+            .default(UNIX_NOW),
+        deletedAt: integer("deleted_at", { mode: "timestamp" }),
+    },
+    (table) => [
+        index("widget_placements_widget_id_idx").on(table.widgetId),
+        index("widget_placements_lookup_idx").on(
+            table.scope,
+            table.scopeId,
+            table.slot,
+            table.isActive,
+            table.deletedAt,
+        ),
+        index("widget_placements_anchor_idx").on(table.anchorType, table.anchorId),
+    ],
+);
+
 export const widgetHistory = sqliteTable("widget_history", {
     id: text("id").primaryKey(),
     widgetId: text("widget_id")
@@ -148,6 +210,7 @@ export const pageTemplates = sqliteTable("page_templates", {
 
 export type Page = InferSelectModel<typeof pages>;
 export type Widget = InferSelectModel<typeof widgets>;
+export type WidgetPlacement = InferSelectModel<typeof widgetPlacements>;
 export type WidgetHistory = InferSelectModel<typeof widgetHistory>;
 export type HeroSection = InferSelectModel<typeof heroSections>;
 export type HeroSlider = InferSelectModel<typeof heroSliders>;
