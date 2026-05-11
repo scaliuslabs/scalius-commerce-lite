@@ -25,9 +25,20 @@ import {
     errorResponses,
 } from "../../schemas/responses";
 import { pageSchema } from "../../schemas/entities";
+import {
+    invalidateGroups,
+    triggerStorefrontPurgeForGroups,
+} from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+const PAGE_CACHE_GROUPS = ["pages"];
+
+async function invalidatePageCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
+    await invalidateGroups(PAGE_CACHE_GROUPS, c.env?.CACHE);
+    triggerStorefrontPurgeForGroups(PAGE_CACHE_GROUPS, c.env, c.executionCtx);
+}
 
 // ── List Pages ──
 
@@ -91,6 +102,7 @@ const createPageRoute = createRoute({
 app.openapi(createPageRoute, async (c) => {
     const db = c.get("db");
     const result = await createPage(db, c.req.valid("json"));
+    await invalidatePageCaches(c);
     return created(c, result);
 });
 
@@ -123,6 +135,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { pageIds, permanent } = c.req.valid("json");
     await bulkDeletePages(db, pageIds, permanent);
+    await invalidatePageCaches(c);
     return noContent(c);
 });
 
@@ -145,6 +158,7 @@ const bulkPublishRoute = createRoute({
 app.openapi(bulkPublishRoute, async (c) => {
     const db = c.get("db");
     await bulkPublishPages(db, c.req.valid("json").ids);
+    await invalidatePageCaches(c);
     return noContent(c);
 });
 
@@ -167,6 +181,7 @@ const bulkUnpublishRoute = createRoute({
 app.openapi(bulkUnpublishRoute, async (c) => {
     const db = c.get("db");
     await bulkUnpublishPages(db, c.req.valid("json").ids);
+    await invalidatePageCaches(c);
     return noContent(c);
 });
 
@@ -189,6 +204,7 @@ const bulkRestoreRoute = createRoute({
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     await restorePages(db, c.req.valid("json").ids);
+    await invalidatePageCaches(c);
     return noContent(c);
 });
 
@@ -217,6 +233,7 @@ app.openapi(restoreRoute, async (c) => {
     // Note: do NOT call getPageById here — it filters deletedAt IS NULL,
     // which would always 404 for soft-deleted pages being restored
     await restorePages(db, [id]);
+    await invalidatePageCaches(c);
     return ok(c, { message: "Page restored" });
 });
 
@@ -271,6 +288,7 @@ app.openapi(updatePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await updatePage(db, id, c.req.valid("json"));
+    await invalidatePageCaches(c);
     return ok(c, {});
 });
 
@@ -294,6 +312,7 @@ app.openapi(deletePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deletePage(db, id);
+    await invalidatePageCaches(c);
     return noContent(c);
 });
 
@@ -317,6 +336,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await bulkDeletePages(db, [id], true);
+    await invalidatePageCaches(c);
     return noContent(c);
 });
 
