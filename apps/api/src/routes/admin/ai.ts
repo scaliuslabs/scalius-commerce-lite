@@ -102,6 +102,17 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function supportsVisionForModel(provider: WidgetAiProvider, model: string): boolean {
+  if (provider === "gemini") return true;
+  if (provider === "cloudflare") {
+    return /kimi-k2\.6|llava|vision/i.test(model);
+  }
+  if (provider === "openai") {
+    return /gpt-4o|gpt-5|vision/i.test(model);
+  }
+  return false;
+}
+
 function configuredModel(
   provider: WidgetAiProvider,
   settings: WidgetAiRuntimeSettings,
@@ -113,7 +124,7 @@ function configuredModel(
           id: model,
           name: model,
           provider,
-          supportsVision: provider === "gemini",
+          supportsVision: supportsVisionForModel(provider, model),
           source: "configured",
         },
       ]
@@ -131,8 +142,8 @@ function fallbackModels(
     gemini: [],
     cloudflare: [
       {
-        id: "@cf/moonshotai/kimi-k2.5",
-        name: "Kimi K2.5",
+        id: "@cf/moonshotai/kimi-k2.6",
+        name: "Kimi K2.6",
         provider,
         supportsVision: true,
         source: "fallback",

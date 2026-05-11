@@ -74,11 +74,10 @@ const defaultProviderValues: ProviderValues = {
 };
 
 const defaultValues: WidgetAiValues = {
-  activeProvider: "openrouter",
+  activeProvider: "cloudflare",
   providers: {
     openrouter: {
       ...defaultProviderValues,
-      enabled: true,
       baseUrl: "https://openrouter.ai/api/v1",
       appName: "Scalius Commerce",
     },
@@ -92,7 +91,8 @@ const defaultValues: WidgetAiValues = {
     },
     cloudflare: {
       ...defaultProviderValues,
-      defaultModel: "@cf/openai/gpt-oss-120b",
+      enabled: true,
+      defaultModel: "@cf/moonshotai/kimi-k2.6",
     },
   },
   generation: {

@@ -26,9 +26,11 @@ describe("widget AI settings", () => {
     });
 
     expect(config.activeProvider).toBe(DEFAULT_WIDGET_AI_CONFIG.activeProvider);
-    expect(config.providers.openrouter.enabled).toBe(true);
+    expect(config.providers.openrouter.enabled).toBe(false);
     expect(config.providers.openrouter.defaultModel).toBe("");
     expect(config.providers.openrouter.baseUrl).toBe("https://openrouter.ai/api/v1");
+    expect(config.providers.cloudflare.enabled).toBe(true);
+    expect(config.providers.cloudflare.defaultModel).toBe("@cf/moonshotai/kimi-k2.6");
     expect(config.generation.planningTemperature).toBe(0);
     expect(config.generation.generationTemperature).toBe(2);
     expect(config.generation.maxOutputTokens).toBe(64000);

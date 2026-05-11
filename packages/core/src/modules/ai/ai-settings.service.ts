@@ -91,10 +91,10 @@ export interface WidgetAiSettingsUpdate {
 }
 
 export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
-  activeProvider: "openrouter",
+  activeProvider: "cloudflare",
   providers: {
     openrouter: {
-      enabled: true,
+      enabled: false,
       defaultModel: "",
       baseUrl: DEFAULT_BASE_URLS.openrouter,
       appName: "Scalius Commerce",
@@ -111,8 +111,8 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
       baseUrl: DEFAULT_BASE_URLS.gemini,
     },
     cloudflare: {
-      enabled: false,
-      defaultModel: "@cf/openai/gpt-oss-120b",
+      enabled: true,
+      defaultModel: "@cf/moonshotai/kimi-k2.6",
       accountId: "",
     },
   },

@@ -24,6 +24,7 @@ import {
 } from "../../integrations/analytics";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
+import { sanitizeWidgetCss, sanitizeWidgetHtml } from "../widgets/widgets.service";
 import type { Database } from "@scalius/database/client";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -162,8 +163,14 @@ export async function getHomepageData(db: Database) {
     (widget) => ({
       id: widget.id,
       name: widget.name,
-      htmlContent: widget.htmlContent,
-      cssContent: widget.cssContent,
+      htmlContent:
+        typeof widget.htmlContent === "string"
+          ? sanitizeWidgetHtml(widget.htmlContent)
+          : widget.htmlContent,
+      cssContent:
+        typeof widget.cssContent === "string"
+          ? sanitizeWidgetCss(widget.cssContent)
+          : widget.cssContent,
       isActive: widget.isActive,
       displayTarget: widget.displayTarget,
       placementRule: widget.placementRule,

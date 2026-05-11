@@ -24,6 +24,7 @@ Widget generation is provider-neutral and dashboard-configurable.
 - Saving provider keys requires `CREDENTIAL_ENCRYPTION_KEY`; there is no JWT-secret fallback for AI secrets.
 - Non-secret provider configuration is stored in key `widget_generation_config`.
 - Runtime generation uses Vercel AI SDK providers for OpenRouter, OpenAI, Gemini, and Cloudflare Workers AI.
+- The fresh-install default provider is Cloudflare Workers AI with `@cf/moonshotai/kimi-k2.6`.
 - The generation API preserves the OpenAI-style `choices[].message.content` and streaming `choices[].delta.content` shapes because the widget editor parser consumes that shape.
 - Widget previews are sanitized and scriptless. Generated widgets should be HTML/CSS only; scripts are stripped before preview/storefront rendering.
 - Provider base URLs are constrained to official HTTPS endpoints to avoid sending merchant API keys to arbitrary proxy URLs.

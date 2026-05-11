@@ -27,6 +27,10 @@ import {
     errorResponses,
 } from "../../schemas/responses";
 import { widgetSchema } from "../../schemas/entities";
+import {
+    invalidateGroups,
+    triggerStorefrontPurgeForGroups,
+} from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
 
@@ -64,6 +68,12 @@ const widgetHistoryEntrySchema = z.object({
 }).passthrough();
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const WIDGET_CACHE_GROUPS = ["homepage"];
+
+async function invalidateWidgetCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
+    await invalidateGroups(WIDGET_CACHE_GROUPS, c.env?.CACHE);
+    triggerStorefrontPurgeForGroups(WIDGET_CACHE_GROUPS, c.env, c.executionCtx);
+}
 
 // ── List Widgets ──
 
@@ -122,6 +132,7 @@ const createWidgetRoute = createRoute({
 app.openapi(createWidgetRoute, async (c) => {
     const db = c.get("db");
     const widget = await createWidget(db, c.req.valid("json"));
+    await invalidateWidgetCaches(c);
     return created(c, widget);
 });
 
@@ -151,6 +162,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { ids, permanent } = c.req.valid("json");
     await bulkDeleteWidgets(db, ids, permanent);
+    await invalidateWidgetCaches(c);
     return noContent(c);
 });
 
@@ -173,6 +185,7 @@ const bulkActivateRoute = createRoute({
 app.openapi(bulkActivateRoute, async (c) => {
     const db = c.get("db");
     await bulkActivateWidgets(db, c.req.valid("json").ids);
+    await invalidateWidgetCaches(c);
     return noContent(c);
 });
 
@@ -195,6 +208,7 @@ const bulkDeactivateRoute = createRoute({
 app.openapi(bulkDeactivateRoute, async (c) => {
     const db = c.get("db");
     await bulkDeactivateWidgets(db, c.req.valid("json").ids);
+    await invalidateWidgetCaches(c);
     return noContent(c);
 });
 
@@ -217,6 +231,7 @@ const bulkRestoreRoute = createRoute({
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     await restoreWidgets(db, c.req.valid("json").ids);
+    await invalidateWidgetCaches(c);
     return noContent(c);
 });
 
@@ -271,6 +286,7 @@ app.openapi(updateWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const result = await updateWidget(db, id, c.req.valid("json"));
+    await invalidateWidgetCaches(c);
     return ok(c, result);
 });
 
@@ -294,6 +310,7 @@ app.openapi(deleteWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteWidget(db, id);
+    await invalidateWidgetCaches(c);
     return noContent(c);
 });
 
@@ -317,6 +334,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await bulkDeleteWidgets(db, [id], true);
+    await invalidateWidgetCaches(c);
     return noContent(c);
 });
 
@@ -340,6 +358,7 @@ app.openapi(restoreWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreWidgets(db, [id]);
+    await invalidateWidgetCaches(c);
     return noContent(c);
 });
 
@@ -368,6 +387,7 @@ app.openapi(toggleStatusRoute, async (c) => {
     const widget = await getWidgetById(db, id);
     if (!widget) throw new NotFoundError("Widget not found");
     const result = await updateWidget(db, id, { isActive: !widget.isActive });
+    await invalidateWidgetCaches(c);
     return ok(c, result);
 });
 
@@ -462,6 +482,7 @@ app.openapi(restoreHistoryRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { historyId } = c.req.valid("json");
     const result = await restoreFromHistory(db, id, historyId);
+    await invalidateWidgetCaches(c);
     return ok(c, result);
 });
 

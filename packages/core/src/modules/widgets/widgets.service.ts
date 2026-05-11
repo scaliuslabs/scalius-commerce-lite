@@ -24,7 +24,7 @@ export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type Up
 /** Strip dangerous HTML patterns before serving widget content to storefront.
  *  Delegates to the shared sanitizer which handles entity-encoded event handlers,
  *  null bytes, CSS expressions, dangerous tags, and protocol-based XSS vectors. */
-function sanitizeWidgetHtml(html: string): string {
+export function sanitizeWidgetHtml(html: string): string {
     if (!html) return html;
     return sanitizeHtml(html);
 }
@@ -32,7 +32,7 @@ function sanitizeWidgetHtml(html: string): string {
 /** Strip dangerous CSS patterns from widget stylesheets.
  *  Removes: @import (external stylesheet loading), expression() (IE script exec),
  *  url(javascript:...), behavior/binding properties (IE/Firefox script exec). */
-function sanitizeWidgetCss(css: string): string {
+export function sanitizeWidgetCss(css: string): string {
     if (!css) return css;
     let result = css;
     // Remove @import rules (can load external stylesheets with script content)
