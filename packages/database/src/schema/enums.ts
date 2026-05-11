@@ -95,6 +95,35 @@ export const WidgetPlacementRule = {
 
 export type WidgetPlacementRule = (typeof WidgetPlacementRule)[keyof typeof WidgetPlacementRule];
 
+export const WidgetPlacementScope = {
+    HOMEPAGE: "homepage",
+    PAGE: "page",
+    PRODUCT: "product",
+    CATEGORY: "category",
+    COLLECTION: "collection",
+} as const;
+
+export type WidgetPlacementScope = (typeof WidgetPlacementScope)[keyof typeof WidgetPlacementScope];
+
+export const WidgetPlacementSlot = {
+    TOP: "top",
+    BOTTOM: "bottom",
+    BEFORE_CONTENT: "before_content",
+    AFTER_CONTENT: "after_content",
+    BEFORE_COLLECTION: "before_collection",
+    AFTER_COLLECTION: "after_collection",
+} as const;
+
+export type WidgetPlacementSlot = (typeof WidgetPlacementSlot)[keyof typeof WidgetPlacementSlot];
+
+export const WidgetPlacementAnchorType = {
+    COLLECTION: "collection",
+    CONTENT: "content",
+} as const;
+
+export type WidgetPlacementAnchorType =
+    (typeof WidgetPlacementAnchorType)[keyof typeof WidgetPlacementAnchorType];
+
 export const PaymentRecordStatus = {
     PENDING: "pending",
     CONFIRMED: "confirmed",

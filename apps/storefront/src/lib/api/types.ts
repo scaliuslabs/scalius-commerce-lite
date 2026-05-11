@@ -216,9 +216,25 @@ export interface ApiWidget {
   placementRule: string;
   referenceCollectionId?: string | null;
   sortOrder: number;
+  placements?: ApiWidgetPlacement[];
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+}
+
+export interface ApiWidgetPlacement {
+  id: string;
+  widgetId: string;
+  scope: string;
+  scopeId?: string | null;
+  slot: string;
+  anchorType?: string | null;
+  anchorId?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt?: string | number | null;
+  updatedAt?: string | number | null;
+  deletedAt?: string | number | null;
 }
 
 // ---------------------------------------------------------------------------

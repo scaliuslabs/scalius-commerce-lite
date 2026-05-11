@@ -43,3 +43,17 @@ The widget system is Scalius Commerce's merchant-facing storefront composition l
 4. Add a real page-builder AI save flow for landing pages instead of overloading widget save semantics.
 5. Finish moving output repair and validation server-side by upgrading the editor protocol from OpenAI-style text envelopes to canonical widget objects.
 6. Add browser smoke suites for widget creation, editing, staged generation, preview devices, placement, shortcode use, homepage rendering, and landing-page rendering.
+
+## Placement Architecture
+
+Widgets are reusable content blocks. Placement is a separate concern and now has a dedicated `widget_placements` table. The old `widgets.displayTarget`, `widgets.placementRule`, `widgets.referenceCollectionId`, and `widgets.sortOrder` columns remain only as a projection for current admin screens and existing response types.
+
+Canonical placement fields:
+
+- `scope`: `homepage`, `page`, `product`, `category`, or `collection`
+- `scopeId`: required for non-homepage scopes
+- `slot`: top/bottom/content/collection anchor slot
+- `anchorType` + `anchorId`: used when a placement is anchored to a collection or content region
+- `sortOrder` + `isActive`: placement-specific ordering and status
+
+Homepage rendering should read active homepage placements, join the reusable widget content, and project legacy placement rule fields only for the current storefront grouping helper. Landing pages should use page-scoped placements instead of saving `[widget]` shortcodes as the primary page-builder model.
