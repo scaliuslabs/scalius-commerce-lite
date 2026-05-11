@@ -44,7 +44,7 @@ export class MediaApiClient {
         folderId: filters.folderId ?? undefined,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
-        type: filters.mimeType ?? undefined,
+        mimeType: filters.mimeType ?? undefined,
       },
     });
     return data as MediaApiResponse;

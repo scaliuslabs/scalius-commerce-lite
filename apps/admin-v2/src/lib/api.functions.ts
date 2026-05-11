@@ -1183,6 +1183,7 @@ export const getMediaList = createServerFn({ method: "GET" })
       limit?: number;
       search?: string;
       folderId?: string;
+      mimeType?: string;
       type?: string;
       sortBy?: string;
       sortOrder?: string;
@@ -1194,7 +1195,8 @@ export const getMediaList = createServerFn({ method: "GET" })
     if (data.limit) params.limit = String(data.limit);
     if (data.search) params.search = data.search;
     if (data.folderId) params.folderId = data.folderId;
-    if (data.type) params.type = data.type;
+    if (data.mimeType) params.mimeType = data.mimeType;
+    if (!data.mimeType && data.type) params.mimeType = data.type;
     if (data.sortBy) params.sortBy = data.sortBy;
     if (data.sortOrder) params.sortOrder = data.sortOrder;
     return apiGet<unknown>("/media", params);
