@@ -6,7 +6,11 @@ const SRC_ATTR_RE = /\s+src\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
 const MANAGED_ATTR_RE =
   /\s+(?:src|srcset|sizes|loading|decoding)\s*=\s*("([^"]*)"|'([^']*)'|[^\s"'=<>`]+)/gi;
 const VOID_ATTR_RE = /\s+(?:loading|decoding)(?=\s|>|$)/gi;
+const CSS_URL_RE =
+  /url\(\s*(?:"([^"]*)"|'([^']*)'|([^'")]*?))\s*\)/gi;
 const SKIPPED_SRC_RE = /^(?:data:|blob:|javascript:|vbscript:|#)/i;
+const SKIPPED_CSS_ASSET_RE =
+  /\.(?:css|js|json|svg|woff2?|ttf|otf|eot)(?:[?#].*)?$/i;
 
 function readAttributeValue(match: RegExpMatchArray): string {
   return match[2] ?? match[3] ?? match[4] ?? "";
@@ -16,6 +20,15 @@ function shouldSkipImage(src: string): boolean {
   const clean = src.trim();
   if (!clean || SKIPPED_SRC_RE.test(clean)) return true;
   return clean.split("?")[0]?.toLowerCase().endsWith(".svg") ?? false;
+}
+
+function shouldSkipCssAsset(src: string): boolean {
+  const clean = src.trim();
+  return !clean || SKIPPED_SRC_RE.test(clean) || SKIPPED_CSS_ASSET_RE.test(clean);
+}
+
+function escapeCssUrl(url: string): string {
+  return url.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n\f]/g, "");
 }
 
 function responsiveVariant(src: string, width: number): string {
@@ -35,7 +48,7 @@ function responsiveVariant(src: string, width: number): string {
 export function optimizeRichContentImages(html: string): string {
   if (!html) return "";
 
-  return html.replace(IMG_TAG_RE, (tag, attrs: string) => {
+  const optimizedHtml = html.replace(IMG_TAG_RE, (tag, attrs: string) => {
     const srcMatch = attrs.match(SRC_ATTR_RE);
     if (!srcMatch) return tag;
 
@@ -67,5 +80,30 @@ export function optimizeRichContentImages(html: string): string {
     const managedPrefix = managed ? ` ${managed}` : "";
 
     return `<img${managedPrefix} src="${escapeHtml(src)}" srcset="${escapeHtml(srcset)}" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 75vw, 900px" loading="lazy" decoding="async">`;
+  });
+
+  return optimizeCssImageUrls(optimizedHtml);
+}
+
+/**
+ * Applies the storefront image optimizer to CSS image references. This covers
+ * widget CSS, inline background images, and `<style>` blocks inside rich HTML.
+ */
+export function optimizeCssImageUrls(css: string): string {
+  if (!css) return "";
+
+  return css.replace(CSS_URL_RE, (match, doubleQuoted, singleQuoted, bare) => {
+    const originalSrc = (doubleQuoted ?? singleQuoted ?? bare ?? "").trim();
+    if (shouldSkipCssAsset(originalSrc)) return match;
+
+    const optimized = getOptimizedImageUrl(originalSrc, {
+      width: 1600,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+    });
+
+    if (!optimized || optimized === originalSrc) return match;
+    return `url("${escapeCssUrl(optimized)}")`;
   });
 }

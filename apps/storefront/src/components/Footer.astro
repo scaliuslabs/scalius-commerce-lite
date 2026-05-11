@@ -9,6 +9,7 @@ import type {
 } from "@/lib/api";
 import RecursiveFooterLink from "./RecursiveFooterLink.astro";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { optimizeRichContentImages } from "@/lib/rich-content-media";
 
 interface Props {
   footerData: FooterData;
@@ -20,6 +21,18 @@ const logo = footerData?.logo || { src: "/logo.svg", alt: "Store Logo" };
 const favicon = footerData?.favicon;
 const tagline = footerData?.tagline || "";
 const description = footerData?.description || "";
+const optimizedDescription = optimizeRichContentImages(description);
+const optimizedFavicon =
+  favicon?.src && !favicon.src.endsWith(".svg")
+    ? {
+        ...favicon,
+        src: getOptimizedImageUrl(favicon.src, {
+          width: 64,
+          height: 64,
+          fit: "contain",
+        }),
+      }
+    : favicon;
 const copyrightText = footerData?.copyrightText || "";
 const rawMenus: FooterMenu[] = footerData?.menus || [];
 const socialRaw: SocialLink[] = footerData?.social || [];
@@ -128,7 +141,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
           description && (
             <div
               class="mt-2 text-base text-white/80 leading-relaxed max-w-md prose prose-base prose-invert prose-p:my-1 prose-p:leading-relaxed prose-a:text-white prose-a:underline hover:prose-a:text-white/90"
-              set:html={description}
+              set:html={optimizedDescription}
             />
           )
         }
@@ -252,21 +265,10 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
   var siteSettings = {
     siteName: ${JSON.stringify(footerData?.copyrightText || "Your Store")},
     social: ${JSON.stringify(social)},
-    favicon: ${JSON.stringify(favicon || null)},
+    favicon: ${JSON.stringify(optimizedFavicon || null)},
   };
   try {
     localStorage.setItem("siteSettings", JSON.stringify(siteSettings));
-    if (siteSettings.favicon && siteSettings.favicon.src && siteSettings.favicon.src.startsWith("http")) {
-      var existingFavicon = document.querySelector('link[rel="icon"]');
-      if (existingFavicon) {
-        existingFavicon.href = siteSettings.favicon.src;
-      } else {
-        var newFavicon = document.createElement("link");
-        newFavicon.rel = "icon";
-        newFavicon.href = siteSettings.favicon.src;
-        document.head.appendChild(newFavicon);
-      }
-    }
   } catch (e) {
     console.error("Error storing site settings in localStorage:", e);
   }
