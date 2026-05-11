@@ -82,6 +82,11 @@ interface FraudCheckerSettingsProps {
 
 const DEFAULT_PROVIDER_TYPE: FraudCheckProviderType = "default";
 
+function credentialPlaceholder(label: string | undefined, fallback: string): string {
+  if (!label) return fallback;
+  return `Enter ${label.toLowerCase()}`;
+}
+
 // ── Component ──
 
 const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
@@ -383,7 +388,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                     type="password"
                     {...form.register("apiKey")}
                     className="h-8 text-sm"
-                    placeholder="Enter API key"
+                    placeholder={credentialPlaceholder(providerDefinition.apiKeyLabel, "Enter API key")}
                   />
                   {form.formState.errors.apiKey && (
                     <p className="text-xs text-destructive">{form.formState.errors.apiKey.message}</p>
@@ -398,7 +403,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                       type="password"
                       {...form.register("apiSecret")}
                       className="h-8 text-sm"
-                      placeholder="Enter API secret"
+                      placeholder={credentialPlaceholder(providerDefinition.apiSecretLabel, "Enter API secret")}
                     />
                     {form.formState.errors.apiSecret && (
                       <p className="text-xs text-destructive">{form.formState.errors.apiSecret.message}</p>
@@ -413,7 +418,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                       id="userId"
                       {...form.register("userId")}
                       className="h-8 text-sm"
-                      placeholder="Enter user ID"
+                      placeholder={credentialPlaceholder(providerDefinition.userIdLabel, "Enter user ID")}
                     />
                     {form.formState.errors.userId && (
                       <p className="text-xs text-destructive">{form.formState.errors.userId.message}</p>

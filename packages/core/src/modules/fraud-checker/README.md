@@ -38,7 +38,7 @@ Provider configuration presets live in `FRAUD_CHECK_PROVIDER_DEFINITIONS`, which
 | Provider type | Adapter | Auth | Request |
 |---------------|---------|------|---------|
 | `default` | `DefaultFraudCheckProvider` | `Authorization: Bearer <apiKey>` | `FormData(phone)` |
-| `fraudbd` | `FraudBdCheckProvider` | `api_key` header | JSON `{ phone_number }` |
+| `fraudbd` | `FraudBdCheckProvider` | `api_key` + `user_name` + `password` headers | JSON `{ phone_number }` |
 | `fraudguard` | `FraudGuardCheckProvider` | `X-API-KEY` + `X-API-SECRET` headers | JSON `{ phone_number }` |
 | `ecourier` | `ECourierFraudCheckProvider` | `API-KEY` + `API-SECRET` + `USER-ID` headers | JSON `{ number }` |
 
