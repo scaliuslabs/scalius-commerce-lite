@@ -28,7 +28,10 @@ interface KVNamespaceListKey<Metadata = unknown, Key extends string = string> {
   metadata?: Metadata;
 }
 
-interface KVNamespaceListResult<Metadata = unknown, Key extends string = string> {
+interface KVNamespaceListResult<
+  Metadata = unknown,
+  Key extends string = string,
+> {
   keys: KVNamespaceListKey<Metadata, Key>[];
   list_complete: boolean;
   cursor?: string;
@@ -44,7 +47,11 @@ interface KVNamespace<Key extends string = string> {
   put(
     key: Key,
     value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
-    options?: { expiration?: number; expirationTtl?: number; metadata?: object | null },
+    options?: {
+      expiration?: number;
+      expirationTtl?: number;
+      metadata?: object | null;
+    },
   ): Promise<void>;
   delete(key: Key): Promise<void>;
   list<Metadata = unknown>(options?: {
@@ -139,6 +146,10 @@ declare let __SCALIUS_CDN_DOMAIN__: string | undefined;
 interface Window {
   __API_BASE_URL__?: string;
   __CDN_DOMAIN__?: string;
+  __IMAGE_OPTIMIZATION_ENABLED__?: boolean;
+  __IMAGE_CDN_BASE_URL__?: string;
+  __IMAGE_CDN_HOSTS__?: string[];
+  __IMAGE_CDN_CANONICAL_HOST_ALIASES__?: string[];
   __CURRENCY_SYMBOL__?: string;
   __CURRENCY_CODE__?: string;
   __CURRENCY_DECIMAL_PLACES__?: number;
@@ -150,12 +161,19 @@ interface Window {
   // Cart interaction handlers (set by lib/cart/client.ts initCartFunctionality)
   lastShippingEventDetail?: { id: string; fee: number; name?: string };
   handleAbandonedCheckout?: () => void;
-  updateCartQuantity?: (id: string, variantId: string, quantity: number) => void;
+  updateCartQuantity?: (
+    id: string,
+    variantId: string,
+    quantity: number,
+  ) => void;
   removeFromCart?: (id: string, variantId: string) => void;
   removeDiscountCode?: () => void;
 
   // Note: Stripe type is declared in checkout/handlers/stripe.ts with its full interface
 
   // Browser APIs that may not be in all TS lib targets
-  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  requestIdleCallback?: (
+    callback: () => void,
+    options?: { timeout?: number },
+  ) => number;
 }

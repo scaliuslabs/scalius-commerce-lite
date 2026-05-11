@@ -1,6 +1,7 @@
 ---
 // src/components/RichContent.astro
 import { processShortcodes } from "@/lib/shortcodes";
+import { optimizeRichContentImages } from "@/lib/rich-content-media";
 
 interface Props {
   content: string;
@@ -25,23 +26,8 @@ if (shouldProcessShortcodes && content) {
   }
 }
 
-// Dynamically generate srcset for hardcoded Cloudflare images injected by the backend Rich Text editor
 if (processedContent) {
-  processedContent = processedContent.replace(
-    /<img([^>]*)src="([^"]*\/cdn-cgi\/image\/[^"]*width=600[^"]*)"([^>]*)>/gi,
-    ( _match, before, src, after) => {
-      // Clean duplicate loading attributes
-      const cleanBefore = before.replace(/\sloading="[^"]*"/gi, '');
-      const cleanAfter = after.replace(/\sloading="[^"]*"/gi, '');
-      
-      const w200 = src.replace('width=600', 'width=200').replace('quality=85', 'quality=80');
-      const w400 = src.replace('width=600', 'width=400').replace('quality=85', 'quality=80');
-      
-      // Responsive sizes assume content varies from 100% on mobile to fractions on wider screens
-      const sizes = "(max-width: 400px) 100vw, (max-width: 800px) 50vw, 33vw";
-      return `<img${cleanBefore}src="${src}" srcset="${w200} 200w, ${w400} 400w, ${src} 600w" sizes="${sizes}"${cleanAfter} loading="lazy">`;
-    }
-  );
+  processedContent = optimizeRichContentImages(processedContent);
 }
 
 // CORRECTED: Drastically simplified class list.

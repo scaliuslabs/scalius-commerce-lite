@@ -8,8 +8,11 @@ import { getLayoutData, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
 import CommandPalette from "@/components/search/CommandPalette";
 import AuthModal from "@/components/AuthModal";
-import { resolveMediaUrl } from "@/lib/media-url";
-import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import {
+  getRuntimeStorefrontUrl,
+  setRuntimeImageCdnPolicy,
+} from "@/lib/api/runtime-env";
 
 interface Props {
   title: string;
@@ -41,8 +44,9 @@ const {
   noindex,
 } = Astro.props;
 
-// Use provided layout data if available (parallel fetch), otherwise fetch here (backward compat)
-const layoutData = providedLayoutData ?? await getLayoutData();
+// Use provided layout data when pages load it in parallel; otherwise fetch here.
+const layoutData = providedLayoutData ?? (await getLayoutData());
+setRuntimeImageCdnPolicy(layoutData?.media);
 
 const analyticsScripts: AnalyticsConfig[] = layoutData?.analytics || [];
 const navigationData = layoutData?.navigation || [];
@@ -66,50 +70,69 @@ const footerData = layoutData?.footer ?? {
   social: [],
 };
 
-const faviconUrl = headerData?.favicon?.src || "/favicon.svg";
+const faviconUrl = headerData?.favicon?.src
+  ? getOptimizedImageUrl(headerData.favicon.src, {
+      width: 64,
+      height: 64,
+      fit: "contain",
+    })
+  : "/favicon.svg";
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
 const storeName = footerData.copyrightText || headerData.logo.alt || "Store";
 const storefrontUrl = getRuntimeStorefrontUrl();
 
 // Organization JSON-LD — only emit when we have a logo (per SEO-05)
-const logoUrl = headerData.logo.src ? resolveMediaUrl(headerData.logo.src) : null;
-const socialUrls = (footerData.social || []).map((s: { url?: string }) => s.url).filter(Boolean);
-const orgJsonLd = logoUrl ? JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  "name": storeName,
-  "url": storefrontUrl,
-  "logo": { "@type": "ImageObject", "url": logoUrl },
-  ...(socialUrls.length > 0 ? { "sameAs": socialUrls } : {}),
-}) : null;
+const logoUrl = headerData.logo.src
+  ? getOptimizedImageUrl(headerData.logo.src, {
+      width: 512,
+      height: 512,
+      fit: "contain",
+    })
+  : null;
+const socialUrls = (footerData.social || [])
+  .map((s: { url?: string }) => s.url)
+  .filter(Boolean);
+const orgJsonLd = logoUrl
+  ? JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: storeName,
+      url: storefrontUrl,
+      logo: { "@type": "ImageObject", url: logoUrl },
+      ...(socialUrls.length > 0 ? { sameAs: socialUrls } : {}),
+    })
+  : null;
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
-const websiteJsonLd = storefrontUrl ? JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "WebSite",
-  "name": storeName,
-  "url": storefrontUrl,
-  "potentialAction": {
-    "@type": "SearchAction",
-    "target": {
-      "@type": "EntryPoint",
-      "urlTemplate": `${storefrontUrl}/search?q={search_term_string}`
-    },
-    "query-input": "required name=search_term_string"
-  }
-}) : null;
+const websiteJsonLd = storefrontUrl
+  ? JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: storeName,
+      url: storefrontUrl,
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${storefrontUrl}/search?q={search_term_string}`,
+        },
+        "query-input": "required name=search_term_string",
+      },
+    })
+  : null;
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
-const currencyDecimalPlaces = layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
+const currencyDecimalPlaces =
+  layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
 // Build dynamic CSS overrides from admin-configured theme colors.
 // Only non-empty color values are included.
 const themeColors = layoutData?.theme?.colors ?? {};
 const themeColorEntries = Object.entries(themeColors).filter(
-  ([, v]) => v && v.trim()
+  ([, v]) => v && v.trim(),
 );
 const themeStyleBlock =
   themeColorEntries.length > 0
@@ -117,21 +140,54 @@ const themeStyleBlock =
     : "";
 
 const headScripts = analyticsScripts.filter(
-  (script) => script.location === "head"
+  (script) => script.location === "head",
 );
 const bodyStartScripts = analyticsScripts.filter(
-  (script) => script.location === "body_start"
+  (script) => script.location === "body_start",
 );
 const bodyEndScripts = analyticsScripts.filter(
-  (script) => script.location === "body_end"
+  (script) => script.location === "body_end",
 );
 
 // Derive preconnect origins from Cloudflare Worker env (wrangler.jsonc vars).
 // All values come from runtime bindings — no build-time fallbacks.
 import { env as cfEnv } from "cloudflare:workers";
-const workerEnv = (() => { try { const e = cfEnv as unknown as Env; return (e?.CDN_DOMAIN_URL || e?.PUBLIC_API_URL) ? e : null; } catch { return null; } })();
+const workerEnv = (() => {
+  try {
+    const e = cfEnv as unknown as Env;
+    return e?.CDN_DOMAIN_URL || e?.PUBLIC_API_URL ? e : null;
+  } catch {
+    return null;
+  }
+})();
 const publicApiUrl = (workerEnv?.PUBLIC_API_URL as string) || "";
-const cdnDomainUrl = (workerEnv?.CDN_DOMAIN_URL as string) || "";
+const envCdnDomainUrl = (workerEnv?.CDN_DOMAIN_URL as string) || "";
+const mediaSettings = layoutData?.media;
+const configuredCdnBase =
+  mediaSettings?.canonicalCdnUrl?.trim() || envCdnDomainUrl;
+const cdnDomainUrl = configuredCdnBase
+  .replace(/^https?:\/\//, "")
+  .replace(/\/$/, "");
+const imageOptimizationEnabled = mediaSettings?.enabled !== false;
+const imageCdnHosts = [
+  cdnDomainUrl,
+  ...(mediaSettings?.allowedImageHosts ?? []),
+]
+  .map((host) =>
+    host
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, "")
+      .toLowerCase(),
+  )
+  .filter(Boolean);
+const imageCdnAliases = (mediaSettings?.canonicalHostAliases ?? [])
+  .map((host) =>
+    host
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, "")
+      .toLowerCase(),
+  )
+  .filter(Boolean);
 
 const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
 const cdnDomain = cdnDomainUrl || null;
@@ -146,11 +202,17 @@ const cdnDomain = cdnDomainUrl || null;
     {apiOrigin && <link rel="dns-prefetch" href={apiOrigin} />}
     {apiOrigin && <link rel="preconnect" href={apiOrigin} crossorigin />}
     {cdnDomain && <link rel="dns-prefetch" href={`https://${cdnDomain}`} />}
-    {cdnDomain && <link rel="preconnect" href={`https://${cdnDomain}`} crossorigin />}
-
+    {
+      cdnDomain && (
+        <link rel="preconnect" href={`https://${cdnDomain}`} crossorigin />
+      )
+    }
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
-    <script is:inline set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl || "/api/v1")};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};window.__CURRENCY_DECIMAL_PLACES__=${currencyDecimalPlaces};`}></script>
+    <script
+      is:inline
+      set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl || "/api/v1")};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_OPTIMIZATION_ENABLED__=${JSON.stringify(imageOptimizationEnabled)};window.__IMAGE_CDN_BASE_URL__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_CDN_HOSTS__=${JSON.stringify(imageCdnHosts)};window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${JSON.stringify(imageCdnAliases)};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};window.__CURRENCY_DECIMAL_PLACES__=${currencyDecimalPlaces};`}
+    />
 
     <!-- Stale Asset Detector -->
     <script is:inline>
@@ -174,7 +236,7 @@ const cdnDomain = cdnDomainUrl || null;
               location.reload();
             }
           },
-          true
+          true,
         );
 
         window.addEventListener("unhandledrejection", function (e) {
@@ -237,19 +299,31 @@ const cdnDomain = cdnDomainUrl || null;
 
     {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}
     {orgJsonLd && <script type="application/ld+json" set:html={orgJsonLd} />}
-    {websiteJsonLd && <script type="application/ld+json" set:html={websiteJsonLd} />}
+    {
+      websiteJsonLd && (
+        <script type="application/ld+json" set:html={websiteJsonLd} />
+      )
+    }
 
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
 
     <script is:inline>
       // Stub for Facebook Pixel on the main thread
-      window.fbq = window.fbq || function() { (window.fbq.q = window.fbq.q || []).push(arguments) };
+      window.fbq =
+        window.fbq ||
+        function () {
+          (window.fbq.q = window.fbq.q || []).push(arguments);
+        };
     </script>
     <script type="text/partytown" is:inline>
       // Stub for Facebook Pixel INSIDE the Partytown Web Worker
-      // Prevents "TypeError: Cannot read properties of undefined (reading 'apply')" 
+      // Prevents "TypeError: Cannot read properties of undefined (reading 'apply')"
       // when Partytown proxies fbq() calls here but the real script hasn't loaded.
-      self.fbq = self.fbq || function() { (self.fbq.q = self.fbq.q || []).push(arguments) };
+      self.fbq =
+        self.fbq ||
+        function () {
+          (self.fbq.q = self.fbq.q || []).push(arguments);
+        };
     </script>
     <script is:inline>
       try {

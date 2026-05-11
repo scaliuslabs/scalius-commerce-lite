@@ -17,27 +17,69 @@ import { apiContext } from "./context";
 // to read at module init. Null on non-Cloudflare environments.
 let _cfEnv: Record<string, string | undefined> | null = null;
 if (import.meta.env.SSR) {
-    try {
-        const { env } = await import("cloudflare:workers");
-        _cfEnv = env as unknown as Record<string, string | undefined>;
-    } catch {
-        // Not running in Cloudflare Workers (e.g., Vite dev server)
-    }
+  try {
+    const { env } = await import("cloudflare:workers");
+    _cfEnv = env as unknown as Record<string, string | undefined>;
+  } catch {
+    // Not running in Cloudflare Workers (e.g., Vite dev server)
+  }
 }
 
 /** Returns PUBLIC_API_URL from the per-request context. */
 export function getRuntimeApiUrl(): string | undefined {
-    return apiContext.getStore()?.PUBLIC_API_URL;
+  return apiContext.getStore()?.PUBLIC_API_URL;
 }
 
 /** Returns PUBLIC_API_BASE_URL from the per-request context. */
 export function getRuntimeApiBaseUrl(): string | undefined {
-    return apiContext.getStore()?.PUBLIC_API_BASE_URL;
+  return apiContext.getStore()?.PUBLIC_API_BASE_URL;
 }
 
 /** Returns CDN_DOMAIN_URL from the per-request context. */
 export function getRuntimeCdnDomain(): string | undefined {
-    return apiContext.getStore()?.CDN_DOMAIN_URL;
+  return apiContext.getStore()?.CDN_DOMAIN_URL;
+}
+
+export interface RuntimeImageCdnPolicy {
+  enabled?: boolean;
+  canonicalCdnUrl?: string;
+  allowedImageHosts?: string[];
+  canonicalHostAliases?: string[];
+}
+
+/** Applies dashboard-loaded media settings to the current SSR request context. */
+export function setRuntimeImageCdnPolicy(
+  policy: RuntimeImageCdnPolicy | null | undefined,
+): void {
+  const store = apiContext.getStore();
+  if (!store || !policy) return;
+
+  store.IMAGE_OPTIMIZATION_ENABLED = policy.enabled !== false;
+  store.IMAGE_CDN_BASE_URL = policy.canonicalCdnUrl || undefined;
+  store.IMAGE_CDN_ALLOWED_HOSTS = Array.isArray(policy.allowedImageHosts)
+    ? policy.allowedImageHosts
+    : [];
+  store.IMAGE_CDN_CANONICAL_HOST_ALIASES = Array.isArray(
+    policy.canonicalHostAliases,
+  )
+    ? policy.canonicalHostAliases
+    : [];
+}
+
+export function getRuntimeImageCdnBaseUrl(): string | undefined {
+  return apiContext.getStore()?.IMAGE_CDN_BASE_URL;
+}
+
+export function getRuntimeImageOptimizationEnabled(): boolean | undefined {
+  return apiContext.getStore()?.IMAGE_OPTIMIZATION_ENABLED;
+}
+
+export function getRuntimeImageCdnAllowedHosts(): string[] {
+  return apiContext.getStore()?.IMAGE_CDN_ALLOWED_HOSTS ?? [];
+}
+
+export function getRuntimeImageCdnCanonicalHostAliases(): string[] {
+  return apiContext.getStore()?.IMAGE_CDN_CANONICAL_HOST_ALIASES ?? [];
 }
 
 /**
@@ -50,22 +92,22 @@ export function getRuntimeCdnDomain(): string | undefined {
  * Always returns a string with trailing slash stripped.
  */
 export function getRuntimeStorefrontUrl(): string {
-    // 1. ALS context (preferred — set per-request by middleware)
-    const alsUrl = apiContext.getStore()?.STOREFRONT_URL;
-    if (alsUrl) return alsUrl.replace(/\/$/, '');
+  // 1. ALS context (preferred — set per-request by middleware)
+  const alsUrl = apiContext.getStore()?.STOREFRONT_URL;
+  if (alsUrl) return alsUrl.replace(/\/$/, "");
 
-    // 2. Cloudflare Workers module env (static binding)
-    const workerUrl = _cfEnv?.STOREFRONT_URL;
-    if (workerUrl) return workerUrl.replace(/\/$/, '');
+  // 2. Cloudflare Workers module env (static binding)
+  const workerUrl = _cfEnv?.STOREFRONT_URL;
+  if (workerUrl) return workerUrl.replace(/\/$/, "");
 
-    // 3. Build-time env var
-    const buildUrl = import.meta.env.STOREFRONT_URL;
-    if (buildUrl) return String(buildUrl).replace(/\/$/, '');
+  // 3. Build-time env var
+  const buildUrl = import.meta.env.STOREFRONT_URL;
+  if (buildUrl) return String(buildUrl).replace(/\/$/, "");
 
-    return '';
+  return "";
 }
 
 /** Returns API_TOKEN from the per-request context. */
 export function getRuntimeApiToken(): string | undefined {
-    return apiContext.getStore()?.API_TOKEN;
+  return apiContext.getStore()?.API_TOKEN;
 }

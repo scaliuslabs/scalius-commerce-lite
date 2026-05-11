@@ -70,6 +70,12 @@ export interface LayoutData {
   footer: FooterData;
   currency?: CurrencyData;
   theme?: { colors: Record<string, string> };
+  media?: {
+    enabled?: boolean;
+    canonicalCdnUrl?: string;
+    allowedImageHosts?: string[];
+    canonicalHostAliases?: string[];
+  };
 }
 
 // =============================================

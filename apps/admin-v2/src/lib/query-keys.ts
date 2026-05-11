@@ -35,8 +35,10 @@ export const queryKeys = {
     list: (params?: Record<string, unknown>) => listKey("products", params),
     detail: (id: string) => ["products", "detail", id] as const,
     stats: () => ["products", "stats"] as const,
-    variants: (productId: string) => ["products", "variants", productId] as const,
-    variantSortOrder: (productId: string) => ["products", "variant-sort-order", productId] as const,
+    variants: (productId: string) =>
+      ["products", "variants", productId] as const,
+    variantSortOrder: (productId: string) =>
+      ["products", "variant-sort-order", productId] as const,
   },
 
   // ── Categories ───────────────────────────────────────────────────
@@ -102,7 +104,10 @@ export const queryKeys = {
     all: ["attributes"] as const,
     list: (params?: Record<string, unknown>) => listKey("attributes", params),
     detail: (id: string) => ["attributes", "detail", id] as const,
-    values: (params?: Record<string, unknown>) => params !== undefined ? ["attributes", "values", params] as const : ["attributes", "values"] as const,
+    values: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["attributes", "values", params] as const)
+        : (["attributes", "values"] as const),
   },
 
   // ── Analytics ────────────────────────────────────────────────────
@@ -129,7 +134,8 @@ export const queryKeys = {
   navigation: {
     all: ["navigation"] as const,
     items: () => ["navigation", "items"] as const,
-    previewProducts: (params: Record<string, string>) => ["navigation", "preview-products", params] as const,
+    previewProducts: (params: Record<string, string>) =>
+      ["navigation", "preview-products", params] as const,
   },
 
   // ── Fraud Checker ────────────────────────────────────────────────
@@ -141,7 +147,8 @@ export const queryKeys = {
   // ── Abandoned Checkouts ──────────────────────────────────────────
   abandonedCheckouts: {
     all: ["abandoned-checkouts"] as const,
-    list: (params?: Record<string, unknown>) => listKey("abandoned-checkouts", params),
+    list: (params?: Record<string, unknown>) =>
+      listKey("abandoned-checkouts", params),
   },
 
   // ── RBAC ─────────────────────────────────────────────────────────
@@ -177,21 +184,39 @@ export const queryKeys = {
     firebase: () => ["settings", "firebase"] as const,
     business: () => ["settings", "business"] as const,
     theme: () => ["settings", "theme"] as const,
+    media: () => ["settings", "media"] as const,
     sms: () => ["settings", "sms"] as const,
     openRouter: () => ["settings", "openrouter"] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,
-    metaConversionsLogs: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "meta-conversions-logs", params] as const : ["settings", "meta-conversions-logs"] as const,
+    metaConversionsLogs: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["settings", "meta-conversions-logs", params] as const)
+        : (["settings", "meta-conversions-logs"] as const),
     allowedCountries: () => ["settings", "allowed-countries"] as const,
     paymentMethods: () => ["settings", "payment-methods"] as const,
-    paymentGateway: (gateway: string) => ["settings", "payment-gateway", gateway] as const,
+    paymentGateway: (gateway: string) =>
+      ["settings", "payment-gateway", gateway] as const,
     notificationChannels: () => ["settings", "notification-channels"] as const,
-    adminNotificationChannels: () => ["settings", "admin-notification-channels"] as const,
+    adminNotificationChannels: () =>
+      ["settings", "admin-notification-channels"] as const,
     deliveryProviders: () => ["settings", "delivery-providers"] as const,
-    deliveryLocations: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "delivery-locations", params] as const : ["settings", "delivery-locations"] as const,
-    deliveryLocationsAll: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "delivery-locations-all", params] as const : ["settings", "delivery-locations-all"] as const,
+    deliveryLocations: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["settings", "delivery-locations", params] as const)
+        : (["settings", "delivery-locations"] as const),
+    deliveryLocationsAll: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["settings", "delivery-locations-all", params] as const)
+        : (["settings", "delivery-locations-all"] as const),
     importPathaoStatus: () => ["settings", "import-pathao-status"] as const,
-    checkoutLanguages: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "checkout-languages", params] as const : ["settings", "checkout-languages"] as const,
-    shippingMethods: (params?: Record<string, unknown>) => params !== undefined ? ["settings", "shipping-methods", params] as const : ["settings", "shipping-methods"] as const,
+    checkoutLanguages: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["settings", "checkout-languages", params] as const)
+        : (["settings", "checkout-languages"] as const),
+    shippingMethods: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["settings", "shipping-methods", params] as const)
+        : (["settings", "shipping-methods"] as const),
     heroSliders: () => ["settings", "hero-sliders"] as const,
   },
 

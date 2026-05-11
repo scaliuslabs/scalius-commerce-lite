@@ -66,7 +66,10 @@ export const getProducts = createServerFn({ method: "GET" })
     if (data.sort) params.sort = data.sort;
     if (data.order) params.order = data.order;
     if (data.showTrashed) params.trashed = "true";
-    return apiGet<{ products: unknown[]; pagination: unknown }>("/products", params);
+    return apiGet<{ products: unknown[]; pagination: unknown }>(
+      "/products",
+      params,
+    );
   });
 
 export const getProduct = createServerFn({ method: "GET" })
@@ -78,7 +81,8 @@ export const getProduct = createServerFn({ method: "GET" })
 export const getProductStats = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/products/stats");
-  });
+  },
+);
 
 export const createProduct = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -113,7 +117,10 @@ export const restoreProduct = createServerFn({ method: "POST" })
 export const bulkDeleteProducts = createServerFn({ method: "POST" })
   .inputValidator((data: { productIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }) => {
-    return apiPost("/products/bulk-delete", { productIds: data.productIds, permanent: data.permanent });
+    return apiPost("/products/bulk-delete", {
+      productIds: data.productIds,
+      permanent: data.permanent,
+    });
   });
 
 // ─── Product Variants ────────────────────────────────────────────
@@ -150,9 +157,7 @@ export const updateProductVariant = createServerFn({ method: "POST" })
 export const deleteProductVariant = createServerFn({ method: "POST" })
   .inputValidator((data: { productId: string; variantId: string }) => data)
   .handler(async ({ data }) => {
-    return apiDelete(
-      `/products/${data.productId}/variants/${data.variantId}`,
-    );
+    return apiDelete(`/products/${data.productId}/variants/${data.variantId}`);
   });
 
 export const bulkCreateProductVariants = createServerFn({ method: "POST" })
@@ -288,15 +293,22 @@ export const restoreCategory = createServerFn({ method: "POST" })
   });
 
 export const bulkDeleteCategories = createServerFn({ method: "POST" })
-  .inputValidator((data: { categoryIds: string[]; permanent?: boolean }) => data)
+  .inputValidator(
+    (data: { categoryIds: string[]; permanent?: boolean }) => data,
+  )
   .handler(async ({ data }) => {
-    return apiPost("/categories/bulk-delete", { categoryIds: data.categoryIds, permanent: data.permanent });
+    return apiPost("/categories/bulk-delete", {
+      categoryIds: data.categoryIds,
+      permanent: data.permanent,
+    });
   });
 
 export const bulkRestoreCategories = createServerFn({ method: "POST" })
   .inputValidator((data: { categoryIds: string[] }) => data)
   .handler(async ({ data }) => {
-    return apiPost("/categories/bulk-restore", { categoryIds: data.categoryIds });
+    return apiPost("/categories/bulk-restore", {
+      categoryIds: data.categoryIds,
+    });
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -371,13 +383,17 @@ export const restoreCollection = createServerFn({ method: "POST" })
   });
 
 export const reorderCollections = createServerFn({ method: "POST" })
-  .inputValidator((data: { items: { id: string; sortOrder: number }[] }) => data)
+  .inputValidator(
+    (data: { items: { id: string; sortOrder: number }[] }) => data,
+  )
   .handler(async ({ data }) => {
     return apiPost("/collections/reorder", { items: data.items });
   });
 
 export const bulkDeleteCollections = createServerFn({ method: "POST" })
-  .inputValidator((data: { collectionIds: string[]; permanent?: boolean }) => data)
+  .inputValidator(
+    (data: { collectionIds: string[]; permanent?: boolean }) => data,
+  )
   .handler(async ({ data }) => {
     return apiPost("/collections/bulk-delete", data);
   });
@@ -435,8 +451,12 @@ export const getOrders = createServerFn({ method: "GET" })
     if (data.endDate) params.endDate = data.endDate;
     if (data.paymentStatus) params.paymentStatus = data.paymentStatus;
     if (data.paymentMethod) params.paymentMethod = data.paymentMethod;
-    if (data.fulfillmentStatus) params.fulfillmentStatus = data.fulfillmentStatus;
-    return apiGet<{ orders: unknown[]; pagination: unknown }>("/orders", params);
+    if (data.fulfillmentStatus)
+      params.fulfillmentStatus = data.fulfillmentStatus;
+    return apiGet<{ orders: unknown[]; pagination: unknown }>(
+      "/orders",
+      params,
+    );
   });
 
 export const getOrder = createServerFn({ method: "GET" })
@@ -482,7 +502,12 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
 
 export const returnOrder = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { orderId: string; reason?: string; items?: unknown[]; autoRefund?: boolean }) => data,
+    (data: {
+      orderId: string;
+      reason?: string;
+      items?: unknown[];
+      autoRefund?: boolean;
+    }) => data,
   )
   .handler(async ({ data }) => {
     return apiPost(`/orders/${data.orderId}/return`, {
@@ -501,7 +526,10 @@ export const restoreOrder = createServerFn({ method: "POST" })
 export const bulkDeleteOrders = createServerFn({ method: "POST" })
   .inputValidator((data: { orderIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }) => {
-    return apiPost("/orders/bulk-delete", { orderIds: data.orderIds, permanent: data.permanent });
+    return apiPost("/orders/bulk-delete", {
+      orderIds: data.orderIds,
+      permanent: data.permanent,
+    });
   });
 
 // ─── Order Payments ──────────────────────────────────────────────
@@ -549,19 +577,27 @@ export const getOrderShipments = createServerFn({ method: "GET" })
 
 export const createOrderShipment = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { orderId: string; shipment?: Record<string, unknown>; providerId?: string; options?: Record<string, unknown> }) => data,
+    (data: {
+      orderId: string;
+      shipment?: Record<string, unknown>;
+      providerId?: string;
+      options?: Record<string, unknown>;
+    }) => data,
   )
   .handler(async ({ data }) => {
-    const body = data.shipment || { providerId: data.providerId, options: data.options };
+    const body = data.shipment || {
+      providerId: data.providerId,
+      options: data.options,
+    };
     return apiPost(`/orders/${data.orderId}/shipments`, body);
   });
 
 export const updateFulfillmentStatus = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { orderId: string; status: string }) => data,
-  )
+  .inputValidator((data: { orderId: string; status: string }) => data)
   .handler(async ({ data }) => {
-    return apiPut(`/orders/${data.orderId}/fulfillment-status`, { status: data.status });
+    return apiPut(`/orders/${data.orderId}/fulfillment-status`, {
+      status: data.status,
+    });
   });
 
 export const updateShipment = createServerFn({ method: "POST" })
@@ -573,9 +609,7 @@ export const updateShipment = createServerFn({ method: "POST" })
   });
 
 export const refreshShipmentStatus = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { orderId: string; shipmentId: string }) => data,
-  )
+  .inputValidator((data: { orderId: string; shipmentId: string }) => data)
   .handler(async ({ data }) => {
     return apiPost<Record<string, unknown>>(
       `/orders/${data.orderId}/shipments/${data.shipmentId}/refresh`,
@@ -584,13 +618,9 @@ export const refreshShipmentStatus = createServerFn({ method: "POST" })
   });
 
 export const deleteShipment = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { orderId: string; shipmentId: string }) => data,
-  )
+  .inputValidator((data: { orderId: string; shipmentId: string }) => data)
   .handler(async ({ data }) => {
-    return apiDelete(
-      `/orders/${data.orderId}/shipments/${data.shipmentId}`,
-    );
+    return apiDelete(`/orders/${data.orderId}/shipments/${data.shipmentId}`);
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -668,9 +698,14 @@ export const restoreCustomer = createServerFn({ method: "POST" })
   });
 
 export const bulkDeleteCustomers = createServerFn({ method: "POST" })
-  .inputValidator((data: { customerIds: string[]; permanent?: boolean }) => data)
+  .inputValidator(
+    (data: { customerIds: string[]; permanent?: boolean }) => data,
+  )
   .handler(async ({ data }) => {
-    return apiPost("/customers/bulk-delete", { customerIds: data.customerIds, permanent: data.permanent });
+    return apiPost("/customers/bulk-delete", {
+      customerIds: data.customerIds,
+      permanent: data.permanent,
+    });
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -743,14 +778,22 @@ export const restoreDiscount = createServerFn({ method: "POST" })
 export const toggleDiscountStatus = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string; isActive?: boolean }) => data)
   .handler(async ({ data }) => {
-    return apiPost(`/discounts/${data.id}/toggle-status`, { isActive: data.isActive });
+    return apiPost(`/discounts/${data.id}/toggle-status`, {
+      isActive: data.isActive,
+    });
   });
 
 export const bulkDeleteDiscounts = createServerFn({ method: "POST" })
-  .inputValidator((data: { discountIds?: string[]; ids?: string[]; permanent?: boolean }) => data)
+  .inputValidator(
+    (data: { discountIds?: string[]; ids?: string[]; permanent?: boolean }) =>
+      data,
+  )
   .handler(async ({ data }) => {
     const discountIds = data.discountIds || data.ids || [];
-    return apiPost("/discounts/bulk-delete", { discountIds, permanent: data.permanent });
+    return apiPost("/discounts/bulk-delete", {
+      discountIds,
+      permanent: data.permanent,
+    });
   });
 
 export const bulkRestoreDiscounts = createServerFn({ method: "POST" })
@@ -852,9 +895,7 @@ export const bulkUnpublishPages = createServerFn({ method: "POST" })
 // ═══════════════════════════════════════════════════════════════════
 
 export const getWidgets = createServerFn({ method: "GET" })
-  .inputValidator(
-    (data: { search?: string; showTrashed?: boolean }) => data,
-  )
+  .inputValidator((data: { search?: string; showTrashed?: boolean }) => data)
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
     if (data.search) params.search = data.search;
@@ -1025,7 +1066,16 @@ export const bulkRestoreAttributes = createServerFn({ method: "POST" })
   });
 
 export const getAttributeValues = createServerFn({ method: "GET" })
-  .inputValidator((data: { attributeId?: string; id?: string; page?: number; limit?: number; search?: string; sort?: string }) => data)
+  .inputValidator(
+    (data: {
+      attributeId?: string;
+      id?: string;
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort?: string;
+    }) => data,
+  )
   .handler(async ({ data }) => {
     const attributeId = data.attributeId || data.id || "";
     const params: Record<string, string> = {};
@@ -1037,9 +1087,7 @@ export const getAttributeValues = createServerFn({ method: "GET" })
   });
 
 export const updateAttributeValues = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { attributeId: string; values: unknown[] }) => data,
-  )
+  .inputValidator((data: { attributeId: string; values: unknown[] }) => data)
   .handler(async ({ data }) => {
     return apiPost(`/attributes/${data.attributeId}/values`, {
       values: data.values,
@@ -1058,9 +1106,7 @@ export const renameAttributeValue = createServerFn({ method: "POST" })
   });
 
 export const addAttributeValue = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { attributeId: string; value: string }) => data,
-  )
+  .inputValidator((data: { attributeId: string; value: string }) => data)
   .handler(async ({ data }) => {
     return apiPost(`/attributes/${data.attributeId}/values`, {
       value: data.value,
@@ -1068,9 +1114,7 @@ export const addAttributeValue = createServerFn({ method: "POST" })
   });
 
 export const removeAttributeValue = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { attributeId: string; value: string }) => data,
-  )
+  .inputValidator((data: { attributeId: string; value: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/attributes/${data.attributeId}/values`, {
       value: data.value,
@@ -1084,7 +1128,8 @@ export const removeAttributeValue = createServerFn({ method: "POST" })
 export const getAnalyticsScripts = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/analytics");
-  });
+  },
+);
 
 export const getAnalyticsScript = createServerFn({ method: "GET" })
   .inputValidator((data: { id: string }) => data)
@@ -1219,7 +1264,8 @@ export const updateMedia = createServerFn({ method: "POST" })
 export const getMediaFolders = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/media/folders");
-  });
+  },
+);
 
 export const createMediaFolder = createServerFn({ method: "POST" })
   .inputValidator((data: { name: string; parentId?: string }) => data)
@@ -1258,12 +1304,16 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
 export const getNavigationItems = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/navigation/items");
-  });
+  },
+);
 
 export const getNavigationPreviewProducts = createServerFn({ method: "GET" })
   .inputValidator((data: Record<string, string>) => data)
   .handler(async ({ data }) => {
-    return apiGet<Record<string, unknown>>("/navigation/preview-products", data);
+    return apiGet<Record<string, unknown>>(
+      "/navigation/preview-products",
+      data,
+    );
   });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1315,7 +1365,13 @@ export const fraudCheckerLookup = createServerFn({ method: "POST" })
 
 export const getAbandonedCheckouts = createServerFn({ method: "GET" })
   .inputValidator(
-    (data: { page?: number; limit?: number; search?: string; sort?: string; order?: string }) => data,
+    (data: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort?: string;
+      order?: string;
+    }) => data,
   )
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
@@ -1340,12 +1396,14 @@ export const deleteAbandonedCheckouts = createServerFn({ method: "POST" })
 export const getRbacRoles = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/rbac/roles");
-  });
+  },
+);
 
 export const getRbacPermissions = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/rbac/permissions");
-  });
+  },
+);
 
 export const createRbacRole = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1371,33 +1429,25 @@ export const deleteRbacRole = createServerFn({ method: "POST" })
   });
 
 export const assignUserRole = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { userId: string; roleId: string }) => data,
-  )
+  .inputValidator((data: { userId: string; roleId: string }) => data)
   .handler(async ({ data }) => {
     return apiPost("/rbac/user-roles", data);
   });
 
 export const removeUserRole = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { userId: string; roleId: string }) => data,
-  )
+  .inputValidator((data: { userId: string; roleId: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete("/rbac/user-roles", data);
   });
 
 export const assignUserPermission = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { userId: string; permissionId: string }) => data,
-  )
+  .inputValidator((data: { userId: string; permissionId: string }) => data)
   .handler(async ({ data }) => {
     return apiPost("/rbac/user-permissions", data);
   });
 
 export const removeUserPermission = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { userId: string; permissionId: string }) => data,
-  )
+  .inputValidator((data: { userId: string; permissionId: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete("/rbac/user-permissions", data);
   });
@@ -1409,7 +1459,8 @@ export const removeUserPermission = createServerFn({ method: "POST" })
 export const getAdminUsers = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/auth/users");
-  });
+  },
+);
 
 export const createAdminUser = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1431,10 +1482,7 @@ export const updateProfile = createServerFn({ method: "POST" })
 
 export const changePassword = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: {
-      currentPassword: string;
-      newPassword: string;
-    }) => data,
+    (data: { currentPassword: string; newPassword: string }) => data,
   )
   .handler(async ({ data }) => {
     return apiPost("/auth/change-password", data);
@@ -1446,7 +1494,8 @@ export const getAccountSecurity = createServerFn({ method: "GET" }).handler(
       twoFactorMethod: string | null;
       isSuperAdmin: boolean;
     }>("/auth/account-security");
-  });
+  },
+);
 
 // ─── 2FA ─────────────────────────────────────────────────────────
 
@@ -1459,12 +1508,14 @@ export const set2faMethod = createServerFn({ method: "POST" })
 export const mark2faVerified = createServerFn({ method: "POST" }).handler(
   async () => {
     return apiPost("/auth/2fa/mark-verified", {});
-  });
+  },
+);
 
 export const get2faInfo = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/auth/2fa/info");
-  });
+  },
+);
 
 // ═══════════════════════════════════════════════════════════════════
 //  SETTINGS
@@ -1491,12 +1542,14 @@ export const updateSettingsByCategory = createServerFn({ method: "POST" })
 export const getGeneralSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/general");
-  });
+  },
+);
 
 export const getStorefrontUrl = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<{ storefrontUrl: string }>("/settings/storefront-url");
-  });
+  },
+);
 
 export const updateStorefrontUrl = createServerFn({ method: "POST" })
   .inputValidator((data: { storefrontUrl: string }) => data)
@@ -1507,7 +1560,8 @@ export const updateStorefrontUrl = createServerFn({ method: "POST" })
 export const getCurrencySettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/currency");
-  });
+  },
+);
 
 export const updateCurrencySettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1518,7 +1572,8 @@ export const updateCurrencySettings = createServerFn({ method: "POST" })
 export const getSeoSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/seo");
-  });
+  },
+);
 
 export const updateSeoSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1529,7 +1584,8 @@ export const updateSeoSettings = createServerFn({ method: "POST" })
 export const getSecuritySettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/security");
-  });
+  },
+);
 
 export const updateSecuritySettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1540,7 +1596,8 @@ export const updateSecuritySettings = createServerFn({ method: "POST" })
 export const getAuthSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/auth");
-  });
+  },
+);
 
 export const updateAuthSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1551,7 +1608,8 @@ export const updateAuthSettings = createServerFn({ method: "POST" })
 export const getEmailSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/email");
-  });
+  },
+);
 
 export const updateEmailSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1562,7 +1620,8 @@ export const updateEmailSettings = createServerFn({ method: "POST" })
 export const getFirebaseSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/firebase");
-  });
+  },
+);
 
 export const updateFirebaseSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1573,7 +1632,8 @@ export const updateFirebaseSettings = createServerFn({ method: "POST" })
 export const getBusinessSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/business");
-  });
+  },
+);
 
 export const updateBusinessSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1584,7 +1644,8 @@ export const updateBusinessSettings = createServerFn({ method: "POST" })
 export const getThemeSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/theme");
-  });
+  },
+);
 
 export const updateThemeSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1592,10 +1653,23 @@ export const updateThemeSettings = createServerFn({ method: "POST" })
     return apiPost("/settings/theme", data);
   });
 
+export const getMediaSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<Record<string, unknown>>("/settings/media");
+  },
+);
+
+export const updateMediaSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: Record<string, unknown>) => data)
+  .handler(async ({ data }) => {
+    return apiPost("/settings/media", data);
+  });
+
 export const getSmsSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/sms");
-  });
+  },
+);
 
 export const updateSmsSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1606,7 +1680,8 @@ export const updateSmsSettings = createServerFn({ method: "POST" })
 export const getOpenRouterSettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<Record<string, unknown>>("/settings/openrouter");
-  });
+  },
+);
 
 export const updateOpenRouterSettings = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1632,23 +1707,29 @@ export const getMetaConversionsLogs = createServerFn({ method: "GET" })
     const params: Record<string, string> = {};
     if (data.page) params.page = String(data.page);
     if (data.limit) params.limit = String(data.limit);
-    return apiGet<Record<string, unknown>>("/settings/meta-conversions/logs", params);
+    return apiGet<Record<string, unknown>>(
+      "/settings/meta-conversions/logs",
+      params,
+    );
   });
 
-export const clearMetaConversionsLogs = createServerFn({ method: "POST" }).handler(
-  async () => {
-    return apiDelete("/settings/meta-conversions/logs");
-  });
+export const clearMetaConversionsLogs = createServerFn({
+  method: "POST",
+}).handler(async () => {
+  return apiDelete("/settings/meta-conversions/logs");
+});
 
-export const cleanupMetaConversionsLogs = createServerFn({ method: "POST" }).handler(
-  async () => {
-    return apiPost("/settings/meta-conversions/logs");
-  });
+export const cleanupMetaConversionsLogs = createServerFn({
+  method: "POST",
+}).handler(async () => {
+  return apiPost("/settings/meta-conversions/logs");
+});
 
 export const getAllowedCountries = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown>("/settings/allowed-countries");
-  });
+  },
+);
 
 export const updateAllowedCountries = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1661,7 +1742,8 @@ export const updateAllowedCountries = createServerFn({ method: "POST" })
 export const getPaymentMethods = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown>("/settings/payment-methods");
-  });
+  },
+);
 
 export const updatePaymentMethods = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1716,7 +1798,8 @@ export const updateAdminNotificationChannels = createServerFn({
 export const getDeliveryProviders = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/settings/delivery-providers");
-  });
+  },
+);
 
 export const createDeliveryProvider = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1741,7 +1824,9 @@ export const deleteDeliveryProvider = createServerFn({ method: "POST" })
 // ─── Delivery Locations ──────────────────────────────────────────
 
 export const getDeliveryLocations = createServerFn({ method: "GET" })
-  .inputValidator((data: Record<string, string | number | boolean | undefined>) => data)
+  .inputValidator(
+    (data: Record<string, string | number | boolean | undefined>) => data,
+  )
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
     for (const [k, v] of Object.entries(data)) {
@@ -1781,12 +1866,14 @@ export const importPathaoLocations = createServerFn({ method: "POST" })
 export const getImportPathaoStatus = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown>("/settings/delivery-locations/import-pathao/status");
-  });
+  },
+);
 
 export const resetImportPathao = createServerFn({ method: "POST" }).handler(
   async () => {
     return apiDelete("/settings/delivery-locations/import-pathao");
-  });
+  },
+);
 
 export const deleteDeliveryLocation = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
@@ -1800,10 +1887,11 @@ export const bulkDeleteDeliveryLocations = createServerFn({ method: "POST" })
     return apiDelete("/settings/delivery-locations", data);
   });
 
-export const cleanAllDeliveryLocations = createServerFn({ method: "POST" }).handler(
-  async () => {
-    return apiDelete("/settings/delivery-locations/all");
-  });
+export const cleanAllDeliveryLocations = createServerFn({
+  method: "POST",
+}).handler(async () => {
+  return apiDelete("/settings/delivery-locations/all");
+});
 
 // ─── Delivery Provider Testing ──────────────────────────────────
 
@@ -1814,7 +1902,14 @@ export const testDeliveryProvider = createServerFn({ method: "POST" })
   });
 
 export const testDeliveryCredentials = createServerFn({ method: "POST" })
-  .inputValidator((data: { type: string; credentials: Record<string, string>; config: Record<string, string | number>; name: string }) => data)
+  .inputValidator(
+    (data: {
+      type: string;
+      credentials: Record<string, string>;
+      config: Record<string, string | number>;
+      name: string;
+    }) => data,
+  )
   .handler(async ({ data }) => {
     return apiPost("/settings/delivery-providers/create-test", data);
   });
@@ -1832,7 +1927,9 @@ export const saveDeliveryProvider = createServerFn({ method: "POST" })
 // ─── Checkout Languages ─────────────────────────────────────────
 
 export const getCheckoutLanguages = createServerFn({ method: "GET" })
-  .inputValidator((data: Record<string, string | number | boolean | undefined>) => data)
+  .inputValidator(
+    (data: Record<string, string | number | boolean | undefined>) => data,
+  )
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
     for (const [k, v] of Object.entries(data)) {
@@ -1848,7 +1945,9 @@ export const createCheckoutLanguage = createServerFn({ method: "POST" })
   });
 
 export const updateCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string; update: Record<string, unknown> }) => data)
+  .inputValidator(
+    (data: { id: string; update: Record<string, unknown> }) => data,
+  )
   .handler(async ({ data }) => {
     return apiPut(`/settings/checkout-languages/${data.id}`, data.update);
   });
@@ -1875,7 +1974,14 @@ export const restoreCheckoutLanguage = createServerFn({ method: "POST" })
 
 export const getShippingMethods = createServerFn({ method: "GET" })
   .inputValidator(
-    (data: { page?: number; limit?: number; search?: string; sort?: string; order?: string; trashed?: boolean }) => data,
+    (data: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort?: string;
+      order?: string;
+      trashed?: boolean;
+    }) => data,
   )
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
@@ -1941,7 +2047,8 @@ export const saveFooterConfig = createServerFn({ method: "POST" })
 export const getHeroSliders = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<unknown[]>("/settings/hero-sliders");
-  });
+  },
+);
 
 export const createHeroSlider = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -1980,22 +2087,26 @@ export const getAiContextBatchDetails = createServerFn({ method: "POST" })
 export const getCacheStats = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiBaseGet<Record<string, unknown>>("/cache/stats");
-  });
+  },
+);
 
 export const getCacheLastCleared = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiBaseGet<unknown>("/cache/last-cleared");
-  });
+  },
+);
 
 export const getCacheGroups = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiBaseGet<unknown>("/cache/groups");
-  });
+  },
+);
 
 export const clearCache = createServerFn({ method: "POST" }).handler(
   async () => {
     return apiBasePost("/cache/clear");
-  });
+  },
+);
 
 export const clearCacheGroup = createServerFn({ method: "POST" })
   .inputValidator((data: { groupName: string }) => data)
@@ -2010,7 +2121,8 @@ export const clearCacheGroup = createServerFn({ method: "POST" })
 export const getSetupStatus = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiBaseGet<{ adminExists: boolean }>("/setup");
-  });
+  },
+);
 
 export const runSetup = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
@@ -2025,4 +2137,5 @@ export const runSetup = createServerFn({ method: "POST" })
 export const getFirebaseConfig = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiBaseGet<Record<string, string>>("/auth/firebase-config");
-  });
+  },
+);
