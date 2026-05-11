@@ -1,15 +1,14 @@
 ---
 // src/pages/[slug].astro
 // Dynamic route for CMS pages
-// IMPORTANT: Validates slug BEFORE making API calls to prevent unnecessary requests
 
 import Layout from "../layouts/Layout.astro";
-import RichContent from "../components/RichContent.astro"; // CORRECTED: Path to RichContent
+import RichContent from "../components/RichContent.astro";
 import { getPageBySlug, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
+import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 
-// ... rest of the file is the same as in step 1 ...
 const { slug } = Astro.params;
 
 // === EARLY VALIDATION ===
@@ -63,6 +62,9 @@ if (!page) {
 
 const title = page.metaTitle || page.title;
 const description = page.metaDescription || "";
+const isStandaloneShortcodePage = isStandaloneShortcodeContent(
+  page.content || "",
+);
 
 let processedContent = page.content;
 if (page.content) {
@@ -75,7 +77,7 @@ if (page.content) {
 }
 
 const hasProductShortcode = processedContent.includes(
-  'class="product-shortcode-container"'
+  'class="product-shortcode-container"',
 );
 
 // --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
@@ -92,80 +94,54 @@ const canonicalUrl = `${storefrontUrl}/${slug}`;
   canonicalUrl={canonicalUrl}
   ogType="website"
 >
-  <div class="w-full max-w-7xl mx-auto px-4 py-8">
-    <div class="text-center mb-8">
-      {!page.hideTitle && (
-        <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
-          {page.title}
-        </h1>
-      )}
-    </div>
+  {
+    isStandaloneShortcodePage ? (
+      <div class="w-full overflow-hidden" set:html={processedContent} />
+    ) : (
+      <div class="w-full max-w-7xl mx-auto px-4 py-8">
+        <div class="text-center mb-8">
+          {!page.hideTitle && (
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
+              {page.title}
+            </h1>
+          )}
+        </div>
 
-    <div class="w-full">
-      <RichContent
-        content={processedContent}
-        processShortcodes={false}
-        className="prose prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl"
-      />
-    </div>
-
-    <div class="text-center mt-10 pt-6 border-t border-gray-100">
-      <a
-        href="/"
-        class="inline-flex items-center px-4 py-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-medium"
-      >
-        <svg
-          class="w-4 h-4 mr-2"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M10 19l-7-7m0 0l7-7m-7 7h18"
+        <div class="w-full">
+          <RichContent
+            content={processedContent}
+            processShortcodes={false}
+            className="prose prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl"
           />
-        </svg>
-        Back to Home
-      </a>
-    </div>
-  </div>
+        </div>
+
+        <div class="text-center mt-10 pt-6 border-t border-gray-100">
+          <a
+            href="/"
+            class="inline-flex items-center px-4 py-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-medium"
+          >
+            <svg
+              class="w-4 h-4 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+            Back to Home
+          </a>
+        </div>
+      </div>
+    )
+  }
   {
     hasProductShortcode && (
       <script>import "../scripts/hydrateProductShortcodes.ts";</script>
     )
   }
 </Layout>
-<style>
-  .container {
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  @media (min-width: 640px) {
-    .container {
-      max-width: 640px;
-    }
-  }
-  @media (min-width: 768px) {
-    .container {
-      max-width: 768px;
-    }
-  }
-  @media (min-width: 1024px) {
-    .container {
-      max-width: 1024px;
-    }
-  }
-  @media (min-width: 1280px) {
-    .container {
-      max-width: 1280px;
-    }
-  }
-  @media (min-width: 1536px) {
-    .container {
-      max-width: 1536px;
-    }
-  }
-</style>
