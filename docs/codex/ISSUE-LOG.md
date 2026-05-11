@@ -16,6 +16,7 @@ Last reviewed: 2026-05-11
 | #14 | Validation Error Displaying Raw JSON Code on Checkout. | `03cfbe8` | Local and production proxy checks return `Address must be at least 10 characters` for the short-address payload. Production browser checkout flow (Fish -> cart -> `rajshahi` address -> COD) shows only the readable message and no raw `too_small`/`origin`/`minimum` JSON fragments. Storefront version `06c013a9-5448-46fa-a959-08cae6ef2a3a` was verified after deploy. |
 | #13 | Issue with Page Content Display for "Combo Offers Page" | `317b48a` | Local browser verification used a local D1 fixture copied from the production combo-offer page/widget and confirmed the landing hero renders without the generic CMS title, Back to Home link, or raw widget wrapper tags. Production browser verification at `/combo-offer` after deploy confirmed the same settled DOM state. Storefront version `75164a7a-78dc-4e23-a4b3-c749cebf9f44` was verified after deploy. |
 | #28 | High-Severity Contrast & Background-Color Regression on Mobile Sidebar Overlay | `d6c9981` | Local Chrome verification at `390x844` created and removed a temporary local admin account, then confirmed the settled mobile drawer opened with opaque `oklch(0.985 0 0)` background, 256px width, and no horizontal overflow. Production Chrome verification after deploy confirmed the same computed state on `https://dashboard.scalius.com/admin`; Admin version `4cfbd3ec-7ecd-4e0b-8218-119829c1cc39` was verified. |
+| #29 | Fixed desktop-width sidebar fails to collapse/reflow in Mobile Viewport | `fe5b5a0` | Local Chrome verification at `390x844` created and removed a temporary local admin account, then confirmed `/admin/media` had no horizontal overflow, a full-width mobile folder panel, wrapped filter controls, and accessible Images/Videos type options. Production Chrome verification after deploy confirmed `scrollWidth=390`, folder panel `364x256`, toolbar `332x72`, and visible folder/type navigation; Admin version `b8915fb5-333c-42fb-8f23-9f396bb50f40` was verified. |
 
 ## Implemented, Needs Browser Verification
 
@@ -33,7 +34,6 @@ These changes were already committed in `aa05893` before the current per-issue l
 
 | Issue | Title | Notes |
 | --- | --- | --- |
-| #29 | Fixed desktop-width sidebar fails to collapse/reflow in Mobile Viewport | Mobile admin layout issue. |
 | #26 | "Edit" Button Triggers Immediate Save Instead of Enabling Inputs | Fraud checker settings edit/save behavior. |
 | #24 | Layout Overflow & Missing Padding | Storefront mobile layout. |
 | #23 | Content Featured Image not displaying on Storefront | Storefront content/page rendering. |
