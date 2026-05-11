@@ -1,0 +1,45 @@
+# Codebase Map
+
+Last reviewed: 2026-05-11
+
+## Runtime Shape
+
+Scalius Commerce is a pnpm/Turborepo monorepo with three Cloudflare Worker applications:
+
+- `apps/api` - Hono + `@hono/zod-openapi` API worker. `apps/api/src/worker.ts` exports a `WorkerEntrypoint` with `fetch`, `queue`, and `scheduled`. `apps/api/src/app.ts` mounts routes under `/api/v1`, initializes D1/KV/R2 per request, applies CORS/security headers, exposes Swagger/OpenAPI, and uses JSON error envelopes.
+- `apps/admin-v2` - TanStack Start admin dashboard. Admin data flows through route loaders/components, `src/lib/api.queries.ts`, `src/lib/api.mutations.ts`, `src/lib/api.functions.ts`, and `src/lib/api.server.ts`. In production it uses the API worker/service binding path and expects API response envelopes unchanged.
+- `apps/storefront` - Astro SSR storefront with React islands. It calls the API through `env.BACKEND_API` where available, uses edge/L1/L2 caching in `src/lib/*cache*`, and has checkout proxy routes that unwrap API `.data` before returning browser-facing payloads.
+
+## Package Roles
+
+- `packages/database` - Drizzle schema, D1 client factory, and migrations.
+- `packages/core` - domain logic: orders, inventory, payments, delivery, notifications, settings, catalog, content, media, search, auth integration.
+- `packages/shared` - pure utilities shared by apps.
+- `packages/api-client` - generated OpenAPI SDK and generated types. Regenerate with `pnpm generate:sdk` after API contract changes.
+- `packages/tsconfig` - shared TypeScript configs.
+
+## Important Contracts
+
+- API success responses must be `{ success: true, data: T }`. Do not nest another `success` or `data` inside `T`.
+- API errors must use the standardized JSON error envelope via `ApiError`/global handlers.
+- 202 responses still need `{ success: true, data: ... }` at top level.
+- Runtime secrets must come from Cloudflare `env`, not `import.meta.env`.
+- Storefront must not import `@scalius/core` or `@scalius/database` directly.
+- Schema changes require matching Drizzle migrations.
+- Typecheck matters: `pnpm build` alone can miss TypeScript regressions.
+
+## Verification Baseline
+
+Use this loop for each issue:
+
+1. Fix one issue with the smallest production-quality change.
+2. Run targeted tests/typechecks.
+3. Commit with the GitHub issue number in the message.
+4. Deploy when the issue affects production behavior.
+5. Verify in Chrome or via production API after the page/API has settled.
+6. Keep `git status --short` clean before moving to the next issue.
+
+Current full-suite baseline:
+
+- `pnpm test` passed on 2026-05-11 after `428dab1`.
+- `pnpm run deploy` succeeded on 2026-05-11 after `428dab1`.
