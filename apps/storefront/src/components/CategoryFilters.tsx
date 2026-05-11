@@ -13,6 +13,12 @@ import { Input } from "@/components/ui/input";
 import type { FilterableAttribute } from "@/lib/api";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
+import {
+  DEFAULT_MAX_PRICE,
+  DEFAULT_MIN_PRICE,
+  appendPriceFilterParams,
+  parsePriceFilterValue,
+} from "@/lib/filters/price-url";
 
 interface CategoryFiltersProps {
   attributes: FilterableAttribute[];
@@ -25,8 +31,14 @@ interface CategoryFiltersProps {
  * Separates price filters from other filters for independent state management
  */
 const getInitialState = (currentFilters: Record<string, string>) => {
-  const minPrice = parseInt(currentFilters.minPrice || "0", 10);
-  const maxPrice = parseInt(currentFilters.maxPrice || "50000", 10);
+  const minPrice = parsePriceFilterValue(
+    currentFilters.minPrice,
+    DEFAULT_MIN_PRICE,
+  );
+  const maxPrice = parsePriceFilterValue(
+    currentFilters.maxPrice,
+    DEFAULT_MAX_PRICE,
+  );
   const filters: Record<string, string | boolean> = {};
 
   // Extract non-navigation filters (exclude URL navigation and price params)
@@ -117,8 +129,14 @@ export default function CategoryFilters({
    */
   useEffect(() => {
     if (!priceState.userModified) {
-      const newMinPrice = parseInt(currentFilters.minPrice || "0", 10);
-      const newMaxPrice = parseInt(currentFilters.maxPrice || "50000", 10);
+      const newMinPrice = parsePriceFilterValue(
+        currentFilters.minPrice,
+        DEFAULT_MIN_PRICE,
+      );
+      const newMaxPrice = parsePriceFilterValue(
+        currentFilters.maxPrice,
+        DEFAULT_MAX_PRICE,
+      );
 
       setPriceState((prev) => ({
         ...prev,
@@ -165,19 +183,12 @@ export default function CategoryFilters({
       finalParams.set("sortBy", formData.get("sortBy")?.toString() || "newest");
 
       // Price parameters (only if explicitly requested AND price was changed)
-      if (includePriceFilter && priceState.priceChanged) {
-        const minValue = parseInt(priceState.minPriceInput, 10) || 0;
-        const maxValue = parseInt(priceState.maxPriceInput, 10) || 50000;
-
-        // Only add minPrice if > 0 (don't clutter URL with default values)
-        if (minValue > 0) {
-          finalParams.set("minPrice", minValue.toString());
-        }
-        // Add maxPrice if < 50000 OR minPrice > 0 (to maintain range context)
-        if (maxValue < 50000 || minValue > 0) {
-          finalParams.set("maxPrice", maxValue.toString());
-        }
-      }
+      appendPriceFilterParams(finalParams, {
+        includePriceFilter,
+        priceChanged: priceState.priceChanged,
+        minPriceInput: priceState.minPriceInput,
+        maxPriceInput: priceState.maxPriceInput,
+      });
 
       // Other filter parameters (switches, attributes)
       Object.entries(selectedFilters).forEach(([key, value]) => {
