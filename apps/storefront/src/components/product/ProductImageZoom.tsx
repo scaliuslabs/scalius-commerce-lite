@@ -12,20 +12,35 @@ interface ProductImageZoomProps {
 // Global image cache to persist across component updates
 const preloadedImages = new Map<string, boolean>();
 
-function preloadImage(url: string): Promise<void> {
-  if (!url || preloadedImages.has(url)) return Promise.resolve();
+function preloadImage(url: string): Promise<boolean> {
+  if (!url) return Promise.resolve(false);
+  if (preloadedImages.has(url)) {
+    return Promise.resolve(preloadedImages.get(url) === true);
+  }
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       preloadedImages.set(url, true);
-      resolve();
+      resolve(true);
     };
     img.onerror = () => {
       preloadedImages.set(url, false);
-      resolve();
+      resolve(false);
     };
     img.src = url;
   });
+}
+
+function canLoadHighResImage(): boolean {
+  if (typeof navigator === "undefined") return true;
+  const connection = (
+    navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }
+  ).connection;
+  return (
+    !connection?.saveData && (!connection || connection.effectiveType === "4g")
+  );
 }
 
 export default function ProductImageZoom({
@@ -67,22 +82,35 @@ export default function ProductImageZoom({
     );
   }, [getHighResUrl]);
 
-  // Preload high-res image immediately on mount and when zoom URL changes
+  const requestZoomImage = useCallback(() => {
+    const zoomUrl = getZoomUrl();
+    if (!zoomUrl) return;
+
+    if (preloadedImages.get(zoomUrl)) {
+      setIsHighResLoaded(true);
+      if (zoomBgRef.current) {
+        zoomBgRef.current.style.backgroundImage = `url('${zoomUrl}')`;
+      }
+      return;
+    }
+
+    if (!canLoadHighResImage()) return;
+
+    preloadImage(zoomUrl).then((loaded) => {
+      if (loaded && getZoomUrl() === zoomUrl) {
+        setIsHighResLoaded(true);
+        if (zoomBgRef.current) {
+          zoomBgRef.current.style.backgroundImage = `url('${zoomUrl}')`;
+        }
+      }
+    });
+  }, [getZoomUrl]);
+
+  // Keep the loaded state in sync with URL changes without forcing high-res
+  // network work before the customer shows zoom intent.
   useEffect(() => {
     const zoomUrl = getZoomUrl();
-    if (zoomUrl) {
-      // Check if already loaded
-      if (preloadedImages.get(zoomUrl)) {
-        setIsHighResLoaded(true);
-      } else {
-        preloadImage(zoomUrl).then(() => {
-          // Only update state if this is still the current zoom URL
-          if (getZoomUrl() === zoomUrl) {
-            setIsHighResLoaded(true);
-          }
-        });
-      }
-    }
+    setIsHighResLoaded(!!zoomUrl && preloadedImages.get(zoomUrl) === true);
   }, [getZoomUrl]);
 
   // Listen for external image changes (from thumbnails/variants)
@@ -114,22 +142,6 @@ export default function ProductImageZoom({
       if (zoomBgRef.current) {
         zoomBgRef.current.style.backgroundImage = `url('${alreadyLoaded ? zoomUrl : newUrl}')`;
       }
-
-      // Preload new zoom image if not already loaded
-      if (!alreadyLoaded) {
-        preloadImage(zoomUrl).then(() => {
-          // Only update if still current
-          if (
-            currentZoomImageRef.current === newZoomUrl ||
-            getHighResUrl(currentImageRef.current) === zoomUrl
-          ) {
-            setIsHighResLoaded(true);
-            if (zoomBgRef.current) {
-              zoomBgRef.current.style.backgroundImage = `url('${zoomUrl}')`;
-            }
-          }
-        });
-      }
     };
 
     window.addEventListener("product-image-change" as any, handleImageChange);
@@ -152,7 +164,8 @@ export default function ProductImageZoom({
 
   const handleMouseEnter = useCallback(() => {
     setIsZoomed(true);
-  }, []);
+    requestZoomImage();
+  }, [requestZoomImage]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;

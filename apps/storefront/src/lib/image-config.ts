@@ -1,7 +1,8 @@
 /**
  * Image Configuration
  * Reads CDN_DOMAIN_URL from wrangler.jsonc vars (the single source of truth).
- * Falls back to process.env for backwards compatibility.
+ * process.env.CDN_DOMAIN_URL is accepted as an explicit build-time override
+ * for CI and preview builds.
  *
  * This module is imported by astro.config.mjs (Node.js build time) AND may be
  * bundled into the Cloudflare Workers runtime where `node:fs` is unavailable.
@@ -9,10 +10,10 @@
  */
 
 /**
- * Parse CDN domains from wrangler.jsonc vars or process.env.
+ * Parse CDN domains from process.env or wrangler.jsonc vars.
  */
 const getCdnDomains = (): string[] => {
-  // Try process.env first (manual override)
+  // Explicit build-time override for CI/preview builds.
   let cdnDomainUrl: string | undefined;
 
   try {
@@ -23,7 +24,11 @@ const getCdnDomains = (): string[] => {
 
   // Read from wrangler.jsonc only in Node.js (build time) — node:fs is
   // unavailable in Cloudflare Workers and would throw at import time.
-  if (!cdnDomainUrl && typeof process !== "undefined" && process.versions?.node) {
+  if (
+    !cdnDomainUrl &&
+    typeof process !== "undefined" &&
+    process.versions?.node
+  ) {
     try {
       // Dynamic imports so the Workers bundler never sees node:fs statically
       const fs = require("node:fs") as typeof import("node:fs");
@@ -58,10 +63,6 @@ export const CDN_DOMAINS = getCdnDomains();
 export const imageConfig = {
   // Allowed domains for image optimization
   domains: CDN_DOMAINS,
-
-
-  // Cache calculated dimensions to improve performance
-  remotePatterns: [{ protocol: "https" as const }],
 };
 
 /**

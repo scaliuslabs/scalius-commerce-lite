@@ -3,13 +3,15 @@
  * Image Optimization Utility for Cloudflare Images
  *
  * ROUTING STRATEGY:
- * - For absolute CDN URLs: routes transforms through the image's own origin
+ * - For allowed absolute CDN URLs: routes transforms through the image's own origin
  *   (e.g., https://cloud.scalius.com/cdn-cgi/image/params/path)
  * - This ensures Image Resizing only needs to be enabled on the CDN zone,
  *   not on every app zone that displays images
  * - Always includes onerror=redirect for graceful degradation
  *
- * NOTE: Bypasses optimization on localhost since /cdn-cgi/ only works on Cloudflare.
+ * NOTE: In development, remote CDN images can still be optimized because the
+ * request goes directly to the Cloudflare-managed CDN origin. Local HTTP media
+ * URLs are left untouched.
  *
  * PURITY: The public API functions (getOptimizedImageUrl, getOriginalImageUrl, etc.)
  * are pure when an explicit ImageContext is provided. When context is omitted, they
@@ -42,8 +44,14 @@ export interface ImageContext {
    */
   cdnBase?: string;
   /**
-   * Whether we are in a development environment. When true, Cloudflare
-   * /cdn-cgi/image/ transforms are skipped (they 404 on localhost).
+   * Hostnames that are known to support Cloudflare Image Resizing.
+   * When set, absolute URLs from other hosts are returned unchanged instead of
+   * being rewritten into a /cdn-cgi/image/ path that would likely fail.
+   */
+  cdnHosts?: string[];
+  /**
+   * Whether we are in a development environment. When true, local/relative
+   * images are not rewritten through /cdn-cgi/image/.
    */
   isDev?: boolean;
 }
@@ -77,6 +85,49 @@ function buildParams(opts: ImageOptimizationOptions): string {
   if (opts.sharpen !== undefined) parts.push(`sharpen=${opts.sharpen}`);
   if (opts.blur !== undefined) parts.push(`blur=${opts.blur}`);
   return parts.join(",");
+}
+
+/** @internal Pure — extracts a lowercase hostname from a URL or host-like value. */
+function toHostname(value: string | undefined): string {
+  const raw = value?.trim();
+  if (!raw) return "";
+
+  try {
+    return new URL(
+      raw.includes("://") ? raw : `https://${raw}`,
+    ).hostname.toLowerCase();
+  } catch {
+    return (
+      raw
+        .replace(/^https?:\/\//, "")
+        .split("/")[0]
+        ?.toLowerCase() || ""
+    );
+  }
+}
+
+/** @internal Pure — builds the CDN host allow-list from context and cdnBase. */
+function getAllowedCdnHosts(
+  ctx: ImageContext | undefined,
+  cdnBase: string,
+): Set<string> {
+  const hosts = new Set<string>();
+  const baseHost = toHostname(cdnBase);
+  if (baseHost) hosts.add(baseHost);
+
+  for (const host of ctx?.cdnHosts ?? []) {
+    const normalized = toHostname(host);
+    if (normalized) hosts.add(normalized);
+  }
+
+  return hosts;
+}
+
+/** @internal Pure — checks if an absolute URL is eligible for Cloudflare resizing. */
+function canResizeAbsoluteUrl(url: URL, allowedHosts: Set<string>): boolean {
+  if (url.protocol !== "https:") return false;
+  if (allowedHosts.size === 0) return true;
+  return allowedHosts.has(url.hostname.toLowerCase());
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +174,7 @@ function detectIsDev(): boolean {
 }
 
 /**
- * Detect CDN base from legacy env vars (R2_PUBLIC_URL, CDN_DOMAIN_URL).
+ * Detect CDN base from configured env vars (R2_PUBLIC_URL, CDN_DOMAIN_URL).
  * Used as a fallback when the caller does not explicitly pass `cdnBase`.
  *
  * **Not pure** — reads `import.meta.env` to find CDN configuration.
@@ -170,6 +221,7 @@ export function getOptimizedImageUrl(
 ): string {
   const cdnBase = ctx?.cdnBase ?? detectCdnBase();
   const isDev = ctx?.isDev ?? detectIsDev();
+  const allowedHosts = getAllowedCdnHosts(ctx, cdnBase);
 
   // Resolve bare keys to full CDN URLs
   const resolved = resolveMediaUrl(originalUrl, cdnBase);
@@ -178,25 +230,27 @@ export function getOptimizedImageUrl(
   // Already optimized
   if (resolved.includes("/cdn-cgi/image/")) return resolved;
 
-  // In development, skip Cloudflare transforms (they 404 on localhost)
-  if (isDev) return resolved;
-
   // Merge with defaults
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const params = buildParams(opts);
 
-  // For absolute URLs, route transforms through the image's own origin.
-  if (resolved.startsWith("https://")) {
+  // For allowed absolute CDN URLs, route transforms through the image's own origin.
+  if (/^https?:\/\//.test(resolved)) {
     try {
       const url = new URL(resolved);
-      return `${url.origin}/cdn-cgi/image/${params}${url.pathname}`;
+      if (!canResizeAbsoluteUrl(url, allowedHosts)) return resolved;
+      return `${url.origin}/cdn-cgi/image/${params}${url.pathname}${url.search}`;
     } catch {
       // fall through to relative path
     }
   }
 
+  // In development, skip local relative transforms because localhost has no /cdn-cgi/image/.
+  if (isDev) return resolved;
+
   // For relative paths, use page-relative /cdn-cgi/image/
-  return `/cdn-cgi/image/${params}/${resolved}`;
+  const relativePath = resolved.startsWith("/") ? resolved : `/${resolved}`;
+  return `/cdn-cgi/image/${params}${relativePath}`;
 }
 
 /**
@@ -331,35 +385,23 @@ export function getResponsiveSrcSet(
  * **Pure when `ctx` is provided.**
  */
 export const ImagePresets = {
-  productThumbnail: (
-    url: string | null | undefined,
-    ctx?: ImageContext,
-  ) => getOptimizedImageUrl(url, { width: 200, height: 200, quality: 75 }, ctx),
+  productThumbnail: (url: string | null | undefined, ctx?: ImageContext) =>
+    getOptimizedImageUrl(url, { width: 200, height: 200, quality: 75 }, ctx),
 
-  productCard: (
-    url: string | null | undefined,
-    ctx?: ImageContext,
-  ) => getOptimizedImageUrl(url, { width: 400, height: 400, quality: 75 }, ctx),
+  productCard: (url: string | null | undefined, ctx?: ImageContext) =>
+    getOptimizedImageUrl(url, { width: 400, height: 400, quality: 75 }, ctx),
 
-  productDetail: (
-    url: string | null | undefined,
-    ctx?: ImageContext,
-  ) => getOptimizedImageUrl(url, { width: 800, height: 800, quality: 85 }, ctx),
+  productDetail: (url: string | null | undefined, ctx?: ImageContext) =>
+    getOptimizedImageUrl(url, { width: 800, height: 800, quality: 85 }, ctx),
 
-  hero: (
-    url: string | null | undefined,
-    ctx?: ImageContext,
-  ) =>
+  hero: (url: string | null | undefined, ctx?: ImageContext) =>
     getOptimizedImageUrl(
       url,
       { width: 1920, height: 600, quality: 90, fit: "cover" },
       ctx,
     ),
 
-  heroMobile: (
-    url: string | null | undefined,
-    ctx?: ImageContext,
-  ) =>
+  heroMobile: (url: string | null | undefined, ctx?: ImageContext) =>
     getOptimizedImageUrl(
       url,
       { width: 768, height: 400, quality: 85, fit: "cover" },

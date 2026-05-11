@@ -27,6 +27,7 @@ import {
 import React, { useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -251,7 +252,16 @@ export default function CartFlyout() {
                     {/* Compact Image */}
                     <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
                       <img
-                        src={item.image || "/placeholder.jpg"}
+                        src={getOptimizedImageUrl(
+                          item.image || "/placeholder.jpg",
+                          {
+                            width: 96,
+                            height: 96,
+                            quality: 75,
+                            format: "auto",
+                            fit: "cover",
+                          },
+                        )}
                         alt={item.name}
                         className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
@@ -284,7 +294,8 @@ export default function CartFlyout() {
 
                         {/* Price */}
                         <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-right shrink-0">
-                          {getCurrencySymbol()}{(item.price * item.quantity).toLocaleString()}
+                          {getCurrencySymbol()}
+                          {(item.price * item.quantity).toLocaleString()}
                         </div>
                       </div>
 
@@ -362,7 +373,8 @@ export default function CartFlyout() {
                   Subtotal (excl. shipping)
                 </div>
                 <div className="text-xl font-bold text-foreground tabular-nums tracking-tight">
-                  {getCurrencySymbol()}{cart.totalAmount.toLocaleString()}
+                  {getCurrencySymbol()}
+                  {cart.totalAmount.toLocaleString()}
                 </div>
               </div>
               <Button
@@ -415,7 +427,8 @@ export default function CartFlyout() {
                   </button>
                 </div>
                 <div className="text-lg font-extrabold text-foreground tabular-nums leading-none">
-                  {getCurrencySymbol()}{cart.totalAmount.toLocaleString()}
+                  {getCurrencySymbol()}
+                  {cart.totalAmount.toLocaleString()}
                 </div>
               </div>
 

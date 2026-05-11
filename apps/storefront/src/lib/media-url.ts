@@ -8,6 +8,26 @@
 import { resolveMediaUrl as sharedResolveMediaUrl } from "@scalius/shared/media-url";
 import { getRuntimeCdnDomain } from "./api/runtime-env";
 
+function normalizeCdnDomain(value: string | null | undefined): string {
+  const raw = value?.trim();
+  if (!raw) return "";
+  return raw.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+function readGlobalCdnDomain(): string {
+  return (
+    (globalThis as typeof globalThis & { __SCALIUS_CDN_DOMAIN__?: string })
+      .__SCALIUS_CDN_DOMAIN__ || ""
+  );
+}
+
+function readWindowCdnDomain(): string {
+  if (typeof window === "undefined") return "";
+  return (
+    (window as typeof window & { __CDN_DOMAIN__?: string }).__CDN_DOMAIN__ || ""
+  );
+}
+
 /**
  * Lazily resolve the CDN base URL (called per-use, not at module init).
  * Resolution order (SSR):
@@ -22,21 +42,35 @@ import { getRuntimeCdnDomain } from "./api/runtime-env";
 export function getCdnBase(): string {
   // SSR: runtime env from middleware
   if (import.meta.env.SSR) {
-    const domain = getRuntimeCdnDomain();
+    const domain = normalizeCdnDomain(getRuntimeCdnDomain());
     if (domain) return `https://${domain.replace(/^https?:\/\//, "")}`;
 
     // Fallback: globalThis store set by middleware (survives across the isolate)
-    if (__SCALIUS_CDN_DOMAIN__)
-      return `https://${__SCALIUS_CDN_DOMAIN__.replace(/^https?:\/\//, "")}`;
+    const globalDomain = normalizeCdnDomain(readGlobalCdnDomain());
+    if (globalDomain) return `https://${globalDomain}`;
   }
 
   // Client-side: injected by Layout.astro into window
-  if (typeof window !== "undefined" && window.__CDN_DOMAIN__) {
-    const d = window.__CDN_DOMAIN__;
-    return d.startsWith("http") ? d : `https://${d}`;
-  }
+  const windowDomain = normalizeCdnDomain(readWindowCdnDomain());
+  if (windowDomain) return `https://${windowDomain}`;
 
   return "";
+}
+
+/**
+ * Return configured CDN hostnames that are eligible for Cloudflare Image Resizing.
+ */
+export function getCdnHosts(): string[] {
+  const hosts = new Set<string>();
+  for (const source of [
+    getRuntimeCdnDomain(),
+    readGlobalCdnDomain(),
+    readWindowCdnDomain(),
+  ]) {
+    const host = normalizeCdnDomain(source);
+    if (host) hosts.add(host.toLowerCase());
+  }
+  return [...hosts];
 }
 
 /**

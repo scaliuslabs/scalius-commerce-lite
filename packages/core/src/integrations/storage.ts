@@ -48,12 +48,18 @@ export function getBucket(): R2Bucket | undefined {
   return _bucket;
 }
 
+function buildPublicUrl(baseUrl: string, key: string): string {
+  const normalizedBase = baseUrl.trim().replace(/\/$/, "");
+  return normalizedBase ? `${normalizedBase}/${key}` : key;
+}
+
 // ---------------------------------------------------------------------------
 // File validation
 // ---------------------------------------------------------------------------
 function validateImageFile(file: File): { isValid: boolean; error?: string } {
   if (!file) return { isValid: false, error: "No file provided" };
-  if (file.size === 0) return { isValid: false, error: "File is empty (0 bytes)" };
+  if (file.size === 0)
+    return { isValid: false, error: "File is empty (0 bytes)" };
 
   if (file.size > MAX_FILE_SIZE) {
     const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
@@ -122,7 +128,7 @@ export async function uploadFile(
   if (!r2) {
     throw new ServiceUnavailableError(
       "R2 bucket binding is not available. " +
-      "Pass the bucket argument explicitly or call initStorage() first.",
+        "Pass the bucket argument explicitly or call initStorage() first.",
     );
   }
 
@@ -136,7 +142,9 @@ export async function uploadFile(
   try {
     fileBuffer = await file.arrayBuffer();
   } catch (err: unknown) {
-    throw new ServiceUnavailableError(`Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`);
+    throw new ServiceUnavailableError(
+      `Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`,
+    );
   }
 
   // Upload with timeout
@@ -163,7 +171,8 @@ export async function uploadFile(
   } catch (err: unknown) {
     let userMessage = err instanceof Error ? err.message : "Upload failed";
     if (userMessage.includes("timeout"))
-      userMessage = "Upload timeout – file may be too large or connection is slow";
+      userMessage =
+        "Upload timeout – file may be too large or connection is slow";
     if (userMessage.includes("NetworkingError"))
       userMessage = "Network error – please check your connection";
     throw new ServiceUnavailableError(userMessage);
@@ -171,7 +180,7 @@ export async function uploadFile(
 
   return {
     key,
-    url: `${baseUrl}/${key}`,
+    url: buildPublicUrl(baseUrl, key),
     size: file.size,
     filename: file.name,
     mimeType: file.type,
@@ -194,7 +203,9 @@ export async function deleteFile(
     await r2.delete(key);
     console.log(`[R2] Deleted: ${key}`);
   } catch (err: unknown) {
-    throw new ServiceUnavailableError(`Failed to delete file: ${err instanceof Error ? err.message : "Unknown error"}`);
+    throw new ServiceUnavailableError(
+      `Failed to delete file: ${err instanceof Error ? err.message : "Unknown error"}`,
+    );
   }
 }
 
@@ -202,11 +213,34 @@ export async function deleteFile(
  * Extract the R2 object key from a full public URL.
  */
 export function extractKeyFromUrl(url: string): string | null {
+  const raw = url.trim();
+  if (!raw) return null;
+
+  const fromPathname = (pathname: string): string | null => {
+    const mediaRouteMarker = "/api/v1/media/";
+    const mediaRouteIndex = pathname.indexOf(mediaRouteMarker);
+    if (mediaRouteIndex >= 0) {
+      const key = pathname.slice(mediaRouteIndex + mediaRouteMarker.length);
+      return key || null;
+    }
+
+    const resizeMarker = "/cdn-cgi/image/";
+    const resizeIndex = pathname.indexOf(resizeMarker);
+    if (resizeIndex >= 0) {
+      const resizedPath = pathname.slice(resizeIndex + resizeMarker.length);
+      const originalPathIndex = resizedPath.indexOf("/");
+      if (originalPathIndex >= 0) {
+        const key = resizedPath.slice(originalPathIndex + 1);
+        return key.replace(/^\/+/, "") || null;
+      }
+    }
+
+    return pathname.replace(/^\/+/, "") || null;
+  };
+
   try {
-    const pathname = new URL(url).pathname;
-    return pathname.startsWith("/") ? pathname.slice(1) : pathname;
+    return fromPathname(new URL(raw).pathname);
   } catch {
-    console.error("Failed to extract key from URL:", url);
-    return null;
+    return raw.replace(/^\/+/, "") || null;
   }
 }
