@@ -156,6 +156,48 @@ export function getStorefrontPrefixesForGroups(groups: string[]): string[] {
 }
 
 /**
+ * Trigger the storefront purge endpoint for the given invalidation groups.
+ *
+ * This bumps the storefront HTML cache version when any group requires it and
+ * clears matching in-memory prefixes on the worker that receives the purge.
+ * The request is intentionally fire-and-forget via waitUntil so admin writes
+ * are not blocked by a downstream storefront network hop.
+ */
+export function triggerStorefrontPurgeForGroups(
+  groups: string[],
+  env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+  executionCtx?: ExecutionContext,
+): void {
+  const validGroups = groups.filter((g) => g in INVALIDATION_GROUPS);
+  if (validGroups.length === 0) return;
+
+  const purgeUrl = env?.PURGE_URL;
+  const purgeToken = env?.PURGE_TOKEN;
+  if (!purgeUrl || !purgeToken) return;
+
+  const urlWithToken = new URL(purgeUrl);
+  urlWithToken.searchParams.set("token", purgeToken);
+
+  const purgePromise = fetch(urlWithToken.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      groups: validGroups,
+      prefixes: getStorefrontPrefixesForGroups(validGroups),
+      bumpVersion: shouldBumpStorefrontVersion(validGroups),
+    }),
+  }).catch((err) =>
+    console.error("[Cache] Storefront group purge failed:", err),
+  );
+
+  if (executionCtx) {
+    executionCtx.waitUntil(purgePromise);
+  } else {
+    void purgePromise;
+  }
+}
+
+/**
  * Invalidate KV cache entries for the given groups.
  * Collects all unique KV prefixes and calls deleteCacheByPattern for each.
  */

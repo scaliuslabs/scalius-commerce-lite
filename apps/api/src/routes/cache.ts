@@ -6,7 +6,7 @@ import {
   ADMIN_PATH_TO_GROUPS,
   invalidateGroups,
   shouldBumpStorefrontVersion,
-  getStorefrontPrefixesForGroups
+  triggerStorefrontPurgeForGroups
 } from "../utils/cache-invalidation";
 import { ValidationError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
@@ -204,25 +204,8 @@ app.openapi(clearGroupRoute, async (c) => {
     );
   }
 
-  // Trigger storefront purge if needed
   const bumpVersion = shouldBumpStorefrontVersion(validGroups);
-  const prefixes = getStorefrontPrefixesForGroups(validGroups);
-  const env = c.env as Env;
-  const purgeUrl = env?.PURGE_URL;
-  const purgeToken = env?.PURGE_TOKEN;
-  if (purgeUrl && purgeToken) {
-    const urlWithToken = new URL(purgeUrl);
-    urlWithToken.searchParams.set("token", purgeToken);
-    c.executionCtx.waitUntil(
-      fetch(urlWithToken.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groups: validGroups, prefixes, bumpVersion })
-      }).catch((err) =>
-        console.error("[Cache] Storefront group purge failed:", err),
-      ),
-    );
-  }
+  triggerStorefrontPurgeForGroups(validGroups, c.env, c.executionCtx);
 
   return ok(c, {
     message: `Cache cleared for groups: ${validGroups.join(", ")}`,
