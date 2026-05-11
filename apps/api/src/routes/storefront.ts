@@ -33,14 +33,10 @@ const homepageRoute = createRoute({
   }
 });
 
-app.use(
-  "/homepage",
-  cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:homepage:", varyByQuery: false, methods: ["GET"] }),
-);
-
 app.openapi(homepageRoute, (async (c: any) => {
   const db = c.get("db");
   const data = await getHomepageData(db);
+  c.header("Cache-Control", "no-store, max-age=0");
   return ok(c, data);
 }) as any);
 
