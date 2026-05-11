@@ -502,7 +502,7 @@ importers:
     devDependencies:
       '@astrojs/cloudflare':
         specifier: ^13.1.1
-        version: 13.1.1(@types/node@25.4.0)(astro@6.0.4(@types/node@25.4.0)(@upstash/redis@1.36.2)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.59.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))(yaml@2.8.2)
+        version: 13.1.1(@types/node@25.4.0)(astro@6.0.4(@types/node@25.4.0)(@upstash/redis@1.36.2)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.59.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(workerd@1.20260317.1)(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))(yaml@2.8.2)
       '@cloudflare/workers-types':
         specifier: ^4.20260313.1
         version: 4.20260313.1
@@ -626,6 +626,12 @@ importers:
       currency.js:
         specifier: ^2.0.4
         version: 2.0.4
+      domhandler:
+        specifier: 5.0.3
+        version: 5.0.3
+      htmlparser2:
+        specifier: 10.1.0
+        version: 10.1.0
       libphonenumber-js:
         specifier: ^1.12.40
         version: 1.12.40
@@ -4643,10 +4649,6 @@ packages:
   eventemitter3@5.0.4:
     resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
 
-  eventsource-parser@3.0.6:
-    resolution: {integrity: sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg==}
-    engines: {node: '>=18.0.0'}
-
   eventsource-parser@3.0.8:
     resolution: {integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==}
     engines: {node: '>=18.0.0'}
@@ -7182,11 +7184,11 @@ snapshots:
       - prettier
       - prettier-plugin-astro
 
-  '@astrojs/cloudflare@13.1.1(@types/node@25.4.0)(astro@6.0.4(@types/node@25.4.0)(@upstash/redis@1.36.2)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.59.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))(yaml@2.8.2)':
+  '@astrojs/cloudflare@13.1.1(@types/node@25.4.0)(astro@6.0.4(@types/node@25.4.0)(@upstash/redis@1.36.2)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.59.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(workerd@1.20260317.1)(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))(yaml@2.8.2)':
     dependencies:
       '@astrojs/internal-helpers': 0.8.0
       '@astrojs/underscore-redirects': 1.0.1
-      '@cloudflare/vite-plugin': 1.30.0(vite@7.3.1(@types/node@25.4.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))
+      '@cloudflare/vite-plugin': 1.30.0(vite@7.3.1(@types/node@25.4.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))(workerd@1.20260317.1)(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))
       astro: 6.0.4(@types/node@25.4.0)(@upstash/redis@1.36.2)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.59.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
       piccolore: 0.1.3
       tinyglobby: 0.2.15
@@ -7546,7 +7548,7 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260317.1
 
-  '@cloudflare/vite-plugin@1.30.0(vite@7.3.1(@types/node@25.4.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))':
+  '@cloudflare/vite-plugin@1.30.0(vite@7.3.1(@types/node@25.4.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))(workerd@1.20260317.1)(wrangler@4.76.0(@cloudflare/workers-types@4.20260313.1))':
     dependencies:
       '@cloudflare/unenv-preset': 2.16.0(unenv@2.0.0-rc.24)(workerd@1.20260317.1)
       miniflare: 4.20260317.1
@@ -11491,13 +11493,11 @@ snapshots:
 
   eventemitter3@5.0.4: {}
 
-  eventsource-parser@3.0.6: {}
-
   eventsource-parser@3.0.8: {}
 
   eventsource@4.1.0:
     dependencies:
-      eventsource-parser: 3.0.6
+      eventsource-parser: 3.0.8
 
   expect-type@1.3.0: {}
 

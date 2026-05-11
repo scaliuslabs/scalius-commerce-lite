@@ -2,6 +2,7 @@
 // src/components/RichContent.astro
 import { processShortcodes } from "@/lib/shortcodes";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 interface Props {
   content: string;
@@ -15,14 +16,14 @@ const {
   processShortcodes: shouldProcessShortcodes = true,
 } = Astro.props;
 
-// Process shortcodes if enabled
-let processedContent = content;
+// Sanitize merchant-authored content before expanding trusted shortcodes.
+let processedContent = sanitizeHtml(content);
 if (shouldProcessShortcodes && content) {
   try {
-    processedContent = await processShortcodes(content);
+    processedContent = await processShortcodes(processedContent);
   } catch (error: unknown) {
     console.error("Error processing shortcodes:", error);
-    processedContent = content; // Fallback to original content
+    processedContent = sanitizeHtml(content);
   }
 }
 

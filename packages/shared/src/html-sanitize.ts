@@ -1,130 +1,352 @@
-// src/html-sanitize.ts
-// Regex-based HTML sanitizer for admin-authored widget content.
+import { DomUtils, parseDocument } from "htmlparser2";
+import { isTag, isText, type ChildNode } from "domhandler";
+
+const ALLOWED_TAGS = new Set([
+  "a",
+  "abbr",
+  "article",
+  "aside",
+  "b",
+  "blockquote",
+  "br",
+  "button",
+  "caption",
+  "code",
+  "col",
+  "colgroup",
+  "dd",
+  "del",
+  "details",
+  "div",
+  "dl",
+  "dt",
+  "em",
+  "figcaption",
+  "figure",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "i",
+  "img",
+  "ins",
+  "li",
+  "main",
+  "mark",
+  "nav",
+  "ol",
+  "p",
+  "picture",
+  "pre",
+  "s",
+  "section",
+  "small",
+  "source",
+  "span",
+  "strong",
+  "sub",
+  "summary",
+  "sup",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
+  "u",
+  "ul",
+]);
+
+const DROP_WITH_CONTENT = new Set([
+  "applet",
+  "base",
+  "embed",
+  "iframe",
+  "link",
+  "meta",
+  "object",
+  "script",
+  "style",
+  "template",
+]);
+
+const GENERAL_ATTRIBUTES = new Set([
+  "class",
+  "dir",
+  "id",
+  "lang",
+  "role",
+  "style",
+  "tabindex",
+  "title",
+]);
+
+const TAG_ATTRIBUTES: Record<string, Set<string>> = {
+  a: new Set(["href", "name", "rel", "target"]),
+  button: new Set(["disabled", "type"]),
+  col: new Set(["span", "width"]),
+  img: new Set([
+    "alt",
+    "decoding",
+    "fetchpriority",
+    "height",
+    "loading",
+    "sizes",
+    "src",
+    "srcset",
+    "width",
+  ]),
+  source: new Set(["height", "media", "sizes", "src", "srcset", "type", "width"]),
+  table: new Set(["summary"]),
+  td: new Set(["colspan", "headers", "rowspan"]),
+  th: new Set(["colspan", "headers", "rowspan", "scope"]),
+};
+
+const BOOLEAN_ATTRIBUTES = new Set(["disabled"]);
+const URL_ATTRIBUTES = new Set(["href", "src"]);
+const IMAGE_URL_TAGS = new Set(["img", "source"]);
+const ALLOWED_BUTTON_TYPES = new Set(["button", "submit", "reset"]);
+const ALLOWED_TARGETS = new Set(["_blank", "_self", "_parent", "_top"]);
+const SAFE_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i;
+const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
- * Sanitize HTML by stripping common XSS vectors while preserving structure.
+ * Sanitizes admin-authored rich HTML using a parser-backed allowlist.
  *
- * **Defense-in-depth measure for semi-trusted admin content.** Covers:
- * - `<script>` tags and their content
- * - Dangerous embed/frame tags (`<iframe>`, `<object>`, `<embed>`, `<applet>`)
- * - `<base>`, `<link>`, `<template>` tags
- * - `<meta>` tags with http-equiv refresh
- * - `on*` event handler attributes (including HTML-entity-encoded variants)
- * - `javascript:`, `vbscript:`, `data:` (non-image) URLs
- * - CSS expressions and `url(javascript:...)` in style attributes
- * - Null bytes and zero-width characters used to bypass filters
- * - `<form>` tags (prevents credential phishing)
- *
- * For fully untrusted user input, use a DOM-based sanitizer like DOMPurify.
- * This is appropriate for admin-authored content where the author is semi-trusted
- * but content may be copy-pasted from external sources containing hidden payloads.
+ * The sanitizer preserves layout/content tags used by CMS pages and widgets,
+ * while dropping script-capable tags, event attributes, unsafe protocols, and
+ * dangerous CSS patterns. Unknown tags are unwrapped so merchant-authored text
+ * survives without preserving unsafe elements.
  */
 export function sanitizeHtml(html: string): string {
   if (!html) return "";
 
-  let result = html;
+  const normalized = html.replace(/[\x00\u200B\u200C\u200D\uFEFF]/g, "");
+  const document = parseDocument(normalized, {
+    decodeEntities: true,
+    lowerCaseAttributeNames: true,
+    lowerCaseTags: true,
+  });
 
-  // ── Phase 0: Strip null bytes and zero-width characters ──
-  // These can be injected between characters to bypass pattern matching
-  // e.g., <scri\0pt> or on\u200Bclick
-  // eslint-disable-next-line no-control-regex
-  result = result.replace(/[\x00\u200B\u200C\u200D\uFEFF]/g, "");
-
-  // ── Phase 1: Decode HTML entities in dangerous contexts ──
-  // Attackers encode "on" as "&#111;n" or "&#x6F;n" to bypass event handler detection.
-  // We normalize numeric HTML entities to their character equivalents before filtering.
-  // This runs BEFORE attribute stripping so encoded payloads are caught.
-  result = decodeNumericEntities(result);
-
-  // ── Phase 2: Remove dangerous tags and their content ──
-
-  // <script>...</script> and unclosed/self-closing variants
-  result = result.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi, "");
-  result = result.replace(/<script\b[^>]*\/?>/gi, "");
-
-  // <iframe>...</iframe>
-  result = result.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe\s*>/gi, "");
-  result = result.replace(/<iframe\b[^>]*\/?>/gi, "");
-
-  // <object>...</object>
-  result = result.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object\s*>/gi, "");
-  result = result.replace(/<object\b[^>]*\/?>/gi, "");
-
-  // <embed> (void element)
-  result = result.replace(/<embed\b[^>]*\/?>/gi, "");
-
-  // <applet>...</applet>
-  result = result.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet\s*>/gi, "");
-  result = result.replace(/<applet\b[^>]*\/?>/gi, "");
-
-  // <base> tags (prevents base URL hijacking)
-  result = result.replace(/<base\b[^>]*\/?>/gi, "");
-
-  // <link> tags (prevents stylesheet injection, import attacks)
-  result = result.replace(/<link\b[^>]*\/?>/gi, "");
-
-  // <template>...</template> (can contain executable content in some contexts)
-  result = result.replace(/<template\b[^<]*(?:(?!<\/template>)<[^<]*)*<\/template\s*>/gi, "");
-  result = result.replace(/<template\b[^>]*\/?>/gi, "");
-
-  // <meta> with http-equiv="refresh" (prevents redirect injection)
-  result = result.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*\/?>/gi, "");
-
-  // ── Phase 3: Remove event handler attributes ──
-  // Matches on* attributes even with whitespace tricks between attribute name and =
-  result = result.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "");
-
-  // ── Phase 4: Remove dangerous URL protocols ──
-
-  // javascript: URLs in href, src, action, formaction, xlink:href
-  result = result.replace(
-    /(href|src|action|formaction|xlink:href)\s*=\s*(?:"[^"]*javascript\s*:[^"]*"|'[^']*javascript\s*:[^']*')/gi,
-    '$1=""',
-  );
-
-  // vbscript: URLs
-  result = result.replace(
-    /(href|src|action|formaction)\s*=\s*(?:"[^"]*vbscript\s*:[^"]*"|'[^']*vbscript\s*:[^']*')/gi,
-    '$1=""',
-  );
-
-  // data: URLs with script-capable MIME types (preserves data:image/*)
-  result = result.replace(
-    /(href|src|action|formaction)\s*=\s*(?:"data\s*:\s*(?:text\/html|application\/javascript|application\/x-javascript|text\/javascript|text\/xml|application\/xml|text\/css)[^"]*"|'data\s*:\s*(?:text\/html|application\/javascript|application\/x-javascript|text\/javascript|text\/xml|application\/xml|text\/css)[^']*')/gi,
-    '$1=""',
-  );
-
-  // ── Phase 5: Neutralize dangerous CSS patterns ──
-  // CSS expression() (IE legacy but still worth catching for defense-in-depth)
-  // and url(javascript:...) in style attributes
-  result = result.replace(
-    /style\s*=\s*("[^"]*"|'[^']*')/gi,
-    (match) => {
-      return match
-        .replace(/expression\s*\(/gi, "blocked(")
-        .replace(/url\s*\(\s*(['"]?\s*javascript\s*:)/gi, "url(blocked:");
-    },
-  );
-
-  // ── Phase 6: Remove <form> tags (preserves content) ──
-  result = result.replace(/<\/?form\b[^>]*>/gi, "");
-
-  return result;
+  const children = sanitizeNodes(document.children);
+  return DomUtils.getOuterHTML(children);
 }
 
-/**
- * Decode numeric HTML entities (&#NNN; and &#xHH;) to their character equivalents.
- * This prevents attackers from encoding "onclick" as "&#111;nclick" to bypass filters.
- * Only decodes printable ASCII range (32-126) to avoid introducing control characters.
- */
-function decodeNumericEntities(html: string): string {
-  return html.replace(/&#(x?)([\da-fA-F]+);?/g, (_match, isHex: string, digits: string) => {
-    const codePoint = isHex ? parseInt(digits, 16) : parseInt(digits, 10);
-    // Only decode printable ASCII to prevent reintroducing control chars
-    if (codePoint >= 32 && codePoint <= 126) {
-      return String.fromCharCode(codePoint);
+function sanitizeNodes(nodes: ChildNode[] = []): ChildNode[] {
+  const sanitized: ChildNode[] = [];
+
+  for (const node of nodes) {
+    if (isText(node)) {
+      sanitized.push(node);
+      continue;
     }
-    // Leave non-printable entities as-is (they're harmless as entities)
-    return _match;
+
+    if (!isTag(node)) {
+      continue;
+    }
+
+    const tagName = (node.name || "").toLowerCase();
+    if (DROP_WITH_CONTENT.has(tagName)) continue;
+
+    const children = sanitizeNodes(node.children ?? []);
+    if (!ALLOWED_TAGS.has(tagName)) {
+      sanitized.push(...children);
+      continue;
+    }
+
+    node.name = tagName;
+    node.attribs = sanitizeAttributes(tagName, node.attribs ?? {});
+    node.children = children;
+    sanitized.push(node);
+  }
+
+  return sanitized;
+}
+
+function sanitizeAttributes(
+  tagName: string,
+  attributes: Record<string, string>,
+): Record<string, string> {
+  const sanitized: Record<string, string> = {};
+
+  for (const [rawName, rawValue] of Object.entries(attributes)) {
+    const name = rawName.toLowerCase();
+    if (name.startsWith("on")) continue;
+    if (!isAllowedAttribute(tagName, name)) continue;
+
+    if (BOOLEAN_ATTRIBUTES.has(name)) {
+      sanitized[name] = "";
+      continue;
+    }
+
+    const value = String(rawValue ?? "");
+    if (name === "style") {
+      const style = sanitizeCss(value);
+      if (style) sanitized[name] = style;
+      continue;
+    }
+
+    if (URL_ATTRIBUTES.has(name)) {
+      const url = sanitizeUrl(value, IMAGE_URL_TAGS.has(tagName));
+      if (url) sanitized[name] = url;
+      continue;
+    }
+
+    if (name === "srcset") {
+      const srcset = sanitizeSrcset(value);
+      if (srcset) sanitized[name] = srcset;
+      continue;
+    }
+
+    if (name === "target") {
+      const target = value.toLowerCase();
+      if (ALLOWED_TARGETS.has(target)) sanitized[name] = target;
+      continue;
+    }
+
+    if (name === "rel") {
+      const rel = sanitizeTokenList(value);
+      if (rel) sanitized[name] = rel;
+      continue;
+    }
+
+    if (name === "type" && tagName === "button") {
+      const type = value.toLowerCase();
+      sanitized[name] = ALLOWED_BUTTON_TYPES.has(type) ? type : "button";
+      continue;
+    }
+
+    sanitized[name] = value;
+  }
+
+  if (tagName === "a" && sanitized.target === "_blank") {
+    const rel = new Set((sanitized.rel || "").split(/\s+/).filter(Boolean));
+    rel.add("noopener");
+    rel.add("noreferrer");
+    sanitized.rel = [...rel].join(" ");
+  }
+
+  return sanitized;
+}
+
+function isAllowedAttribute(tagName: string, name: string): boolean {
+  if (GENERAL_ATTRIBUTES.has(name)) return true;
+  if (name.startsWith("data-") || name.startsWith("aria-")) return true;
+  return TAG_ATTRIBUTES[tagName]?.has(name) === true;
+}
+
+function sanitizeUrl(value: string, imageUrl: boolean): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const compact = trimmed.replace(/[\u0000-\u001F\u007F\s]+/g, "").toLowerCase();
+  if (
+    compact.startsWith("javascript:") ||
+    compact.startsWith("vbscript:") ||
+    compact.startsWith("file:")
+  ) {
+    return "";
+  }
+
+  if (compact.startsWith("data:")) {
+    return imageUrl && SAFE_DATA_IMAGE_RE.test(compact) ? trimmed : "";
+  }
+
+  if (compact.startsWith("mailto:") || compact.startsWith("tel:")) {
+    return imageUrl ? "" : trimmed;
+  }
+
+  if (HAS_SCHEME_RE.test(compact)) {
+    return compact.startsWith("http:") || compact.startsWith("https:")
+      ? trimmed
+      : "";
+  }
+
+  return trimmed;
+}
+
+function sanitizeSrcset(value: string): string {
+  return value
+    .split(",")
+    .map((candidate) => {
+      const parts = candidate.trim().split(/\s+/);
+      const url = sanitizeUrl(parts[0] || "", true);
+      if (!url) return "";
+      return [url, ...parts.slice(1)].join(" ");
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function sanitizeTokenList(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((token) => token.replace(/[^\w:-]/g, "").toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function sanitizeCss(value: string): string {
+  return value
+    .split(";")
+    .map(sanitizeCssDeclaration)
+    .filter(Boolean)
+    .join("; ");
+}
+
+function sanitizeCssDeclaration(declaration: string): string {
+  const trimmed = declaration.trim();
+  if (!trimmed) return "";
+  if (/^@import\b/i.test(trimmed)) return "";
+
+  const separator = trimmed.indexOf(":");
+  if (separator <= 0) return "";
+
+  const property = trimmed.slice(0, separator).trim().toLowerCase();
+  const propertyValue = trimmed.slice(separator + 1).trim();
+  if (!/^(?:-?[a-z][a-z0-9-]*|--[a-z0-9-]+)$/i.test(property)) return "";
+  if (/^(?:behavior|(?:-moz-|-webkit-)?binding)$/i.test(property)) return "";
+  if (hasUnsafeCssValue(propertyValue)) return "";
+
+  return `${property}: ${propertyValue}`;
+}
+
+function hasUnsafeCssValue(value: string): boolean {
+  const decoded = decodeCssEscapes(value).replace(/\/\*[\s\S]*?\*\//g, "");
+  const compact = decoded.replace(/[\u0000-\u001F\u007F\s]+/g, "").toLowerCase();
+  if (
+    compact.includes("expression(") ||
+    compact.includes("javascript:") ||
+    compact.includes("vbscript:") ||
+    compact.includes("file:")
+  ) {
+    return true;
+  }
+
+  for (const match of decoded.matchAll(/url\s*\(\s*(['"]?)(.*?)\1\s*\)/gi)) {
+    const url = match[2]?.trim() ?? "";
+    if (!sanitizeUrl(url, true)) return true;
+  }
+
+  return false;
+}
+
+function decodeCssEscapes(value: string): string {
+  return value.replace(/\\([0-9a-fA-F]{1,6}\s?|.)/g, (_match, escape: string) => {
+    const hex = escape.trim();
+    if (/^[0-9a-fA-F]+$/.test(hex)) {
+      const codePoint = Number.parseInt(hex, 16);
+      if (Number.isFinite(codePoint) && codePoint > 0 && codePoint <= 0x10ffff) {
+        return String.fromCodePoint(codePoint);
+      }
+      return "";
+    }
+    return escape;
   });
 }
