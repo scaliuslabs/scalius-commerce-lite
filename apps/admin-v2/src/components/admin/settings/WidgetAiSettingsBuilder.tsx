@@ -134,6 +134,12 @@ function normalizeProvider(id: ProviderId, value: unknown): ProviderValues {
   };
 }
 
+function normalizeProviderId(value: unknown): ProviderId {
+  return PROVIDERS.some((provider) => provider.id === value)
+    ? (value as ProviderId)
+    : defaultValues.activeProvider;
+}
+
 async function fetchWidgetAi(): Promise<WidgetAiValues> {
   const data = (await getWidgetAiSettings()) as Record<string, unknown>;
   const providers = (data.providers ?? {}) as Record<string, unknown>;
@@ -142,7 +148,7 @@ async function fetchWidgetAi(): Promise<WidgetAiValues> {
   const generation = (data.generation ?? {}) as Partial<WidgetAiValues["generation"]>;
 
   return {
-    activeProvider: (data.activeProvider as ProviderId) || "openrouter",
+    activeProvider: normalizeProviderId(data.activeProvider),
     providers: {
       openrouter: normalizeProvider("openrouter", providers.openrouter),
       openai: normalizeProvider("openai", providers.openai),
@@ -311,6 +317,7 @@ export default function WidgetAiSettingsBuilder() {
         {PROVIDERS.map((provider) => {
           const valuesForProvider = values.providers[provider.id];
           const supportsBaseUrl = provider.id !== "cloudflare";
+          const isCloudflare = provider.id === "cloudflare";
           return (
             <section key={provider.id} className="rounded-md border border-border p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -321,8 +328,16 @@ export default function WidgetAiSettingsBuilder() {
                     {(valuesForProvider.hasApiKey || valuesForProvider.hasBinding) && (
                       <Badge variant="outline">Configured</Badge>
                     )}
+                    {isCloudflare && valuesForProvider.hasBinding && (
+                      <Badge variant="secondary">Workers AI binding</Badge>
+                    )}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{provider.hint}</p>
+                  {isCloudflare && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      The Worker binding is preferred for production generation. Account ID and API key are optional REST fallback/model-catalog credentials.
+                    </p>
+                  )}
                 </div>
                 <Switch
                   checked={valuesForProvider.enabled}
@@ -429,19 +444,32 @@ export default function WidgetAiSettingsBuilder() {
                 )}
 
                 {provider.id === "cloudflare" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="cloudflare-account-id">Account ID</Label>
-                    <Input
-                      id="cloudflare-account-id"
-                      name="widget-ai-cloudflare-account-id"
-                      autoComplete="off"
-                      data-lpignore="true"
-                      data-1p-ignore="true"
-                      value={valuesForProvider.accountId}
-                      onChange={(event) => setProviderValue("cloudflare", "accountId", event.target.value)}
-                      placeholder={valuesForProvider.hasBinding ? "Worker AI binding is available" : "Cloudflare account ID"}
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="cloudflare-account-id">Account ID for REST fallback</Label>
+                      <Input
+                        id="cloudflare-account-id"
+                        name="widget-ai-cloudflare-account-id"
+                        autoComplete="off"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        value={valuesForProvider.accountId}
+                        onChange={(event) => setProviderValue("cloudflare", "accountId", event.target.value)}
+                        placeholder="32-character Cloudflare account ID"
+                      />
+                    </div>
+                    <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground md:col-span-2">
+                      <div className="font-medium text-foreground">Cloudflare mode</div>
+                      <div className="mt-1">
+                        {valuesForProvider.hasBinding
+                          ? "Binding active: generation works without a stored API token."
+                          : "Binding missing: add account ID and API token for REST fallback generation."}
+                      </div>
+                      <div className="mt-1">
+                        REST fallback: {valuesForProvider.hasApiKey && valuesForProvider.accountId ? "configured" : "not configured"}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </section>

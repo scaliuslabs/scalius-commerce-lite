@@ -91,7 +91,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           cssContent: undefined,
           isActive: true,
           displayTarget: 'homepage',
-          placementRule: WidgetPlacementRule.STANDALONE, // Default to shortcode
+          placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
           referenceCollectionId: null,
           sortOrder: 0,
         },
@@ -170,6 +170,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    * Accept generated content from preview
    */
   const handleAcceptPreview = () => {
+    if (!aiGenerator.canAcceptGenerated) {
+      toast.error('Generation is not ready to apply.');
+      return;
+    }
     if (aiGenerator.generatedContent) {
       setValue('htmlContent', aiGenerator.generatedContent.html);
       setValue('cssContent', aiGenerator.generatedContent.css);
@@ -444,6 +448,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
         <WidgetDetails
           register={register}
+          watch={watch}
           errors={errors}
           handleShowPreview={handleShowPreview}
           onPaste={() => setIsPasteModalOpen(true)}
@@ -487,7 +492,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           }
         }}
         content={editorMode === 'improvement' ? aiImprover.contentToImprove : aiGenerator.generatedContent}
-        rawOutput={editorMode === 'improvement' ? aiImprover.rawOutput : undefined}
+        rawOutput={editorMode === 'improvement' ? aiImprover.rawOutput : aiGenerator.rawOutput || undefined}
+        error={editorMode === 'generation-preview' ? aiGenerator.generationError : undefined}
         mode={editorMode}
         onAccept={
           editorMode === 'improvement'
@@ -502,6 +508,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         onImprove={editorMode === 'improvement' ? aiImprover.improve : undefined}
         onRequestImprovement={editorMode === 'generation-preview' ? handleRequestImprovement : undefined}
         isProcessing={editorMode === 'improvement' ? aiImprover.isImproving : aiGenerator.isLoadingPrompt}
+        canAccept={editorMode === 'generation-preview' ? aiGenerator.canAcceptGenerated : true}
         processingProgress={aiGenerator.generationProgress}
         aiContext={aiContext}
         promptType={aiGenerator.promptType}

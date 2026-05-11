@@ -305,10 +305,14 @@ export function isPromptTooLarge(prompt: string): boolean {
 }
 
 /**
- * Should use staged generation based on prompt length?
+ * Should use staged generation?
+ *
+ * Keep this decision merchant-controlled. Large prompts can benefit from
+ * staged generation, but silently overriding an off toggle makes the editor
+ * feel unpredictable and can save partial content when a later section fails.
  */
-export function shouldUseStagedGeneration(promptLength: number, userEnabled: boolean): boolean {
-  return userEnabled || promptLength > GENERATION_CONFIG.stagedGeneration.autoEnableThreshold;
+export function shouldUseStagedGeneration(_promptLength: number, userEnabled: boolean): boolean {
+  return userEnabled;
 }
 
 /**

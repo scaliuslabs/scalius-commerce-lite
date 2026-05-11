@@ -5,12 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Eye, ClipboardPaste, Sparkles } from 'lucide-react';
-import type { UseFormRegister, FieldErrors } from 'react-hook-form';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@scalius/shared/utils';
+import { Eye, ClipboardPaste, Sparkles, Code2, ChevronDown } from 'lucide-react';
+import type { UseFormRegister, UseFormWatch, FieldErrors } from 'react-hook-form';
 import type { WidgetFormValues } from '@/lib/form-schemas';
 
 interface WidgetDetailsProps {
   register: UseFormRegister<WidgetFormValues>;
+  watch: UseFormWatch<WidgetFormValues>;
   errors: FieldErrors<WidgetFormValues>;
   handleShowPreview: () => void;
   onPaste: () => void;
@@ -19,29 +22,48 @@ interface WidgetDetailsProps {
 
 export const WidgetDetails: React.FC<WidgetDetailsProps> = ({
   register,
+  watch,
   errors,
   handleShowPreview,
   onPaste,
   onImproveExisting
 }) => {
+  const [isCodeOpen, setIsCodeOpen] = React.useState(false);
+  const html = watch("htmlContent") || "";
+  const css = watch("cssContent") || "";
+  const hasContent = html.trim().length > 0;
+
+  React.useEffect(() => {
+    if (errors.htmlContent || errors.cssContent) {
+      setIsCodeOpen(true);
+    }
+  }, [errors.htmlContent, errors.cssContent]);
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Widget Details</CardTitle>
-        <div className="flex items-center gap-2">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 p-4">
+        <div>
+          <CardTitle className="text-base">Widget content</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {hasContent
+              ? `${html.length.toLocaleString()} HTML chars, ${css.length.toLocaleString()} CSS chars`
+              : "Generate, paste, or write widget HTML/CSS."}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onPaste}>
               <ClipboardPaste className="mr-2 h-4 w-4" />
-              Paste AI Response
+              Paste
           </Button>
           {onImproveExisting && (
             <Button type="button" variant="outline" size="sm" onClick={onImproveExisting}>
               <Sparkles className="mr-2 h-4 w-4" />
-              Improve Existing
+              Improve
             </Button>
           )}
           <Button type="button" variant="outline" size="sm" onClick={handleShowPreview}>
               <Eye className="mr-2 h-4 w-4" />
-              Show Live Preview
+              Preview
           </Button>
         </div>
       </CardHeader>
@@ -59,34 +81,49 @@ export const WidgetDetails: React.FC<WidgetDetailsProps> = ({
             </p>
           )}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="htmlContent">HTML Content</Label>
-          <Textarea
-            id="htmlContent"
-            {...register("htmlContent")}
-            rows={10}
-            placeholder="<div>Your HTML here...</div>"
-          />
-          {errors.htmlContent && (
-            <p className="text-sm text-destructive">
-              {errors.htmlContent.message}
-            </p>
-          )}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cssContent">CSS Content (Optional)</Label>
-          <Textarea
-            id="cssContent"
-            {...register("cssContent")}
-            rows={6}
-            placeholder=".my-widget-class { color: blue; }"
-          />
-          {errors.cssContent && (
-            <p className="text-sm text-destructive">
-              {errors.cssContent.message}
-            </p>
-          )}
-        </div>
+        <Collapsible open={isCodeOpen} onOpenChange={setIsCodeOpen}>
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="outline" className="w-full justify-between">
+              <span className="inline-flex items-center gap-2">
+                <Code2 className="h-4 w-4" />
+                Advanced HTML/CSS
+              </span>
+              <ChevronDown className={cn("h-4 w-4 transition-transform", isCodeOpen && "rotate-180")} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="htmlContent">HTML</Label>
+              <Textarea
+                id="htmlContent"
+                {...register("htmlContent")}
+                rows={10}
+                placeholder="<div>Your HTML here...</div>"
+                className="font-mono text-xs"
+              />
+              {errors.htmlContent && (
+                <p className="text-sm text-destructive">
+                  {errors.htmlContent.message}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cssContent">CSS</Label>
+              <Textarea
+                id="cssContent"
+                {...register("cssContent")}
+                rows={6}
+                placeholder=".my-widget-class { color: blue; }"
+                className="font-mono text-xs"
+              />
+              {errors.cssContent && (
+                <p className="text-sm text-destructive">
+                  {errors.cssContent.message}
+                </p>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );

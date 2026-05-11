@@ -410,9 +410,12 @@ export async function generateStructuredPrompt({
   let imageContext = "";
   const multimodalImages: MessageContent[] = [];
 
-  if (allImageUrls.length > 0) {
+  const maxImages = getMaxImages(modelId);
+  const cappedImageUrls = Array.from(new Set(allImageUrls)).slice(0, maxImages);
+
+  if (cappedImageUrls.length > 0) {
     // Convert URLs to MediaFile format for dimension processing
-    const allImageFiles: MediaFile[] = allImageUrls.map((url, index) => ({
+    const allImageFiles: MediaFile[] = cappedImageUrls.map((url, index) => ({
       id: `img-${index}`,
       filename: `image-${index + 1}.jpg`,
       url: url,
@@ -425,11 +428,10 @@ export async function generateStructuredPrompt({
   }
 
   // If model supports vision, send ALL images as native multimodal
-  if (supportsVision && allImageUrls.length > 0) {
-    const maxImages = getMaxImages(modelId);
-    const imagesToSend = allImageUrls.slice(0, maxImages);
+  if (supportsVision && cappedImageUrls.length > 0) {
+    const imagesToSend = cappedImageUrls;
 
-    if (allImageUrls.length > maxImages) {
+    if (allImageUrls.length > cappedImageUrls.length) {
       console.warn(`Model ${modelId} supports max ${maxImages} images. Sending first ${maxImages} of ${allImageUrls.length} total images.`);
     }
 

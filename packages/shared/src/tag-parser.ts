@@ -47,7 +47,13 @@ function extractTag(content: string, tagName: string): string | null {
     }
   }
 
-  return null;
+  const openMatch = content.match(new RegExp(`<${tagName}>`, "i"));
+  if (!openMatch || openMatch.index === undefined) return null;
+
+  const start = openMatch.index + openMatch[0].length;
+  const afterStart = content.slice(start);
+  const nextKnownTag = afterStart.search(/<\/?(?:htmljs|html|css|part\d+)\b/i);
+  return (nextKnownTag === -1 ? afterStart : afterStart.slice(0, nextKnownTag)).trim();
 }
 
 /**

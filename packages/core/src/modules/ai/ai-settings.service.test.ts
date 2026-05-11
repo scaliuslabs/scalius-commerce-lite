@@ -45,6 +45,14 @@ describe("widget AI settings", () => {
     ).toThrow("Unsupported openai base URL");
   });
 
+  it("rejects malformed Cloudflare account IDs", () => {
+    expect(() =>
+      normalizeWidgetAiConfig({
+        providers: { cloudflare: { accountId: "not-an-account-id" } },
+      }),
+    ).toThrow("Cloudflare account ID");
+  });
+
   it("treats Cloudflare binding as valid credentials", () => {
     const runtime: WidgetAiRuntimeSettings = {
       ...DEFAULT_WIDGET_AI_CONFIG,

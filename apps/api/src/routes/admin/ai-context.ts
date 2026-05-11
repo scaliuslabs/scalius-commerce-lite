@@ -17,6 +17,7 @@ import {
     type ProductAttributeValue
 } from "@scalius/database/schema";
 import * as SettingsService from "@scalius/core/modules/settings/settings.service";
+import { GENERATION_CONFIG } from "@scalius/core/modules/ai";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
@@ -59,10 +60,14 @@ function calculateFinalPrice(
 }
 
 const batchDetailsSchema = z.object({
-    productIds: z.array(z.string()).optional(),
-    categoryIds: z.array(z.string()).optional(),
+    productIds: z.array(z.string()).max(GENERATION_CONFIG.context.maxProducts).optional(),
+    categoryIds: z.array(z.string()).max(GENERATION_CONFIG.context.maxCategories).optional(),
     allCategories: z.boolean().optional()
 });
+
+function uniqueLimited(values: string[] | undefined, limit: number): string[] {
+    return Array.from(new Set(values ?? [])).slice(0, limit);
+}
 
 const batchDetailsRoute = createRoute({
     method: "post",
@@ -82,16 +87,21 @@ app.openapi(batchDetailsRoute, async (c) => {
     try {
         const db = c.get("db");
         const kv = (c.env as Record<string, unknown>)?.CACHE as KVNamespace | undefined;
-        const { productIds, categoryIds, allCategories } = c.req.valid("json");
+        const payload = c.req.valid("json");
+        const productIds = uniqueLimited(payload.productIds, GENERATION_CONFIG.context.maxProducts);
+        const categoryIds = uniqueLimited(payload.categoryIds, GENERATION_CONFIG.context.maxCategories);
+        const allCategories = payload.allCategories;
 
         let productsData: ProductContextDetail[] = [];
         let fetchedCategories: Category[] = [];
 
-        if (productIds && productIds.length > 0) {
+        if (productIds.length > 0) {
             const productResults = await db
                 .select()
                 .from(products)
                 .where(inArray(products.id, productIds));
+            const productOrder = new Map(productIds.map((id, index) => [id, index]));
+            productResults.sort((a, b) => (productOrder.get(a.id) ?? 0) - (productOrder.get(b.id) ?? 0));
 
             if (productResults.length > 0) {
                 const allProductIds = productResults.map((p) => p.id);
@@ -214,12 +224,15 @@ app.openapi(batchDetailsRoute, async (c) => {
             fetchedCategories = await db
                 .select()
                 .from(categories)
-                .where(isNull(categories.deletedAt));
-        } else if (categoryIds && categoryIds.length > 0) {
+                .where(isNull(categories.deletedAt))
+                .limit(GENERATION_CONFIG.context.maxCategories);
+        } else if (categoryIds.length > 0) {
             fetchedCategories = await db
                 .select()
                 .from(categories)
                 .where(inArray(categories.id, categoryIds));
+            const categoryOrder = new Map(categoryIds.map((id, index) => [id, index]));
+            fetchedCategories.sort((a, b) => (categoryOrder.get(a.id) ?? 0) - (categoryOrder.get(b.id) ?? 0));
         }
 
         const categoriesData: CategoryContextDetail[] = await Promise.all(
@@ -231,7 +244,15 @@ app.openapi(batchDetailsRoute, async (c) => {
 
         return ok(c, {
             products: productsData,
-            categories: categoriesData
+            categories: categoriesData,
+            warnings: {
+                productsTruncated: (payload.productIds?.length ?? 0) > productIds.length,
+                categoriesTruncated:
+                    allCategories ||
+                    (payload.categoryIds?.length ?? 0) > categoryIds.length,
+                maxProducts: GENERATION_CONFIG.context.maxProducts,
+                maxCategories: GENERATION_CONFIG.context.maxCategories,
+            },
         });
     } catch (error: unknown) {
         console.error("Batch fetch error:", error);
