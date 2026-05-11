@@ -19,6 +19,7 @@ Last reviewed: 2026-05-11
 | #29 | Fixed desktop-width sidebar fails to collapse/reflow in Mobile Viewport | `fe5b5a0` | Local Chrome verification at `390x844` created and removed a temporary local admin account, then confirmed `/admin/media` had no horizontal overflow, a full-width mobile folder panel, wrapped filter controls, and accessible Images/Videos type options. Production Chrome verification after deploy confirmed `scrollWidth=390`, folder panel `364x256`, toolbar `332x72`, and visible folder/type navigation; Admin version `b8915fb5-333c-42fb-8f23-9f396bb50f40` was verified. |
 | #26 | "Edit" Button Triggers Immediate Save Instead of Enabling Inputs | `57111d4` | Local Chrome verification with a temporary fraud provider confirmed Edit is outside the submit form, clicking Edit creates the Save/Cancel form, no request fires on Edit, and Save persists the edited provider. Production Chrome verification after deploy created one inactive temporary eCourier provider, confirmed Edit opened the form with no save request, then deleted the temporary provider; Admin version `29e1628d-215a-4cf1-a5c8-f8061954d8d9` was verified. |
 | #25 | API 404 Error on Individual Cache Clear Actions | `aa05893` | Production Chrome verification after deploy opened `/admin/settings/cache`, clicked the individual Categories cache Clear action, waited for the settled page state, and confirmed the row changed from `Never` to `0s ago`. The server function POST returned `200` and no `API error: 404`, `404`, or `Not Found` text appeared. |
+| #27 | Broken "View" Action for Trashed Items in Page Trash | `aa05893` | Read the GitHub issue body and attempted the linked Google Doc tab; the rendered preview exposed the matching "Broken View Action for Trashed Items" heading, while export returned a Google Docs error page. Production Chrome verification after deploy opened `/admin/pages?trashed=true`, found 3 real trashed pages, opened the first row menu, and confirmed the settled menu contained only `Restore` and `Delete Permanently` with no `View` action. |
 
 ## Implemented, Needs Browser Verification
 
@@ -26,7 +27,6 @@ These changes were already committed in `aa05893` before the current per-issue l
 
 | Issue | Title | Implementation Status |
 | --- | --- | --- |
-| #27 | Broken "View" Action for Trashed Items in Page Trash | Page trash action no longer renders the broken view action. |
 | #22 | Sorting Functionality Completely Unresponsive in Inventory Module | Inventory route/service accepts sort/order and sorts by supported fields. |
 | #20 | "View" Action is Unresponsive in Category Trash | Category trash action no longer renders the broken view action. |
 | #17 | Deleted Products Retain "Active" Status in Trash | Product trash status label adjusted. The issue body also mentions WYSIWYG image rendering, which still needs separate investigation. |
