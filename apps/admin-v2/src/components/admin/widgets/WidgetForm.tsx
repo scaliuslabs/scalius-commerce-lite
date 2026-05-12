@@ -59,6 +59,7 @@ type SupportedWidgetPlacement = NonNullable<Widget["placements"]>[number] & {
   scope: SupportedWidgetPlacementScopeValue;
 };
 type WidgetContentDraft = { html: string; css: string };
+type WidgetContentSource = 'generation' | 'improvement' | 'manual';
 
 function homepagePlacement(
   slot: WidgetPlacementSlot,
@@ -217,6 +218,17 @@ function getSavedAiContextCreatedAt(aiContext: string | null | undefined): numbe
   } catch {
     return Date.now();
   }
+}
+
+function stagedSectionsFromContent(content: WidgetContentDraft) {
+  return parseHtmlIntoSections(content.html, content.css || '').map(section => ({
+    html: section.html,
+    css: section.css,
+    sectionIndex: section.index,
+    description: section.description,
+    id: section.id,
+    timestamp: section.timestamp,
+  }));
 }
 
 export const WidgetForm: React.FC<WidgetFormProps> = ({
@@ -418,11 +430,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       return;
     }
     if (aiGenerator.generatedContent) {
-      applyContentToForm(aiGenerator.generatedContent);
+      replaceWidgetContent(aiGenerator.generatedContent, 'generation');
       toast.success('Content applied to the form.');
     }
     setIsEditorOpen(false);
-    aiGenerator.setGeneratedContent(null);
   };
 
   /**
@@ -435,21 +446,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
       // If no staged sections, parse HTML into sections
       if (aiGenerator.stagedGeneration.sections.length === 0) {
-        const parsedSections = parseHtmlIntoSections(
-          aiGenerator.generatedContent.html,
-          aiGenerator.generatedContent.css
-        );
-        // Convert ParsedSection[] to SectionContent[] format
-        const convertedSections = parsedSections.map(s => ({
-          html: s.html,
-          css: s.css,
-          sectionIndex: s.index,
-          description: s.description,
-          id: s.id,
-          timestamp: s.timestamp,
-        }));
-        aiGenerator.stagedGeneration.updateSections(convertedSections);
-        toast.info(`Detected ${parsedSections.length} section(s) in your widget.`);
+        const stagedSections = stagedSectionsFromContent(aiGenerator.generatedContent);
+        aiGenerator.stagedGeneration.updateSections(stagedSections);
+        toast.info(`Detected ${stagedSections.length} section(s) in your widget.`);
       }
 
       setEditorMode('improvement');
@@ -462,12 +461,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    */
   const handleAcceptImprovement = () => {
     if (aiImprover.contentToImprove) {
-      applyContentToForm(aiImprover.contentToImprove);
+      replaceWidgetContent(aiImprover.contentToImprove, 'improvement');
       toast.success('Improved content applied to the form.');
     }
     setIsEditorOpen(false);
-    aiImprover.cancel({ silent: true });
-    aiImprover.setContentToImprove(null);
   };
 
   /**
@@ -531,20 +528,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     aiImprover.startImprovement(existingContent);
 
     // Parse HTML into sections if not already staged
-    const parsedSections = parseHtmlIntoSections(html, css || '');
-    const convertedSections = parsedSections.map(s => ({
-      html: s.html,
-      css: s.css,
-      sectionIndex: s.index,
-      description: s.description,
-      id: s.id,
-      timestamp: s.timestamp,
-    }));
+    const stagedSections = stagedSectionsFromContent(existingContent);
 
     // Update staged generation state with parsed sections
-    aiGenerator.stagedGeneration.updateSections(convertedSections);
+    aiGenerator.stagedGeneration.updateSections(stagedSections);
 
-    toast.info(`Detected ${parsedSections.length} section(s) in your widget.`);
+    toast.info(`Detected ${stagedSections.length} section(s) in your widget.`);
 
     // Open improvement editor
     setEditorMode('improvement');
@@ -555,7 +544,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    * Handle paste from modal
    */
   const handlePaste = (content: { html: string; css: string }) => {
-    applyContentToForm(content);
+    replaceWidgetContent(content, 'manual');
   };
 
   /**
@@ -592,10 +581,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       return;
     }
 
-    applyContentToForm({
+    replaceWidgetContent({
       html: restoredEntry.htmlContent,
       css: restoredEntry.cssContent || '',
-    });
+    }, 'manual');
     setSelectedHistoryItem(restoredEntry);
     setIsHistoryOpen(false);
     toast.success('Version content applied. Save the widget to keep it.');
@@ -772,6 +761,23 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     });
   }
 
+  function replaceWidgetContent(content: WidgetContentDraft, source: WidgetContentSource) {
+    applyContentToForm(content);
+
+    if (source === 'manual') {
+      aiGenerator.cancelGeneration({ silent: true });
+      aiImprover.reset();
+      return;
+    }
+
+    aiGenerator.setGeneratedContent(null);
+    aiImprover.clearCurrentImprovement();
+
+    if (source === 'improvement' || aiGenerator.stagedGeneration.sections.length === 0) {
+      aiGenerator.stagedGeneration.updateSections(stagedSectionsFromContent(content));
+    }
+  }
+
   function getPendingPreviewContent(html: string, css: string) {
     const generated = aiGenerator.generatedContent;
     if (
@@ -904,13 +910,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
                 type="button"
                 size="sm"
                 onClick={() => {
-                  applyContentToForm(pendingPreviewContent.content);
-                  if (pendingPreviewContent.source === 'generation') {
-                    aiGenerator.setGeneratedContent(null);
-                  } else {
-                    aiImprover.cancel({ silent: true });
-                    aiImprover.setContentToImprove(null);
-                  }
+                  replaceWidgetContent(
+                    pendingPreviewContent.content,
+                    pendingPreviewContent.source,
+                  );
                   toast.success('Preview content applied.');
                 }}
               >

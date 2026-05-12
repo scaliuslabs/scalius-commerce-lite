@@ -368,6 +368,12 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
     setRawOutput('');
   }, [cancel]);
 
+  const clearCurrentImprovement = useCallback(() => {
+    cancel({ silent: true });
+    setContentToImprove(null);
+    setRawOutput('');
+  }, [cancel]);
+
   /**
    * Reset improvement state
    */
@@ -402,6 +408,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
     cancel,
     loadHistory,
     discardImprovement,
+    clearCurrentImprovement,
     setContentToImprove,
   };
 }
