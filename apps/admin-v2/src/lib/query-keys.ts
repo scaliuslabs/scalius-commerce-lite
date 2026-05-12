@@ -97,6 +97,8 @@ export const queryKeys = {
     list: (params?: Record<string, unknown>) => listKey("widgets", params),
     detail: (id: string) => ["widgets", "detail", id] as const,
     history: (widgetId: string) => ["widgets", "history", widgetId] as const,
+    placementTargets: (params: Record<string, unknown>) =>
+      ["widgets", "placement-targets", params] as const,
   },
 
   // ── Attributes ───────────────────────────────────────────────────

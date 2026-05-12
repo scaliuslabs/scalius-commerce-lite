@@ -511,16 +511,23 @@ export interface WidgetListResponse {
     slug: string;
     sortOrder: number;
   }>;
-  availableProducts?: Array<{
+  referencedProducts?: Array<{
     id: string;
     name: string;
     slug: string;
   }>;
-  availableCategories?: Array<{
+  referencedCategories?: Array<{
     id: string;
     name: string;
     slug: string;
   }>;
+}
+
+export interface WidgetPlacementTargetOption {
+  id: string;
+  label: string;
+  description: string | null;
+  type: "page" | "product" | "category" | "collection";
 }
 
 // ---------------------------------------------------------------------------

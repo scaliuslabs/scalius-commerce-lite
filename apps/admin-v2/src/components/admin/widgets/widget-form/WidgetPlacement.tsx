@@ -19,9 +19,9 @@ import {
   WidgetPlacementAnchorType,
   WidgetPlacementScope,
   WidgetPlacementSlot,
-  type Collection,
 } from '@/types/api-responses';
 import type { WidgetFormValues } from '@/lib/form-schemas';
+import { WidgetTargetSelect } from './WidgetTargetSelect';
 
 interface WidgetPlacementProps {
   control: Control<WidgetFormValues>;
@@ -29,10 +29,6 @@ interface WidgetPlacementProps {
   watch: UseFormWatch<WidgetFormValues>;
   register: UseFormRegister<WidgetFormValues>;
   setValue: UseFormSetValue<WidgetFormValues>;
-  availableCollections: Pick<Collection, "id" | "name" | "type">[];
-  availablePages: Array<{ id: string; title: string; slug: string; sortOrder: number }>;
-  availableProducts: Array<{ id: string; name: string; slug: string }>;
-  availableCategories: Array<{ id: string; name: string; slug: string }>;
 }
 
 const scopeLabels: Partial<Record<WidgetPlacementScope, string>> = {
@@ -67,10 +63,6 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
   watch,
   register,
   setValue,
-  availableCollections,
-  availablePages,
-  availableProducts,
-  availableCategories,
 }) => {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -139,31 +131,19 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
               ? {
                   label: "Page",
                   placeholder: "Select page",
-                  options: availablePages.map((page) => ({
-                    id: page.id,
-                    label: page.title,
-                    description: page.slug,
-                  })),
+                  targetType: "page" as const,
                 }
               : scope === WidgetPlacementScope.PRODUCT
                 ? {
                     label: "Product",
                     placeholder: "Select product",
-                    options: availableProducts.map((product) => ({
-                      id: product.id,
-                      label: product.name,
-                      description: product.slug,
-                    })),
+                    targetType: "product" as const,
                   }
                 : scope === WidgetPlacementScope.CATEGORY
                   ? {
                       label: "Category",
                       placeholder: "Select category",
-                      options: availableCategories.map((category) => ({
-                        id: category.id,
-                        label: category.name,
-                        description: category.slug,
-                      })),
+                      targetType: "category" as const,
                     }
                   : null;
           const placementErrors = errors.placements?.[index];
@@ -216,21 +196,13 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                         name={`placements.${index}.scopeId`}
                         control={control}
                         render={({ field: scopeTargetField }) => (
-                          <Select
+                          <WidgetTargetSelect
+                            targetType={scopeTarget.targetType}
                             value={scopeTargetField.value ?? undefined}
-                            onValueChange={scopeTargetField.onChange}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={scopeTarget.placeholder} />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl bg-background">
-                              {scopeTarget.options.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                  {option.label} ({option.description})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            onChange={scopeTargetField.onChange}
+                            placeholder={scopeTarget.placeholder}
+                            searchPlaceholder={`Search ${scopeTarget.label.toLowerCase()}...`}
+                          />
                         )}
                       />
                       {placementErrors?.scopeId && (
@@ -318,24 +290,16 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                     name={`placements.${index}.anchorId`}
                     control={control}
                     render={({ field: collectionField }) => (
-                      <Select
+                      <WidgetTargetSelect
+                        targetType="collection"
                         value={collectionField.value ?? undefined}
-                        onValueChange={(value) => {
+                        onChange={(value) => {
                           setValue(`placements.${index}.anchorType`, WidgetPlacementAnchorType.COLLECTION, { shouldDirty: true });
                           collectionField.onChange(value);
                         }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select collection" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl bg-background">
-                          {availableCollections.map((collection) => (
-                            <SelectItem key={collection.id} value={collection.id}>
-                              {collection.name} ({collection.type})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Select collection"
+                        searchPlaceholder="Search collection..."
+                      />
                     )}
                   />
                   {placementErrors?.anchorId && (

@@ -51,6 +51,8 @@ function WidgetsPage() {
     () => ({
       collections: new Map<string, string>(),
       pages: new Map<string, string>(),
+      products: new Map<string, string>(),
+      categories: new Map<string, string>(),
     }),
     [],
   );
@@ -62,6 +64,8 @@ function WidgetsPage() {
         showTrashed: false,
         getCollectionName: (id) => metadataRef.collections.get(id) ?? null,
         getPageTitle: (id) => metadataRef.pages.get(id) ?? null,
+        getProductName: (id) => metadataRef.products.get(id) ?? null,
+        getCategoryName: (id) => metadataRef.categories.get(id) ?? null,
         onEdit: (id) =>
           void navigate({ to: `/admin/widgets/${id}` as string }),
         onDelete: (id) => deleteMutation.mutate(id),
@@ -87,6 +91,12 @@ function WidgetsPage() {
       );
       metadataRef.pages = new Map(
         (r.availablePages ?? []).map((page) => [page.id, page.title]),
+      );
+      metadataRef.products = new Map(
+        (r.referencedProducts ?? []).map((product) => [product.id, product.name]),
+      );
+      metadataRef.categories = new Map(
+        (r.referencedCategories ?? []).map((category) => [category.id, category.name]),
       );
 
       // Client-side search filtering

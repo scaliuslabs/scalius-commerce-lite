@@ -20,7 +20,6 @@ import {
   WidgetPlacementScope,
   WidgetPlacementSlot,
   type Widget,
-  type Collection,
   type WidgetHistoryEntry,
   type Category,
 } from '@/types/api-responses';
@@ -65,10 +64,6 @@ import {
 interface WidgetFormProps {
   widget?: Widget | null;
   isCreateMode: boolean;
-  availableCollections: Pick<Collection, 'id' | 'name' | 'type'>[];
-  availablePages: Array<{ id: string; title: string; slug: string; sortOrder: number }>;
-  availableProducts: Array<{ id: string; name: string; slug: string }>;
-  availableCategories: Array<{ id: string; name: string; slug: string }>;
   submitButtonText: string;
 }
 
@@ -239,10 +234,6 @@ function getSavedAiContextCreatedAt(aiContext: string | null | undefined): numbe
 export const WidgetForm: React.FC<WidgetFormProps> = ({
   widget,
   isCreateMode,
-  availableCollections,
-  availablePages,
-  availableProducts,
-  availableCategories,
   submitButtonText,
 }) => {
   const navigate = useNavigate();
@@ -766,10 +757,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           watch={watch}
           register={register}
           setValue={setValue}
-          availableCollections={availableCollections}
-          availablePages={availablePages}
-          availableProducts={availableProducts}
-          availableCategories={availableCategories}
         />
 
         <div className="flex justify-end gap-2">

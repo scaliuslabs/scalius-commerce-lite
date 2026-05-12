@@ -7,6 +7,8 @@ interface WidgetColumnOptions {
   showTrashed: boolean;
   getCollectionName: (id: string) => string | null;
   getPageTitle: (id: string) => string | null;
+  getProductName: (id: string) => string | null;
+  getCategoryName: (id: string) => string | null;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
@@ -33,10 +35,16 @@ const slotLabels: Record<string, string> = {
 
 function placementTargetLabel(
   placement: WidgetPlacement,
-  opts: Pick<WidgetColumnOptions, "getCollectionName" | "getPageTitle">,
+  opts: Pick<WidgetColumnOptions, "getCollectionName" | "getPageTitle" | "getProductName" | "getCategoryName">,
 ): string | null {
   if (placement.scope === "page" && placement.scopeId) {
     return opts.getPageTitle(placement.scopeId) ?? placement.scopeId;
+  }
+  if (placement.scope === "product" && placement.scopeId) {
+    return opts.getProductName(placement.scopeId) ?? placement.scopeId;
+  }
+  if (placement.scope === "category" && placement.scopeId) {
+    return opts.getCategoryName(placement.scopeId) ?? placement.scopeId;
   }
   if (placement.anchorType === "collection" && placement.anchorId) {
     return opts.getCollectionName(placement.anchorId) ?? placement.anchorId;
@@ -46,7 +54,7 @@ function placementTargetLabel(
 
 function formatPlacementSummary(
   widget: Widget,
-  opts: Pick<WidgetColumnOptions, "getCollectionName" | "getPageTitle">,
+  opts: Pick<WidgetColumnOptions, "getCollectionName" | "getPageTitle" | "getProductName" | "getCategoryName">,
 ): string {
   const activePlacements = (widget.placements ?? [])
     .filter((placement) => placement.deletedAt == null && placement.isActive)

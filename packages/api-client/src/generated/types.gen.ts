@@ -8897,13 +8897,13 @@ export type GetApiV1AdminWidgetsResponses = {
                 sortOrder: number;
                 [key: string]: unknown | string | number;
             }>;
-            availableProducts?: Array<{
+            referencedProducts?: Array<{
                 id: string;
                 name: string;
                 slug: string;
                 [key: string]: unknown | string;
             }>;
-            availableCategories?: Array<{
+            referencedCategories?: Array<{
                 id: string;
                 name: string;
                 slug: string;
@@ -9044,6 +9044,103 @@ export type PostApiV1AdminWidgetsResponses = {
 };
 
 export type PostApiV1AdminWidgetsResponse = PostApiV1AdminWidgetsResponses[keyof PostApiV1AdminWidgetsResponses];
+
+export type GetApiV1AdminWidgetsPlacementTargetsData = {
+    body?: never;
+    path?: never;
+    query: {
+        type: 'page' | 'product' | 'category' | 'collection';
+        /**
+         * Target search term
+         */
+        search?: string;
+        /**
+         * Comma-separated selected IDs to hydrate
+         */
+        ids?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/widgets/placement-targets';
+};
+
+export type GetApiV1AdminWidgetsPlacementTargetsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminWidgetsPlacementTargetsError = GetApiV1AdminWidgetsPlacementTargetsErrors[keyof GetApiV1AdminWidgetsPlacementTargetsErrors];
+
+export type GetApiV1AdminWidgetsPlacementTargetsResponses = {
+    /**
+     * Widget placement target options
+     */
+    200: {
+        success: true;
+        data: {
+            targets: Array<{
+                id: string;
+                label: string;
+                description: string | null;
+                type: 'page' | 'product' | 'category' | 'collection';
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminWidgetsPlacementTargetsResponse = GetApiV1AdminWidgetsPlacementTargetsResponses[keyof GetApiV1AdminWidgetsPlacementTargetsResponses];
 
 export type PostApiV1AdminWidgetsBulkDeleteData = {
     body?: {

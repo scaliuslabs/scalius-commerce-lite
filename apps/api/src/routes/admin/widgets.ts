@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     listWidgets,
+    listWidgetPlacementTargets,
     getWidgetById,
     createWidget,
     updateWidget,
@@ -66,17 +67,26 @@ const pageSummarySchema = z.object({
     sortOrder: z.number(),
 }).passthrough();
 
-const productTargetSummarySchema = z.object({
+const referencedProductSummarySchema = z.object({
     id: z.string(),
     name: z.string(),
     slug: z.string(),
 }).passthrough();
 
-const categoryTargetSummarySchema = z.object({
+const referencedCategorySummarySchema = z.object({
     id: z.string(),
     name: z.string(),
     slug: z.string(),
 }).passthrough();
+
+const placementTargetTypeSchema = z.enum(["page", "product", "category", "collection"]);
+
+const placementTargetSchema = z.object({
+    id: z.string(),
+    label: z.string(),
+    description: z.string().nullable(),
+    type: placementTargetTypeSchema,
+});
 
 const widgetHistoryEntrySchema = z.object({
     id: z.string(),
@@ -116,8 +126,8 @@ const listRoute = createRoute({
                         widgets: z.array(widgetListItemSchema),
                         availableCollections: z.array(collectionSummarySchema),
                         availablePages: z.array(pageSummarySchema).optional(),
-                        availableProducts: z.array(productTargetSummarySchema).optional(),
-                        availableCategories: z.array(categoryTargetSummarySchema).optional(),
+                        referencedProducts: z.array(referencedProductSummarySchema).optional(),
+                        referencedCategories: z.array(referencedCategorySummarySchema).optional(),
                     })),
                 },
             },
@@ -131,6 +141,51 @@ app.openapi(listRoute, async (c) => {
     const query = c.req.valid("query");
     const result = await listWidgets(db, { showTrashed: query.trashed === "true" });
     return ok(c, result);
+});
+
+// ── Placement Targets ──
+
+const placementTargetsRoute = createRoute({
+    method: "get",
+    path: "/placement-targets",
+    tags: ["Admin - Widgets"],
+    summary: "Search widget placement targets",
+    request: {
+        query: z.object({
+            type: placementTargetTypeSchema,
+            search: z.string().optional().openapi({ description: "Target search term" }),
+            ids: z.string().optional().openapi({ description: "Comma-separated selected IDs to hydrate" }),
+            limit: z.coerce.number().int().min(1).max(50).default(20),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Widget placement target options",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        targets: z.array(placementTargetSchema),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(placementTargetsRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const selectedIds = query.ids
+        ? query.ids.split(",").map((id) => id.trim()).filter(Boolean)
+        : [];
+    const targets = await listWidgetPlacementTargets(db, {
+        targetType: query.type,
+        search: query.search,
+        selectedIds,
+        limit: query.limit,
+    });
+    return ok(c, { targets });
 });
 
 // ── Create Widget ──
