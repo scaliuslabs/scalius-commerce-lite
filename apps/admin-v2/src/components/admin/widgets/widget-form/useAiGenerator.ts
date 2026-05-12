@@ -11,6 +11,7 @@ import {
   notifyAiContextWarnings,
   type AiContextBatchDetails,
 } from "./ai-context-warnings";
+import { limitImagesForModel } from "./ai-context-limits";
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
@@ -108,6 +109,19 @@ export const useAiGenerator = (
       }
     },
     [stagedGeneration],
+  );
+
+  const getModelLimitedImages = useCallback(
+    (options?: { warn?: boolean }) => {
+      const result = limitImagesForModel(aiContext.selectedImages, selectedModel);
+      if (options?.warn && result.truncated > 0) {
+        toast.warning(
+          `Using the first ${result.limit} selected images for this model. ${result.truncated} ${result.truncated === 1 ? "image was" : "images were"} skipped.`,
+        );
+      }
+      return result.images;
+    },
+    [aiContext.selectedImages, selectedModel],
   );
 
   useEffect(() => {
@@ -210,11 +224,12 @@ export const useAiGenerator = (
       // 3. Generate structured prompt with caching support
       const currentModel = aiModels.find(m => m.id === selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
+      const selectedImages = getModelLimitedImages({ warn: true });
 
       const promptResult = await generateStructuredPrompt({
         systemPrompt,
         userPrompt: userPrompt,
-        selectedImages: aiContext.selectedImages,
+        selectedImages,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
@@ -356,11 +371,12 @@ export const useAiGenerator = (
         },
       }) as AiContextBatchDetails;
       notifyAiContextWarnings(contextData);
+      const selectedImages = getModelLimitedImages({ warn: true });
 
       const combinedPrompt = await generateCompletePrompt({
         systemPrompt,
         userPrompt: userPrompt,
-        selectedImages: aiContext.selectedImages,
+        selectedImages,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
@@ -388,7 +404,7 @@ ${combinedPrompt}
 </css>
 
 Do NOT use markdown code blocks. Do NOT use JSON format. Use ONLY the <htmljs> and <css> tags shown above.
-${aiContext.selectedImages.length > 0 ? `\n\n**Note**: ${aiContext.selectedImages.length} image URL(s) provided above. Use them in your HTML.` : ''}`;
+${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(s) provided above. Use them in your HTML.` : ''}`;
 
       await navigator.clipboard.writeText(standalonePrompt);
       toast.success("Standalone prompt copied! Paste it into any AI chatbot.", { id: toastId });

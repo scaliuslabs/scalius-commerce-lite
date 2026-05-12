@@ -72,6 +72,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
   } = context;
 
   const maxImagesForModel = getEffectiveImageLimit(selectedModel);
+  const imageOverage = Math.max(0, selectedImages.length - maxImagesForModel);
 
   const addOneImage = (file: MediaFile) => {
     if (selectedImages.some((img) => img.url === file.url)) return;
@@ -141,6 +142,11 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                   ? `Max ${maxImagesForModel} images. Model supports vision - images will be analyzed.`
                   : `Max ${maxImagesForModel} images. Image metadata (size, name, aspect ratio) will be included in prompt.`}
               </p>
+              {imageOverage > 0 && (
+                <p className="mt-2 text-xs font-medium text-amber-600">
+                  This model will use the first {maxImagesForModel} images and skip {imageOverage}.
+                </p>
+              )}
             </div>
           </PopoverContent>
         </Popover>
@@ -328,6 +334,11 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
           <h5 className="text-sm font-medium text-muted-foreground">
             Selected Context:
           </h5>
+          {imageOverage > 0 && (
+            <p className="text-xs font-medium text-amber-600">
+              The selected model accepts {maxImagesForModel} images. Generation keeps your full selection saved here but only sends the first {maxImagesForModel}.
+            </p>
+          )}
           <div className="flex flex-wrap gap-2 items-start">
             {selectedImages.map((f) => (
               <Badge
