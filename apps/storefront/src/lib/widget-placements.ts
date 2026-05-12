@@ -27,6 +27,13 @@ function matchesZone(
   if (!isLivePlacement(placement)) return false;
   if (placement.scope !== zone.scope) return false;
   if (placement.slot !== zone.slot) return false;
+  if (zone.scope !== "homepage" && !zone.scopeId) return false;
+  if (
+    (zone.slot === "before_collection" || zone.slot === "after_collection") &&
+    !zone.anchorId
+  ) {
+    return false;
+  }
 
   if (zone.scopeId !== undefined && (placement.scopeId ?? null) !== zone.scopeId) {
     return false;

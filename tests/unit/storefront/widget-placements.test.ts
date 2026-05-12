@@ -165,4 +165,50 @@ describe("widget placement grouping", () => {
       }).map((item) => item.id),
     ).toEqual(["collection-hero"]);
   });
+
+  it("does not overmatch scoped placements when the caller omits the scope id", () => {
+    const widgets = [
+      widget("product-promo", {
+        id: "wpl_product",
+        widgetId: "product-promo",
+        scope: "product",
+        scopeId: "prod_1",
+        slot: "after_content",
+        anchorType: null,
+        anchorId: null,
+        sortOrder: 1,
+        isActive: true,
+      }),
+    ];
+
+    expect(
+      getWidgetsForZone(widgets, {
+        scope: "product",
+        slot: "after_content",
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not overmatch collection-anchored homepage slots without an anchor id", () => {
+    const widgets = [
+      widget("collection-promo", {
+        id: "wpl_collection_anchor",
+        widgetId: "collection-promo",
+        scope: "homepage",
+        scopeId: null,
+        slot: "before_collection",
+        anchorType: "collection",
+        anchorId: "col_1",
+        sortOrder: 1,
+        isActive: true,
+      }),
+    ];
+
+    expect(
+      getWidgetsForZone(widgets, {
+        scope: "homepage",
+        slot: "before_collection",
+      }),
+    ).toEqual([]);
+  });
 });

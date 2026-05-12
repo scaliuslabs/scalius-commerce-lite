@@ -238,8 +238,11 @@ function assertPublishableWidgetState(state: { htmlContent?: string | null }): v
 async function validatePlacementReferences(
     db: Database,
     placements: WidgetPlacementInput[],
+    options: { checkDuplicates?: boolean } = {},
 ): Promise<void> {
-    assertUniquePlacements(placements);
+    if (options.checkDuplicates ?? true) {
+        assertUniquePlacements(placements);
+    }
 
     const pageIds = new Set<string>();
     const productIds = new Set<string>();
@@ -364,6 +367,21 @@ async function validatePlacementReferences(
     }
 }
 
+function toActivePlacementInputs(placements: WidgetPlacement[]): WidgetPlacementInput[] {
+    return placements
+        .filter((placement) => placement.isActive && placement.deletedAt == null)
+        .map((placement) => ({
+            id: placement.id,
+            scope: placement.scope,
+            scopeId: placement.scopeId,
+            slot: placement.slot,
+            anchorType: placement.anchorType,
+            anchorId: placement.anchorId,
+            sortOrder: placement.sortOrder,
+            isActive: placement.isActive,
+        }));
+}
+
 async function validateWidgetActivationBatch(db: Database, ids: string[]): Promise<void> {
     const requestedIds = [...new Set(ids)];
     if (requestedIds.length === 0) return;
@@ -395,6 +413,23 @@ async function validateWidgetActivationBatch(db: Database, ids: string[]): Promi
             throw error;
         }
     }
+
+    const activePlacements = await db
+        .select()
+        .from(widgetPlacements)
+        .where(and(
+            inArray(widgetPlacements.widgetId, requestedIds),
+            eq(widgetPlacements.isActive, true),
+            isNull(widgetPlacements.deletedAt),
+        ));
+    const placementsByWidget = groupPlacementsByWidget(activePlacements as WidgetPlacement[]);
+    const placementInputs: WidgetPlacementInput[] = [];
+    for (const id of requestedIds) {
+        const activeWidgetPlacements = toActivePlacementInputs(placementsByWidget.get(id) ?? []);
+        assertUniquePlacements(activeWidgetPlacements);
+        placementInputs.push(...activeWidgetPlacements);
+    }
+    await validatePlacementReferences(db, placementInputs, { checkDuplicates: false });
 }
 
 function groupPlacementsByWidget(placements: WidgetPlacement[]) {
@@ -496,6 +531,61 @@ function sortPlacementRows<
         const nameDiff = a.name.localeCompare(b.name);
         return nameDiff !== 0 ? nameDiff : a.id.localeCompare(b.id);
     });
+}
+
+function renderableWidgetPlacementCondition(): SQL {
+    return sql`(
+        (
+            ${widgetPlacements.scope} = ${WidgetPlacementScope.HOMEPAGE}
+            OR (
+                ${widgetPlacements.scope} = ${WidgetPlacementScope.PAGE}
+                AND EXISTS (
+                    SELECT 1 FROM ${pages}
+                    WHERE ${pages.id} = ${widgetPlacements.scopeId}
+                    AND ${pages.isPublished} = true
+                    AND ${pages.deletedAt} IS NULL
+                )
+            )
+            OR (
+                ${widgetPlacements.scope} = ${WidgetPlacementScope.PRODUCT}
+                AND EXISTS (
+                    SELECT 1 FROM ${products}
+                    WHERE ${products.id} = ${widgetPlacements.scopeId}
+                    AND ${products.isActive} = true
+                    AND ${products.deletedAt} IS NULL
+                )
+            )
+            OR (
+                ${widgetPlacements.scope} = ${WidgetPlacementScope.CATEGORY}
+                AND EXISTS (
+                    SELECT 1 FROM ${categories}
+                    WHERE ${categories.id} = ${widgetPlacements.scopeId}
+                    AND ${categories.deletedAt} IS NULL
+                )
+            )
+            OR (
+                ${widgetPlacements.scope} = ${WidgetPlacementScope.COLLECTION}
+                AND EXISTS (
+                    SELECT 1 FROM ${collections}
+                    WHERE ${collections.id} = ${widgetPlacements.scopeId}
+                    AND ${collections.isActive} = true
+                    AND ${collections.deletedAt} IS NULL
+                )
+            )
+        )
+        AND (
+            ${widgetPlacements.anchorId} IS NULL
+            OR (
+                ${widgetPlacements.anchorType} = ${WidgetPlacementAnchorType.COLLECTION}
+                AND EXISTS (
+                    SELECT 1 FROM ${collections}
+                    WHERE ${collections.id} = ${widgetPlacements.anchorId}
+                    AND ${collections.isActive} = true
+                    AND ${collections.deletedAt} IS NULL
+                )
+            )
+        )
+    )`;
 }
 
 function normalizedSearchPattern(search?: string | null): string | null {
@@ -821,6 +911,7 @@ export async function getActiveWidgetById(db: Database, id: string) {
                 eq(widgetPlacements.widgetId, id),
                 eq(widgetPlacements.isActive, true),
                 isNull(widgetPlacements.deletedAt),
+                renderableWidgetPlacementCondition(),
             ))
             .orderBy(asc(widgetPlacements.sortOrder));
         return toPublicWidget(widget, placements);
@@ -849,6 +940,7 @@ export async function getActiveWidgetPlacements(
         eq(widgetPlacements.isActive, true),
         isNull(widgets.deletedAt),
         isNull(widgetPlacements.deletedAt),
+        renderableWidgetPlacementCondition(),
     ];
 
     if (options.scope !== WidgetPlacementScope.HOMEPAGE) {
@@ -955,6 +1047,9 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
         assertPublishableWidgetState({
             htmlContent: data.htmlContent ?? existing.htmlContent,
         });
+        if (requestedPlacements === undefined) {
+            await validatePlacementReferences(db, toActivePlacementInputs(existing.placements as WidgetPlacement[]));
+        }
     }
 
     const batchOps: unknown[] = [
