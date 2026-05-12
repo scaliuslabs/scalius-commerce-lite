@@ -250,7 +250,10 @@ export const useAiGenerator = (
         if (result) {
           setGeneratedContent(result);
         } else {
-          throw new Error("Staged generation failed");
+          if (!isActiveGenerationRun(run)) return;
+          toast.info("Staged generation could not finish; retrying as a single widget.");
+          stagedGeneration.reset();
+          await handleSimpleGeneration(promptResult.messages, run);
         }
       } else {
         // SIMPLE GENERATION
