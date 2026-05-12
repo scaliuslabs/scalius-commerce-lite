@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, Output, type LanguageModel, type ModelMessage } from "ai";
+import { generateText, Output, streamText, type LanguageModel, type ModelMessage } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { getClientIp, rateLimit } from "@scalius/shared/rate-limit";
 import {
@@ -346,8 +346,17 @@ function openAiCompatibleStream(textStream: AsyncIterable<string>): Response {
   });
 }
 
-async function* singleChunkStream(text: string): AsyncIterable<string> {
-  yield text;
+async function* validatedWidgetTextStream(
+  textStream: AsyncIterable<string>,
+): AsyncIterable<string> {
+  let fullText = "";
+
+  for await (const delta of textStream) {
+    fullText += delta;
+    yield delta;
+  }
+
+  normalizeWidgetGenerationText(fullText);
 }
 
 function usageFromResult(result: { totalUsage?: GenerationUsage }): GenerationUsage {
@@ -524,11 +533,12 @@ app.openapi(generateRoute, async (c) => {
     maxOutputTokens: settings.generation.maxOutputTokens,
     timeout: { totalMs: getTimeout(payload.operation === "improve" ? "improvement" : "generation") },
     maxRetries: 2,
+    abortSignal: c.req.raw.signal,
   };
 
   if (payload.stream) {
-    const result = await generateWidgetContent(generationOptions, provider);
-    return openAiCompatibleStream(singleChunkStream(result.text));
+    const result = streamText(generationOptions);
+    return openAiCompatibleStream(validatedWidgetTextStream(result.textStream));
   }
 
   const result = await generateWidgetContent(generationOptions, provider);
@@ -579,6 +589,7 @@ app.openapi(generateStagedRoute, async (c) => {
         payload.stage === "plan" ? getTimeout("planning") : getTimeout("generation"),
     },
     maxRetries: 2,
+    abortSignal: c.req.raw.signal,
   };
 
   const result =
