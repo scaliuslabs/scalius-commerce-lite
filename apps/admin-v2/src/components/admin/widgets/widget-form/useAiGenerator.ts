@@ -14,7 +14,7 @@ import {
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
-import { getWidgetAiSettings, getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
+import { getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
@@ -36,7 +36,26 @@ interface WidgetAiSettings {
   generation?: { stagedGenerationDefault?: boolean };
 }
 
-export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widget: Widget | undefined | null) => {
+async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
+  const response = await fetch("/api/v1/admin/settings/widget-ai");
+  const payload = await response.json() as {
+    success?: boolean;
+    data?: WidgetAiSettings;
+    error?: { message?: string };
+  };
+
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.error?.message || "Failed to load widget AI settings.");
+  }
+
+  return payload.data ?? {};
+}
+
+export const useAiGenerator = (
+  aiContext: ReturnType<typeof useAiContext>,
+  widget: Widget | undefined | null,
+  shouldLoadSettings = true,
+) => {
   const [promptType, setPromptType] = useState<
     "widget" | "landing-page" | "collection"
   >("widget");
@@ -59,10 +78,12 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
 
 
   useEffect(() => {
+    if (!shouldLoadSettings) return;
+
     let cancelled = false;
 
     async function loadAiSettings() {
-      const settings = (await getWidgetAiSettings()) as WidgetAiSettings;
+      const settings = await fetchWidgetAiSettings();
       if (cancelled) return;
 
       const provider = settings.activeProvider || "openrouter";
@@ -105,6 +126,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
     }
 
     loadAiSettings().catch((error) => {
+      if (cancelled) return;
       if (import.meta.env.DEV) console.error("Failed to load widget AI settings:", error);
       setIsApiKeySet(false);
     });
@@ -112,7 +134,7 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
     return () => {
       cancelled = true;
     };
-  }, [widget]);
+  }, [widget, shouldLoadSettings]);
 
   const handleAiRequest = async () => {
     if (!userPrompt.trim()) {

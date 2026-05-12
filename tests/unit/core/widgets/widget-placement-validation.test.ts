@@ -140,7 +140,7 @@ describe("widget placement validation", () => {
     expect(widget.placements).toEqual([]);
   });
 
-  it("requires HTML and an active placement before publishing", () => {
+  it("requires HTML before publishing", () => {
     const result = createWidgetSchema.safeParse({
       name: "Launch Draft",
       htmlContent: " ",
@@ -152,8 +152,20 @@ describe("widget placement validation", () => {
     if (!result.success) {
       const paths = result.error.issues.map((issue) => issue.path.join("."));
       expect(paths).toContain("htmlContent");
-      expect(paths).toContain("placements");
+      expect(paths).not.toContain("placements");
     }
+  });
+
+  it("allows active shortcode-only widgets without placements", () => {
+    const widget = createWidgetSchema.parse({
+      name: "Shortcode Promo",
+      htmlContent: "<section>Promo</section>",
+      isActive: true,
+      placements: [],
+    });
+
+    expect(widget.placements).toEqual([]);
+    expect(widget.isActive).toBe(true);
   });
 
   it("rejects page content slots on homepage placements", () => {

@@ -70,6 +70,7 @@ export const useAiContext = (
   const [categoryPage, setCategoryPage] = useState(1);
   const [hasMoreCategories, setHasMoreCategories] = useState(true);
   const [isFetchingCategories, setIsFetchingCategories] = useState(false);
+  const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false);
   const debouncedCategorySearch = useDebounce(categorySearchQuery, 300);
 
   const startProductRequest = useCallback(() => {
@@ -228,12 +229,17 @@ export const useAiContext = (
 
   // Category search effect
   useEffect(() => {
+    if (!isCategoryPopoverOpen) {
+      categoryRequestId.current += 1;
+      return;
+    }
+
     setAllCategoriesList([]);
     setCategoryPage(1);
     setHasMoreCategories(true);
     const search = debouncedCategorySearch.trim() || undefined;
     fetchCategoriesPage(1, search);
-  }, [debouncedCategorySearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedCategorySearch, isCategoryPopoverOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Image handlers ─────────────────────────────────────────────────
   const handleImageSelect = (file: MediaFile) => {
@@ -360,6 +366,8 @@ export const useAiContext = (
     // Category pagination
     categorySearchQuery,
     setCategorySearchQuery,
+    isCategoryPopoverOpen,
+    setIsCategoryPopoverOpen,
     hasMoreCategories,
     loadMoreCategories,
     isFetchingCategories,

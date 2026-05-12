@@ -198,7 +198,7 @@ describe("widget placement persistence", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("rejects activation when final content or placements are missing", async () => {
+  it("rejects activation when final content is missing", async () => {
     const existingWidget = {
       id: "wid_draft",
       name: "Campaign draft",
@@ -224,6 +224,40 @@ describe("widget placement persistence", () => {
         placements: [],
       }),
     ).rejects.toThrow("HTML content is required before publishing a widget.");
+  });
+
+  it("allows publishing a shortcode-only widget without placements", async () => {
+    const existingWidget = {
+      id: "wid_draft",
+      name: "Campaign draft",
+      htmlContent: "<section>Old</section>",
+      cssContent: "",
+      aiContext: null,
+      isActive: false,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.STANDALONE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      placements: [],
+    };
+    const db = createMockDb({ selectResult: existingWidget }) as any;
+
+    await expect(
+      updateWidget(db, "wid_draft", {
+        htmlContent: "<section>Use me with a shortcode</section>",
+        isActive: true,
+        placements: [],
+      }),
+    ).resolves.toBeTruthy();
+
+    const placementInsert = db._calls
+      .filter((call: { method: string }) => call.method === "insert.values")
+      .map((call: { args: unknown[] }) => call.args[0])
+      .find(Array.isArray);
+    expect(placementInsert).toBeUndefined();
   });
 
   it("rejects collection placements that do not reference an active collection", async () => {

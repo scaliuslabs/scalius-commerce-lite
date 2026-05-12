@@ -61,6 +61,8 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
     loadMoreProducts,
     categorySearchQuery,
     setCategorySearchQuery,
+    isCategoryPopoverOpen,
+    setIsCategoryPopoverOpen,
     hasMoreCategories,
     loadMoreCategories,
     isFetchingCategories,
@@ -107,7 +109,10 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
   return (
     <>
       <div className={gridClass}>
-        <Popover>
+        <Popover
+          open={isCategoryPopoverOpen}
+          onOpenChange={setIsCategoryPopoverOpen}
+        >
           <PopoverTrigger asChild>
             <Button
               type="button"
