@@ -115,13 +115,18 @@ const inflight = new Map<string, Promise<any>>();
  * Uses the actual hostname to follow Cloudflare's recommendation.
  * Includes KV version and BUILD_ID to ensure proper invalidation.
  *
- * Cache key format: https://{hostname}/_api-cache/{key}?v={version}&build={BUILD_ID}
+ * Cache key format: https://{hostname}/_api-cache/{encoded-key}?v={version}&build={BUILD_ID}
  */
 function buildL2CacheKey(key: string): string {
   const ctx = getCacheContext();
+  const encodedKey = encodeURIComponent(key);
   // Use actual hostname with a reserved path prefix for API cache
   // This follows Cloudflare's recommendation to avoid hostname mismatches
-  return `https://${ctx.hostname}/_api-cache/${key}?v=${ctx.kvVersion}&build=${BUILD_ID}`;
+  return `https://${ctx.hostname}/_api-cache/${encodedKey}?v=${ctx.kvVersion}&build=${BUILD_ID}`;
+}
+
+function buildScopedMemoryKey(key: string, ctx: CacheContext): string {
+  return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v${ctx.kvVersion}`;
 }
 
 /**
@@ -201,22 +206,20 @@ export async function withEdgeCache<T>(
   const ttlSeconds = options.ttlSeconds ?? DEFAULT_TTL_SECONDS;
   const ctx = getCacheContext();
 
-  // Include KV version in L1 key so a version bump (from cache purge)
-  // automatically misses L1 on ALL isolates — not just the one that
-  // handled the purge request. This eliminates the cross-isolate
-  // staleness window that existed when L1 used unversioned keys.
-  const l1Key = `${key}:v${ctx.kvVersion}`;
+  // Include hostname, build, and KV version in memory keys so warm isolates
+  // cannot share data across custom domains or deployed builds.
+  const memoryKey = buildScopedMemoryKey(key, ctx);
 
   // 1. Check L1 Cache (in-memory) - fastest
-  const l1Cached = smartCache.get<T>(l1Key);
+  const l1Cached = smartCache.get<T>(memoryKey);
   if (l1Cached !== null) {
     return l1Cached;
   }
 
   // 2. Check if request is already in-flight (deduplication)
   // This prevents duplicate API calls when multiple components request simultaneously
-  if (inflight.has(key)) {
-    return inflight.get(key) as Promise<T | null>;
+  if (inflight.has(memoryKey)) {
+    return inflight.get(memoryKey) as Promise<T | null>;
   }
 
   // 3. Create the fetch promise with L2 check and backend fallback
@@ -226,7 +229,7 @@ export async function withEdgeCache<T>(
       const l2Cached = await getFromL2<T>(key);
       if (l2Cached !== null) {
         // Populate L1 from L2 for faster subsequent requests
-        smartCache.set(l1Key, l2Cached, ttlSeconds);
+        smartCache.set(memoryKey, l2Cached, ttlSeconds);
         return l2Cached;
       }
 
@@ -235,7 +238,7 @@ export async function withEdgeCache<T>(
 
       if (data !== null) {
         // Store in L1 (fast access for this request lifecycle)
-        smartCache.set(l1Key, data, ttlSeconds);
+        smartCache.set(memoryKey, data, ttlSeconds);
 
         // Store in L2 (survives cold starts)
         storeInL2(key, data, ttlSeconds);
@@ -247,11 +250,11 @@ export async function withEdgeCache<T>(
       return null;
     } finally {
       // Clean up inflight map after request completes (success or failure)
-      inflight.delete(key);
+      inflight.delete(memoryKey);
     }
   })();
 
-  inflight.set(key, promise);
+  inflight.set(memoryKey, promise);
   return promise;
 }
 
@@ -270,8 +273,8 @@ export function clearMemoryCache(): void {
  * Selectively clears L1 (in-memory) cache entries matching given prefixes.
  * Called by /api/purge-cache for targeted invalidation.
  *
- * Note: L1 keys include the KV version suffix (e.g., "product_slug_foo:v42"),
- * but prefix matching still works because the prefix comes first.
+ * Note: memory keys keep the logical cache key first, then append
+ * host/build/version scope, so prefix matching still works.
  */
 export function clearL1ByPrefixes(prefixes: string[]): void {
   smartCache.deleteByPrefixes(prefixes);
