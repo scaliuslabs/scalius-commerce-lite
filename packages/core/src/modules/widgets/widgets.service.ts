@@ -15,7 +15,7 @@ import {
     WidgetPlacementSlot,
 } from "@scalius/database/schema";
 import type { WidgetHistory, WidgetPlacement } from "@scalius/database/schema";
-import { isNull, asc, and, sql, inArray, eq } from "drizzle-orm";
+import { isNull, asc, and, sql, inArray, eq, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -32,6 +32,14 @@ import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
 
 type WidgetPlacementInsert = typeof widgetPlacements.$inferInsert;
+export type WidgetPlacementTargetType = "page" | "product" | "category" | "collection";
+
+export type WidgetPlacementTargetOption = {
+    id: string;
+    label: string;
+    description: string | null;
+    type: WidgetPlacementTargetType;
+};
 
 type LegacyPlacementFields = {
     displayTarget: "homepage";
@@ -457,6 +465,62 @@ function sortPlacementRows<
     });
 }
 
+function normalizedSearchPattern(search?: string | null): string | null {
+    const normalized = search?.trim().toLowerCase();
+    if (!normalized) return null;
+    const escaped = normalized.replace(/[\\%_]/g, (match) => `\\${match}`);
+    return `%${escaped}%`;
+}
+
+function mergeTargetOptions(
+    selected: WidgetPlacementTargetOption[],
+    searched: WidgetPlacementTargetOption[],
+): WidgetPlacementTargetOption[] {
+    const seen = new Set<string>();
+    const merged: WidgetPlacementTargetOption[] = [];
+    for (const option of [...selected, ...searched]) {
+        if (seen.has(option.id)) continue;
+        seen.add(option.id);
+        merged.push(option);
+    }
+    return merged;
+}
+
+async function getReferencedPlacementTargets(
+    db: Database,
+    placements: WidgetPlacement[],
+) {
+    const productIds = new Set<string>();
+    const categoryIds = new Set<string>();
+
+    for (const placement of placements) {
+        if (placement.deletedAt != null) continue;
+        if (placement.scope === WidgetPlacementScope.PRODUCT && placement.scopeId) {
+            productIds.add(placement.scopeId);
+        }
+        if (placement.scope === WidgetPlacementScope.CATEGORY && placement.scopeId) {
+            categoryIds.add(placement.scopeId);
+        }
+    }
+
+    const [referencedProducts, referencedCategories] = await Promise.all([
+        productIds.size === 0
+            ? Promise.resolve([])
+            : db
+                .select({ id: products.id, name: products.name, slug: products.slug })
+                .from(products)
+                .where(and(inArray(products.id, [...productIds]), isNull(products.deletedAt))),
+        categoryIds.size === 0
+            ? Promise.resolve([])
+            : db
+                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .from(categories)
+                .where(and(inArray(categories.id, [...categoryIds]), isNull(categories.deletedAt))),
+    ]);
+
+    return { referencedProducts, referencedCategories };
+}
+
 // ─────────────────────────────────────────
 // Queries
 // ─────────────────────────────────────────
@@ -468,8 +532,6 @@ export async function listWidgets(db: Database, options?: { showTrashed?: boolea
         allPlacements,
         availableCollections,
         availablePages,
-        availableProducts,
-        availableCategories,
     ] = await Promise.all([
         db
         .select({
@@ -516,31 +578,15 @@ export async function listWidgets(db: Database, options?: { showTrashed?: boolea
                 sortOrder: pages.sortOrder,
             })
             .from(pages)
-            .where(isNull(pages.deletedAt))
+            .where(and(isNull(pages.deletedAt), eq(pages.isPublished, true)))
             .orderBy(asc(pages.sortOrder), asc(pages.title)),
-
-        db
-            .select({
-                id: products.id,
-                name: products.name,
-                slug: products.slug,
-            })
-            .from(products)
-            .where(and(isNull(products.deletedAt), eq(products.isActive, true)))
-            .orderBy(asc(products.name), asc(products.slug)),
-
-        db
-            .select({
-                id: categories.id,
-                name: categories.name,
-                slug: categories.slug,
-            })
-            .from(categories)
-            .where(isNull(categories.deletedAt))
-            .orderBy(asc(categories.name), asc(categories.slug)),
     ]);
 
     const placementsByWidget = groupPlacementsByWidget(allPlacements as WidgetPlacement[]);
+    const { referencedProducts, referencedCategories } = await getReferencedPlacementTargets(
+        db,
+        allPlacements as WidgetPlacement[],
+    );
 
     return {
         widgets: allWidgets.map((widget) => ({
@@ -549,9 +595,135 @@ export async function listWidgets(db: Database, options?: { showTrashed?: boolea
         })),
         availableCollections,
         availablePages,
-        availableProducts,
-        availableCategories,
+        referencedProducts,
+        referencedCategories,
     };
+}
+
+export async function listWidgetPlacementTargets(
+    db: Database,
+    options: {
+        targetType: WidgetPlacementTargetType;
+        search?: string | null;
+        selectedIds?: string[];
+        limit?: number;
+    },
+): Promise<WidgetPlacementTargetOption[]> {
+    const { targetType, search, selectedIds = [], limit: rawLimit = 20 } = options;
+    const limit = Math.min(Math.max(rawLimit, 1), 50);
+    const searchPattern = normalizedSearchPattern(search);
+    const uniqueSelectedIds = [...new Set(selectedIds.filter(Boolean))].slice(0, 20);
+
+    if (targetType === "page") {
+        const selected = uniqueSelectedIds.length === 0
+            ? []
+            : await db
+                .select({ id: pages.id, label: pages.title, description: pages.slug })
+                .from(pages)
+                .where(and(
+                    inArray(pages.id, uniqueSelectedIds),
+                    eq(pages.isPublished, true),
+                    isNull(pages.deletedAt),
+                ));
+        const searchConditions: SQL[] = [
+            eq(pages.isPublished, true),
+            isNull(pages.deletedAt),
+        ];
+        if (searchPattern) {
+            searchConditions.push(sql`(lower(${pages.title}) LIKE ${searchPattern} ESCAPE '\\' OR lower(${pages.slug}) LIKE ${searchPattern} ESCAPE '\\')`);
+        }
+        const searched = await db
+            .select({ id: pages.id, label: pages.title, description: pages.slug })
+            .from(pages)
+            .where(and(...searchConditions))
+            .orderBy(asc(pages.sortOrder), asc(pages.title))
+            .limit(limit);
+        return mergeTargetOptions(
+            selected.map((item) => ({ ...item, type: "page" as const })),
+            searched.map((item) => ({ ...item, type: "page" as const })),
+        );
+    }
+
+    if (targetType === "product") {
+        const selected = uniqueSelectedIds.length === 0
+            ? []
+            : await db
+                .select({ id: products.id, label: products.name, description: products.slug })
+                .from(products)
+                .where(and(
+                    inArray(products.id, uniqueSelectedIds),
+                    eq(products.isActive, true),
+                    isNull(products.deletedAt),
+                ));
+        const searchConditions: SQL[] = [
+            eq(products.isActive, true),
+            isNull(products.deletedAt),
+        ];
+        if (searchPattern) {
+            searchConditions.push(sql`(lower(${products.name}) LIKE ${searchPattern} ESCAPE '\\' OR lower(${products.slug}) LIKE ${searchPattern} ESCAPE '\\')`);
+        }
+        const searched = await db
+            .select({ id: products.id, label: products.name, description: products.slug })
+            .from(products)
+            .where(and(...searchConditions))
+            .orderBy(asc(products.name), asc(products.slug))
+            .limit(limit);
+        return mergeTargetOptions(
+            selected.map((item) => ({ ...item, type: "product" as const })),
+            searched.map((item) => ({ ...item, type: "product" as const })),
+        );
+    }
+
+    if (targetType === "category") {
+        const selected = uniqueSelectedIds.length === 0
+            ? []
+            : await db
+                .select({ id: categories.id, label: categories.name, description: categories.slug })
+                .from(categories)
+                .where(and(inArray(categories.id, uniqueSelectedIds), isNull(categories.deletedAt)));
+        const searchConditions: SQL[] = [isNull(categories.deletedAt)];
+        if (searchPattern) {
+            searchConditions.push(sql`(lower(${categories.name}) LIKE ${searchPattern} ESCAPE '\\' OR lower(${categories.slug}) LIKE ${searchPattern} ESCAPE '\\')`);
+        }
+        const searched = await db
+            .select({ id: categories.id, label: categories.name, description: categories.slug })
+            .from(categories)
+            .where(and(...searchConditions))
+            .orderBy(asc(categories.name), asc(categories.slug))
+            .limit(limit);
+        return mergeTargetOptions(
+            selected.map((item) => ({ ...item, type: "category" as const })),
+            searched.map((item) => ({ ...item, type: "category" as const })),
+        );
+    }
+
+    const selected = uniqueSelectedIds.length === 0
+        ? []
+        : await db
+            .select({ id: collections.id, label: collections.name, description: collections.type })
+            .from(collections)
+            .where(and(
+                inArray(collections.id, uniqueSelectedIds),
+                eq(collections.isActive, true),
+                isNull(collections.deletedAt),
+            ));
+    const searchConditions: SQL[] = [
+        eq(collections.isActive, true),
+        isNull(collections.deletedAt),
+    ];
+    if (searchPattern) {
+        searchConditions.push(sql`lower(${collections.name}) LIKE ${searchPattern} ESCAPE '\\'`);
+    }
+    const searched = await db
+        .select({ id: collections.id, label: collections.name, description: collections.type })
+        .from(collections)
+        .where(and(...searchConditions))
+        .orderBy(asc(collections.sortOrder), asc(collections.name))
+        .limit(limit);
+    return mergeTargetOptions(
+        selected.map((item) => ({ ...item, type: "collection" as const })),
+        searched.map((item) => ({ ...item, type: "collection" as const })),
+    );
 }
 
 export async function getWidgetById(db: Database, id: string) {

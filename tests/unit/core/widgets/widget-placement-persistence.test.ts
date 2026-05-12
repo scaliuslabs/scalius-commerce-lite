@@ -12,12 +12,35 @@ import {
   createWidget,
   createHistoryEntry,
   deleteWidget,
+  listWidgetPlacementTargets,
   restoreWidgets,
   updateWidget,
 } from "../../../../packages/core/src/modules/widgets/widgets.service";
 import { createMockDb } from "../../../setup";
 
 describe("widget placement persistence", () => {
+  it("hydrates selected placement targets without duplicating search results", async () => {
+    const db = createMockDb({
+      selectResult: [{ id: "prod_1", label: "Fish", description: "fish" }],
+    }) as any;
+
+    const targets = await listWidgetPlacementTargets(db, {
+      targetType: "product",
+      search: "fish",
+      selectedIds: ["prod_1"],
+      limit: 20,
+    });
+
+    expect(targets).toEqual([
+      {
+        id: "prod_1",
+        label: "Fish",
+        description: "fish",
+        type: "product",
+      },
+    ]);
+  });
+
   it("generates fresh placement row ids when replacing placements", async () => {
     const existingWidget = {
       id: "wid_1",

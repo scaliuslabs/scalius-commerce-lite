@@ -904,7 +904,33 @@ export const getWidgets = createServerFn({ method: "GET" })
       widgets: unknown[];
       availableCollections: unknown[];
       availablePages?: unknown[];
+      referencedProducts?: unknown[];
+      referencedCategories?: unknown[];
     }>("/widgets", params);
+  });
+
+export const getWidgetPlacementTargets = createServerFn({ method: "GET" })
+  .inputValidator(
+    (data: {
+      type: "page" | "product" | "category" | "collection";
+      search?: string;
+      ids?: string[];
+      limit?: number;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const params: Record<string, string> = { type: data.type };
+    if (data.search) params.search = data.search;
+    if (data.ids?.length) params.ids = data.ids.join(",");
+    if (data.limit) params.limit = String(data.limit);
+    return apiGet<{
+      targets: Array<{
+        id: string;
+        label: string;
+        description: string | null;
+        type: "page" | "product" | "category" | "collection";
+      }>;
+    }>("/widgets/placement-targets", params);
   });
 
 export const getWidget = createServerFn({ method: "GET" })
