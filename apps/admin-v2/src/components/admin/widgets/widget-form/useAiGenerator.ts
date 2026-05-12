@@ -111,6 +111,10 @@ export const useAiGenerator = (
       generationRunIdRef.current += 1;
       stagedGeneration.reset();
       setIsLoadingPrompt(false);
+      setGeneratedContent(null);
+      setGenerationError(null);
+      setRawOutput(null);
+      setIsPreviewOpen(false);
       if (!options?.silent) {
         toast.info("Generation cancelled.");
       }
