@@ -77,6 +77,19 @@ describe("rich content image optimization behavior", () => {
     expect(optimized).not.toContain("height=600");
   });
 
+  it("rebuilds rich content variants from stale pre-optimized image URLs", () => {
+    const html =
+      '<img src="https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=400,height=400,quality=80,format=auto,fit=cover,sharpen=1/widgets/freeform-photo.jpg" alt="Freeform">';
+
+    const optimized = optimizeRichContentImages(html);
+
+    expect(optimized).toContain("width=600");
+    expect(optimized).toContain("width=1200");
+    expect(optimized).not.toContain("height=600");
+    expect(optimized).not.toContain("width=400,height=400");
+    expect(optimized).toContain("/widgets/freeform-photo.jpg");
+  });
+
   it("normalizes stale image loading attributes", () => {
     const html =
       '<img src="https://cloud.scalius.com/widgets/hero.jpg" loading="lazy" fetchpriority="low" decoding="sync" alt="Hero">';

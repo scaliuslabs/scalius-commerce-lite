@@ -38,7 +38,7 @@ describe("storefront image optimization URLs", () => {
     expect(optimized).not.toContain("height=");
   });
 
-  it("does not double-wrap an already optimized image", () => {
+  it("keeps an already optimized image unchanged when no new transform is requested", () => {
     const optimized =
       "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=400/image.webp";
 
@@ -49,6 +49,46 @@ describe("storefront image optimization URLs", () => {
         isDev: false,
       }),
     ).toBe(optimized);
+  });
+
+  it("rebuilds an already optimized image when callers request a different transform", () => {
+    const stale =
+      "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=400,height=400,quality=80,format=auto,fit=contain,sharpen=1/products/fish.webp?version=1";
+
+    const optimized = getOptimizedImageUrl(
+      stale,
+      { width: 96, height: 96, quality: 75, format: "auto", fit: "cover" },
+      {
+        cdnBase,
+        cdnHosts: ["cloud.scalius.com"],
+        isDev: false,
+      },
+    );
+
+    expect(optimized.match(/\/cdn-cgi\/image\//g)).toHaveLength(1);
+    expect(optimized).toContain("width=96");
+    expect(optimized).toContain("height=96");
+    expect(optimized).toContain("quality=75");
+    expect(optimized).not.toContain("width=400");
+    expect(optimized).toContain("/products/fish.webp?version=1");
+  });
+
+  it("unwraps stale optimized URLs when image optimization is disabled", () => {
+    const stale =
+      "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=400,height=400/products/fish.webp";
+
+    expect(
+      getOptimizedImageUrl(
+        stale,
+        { width: 96, height: 96 },
+        {
+          enabled: false,
+          cdnBase,
+          cdnHosts: ["cloud.scalius.com"],
+          isDev: false,
+        },
+      ),
+    ).toBe("https://cloud.scalius.com/products/fish.webp");
   });
 
   it("still optimizes remote CDN images in development", () => {

@@ -85,6 +85,8 @@ const DEFAULT_OPTIONS: ImageOptimizationOptions = {
   sharpen: 1,
 };
 
+const CLOUDFLARE_IMAGE_PATH = "/cdn-cgi/image/";
+
 // ---------------------------------------------------------------------------
 // Internal helpers (pure)
 // ---------------------------------------------------------------------------
@@ -101,6 +103,67 @@ function buildParams(opts: ImageOptimizationOptions): string {
   if (opts.sharpen !== undefined) parts.push(`sharpen=${opts.sharpen}`);
   if (opts.blur !== undefined) parts.push(`blur=${opts.blur}`);
   return parts.join(",");
+}
+
+/** @internal Pure — true when a caller explicitly requested transform options. */
+function hasRequestedTransformOptions(
+  options: ImageOptimizationOptions | undefined,
+): boolean {
+  return Object.values(options ?? {}).some((value) => value !== undefined);
+}
+
+/** @internal Pure — returns a decoded absolute remote URL when Cloudflare wrapped one. */
+function extractNestedRemoteUrl(originalPath: string): string | null {
+  if (/^https?:\/\//i.test(originalPath)) return originalPath;
+  if (!/^https?%3a%2f%2f/i.test(originalPath)) return null;
+
+  try {
+    const decoded = decodeURIComponent(originalPath);
+    return /^https?:\/\//i.test(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @internal Pure — unwraps Cloudflare Image Resizing URLs back to their
+ * original asset URL/path so callers can request a different transform.
+ */
+function extractCloudflareImageOriginalUrl(url: string): string | null {
+  if (!url.includes(CLOUDFLARE_IMAGE_PATH)) return null;
+
+  try {
+    const parsed = new URL(url);
+    const markerIndex = parsed.pathname.indexOf(CLOUDFLARE_IMAGE_PATH);
+    if (markerIndex < 0) return null;
+
+    const afterMarker = parsed.pathname.slice(
+      markerIndex + CLOUDFLARE_IMAGE_PATH.length,
+    );
+    const sourceStartIndex = afterMarker.indexOf("/");
+    if (sourceStartIndex < 0) return null;
+
+    const originalPath = afterMarker.slice(sourceStartIndex + 1);
+    if (!originalPath) return null;
+
+    const suffix = `${parsed.search}${parsed.hash}`;
+    const nestedRemoteUrl = extractNestedRemoteUrl(originalPath);
+    if (nestedRemoteUrl) return `${nestedRemoteUrl}${suffix}`;
+
+    return `${parsed.origin}/${originalPath}${suffix}`;
+  } catch {
+    const markerIndex = url.indexOf(CLOUDFLARE_IMAGE_PATH);
+    if (markerIndex < 0) return null;
+
+    const afterMarker = url.slice(markerIndex + CLOUDFLARE_IMAGE_PATH.length);
+    const sourceStartIndex = afterMarker.indexOf("/");
+    if (sourceStartIndex < 0) return null;
+
+    const originalPath = afterMarker.slice(sourceStartIndex + 1);
+    if (!originalPath) return null;
+
+    return extractNestedRemoteUrl(originalPath) ?? originalPath;
+  }
 }
 
 /** @internal Pure — extracts a lowercase hostname from a URL or host-like value. */
@@ -253,19 +316,31 @@ export function getOptimizedImageUrl(
   // Resolve bare keys to full CDN URLs
   const resolved = resolveMediaUrl(originalUrl, cdnBase);
   if (!resolved) return "";
-  if (ctx?.enabled === false) return resolved;
 
-  // Already optimized
-  if (resolved.includes("/cdn-cgi/image/")) return resolved;
+  const isAlreadyOptimized = resolved.includes(CLOUDFLARE_IMAGE_PATH);
+  const unwrappedOriginal = isAlreadyOptimized
+    ? extractCloudflareImageOriginalUrl(resolved)
+    : null;
+  const sourceUrl = unwrappedOriginal
+    ? resolveMediaUrl(unwrappedOriginal, cdnBase)
+    : resolved;
+
+  if (ctx?.enabled === false) return sourceUrl;
+
+  // Keep already optimized URLs idempotent unless the caller asks for a
+  // context-specific transform such as a new width, height, fit, or quality.
+  if (isAlreadyOptimized && !hasRequestedTransformOptions(options)) {
+    return resolved;
+  }
 
   // Merge with defaults
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const params = buildParams(opts);
 
   // For allowed absolute CDN URLs, route transforms through the image's own origin.
-  if (/^https?:\/\//.test(resolved)) {
+  if (/^https?:\/\//.test(sourceUrl)) {
     try {
-      const url = new URL(resolved);
+      const url = new URL(sourceUrl);
       const canonicalBaseHost = toHostname(cdnBase);
       if (canonicalBaseHost && aliasHosts.has(url.hostname.toLowerCase())) {
         const canonicalBase = new URL(
@@ -281,10 +356,10 @@ export function getOptimizedImageUrl(
   }
 
   // In development, skip local relative transforms because localhost has no /cdn-cgi/image/.
-  if (isDev) return resolved;
+  if (isDev) return sourceUrl;
 
   // For relative paths, use page-relative /cdn-cgi/image/
-  const relativePath = resolved.startsWith("/") ? resolved : `/${resolved}`;
+  const relativePath = sourceUrl.startsWith("/") ? sourceUrl : `/${sourceUrl}`;
   return `/cdn-cgi/image/${params}${relativePath}`;
 }
 
@@ -304,20 +379,10 @@ export function getOriginalImageUrl(
 ): string {
   if (!url) return "";
 
-  // If URL contains /cdn-cgi/image/, extract the original URL
-  if (url.includes("/cdn-cgi/image/")) {
-    // Handle absolute CDN URLs: https://cdn.example.com/cdn-cgi/image/params/path
-    const match = url.match(
-      /^(https?:\/\/[^/]+)\/cdn-cgi\/image\/[^/]+(\/.+)$/,
-    );
-    if (match && match[1] && match[2]) {
-      return `${match[1]}${match[2]}`;
-    }
-    // Handle relative URLs: /cdn-cgi/image/params/https://...
-    const relMatch = url.match(/\/cdn-cgi\/image\/[^/]+\/(.+)/);
-    if (relMatch && relMatch[1]) {
-      return relMatch[1];
-    }
+  const original = extractCloudflareImageOriginalUrl(url);
+  if (original) {
+    const base = cdnBase ?? detectCdnBase();
+    return resolveMediaUrl(original, base);
   }
 
   // Resolve bare keys to full CDN URLs
