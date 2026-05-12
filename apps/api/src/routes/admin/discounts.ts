@@ -10,6 +10,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses } from "../../schemas/responses";
 import { discountSchema } from "../../schemas/entities";
+import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── List Discounts ──
@@ -69,6 +70,7 @@ app.openapi(createDiscountRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createDiscount(db, data);
+    await invalidateCatalogCaches("discounts", c);
     return created(c, result);
 }) as any);
 
@@ -101,6 +103,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const { discountIds, permanent } = c.req.valid("json");
     if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
     await bulkDeleteDiscounts(db, discountIds, permanent);
+    await invalidateCatalogCaches("discounts", c);
     return noContent(c);
 });
 
@@ -130,6 +133,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const { discountIds } = c.req.valid("json");
     if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
     await restoreDiscounts(db, discountIds);
+    await invalidateCatalogCaches("discounts", c);
     return noContent(c);
 });
 
@@ -179,6 +183,7 @@ app.openapi(updateDiscountRoute, (async (c: any) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     const result = await updateDiscount(db, id, data);
+    await invalidateCatalogCaches("discounts", c);
     return ok(c, result);
 }) as any);
 
@@ -201,6 +206,7 @@ app.openapi(deleteDiscountRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteDiscount(db, id);
+    await invalidateCatalogCaches("discounts", c);
     return noContent(c);
 });
 
@@ -223,6 +229,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await permanentlyDeleteDiscount(db, id);
+    await invalidateCatalogCaches("discounts", c);
     return noContent(c);
 });
 
@@ -258,6 +265,7 @@ app.openapi(toggleStatusRoute, async (c) => {
     const discount = await getDiscountById(db, id);
     if (!discount) throw new NotFoundError("Discount not found");
     await db.update(discounts).set({ isActive, updatedAt: sql`unixepoch()` }).where(eq(discounts.id, id));
+    await invalidateCatalogCaches("discounts", c);
     return ok(c, { id, isActive });
 });
 
@@ -281,6 +289,7 @@ app.openapi(restoreDiscountRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreDiscounts(db, [id]);
+    await invalidateCatalogCaches("discounts", c);
     return ok(c, {});
 });
 
