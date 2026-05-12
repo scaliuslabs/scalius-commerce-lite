@@ -103,4 +103,47 @@ describe("widget placement grouping", () => {
       }).map((item) => item.id),
     ).toEqual(["landing"]);
   });
+
+  it("matches product and category scoped placements by entity id", () => {
+    const widgets = [
+      widget("product-promo", {
+        id: "wpl_product",
+        widgetId: "product-promo",
+        scope: "product",
+        scopeId: "prod_1",
+        slot: "after_content",
+        anchorType: null,
+        anchorId: null,
+        sortOrder: 1,
+        isActive: true,
+      }),
+      widget("category-promo", {
+        id: "wpl_category",
+        widgetId: "category-promo",
+        scope: "category",
+        scopeId: "cat_1",
+        slot: "before_content",
+        anchorType: null,
+        anchorId: null,
+        sortOrder: 1,
+        isActive: true,
+      }),
+    ];
+
+    expect(
+      getWidgetsForZone(widgets, {
+        scope: "product",
+        scopeId: "prod_1",
+        slot: "after_content",
+      }).map((item) => item.id),
+    ).toEqual(["product-promo"]);
+
+    expect(
+      getWidgetsForZone(widgets, {
+        scope: "category",
+        scopeId: "cat_1",
+        slot: "before_content",
+      }).map((item) => item.id),
+    ).toEqual(["category-promo"]);
+  });
 });

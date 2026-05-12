@@ -54,8 +54,8 @@ describe("widget placement validation", () => {
         expect(result.success).toBe(false);
     });
 
-    it("rejects placement scopes that do not render end to end yet", () => {
-        const result = createWidgetSchema.safeParse({
+    it("accepts product placements because product pages render scoped widgets", () => {
+        const parsed = createWidgetSchema.parse({
             name: "Product Promo",
             htmlContent: "<section>Product promo</section>",
             placements: [{
@@ -66,6 +66,6 @@ describe("widget placement validation", () => {
             }],
         });
 
-        expect(result.success).toBe(false);
+        expect(parsed.placements?.[0]?.scope).toBe(WidgetPlacementScope.PRODUCT);
     });
 });

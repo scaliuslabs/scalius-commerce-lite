@@ -19,6 +19,8 @@ export const widgetPlacementInputSchema = z.object({
     scope: z.enum([
         WidgetPlacementScope.HOMEPAGE,
         WidgetPlacementScope.PAGE,
+        WidgetPlacementScope.PRODUCT,
+        WidgetPlacementScope.CATEGORY,
     ]).default(WidgetPlacementScope.HOMEPAGE),
     scopeId: z.string().optional().nullable(),
     slot: z.enum([
@@ -45,10 +47,10 @@ export const widgetPlacementInputSchema = z.object({
         });
     }
 
-    if (placement.scope === WidgetPlacementScope.PAGE && !placement.scopeId) {
+    if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
         ctx.addIssue({
             code: "custom",
-            message: "A page placement requires a scopeId.",
+            message: "This placement scope requires a scopeId.",
             path: ["scopeId"],
         });
     }

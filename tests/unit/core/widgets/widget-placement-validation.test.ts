@@ -27,9 +27,33 @@ describe("widget placement validation", () => {
     });
   });
 
+  it("accepts product and category scoped content placements", () => {
+    const productPlacement = widgetPlacementInputSchema.parse({
+      scope: WidgetPlacementScope.PRODUCT,
+      scopeId: "prod_1",
+      slot: WidgetPlacementSlot.AFTER_CONTENT,
+    });
+    const categoryPlacement = widgetPlacementInputSchema.parse({
+      scope: WidgetPlacementScope.CATEGORY,
+      scopeId: "cat_1",
+      slot: WidgetPlacementSlot.BEFORE_CONTENT,
+    });
+
+    expect(productPlacement).toMatchObject({
+      scope: WidgetPlacementScope.PRODUCT,
+      scopeId: "prod_1",
+      slot: WidgetPlacementSlot.AFTER_CONTENT,
+    });
+    expect(categoryPlacement).toMatchObject({
+      scope: WidgetPlacementScope.CATEGORY,
+      scopeId: "cat_1",
+      slot: WidgetPlacementSlot.BEFORE_CONTENT,
+    });
+  });
+
   it("requires scopeId for non-homepage placements", () => {
     const result = widgetPlacementInputSchema.safeParse({
-      scope: WidgetPlacementScope.PAGE,
+      scope: WidgetPlacementScope.PRODUCT,
       slot: WidgetPlacementSlot.TOP,
     });
 

@@ -6,7 +6,9 @@ import {
     widgetPlacements,
     widgetHistory,
     collections,
+    categories,
     pages,
+    products,
     WidgetPlacementAnchorType,
     WidgetPlacementRule,
     WidgetPlacementScope,
@@ -236,6 +238,8 @@ async function validatePlacementReferences(
     assertUniquePlacements(placements);
 
     const pageIds = new Set<string>();
+    const productIds = new Set<string>();
+    const categoryIds = new Set<string>();
     const collectionIds = new Set<string>();
 
     for (const placement of placements) {
@@ -243,11 +247,23 @@ async function validatePlacementReferences(
             throw new ValidationError("Homepage widget placements must not include a page scope.");
         }
 
+        if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
+            throw new ValidationError("Scoped widget placements require a target record.");
+        }
+
         if (placement.scope === WidgetPlacementScope.PAGE) {
             if (!placement.scopeId) {
                 throw new ValidationError("Page widget placements require a page.");
             }
             pageIds.add(placement.scopeId);
+        }
+
+        if (placement.scope === WidgetPlacementScope.PRODUCT && placement.scopeId) {
+            productIds.add(placement.scopeId);
+        }
+
+        if (placement.scope === WidgetPlacementScope.CATEGORY && placement.scopeId) {
+            categoryIds.add(placement.scopeId);
         }
 
         const isCollectionSlot =
@@ -279,6 +295,43 @@ async function validatePlacementReferences(
         if (missing.length > 0) {
             throw new ValidationError(
                 `Widget placement references missing or unpublished pages: ${missing.join(", ")}.`,
+            );
+        }
+    }
+
+    if (productIds.size > 0) {
+        const ids = [...productIds];
+        const activeProducts = await db
+            .select({ id: products.id })
+            .from(products)
+            .where(and(
+                inArray(products.id, ids),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+            ));
+        const found = new Set((activeProducts as Array<{ id: string }>).map((product) => product.id));
+        const missing = ids.filter((id) => !found.has(id));
+        if (missing.length > 0) {
+            throw new ValidationError(
+                `Widget placement references missing or inactive products: ${missing.join(", ")}.`,
+            );
+        }
+    }
+
+    if (categoryIds.size > 0) {
+        const ids = [...categoryIds];
+        const liveCategories = await db
+            .select({ id: categories.id })
+            .from(categories)
+            .where(and(
+                inArray(categories.id, ids),
+                isNull(categories.deletedAt),
+            ));
+        const found = new Set((liveCategories as Array<{ id: string }>).map((category) => category.id));
+        const missing = ids.filter((id) => !found.has(id));
+        if (missing.length > 0) {
+            throw new ValidationError(
+                `Widget placement references missing categories: ${missing.join(", ")}.`,
             );
         }
     }
@@ -410,7 +463,14 @@ function sortPlacementRows<
 
 export async function listWidgets(db: Database, options?: { showTrashed?: boolean }) {
     const { showTrashed = false } = options ?? {};
-    const [allWidgets, allPlacements, availableCollections, availablePages] = await Promise.all([
+    const [
+        allWidgets,
+        allPlacements,
+        availableCollections,
+        availablePages,
+        availableProducts,
+        availableCategories,
+    ] = await Promise.all([
         db
         .select({
             id: widgets.id,
@@ -458,6 +518,26 @@ export async function listWidgets(db: Database, options?: { showTrashed?: boolea
             .from(pages)
             .where(isNull(pages.deletedAt))
             .orderBy(asc(pages.sortOrder), asc(pages.title)),
+
+        db
+            .select({
+                id: products.id,
+                name: products.name,
+                slug: products.slug,
+            })
+            .from(products)
+            .where(and(isNull(products.deletedAt), eq(products.isActive, true)))
+            .orderBy(asc(products.name), asc(products.slug)),
+
+        db
+            .select({
+                id: categories.id,
+                name: categories.name,
+                slug: categories.slug,
+            })
+            .from(categories)
+            .where(isNull(categories.deletedAt))
+            .orderBy(asc(categories.name), asc(categories.slug)),
     ]);
 
     const placementsByWidget = groupPlacementsByWidget(allPlacements as WidgetPlacement[]);
@@ -469,6 +549,8 @@ export async function listWidgets(db: Database, options?: { showTrashed?: boolea
         })),
         availableCollections,
         availablePages,
+        availableProducts,
+        availableCategories,
     };
 }
 

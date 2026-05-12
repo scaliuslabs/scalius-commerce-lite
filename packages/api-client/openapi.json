@@ -5478,6 +5478,331 @@
         }
       }
     },
+    "/api/v1/widgets/active/scope/{scope}": {
+      "get": {
+        "tags": [
+          "Widgets"
+        ],
+        "summary": "Get active widgets for a storefront placement scope",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "homepage",
+                "page",
+                "product",
+                "category"
+              ]
+            },
+            "required": true,
+            "name": "scope",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "scopeId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active scoped widgets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "widgets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "htmlContent": {
+                                "type": "string"
+                              },
+                              "cssContent": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              },
+                              "displayTarget": {
+                                "type": "string"
+                              },
+                              "placementRule": {
+                                "type": "string"
+                              },
+                              "referenceCollectionId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sortOrder": {
+                                "type": "number"
+                              },
+                              "placements": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "widgetId": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string"
+                                    },
+                                    "scopeId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "slot": {
+                                      "type": "string"
+                                    },
+                                    "anchorType": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "anchorId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "sortOrder": {
+                                      "type": "number"
+                                    },
+                                    "isActive": {
+                                      "type": "boolean"
+                                    },
+                                    "createdAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    },
+                                    "updatedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    },
+                                    "deletedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "nullable": true
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "widgetId",
+                                    "scope",
+                                    "scopeId",
+                                    "slot",
+                                    "anchorType",
+                                    "anchorId",
+                                    "sortOrder",
+                                    "isActive",
+                                    "createdAt",
+                                    "updatedAt",
+                                    "deletedAt"
+                                  ]
+                                }
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "nullable": true
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "htmlContent",
+                              "cssContent",
+                              "isActive",
+                              "displayTarget",
+                              "placementRule",
+                              "referenceCollectionId",
+                              "sortOrder",
+                              "createdAt",
+                              "updatedAt",
+                              "deletedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "widgets"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/analytics/configurations": {
       "get": {
         "tags": [
@@ -27031,6 +27356,56 @@
                               "nullable": true
                             }
                           }
+                        },
+                        "availableProducts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "availableCategories": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
                         }
                       },
                       "required": [
@@ -27320,7 +27695,9 @@
                           "type": "string",
                           "enum": [
                             "homepage",
-                            "page"
+                            "page",
+                            "product",
+                            "category"
                           ],
                           "default": "homepage"
                         },
@@ -29229,7 +29606,9 @@
                           "type": "string",
                           "enum": [
                             "homepage",
-                            "page"
+                            "page",
+                            "product",
+                            "category"
                           ],
                           "default": "homepage"
                         },

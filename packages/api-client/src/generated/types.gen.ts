@@ -1785,6 +1785,85 @@ export type GetApiV1WidgetsActiveHomepageResponses = {
 
 export type GetApiV1WidgetsActiveHomepageResponse = GetApiV1WidgetsActiveHomepageResponses[keyof GetApiV1WidgetsActiveHomepageResponses];
 
+export type GetApiV1WidgetsActiveScopeByScopeData = {
+    body?: never;
+    path: {
+        scope: 'homepage' | 'page' | 'product' | 'category';
+    };
+    query?: {
+        scopeId?: string;
+    };
+    url: '/api/v1/widgets/active/scope/{scope}';
+};
+
+export type GetApiV1WidgetsActiveScopeByScopeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1WidgetsActiveScopeByScopeError = GetApiV1WidgetsActiveScopeByScopeErrors[keyof GetApiV1WidgetsActiveScopeByScopeErrors];
+
+export type GetApiV1WidgetsActiveScopeByScopeResponses = {
+    /**
+     * Active scoped widgets
+     */
+    200: {
+        success: true;
+        data: {
+            widgets: Array<{
+                id: string;
+                name: string;
+                htmlContent: string;
+                cssContent: string | null;
+                isActive: boolean;
+                displayTarget: string;
+                placementRule: string;
+                referenceCollectionId: string | null;
+                sortOrder: number;
+                placements?: Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                }>;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1WidgetsActiveScopeByScopeResponse = GetApiV1WidgetsActiveScopeByScopeResponses[keyof GetApiV1WidgetsActiveScopeByScopeResponses];
+
 export type GetApiV1AnalyticsConfigurationsData = {
     body?: never;
     path?: never;
@@ -8818,6 +8897,18 @@ export type GetApiV1AdminWidgetsResponses = {
                 sortOrder: number;
                 [key: string]: unknown | string | number;
             }>;
+            availableProducts?: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                [key: string]: unknown | string;
+            }>;
+            availableCategories?: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                [key: string]: unknown | string;
+            }>;
         };
     };
 };
@@ -8839,7 +8930,7 @@ export type PostApiV1AdminWidgetsData = {
         sortOrder?: number;
         placements?: Array<{
             id?: string;
-            scope?: 'homepage' | 'page';
+            scope?: 'homepage' | 'page' | 'product' | 'category';
             scopeId?: string | null;
             slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
             anchorType?: 'collection' | 'content' | null;
@@ -9470,7 +9561,7 @@ export type PutApiV1AdminWidgetsByIdData = {
         sortOrder?: number;
         placements?: Array<{
             id?: string;
-            scope?: 'homepage' | 'page';
+            scope?: 'homepage' | 'page' | 'product' | 'category';
             scopeId?: string | null;
             slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
             anchorType?: 'collection' | 'content' | null;

@@ -146,6 +146,8 @@ const widgetPlacementFormSchema = z.object({
   scope: z.enum([
     WidgetPlacementScope.HOMEPAGE,
     WidgetPlacementScope.PAGE,
+    WidgetPlacementScope.PRODUCT,
+    WidgetPlacementScope.CATEGORY,
   ]).default(WidgetPlacementScope.HOMEPAGE),
   scopeId: z.string().optional().nullable(),
   slot: z.enum([
@@ -172,10 +174,18 @@ const widgetPlacementFormSchema = z.object({
     });
   }
 
-  if (placement.scope === WidgetPlacementScope.PAGE && !placement.scopeId) {
+  if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
     ctx.addIssue({
       code: "custom",
-      message: "Select the target page for this placement.",
+      message: "Select the target record for this placement.",
+      path: ["scopeId"],
+    });
+  }
+
+  if (placement.scope === WidgetPlacementScope.HOMEPAGE && placement.scopeId) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Homepage placements must not include a target record.",
       path: ["scopeId"],
     });
   }
@@ -187,6 +197,17 @@ const widgetPlacementFormSchema = z.object({
     ctx.addIssue({
       code: "custom",
       message: "Select the collection this placement anchors to.",
+      path: ["anchorId"],
+    });
+  }
+
+  if (
+    !isWidgetCollectionSlot(placement.slot) &&
+    (placement.anchorType != null || placement.anchorId != null)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Only collection positions can include a collection anchor.",
       path: ["anchorId"],
     });
   }

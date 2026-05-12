@@ -35,6 +35,8 @@ function WidgetCreateForm() {
   const widgetList = listData as WidgetListResponse;
   const availableCollections = widgetList.availableCollections || [];
   const availablePages = widgetList.availablePages || [];
+  const availableProducts = widgetList.availableProducts || [];
+  const availableCategories = widgetList.availableCategories || [];
 
   return (
     <div className="container mx-auto py-6">
@@ -43,6 +45,8 @@ function WidgetCreateForm() {
         isCreateMode={true}
         availableCollections={availableCollections}
         availablePages={availablePages}
+        availableProducts={availableProducts}
+        availableCategories={availableCategories}
         submitButtonText="Create Widget"
       />
     </div>
@@ -58,6 +62,8 @@ function WidgetEditForm() {
   const widgetList = listData as WidgetListResponse;
   const availableCollections = widgetList.availableCollections || [];
   const availablePages = widgetList.availablePages || [];
+  const availableProducts = widgetList.availableProducts || [];
+  const availableCategories = widgetList.availableCategories || [];
 
   return (
     <div className="container mx-auto py-6">
@@ -66,6 +72,8 @@ function WidgetEditForm() {
         isCreateMode={false}
         availableCollections={availableCollections}
         availablePages={availablePages}
+        availableProducts={availableProducts}
+        availableCategories={availableCategories}
         submitButtonText="Save Changes"
       />
     </div>

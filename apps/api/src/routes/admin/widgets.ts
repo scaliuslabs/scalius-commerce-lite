@@ -66,6 +66,18 @@ const pageSummarySchema = z.object({
     sortOrder: z.number(),
 }).passthrough();
 
+const productTargetSummarySchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+}).passthrough();
+
+const categoryTargetSummarySchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+}).passthrough();
+
 const widgetHistoryEntrySchema = z.object({
     id: z.string(),
     widgetId: z.string(),
@@ -76,7 +88,7 @@ const widgetHistoryEntrySchema = z.object({
 }).passthrough();
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const WIDGET_CACHE_GROUPS = ["homepage", "pages"];
+const WIDGET_CACHE_GROUPS = ["homepage", "pages", "products", "categories"];
 
 async function invalidateWidgetCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
     await invalidateGroups(WIDGET_CACHE_GROUPS, c.env?.CACHE);
@@ -104,6 +116,8 @@ const listRoute = createRoute({
                         widgets: z.array(widgetListItemSchema),
                         availableCollections: z.array(collectionSummarySchema),
                         availablePages: z.array(pageSummarySchema).optional(),
+                        availableProducts: z.array(productTargetSummarySchema).optional(),
+                        availableCategories: z.array(categoryTargetSummarySchema).optional(),
                     })),
                 },
             },
