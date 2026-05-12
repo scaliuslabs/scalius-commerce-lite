@@ -11,7 +11,11 @@ import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol, getCurrencyCode } from "@/lib/currency";
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import {
+  getProductImageUrl,
+  hasProductImage,
+  PRODUCT_IMAGE_FALLBACK,
+} from "@/lib/product-media";
 
 interface ProductShortcodeProps {
   productData: ProductPageData;
@@ -26,7 +30,10 @@ export default function ProductShortcode({
   const [selectedColor, setSelectedColor] = useState<string | undefined>();
   const [quantity, setQuantity] = useState(1);
   const [currentImage, setCurrentImage] = useState(
-    images.find((img) => img.isPrimary)?.url || images[0]?.url,
+    images.find((img) => hasProductImage(img.url) && img.isPrimary)?.url ||
+      images.find((img) => hasProductImage(img.url))?.url ||
+      product.imageUrl ||
+      PRODUCT_IMAGE_FALLBACK,
   );
   const [toastMessage, setToastMessage] = useState<{
     msg: string;
@@ -62,19 +69,20 @@ export default function ProductShortcode({
     : product.discountedPrice;
   const originalPrice = matchingVariant?.price || product.price;
   const hasDiscount = finalPrice < originalPrice;
-  const currentDisplayImage = getOptimizedImageUrl(currentImage, {
+  const currentDisplayImage = getProductImageUrl(currentImage, {
     width: 600,
     height: 600,
     quality: 85,
     format: "auto",
-    fit: "cover",
+    fit: "contain",
   });
 
   useEffect(() => {
     if (isVariantImagesEnabled && selectedColor) {
       const colorIndex = colorOptions.indexOf(selectedColor);
-      if (colorIndex !== -1 && images[colorIndex]) {
-        setCurrentImage(images[colorIndex].url);
+      const variantImage = colorIndex !== -1 ? images[colorIndex] : undefined;
+      if (variantImage?.url && hasProductImage(variantImage.url)) {
+        setCurrentImage(variantImage.url);
       }
     }
   }, [selectedColor, isVariantImagesEnabled, colorOptions, images]);
@@ -102,7 +110,7 @@ export default function ProductShortcode({
       slug: product.slug,
       name: product.name,
       price: finalPrice,
-      image: currentImage,
+      image: currentImage || PRODUCT_IMAGE_FALLBACK,
       quantity,
       variantId: matchingVariant?.id,
       size: selectedSize,
@@ -144,14 +152,16 @@ export default function ProductShortcode({
         <div>
           <div className="aspect-square overflow-hidden rounded-lg bg-gray-50 border border-gray-100">
             <img
-              src={currentDisplayImage || "/placeholder.jpg"}
+              src={currentDisplayImage}
               alt={product.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
+              loading="lazy"
+              decoding="async"
             />
           </div>
-          {images.length > 1 && (
+          {images.filter((img) => hasProductImage(img.url)).length > 1 && (
             <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
-              {images.map((img) => (
+              {images.filter((img) => hasProductImage(img.url)).map((img) => (
                 <button
                   key={img.id}
                   onClick={() => setCurrentImage(img.url)}
@@ -163,7 +173,7 @@ export default function ProductShortcode({
                   )}
                 >
                   <img
-                    src={getOptimizedImageUrl(img.url, {
+                    src={getProductImageUrl(img.url, {
                       width: 120,
                       height: 120,
                       quality: 75,

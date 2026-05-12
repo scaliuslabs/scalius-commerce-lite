@@ -14,7 +14,7 @@ const PRODUCT_CARD_IMAGE_OPTIONS: ImageOptimizationOptions = {
   height: 400,
   quality: 80,
   format: "auto",
-  fit: "cover",
+  fit: "contain",
 };
 
 const PRODUCT_DETAIL_IMAGE_OPTIONS: ImageOptimizationOptions = {
@@ -22,7 +22,7 @@ const PRODUCT_DETAIL_IMAGE_OPTIONS: ImageOptimizationOptions = {
   height: 600,
   quality: 85,
   format: "auto",
-  fit: "cover",
+  fit: "contain",
 };
 
 const SOCIAL_ICON_IMAGE_OPTIONS: ImageOptimizationOptions = {

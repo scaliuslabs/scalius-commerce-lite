@@ -186,7 +186,7 @@ export function isValidImageUrl(url: string | null | undefined): boolean {
  */
 export function getFallbackImage(
   url: string | null | undefined,
-  fallback: string = "/placeholder-product.png",
+  fallback: string = "/placeholder-product.svg",
 ): string {
   return isValidImageUrl(url) ? url! : fallback;
 }

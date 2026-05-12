@@ -3,7 +3,7 @@
 import type { Product } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getProductImageUrl } from "@/lib/product-media";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
@@ -20,10 +20,12 @@ const discountBadge = formatDiscountBadge(
   product.discountAmount
 );
 
-const productImageUrl = getOptimizedImageUrl(product.imageUrl, {
+const productImageUrl = getProductImageUrl(product.imageUrl, {
   width: 400,
   height: 400,
   quality: 80,
+  format: "auto",
+  fit: "contain",
 });
 ---
 

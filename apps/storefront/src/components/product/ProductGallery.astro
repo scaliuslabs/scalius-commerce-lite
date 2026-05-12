@@ -4,7 +4,12 @@ import type { Product, ProductImage } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
 import ProductImageZoom from "./ProductImageZoom";
 import { Maximize2, X, ChevronDown, ChevronUp } from "lucide-react";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import {
+  getProductImageSrcSet,
+  getProductImageUrl,
+  hasProductImage,
+  PRODUCT_IMAGE_FALLBACK,
+} from "@/lib/product-media";
 
 interface Props {
   product: Product;
@@ -14,41 +19,70 @@ interface Props {
 const { product, images } = Astro.props;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
-const hasMultipleImages = images.length > 1;
+const galleryImages: ProductImage[] = images.filter((img) =>
+  hasProductImage(img.url),
+);
 
-const optimizedImages = images.map((img) => {
+if (galleryImages.length === 0) {
+  galleryImages.push({
+    id: `${product.id}-fallback-image`,
+    productId: product.id,
+    url: product.imageUrl || PRODUCT_IMAGE_FALLBACK,
+    alt: product.imageAlt || product.name,
+    isPrimary: true,
+    sortOrder: 0,
+    createdAt: product.createdAt,
+  });
+}
+
+const hasMultipleImages = galleryImages.length > 1;
+
+const optimizedImages = galleryImages.map((img) => {
   return {
     original: img,
-    thumbUrl: getOptimizedImageUrl(img.url, {
+    thumbUrl: getProductImageUrl(img.url, {
       width: desktopThumb.imageSize,
       height: desktopThumb.imageSize,
       quality: 80,
       format: "auto",
       fit: "cover",
     }),
-    mainUrl: getOptimizedImageUrl(img.url, {
+    mainUrl: getProductImageUrl(img.url, {
       width: 600,
       height: 600,
       quality: 85,
       format: "auto",
-      fit: "cover",
+      fit: "contain",
     }),
-    mainMobileSmall: getOptimizedImageUrl(img.url, {
-      width: 400,
-      height: 400,
-      quality: 80,
-      format: "auto",
-      fit: "cover",
-    }),
-    zoomUrl: getOptimizedImageUrl(img.url, {
+    mainSrcSet: getProductImageSrcSet(img.url, [
+      {
+        descriptor: "400w",
+        width: 400,
+        height: 400,
+        quality: 80,
+        format: "auto",
+        fit: "contain",
+      },
+      {
+        descriptor: "600w",
+        width: 600,
+        height: 600,
+        quality: 85,
+        format: "auto",
+        fit: "contain",
+      },
+    ]),
+    zoomUrl: getProductImageUrl(img.url, {
       width: 1400,
       height: 1400,
       quality: 85,
       format: "auto",
-      fit: "cover",
+      fit: "contain",
     }),
   };
 });
+const primaryImage = optimizedImages[0]!;
+const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name;
 ---
 
 <div
@@ -128,9 +162,9 @@ const optimizedImages = images.map((img) => {
           >
             <ProductImageZoom
               client:media="(min-width: 1024px)"
-              initialImage={optimizedImages[0]?.mainUrl || "/img/no-image.webp"}
-              initialZoomImage={optimizedImages[0]?.zoomUrl}
-              alt={images[0]?.alt || product.name}
+              initialImage={primaryImage.mainUrl}
+              initialZoomImage={primaryImage.zoomUrl}
+              alt={primaryAlt}
               aspectRatio="aspect-square"
             />
           </div>
@@ -141,10 +175,10 @@ const optimizedImages = images.map((img) => {
           >
             <img
               id="mobile-main-image"
-              src={optimizedImages[0]?.mainUrl || "/img/no-image.webp"}
-              srcset={`${optimizedImages[0]?.mainMobileSmall || ""} 400w, ${optimizedImages[0]?.mainUrl || ""} 600w`}
-              sizes="(max-width: 640px) 400px, 600px"
-              alt={images[0]?.alt || product.name}
+              src={primaryImage.mainUrl}
+              srcset={primaryImage.mainSrcSet || undefined}
+              sizes={primaryImage.mainSrcSet ? "(max-width: 640px) 400px, 600px" : undefined}
+              alt={primaryAlt}
               width="600"
               height="600"
               class="h-full w-full object-contain object-center"
@@ -244,7 +278,7 @@ const optimizedImages = images.map((img) => {
   >
     <img
       id="fullscreen-image"
-      src=""
+      src={primaryImage.zoomUrl}
       alt={`${product.name} — zoomed view`}
       class="max-w-full max-h-full object-contain transition-transform duration-100 ease-out origin-center will-change-transform"
     />

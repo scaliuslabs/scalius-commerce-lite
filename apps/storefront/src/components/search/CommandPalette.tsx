@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 
 interface SearchResultItem {
   id: string;
@@ -306,9 +306,9 @@ export default function CommandPalette() {
                           id={`cmd-item-${activeIdx}`}
                         >
                           <div className="h-10 w-10 rounded bg-white p-0.5 border border-gray-100 mr-3 overflow-hidden shrink-0">
-                            {p.imageUrl ? (
+                            {hasProductImage(p.imageUrl) ? (
                               <img
-                                src={getOptimizedImageUrl(p.imageUrl, {
+                                src={getProductImageUrl(p.imageUrl, {
                                   width: 80,
                                   height: 80,
                                   quality: 75,

@@ -16,7 +16,7 @@ import {
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
 import { nanoid } from "nanoid";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getProductImageUrl } from "@/lib/product-media";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -338,7 +338,7 @@ export async function renderCartItems() {
       // Escape all user-supplied strings to prevent XSS via innerHTML
       const safeName = escapeHtml(item.name || "");
       const safeImage = escapeHtml(
-        getOptimizedImageUrl(item.image || "/placeholder.jpg", {
+        getProductImageUrl(item.image, {
           width: 96,
           height: 96,
           quality: 75,
