@@ -258,7 +258,7 @@ describe("widget history persistence", () => {
     expect(historyInsert.htmlContent).not.toContain("onclick");
     expect(historyInsert.htmlContent).not.toContain("<script");
     expect(historyInsert.htmlContent).not.toContain("Published");
-    expect(historyInsert.cssContent).toContain(".draft { color: red; }");
+    expect(historyInsert.cssContent).toContain(".draft{color:red}");
     expect(historyInsert.cssContent).not.toContain("@import");
     expect(historyInsert.cssContent).not.toContain(".published");
   });
