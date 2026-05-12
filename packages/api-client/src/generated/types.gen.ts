@@ -25289,6 +25289,8 @@ export type PostApiV1AdminAiContextBatchDetailsData = {
     body?: {
         productIds?: Array<string>;
         categoryIds?: Array<string>;
+        collectionIds?: Array<string>;
+        anchorCollectionIds?: Array<string>;
         allCategories?: boolean;
     };
     path?: never;
@@ -25366,27 +25368,98 @@ export type PostApiV1AdminAiContextBatchDetailsResponses = {
             products: Array<{
                 id: string;
                 name: string;
-                slug: string;
+                description: string | null;
                 price: number;
+                discountType: 'percentage' | 'flat' | null;
+                discountAmount: number | null;
+                discountPercentage: number | null;
+                freeDelivery: boolean;
+                slug: string;
                 url: string;
                 buyNowUrl: string;
                 finalPrice: number;
-                [key: string]: unknown | string | number;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                    url: string;
+                } | null;
+                images: Array<{
+                    url: string;
+                    alt: string | null;
+                    isPrimary: boolean;
+                }>;
+                variants: Array<{
+                    id: string;
+                    sku: string;
+                    size: string | null;
+                    color: string | null;
+                    stock: number;
+                    price: number;
+                    discountType: 'percentage' | 'flat' | null;
+                    discountAmount: number | null;
+                    discountPercentage: number | null;
+                    buyNowUrl: string;
+                    finalPrice: number;
+                }>;
+                attributes: Array<{
+                    name: string;
+                    value: string;
+                }>;
             }>;
             categories: Array<{
                 id: string;
                 name: string;
+                description: string | null;
                 slug: string;
+                imageUrl: string | null;
                 url: string;
-                [key: string]: unknown | string;
+            }>;
+            collections: Array<{
+                id: string;
+                name: string;
+                type: 'manual' | 'dynamic';
+                url: string;
+                title: string | null;
+                subtitle: string | null;
+                placementRoles: Array<'target' | 'anchor'>;
+                products: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    url: string;
+                    price: number;
+                    discountedPrice: number;
+                    imageUrl: string | null;
+                    imageAlt: string | null;
+                }>;
+                categories: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    url: string;
+                }>;
+                featuredProduct: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                    url: string;
+                    price: number;
+                    discountedPrice: number;
+                    imageUrl: string | null;
+                    imageAlt: string | null;
+                } | null;
             }>;
             warnings: {
                 productsTruncated: boolean;
                 categoriesTruncated: boolean;
+                collectionsTruncated: boolean;
                 productsUnavailable: number;
                 categoriesUnavailable: number;
+                collectionsUnavailable: number;
                 maxProducts: number;
                 maxCategories: number;
+                maxCollections: number;
             };
         };
     };

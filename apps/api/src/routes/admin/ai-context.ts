@@ -14,10 +14,8 @@ import {
     type Category,
     type Collection,
     type Product,
-    type ProductImage,
     type ProductVariant,
     type ProductAttribute,
-    type ProductAttributeValue
 } from "@scalius/database/schema";
 import * as SettingsService from "@scalius/core/modules/settings/settings.service";
 import { GENERATION_CONFIG } from "@scalius/core/modules/ai";
@@ -28,24 +26,49 @@ import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-interface VariantWithBuyNowUrl extends ProductVariant {
+interface VariantContextDetail {
+    id: string;
+    sku: string;
+    size: string | null;
+    color: string | null;
+    stock: number;
+    price: number;
+    discountType: "percentage" | "flat" | null;
+    discountAmount: number | null;
+    discountPercentage: number | null;
     buyNowUrl: string;
     finalPrice: number;
 }
 
-interface ProductContextDetail extends Product {
+interface ProductContextDetail {
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    discountType: "percentage" | "flat" | null;
+    discountAmount: number | null;
+    discountPercentage: number | null;
+    freeDelivery: boolean;
+    slug: string;
     url: string;
     buyNowUrl: string;
     finalPrice: number;
     category: (Pick<Category, "id" | "name" | "slug"> & { url: string }) | null;
-    images: ProductImage[];
-    variants: VariantWithBuyNowUrl[];
-    attributes: (ProductAttributeValue & { name: string; slug: string })[];
+    images: Array<{ url: string; alt: string | null; isPrimary: boolean }>;
+    variants: VariantContextDetail[];
+    attributes: Array<{ name: string; value: string }>;
 }
 
-interface CategoryContextDetail extends Category {
+interface CategoryContextDetail {
+    id: string;
+    name: string;
+    description: string | null;
+    slug: string;
+    imageUrl: string | null;
     url: string;
 }
+
+type CategoryRowForAiContext = Pick<Category, "id" | "name" | "description" | "slug" | "imageUrl">;
 
 type CollectionPlacementRole = "target" | "anchor";
 
@@ -118,6 +141,95 @@ function uniqueLimited(values: string[] | undefined, limit: number): string[] {
     return Array.from(new Set(values ?? [])).slice(0, limit);
 }
 
+const aiProductImageSchema = z.object({
+    url: z.string(),
+    alt: z.string().nullable(),
+    isPrimary: z.boolean(),
+}).strict();
+
+const aiProductVariantSchema = z.object({
+    id: z.string(),
+    sku: z.string(),
+    size: z.string().nullable(),
+    color: z.string().nullable(),
+    stock: z.number(),
+    price: z.number(),
+    discountType: z.enum(["percentage", "flat"]).nullable(),
+    discountAmount: z.number().nullable(),
+    discountPercentage: z.number().nullable(),
+    buyNowUrl: z.string(),
+    finalPrice: z.number(),
+}).strict();
+
+const aiProductAttributeSchema = z.object({
+    name: z.string(),
+    value: z.string(),
+}).strict();
+
+const aiProductContextSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    price: z.number(),
+    discountType: z.enum(["percentage", "flat"]).nullable(),
+    discountAmount: z.number().nullable(),
+    discountPercentage: z.number().nullable(),
+    freeDelivery: z.boolean(),
+    slug: z.string(),
+    url: z.string(),
+    buyNowUrl: z.string(),
+    finalPrice: z.number(),
+    category: z.object({
+        id: z.string(),
+        name: z.string(),
+        slug: z.string(),
+        url: z.string(),
+    }).strict().nullable(),
+    images: z.array(aiProductImageSchema),
+    variants: z.array(aiProductVariantSchema),
+    attributes: z.array(aiProductAttributeSchema),
+}).strict();
+
+const aiCategoryContextSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    slug: z.string(),
+    imageUrl: z.string().nullable(),
+    url: z.string(),
+}).strict();
+
+const aiCollectionProductContextSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    url: z.string(),
+    price: z.number(),
+    discountedPrice: z.number(),
+    imageUrl: z.string().nullable(),
+    imageAlt: z.string().nullable(),
+}).strict();
+
+const aiCollectionCategoryContextSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    url: z.string(),
+}).strict();
+
+const aiCollectionContextSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(["manual", "dynamic"]),
+    url: z.string(),
+    title: z.string().nullable(),
+    subtitle: z.string().nullable(),
+    placementRoles: z.array(z.enum(["target", "anchor"])),
+    products: z.array(aiCollectionProductContextSchema),
+    categories: z.array(aiCollectionCategoryContextSchema),
+    featuredProduct: aiCollectionProductContextSchema.nullable(),
+}).strict();
+
 export function isProductVisibleForAiContext(product: Pick<Product, "isActive" | "deletedAt">): boolean {
     return product.isActive && product.deletedAt == null;
 }
@@ -175,16 +287,9 @@ const batchDetailsRoute = createRoute({
     },
     responses: {
         200: { description: "Batch details", content: { "application/json": { schema: successEnvelope(z.object({
-            products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number(), url: z.string(), buyNowUrl: z.string(), finalPrice: z.number() }).passthrough()),
-            categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), url: z.string() }).passthrough()),
-            collections: z.array(z.object({
-                id: z.string(),
-                name: z.string(),
-                type: z.enum(["manual", "dynamic"]),
-                url: z.string(),
-                products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), url: z.string() }).passthrough()),
-                categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), url: z.string() }).passthrough()),
-            }).passthrough()),
+            products: z.array(aiProductContextSchema),
+            categories: z.array(aiCategoryContextSchema),
+            collections: z.array(aiCollectionContextSchema),
             warnings: z.object({
                 productsTruncated: z.boolean(),
                 categoriesTruncated: z.boolean(),
@@ -227,12 +332,23 @@ app.openapi(batchDetailsRoute, async (c) => {
         const allCategories = payload.allCategories;
 
         const productsData: ProductContextDetail[] = [];
-        let fetchedCategories: Category[] = [];
+        let fetchedCategories: CategoryRowForAiContext[] = [];
         let collectionsData: CollectionContextDetail[] = [];
 
         if (productIds.length > 0) {
             const productResults = await db
-                .select()
+                .select({
+                    id: products.id,
+                    name: products.name,
+                    description: products.description,
+                    price: products.price,
+                    categoryId: products.categoryId,
+                    slug: products.slug,
+                    discountPercentage: products.discountPercentage,
+                    discountType: products.discountType,
+                    discountAmount: products.discountAmount,
+                    freeDelivery: products.freeDelivery,
+                })
                 .from(products)
                 .where(and(
                     inArray(products.id, productIds),
@@ -253,11 +369,28 @@ app.openapi(batchDetailsRoute, async (c) => {
                 const [images, variants, attributesResult, categoryResults] =
                     await Promise.all([
                         db
-                            .select()
+                            .select({
+                                productId: productImages.productId,
+                                url: productImages.url,
+                                alt: productImages.alt,
+                                isPrimary: productImages.isPrimary,
+                                sortOrder: productImages.sortOrder,
+                            })
                             .from(productImages)
                             .where(inArray(productImages.productId, allProductIds)),
                         db
-                            .select()
+                            .select({
+                                id: productVariants.id,
+                                productId: productVariants.productId,
+                                sku: productVariants.sku,
+                                size: productVariants.size,
+                                color: productVariants.color,
+                                stock: productVariants.stock,
+                                price: productVariants.price,
+                                discountType: productVariants.discountType,
+                                discountAmount: productVariants.discountAmount,
+                                discountPercentage: productVariants.discountPercentage,
+                            })
                             .from(productVariants)
                             .where(and(
                                 inArray(productVariants.productId, allProductIds),
@@ -265,8 +398,10 @@ app.openapi(batchDetailsRoute, async (c) => {
                             )),
                         db
                             .select({
-                                value: productAttributeValues,
-                                attribute: productAttributes
+                                productId: productAttributeValues.productId,
+                                value: productAttributeValues.value,
+                                attributeName: productAttributes.name,
+                                attributeSlug: productAttributes.slug,
                             })
                             .from(productAttributeValues)
                             .innerJoin(
@@ -279,7 +414,11 @@ app.openapi(batchDetailsRoute, async (c) => {
                             )),
                         allCategoryIds.length > 0
                             ? db
-                                .select()
+                                .select({
+                                    id: categories.id,
+                                    name: categories.name,
+                                    slug: categories.slug,
+                                })
                                 .from(categories)
                                 .where(and(
                                     inArray(categories.id, allCategoryIds),
@@ -322,7 +461,7 @@ app.openapi(batchDetailsRoute, async (c) => {
                         : null;
 
                     const productVariantsList = variants.filter((v) => v.productId === product.id);
-                    const variantsWithBuyNowUrls: VariantWithBuyNowUrl[] = productVariantsList.map((variant) => {
+                    const variantsWithBuyNowUrls: VariantContextDetail[] = productVariantsList.map((variant) => {
                         const finalPrice = calculateFinalPrice(
                             variant.price,
                             variant.discountType,
@@ -330,7 +469,15 @@ app.openapi(batchDetailsRoute, async (c) => {
                             variant.discountPercentage
                         );
                         return {
-                            ...variant,
+                            id: variant.id,
+                            sku: variant.sku,
+                            size: variant.size,
+                            color: variant.color,
+                            stock: variant.stock,
+                            price: variant.price,
+                            discountType: variant.discountType,
+                            discountAmount: variant.discountAmount,
+                            discountPercentage: variant.discountPercentage,
                             buyNowUrl: urlMap.get(`/buy/${product.slug}?variant=${variant.id}`)!,
                             finalPrice
                         };
@@ -344,7 +491,15 @@ app.openapi(batchDetailsRoute, async (c) => {
                     );
 
                     productsData.push({
-                        ...product,
+                        id: product.id,
+                        name: product.name,
+                        description: product.description,
+                        price: product.price,
+                        discountType: product.discountType,
+                        discountAmount: product.discountAmount,
+                        discountPercentage: product.discountPercentage,
+                        freeDelivery: product.freeDelivery,
+                        slug: product.slug,
                         url: productUrl,
                         buyNowUrl: buyNowUrl,
                         finalPrice: productFinalPrice,
@@ -356,30 +511,48 @@ app.openapi(batchDetailsRoute, async (c) => {
                                 url: productCategory.url
                             }
                             : null,
-                        images: images.filter((img) => img.productId === product.id),
+                        images: images
+                            .filter((img) => img.productId === product.id)
+                            .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder)
+                            .map((image) => ({
+                                url: image.url,
+                                alt: image.alt,
+                                isPrimary: image.isPrimary,
+                            })),
                         variants: variantsWithBuyNowUrls,
                         attributes: attributesResult
-                            .filter((attr) => attr.value.productId === product.id)
+                            .filter((attr) => attr.productId === product.id)
                             .map((res) => ({
-                                ...res.value,
-                                name: res.attribute.name,
-                                slug: res.attribute.slug
+                                name: res.attributeName,
+                                value: res.value,
                             }))
-                    } as ProductContextDetail);
+                    });
                 }
             }
         }
 
         if (allCategories) {
             fetchedCategories = await db
-                .select()
+                .select({
+                    id: categories.id,
+                    name: categories.name,
+                    description: categories.description,
+                    slug: categories.slug,
+                    imageUrl: categories.imageUrl,
+                })
                 .from(categories)
                 .where(isNull(categories.deletedAt))
                 .orderBy(asc(categories.name), asc(categories.id))
                 .limit(GENERATION_CONFIG.context.maxCategories);
         } else if (categoryIds.length > 0) {
             fetchedCategories = await db
-                .select()
+                .select({
+                    id: categories.id,
+                    name: categories.name,
+                    description: categories.description,
+                    slug: categories.slug,
+                    imageUrl: categories.imageUrl,
+                })
                 .from(categories)
                 .where(and(
                     inArray(categories.id, categoryIds),
@@ -398,7 +571,12 @@ app.openapi(batchDetailsRoute, async (c) => {
 
         if (collectionIds.length > 0) {
             const collectionRows = await db
-                .select()
+                .select({
+                    id: collections.id,
+                    name: collections.name,
+                    type: collections.type,
+                    config: collections.config,
+                })
                 .from(collections)
                 .where(and(
                     inArray(collections.id, collectionIds),
