@@ -2,7 +2,15 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, Output, streamText, type LanguageModel, type ModelMessage } from "ai";
+import {
+  generateText,
+  NoObjectGeneratedError,
+  Output,
+  streamText,
+  UnsupportedFunctionalityError,
+  type LanguageModel,
+  type ModelMessage,
+} from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { getClientIp, rateLimit } from "@scalius/shared/rate-limit";
 import {
@@ -28,7 +36,9 @@ import {
   normalizeStagedPlanText,
   normalizeWidgetGenerationText,
   normalizeWidgetOutput,
+  stagedPlanOutputObjectSpec,
   stagedPlanOutputSchema,
+  widgetOutputObjectSpec,
   widgetOutputSchema,
 } from "./ai-response-validation";
 import { normalizeMessages } from "./ai-message-normalization";
@@ -372,6 +382,36 @@ function usageFromResult(result: { totalUsage?: GenerationUsage }): GenerationUs
   };
 }
 
+function structuredGenerationFailureDetails(error: unknown): Record<string, unknown> {
+  if (NoObjectGeneratedError.isInstance(error)) {
+    return {
+      type: "NoObjectGeneratedError",
+      cause: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ""),
+      finishReason: error.finishReason,
+      usage: error.usage,
+      response: error.response,
+      textSample: error.text?.slice(0, 800),
+    };
+  }
+
+  if (UnsupportedFunctionalityError.isInstance(error)) {
+    return {
+      type: "UnsupportedFunctionalityError",
+      functionality: error.functionality,
+      message: error.message,
+    };
+  }
+
+  return {
+    type: error instanceof Error ? error.name : typeof error,
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
+
+function warnStructuredGenerationFallback(scope: string, error: unknown): void {
+  console.warn(`${scope} structured generation failed; falling back to text.`, structuredGenerationFailureDetails(error));
+}
+
 function addWidgetFormatRetryInstruction(options: GenerateTextOptions): GenerateTextOptions {
   const messages = Array.isArray((options as { messages?: ModelMessage[] }).messages)
     ? (options as { messages: ModelMessage[] }).messages
@@ -424,10 +464,10 @@ async function generateWidgetContent(
     const result = await generateText({
       ...options,
       output: Output.object({
-        schema: widgetOutputSchema,
+        ...widgetOutputObjectSpec,
       }),
     }).catch((error) => {
-      console.warn("Structured widget generation failed, falling back to text:", error);
+      warnStructuredGenerationFallback("Widget", error);
       return null;
     });
 
@@ -476,10 +516,10 @@ async function generateStagedPlan(
     const result = await generateText({
       ...options,
       output: Output.object({
-        schema: stagedPlanOutputSchema,
+        ...stagedPlanOutputObjectSpec,
       }),
     }).catch((error) => {
-      console.warn("Structured staged plan generation failed, falling back to text:", error);
+      warnStructuredGenerationFallback("Staged plan", error);
       return null;
     });
 

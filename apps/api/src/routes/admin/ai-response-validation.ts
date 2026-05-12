@@ -3,6 +3,8 @@ import {
   GENERATION_CONFIG,
   ERROR_MESSAGES,
 } from "@scalius/core/modules/ai";
+import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { parseJSONSafely, validateWidgetJSON } from "@scalius/shared/json-repair";
 import {
   parseTagBasedResponse,
@@ -11,10 +13,18 @@ import {
 } from "@scalius/shared/tag-parser";
 import { ValidationError } from "../../utils/api-error";
 
-export const widgetOutputSchema = z.object({
-  html: z.string().min(1),
-  css: z.string().optional(),
-});
+export const widgetOutputSchema = z
+  .object({
+    html: z
+      .string()
+      .min(1)
+      .describe("Complete widget HTML fragment. Do not include script tags or markdown fences."),
+    css: z
+      .string()
+      .describe("Complete widget stylesheet. Use an empty string if no CSS is needed."),
+  })
+  .strict()
+  .describe("Validated storefront widget code returned by the AI generator.");
 
 export const stagedPlanOutputSchema = z
   .object({
@@ -22,13 +32,21 @@ export const stagedPlanOutputSchema = z
       .number()
       .int()
       .min(GENERATION_CONFIG.stagedGeneration.minSections)
-      .max(GENERATION_CONFIG.stagedGeneration.maxSections),
+      .max(GENERATION_CONFIG.stagedGeneration.maxSections)
+      .describe("Number of widget sections to generate."),
     sectionDescriptions: z
       .array(z.string().min(1).max(160))
       .min(GENERATION_CONFIG.stagedGeneration.minSections)
-      .max(GENERATION_CONFIG.stagedGeneration.maxSections),
-    estimatedTokens: z.number().int().positive().optional(),
+      .max(GENERATION_CONFIG.stagedGeneration.maxSections)
+      .describe("Short storefront-facing purpose for each section, in generation order."),
+    estimatedTokens: z
+      .number()
+      .int()
+      .positive()
+      .describe("Estimated output tokens for the complete widget."),
   })
+  .strict()
+  .describe("Section plan for staged storefront widget generation.")
   .refine((plan) => plan.sectionDescriptions.length === plan.totalSections, {
     message: "Section description count must match totalSections.",
     path: ["sectionDescriptions"],
@@ -36,6 +54,20 @@ export const stagedPlanOutputSchema = z
 
 export type WidgetOutput = z.infer<typeof widgetOutputSchema>;
 export type StagedPlanOutput = z.infer<typeof stagedPlanOutputSchema>;
+
+export const widgetOutputObjectSpec = {
+  name: "WidgetGeneration",
+  description:
+    "Return production-ready ecommerce widget HTML and CSS only. The HTML must be a fragment without scripts; the CSS must be safe for a style element.",
+  schema: widgetOutputSchema,
+} as const;
+
+export const stagedPlanOutputObjectSpec = {
+  name: "WidgetGenerationPlan",
+  description:
+    "Return a concise staged generation plan for one ecommerce storefront widget.",
+  schema: stagedPlanOutputSchema,
+} as const;
 
 function widgetOutputToTaggedText(output: WidgetOutput): string {
   return `<htmljs>\n${output.html.trim()}\n</htmljs>\n\n<css>\n${(output.css ?? "").trim()}\n</css>`;
@@ -66,6 +98,17 @@ function assertGeneratedWidgetIsSafe(widget: ParsedWidget): void {
       "AI response included script tags. Widgets must use HTML and CSS only.",
     );
   }
+}
+
+function sanitizeGeneratedWidget(widget: ParsedWidget): ParsedWidget {
+  const sanitized = {
+    html: sanitizeHtml(widget.html),
+    css: sanitizeCssForStyleElement(widget.css),
+    raw: widget.raw,
+  };
+
+  assertGeneratedWidgetIsSafe(sanitized);
+  return sanitized;
 }
 
 function parseWidgetJson(text: string): ParsedWidget | null {
@@ -102,7 +145,7 @@ export function normalizeWidgetGenerationText(text: string): string {
   }
 
   assertGeneratedWidgetIsSafe(widget);
-  return widgetOutputToTaggedText(widget);
+  return widgetOutputToTaggedText(sanitizeGeneratedWidget(widget));
 }
 
 export function normalizeWidgetOutput(output: WidgetOutput): string {
@@ -141,12 +184,14 @@ export function normalizeStagedPlanText(text: string): string {
     normalizedDescriptions.push(`Section ${normalizedDescriptions.length + 1}`);
   }
 
+  const estimatedTokens = Number.isFinite(Number(planData.estimatedTokens))
+    ? Math.max(1, Math.round(Number(planData.estimatedTokens)))
+    : Math.max(800, totalSections * 700);
+
   const normalizedPlan = {
     totalSections,
     sectionDescriptions: normalizedDescriptions,
-    ...(Number.isFinite(Number(planData.estimatedTokens))
-      ? { estimatedTokens: Math.max(1, Math.round(Number(planData.estimatedTokens))) }
-      : {}),
+    estimatedTokens,
   };
 
   const plan = stagedPlanOutputSchema.safeParse(normalizedPlan);
