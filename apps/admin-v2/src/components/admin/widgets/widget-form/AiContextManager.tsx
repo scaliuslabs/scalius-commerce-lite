@@ -104,8 +104,10 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
       ? "grid grid-cols-1 gap-2"
       : "grid grid-cols-1 md:grid-cols-3 gap-3";
 
-  const popoverWidth = variant === "compact" ? "w-[320px]" : "w-[300px]";
+  const popoverWidth = "w-[min(340px,calc(100vw-2rem))]";
   const popoverZIndex = variant === "compact" ? "z-[101]" : "";
+  const commandListClass =
+    "max-h-[min(300px,var(--radix-popover-content-available-height))]";
 
   return (
     <>
@@ -122,7 +124,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className={cn(popoverWidth, popoverZIndex, "p-0")}
+            className={cn(popoverWidth, popoverZIndex, "overflow-hidden p-0")}
             align="start"
             sideOffset={5}
           >
@@ -158,7 +160,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className={cn(popoverWidth, popoverZIndex, "p-0")}
+            className={cn(popoverWidth, popoverZIndex, "overflow-hidden p-0")}
             align="start"
             sideOffset={5}
           >
@@ -168,7 +170,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                 value={productSearchQuery}
                 onValueChange={setProductSearchQuery}
               />
-              <CommandList>
+              <CommandList className={commandListClass}>
                 <CommandEmpty>
                   {isFetchingProducts ? "Loading..." : "No products found."}
                 </CommandEmpty>
@@ -248,7 +250,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className={cn(popoverWidth, popoverZIndex, "p-0")}
+            className={cn(popoverWidth, popoverZIndex, "overflow-hidden p-0")}
             align="start"
             sideOffset={5}
           >
@@ -278,7 +280,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                 value={categorySearchQuery}
                 onValueChange={setCategorySearchQuery}
               />
-              <CommandList>
+              <CommandList className={commandListClass}>
                 <CommandEmpty>
                   {isFetchingCategories ? "Loading..." : "No categories found."}
                 </CommandEmpty>
