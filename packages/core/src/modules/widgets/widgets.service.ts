@@ -28,6 +28,7 @@ import {
 } from "./widgets.validation";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
+import { findDuplicateWidgetPlacementIndexes } from "@scalius/shared/widget-placement";
 
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
 
@@ -215,28 +216,34 @@ function normalizePlacementInserts(
     }));
 }
 
-function placementIdentity(placement: WidgetPlacementInput): string {
-    return [
-        placement.scope,
-        placement.scopeId ?? "",
-        placement.slot,
-        placement.anchorType ?? "",
-        placement.anchorId ?? "",
-    ].join("\u001f");
+function assertUniquePlacements(placements: WidgetPlacementInput[]): void {
+    const [duplicate] = findDuplicateWidgetPlacementIndexes(placements);
+    if (duplicate) {
+        throw new ValidationError(
+            `Duplicate widget placement target at positions ${duplicate.firstIndex + 1} and ${duplicate.duplicateIndex + 1}.`,
+        );
+    }
 }
 
-function assertUniquePlacements(placements: WidgetPlacementInput[]): void {
-    const seen = new Map<string, number>();
-    placements.forEach((placement, index) => {
-        const key = placementIdentity(placement);
-        const firstIndex = seen.get(key);
-        if (firstIndex !== undefined) {
-            throw new ValidationError(
-                `Duplicate widget placement target at positions ${firstIndex + 1} and ${index + 1}.`,
-            );
-        }
-        seen.set(key, index);
-    });
+function hasRenderableWidgetContent(htmlContent: string | null | undefined): boolean {
+    return typeof htmlContent === "string" && htmlContent.trim().length > 0;
+}
+
+function hasActivePlacement(
+    placements: Array<{ isActive?: boolean | null }> | undefined,
+): boolean {
+    return (placements ?? []).some((placement) => placement.isActive !== false);
+}
+
+function assertPublishableWidgetState(
+    state: { htmlContent?: string | null; placements?: Array<{ isActive?: boolean | null }> },
+): void {
+    if (!hasRenderableWidgetContent(state.htmlContent)) {
+        throw new ValidationError("HTML content is required before publishing a widget.");
+    }
+    if (!hasActivePlacement(state.placements)) {
+        throw new ValidationError("Add at least one active placement before publishing this widget.");
+    }
 }
 
 async function validatePlacementReferences(
@@ -364,6 +371,55 @@ async function validatePlacementReferences(
             throw new ValidationError(
                 `Widget placement references missing or inactive collections: ${missing.join(", ")}.`,
             );
+        }
+    }
+}
+
+async function validateWidgetActivationBatch(db: Database, ids: string[]): Promise<void> {
+    const requestedIds = [...new Set(ids)];
+    if (requestedIds.length === 0) return;
+
+    const widgetRows = await db
+        .select({ id: widgets.id, name: widgets.name, htmlContent: widgets.htmlContent })
+        .from(widgets)
+        .where(and(inArray(widgets.id, requestedIds), isNull(widgets.deletedAt)));
+
+    const widgetsById = new Map(
+        (widgetRows as Array<{ id: string; name: string; htmlContent: string | null }>).map((widget) => [widget.id, widget]),
+    );
+    const missingIds = requestedIds.filter((id) => !widgetsById.has(id));
+    if (missingIds.length > 0) {
+        throw new ValidationError(`Cannot activate missing widgets: ${missingIds.join(", ")}.`);
+    }
+
+    const placements = await db
+        .select({ widgetId: widgetPlacements.widgetId, isActive: widgetPlacements.isActive })
+        .from(widgetPlacements)
+        .where(and(
+            inArray(widgetPlacements.widgetId, requestedIds),
+            isNull(widgetPlacements.deletedAt),
+        ));
+
+    const placementsByWidget = new Map<string, Array<{ isActive?: boolean | null }>>();
+    for (const placement of placements as Array<{ widgetId: string; isActive: boolean | null }>) {
+        const list = placementsByWidget.get(placement.widgetId) ?? [];
+        list.push(placement);
+        placementsByWidget.set(placement.widgetId, list);
+    }
+
+    for (const id of requestedIds) {
+        const widget = widgetsById.get(id);
+        if (!widget) continue;
+        try {
+            assertPublishableWidgetState({
+                htmlContent: widget.htmlContent,
+                placements: placementsByWidget.get(id) ?? [],
+            });
+        } catch (error) {
+            if (error instanceof ValidationError) {
+                throw new ValidationError(`Widget "${widget.name}" cannot be activated: ${error.message}`);
+            }
+            throw error;
         }
     }
 }
@@ -863,6 +919,12 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
     const widgetId = "wid_" + nanoid();
     const requestedPlacements = data.placements ?? placementFromLegacyFields(data);
     await validatePlacementReferences(db, requestedPlacements);
+    if (data.isActive) {
+        assertPublishableWidgetState({
+            htmlContent: data.htmlContent,
+            placements: requestedPlacements,
+        });
+    }
     const legacyFields = legacyFieldsFromPlacement(requestedPlacements[0]);
 
     const batchOps: unknown[] = [
@@ -914,6 +976,14 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
         updateData.placementRule = legacyFields.placementRule;
         updateData.referenceCollectionId = legacyFields.referenceCollectionId;
         updateData.sortOrder = legacyFields.sortOrder;
+    }
+
+    const nextIsActive = data.isActive ?? existing.isActive;
+    if (nextIsActive) {
+        assertPublishableWidgetState({
+            htmlContent: data.htmlContent ?? existing.htmlContent,
+            placements: requestedPlacements ?? existing.placements,
+        });
     }
 
     const batchOps: unknown[] = [
@@ -975,6 +1045,7 @@ export async function bulkDeleteWidgets(db: Database, ids: string[], permanent =
 
 export async function bulkActivateWidgets(db: Database, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
+    await validateWidgetActivationBatch(db, ids);
     await db.update(widgets).set({ isActive: true }).where(inArray(widgets.id, ids));
 }
 

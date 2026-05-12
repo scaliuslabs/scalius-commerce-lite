@@ -258,6 +258,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     setValue,
     reset,
     getValues,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<WidgetFormValues>({
     resolver: zodResolver(widgetFormSchema),
@@ -628,15 +629,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     intent: 'save' | 'draft' | 'publish' = 'save',
   ) => {
     try {
-      if (
-        intent === 'publish' &&
-        data.placements.length > 0 &&
-        !data.placements.some((placement) => placement.isActive)
-      ) {
-        toast.error('Activate at least one placement before publishing this widget.');
-        return;
-      }
-
       const activationData = {
         ...data,
         isActive:
@@ -646,6 +638,27 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
               ? true
               : data.isActive,
       };
+
+      if (activationData.isActive && activationData.htmlContent.trim().length === 0) {
+        setError('htmlContent', {
+          type: 'manual',
+          message: 'HTML content is required before publishing this widget.',
+        });
+        toast.error('Add HTML content before publishing this widget.');
+        return;
+      }
+
+      if (
+        activationData.isActive &&
+        !activationData.placements.some((placement) => placement.isActive)
+      ) {
+        setError('placements', {
+          type: 'manual',
+          message: 'Add at least one active placement before publishing this widget.',
+        });
+        toast.error('Add at least one active placement before publishing this widget.');
+        return;
+      }
 
       // Build AI context with all state.
       const contextToSave: Partial<AiContext> = {

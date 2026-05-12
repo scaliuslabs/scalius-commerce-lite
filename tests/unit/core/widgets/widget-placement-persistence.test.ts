@@ -170,6 +170,62 @@ describe("widget placement persistence", () => {
     ).toBe(false);
   });
 
+  it("allows incomplete widget edits only while the widget remains inactive", async () => {
+    const existingWidget = {
+      id: "wid_draft",
+      name: "Campaign draft",
+      htmlContent: "<section>Old</section>",
+      cssContent: "",
+      aiContext: null,
+      isActive: false,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.STANDALONE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      placements: [],
+    };
+    const db = createMockDb({ selectResult: existingWidget }) as any;
+
+    await expect(
+      updateWidget(db, "wid_draft", {
+        htmlContent: "",
+        isActive: false,
+        placements: [],
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("rejects activation when final content or placements are missing", async () => {
+    const existingWidget = {
+      id: "wid_draft",
+      name: "Campaign draft",
+      htmlContent: "<section>Old</section>",
+      cssContent: "",
+      aiContext: null,
+      isActive: false,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.STANDALONE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      placements: [],
+    };
+    const db = createMockDb({ selectResult: existingWidget }) as any;
+
+    await expect(
+      updateWidget(db, "wid_draft", {
+        htmlContent: "",
+        isActive: true,
+        placements: [],
+      }),
+    ).rejects.toThrow("HTML content is required before publishing a widget.");
+  });
+
   it("rejects collection placements that do not reference an active collection", async () => {
     const db = createMockDb({ selectResult: [] }) as any;
 

@@ -72,6 +72,12 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
     keyName: "fieldKey",
   });
   const placements = watch("placements") ?? [];
+  const placementListMessage =
+    typeof errors.placements?.message === "string"
+      ? errors.placements.message
+      : typeof (errors.placements as { root?: { message?: unknown } } | undefined)?.root?.message === "string"
+        ? String((errors.placements as { root?: { message?: unknown } }).root?.message)
+        : undefined;
 
   const addPlacement = () => {
     append({
@@ -98,6 +104,9 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <input type="hidden" {...register("displayTarget")} />
+        {placementListMessage && (
+          <p className="text-sm text-destructive">{placementListMessage}</p>
+        )}
 
         <div className="flex items-center justify-between rounded-md border p-3">
           <div className="flex items-center gap-3">
@@ -155,6 +164,12 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                       }
                     : null;
           const placementErrors = errors.placements?.[index];
+          const placementMessage =
+            typeof placementErrors?.message === "string"
+              ? placementErrors.message
+              : typeof (placementErrors as { root?: { message?: unknown } } | undefined)?.root?.message === "string"
+                ? String((placementErrors as { root?: { message?: unknown } }).root?.message)
+                : undefined;
 
           return (
             <div key={field.fieldKey} className="rounded-md border p-3">
@@ -322,6 +337,9 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                 <p className="mt-2 text-sm text-destructive">
                   {placementErrors.sortOrder.message}
                 </p>
+              )}
+              {placementMessage && (
+                <p className="mt-2 text-sm text-destructive">{placementMessage}</p>
               )}
             </div>
           );
