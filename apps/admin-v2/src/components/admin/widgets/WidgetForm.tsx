@@ -611,8 +611,40 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     }
   };
 
+  function requireSettledPendingPreview(
+    message: string,
+    content = pendingPreviewContent,
+  ) {
+    if (!content) return false;
+
+    toast.error(message);
+    setEditorMode(content.source === 'improvement' ? 'improvement' : 'generation-preview');
+    setIsEditorOpen(true);
+    return true;
+  }
+
+  const openSaveVersionDialog = () => {
+    if (
+      requireSettledPendingPreview(
+        'Apply or discard the preview content before saving a version.',
+      )
+    ) {
+      return;
+    }
+
+    setIsSaveVersionOpen(true);
+  };
+
   const handleSaveVersion = async () => {
     if (!widget?.id) return;
+    if (
+      requireSettledPendingPreview(
+        'Apply or discard the preview content before saving a version.',
+      )
+    ) {
+      return;
+    }
+
     const htmlContent = watch('htmlContent');
     const cssContent = watch('cssContent');
     if (!htmlContent || htmlContent.trim().length === 0) {
@@ -650,10 +682,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const onSubmit = async (data: WidgetFormValues) => {
     try {
       const pendingContent = getPendingPreviewContent(data.htmlContent, data.cssContent ?? '');
-      if (pendingContent) {
-        toast.error('Apply or discard the preview content before saving this widget.');
-        setEditorMode(pendingContent.source === 'improvement' ? 'improvement' : 'generation-preview');
-        setIsEditorOpen(true);
+      if (
+        requireSettledPendingPreview(
+          'Apply or discard the preview content before saving this widget.',
+          pendingContent,
+        )
+      ) {
         return;
       }
 
@@ -936,7 +970,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         <div className="flex justify-end gap-2">
           {!isCreateMode && (
             <>
-              <Button type="button" variant="outline" onClick={() => setIsSaveVersionOpen(true)}>
+              <Button type="button" variant="outline" onClick={openSaveVersionDialog}>
                 <Save className="mr-2 h-4 w-4" /> Save Version
               </Button>
               <Button type="button" variant="outline" onClick={openHistory}>
