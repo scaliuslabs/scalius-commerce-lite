@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for AI context (batch product/category details).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { asc, inArray, eq, isNull } from "drizzle-orm";
+import { and, asc, inArray, eq, isNull } from "drizzle-orm";
 import {
     products,
     productImages,
@@ -14,6 +14,7 @@ import {
     type Product,
     type ProductImage,
     type ProductVariant,
+    type ProductAttribute,
     type ProductAttributeValue
 } from "@scalius/database/schema";
 import * as SettingsService from "@scalius/core/modules/settings/settings.service";
@@ -69,6 +70,22 @@ function uniqueLimited(values: string[] | undefined, limit: number): string[] {
     return Array.from(new Set(values ?? [])).slice(0, limit);
 }
 
+export function isProductVisibleForAiContext(product: Pick<Product, "isActive" | "deletedAt">): boolean {
+    return product.isActive && product.deletedAt == null;
+}
+
+export function isCategoryVisibleForAiContext(category: Pick<Category, "deletedAt">): boolean {
+    return category.deletedAt == null;
+}
+
+export function isVariantVisibleForAiContext(variant: Pick<ProductVariant, "deletedAt">): boolean {
+    return variant.deletedAt == null;
+}
+
+export function isAttributeVisibleForAiContext(attribute: Pick<ProductAttribute, "deletedAt">): boolean {
+    return attribute.deletedAt == null;
+}
+
 const batchDetailsRoute = createRoute({
     method: "post",
     path: "/batch-details",
@@ -84,6 +101,8 @@ const batchDetailsRoute = createRoute({
             warnings: z.object({
                 productsTruncated: z.boolean(),
                 categoriesTruncated: z.boolean(),
+                productsUnavailable: z.number(),
+                categoriesUnavailable: z.number(),
                 maxProducts: z.number(),
                 maxCategories: z.number(),
             }),
@@ -101,22 +120,28 @@ app.openapi(batchDetailsRoute, async (c) => {
         const categoryIds = uniqueLimited(payload.categoryIds, GENERATION_CONFIG.context.maxCategories);
         const allCategories = payload.allCategories;
 
-        let productsData: ProductContextDetail[] = [];
+        const productsData: ProductContextDetail[] = [];
         let fetchedCategories: Category[] = [];
 
         if (productIds.length > 0) {
             const productResults = await db
                 .select()
                 .from(products)
-                .where(inArray(products.id, productIds));
+                .where(and(
+                    inArray(products.id, productIds),
+                    eq(products.isActive, true),
+                    isNull(products.deletedAt),
+                ));
             const productOrder = new Map(productIds.map((id, index) => [id, index]));
             productResults.sort((a, b) => (productOrder.get(a.id) ?? 0) - (productOrder.get(b.id) ?? 0));
 
             if (productResults.length > 0) {
                 const allProductIds = productResults.map((p) => p.id);
-                const allCategoryIds = productResults
-                    .map((p) => p.categoryId)
-                    .filter(Boolean) as string[];
+                const allCategoryIds = Array.from(new Set(
+                    productResults
+                        .map((p) => p.categoryId)
+                        .filter(Boolean) as string[],
+                ));
 
                 const [images, variants, attributesResult, categoryResults] =
                     await Promise.all([
@@ -127,7 +152,10 @@ app.openapi(batchDetailsRoute, async (c) => {
                         db
                             .select()
                             .from(productVariants)
-                            .where(inArray(productVariants.productId, allProductIds)),
+                            .where(and(
+                                inArray(productVariants.productId, allProductIds),
+                                isNull(productVariants.deletedAt),
+                            )),
                         db
                             .select({
                                 value: productAttributeValues,
@@ -138,12 +166,18 @@ app.openapi(batchDetailsRoute, async (c) => {
                                 productAttributes,
                                 eq(productAttributeValues.attributeId, productAttributes.id),
                             )
-                            .where(inArray(productAttributeValues.productId, allProductIds)),
+                            .where(and(
+                                inArray(productAttributeValues.productId, allProductIds),
+                                isNull(productAttributes.deletedAt),
+                            )),
                         allCategoryIds.length > 0
                             ? db
                                 .select()
                                 .from(categories)
-                                .where(inArray(categories.id, allCategoryIds))
+                                .where(and(
+                                    inArray(categories.id, allCategoryIds),
+                                    isNull(categories.deletedAt),
+                                ))
                             : Promise.resolve([]),
                     ]);
 
@@ -240,7 +274,10 @@ app.openapi(batchDetailsRoute, async (c) => {
             fetchedCategories = await db
                 .select()
                 .from(categories)
-                .where(inArray(categories.id, categoryIds));
+                .where(and(
+                    inArray(categories.id, categoryIds),
+                    isNull(categories.deletedAt),
+                ));
             const categoryOrder = new Map(categoryIds.map((id, index) => [id, index]));
             fetchedCategories.sort((a, b) => (categoryOrder.get(a.id) ?? 0) - (categoryOrder.get(b.id) ?? 0));
         }
@@ -260,6 +297,10 @@ app.openapi(batchDetailsRoute, async (c) => {
                 categoriesTruncated:
                     allCategories ||
                     (payload.categoryIds?.length ?? 0) > categoryIds.length,
+                productsUnavailable: Math.max(0, productIds.length - productsData.length),
+                categoriesUnavailable: allCategories
+                    ? 0
+                    : Math.max(0, categoryIds.length - categoriesData.length),
                 maxProducts: GENERATION_CONFIG.context.maxProducts,
                 maxCategories: GENERATION_CONFIG.context.maxCategories,
             },

@@ -25383,6 +25383,8 @@ export type PostApiV1AdminAiContextBatchDetailsResponses = {
             warnings: {
                 productsTruncated: boolean;
                 categoriesTruncated: boolean;
+                productsUnavailable: number;
+                categoriesUnavailable: number;
                 maxProducts: number;
                 maxCategories: number;
             };

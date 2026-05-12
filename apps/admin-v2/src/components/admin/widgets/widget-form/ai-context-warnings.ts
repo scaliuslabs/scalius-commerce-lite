@@ -6,6 +6,8 @@ export interface AiContextBatchDetails {
   warnings?: {
     productsTruncated?: boolean;
     categoriesTruncated?: boolean;
+    productsUnavailable?: number;
+    categoriesUnavailable?: number;
     maxProducts?: number;
     maxCategories?: number;
   };
@@ -21,5 +23,17 @@ export function notifyAiContextWarnings(contextData: AiContextBatchDetails) {
 
   if (warnings.categoriesTruncated && warnings.maxCategories) {
     toast.warning(`Using up to ${warnings.maxCategories} categories for this AI request.`);
+  }
+
+  if (warnings.productsUnavailable) {
+    toast.warning(
+      `${warnings.productsUnavailable} selected product${warnings.productsUnavailable === 1 ? " was" : "s were"} skipped because ${warnings.productsUnavailable === 1 ? "it is" : "they are"} not storefront-visible.`,
+    );
+  }
+
+  if (warnings.categoriesUnavailable) {
+    toast.warning(
+      `${warnings.categoriesUnavailable} selected categor${warnings.categoriesUnavailable === 1 ? "y was" : "ies were"} skipped because ${warnings.categoriesUnavailable === 1 ? "it is" : "they are"} deleted.`,
+    );
   }
 }
