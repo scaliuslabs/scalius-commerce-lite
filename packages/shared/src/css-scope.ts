@@ -1,4 +1,3 @@
-import * as cssTree from "css-tree";
 import type {
   Atrule,
   EnterOrLeaveFn,
@@ -9,6 +8,7 @@ import type {
   StyleSheet,
   WalkContext,
 } from "css-tree";
+import cssTree from "./css-tree-runtime";
 
 const ALLOWED_BLOCK_AT_RULES = new Set([
   "container",
