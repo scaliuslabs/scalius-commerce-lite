@@ -55,7 +55,13 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
   } = aiGenerator;
 
   const ModelSelector = (
-    <Popover open={isModelSelectorOpen} onOpenChange={setIsModelSelectorOpen}>
+    <Popover
+      open={isModelSelectorOpen}
+      onOpenChange={(open) => {
+        setIsModelSelectorOpen(open);
+        if (!open) setModelSearchQuery("");
+      }}
+    >
         <PopoverTrigger asChild>
             <Button
                 type="button"
@@ -79,14 +85,19 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
                 )}
             </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] overflow-hidden p-0">
+        <PopoverContent
+          align="start"
+          collisionPadding={16}
+          sideOffset={6}
+          className="w-[min(max(var(--radix-popover-trigger-width),22rem),calc(100vw-2rem))] overflow-hidden p-0"
+        >
             <Command>
                 <CommandInput
                     placeholder="Search for a model..."
                     value={modelSearchQuery}
                     onValueChange={setModelSearchQuery}
                 />
-                <CommandList className="max-h-[min(300px,var(--radix-popover-content-available-height))]">
+                <CommandList className="max-h-[clamp(9rem,calc(var(--radix-popover-content-available-height)-2.75rem),20rem)]">
                     <CommandEmpty>No model found.</CommandEmpty>
                     <CommandGroup>
                         {aiModels

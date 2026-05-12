@@ -167,11 +167,11 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
     <div className="fixed inset-0 bg-background z-[100] flex flex-col">
       {/* Header */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <h2 className="text-xl font-semibold">{modeLabels[mode]}</h2>
             {isProcessing && processingProgress && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>{processingProgress.currentStage}</span>
                 {processingProgress.currentSection !== undefined && processingProgress.totalSections && (
@@ -184,10 +184,10 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {/* Device Toggles */}
             {!isProcessing && activeView === 'preview' && (
-              <div className="flex items-center gap-1 mr-4">
+              <div className="flex items-center gap-1 sm:mr-4">
                 <Button
                   size="sm"
                   variant={previewWidth === '100%' ? 'default' : 'ghost'}
@@ -310,9 +310,9 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden lg:flex-row">
         {/* Preview/Code Area */}
-        <div className="flex-1 overflow-auto bg-muted/20">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto bg-muted/20">
           {isProcessing && !content ? (
             <div className="h-full flex flex-col items-center justify-center gap-6">
               <div className="relative">
@@ -360,13 +360,13 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
               </div>
             </div>
           ) : content ? (
-            <div className="h-full flex items-center justify-center p-8">
+            <div className="flex h-full items-center justify-center p-3 sm:p-8">
               <div
                 className={cn(
                   'bg-white shadow-2xl rounded-lg overflow-hidden transition-all duration-300',
                   previewWidth === '100%' && 'w-full h-full',
-                  previewWidth === '768px' && 'w-[768px] h-full',
-                  previewWidth === '375px' && 'w-[375px] h-full'
+                  previewWidth === '768px' && 'w-[min(768px,100%)] h-full',
+                  previewWidth === '375px' && 'w-[min(375px,100%)] h-full'
                 )}
               >
                 <iframe
@@ -424,8 +424,8 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
 
         {/* Improvement Panel (only in improvement mode) */}
         {mode === 'improvement' && showPanel && (
-          <div className="w-[400px] border-l bg-background overflow-y-auto">
-            <div className="p-6 space-y-6">
+          <div className="max-h-[45vh] w-full shrink-0 overflow-y-auto border-t bg-background lg:max-h-none lg:w-[400px] lg:border-l lg:border-t-0">
+            <div className="space-y-6 p-4 sm:p-6">
               {/* History Toggle */}
               {improvementHistory.length > 0 && (
                 <Button
