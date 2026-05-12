@@ -34,6 +34,11 @@ export interface ResolvedWidgetAiModelCapabilities {
   structuredOutputMode: "sdk" | "text";
   supportsStructuredOutput: boolean;
   supportsVisionInput: boolean;
+  /**
+   * Maximum selected image references allowed in widget context.
+   * Text-only models still receive image URLs and metadata in the prompt; they
+   * just do not receive native image parts.
+   */
   maxImages: number;
   notes: string[];
 }
@@ -396,9 +401,7 @@ export function resolveWidgetAiModelCapabilities(
   }
 
   const inferredMaxImages = Math.min(getMaxImages(modelId), GENERATION_CONFIG.context.maxImages);
-  const maxImages = supportsVisionInput
-    ? clampImageLimit(config.maxImages, inferredMaxImages)
-    : 0;
+  const maxImages = clampImageLimit(config.maxImages, inferredMaxImages);
 
   return {
     structuredOutputMode: supportsStructuredOutput ? "sdk" : "text",
