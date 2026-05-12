@@ -31,4 +31,35 @@ describe("storefront product media helpers", () => {
     expect(getProductImageSrcSet(null, variants)).toBe("");
     expect(getProductImageSrcSet(PRODUCT_IMAGE_FALLBACK, variants)).toBe("");
   });
+
+  it("rebuilds responsive candidates from pre-optimized product image URLs", () => {
+    const srcset = getProductImageSrcSet(
+      "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=1200,height=1200,quality=85,format=auto,fit=contain,sharpen=1/products/fish.webp",
+      [
+        {
+          descriptor: "400w",
+          width: 400,
+          height: 400,
+          quality: 80,
+          format: "auto",
+          fit: "contain",
+        },
+        {
+          descriptor: "600w",
+          width: 600,
+          height: 600,
+          quality: 85,
+          format: "auto",
+          fit: "contain",
+        },
+      ],
+    );
+
+    expect(srcset.match(/\/cdn-cgi\/image\//g)).toHaveLength(2);
+    expect(srcset).toContain("width=400");
+    expect(srcset).toContain("width=600");
+    expect(srcset).not.toContain("width=1200");
+    expect(srcset).toContain("/products/fish.webp 400w");
+    expect(srcset).toContain("/products/fish.webp 600w");
+  });
 });

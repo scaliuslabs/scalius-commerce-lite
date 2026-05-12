@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   withOptimizedCollectionProductImages,
+  withOptimizedProductPageImages,
   withOptimizedSocialIcons,
 } from "../../../apps/storefront/src/lib/serialized-media";
 import type {
   CollectionWithProducts,
   Product,
+  ProductPageData,
 } from "../../../apps/storefront/src/lib/api";
 
 const rawImage = "https://cloud.scalius.com/products/fish.webp";
@@ -77,6 +79,40 @@ describe("serialized storefront media", () => {
     expect(social?.iconUrl).toBe(social?.optimizedIconUrl);
     expect(social?.iconUrl).toContain(
       "https://cloud.scalius.com/cdn-cgi/image/",
+    );
+  });
+
+  it("normalizes stale pre-optimized product page image URLs per surface", () => {
+    const staleOptimizedImage =
+      "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=1200,height=1200,quality=85,format=auto,fit=contain,sharpen=1/products/fish.webp";
+    const productData: ProductPageData = {
+      product: product({ imageUrl: staleOptimizedImage }),
+      category: undefined,
+      images: [
+        {
+          id: "image_1",
+          productId: "prod_1",
+          url: staleOptimizedImage,
+          alt: "Fish",
+          isPrimary: true,
+          sortOrder: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      variants: [],
+      relatedProducts: [
+        product({ id: "prod_2", imageUrl: staleOptimizedImage }),
+      ],
+    };
+
+    const optimized = withOptimizedProductPageImages(productData);
+
+    expect(optimized.product.imageUrl).toContain("width=400");
+    expect(optimized.images[0]?.url).toContain("width=600");
+    expect(optimized.relatedProducts[0]?.imageUrl).toContain("width=400");
+    expect(JSON.stringify(optimized)).not.toContain("width=1200");
+    expect(optimized.images[0]?.url.match(/\/cdn-cgi\/image\//g)).toHaveLength(
+      1,
     );
   });
 });
