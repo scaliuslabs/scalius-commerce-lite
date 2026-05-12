@@ -202,9 +202,9 @@ function extractAtRule(css: string, start: number): AtRuleInfo | null {
 function findTopLevelChar(css: string, char: string, start: number): number {
   let depth = 0;
   for (let i = start; i < css.length; i++) {
+    if (depth === 0 && css[i] === char) return i;
     if (css[i] === "{") depth++;
     else if (css[i] === "}") depth--;
-    if (depth === 0 && css[i] === char) return i;
   }
   return -1;
 }

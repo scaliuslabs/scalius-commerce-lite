@@ -25,6 +25,7 @@ import {
     type WidgetPlacementInput,
 } from "./widgets.validation";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
 
@@ -49,21 +50,9 @@ export function sanitizeWidgetHtml(html: string): string {
     return sanitizeHtml(html);
 }
 
-/** Strip dangerous CSS patterns from widget stylesheets.
- *  Removes: @import (external stylesheet loading), expression() (IE script exec),
- *  url(javascript:...), behavior/binding properties (IE/Firefox script exec). */
+/** Strip dangerous CSS patterns from widget stylesheets before persistence/rendering. */
 export function sanitizeWidgetCss(css: string): string {
-    if (!css) return css;
-    let result = css;
-    // Remove @import rules (can load external stylesheets with script content)
-    result = result.replace(/@import\b[^;]*;?/gi, "");
-    // Remove expression() (IE CSS expressions execute JavaScript)
-    result = result.replace(/expression\s*\(/gi, "blocked(");
-    // Remove url(javascript:...) and url(vbscript:...)
-    result = result.replace(/url\s*\(\s*(['"]?\s*(?:javascript|vbscript)\s*:)/gi, "url(blocked:");
-    // Remove behavior and -moz-binding (IE/Firefox script execution via CSS)
-    result = result.replace(/(?:behavior|(?:-moz-|-webkit-)?binding)\s*:/gi, "blocked:");
-    return result;
+    return sanitizeCssForStyleElement(css);
 }
 
 function legacyFieldsFromPlacement(placement?: WidgetPlacementInput | WidgetPlacement | null): LegacyPlacementFields {

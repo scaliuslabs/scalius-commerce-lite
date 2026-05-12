@@ -4,6 +4,7 @@ import {
   optimizeCssImageUrls,
   optimizeRichContentImages,
 } from "@/lib/rich-content-media";
+import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 import { scopeCss } from "@scalius/shared/css-scope";
 
 interface Props {
@@ -15,12 +16,12 @@ const { widget, class: className = "" } = Astro.props;
 const scopeClass = `sw-${widget.id}`;
 const html = optimizeRichContentImages(widget.htmlContent || "");
 const css = scopeCss(
-  optimizeCssImageUrls(widget.cssContent || ""),
+  optimizeCssImageUrls(sanitizeCssForStyleElement(widget.cssContent)),
   scopeClass,
 );
 ---
 
 <div class:list={["widget-container cms-widget-frame", scopeClass, className]}>
-  {widget.cssContent && <style set:html={css} />}
+  {css && <style set:html={css} />}
   <div set:html={html} />
 </div>
