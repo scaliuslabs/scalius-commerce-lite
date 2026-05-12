@@ -9,6 +9,7 @@ import {
 import { eq, isNull, sql, and, desc, inArray, or } from "drizzle-orm";
 import { ftsMatch } from "@scalius/core/search";
 import { getPublicCategories, getPublicCategoryBySlug } from "@scalius/core/modules/categories/categories.storefront";
+import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
@@ -51,12 +52,6 @@ const categoryProductFilterSchema = z.object({
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" })
 });
-
-// Helper function to convert Unix timestamp to Date
-const unixToDate = (timestamp: number | null): Date | null => {
-  if (!timestamp) return null;
-  return new Date(timestamp * 1000);
-};
 
 const storefrontCategorySchema = z.object({
   id: z.string(),
@@ -140,7 +135,16 @@ const getCategoryProductsRoute = createRoute({
       description: "Category products with pagination and filters",
       content: { "application/json": { schema: successEnvelope(z.object({
         category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough(),
-        products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number() }).passthrough()),
+        products: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          slug: z.string(),
+          price: z.number(),
+          discountType: z.string().nullable(),
+          discountPercentage: z.number().nullable(),
+          discountAmount: z.number().nullable(),
+          discountedPrice: z.number(),
+        }).passthrough()),
         pagination: paginationSchema,
         appliedFilters: z.record(z.string(), z.unknown()),
       })) } },
@@ -232,33 +236,40 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
 
   // Apply discount filter
   if (hasDiscount === "true") {
-    conditions.push(sql`${products.discountPercentage} > 0`);
+    conditions.push(
+      sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`,
+    );
   } else if (hasDiscount === "false") {
     conditions.push(
-      sql`${products.discountPercentage} = 0 OR ${products.discountPercentage} IS NULL`,
+      sql`(${products.discountPercentage} = 0 OR ${products.discountPercentage} IS NULL)
+        AND (${products.discountAmount} = 0 OR ${products.discountAmount} IS NULL)`,
     );
   }
 
   // Determine sort order
   let orderBy;
+  const effectivePriceSql = sql`CASE
+    WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0
+      THEN MAX(${products.price} - ${products.discountAmount}, 0)
+    WHEN ${products.discountPercentage} > 0
+      THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100.0))
+    ELSE ${products.price}
+  END`;
   if (sort === "price-asc") {
-    orderBy = sql`CASE
-      WHEN ${products.discountPercentage} > 0
-      THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100))
-      ELSE ${products.price}
-    END`;
+    orderBy = effectivePriceSql;
   } else if (sort === "price-desc") {
-    orderBy = desc(sql`CASE
-      WHEN ${products.discountPercentage} > 0
-      THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100))
-      ELSE ${products.price}
-    END`);
+    orderBy = desc(effectivePriceSql);
   } else if (sort === "name-asc") {
     orderBy = products.name;
   } else if (sort === "name-desc") {
     orderBy = desc(products.name);
   } else if (sort === "discount") {
-    orderBy = desc(products.discountPercentage);
+    orderBy = desc(sql`CASE
+      WHEN ${products.price} > 0 AND ${products.discountType} = 'flat' AND ${products.discountAmount} > 0
+        THEN ${products.discountAmount} / ${products.price} * 100
+      WHEN ${products.discountPercentage} > 0 THEN ${products.discountPercentage}
+      ELSE 0
+    END`);
   } else {
     orderBy = desc(products.createdAt);
   }
@@ -273,7 +284,9 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
       name: products.name,
       price: products.price,
       slug: products.slug,
+      discountType: products.discountType,
       discountPercentage: products.discountPercentage,
+      discountAmount: products.discountAmount,
       freeDelivery: products.freeDelivery,
       categoryId: products.categoryId,
       createdAt: products.createdAt,
@@ -343,9 +356,12 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
   const productsWithImages = productsList.map((product: any) => ({
     ...product,
     imageUrl: imageMap.get(product.id) || null,
-    discountedPrice: product.discountPercentage
-      ? Math.round(product.price * (1 - product.discountPercentage / 100))
-      : product.price,
+    discountedPrice: calculateDiscountedPrice(
+      product.price,
+      product.discountType,
+      product.discountPercentage,
+      product.discountAmount,
+    ),
     createdAt:
       product.createdAt instanceof Date ? product.createdAt.toISOString() : null,
     updatedAt:
