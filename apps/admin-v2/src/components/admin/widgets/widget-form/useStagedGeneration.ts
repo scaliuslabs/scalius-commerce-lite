@@ -4,7 +4,7 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { GENERATION_CONFIG } from '@scalius/core/modules/ai/ai-config';
-import { extractChatCompletionContent } from './ai-stream';
+import { extractChatCompletionContent, readApiErrorMessage } from './ai-stream';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 
@@ -90,7 +90,9 @@ Respond ONLY with the JSON object, no markdown formatting.`,
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create plan");
+        throw new Error(
+          await readApiErrorMessage(response, "Failed to create plan"),
+        );
       }
 
       const content = extractChatCompletionContent(await response.json());
@@ -188,7 +190,9 @@ Respond with the section code in tag format.`,
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(
+          await readApiErrorMessage(response, `HTTP ${response.status}`),
+        );
       }
 
       const content = extractChatCompletionContent(await response.json());

@@ -21,6 +21,14 @@ import { RateLimitError, ValidationError } from "../../utils/api-error";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { listModelsForProvider } from "./ai-models";
+import {
+  normalizeStagedPlanOutput,
+  normalizeStagedPlanText,
+  normalizeWidgetGenerationText,
+  normalizeWidgetOutput,
+  stagedPlanOutputSchema,
+  widgetOutputSchema,
+} from "./ai-response-validation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -81,24 +89,6 @@ const MAX_TEXT_CHARS = GENERATION_CONFIG.context.maxPromptChars;
 const MAX_IMAGES = GENERATION_CONFIG.context.maxImages;
 const MAX_MODEL_ID_CHARS = 200;
 const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
-
-const widgetOutputSchema = z.object({
-  html: z.string().min(1),
-  css: z.string().optional(),
-});
-
-const stagedPlanOutputSchema = z.object({
-  totalSections: z
-    .number()
-    .int()
-    .min(GENERATION_CONFIG.stagedGeneration.minSections)
-    .max(GENERATION_CONFIG.stagedGeneration.maxSections),
-  sectionDescriptions: z
-    .array(z.string().min(1).max(160))
-    .min(GENERATION_CONFIG.stagedGeneration.minSections)
-    .max(GENERATION_CONFIG.stagedGeneration.maxSections),
-  estimatedTokens: z.number().int().positive().optional(),
-});
 
 type GenerateTextOptions = Parameters<typeof generateText>[0];
 type GenerationUsage = {
@@ -453,36 +443,39 @@ function usageFromResult(result: { totalUsage?: GenerationUsage }): GenerationUs
   };
 }
 
-function widgetOutputToTaggedText(output: z.infer<typeof widgetOutputSchema>): string {
-  return `<htmljs>\n${output.html.trim()}\n</htmljs>\n\n<css>\n${(output.css ?? "").trim()}\n</css>`;
-}
-
 async function generateWidgetContent(
   options: GenerateTextOptions,
   provider: WidgetAiProvider,
 ): Promise<WidgetGenerationResult> {
   if (shouldUseStructuredOutput(provider)) {
-    try {
-      const result = await generateText({
-        ...options,
-        output: Output.object({
-          schema: widgetOutputSchema,
-        }),
-      });
+    const result = await generateText({
+      ...options,
+      output: Output.object({
+        schema: widgetOutputSchema,
+      }),
+    }).catch((error) => {
+      console.warn("Structured widget generation failed, falling back to text:", error);
+      return null;
+    });
 
-      const output = widgetOutputSchema.parse(result.output);
+    if (result) {
+      const output = widgetOutputSchema.safeParse(result.output);
+      if (!output.success) {
+        throw new ValidationError(
+          ERROR_MESSAGES.jsonParseFailed,
+          { issues: output.error.issues },
+        );
+      }
       return {
-        text: widgetOutputToTaggedText(output),
+        text: normalizeWidgetOutput(output.data),
         usage: usageFromResult(result),
       };
-    } catch (error) {
-      console.warn("Structured widget generation failed, falling back to text:", error);
     }
   }
 
   const result = await generateText(options);
   return {
-    text: result.text,
+    text: normalizeWidgetGenerationText(result.text),
     usage: usageFromResult(result),
   };
 }
@@ -492,27 +485,34 @@ async function generateStagedPlan(
   provider: WidgetAiProvider,
 ): Promise<WidgetGenerationResult> {
   if (shouldUseStructuredOutput(provider)) {
-    try {
-      const result = await generateText({
-        ...options,
-        output: Output.object({
-          schema: stagedPlanOutputSchema,
-        }),
-      });
+    const result = await generateText({
+      ...options,
+      output: Output.object({
+        schema: stagedPlanOutputSchema,
+      }),
+    }).catch((error) => {
+      console.warn("Structured staged plan generation failed, falling back to text:", error);
+      return null;
+    });
 
-      const output = stagedPlanOutputSchema.parse(result.output);
+    if (result) {
+      const output = stagedPlanOutputSchema.safeParse(result.output);
+      if (!output.success) {
+        throw new ValidationError(
+          "AI response did not include a valid staged generation plan.",
+          { issues: output.error.issues },
+        );
+      }
       return {
-        text: JSON.stringify(output),
+        text: normalizeStagedPlanOutput(output.data),
         usage: usageFromResult(result),
       };
-    } catch (error) {
-      console.warn("Structured staged plan generation failed, falling back to text:", error);
     }
   }
 
   const result = await generateText(options);
   return {
-    text: result.text,
+    text: normalizeStagedPlanText(result.text),
     usage: usageFromResult(result),
   };
 }

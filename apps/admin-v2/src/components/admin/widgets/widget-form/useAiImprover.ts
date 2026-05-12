@@ -19,7 +19,7 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
 import { getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
-import { readChatCompletionStream } from "./ai-stream";
+import { readApiErrorMessage, readChatCompletionStream } from "./ai-stream";
 import {
   notifyAiContextWarnings,
   type AiContextBatchDetails,
@@ -154,8 +154,9 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       });
 
       if (!response.ok || !response.body) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to generate content.');
+        throw new Error(
+          await readApiErrorMessage(response, 'Failed to generate content.'),
+        );
       }
 
       const accumulatedJson = await readChatCompletionStream(response);
