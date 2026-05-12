@@ -8,17 +8,13 @@
  * - Section merging for staged widgets
  */
 
-import { useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { generateStructuredPrompt } from '@scalius/core/modules/ai/prompt-helper-v2';
-
-type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
-type AiProductData = StructuredPromptParams['selectedProducts'][number];
-type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
-import { getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
+import { getAiPrompts, getAiContextBatchDetails } from '@/lib/api.functions';
 import { readApiErrorMessage, readChatCompletionStream } from "./ai-stream";
 import {
   notifyAiContextWarnings,
@@ -29,6 +25,11 @@ import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
 import type { SectionContent } from './useStagedGeneration';
 import type { ProductSearchResult, Category } from './types';
+
+type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
+type AiProductData = StructuredPromptParams['selectedProducts'][number];
+type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
+type ImprovementRun = { id: number; signal: AbortSignal };
 
 interface ModelInfo {
   id: string;
@@ -44,12 +45,42 @@ interface UseAiImproverProps {
   aiGenerator: ReturnType<typeof useAiGenerator>;
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
   const [contentToImprove, setContentToImprove] = useState<{ html: string; css: string } | null>(null);
   const [isImproving, setIsImproving] = useState(false);
   const [improvementHistory, setImprovementHistory] = useState<ImprovementHistoryEntry[]>([]);
   const [currentImprovementTarget, setCurrentImprovementTarget] = useState<number | undefined>(undefined);
   const [rawOutput, setRawOutput] = useState<string>(''); // Capture raw LLM output for debugging
+  const improvementRunIdRef = useRef(0);
+  const improvementAbortRef = useRef<AbortController | null>(null);
+
+  const startImprovementRun = (): ImprovementRun => {
+    improvementAbortRef.current?.abort();
+    const controller = new AbortController();
+    improvementAbortRef.current = controller;
+    improvementRunIdRef.current += 1;
+    return { id: improvementRunIdRef.current, signal: controller.signal };
+  };
+
+  const isActiveImprovementRun = (run: ImprovementRun): boolean =>
+    improvementRunIdRef.current === run.id && !run.signal.aborted;
+
+  const cancel = useCallback((options?: { silent?: boolean }) => {
+    if (improvementAbortRef.current) {
+      improvementAbortRef.current.abort();
+      improvementAbortRef.current = null;
+    }
+    improvementRunIdRef.current += 1;
+    setIsImproving(false);
+    setCurrentImprovementTarget(undefined);
+    if (!options?.silent) {
+      toast.info('Improvement cancelled.');
+    }
+  }, []);
 
   /**
    * Main improvement function
@@ -62,12 +93,15 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       return false;
     }
 
+    const run = startImprovementRun();
+
     setIsImproving(true);
     setCurrentImprovementTarget(targetSection);
 
     try {
       // Fetch system prompt (returns plain text)
       const systemPrompt = await getAiPrompts({ data: { type: aiGenerator.promptType } }) as string;
+      if (!isActiveImprovementRun(run)) return false;
       if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
 
       // Fetch context details
@@ -80,6 +114,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           allCategories: aiContext.allCategoriesSelected,
         },
       }) as AiContextBatchDetails;
+      if (!isActiveImprovementRun(run)) return false;
       notifyAiContextWarnings(contextData);
 
       // Get latest sections from stagedGeneration state
@@ -139,11 +174,13 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         sectionIndex: targetSection,
         totalSections: sections.length,
       });
+      if (!isActiveImprovementRun(run)) return false;
 
       // Call API with structured messages
       const response = await fetch('/api/v1/admin/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: run.signal,
         body: JSON.stringify({
           provider: aiGenerator.activeProvider,
           messages: promptResult.messages,
@@ -152,6 +189,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           operation: 'improve',
         }),
       });
+      if (!isActiveImprovementRun(run)) return false;
 
       if (!response.ok || !response.body) {
         throw new Error(
@@ -160,6 +198,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       }
 
       const accumulatedJson = await readChatCompletionStream(response);
+      if (!isActiveImprovementRun(run)) return false;
       setRawOutput(accumulatedJson);
 
       // Try tag-based parsing first, then fall back to JSON
@@ -276,12 +315,20 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
 
       return true;
     } catch (error: unknown) {
+      if (isAbortError(error) || run.signal.aborted) {
+        return false;
+      }
       if (import.meta.env.DEV) console.error('Error improving content:', error);
       toast.error(ERROR_MESSAGES.generationFailed((error instanceof Error ? error.message : String(error))));
       return false;
     } finally {
-      setIsImproving(false);
-      setCurrentImprovementTarget(undefined);
+      if (improvementRunIdRef.current === run.id) {
+        setIsImproving(false);
+        setCurrentImprovementTarget(undefined);
+        if (improvementAbortRef.current?.signal === run.signal) {
+          improvementAbortRef.current = null;
+        }
+      }
     }
   }, [contentToImprove, aiContext, aiGenerator, improvementHistory]);
 
@@ -297,12 +344,11 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
    * Reset improvement state
    */
   const reset = useCallback(() => {
+    cancel({ silent: true });
     setContentToImprove(null);
     setImprovementHistory([]);
-    setIsImproving(false);
-    setCurrentImprovementTarget(undefined);
     setRawOutput('');
-  }, []);
+  }, [cancel]);
 
   /**
    * Load improvement history (e.g., from saved aiContext)
@@ -323,6 +369,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
     improve,
     startImprovement,
     reset,
+    cancel,
     loadHistory,
     setContentToImprove,
   };

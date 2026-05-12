@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { generateCompletePrompt, generateStructuredPrompt, type StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
@@ -14,12 +14,13 @@ import {
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
-import { getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
+import { getAiPrompts, getAiContextBatchDetails } from '@/lib/api.functions';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
 type AiProductData = StructuredPromptParams['selectedProducts'][number];
 type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
+type GenerationRun = { id: number; signal: AbortSignal };
 
 interface ModelInfo {
   id: string;
@@ -36,8 +37,12 @@ interface WidgetAiSettings {
   generation?: { stagedGenerationDefault?: boolean };
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
-  const response = await fetch("/api/v1/admin/settings/widget-ai");
+  const response = await fetch('/api/v1/admin/settings/widget-ai');
   const payload = await response.json() as {
     success?: boolean;
     data?: WidgetAiSettings;
@@ -45,7 +50,7 @@ async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
   };
 
   if (!response.ok || payload.success === false) {
-    throw new Error(payload.error?.message || "Failed to load widget AI settings.");
+    throw new Error(payload.error?.message || 'Failed to load widget AI settings.');
   }
 
   return payload.data ?? {};
@@ -57,12 +62,12 @@ export const useAiGenerator = (
   shouldLoadSettings = true,
 ) => {
   const [promptType, setPromptType] = useState<
-    "widget" | "landing-page" | "collection"
-  >("widget");
-  const [userPrompt, setUserPrompt] = useState("");
+    'widget' | 'landing-page' | 'collection'
+  >('widget');
+  const [userPrompt, setUserPrompt] = useState('');
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [aiModels, setAiModels] = useState<ModelInfo[]>([]);
-  const [activeProvider, setActiveProvider] = useState("openrouter");
+  const [activeProvider, setActiveProvider] = useState('openrouter');
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [isApiKeySet, setIsApiKeySet] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
@@ -72,10 +77,38 @@ export const useAiGenerator = (
   const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [useStagedMode, setUseStagedMode] = useState(true); // Toggle for staged generation (default: true)
+  const generationRunIdRef = useRef(0);
+  const generationAbortRef = useRef<AbortController | null>(null);
 
   // Staged generation hook
   const stagedGeneration = useStagedGeneration();
 
+  const startGenerationRun = (): GenerationRun => {
+    generationAbortRef.current?.abort();
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
+    generationRunIdRef.current += 1;
+    return { id: generationRunIdRef.current, signal: controller.signal };
+  };
+
+  const isActiveGenerationRun = (run: GenerationRun): boolean =>
+    generationRunIdRef.current === run.id && !run.signal.aborted;
+
+  const cancelGeneration = useCallback(
+    (options?: { silent?: boolean }) => {
+      if (generationAbortRef.current) {
+        generationAbortRef.current.abort();
+        generationAbortRef.current = null;
+      }
+      generationRunIdRef.current += 1;
+      stagedGeneration.reset();
+      setIsLoadingPrompt(false);
+      if (!options?.silent) {
+        toast.info("Generation cancelled.");
+      }
+    },
+    [stagedGeneration],
+  );
 
   useEffect(() => {
     if (!shouldLoadSettings) return;
@@ -147,6 +180,8 @@ export const useAiGenerator = (
       return;
     }
 
+    const run = startGenerationRun();
+
     setIsLoadingPrompt(true);
     setGenerationError(null);
     setRawOutput(null);
@@ -156,6 +191,7 @@ export const useAiGenerator = (
     try {
       // 1. Fetch system prompt (returns plain text)
       const systemPrompt = await getAiPrompts({ data: { type: promptType } }) as string;
+      if (!isActiveGenerationRun(run)) return;
       if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
 
       // 2. Fetch context details
@@ -168,6 +204,7 @@ export const useAiGenerator = (
           allCategories: aiContext.allCategoriesSelected,
         },
       }) as AiContextBatchDetails;
+      if (!isActiveGenerationRun(run)) return;
       notifyAiContextWarnings(contextData);
 
       // 3. Generate structured prompt with caching support
@@ -184,6 +221,7 @@ export const useAiGenerator = (
         modelId: selectedModel,
         supportsVision: isVisionModel,
       });
+      if (!isActiveGenerationRun(run)) return;
 
       // 4. Decide: staged vs simple generation
       const useStaged = shouldUseStagedGeneration(
@@ -198,13 +236,16 @@ export const useAiGenerator = (
           selectedModel,
           promptResult.messages,
           (section) => {
+            if (!isActiveGenerationRun(run)) return;
             // Progressive rendering callback
             setGeneratedContent(prev => ({
               html: (prev?.html || '') + '\n\n' + section.html,
               css: (prev?.css || '') + '\n\n' + section.css,
             }));
-          }
+          },
+          run.signal,
         );
+        if (!isActiveGenerationRun(run)) return;
 
         if (result) {
           setGeneratedContent(result);
@@ -213,77 +254,81 @@ export const useAiGenerator = (
         }
       } else {
         // SIMPLE GENERATION
-        await handleSimpleGeneration(promptResult.messages);
+        await handleSimpleGeneration(promptResult.messages, run);
       }
 
     } catch (error: unknown) {
+      if (isAbortError(error) || run.signal.aborted) {
+        return;
+      }
       if (import.meta.env.DEV) console.error(`Error generating content:`, error);
       toast.error(ERROR_MESSAGES.generationFailed(error instanceof Error ? error.message : String(error)));
       setGenerationError(error instanceof Error ? error.message : String(error));
       setGeneratedContent(null);
       setIsPreviewOpen(false);
     } finally {
-      setIsLoadingPrompt(false);
+      if (generationRunIdRef.current === run.id) {
+        setIsLoadingPrompt(false);
+        if (generationAbortRef.current?.signal === run.signal) {
+          generationAbortRef.current = null;
+        }
+      }
     }
   };
 
-  const handleSimpleGeneration = async (messages: PromptMessage[]) => {
-    try {
-      const response = await fetch("/api/v1/admin/ai/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: activeProvider,
-          messages: messages,
-          model: selectedModel,
-          stream: false,
-        }),
-      });
+  const handleSimpleGeneration = async (
+    messages: PromptMessage[],
+    run: GenerationRun,
+  ) => {
+    const response = await fetch("/api/v1/admin/ai/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: run.signal,
+      body: JSON.stringify({
+        provider: activeProvider,
+        messages: messages,
+        model: selectedModel,
+        stream: false,
+      }),
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || errorData.error?.message || "Failed to generate content.");
+    if (!isActiveGenerationRun(run)) return;
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || errorData.error?.message || "Failed to generate content.");
+    }
+
+    const content = extractChatCompletionContent(await response.json());
+    if (!isActiveGenerationRun(run)) return;
+    setRawOutput(content);
+
+    // Try tag-based parsing first (primary), then fall back to JSON
+    const tagResult = parseTagBasedResponse(content);
+
+    if (tagResult.success && tagResult.data) {
+      const validation = validateParsedWidget(tagResult.data);
+      if (validation.valid) {
+        setGeneratedContent(tagResult.data as { html: string; css: string });
+      } else {
+        if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
+        throw new Error(`Invalid response: ${validation.error}`);
       }
-
-      const content = extractChatCompletionContent(await response.json());
-      setRawOutput(content);
-
-      // Try tag-based parsing first (primary), then fall back to JSON
-      const tagResult = parseTagBasedResponse(content);
-
-      if (tagResult.success && tagResult.data) {
-        const validation = validateParsedWidget(tagResult.data);
+    } else {
+      // Fallback to JSON parsing
+      const jsonParsed = parseJSONSafely(content);
+      if (jsonParsed.success) {
+        const validation = validateWidgetJSON(jsonParsed.data);
         if (validation.valid) {
-          setGeneratedContent(tagResult.data as { html: string; css: string });
+          setGeneratedContent(jsonParsed.data as { html: string; css: string });
         } else {
           if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
           throw new Error(`Invalid response: ${validation.error}`);
         }
       } else {
-        // Fallback to JSON parsing
-        const jsonParsed = parseJSONSafely(content);
-        if (jsonParsed.success) {
-          const validation = validateWidgetJSON(jsonParsed.data);
-          if (validation.valid) {
-            setGeneratedContent(jsonParsed.data as { html: string; css: string });
-          } else {
-            if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
-            throw new Error(`Invalid response: ${validation.error}`);
-          }
-        } else {
-          if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, content);
-          throw new Error("Failed to parse AI response.");
-        }
+        if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, content);
+        throw new Error("Failed to parse AI response.");
       }
-
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error(`Error generating content:`, error);
-      toast.error(`Generation failed: ${error instanceof Error ? error.message : String(error)}`);
-      setGenerationError(error instanceof Error ? error.message : String(error));
-      setGeneratedContent(null);
-      setIsPreviewOpen(false);
-    } finally {
-      setIsLoadingPrompt(false);
     }
   };
 
@@ -383,6 +428,7 @@ ${aiContext.selectedImages.length > 0 ? `\n\n**Note**: ${aiContext.selectedImage
     canAcceptGenerated: Boolean(generatedContent && !generationError && !isLoadingPrompt),
     isPreviewOpen,
     setIsPreviewOpen,
+    cancelGeneration,
     useStagedMode,
     setUseStagedMode,
     stagedGeneration,

@@ -36,6 +36,20 @@ interface StagedGenerationState {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
+function createAbortError(): Error {
+  const error = new Error('Generation cancelled');
+  error.name = 'AbortError';
+  return error;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw createAbortError();
+}
+
 export function useStagedGeneration() {
   const [state, setState] = useState<StagedGenerationState>({
     isGenerating: false,
@@ -47,7 +61,23 @@ export function useStagedGeneration() {
     retryCount: 0,
   });
 
-  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const sleep = (ms: number, signal?: AbortSignal) =>
+    new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(createAbortError());
+        return;
+      }
+
+      const timeout = window.setTimeout(resolve, ms);
+      signal?.addEventListener(
+        "abort",
+        () => {
+          window.clearTimeout(timeout);
+          reject(createAbortError());
+        },
+        { once: true },
+      );
+    });
 
   /**
    * Step 1: Ask LLM to create a generation plan
@@ -55,7 +85,8 @@ export function useStagedGeneration() {
   const createPlan = useCallback(async (
     provider: string,
     model: string,
-    messages: PromptMessage[]
+    messages: PromptMessage[],
+    signal?: AbortSignal,
   ): Promise<GenerationPlan | null> => {
     const planningPrompt = {
       role: "user",
@@ -77,9 +108,11 @@ Respond ONLY with the JSON object, no markdown formatting.`,
     };
 
     try {
+      throwIfAborted(signal);
       const response = await fetch("/api/v1/admin/ai/generate-staged", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal,
         body: JSON.stringify({
           provider,
           model,
@@ -128,6 +161,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
 
       return plan;
     } catch (error: unknown) {
+      if (isAbortError(error)) throw error;
       if (import.meta.env.DEV) console.error("Error creating plan:", error);
       toast.error(`Planning failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
@@ -145,8 +179,11 @@ Respond ONLY with the JSON object, no markdown formatting.`,
     sectionDescription: string,
     totalSections: number,
     previousSections: SectionContent[],
-    retryAttempt = 0
+    retryAttempt = 0,
+    signal?: AbortSignal,
   ): Promise<SectionContent | null> => {
+    throwIfAborted(signal);
+
     // Build context from previous sections
     let previousContext = '';
     if (previousSections.length > 0) {
@@ -179,6 +216,7 @@ Respond with the section code in tag format.`,
       const response = await fetch("/api/v1/admin/ai/generate-staged", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal,
         body: JSON.stringify({
           provider,
           model,
@@ -231,14 +269,15 @@ Respond with the section code in tag format.`,
         timestamp: Date.now(),
       };
     } catch (error: unknown) {
+      if (isAbortError(error)) throw error;
       if (import.meta.env.DEV) console.error(`Error generating section ${sectionIndex}:`, error);
 
       // Retry logic with exponential backoff
       if (retryAttempt < MAX_RETRIES) {
         const delay = RETRY_DELAY_MS * Math.pow(2, retryAttempt);
         toast.info(`Retrying section ${sectionIndex + 1} in ${delay / 1000}s...`);
-        await sleep(delay);
-        return generateSection(provider, model, messages, sectionIndex, sectionDescription, totalSections, previousSections, retryAttempt + 1);
+        await sleep(delay, signal);
+        return generateSection(provider, model, messages, sectionIndex, sectionDescription, totalSections, previousSections, retryAttempt + 1, signal);
       }
 
       toast.error(`Failed to generate section ${sectionIndex + 1}: ${error instanceof Error ? error.message : String(error)}`);
@@ -253,8 +292,11 @@ Respond with the section code in tag format.`,
     provider: string,
     model: string,
     messages: PromptMessage[],
-    onSectionComplete?: (section: SectionContent, index: number, total: number) => void
+    onSectionComplete?: (section: SectionContent, index: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<{ html: string; css: string } | null> => {
+    throwIfAborted(signal);
+
     setState({
       isGenerating: true,
       currentStage: 'planning',
@@ -268,9 +310,10 @@ Respond with the section code in tag format.`,
     try {
       // Phase 1: Create plan
       toast.info("Planning widget structure...");
-      const plan = await createPlan(provider, model, messages);
+      const plan = await createPlan(provider, model, messages, signal);
 
       if (!plan) {
+        throwIfAborted(signal);
         throw new Error("Failed to create generation plan");
       }
 
@@ -281,6 +324,7 @@ Respond with the section code in tag format.`,
       const generatedSections: SectionContent[] = [];
 
       for (let i = 0; i < plan.totalSections; i++) {
+        throwIfAborted(signal);
         setState(prev => ({ ...prev, currentSectionIndex: i }));
         toast.info(`Generating section ${i + 1} of ${plan.totalSections}...`);
 
@@ -292,10 +336,13 @@ Respond with the section code in tag format.`,
           i,
           plan.sectionDescriptions[i],
           plan.totalSections,
-          generatedSections  // Accumulating context from previous sections
+          generatedSections,  // Accumulating context from previous sections
+          0,
+          signal,
         );
 
         if (!section) {
+          throwIfAborted(signal);
           throw new Error(`Failed to generate section ${i + 1}`);
         }
 
@@ -312,7 +359,7 @@ Respond with the section code in tag format.`,
 
         // Small delay between sections to avoid rate limits
         if (i < plan.totalSections - 1) {
-          await sleep(500);
+          await sleep(500, signal);
         }
       }
 
@@ -357,6 +404,19 @@ ${generatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${
         css: combinedCss,
       };
     } catch (error: unknown) {
+      if (isAbortError(error)) {
+        setState({
+          isGenerating: false,
+          currentStage: 'idle',
+          plan: null,
+          sections: [],
+          currentSectionIndex: 0,
+          error: null,
+          retryCount: 0,
+        });
+        return null;
+      }
+
       if (import.meta.env.DEV) console.error("Staged generation error:", error);
       setState(prev => ({
         ...prev,

@@ -37,6 +37,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
   supportsVision = false,
   variant = "default",
 }) => {
+  const [isImagePopoverOpen, setIsImagePopoverOpen] = React.useState(false);
   const {
     selectedImages,
     selectedProducts,
@@ -109,10 +110,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
   return (
     <>
       <div className={gridClass}>
-        <Popover
-          open={isCategoryPopoverOpen}
-          onOpenChange={setIsCategoryPopoverOpen}
-        >
+        <Popover open={isImagePopoverOpen} onOpenChange={setIsImagePopoverOpen}>
           <PopoverTrigger asChild>
             <Button
               type="button"
@@ -232,7 +230,10 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
           </PopoverContent>
         </Popover>
 
-        <Popover>
+        <Popover
+          open={isCategoryPopoverOpen}
+          onOpenChange={setIsCategoryPopoverOpen}
+        >
           <PopoverTrigger asChild>
             <Button
               type="button"

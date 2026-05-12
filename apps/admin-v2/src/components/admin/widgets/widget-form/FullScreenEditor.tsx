@@ -62,6 +62,7 @@ interface FullScreenEditorProps {
   error?: string | null;
   onAccept: () => void;
   canAccept?: boolean;
+  onCancelProcessing?: () => void;
   onImprove?: (prompt: string, targetSection?: number) => Promise<void> | Promise<boolean>;
   onRequestImprovement?: () => void; // Handler to switch from preview to improvement mode
   mode: EditorMode;
@@ -89,6 +90,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
   error,
   onAccept,
   canAccept = true,
+  onCancelProcessing,
   onImprove,
   onRequestImprovement,
   mode,
@@ -262,9 +264,16 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
 
             {/* Actions */}
             <div className="h-6 w-px bg-border mx-2" />
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (isProcessing) onCancelProcessing?.();
+                onClose();
+              }}
+            >
               <X className="h-4 w-4 mr-2" />
-              Close
+              {isProcessing ? "Cancel" : "Close"}
             </Button>
             {!isProcessing && (
               <>

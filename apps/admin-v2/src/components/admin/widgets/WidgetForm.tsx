@@ -308,13 +308,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     aiContextVersionRef.current = widgetFormVersion;
 
     aiContext.resetContext();
+    aiGenerator.cancelGeneration({ silent: true });
     aiGenerator.setPromptType('widget');
     aiGenerator.setUserPrompt('');
     aiGenerator.setSelectedModel('');
     aiGenerator.setGeneratedContent(null);
     aiGenerator.setIsPreviewOpen(false);
     aiGenerator.setUseStagedMode(true);
-    aiGenerator.stagedGeneration.reset();
     aiImprover.reset();
     setEditorMode('generation-preview');
     setIsEditorOpen(false);
@@ -822,6 +822,11 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
             aiGenerator.setGeneratedContent(null);
           }
         }}
+        onCancelProcessing={
+          editorMode === 'improvement'
+            ? aiImprover.cancel
+            : aiGenerator.cancelGeneration
+        }
         content={editorMode === 'improvement' ? aiImprover.contentToImprove : aiGenerator.generatedContent}
         rawOutput={editorMode === 'improvement' ? aiImprover.rawOutput : aiGenerator.rawOutput || undefined}
         error={editorMode === 'generation-preview' ? aiGenerator.generationError : undefined}
