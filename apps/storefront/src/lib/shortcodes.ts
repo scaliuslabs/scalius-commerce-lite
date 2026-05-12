@@ -1,14 +1,8 @@
 // src/lib/shortcodes.ts
 import { getProductBySlug, getWidgetById } from "@/lib/api";
-import { scopeCss } from "@scalius/shared/css-scope";
-import {
-  optimizeCssImageUrls,
-  optimizeRichContentImages,
-} from "./rich-content-media";
-import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
 import { withOptimizedProductPageImages } from "./serialized-media";
-import { normalizeWidgetCss, normalizeWidgetHtml } from "./widget-content";
+import { prepareWidgetContent } from "./widget-content";
 
 export interface ShortcodeMatch {
   fullMatch: string;
@@ -58,15 +52,11 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
       return `<div class="shortcode-error">Widget not found or inactive: ${widgetId}</div>`;
     }
 
-    const scopeClass = `sw-${widgetId}`;
-    let html = optimizeRichContentImages(
-      normalizeWidgetHtml(widgetData.htmlContent),
-    );
-    const css = optimizeCssImageUrls(
-      sanitizeCssForStyleElement(normalizeWidgetCss(widgetData.cssContent)),
-    );
+    const { scopeClass, css, html: preparedHtml } =
+      prepareWidgetContent(widgetData);
+    let html = preparedHtml;
     if (css) {
-      html = `<style>${scopeCss(css, scopeClass)}</style>${html}`;
+      html = `<style>${css}</style>${html}`;
     }
 
     return `<div class="widget-shortcode not-prose cms-widget-frame ${scopeClass}" data-widget-id="${widgetId}">${html}</div>`;

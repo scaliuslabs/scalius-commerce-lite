@@ -7,6 +7,7 @@ import {
 import {
   normalizeWidgetCss,
   normalizeWidgetHtml,
+  prepareWidgetContent,
 } from "../../../apps/storefront/src/lib/widget-content";
 
 describe("storefront shortcode content helpers", () => {
@@ -54,5 +55,28 @@ describe("storefront shortcode content helpers", () => {
     ).toContain(
       "/* Hero Section */\n.hero { min-height: 100vh; /* Full viewport height */ }",
     );
+  });
+
+  it("prepares widget HTML and CSS through one normalized rendering path", () => {
+    const prepared = prepareWidgetContent(
+      {
+        id: "wid_123",
+        htmlContent:
+          "<htmljs><section onclick=\"alert(1)\"><script>alert(1)</script><img src=\"https://cloud.scalius.com/widgets/hero.jpg\" alt=\"Hero\"></section></htmljs>",
+        cssContent:
+          "<css>@import url('https://evil.example.com/x.css'); .hero { background-image: url('https://cloud.scalius.com/widgets/bg.webp'); }</css>",
+      },
+      { priority: true },
+    );
+
+    expect(prepared.scopeClass).toBe("sw-wid_123");
+    expect(prepared.html).not.toContain("htmljs");
+    expect(prepared.html).not.toContain("script");
+    expect(prepared.html).not.toContain("onclick");
+    expect(prepared.html).toContain("/cdn-cgi/image/");
+    expect(prepared.html).toContain('fetchpriority="high"');
+    expect(prepared.css).toContain(".sw-wid_123 .hero");
+    expect(prepared.css).toContain("/cdn-cgi/image/");
+    expect(prepared.css).not.toContain("@import");
   });
 });

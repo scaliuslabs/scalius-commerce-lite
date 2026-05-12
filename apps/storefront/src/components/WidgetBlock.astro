@@ -1,11 +1,6 @@
 ---
 import type { ApiWidget } from "@/lib/api";
-import {
-  optimizeCssImageUrls,
-  optimizeRichContentImages,
-} from "@/lib/rich-content-media";
-import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
-import { scopeCss } from "@scalius/shared/css-scope";
+import { prepareWidgetContent } from "@/lib/widget-content";
 
 interface Props {
   widget: ApiWidget;
@@ -14,12 +9,7 @@ interface Props {
 }
 
 const { widget, class: className = "", priority = false } = Astro.props;
-const scopeClass = `sw-${widget.id}`;
-const html = optimizeRichContentImages(widget.htmlContent || "", { priority });
-const css = scopeCss(
-  optimizeCssImageUrls(sanitizeCssForStyleElement(widget.cssContent)),
-  scopeClass,
-);
+const { scopeClass, html, css } = prepareWidgetContent(widget, { priority });
 ---
 
 <div class:list={["widget-container cms-widget-frame", scopeClass, className]}>
