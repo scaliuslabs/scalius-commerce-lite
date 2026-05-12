@@ -51,6 +51,20 @@ describe("widget placement validation", () => {
     });
   });
 
+  it("accepts collection scoped content placements", () => {
+    const placement = widgetPlacementInputSchema.parse({
+      scope: WidgetPlacementScope.COLLECTION,
+      scopeId: "col_1",
+      slot: WidgetPlacementSlot.BEFORE_CONTENT,
+    });
+
+    expect(placement).toMatchObject({
+      scope: WidgetPlacementScope.COLLECTION,
+      scopeId: "col_1",
+      slot: WidgetPlacementSlot.BEFORE_CONTENT,
+    });
+  });
+
   it("requires scopeId for non-homepage placements", () => {
     const result = widgetPlacementInputSchema.safeParse({
       scope: WidgetPlacementScope.PRODUCT,

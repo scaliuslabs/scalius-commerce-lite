@@ -10,7 +10,7 @@ import {
   getApiV1WidgetsById,
 } from "@scalius/api-client/sdk";
 
-type ScopedWidgetScope = "homepage" | "page" | "product" | "category";
+type ScopedWidgetScope = "homepage" | "page" | "product" | "category" | "collection";
 
 /**
  * Fetches all widgets that are active and configured for the homepage.

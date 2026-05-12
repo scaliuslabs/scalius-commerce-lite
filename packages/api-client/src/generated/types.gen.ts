@@ -1788,7 +1788,7 @@ export type GetApiV1WidgetsActiveHomepageResponse = GetApiV1WidgetsActiveHomepag
 export type GetApiV1WidgetsActiveScopeByScopeData = {
     body?: never;
     path: {
-        scope: 'homepage' | 'page' | 'product' | 'category';
+        scope: 'homepage' | 'page' | 'product' | 'category' | 'collection';
     };
     query?: {
         scopeId?: string;
@@ -8930,7 +8930,7 @@ export type PostApiV1AdminWidgetsData = {
         sortOrder?: number;
         placements?: Array<{
             id?: string;
-            scope?: 'homepage' | 'page' | 'product' | 'category';
+            scope?: 'homepage' | 'page' | 'product' | 'category' | 'collection';
             scopeId?: string | null;
             slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
             anchorType?: 'collection' | 'content' | null;
@@ -9658,7 +9658,7 @@ export type PutApiV1AdminWidgetsByIdData = {
         sortOrder?: number;
         placements?: Array<{
             id?: string;
-            scope?: 'homepage' | 'page' | 'product' | 'category';
+            scope?: 'homepage' | 'page' | 'product' | 'category' | 'collection';
             scopeId?: string | null;
             slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
             anchorType?: 'collection' | 'content' | null;

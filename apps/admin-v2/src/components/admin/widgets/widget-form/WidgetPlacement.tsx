@@ -36,6 +36,7 @@ const scopeLabels: Partial<Record<WidgetPlacementScope, string>> = {
   [WidgetPlacementScope.PAGE]: "Page",
   [WidgetPlacementScope.PRODUCT]: "Product",
   [WidgetPlacementScope.CATEGORY]: "Category",
+  [WidgetPlacementScope.COLLECTION]: "Collection",
 };
 
 const placementScopes = [
@@ -43,6 +44,7 @@ const placementScopes = [
   WidgetPlacementScope.PAGE,
   WidgetPlacementScope.PRODUCT,
   WidgetPlacementScope.CATEGORY,
+  WidgetPlacementScope.COLLECTION,
 ] as const;
 
 const slotLabels: Partial<Record<WidgetPlacementSlot, string>> = {
@@ -145,7 +147,13 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                       placeholder: "Select category",
                       targetType: "category" as const,
                     }
-                  : null;
+                  : scope === WidgetPlacementScope.COLLECTION
+                    ? {
+                        label: "Collection",
+                        placeholder: "Select collection",
+                        targetType: "collection" as const,
+                      }
+                    : null;
           const placementErrors = errors.placements?.[index];
 
           return (

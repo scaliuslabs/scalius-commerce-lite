@@ -197,6 +197,33 @@ describe("widget placement persistence", () => {
 
     expect(db._calls.some((call: { method: string }) => call.method === "insert.values")).toBe(false);
   });
+
+  it("rejects collection scoped widgets that do not reference an active collection", async () => {
+    const db = createMockDb({ selectResult: [] }) as any;
+
+    await expect(
+      createWidget(db, {
+        name: "Collection page hero",
+        htmlContent: "<section>Hero</section>",
+        isActive: true,
+        displayTarget: "homepage",
+        placementRule: WidgetPlacementRule.STANDALONE,
+        referenceCollectionId: null,
+        sortOrder: 0,
+        placements: [
+          {
+            scope: WidgetPlacementScope.COLLECTION,
+            scopeId: "col_missing",
+            slot: WidgetPlacementSlot.TOP,
+            sortOrder: 0,
+            isActive: true,
+          },
+        ],
+      }),
+    ).rejects.toThrow("missing or inactive collections");
+
+    expect(db._calls.some((call: { method: string }) => call.method === "insert.values")).toBe(false);
+  });
 });
 
 describe("widget restore persistence", () => {

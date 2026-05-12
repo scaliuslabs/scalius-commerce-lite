@@ -5492,7 +5492,8 @@
                 "homepage",
                 "page",
                 "product",
-                "category"
+                "category",
+                "collection"
               ]
             },
             "required": true,
@@ -27697,7 +27698,8 @@
                             "homepage",
                             "page",
                             "product",
-                            "category"
+                            "category",
+                            "collection"
                           ],
                           "default": "homepage"
                         },
@@ -29928,7 +29930,8 @@
                             "homepage",
                             "page",
                             "product",
-                            "category"
+                            "category",
+                            "collection"
                           ],
                           "default": "homepage"
                         },

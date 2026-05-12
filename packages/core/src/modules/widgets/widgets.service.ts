@@ -274,6 +274,10 @@ async function validatePlacementReferences(
             categoryIds.add(placement.scopeId);
         }
 
+        if (placement.scope === WidgetPlacementScope.COLLECTION && placement.scopeId) {
+            collectionIds.add(placement.scopeId);
+        }
+
         const isCollectionSlot =
             placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
             placement.slot === WidgetPlacementSlot.AFTER_COLLECTION;

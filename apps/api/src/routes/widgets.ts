@@ -90,6 +90,7 @@ const activeWidgetScopeSchema = z.enum([
   WidgetPlacementScope.PAGE,
   WidgetPlacementScope.PRODUCT,
   WidgetPlacementScope.CATEGORY,
+  WidgetPlacementScope.COLLECTION,
 ]);
 
 const getActiveScopedWidgetsRoute = createRoute({
