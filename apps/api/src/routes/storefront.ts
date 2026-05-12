@@ -16,7 +16,7 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { pageSchema, widgetSchema } from "../schemas/entities";
+import { pageSchema, publicWidgetSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // GET /storefront/homepage — consolidated homepage data
@@ -31,7 +31,7 @@ const homepageRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         seo: z.record(z.string(), z.unknown()),
         hero: z.record(z.string(), z.unknown()),
-        widgets: z.array(z.record(z.string(), z.unknown())),
+        widgets: z.array(publicWidgetSchema),
         collections: z.array(z.record(z.string(), z.unknown())),
       }).passthrough()) } },
     },
@@ -62,7 +62,7 @@ const pageBySlugRoute = createRoute({
       description: "Page render data",
       content: { "application/json": { schema: successEnvelope(z.object({
         page: pageSchema,
-        widgets: z.array(widgetSchema),
+        widgets: z.array(publicWidgetSchema),
       })) } },
     },
     404: errorResponses[404],

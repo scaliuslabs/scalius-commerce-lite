@@ -6,7 +6,7 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { widgetSchema } from "../schemas/entities";
+import { publicWidgetSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use(
@@ -35,7 +35,7 @@ const getWidgetByIdRoute = createRoute({
     200: {
       description: "Widget details",
       content: { "application/json": { schema: successEnvelope(z.object({
-        widget: widgetSchema,
+        widget: publicWidgetSchema,
       })) } },
     },
     400: errorResponses[400],
@@ -66,7 +66,7 @@ const getActiveHomepageWidgetsRoute = createRoute({
     200: {
       description: "Active homepage widgets",
       content: { "application/json": { schema: successEnvelope(z.object({
-        widgets: z.array(widgetSchema),
+        widgets: z.array(publicWidgetSchema),
       })) } },
     },
     500: errorResponses[500],

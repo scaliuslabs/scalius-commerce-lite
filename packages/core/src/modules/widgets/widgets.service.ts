@@ -38,6 +38,42 @@ type LegacyPlacementFields = {
     sortOrder: number;
 };
 
+type PublicWidgetBase = Pick<
+    typeof widgets.$inferSelect,
+    | "id"
+    | "name"
+    | "htmlContent"
+    | "cssContent"
+    | "isActive"
+    | "displayTarget"
+    | "placementRule"
+    | "referenceCollectionId"
+    | "sortOrder"
+    | "createdAt"
+    | "updatedAt"
+    | "deletedAt"
+>;
+
+type PublicWidgetPlacement = Pick<
+    WidgetPlacement,
+    | "id"
+    | "widgetId"
+    | "scope"
+    | "scopeId"
+    | "slot"
+    | "anchorType"
+    | "anchorId"
+    | "sortOrder"
+    | "isActive"
+    | "createdAt"
+    | "updatedAt"
+    | "deletedAt"
+>;
+
+export type PublicWidget = PublicWidgetBase & {
+    placements: PublicWidgetPlacement[];
+};
+
 // ─────────────────────────────────────────
 // HTML Sanitization
 // ─────────────────────────────────────────
@@ -167,6 +203,62 @@ function groupPlacementsByWidget(placements: WidgetPlacement[]) {
     return byWidget;
 }
 
+function toPublicPlacement(placement: PublicWidgetPlacement): PublicWidgetPlacement {
+    return {
+        id: placement.id,
+        widgetId: placement.widgetId,
+        scope: placement.scope,
+        scopeId: placement.scopeId,
+        slot: placement.slot,
+        anchorType: placement.anchorType,
+        anchorId: placement.anchorId,
+        sortOrder: placement.sortOrder,
+        isActive: placement.isActive,
+        createdAt: placement.createdAt,
+        updatedAt: placement.updatedAt,
+        deletedAt: placement.deletedAt,
+    };
+}
+
+function legacyFieldsForPublicWidget(
+    widget: PublicWidgetBase,
+    placements: PublicWidgetPlacement[],
+): LegacyPlacementFields {
+    const primaryPlacement = placements[0];
+    if (primaryPlacement) return legacyFieldsFromPlacement(primaryPlacement);
+
+    return {
+        displayTarget: "homepage",
+        placementRule: widget.placementRule,
+        referenceCollectionId: widget.referenceCollectionId ?? null,
+        sortOrder: widget.sortOrder,
+    };
+}
+
+function toPublicWidget(
+    widget: PublicWidgetBase,
+    placements: PublicWidgetPlacement[] = [],
+): PublicWidget {
+    const publicPlacements = placements.map(toPublicPlacement);
+    const legacyFields = legacyFieldsForPublicWidget(widget, publicPlacements);
+
+    return {
+        id: widget.id,
+        name: widget.name,
+        htmlContent: widget.htmlContent ? sanitizeWidgetHtml(widget.htmlContent) : widget.htmlContent,
+        cssContent: widget.cssContent ? sanitizeWidgetCss(widget.cssContent) : widget.cssContent,
+        isActive: widget.isActive,
+        displayTarget: legacyFields.displayTarget,
+        placementRule: legacyFields.placementRule,
+        referenceCollectionId: legacyFields.referenceCollectionId,
+        sortOrder: legacyFields.sortOrder,
+        createdAt: widget.createdAt,
+        updatedAt: widget.updatedAt,
+        deletedAt: widget.deletedAt,
+        placements: publicPlacements,
+    };
+}
+
 const slotSortRank: Record<string, number> = {
     [WidgetPlacementSlot.TOP]: 10,
     [WidgetPlacementSlot.BEFORE_CONTENT]: 20,
@@ -293,16 +385,40 @@ export async function getWidgetById(db: Database, id: string) {
  *  replacing the inline DB query at lines 90-100. Same query shape + sanitization. */
 export async function getActiveWidgetById(db: Database, id: string) {
     const widget = await db
-        .select()
+        .select({
+            id: widgets.id,
+            name: widgets.name,
+            htmlContent: widgets.htmlContent,
+            cssContent: widgets.cssContent,
+            isActive: widgets.isActive,
+            displayTarget: widgets.displayTarget,
+            placementRule: widgets.placementRule,
+            referenceCollectionId: widgets.referenceCollectionId,
+            sortOrder: widgets.sortOrder,
+            createdAt: widgets.createdAt,
+            updatedAt: widgets.updatedAt,
+            deletedAt: widgets.deletedAt,
+        })
         .from(widgets)
         .where(and(eq(widgets.id, id), eq(widgets.isActive, true), isNull(widgets.deletedAt)))
         .get() ?? null;
 
     if (widget) {
-        if (widget.htmlContent) widget.htmlContent = sanitizeWidgetHtml(widget.htmlContent);
-        if (widget.cssContent) widget.cssContent = sanitizeWidgetCss(widget.cssContent);
         const placements = await db
-            .select()
+            .select({
+                id: widgetPlacements.id,
+                widgetId: widgetPlacements.widgetId,
+                scope: widgetPlacements.scope,
+                scopeId: widgetPlacements.scopeId,
+                slot: widgetPlacements.slot,
+                anchorType: widgetPlacements.anchorType,
+                anchorId: widgetPlacements.anchorId,
+                sortOrder: widgetPlacements.sortOrder,
+                isActive: widgetPlacements.isActive,
+                createdAt: widgetPlacements.createdAt,
+                updatedAt: widgetPlacements.updatedAt,
+                deletedAt: widgetPlacements.deletedAt,
+            })
             .from(widgetPlacements)
             .where(and(
                 eq(widgetPlacements.widgetId, id),
@@ -310,7 +426,7 @@ export async function getActiveWidgetById(db: Database, id: string) {
                 isNull(widgetPlacements.deletedAt),
             ))
             .orderBy(asc(widgetPlacements.sortOrder));
-        return { ...widget, placements };
+        return toPublicWidget(widget, placements);
     }
     return widget;
 }
@@ -352,7 +468,6 @@ export async function getActiveWidgetPlacements(
             name: widgets.name,
             htmlContent: widgets.htmlContent,
             cssContent: widgets.cssContent,
-            aiContext: widgets.aiContext,
             isActive: widgets.isActive,
             displayTarget: widgets.displayTarget,
             placementRule: widgets.placementRule,
@@ -367,13 +482,9 @@ export async function getActiveWidgetPlacements(
         .innerJoin(widgets, eq(widgetPlacements.widgetId, widgets.id))
         .where(and(...placementConditions));
 
-    return sortPlacementRows(result).map((w) => ({
-        ...w,
-        htmlContent: w.htmlContent ? sanitizeWidgetHtml(w.htmlContent) : w.htmlContent,
-        cssContent: w.cssContent ? sanitizeWidgetCss(w.cssContent) : w.cssContent,
-        ...legacyFieldsFromPlacement(w.placement),
-        placements: [w.placement],
-    }));
+    return sortPlacementRows(result).map(({ placement, ...widget }) =>
+        toPublicWidget(widget, [placement]),
+    );
 }
 
 // ─────────────────────────────────────────
