@@ -80086,6 +80086,12 @@
                             "categoriesTruncated": {
                               "type": "boolean"
                             },
+                            "productsUnavailable": {
+                              "type": "number"
+                            },
+                            "categoriesUnavailable": {
+                              "type": "number"
+                            },
                             "maxProducts": {
                               "type": "number"
                             },
@@ -80096,6 +80102,8 @@
                           "required": [
                             "productsTruncated",
                             "categoriesTruncated",
+                            "productsUnavailable",
+                            "categoriesUnavailable",
                             "maxProducts",
                             "maxCategories"
                           ]
