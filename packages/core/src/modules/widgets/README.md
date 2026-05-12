@@ -41,7 +41,7 @@ Individual and bulk operations:
 
 Widget content changes can be tracked via the `widgetHistory` table:
 
-- **Save version** (`createHistoryEntry`): Snapshots the widget's current `htmlContent` and `cssContent` with a reason string (default: "Manual save").
+- **Save version** (`createHistoryEntry`): Snapshots the widget's persisted `htmlContent` and `cssContent` by default, or explicit draft HTML/CSS from the editor when supplied, with a reason string (default: "Manual save").
 - **Restore version** (`restoreFromHistory`): Atomic via `db.batch()` -- auto-snapshots the current state with reason "Auto-saved before restore", then applies the selected history entry's HTML/CSS. Both operations execute in a single batch.
 - **Delete version** (`deleteHistoryEntry`): Permanently removes a single history entry. Validates the entry belongs to the specified widget.
 - **List history** (`getWidgetHistory`): Returns all entries for a widget, ordered by `createdAt DESC`. Throws `NotFoundError` if widget not found.
@@ -129,7 +129,7 @@ Exported types: `CreateWidgetInput`, `UpdateWidgetInput`.
 | POST | `/admin/widgets/bulk-deactivate` | Bulk deactivate (`{ ids }`) |
 | POST | `/admin/widgets/bulk-restore` | Bulk restore (`{ ids }`) |
 | GET | `/admin/widgets/{id}/history` | List widget version history |
-| POST | `/admin/widgets/{id}/history` | Save current state as history entry (`{ reason? }`) |
+| POST | `/admin/widgets/{id}/history` | Save persisted or supplied draft state as history entry (`{ reason?, htmlContent?, cssContent? }`) |
 | POST | `/admin/widgets/{id}/history/restore` | Restore widget from history version (`{ historyId }`) |
 | DELETE | `/admin/widgets/{id}/history/{versionId}` | Delete a history entry |
 

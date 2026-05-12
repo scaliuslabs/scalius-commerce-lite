@@ -532,17 +532,29 @@ export async function createHistoryEntry(
     db: Database,
     widgetId: string,
     reason: string = "Manual save",
+    snapshot?: { htmlContent?: string; cssContent?: string | null },
 ): Promise<WidgetHistory> {
     const widget = await getWidgetById(db, widgetId);
     if (!widget) throw new NotFoundError("Widget not found");
+
+    const htmlContent =
+        snapshot?.htmlContent !== undefined
+            ? sanitizeWidgetHtml(snapshot.htmlContent)
+            : widget.htmlContent;
+    const cssContent =
+        snapshot?.cssContent !== undefined
+            ? snapshot.cssContent
+                ? sanitizeWidgetCss(snapshot.cssContent)
+                : snapshot.cssContent
+            : widget.cssContent;
 
     return db
         .insert(widgetHistory)
         .values({
             id: "whist_" + nanoid(),
             widgetId,
-            htmlContent: widget.htmlContent,
-            cssContent: widget.cssContent,
+            htmlContent,
+            cssContent,
             reason,
         })
         .returning()
