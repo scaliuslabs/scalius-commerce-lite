@@ -10,6 +10,7 @@ import {
     WidgetPlacementSlot,
 } from "@scalius/database/schema";
 import {
+    findDuplicateWidgetPlacementIndexes,
     isWidgetCollectionSlot,
     isWidgetPlacementSlotAllowedForScope,
 } from "@scalius/shared/widget-placement";
@@ -87,57 +88,58 @@ export const widgetPlacementInputSchema = z.object({
     }
 });
 
-function placementIdentity(placement: WidgetPlacementInput): string {
-    return [
-        placement.scope,
-        placement.scopeId ?? "",
-        placement.slot,
-        placement.anchorType ?? "",
-        placement.anchorId ?? "",
-    ].join("\u001f");
-}
-
 const widgetPlacementListSchema = z.array(widgetPlacementInputSchema).superRefine((placements, ctx) => {
-    const seen = new Map<string, number>();
-    placements.forEach((placement, index) => {
-        const key = placementIdentity(placement);
-        const firstIndex = seen.get(key);
-        if (firstIndex !== undefined) {
-            ctx.addIssue({
-                code: "custom",
-                message: "Duplicate widget placement target.",
-                path: [index],
-            });
-            ctx.addIssue({
-                code: "custom",
-                message: "Duplicate widget placement target.",
-                path: [firstIndex],
-            });
-            return;
-        }
-        seen.set(key, index);
-    });
+    for (const duplicate of findDuplicateWidgetPlacementIndexes(placements)) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Duplicate widget placement target.",
+            path: [duplicate.duplicateIndex],
+        });
+        ctx.addIssue({
+            code: "custom",
+            message: "Duplicate widget placement target.",
+            path: [duplicate.firstIndex],
+        });
+    }
 });
 
-/** Base shape without .refine() so .partial() works for the update schema */
+const placementRuleSchema = z.enum([
+    WidgetPlacementRule.BEFORE_COLLECTION,
+    WidgetPlacementRule.AFTER_COLLECTION,
+    WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
+    WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
+    WidgetPlacementRule.STANDALONE,
+]);
+
+/** Create shape keeps defaults. Update shape below is intentionally default-free. */
 const widgetBaseSchema = z.object({
     name: z.string().min(3),
-    htmlContent: z.string().min(1),
+    htmlContent: z.string(),
     cssContent: z.string().optional(),
     aiContext: z.record(z.string(), z.unknown()).nullable().optional(),
     isActive: z.boolean().default(true),
     displayTarget: z.enum(["homepage"]).default("homepage"),
-    placementRule: z.enum([
-        WidgetPlacementRule.BEFORE_COLLECTION,
-        WidgetPlacementRule.AFTER_COLLECTION,
-        WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
-        WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
-        WidgetPlacementRule.STANDALONE,
-    ]).default(WidgetPlacementRule.STANDALONE),
+    placementRule: placementRuleSchema.default(WidgetPlacementRule.STANDALONE),
     referenceCollectionId: z.string().optional().nullable(),
     sortOrder: z.number().int().optional().default(0),
     placements: widgetPlacementListSchema.optional(),
 });
+
+const widgetUpdateBaseSchema = z.object({
+    name: z.string().min(3),
+    htmlContent: z.string(),
+    cssContent: z.string().optional(),
+    aiContext: z.record(z.string(), z.unknown()).nullable().optional(),
+    isActive: z.boolean(),
+    displayTarget: z.enum(["homepage"]),
+    placementRule: placementRuleSchema,
+    referenceCollectionId: z.string().optional().nullable(),
+    sortOrder: z.number().int(),
+    placements: widgetPlacementListSchema,
+}).partial();
+
+type CreateWidgetInputDraft = z.infer<typeof widgetBaseSchema>;
+type UpdateWidgetInputDraft = z.infer<typeof widgetUpdateBaseSchema>;
 
 /** Validates projected placement fields only when canonical placement rows are absent. */
 function validateCollectionRef(data: {
@@ -177,14 +179,76 @@ function hasLegacyPlacementProjection(data: Partial<{
         data.sortOrder !== undefined;
 }
 
-/** Schema for creating a new widget (POST /api/widgets) */
-export const createWidgetSchema = widgetBaseSchema.refine(
-    validateCollectionRef,
-    collectionRefMessage,
-);
+function hasRenderableWidgetContent(data: { htmlContent?: string }): boolean {
+    return typeof data.htmlContent === "string" && data.htmlContent.trim().length > 0;
+}
 
-/** Schema for updating an existing widget (PUT /api/widgets/:id) */
-export const updateWidgetSchema = widgetBaseSchema.partial().superRefine((data, ctx) => {
+function hasActivePlacement(placements: WidgetPlacementInput[] | undefined): boolean {
+    return (placements ?? []).some((placement) => placement.isActive !== false);
+}
+
+function hasActiveLegacyPlacement(data: {
+    placementRule?: WidgetPlacementRule;
+    referenceCollectionId?: string | null;
+}): boolean {
+    if (!data.placementRule || data.placementRule === WidgetPlacementRule.STANDALONE) {
+        return false;
+    }
+    if (
+        (data.placementRule === WidgetPlacementRule.BEFORE_COLLECTION ||
+            data.placementRule === WidgetPlacementRule.AFTER_COLLECTION) &&
+        !data.referenceCollectionId
+    ) {
+        return false;
+    }
+    return true;
+}
+
+function validatePublishableWidget(
+    data: {
+        htmlContent?: string;
+        isActive?: boolean;
+        placements?: WidgetPlacementInput[];
+        placementRule?: WidgetPlacementRule;
+        referenceCollectionId?: string | null;
+    },
+    ctx: z.RefinementCtx,
+): void {
+    if (data.isActive !== true) return;
+
+    if (!hasRenderableWidgetContent(data)) {
+        ctx.addIssue({
+            code: "custom",
+            message: "HTML content is required before publishing a widget.",
+            path: ["htmlContent"],
+        });
+    }
+
+    const hasPlacement = data.placements !== undefined
+        ? hasActivePlacement(data.placements)
+        : hasActiveLegacyPlacement(data);
+    if (!hasPlacement) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Add at least one active placement before publishing this widget.",
+            path: ["placements"],
+        });
+    }
+}
+
+function validateCreateWidget(data: CreateWidgetInputDraft, ctx: z.RefinementCtx): void {
+    if (!validateCollectionRef(data)) {
+        ctx.addIssue({
+            code: "custom",
+            message: collectionRefMessage.message,
+            path: collectionRefMessage.path,
+        });
+    }
+
+    validatePublishableWidget(data, ctx);
+}
+
+function validateUpdateWidget(data: UpdateWidgetInputDraft, ctx: z.RefinementCtx): void {
     if (!validateCollectionRef(data)) {
         ctx.addIssue({
             code: "custom",
@@ -200,7 +264,29 @@ export const updateWidgetSchema = widgetBaseSchema.partial().superRefine((data, 
             path: ["placements"],
         });
     }
-});
+
+    if (data.isActive === true && data.htmlContent !== undefined && !hasRenderableWidgetContent(data)) {
+        ctx.addIssue({
+            code: "custom",
+            message: "HTML content is required before publishing a widget.",
+            path: ["htmlContent"],
+        });
+    }
+
+    if (data.isActive === true && data.placements !== undefined && !hasActivePlacement(data.placements)) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Add at least one active placement before publishing this widget.",
+            path: ["placements"],
+        });
+    }
+}
+
+/** Schema for creating a new widget (POST /api/widgets) */
+export const createWidgetSchema = widgetBaseSchema.superRefine(validateCreateWidget);
+
+/** Schema for updating an existing widget (PUT /api/widgets/:id) */
+export const updateWidgetSchema = widgetUpdateBaseSchema.superRefine(validateUpdateWidget);
 
 export type CreateWidgetInput = z.infer<typeof createWidgetSchema>;
 export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;

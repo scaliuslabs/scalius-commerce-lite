@@ -16,6 +16,7 @@ import {
   WidgetPlacementSlot,
 } from "@/types/api-responses";
 import {
+  findDuplicateWidgetPlacementIndexes,
   isWidgetCollectionSlot,
   isWidgetPlacementSlotAllowedForScope,
 } from "@scalius/shared/widget-placement";
@@ -216,7 +217,7 @@ const widgetPlacementFormSchema = z.object({
 
 export const widgetFormSchema = z.object({
   name: z.string().min(3, 'Widget name must be at least 3 characters long.'),
-  htmlContent: z.string().min(1, 'HTML content cannot be empty.'),
+  htmlContent: z.string(),
   cssContent: z.string().optional(),
   isActive: z.boolean().default(true),
   displayTarget: z.enum(['homepage']).default('homepage'),
@@ -230,6 +231,19 @@ export const widgetFormSchema = z.object({
   referenceCollectionId: z.string().optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),
   placements: z.array(widgetPlacementFormSchema).default([]),
+}).superRefine((data, ctx) => {
+  for (const duplicate of findDuplicateWidgetPlacementIndexes(data.placements)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Duplicate placement target.",
+      path: ["placements", duplicate.duplicateIndex],
+    });
+    ctx.addIssue({
+      code: "custom",
+      message: "Duplicate placement target.",
+      path: ["placements", duplicate.firstIndex],
+    });
+  }
 });
 
 export type WidgetFormValues = z.infer<typeof widgetFormSchema>;

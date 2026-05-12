@@ -127,6 +127,35 @@ describe("widget placement validation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("allows inactive drafts without final HTML or placements", () => {
+    const widget = createWidgetSchema.parse({
+      name: "Launch Draft",
+      htmlContent: "",
+      isActive: false,
+      placements: [],
+    });
+
+    expect(widget.isActive).toBe(false);
+    expect(widget.htmlContent).toBe("");
+    expect(widget.placements).toEqual([]);
+  });
+
+  it("requires HTML and an active placement before publishing", () => {
+    const result = createWidgetSchema.safeParse({
+      name: "Launch Draft",
+      htmlContent: " ",
+      isActive: true,
+      placements: [],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join("."));
+      expect(paths).toContain("htmlContent");
+      expect(paths).toContain("placements");
+    }
+  });
+
   it("rejects page content slots on homepage placements", () => {
     const result = widgetPlacementInputSchema.safeParse({
       scope: WidgetPlacementScope.HOMEPAGE,

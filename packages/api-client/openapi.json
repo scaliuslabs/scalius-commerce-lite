@@ -27641,8 +27641,7 @@
                     "minLength": 3
                   },
                   "htmlContent": {
-                    "type": "string",
-                    "minLength": 1
+                    "type": "string"
                   },
                   "cssContent": {
                     "type": "string"
@@ -29873,8 +29872,7 @@
                     "minLength": 3
                   },
                   "htmlContent": {
-                    "type": "string",
-                    "minLength": 1
+                    "type": "string"
                   },
                   "cssContent": {
                     "type": "string"
@@ -29887,15 +29885,13 @@
                     }
                   },
                   "isActive": {
-                    "type": "boolean",
-                    "default": true
+                    "type": "boolean"
                   },
                   "displayTarget": {
                     "type": "string",
                     "enum": [
                       "homepage"
-                    ],
-                    "default": "homepage"
+                    ]
                   },
                   "placementRule": {
                     "type": "string",
@@ -29905,16 +29901,14 @@
                       "fixed_top_homepage",
                       "fixed_bottom_homepage",
                       "standalone"
-                    ],
-                    "default": "standalone"
+                    ]
                   },
                   "referenceCollectionId": {
                     "type": "string",
                     "nullable": true
                   },
                   "sortOrder": {
-                    "type": "integer",
-                    "default": 0
+                    "type": "integer"
                   },
                   "placements": {
                     "type": "array",
