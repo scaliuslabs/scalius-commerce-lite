@@ -27,6 +27,17 @@ describe("storefront image optimization URLs", () => {
     expect(optimized).toContain("/pages/combo-offer.webp");
   });
 
+  it("lets callers intentionally omit default dimensions", () => {
+    const optimized = getOptimizedImageUrl(
+      "https://cloud.scalius.com/pages/freeform.webp",
+      { width: 1280, height: null, quality: 85, format: "auto" },
+      { cdnBase, cdnHosts: ["cloud.scalius.com"], isDev: false },
+    );
+
+    expect(optimized).toContain("width=1280");
+    expect(optimized).not.toContain("height=");
+  });
+
   it("does not double-wrap an already optimized image", () => {
     const optimized =
       "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=400/image.webp";
