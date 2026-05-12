@@ -29,7 +29,7 @@ import { parseAiContext, AiContextSchema, type AiContext } from '@scalius/core/m
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
 import type { MediaFile, ProductSearchResult } from './widget-form/types';
 import { useAiContext } from './widget-form/useAiContext';
-import { useAiGenerator } from './widget-form/useAiGenerator';
+import { useAiGenerator, type AiPlacementContext } from './widget-form/useAiGenerator';
 import { useAiImprover } from './widget-form/useAiImprover';
 import { AiAssistant } from './widget-form/AiAssistant';
 import { WidgetDetails } from './widget-form/WidgetDetails';
@@ -177,6 +177,50 @@ function legacyProjectionFromPlacements(placements: WidgetPlacementFormValue[] |
   };
 }
 
+function getPlacementAiContext(placements: WidgetPlacementFormValue[] | undefined): AiPlacementContext {
+  const activePlacements = (placements ?? []).filter((placement) => placement.isActive);
+  const productIds = activePlacements
+    .filter((placement) => placement.scope === WidgetPlacementScope.PRODUCT && placement.scopeId)
+    .map((placement) => placement.scopeId as string);
+  const categoryIds = activePlacements
+    .filter((placement) => placement.scope === WidgetPlacementScope.CATEGORY && placement.scopeId)
+    .map((placement) => placement.scopeId as string);
+  const hasCollectionIntent = activePlacements.some(
+    (placement) =>
+      placement.scope === WidgetPlacementScope.COLLECTION ||
+      placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
+      placement.slot === WidgetPlacementSlot.AFTER_COLLECTION,
+  );
+  const hasScopedLandingIntent = activePlacements.some(
+    (placement) =>
+      placement.scope === WidgetPlacementScope.PAGE ||
+      placement.scope === WidgetPlacementScope.PRODUCT ||
+      placement.scope === WidgetPlacementScope.CATEGORY,
+  );
+  const suggestedPromptType = hasCollectionIntent
+    ? 'collection'
+    : hasScopedLandingIntent
+      ? 'landing-page'
+      : 'widget';
+  const summary = activePlacements.length === 0
+    ? 'Shortcode-only widget with no automatic storefront placement'
+    : activePlacements
+        .map((placement) => {
+          const target = placement.scopeId ? ` target ${placement.scopeId}` : '';
+          const anchor = placement.anchorId ? ` anchored to collection ${placement.anchorId}` : '';
+          return `${placement.scope} ${placement.slot}${target}${anchor}`;
+        })
+        .join('; ');
+
+  return {
+    productIds: Array.from(new Set(productIds)),
+    categoryIds: Array.from(new Set(categoryIds)),
+    summary,
+    suggestedPromptType,
+    hasActivePlacements: activePlacements.length > 0,
+  };
+}
+
 function getWidgetFormDefaultValues(
   widget: Widget | null | undefined,
   isCreateMode: boolean,
@@ -289,9 +333,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const [serverVersionAvailable, setServerVersionAvailable] = useState(false);
   const [appliedWidgetVersionKey, setAppliedWidgetVersionKey] = useState<string | null>(null);
 
-  // Initialize hooks
   const aiContext = useAiContext();
-  const aiGenerator = useAiGenerator(aiContext, widget, true);
+  const watchedPlacements = watch('placements') ?? [];
+  const aiPlacementContext = useMemo(
+    () => getPlacementAiContext(watchedPlacements),
+    [watchedPlacements],
+  );
+  const aiGenerator = useAiGenerator(aiContext, widget, true, aiPlacementContext);
   const aiImprover = useAiImprover({ aiContext, aiGenerator });
 
   const watchedHtmlContent = watch('htmlContent') || '';
@@ -702,7 +750,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
       // Build AI context with all state.
       const contextToSave: Partial<AiContext> = {
-        promptType: aiGenerator.promptType,
+        promptType: aiGenerator.effectivePromptType,
         preferredAiModel: aiGenerator.selectedModel,
         useStagedMode: aiGenerator.useStagedMode,
         savedImages: aiContext.selectedImages,
@@ -773,13 +821,19 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   ]);
 
   const isActive = watch('isActive');
+  const activePlacementCount = watchedPlacements.filter((placement) => placement.isActive).length;
+  const isActiveShortcodeOnly = isActive && activePlacementCount === 0;
   const shouldGuardNavigation = isDirty || Boolean(pendingPreviewContent);
   const primarySubmitLabel = isCreateMode
     ? isActive
-      ? 'Create Active Widget'
+      ? isActiveShortcodeOnly
+        ? 'Create Active Shortcode'
+        : 'Create Active Widget'
       : 'Create Draft'
     : isActive
-      ? submitButtonText
+      ? isActiveShortcodeOnly
+        ? 'Save Active Shortcode'
+        : submitButtonText
       : 'Save Draft';
 
   function applyContentToForm(content: WidgetContentDraft) {

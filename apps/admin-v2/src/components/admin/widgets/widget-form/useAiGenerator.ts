@@ -11,7 +11,7 @@ import {
   notifyAiContextWarnings,
   type AiContextBatchDetails,
 } from "./ai-context-warnings";
-import { limitImagesForModel } from "./ai-context-limits";
+import { AI_CONTEXT_LIMITS, limitImagesForModel } from "./ai-context-limits";
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
@@ -38,6 +38,14 @@ interface WidgetAiSettings {
   generation?: { stagedGenerationDefault?: boolean };
 }
 
+export type AiPlacementContext = {
+  productIds: string[];
+  categoryIds: string[];
+  summary: string;
+  suggestedPromptType: 'widget' | 'landing-page' | 'collection';
+  hasActivePlacements: boolean;
+};
+
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
@@ -61,6 +69,7 @@ export const useAiGenerator = (
   aiContext: ReturnType<typeof useAiContext>,
   widget: Widget | undefined | null,
   shouldLoadSettings = true,
+  placementContext?: AiPlacementContext,
 ) => {
   const [promptType, setPromptType] = useState<
     'widget' | 'landing-page' | 'collection'
@@ -134,6 +143,32 @@ export const useAiGenerator = (
     },
     [aiContext.selectedImages, selectedModel],
   );
+
+  const effectivePromptType = placementContext?.hasActivePlacements
+    ? placementContext.suggestedPromptType
+    : promptType;
+
+  const getMergedProductIds = useCallback(
+    () => Array.from(new Set([
+      ...aiContext.selectedProducts.map((p: ProductSearchResult) => p.id),
+      ...(placementContext?.productIds ?? []),
+    ])).slice(0, AI_CONTEXT_LIMITS.maxProducts),
+    [aiContext.selectedProducts, placementContext?.productIds],
+  );
+
+  const getMergedCategoryIds = useCallback(
+    () => Array.from(new Set([
+      ...aiContext.selectedCategories.map((c: Category) => c.id),
+      ...(placementContext?.categoryIds ?? []),
+    ])).slice(0, AI_CONTEXT_LIMITS.maxCategories),
+    [aiContext.selectedCategories, placementContext?.categoryIds],
+  );
+
+  const getPlacementAwarePrompt = useCallback(() => {
+    const prompt = userPrompt.trim();
+    if (!placementContext?.summary) return prompt;
+    return `${prompt}\n\nPlacement context: ${placementContext.summary}. Generate for this exact storefront placement and use only relevant calls to action.`;
+  }, [placementContext?.summary, userPrompt]);
 
   useEffect(() => {
     if (!shouldLoadSettings) return;
@@ -226,17 +261,17 @@ export const useAiGenerator = (
 
     try {
       // 1. Fetch system prompt (returns plain text)
-      const systemPrompt = await getAiPrompts({ data: { type: promptType } }) as string;
+      const systemPrompt = await getAiPrompts({ data: { type: effectivePromptType } }) as string;
       if (!isActiveGenerationRun(run)) return;
       if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
 
       // 2. Fetch context details
       const contextData = await getAiContextBatchDetails({
         data: {
-          productIds: aiContext.selectedProducts.map((p: ProductSearchResult) => p.id),
+          productIds: getMergedProductIds(),
           categoryIds: aiContext.allCategoriesSelected
             ? undefined
-            : aiContext.selectedCategories.map((c: Category) => c.id),
+            : getMergedCategoryIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
       }) as AiContextBatchDetails;
@@ -250,7 +285,7 @@ export const useAiGenerator = (
 
       const promptResult = await generateStructuredPrompt({
         systemPrompt,
-        userPrompt: userPrompt,
+        userPrompt: getPlacementAwarePrompt(),
         selectedImages,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
@@ -380,15 +415,15 @@ export const useAiGenerator = (
 
     const toastId = toast.loading("Preparing standalone prompt...");
     try {
-      const systemPrompt = await getAiPrompts({ data: { type: promptType } }) as string;
+      const systemPrompt = await getAiPrompts({ data: { type: effectivePromptType } }) as string;
       if (!systemPrompt) throw new Error("Could not fetch system prompt.");
 
       const contextData = await getAiContextBatchDetails({
         data: {
-          productIds: aiContext.selectedProducts.map((p: ProductSearchResult) => p.id),
+          productIds: getMergedProductIds(),
           categoryIds: aiContext.allCategoriesSelected
             ? undefined
-            : aiContext.selectedCategories.map((c: Category) => c.id),
+            : getMergedCategoryIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
       }) as AiContextBatchDetails;
@@ -397,7 +432,7 @@ export const useAiGenerator = (
 
       const combinedPrompt = await generateCompletePrompt({
         systemPrompt,
-        userPrompt: userPrompt,
+        userPrompt: getPlacementAwarePrompt(),
         selectedImages,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
@@ -447,6 +482,7 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
 
   return {
     promptType,
+    effectivePromptType,
     setPromptType,
     userPrompt,
     setUserPrompt,
