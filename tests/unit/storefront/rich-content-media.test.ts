@@ -52,6 +52,33 @@ describe("rich content image optimization behavior", () => {
     );
   });
 
+  it("marks the first priority widget image as eager with larger candidates", () => {
+    const html =
+      '<section><img src="https://cloud.scalius.com/widgets/hero.jpg" alt="Hero"><img src="https://cloud.scalius.com/widgets/secondary.jpg" alt="Secondary"></section>';
+
+    const optimized = optimizeRichContentImages(html, { priority: true });
+
+    expect(optimized).toContain("width=1280");
+    expect(optimized).toContain(" 1920w");
+    expect(optimized).toContain('sizes="100vw"');
+    expect(optimized).toContain('loading="eager"');
+    expect(optimized).toContain('fetchpriority="high"');
+    expect(optimized).toContain('loading="lazy"');
+  });
+
+  it("normalizes stale image loading attributes", () => {
+    const html =
+      '<img src="https://cloud.scalius.com/widgets/hero.jpg" loading="lazy" fetchpriority="low" decoding="sync" alt="Hero">';
+
+    const optimized = optimizeRichContentImages(html, { priority: true });
+
+    expect(optimized).toContain('loading="eager"');
+    expect(optimized).toContain('fetchpriority="high"');
+    expect(optimized).toContain('decoding="async"');
+    expect(optimized).not.toContain('fetchpriority="low"');
+    expect(optimized.match(/fetchpriority=/g)).toHaveLength(1);
+  });
+
   it("optimizes widget CSS url() images without rewriting fonts", () => {
     const css = [
       ".hero { background-image: url('https://cloud.scalius.com/widgets/bg.webp'); }",
@@ -66,5 +93,15 @@ describe("rich content image optimization behavior", () => {
     expect(optimized).toContain(
       "src: url('https://cloud.scalius.com/fonts/site.woff2')",
     );
+  });
+
+  it("does not route SVG assets through Cloudflare image resizing", () => {
+    const html = '<img src="https://cloud.scalius.com/widgets/logo.svg" alt="Logo">';
+    const css = ".logo { background-image: url('https://cloud.scalius.com/widgets/logo.svg'); }";
+
+    const optimizedHtml = optimizeRichContentImages(html);
+    expect(optimizedHtml).not.toContain("/cdn-cgi/image/");
+    expect(optimizedHtml).not.toContain("srcset=");
+    expect(optimizeCssImageUrls(css)).not.toContain("/cdn-cgi/image/");
   });
 });

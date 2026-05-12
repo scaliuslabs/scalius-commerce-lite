@@ -7,12 +7,14 @@ interface Props extends WidgetPlacementZone {
   widgets: ApiWidget[];
   class?: string;
   itemClass?: string;
+  priority?: boolean;
 }
 
 const {
   widgets,
   class: className = "",
   itemClass = "",
+  priority = false,
   ...zone
 } = Astro.props;
 const zoneWidgets = getWidgetsForZone(widgets, zone);
@@ -21,8 +23,12 @@ const zoneWidgets = getWidgetsForZone(widgets, zone);
 {
   zoneWidgets.length > 0 && (
     <div class:list={["widget-placement-zone", className]}>
-      {zoneWidgets.map((widget) => (
-        <WidgetBlock widget={widget} class={itemClass} />
+      {zoneWidgets.map((widget, index) => (
+        <WidgetBlock
+          widget={widget}
+          class={itemClass}
+          priority={priority && index === 0}
+        />
       ))}
     </div>
   )
