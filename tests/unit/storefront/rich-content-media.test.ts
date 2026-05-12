@@ -32,6 +32,26 @@ describe("rich content image optimization behavior", () => {
     );
   });
 
+  it("optimizes picture source srcset candidates while preserving descriptors", () => {
+    const html = [
+      "<picture>",
+      '<source media="(min-width: 768px)" srcset="https://cloud.scalius.com/widgets/hero-large.webp 1200w, https://cloud.scalius.com/widgets/hero-large@2x.webp 2x">',
+      '<img src="https://cloud.scalius.com/widgets/hero.webp" alt="Hero">',
+      "</picture>",
+    ].join("");
+
+    const optimized = optimizeRichContentImages(html);
+
+    expect(optimized).toContain(
+      'srcset="https://cloud.scalius.com/cdn-cgi/image/',
+    );
+    expect(optimized).toContain(" 1200w");
+    expect(optimized).toContain(" 2x");
+    expect(optimized).not.toContain(
+      'srcset="https://cloud.scalius.com/widgets/',
+    );
+  });
+
   it("optimizes widget CSS url() images without rewriting fonts", () => {
     const css = [
       ".hero { background-image: url('https://cloud.scalius.com/widgets/bg.webp'); }",

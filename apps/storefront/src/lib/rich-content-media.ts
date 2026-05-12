@@ -2,7 +2,10 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { getOptimizedImageUrl } from "./image-optimizer";
 
 const IMG_TAG_RE = /<img\b([^>]*)>/gi;
+const SOURCE_TAG_RE = /<source\b([^>]*)>/gi;
 const SRC_ATTR_RE = /\s+src\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
+const SRCSET_ATTR_RE =
+  /\s+srcset\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
 const MANAGED_ATTR_RE =
   /\s+(?:src|srcset|sizes|loading|decoding)\s*=\s*("([^"]*)"|'([^']*)'|[^\s"'=<>`]+)/gi;
 const VOID_ATTR_RE = /\s+(?:loading|decoding)(?=\s|>|$)/gi;
@@ -37,6 +40,74 @@ function responsiveVariant(src: string, width: number): string {
     quality: width <= 400 ? 80 : 85,
     format: "auto",
     fit: "scale-down",
+  });
+}
+
+function getSrcsetCandidateWidth(descriptor: string): number {
+  const width = descriptor
+    .split(/\s+/)
+    .map((part) => part.match(/^(\d+)w$/i)?.[1])
+    .find(Boolean);
+  return width ? Number(width) : 1200;
+}
+
+function optimizeSrcsetValue(srcset: string): string {
+  return srcset
+    .split(",")
+    .map((candidate) => {
+      const trimmed = candidate.trim();
+      if (!trimmed) return "";
+
+      const [src, ...descriptors] = trimmed.split(/\s+/);
+      if (!src || shouldSkipImage(src)) return trimmed;
+
+      const descriptor = descriptors.join(" ");
+      const optimized = responsiveVariant(
+        src,
+        getSrcsetCandidateWidth(descriptor),
+      );
+
+      if (!optimized || optimized === src) return trimmed;
+      return descriptor ? `${optimized} ${descriptor}` : optimized;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function optimizeSourceTags(html: string): string {
+  return html.replace(SOURCE_TAG_RE, (tag, attrs: string) => {
+    const srcsetMatch = attrs.match(SRCSET_ATTR_RE);
+    const srcMatch = attrs.match(SRC_ATTR_RE);
+
+    if (!srcsetMatch && !srcMatch) return tag;
+
+    let nextAttrs = attrs;
+
+    if (srcsetMatch) {
+      const originalSrcset = readAttributeValue(srcsetMatch);
+      const optimizedSrcset = optimizeSrcsetValue(originalSrcset);
+      if (optimizedSrcset !== originalSrcset) {
+        nextAttrs = nextAttrs.replace(
+          SRCSET_ATTR_RE,
+          ` srcset="${escapeHtml(optimizedSrcset)}"`,
+        );
+      }
+    }
+
+    if (srcMatch) {
+      const originalSrc = readAttributeValue(srcMatch);
+      if (!shouldSkipImage(originalSrc)) {
+        const optimizedSrc = responsiveVariant(originalSrc, 1200);
+        if (optimizedSrc && optimizedSrc !== originalSrc) {
+          nextAttrs = nextAttrs.replace(
+            SRC_ATTR_RE,
+            ` src="${escapeHtml(optimizedSrc)}"`,
+          );
+        }
+      }
+    }
+
+    return `<source${nextAttrs}>`;
   });
 }
 
@@ -82,7 +153,7 @@ export function optimizeRichContentImages(html: string): string {
     return `<img${managedPrefix} src="${escapeHtml(src)}" srcset="${escapeHtml(srcset)}" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 75vw, 900px" loading="lazy" decoding="async">`;
   });
 
-  return optimizeCssImageUrls(optimizedHtml);
+  return optimizeCssImageUrls(optimizeSourceTags(optimizedHtml));
 }
 
 /**

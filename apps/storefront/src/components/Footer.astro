@@ -10,6 +10,10 @@ import type {
 import RecursiveFooterLink from "./RecursiveFooterLink.astro";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import {
+  withOptimizedSocialIcons,
+  type SerializedSocialLink,
+} from "@/lib/serialized-media";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 interface Props {
@@ -37,14 +41,7 @@ const optimizedFavicon =
 const copyrightText = footerData?.copyrightText || "";
 const rawMenus: FooterMenu[] = footerData?.menus || [];
 const socialRaw: SocialLink[] = footerData?.social || [];
-
-const social = socialRaw.map((item) => {
-  if (item.iconUrl && !item.iconUrl.endsWith(".svg")) {
-    const optimized = getOptimizedImageUrl(item.iconUrl, { width: 20, height: 20 });
-    return { ...item, optimizedIconUrl: optimized };
-  }
-  return { ...item, optimizedIconUrl: item.iconUrl };
-});
+const social = withOptimizedSocialIcons(socialRaw);
 
 /**
  * Convert flat menu structure to nested.
@@ -169,7 +166,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         social.length > 0 && (
           <div class="lg:col-span-12 lg:hidden flex justify-center mt-8 w-full">
             <div class="flex items-center gap-4 flex-wrap">
-              {social.map((item: SocialLink & { optimizedIconUrl?: string | null }) => {
+              {social.map((item: SerializedSocialLink) => {
                 if (!item.url) return null;
                 const displayTitle = item.label || item.platform || "Social";
                 const href = item.url.startsWith("http")
@@ -221,7 +218,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         {
           social.length > 0 && (
             <div class="hidden lg:flex items-center gap-5 flex-wrap">
-              {social.map((item: SocialLink & { optimizedIconUrl?: string | null }) => {
+              {social.map((item: SerializedSocialLink) => {
                 if (!item.url) return null;
                 const displayTitle = item.label || item.platform || "Social";
                 const href = item.url.startsWith("http")
