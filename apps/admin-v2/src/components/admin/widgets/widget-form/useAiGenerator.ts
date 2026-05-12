@@ -7,6 +7,10 @@ import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
 import { extractChatCompletionContent } from './ai-stream';
+import {
+  notifyAiContextWarnings,
+  type AiContextBatchDetails,
+} from "./ai-context-warnings";
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
@@ -141,7 +145,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
             : aiContext.selectedCategories.map((c: Category) => c.id),
           allCategories: aiContext.allCategoriesSelected,
         },
-      }) as { products?: unknown[]; categories?: unknown[] };
+      }) as AiContextBatchDetails;
+      notifyAiContextWarnings(contextData);
 
       // 3. Generate structured prompt with caching support
       const currentModel = aiModels.find(m => m.id === selectedModel);
@@ -279,7 +284,8 @@ export const useAiGenerator = (aiContext: ReturnType<typeof useAiContext>, widge
             : aiContext.selectedCategories.map((c: Category) => c.id),
           allCategories: aiContext.allCategoriesSelected,
         },
-      }) as { products?: unknown[]; categories?: unknown[] };
+      }) as AiContextBatchDetails;
+      notifyAiContextWarnings(contextData);
 
       const combinedPrompt = await generateCompletePrompt({
         systemPrompt,

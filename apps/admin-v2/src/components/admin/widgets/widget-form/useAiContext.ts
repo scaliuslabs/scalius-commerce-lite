@@ -1,10 +1,15 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { Category } from '@/types/api-responses';
 import type { MediaFile, ProductSearchResult } from './types';
 import { getProducts, getCategories } from "@/lib/api.functions";
+import {
+  AI_CONTEXT_LIMITS,
+  appendUniqueWithinLimit,
+  uniqueByLimit,
+} from "./ai-context-limits";
 
 interface RawProduct {
   id: string;
@@ -31,10 +36,21 @@ interface AiContextSelection {
 export const useAiContext = (
   initialContext?: AiContextSelection,
 ) => {
-  const [selectedImages, setSelectedImages] = useState<MediaFile[]>(initialContext?.images || []);
-  const [selectedProducts, setSelectedProducts] = useState<ProductSearchResult[]>(initialContext?.products || []);
-  const [selectedCategories, setSelectedCategories] = useState<Category[]>(initialContext?.categories || []);
+  const [selectedImages, setSelectedImages] = useState<MediaFile[]>(() =>
+    uniqueByLimit(initialContext?.images ?? [], (image) => image.url, AI_CONTEXT_LIMITS.maxImages),
+  );
+  const [selectedProducts, setSelectedProducts] = useState<ProductSearchResult[]>(() =>
+    uniqueByLimit(initialContext?.products ?? [], (product) => product.id, AI_CONTEXT_LIMITS.maxProducts),
+  );
+  const [selectedCategories, setSelectedCategories] = useState<Category[]>(() =>
+    uniqueByLimit(initialContext?.categories ?? [], (category) => category.id, AI_CONTEXT_LIMITS.maxCategories),
+  );
   const [allCategoriesSelected, setAllCategoriesSelected] = useState(initialContext?.allCategories || false);
+  const productBrowseRequestId = useRef(0);
+  const productSearchRequestId = useRef(0);
+  const categoryRequestId = useRef(0);
+  const pendingProductRequests = useRef(0);
+  const pendingCategoryRequests = useRef(0);
 
   // Products state
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -56,14 +72,36 @@ export const useAiContext = (
   const [isFetchingCategories, setIsFetchingCategories] = useState(false);
   const debouncedCategorySearch = useDebounce(categorySearchQuery, 300);
 
+  const startProductRequest = useCallback(() => {
+    pendingProductRequests.current += 1;
+    setIsFetchingProducts(true);
+  }, []);
+
+  const finishProductRequest = useCallback(() => {
+    pendingProductRequests.current = Math.max(0, pendingProductRequests.current - 1);
+    setIsFetchingProducts(pendingProductRequests.current > 0);
+  }, []);
+
+  const startCategoryRequest = useCallback(() => {
+    pendingCategoryRequests.current += 1;
+    setIsFetchingCategories(true);
+  }, []);
+
+  const finishCategoryRequest = useCallback(() => {
+    pendingCategoryRequests.current = Math.max(0, pendingCategoryRequests.current - 1);
+    setIsFetchingCategories(pendingCategoryRequests.current > 0);
+  }, []);
+
   // ─── Products: browse (no search) ───────────────────────────────────
   const fetchProductsForSelector = useCallback(async (pageToFetch: number) => {
-    if (isFetchingProducts) return;
-    setIsFetchingProducts(true);
+    const requestId = ++productBrowseRequestId.current;
+    startProductRequest();
     try {
       const data = await getProducts({
         data: { page: pageToFetch, limit: PAGE_SIZE, sort: "updatedAt", order: "desc" },
       }) as Record<string, unknown>;
+      if (requestId !== productBrowseRequestId.current) return;
+
       const newProducts: ProductSearchResult[] = ((data.products || []) as RawProduct[]).map((p) => ({
         id: p.id,
         name: p.name,
@@ -84,18 +122,21 @@ export const useAiContext = (
       if (import.meta.env.DEV) console.error("Failed to fetch latest products:", error);
       toast.error("Could not load products.");
     } finally {
-      setIsFetchingProducts(false);
+      finishProductRequest();
     }
-  }, [isFetchingProducts]);
+  }, [finishProductRequest, startProductRequest]);
 
   // ─── Products: search with pagination ───────────────────────────────
   const fetchSearchProducts = useCallback(async (query: string, pageToFetch: number) => {
-    if (isFetchingProducts) return;
-    setIsFetchingProducts(true);
+    const normalizedQuery = query.trim();
+    const requestId = ++productSearchRequestId.current;
+    startProductRequest();
     try {
       const data = await getProducts({
-        data: { search: query, page: pageToFetch, limit: PAGE_SIZE },
+        data: { search: normalizedQuery, page: pageToFetch, limit: PAGE_SIZE },
       }) as Record<string, unknown>;
+      if (requestId !== productSearchRequestId.current) return;
+
       const newProducts: ProductSearchResult[] = ((data.products || []) as RawProduct[]).map((p) => ({
         id: p.id,
         name: p.name,
@@ -115,17 +156,18 @@ export const useAiContext = (
     } catch (error) {
       if (import.meta.env.DEV) console.error("Failed to search products:", error);
     } finally {
-      setIsFetchingProducts(false);
+      finishProductRequest();
     }
-  }, [isFetchingProducts]);
+  }, [finishProductRequest, startProductRequest]);
 
   const loadMoreProducts = useCallback(() => {
+    if (isFetchingProducts) return;
     if (debouncedProductSearch.trim()) {
       fetchSearchProducts(debouncedProductSearch, productSearchPage + 1);
     } else {
       fetchProductsForSelector(productPage + 1);
     }
-  }, [debouncedProductSearch, productSearchPage, productPage, fetchSearchProducts, fetchProductsForSelector]);
+  }, [debouncedProductSearch, productSearchPage, productPage, fetchSearchProducts, fetchProductsForSelector, isFetchingProducts]);
 
   useEffect(() => {
     if (isProductPopoverOpen && latestProducts.length === 0) {
@@ -140,6 +182,7 @@ export const useAiContext = (
       setHasMoreSearchProducts(false);
       fetchSearchProducts(debouncedProductSearch, 1);
     } else {
+      productSearchRequestId.current += 1;
       setProductSearchResults([]);
       setProductSearchPage(1);
       setHasMoreSearchProducts(false);
@@ -148,15 +191,18 @@ export const useAiContext = (
 
   // ─── Categories: paginated fetch ────────────────────────────────────
   const fetchCategoriesPage = useCallback(async (pageToFetch: number, search?: string) => {
-    if (isFetchingCategories) return;
-    setIsFetchingCategories(true);
+    const normalizedSearch = search?.trim() || undefined;
+    const requestId = ++categoryRequestId.current;
+    startCategoryRequest();
     try {
       const params: { page: number; limit: number; search?: string } = {
         page: pageToFetch,
         limit: PAGE_SIZE,
       };
-      if (search) params.search = search;
+      if (normalizedSearch) params.search = normalizedSearch;
       const data = await getCategories({ data: params }) as Record<string, unknown>;
+      if (requestId !== categoryRequestId.current) return;
+
       const newCategories = (data.categories || []) as Category[];
       setAllCategoriesList((prev) => pageToFetch === 1 ? newCategories : [...prev, ...newCategories]);
       setCategoryPage(pageToFetch);
@@ -170,19 +216,15 @@ export const useAiContext = (
     } catch (error) {
       if (import.meta.env.DEV) console.error("Failed to fetch categories:", error);
     } finally {
-      setIsFetchingCategories(false);
+      finishCategoryRequest();
     }
-  }, [isFetchingCategories]);
+  }, [finishCategoryRequest, startCategoryRequest]);
 
   const loadMoreCategories = useCallback(() => {
+    if (isFetchingCategories) return;
     const search = debouncedCategorySearch.trim() || undefined;
     fetchCategoriesPage(categoryPage + 1, search);
-  }, [categoryPage, debouncedCategorySearch, fetchCategoriesPage]);
-
-  // Initial categories load
-  useEffect(() => {
-    fetchCategoriesPage(1);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [categoryPage, debouncedCategorySearch, fetchCategoriesPage, isFetchingCategories]);
 
   // Category search effect
   useEffect(() => {
@@ -195,14 +237,25 @@ export const useAiContext = (
 
   // ─── Image handlers ─────────────────────────────────────────────────
   const handleImageSelect = (file: MediaFile) => {
-    if (!selectedImages.some((img) => img.url === file.url)) {
-      setSelectedImages((prev) => [...prev, file]);
+    if (selectedImages.some((img) => img.url === file.url)) return;
+    if (selectedImages.length >= AI_CONTEXT_LIMITS.maxImages) {
+      toast.error(`Widget AI can use up to ${AI_CONTEXT_LIMITS.maxImages} images.`);
+      return;
     }
+    setSelectedImages((prev) => [...prev, file]);
   };
 
   const handleMultiImageSelect = (files: MediaFile[]) => {
-    const newImages = files.filter((file) => !selectedImages.some((img) => img.url === file.url));
-    setSelectedImages((prev) => [...prev, ...newImages]);
+    const result = appendUniqueWithinLimit(
+      selectedImages,
+      files,
+      (file) => file.url,
+      AI_CONTEXT_LIMITS.maxImages,
+    );
+    setSelectedImages(result.next);
+    if (result.skipped > 0) {
+      toast.error(`Skipped ${result.skipped} image${result.skipped === 1 ? "" : "s"} over the ${AI_CONTEXT_LIMITS.maxImages}-image limit.`);
+    }
   };
 
   const removeImage = (imageUrl: string) => {
@@ -211,9 +264,12 @@ export const useAiContext = (
 
   // ─── Product handlers ──────────────────────────────────────────────
   const handleProductSelect = (product: ProductSearchResult) => {
-    if (!selectedProducts.some((p) => p.id === product.id)) {
-      setSelectedProducts((prev) => [...prev, product]);
+    if (selectedProducts.some((p) => p.id === product.id)) return;
+    if (selectedProducts.length >= AI_CONTEXT_LIMITS.maxProducts) {
+      toast.error(`Widget AI can use up to ${AI_CONTEXT_LIMITS.maxProducts} products.`);
+      return;
     }
+    setSelectedProducts((prev) => [...prev, product]);
   };
 
   const removeProduct = (productId: string) => {
@@ -222,11 +278,15 @@ export const useAiContext = (
 
   // ─── Category handlers ─────────────────────────────────────────────
   const handleCategorySelect = (category: Category) => {
-    if (!selectedCategories.some((c) => c.id === category.id)) {
-      setSelectedCategories((prev) => [...prev, category]);
-    } else {
+    if (selectedCategories.some((c) => c.id === category.id)) {
       removeCategory(category.id);
+      return;
     }
+    if (selectedCategories.length >= AI_CONTEXT_LIMITS.maxCategories) {
+      toast.error(`Widget AI can use up to ${AI_CONTEXT_LIMITS.maxCategories} categories.`);
+      return;
+    }
+    setSelectedCategories((prev) => [...prev, category]);
   };
 
   const removeCategory = (categoryId: string) => {
@@ -241,9 +301,23 @@ export const useAiContext = (
   };
 
   const replaceContext = useCallback((context: AiContextSelection = {}) => {
-    setSelectedImages(context.images ?? []);
-    setSelectedProducts(context.products ?? []);
-    setSelectedCategories(context.allCategories ? [] : context.categories ?? []);
+    const nextImages = uniqueByLimit(context.images ?? [], (image) => image.url, AI_CONTEXT_LIMITS.maxImages);
+    const nextProducts = uniqueByLimit(context.products ?? [], (product) => product.id, AI_CONTEXT_LIMITS.maxProducts);
+    const nextCategories = context.allCategories
+      ? []
+      : uniqueByLimit(context.categories ?? [], (category) => category.id, AI_CONTEXT_LIMITS.maxCategories);
+
+    if (
+      nextImages.length < (context.images?.length ?? 0) ||
+      nextProducts.length < (context.products?.length ?? 0) ||
+      nextCategories.length < (context.allCategories ? 0 : context.categories?.length ?? 0)
+    ) {
+      toast.warning("Saved AI context was trimmed to current widget limits.");
+    }
+
+    setSelectedImages(nextImages);
+    setSelectedProducts(nextProducts);
+    setSelectedCategories(nextCategories);
     setAllCategoriesSelected(Boolean(context.allCategories));
   }, []);
 
@@ -289,5 +363,8 @@ export const useAiContext = (
     hasMoreCategories,
     loadMoreCategories,
     isFetchingCategories,
+    maxImages: AI_CONTEXT_LIMITS.maxImages,
+    maxProducts: AI_CONTEXT_LIMITS.maxProducts,
+    maxCategories: AI_CONTEXT_LIMITS.maxCategories,
   };
 };
