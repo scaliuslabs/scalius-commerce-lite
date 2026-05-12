@@ -1,4 +1,3 @@
-import * as cssTree from "css-tree";
 import type {
   Atrule,
   Declaration,
@@ -7,6 +6,7 @@ import type {
   StyleSheet,
   Value,
 } from "css-tree";
+import cssTree from "./css-tree-runtime";
 
 const CONTROL_CHARS_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B\u200C\u200D\uFEFF]/g;
 const STYLE_TAG_RE = /<\/?\s*style\b[^>]*>/gi;
