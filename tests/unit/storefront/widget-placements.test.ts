@@ -104,7 +104,7 @@ describe("widget placement grouping", () => {
     ).toEqual(["landing"]);
   });
 
-  it("matches product and category scoped placements by entity id", () => {
+  it("matches product, category, and collection scoped placements by entity id", () => {
     const widgets = [
       widget("product-promo", {
         id: "wpl_product",
@@ -128,6 +128,17 @@ describe("widget placement grouping", () => {
         sortOrder: 1,
         isActive: true,
       }),
+      widget("collection-hero", {
+        id: "wpl_collection",
+        widgetId: "collection-hero",
+        scope: "collection",
+        scopeId: "col_1",
+        slot: "top",
+        anchorType: null,
+        anchorId: null,
+        sortOrder: 1,
+        isActive: true,
+      }),
     ];
 
     expect(
@@ -145,5 +156,13 @@ describe("widget placement grouping", () => {
         slot: "before_content",
       }).map((item) => item.id),
     ).toEqual(["category-promo"]);
+
+    expect(
+      getWidgetsForZone(widgets, {
+        scope: "collection",
+        scopeId: "col_1",
+        slot: "top",
+      }).map((item) => item.id),
+    ).toEqual(["collection-hero"]);
   });
 });

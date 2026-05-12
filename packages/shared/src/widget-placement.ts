@@ -17,6 +17,7 @@ export const SUPPORTED_WIDGET_PLACEMENT_SCOPES = [
   "page",
   "product",
   "category",
+  "collection",
 ] as const;
 
 export type SupportedWidgetPlacementScopeValue =

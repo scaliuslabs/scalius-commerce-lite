@@ -148,6 +148,7 @@ const widgetPlacementFormSchema = z.object({
     WidgetPlacementScope.PAGE,
     WidgetPlacementScope.PRODUCT,
     WidgetPlacementScope.CATEGORY,
+    WidgetPlacementScope.COLLECTION,
   ]).default(WidgetPlacementScope.HOMEPAGE),
   scopeId: z.string().optional().nullable(),
   slot: z.enum([

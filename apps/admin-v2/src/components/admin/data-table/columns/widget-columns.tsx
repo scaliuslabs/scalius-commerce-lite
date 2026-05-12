@@ -46,6 +46,9 @@ function placementTargetLabel(
   if (placement.scope === "category" && placement.scopeId) {
     return opts.getCategoryName(placement.scopeId) ?? placement.scopeId;
   }
+  if (placement.scope === "collection" && placement.scopeId) {
+    return opts.getCollectionName(placement.scopeId) ?? placement.scopeId;
+  }
   if (placement.anchorType === "collection" && placement.anchorId) {
     return opts.getCollectionName(placement.anchorId) ?? placement.anchorId;
   }
