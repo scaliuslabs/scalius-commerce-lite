@@ -30,6 +30,7 @@ import {
   stagedPlanOutputSchema,
   widgetOutputSchema,
 } from "./ai-response-validation";
+import { normalizeMessages } from "./ai-message-normalization";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -86,10 +87,6 @@ const generateStagedSchema = z.object({
     .max(GENERATION_CONFIG.stagedGeneration.maxSections)
     .optional(),
 });
-
-type AiUserPart =
-  | { type: "text"; text: string }
-  | { type: "image"; image: URL; mediaType?: string };
 
 type GenerateTextOptions = Parameters<typeof generateText>[0];
 type GenerationUsage = {
@@ -249,76 +246,6 @@ function getLanguageModel(
   }
   const workersai = createWorkersAI({ accountId, apiKey });
   return workersai(modelId);
-}
-
-function contentPartToText(part: unknown): string {
-  if (!part || typeof part !== "object") return "";
-  const data = part as Record<string, unknown>;
-  if (typeof data.text === "string") return data.text;
-  if (
-    data.image_url &&
-    typeof data.image_url === "object" &&
-    typeof (data.image_url as Record<string, unknown>).url === "string"
-  ) {
-    return `[Image: ${(data.image_url as Record<string, unknown>).url}]`;
-  }
-  if (typeof data.image === "string") return `[Image: ${data.image}]`;
-  return "";
-}
-
-function normalizeContentParts(parts: unknown[]): AiUserPart[] {
-  return parts
-    .map((part) => {
-      if (!part || typeof part !== "object") return null;
-      const data = part as Record<string, unknown>;
-      if (data.type === "text" && typeof data.text === "string") {
-        return { type: "text" as const, text: data.text };
-      }
-      const imageUrl =
-        data.type === "image_url" &&
-        data.image_url &&
-        typeof data.image_url === "object" &&
-        typeof (data.image_url as Record<string, unknown>).url === "string"
-          ? String((data.image_url as Record<string, unknown>).url)
-          : data.type === "image" && typeof data.image === "string"
-            ? data.image
-            : "";
-      if (imageUrl) {
-        try {
-          return {
-            type: "image" as const,
-            image: new URL(imageUrl),
-            mediaType:
-              typeof data.mediaType === "string" ? data.mediaType : undefined,
-          };
-        } catch {
-          return { type: "text" as const, text: `[Image: ${imageUrl}]` };
-        }
-      }
-      const text = contentPartToText(data);
-      return text ? { type: "text" as const, text } : null;
-    })
-    .filter(Boolean) as AiUserPart[];
-}
-
-function normalizeMessages(messages: Array<z.infer<typeof messageSchema>>): ModelMessage[] {
-  return messages.map((message) => {
-    if (typeof message.content === "string") {
-      return { role: message.role, content: message.content } as ModelMessage;
-    }
-
-    if (message.role === "user") {
-      return {
-        role: "user",
-        content: normalizeContentParts(message.content),
-      } as ModelMessage;
-    }
-
-    return {
-      role: message.role,
-      content: message.content.map(contentPartToText).filter(Boolean).join("\n"),
-    } as ModelMessage;
-  });
 }
 
 function promptToMessages(
