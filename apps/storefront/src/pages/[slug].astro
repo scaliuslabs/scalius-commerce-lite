@@ -5,6 +5,7 @@
 import Layout from "../layouts/Layout.astro";
 import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import { getPageRenderData, getLayoutData } from "../lib/api";
+import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
 import {
@@ -67,7 +68,10 @@ const page = pageRenderData?.page ?? null;
 if (!page) {
   return new Response(null, { status: 404 });
 }
-const pageWidgets = pageRenderData?.widgets ?? [];
+let pageWidgets = pageRenderData?.widgets ?? [];
+if (pageWidgets.length === 0) {
+  pageWidgets = (await getActiveWidgetsForScope("page", page.id)) ?? [];
+}
 
 const title = page.metaTitle || page.title;
 const description = page.metaDescription || "";
