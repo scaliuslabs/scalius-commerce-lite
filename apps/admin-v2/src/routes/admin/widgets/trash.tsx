@@ -46,15 +46,21 @@ function WidgetsTrashPage() {
   const restoreMutation = useRestoreWidget();
   const bulkDeleteMutation = useBulkDeleteWidgets();
 
-  // Collections come from the widgets response
-  const collectionsRef = useMemo(() => ({ current: [] as Array<{ id: string; name: string }> }), []);
+  const metadataRef = useMemo(
+    () => ({
+      collections: new Map<string, string>(),
+      pages: new Map<string, string>(),
+    }),
+    [],
+  );
 
   // Column definitions
   const columns = useMemo(
     () =>
       getWidgetColumns({
         showTrashed: true,
-        collections: collectionsRef.current,
+        getCollectionName: (id) => metadataRef.collections.get(id) ?? null,
+        getPageTitle: (id) => metadataRef.pages.get(id) ?? null,
         onEdit: (id) =>
           void navigate({ to: `/admin/widgets/${id}` as string }),
         onDelete: (id) => deleteMutation.mutate(id),
@@ -62,7 +68,7 @@ function WidgetsTrashPage() {
         onPermanentDelete: (id) => permanentDeleteMutation.mutate(id),
         onCopyShortcode: () => {},
       }),
-    [navigate, deleteMutation, permanentDeleteMutation, restoreMutation, collectionsRef],
+    [navigate, deleteMutation, permanentDeleteMutation, restoreMutation, metadataRef],
   );
 
   // Data selector — client-side pagination for widgets
@@ -70,7 +76,12 @@ function WidgetsTrashPage() {
     (raw: unknown) => {
       const r = raw as WidgetListResponse;
       const allWidgets = (r.widgets ?? []) as Widget[];
-      collectionsRef.current = r.availableCollections ?? [];
+      metadataRef.collections = new Map(
+        (r.availableCollections ?? []).map((collection) => [collection.id, collection.name]),
+      );
+      metadataRef.pages = new Map(
+        (r.availablePages ?? []).map((page) => [page.id, page.title]),
+      );
 
       const filtered = search.search
         ? allWidgets.filter((w) =>
@@ -91,7 +102,7 @@ function WidgetsTrashPage() {
         pagination: { total, page: safePage, limit: search.limit, totalPages },
       };
     },
-    [search.search, search.page, search.limit, collectionsRef],
+    [search.search, search.page, search.limit, metadataRef],
   );
 
   const { table, isFetching, isLoading, selectedIds, clearSelection } =

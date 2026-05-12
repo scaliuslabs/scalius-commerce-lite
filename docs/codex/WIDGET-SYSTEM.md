@@ -46,7 +46,7 @@ The widget system is Scalius Commerce's merchant-facing storefront composition l
 
 ## Placement Architecture
 
-Widgets are reusable content blocks. Placement is a separate concern and now has a dedicated `widget_placements` table. The old `widgets.displayTarget`, `widgets.placementRule`, `widgets.referenceCollectionId`, and `widgets.sortOrder` columns remain only as a projection for current admin screens and existing response types.
+Widgets are reusable content blocks. Placement is a separate concern and now has a dedicated `widget_placements` table. The old `widgets.displayTarget`, `widgets.placementRule`, `widgets.referenceCollectionId`, and `widgets.sortOrder` columns remain only as a projection for response compatibility and sorting fallbacks.
 
 Canonical placement fields:
 
@@ -56,4 +56,11 @@ Canonical placement fields:
 - `anchorType` + `anchorId`: used when a placement is anchored to a collection or content region
 - `sortOrder` + `isActive`: placement-specific ordering and status
 
-Homepage rendering should read active homepage placements, join the reusable widget content, and project legacy placement rule fields only for the current storefront grouping helper. Landing pages should use page-scoped placements instead of saving `[widget]` shortcodes as the primary page-builder model.
+Current implementation notes:
+
+- Admin create/edit hydrates and saves canonical `placements[]`.
+- A widget with zero placements is shortcode/manual use only.
+- Homepage rendering reads canonical homepage placements and renders zones by `slot`/`anchorId`.
+- CMS page rendering reads canonical page-scoped placements through `/storefront/pages/slug/{slug}` and renders `top`, `before_content`, `after_content`, and `bottom` zones around the page body.
+- Shortcodes remain an escape hatch for exact inline placement, not the primary page-builder model.
+- Widget mutations invalidate both homepage and page render caches because one reusable widget can appear on either surface.

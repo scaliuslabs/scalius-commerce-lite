@@ -1,12 +1,14 @@
 // src/lib/api/pages.ts
 
 import { getConfiguredSdkClient } from "./client";
-import type { Page, PaginatedResponse } from "./types";
+import type { ApiWidget, Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
-import { unwrapData } from "./unwrap";
+import { unwrapData, unwrapEnvelope } from "./unwrap";
+import { BUILD_ID } from "@/config/build-id";
 import {
   getApiV1PagesSlugBySlug,
   getApiV1Pages,
+  getApiV1StorefrontPagesSlugBySlug,
 } from "@scalius/api-client/sdk";
 
 /**
@@ -35,6 +37,39 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
         return unwrapData<{ page: Page }>(data)?.page ?? null;
       } catch (error: unknown) {
         console.error(`Error fetching page by slug "${slug}":`, error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.LONG },
+  );
+}
+
+export interface PageRenderData {
+  page: Page;
+  widgets: ApiWidget[];
+}
+
+export async function getPageRenderData(
+  slug: string,
+): Promise<PageRenderData | null> {
+  if (!slug) {
+    console.error("getPageRenderData: slug is required.");
+    return null;
+  }
+
+  return withEdgeCache(
+    `page_render_${slug}_${BUILD_ID}`,
+    async () => {
+      try {
+        const { data, error } = await getApiV1StorefrontPagesSlugBySlug({
+          client: getConfiguredSdkClient(),
+          path: { slug },
+          headers: { "Cache-Control": "no-cache" },
+        });
+        if (error) return null;
+        return unwrapEnvelope<PageRenderData>(data);
+      } catch (error: unknown) {
+        console.error(`Error fetching render data for page "${slug}":`, error);
         return null;
       }
     },

@@ -13,6 +13,7 @@ import {
   categories,
   pages,
   settings,
+  WidgetPlacementScope,
   type Analytics,
 } from "@scalius/database/schema";
 import { eq, isNull, and, asc, sql } from "drizzle-orm";
@@ -23,7 +24,11 @@ import {
 } from "../../integrations/analytics";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
-import { getActiveHomepageWidgets } from "../widgets/widgets.service";
+import { getPublicPageBySlug } from "../pages/pages.service";
+import {
+  getActiveHomepageWidgets,
+  getActiveWidgetPlacements,
+} from "../widgets/widgets.service";
 import type { Database } from "@scalius/database/client";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -197,6 +202,20 @@ export async function getHomepageData(db: Database) {
     widgets: formattedWidgets,
     collections: formattedCollections,
   };
+}
+
+// ── CMS page render data ────────────────────────────────────────────────────
+
+export async function getPageRenderData(db: Database, slug: string) {
+  const page = await getPublicPageBySlug(db, slug);
+  if (!page) return null;
+
+  const widgets = await getActiveWidgetPlacements(db, {
+    scope: WidgetPlacementScope.PAGE,
+    scopeId: page.id,
+  });
+
+  return { page, widgets };
 }
 
 // ── Layout data ───────────────────────────────────────────────────────────────

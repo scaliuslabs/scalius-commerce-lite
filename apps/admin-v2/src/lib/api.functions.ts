@@ -903,6 +903,7 @@ export const getWidgets = createServerFn({ method: "GET" })
     return apiGet<{
       widgets: unknown[];
       availableCollections: unknown[];
+      availablePages?: unknown[];
     }>("/widgets", params);
   });
 
