@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for AI context (batch product/category details).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { inArray, eq, isNull } from "drizzle-orm";
+import { asc, inArray, eq, isNull } from "drizzle-orm";
 import {
     products,
     productImages,
@@ -78,7 +78,16 @@ const batchDetailsRoute = createRoute({
         body: { content: { "application/json": { schema: batchDetailsSchema } } }
     },
     responses: {
-        200: { description: "Batch details", content: { "application/json": { schema: successEnvelope(z.object({ products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number(), url: z.string(), buyNowUrl: z.string(), finalPrice: z.number() }).passthrough()), categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), url: z.string() }).passthrough()) })) } } },
+        200: { description: "Batch details", content: { "application/json": { schema: successEnvelope(z.object({
+            products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number(), url: z.string(), buyNowUrl: z.string(), finalPrice: z.number() }).passthrough()),
+            categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), url: z.string() }).passthrough()),
+            warnings: z.object({
+                productsTruncated: z.boolean(),
+                categoriesTruncated: z.boolean(),
+                maxProducts: z.number(),
+                maxCategories: z.number(),
+            }),
+        })) } } },
         ...errorResponses,
     }
 });
@@ -225,6 +234,7 @@ app.openapi(batchDetailsRoute, async (c) => {
                 .select()
                 .from(categories)
                 .where(isNull(categories.deletedAt))
+                .orderBy(asc(categories.name), asc(categories.id))
                 .limit(GENERATION_CONFIG.context.maxCategories);
         } else if (categoryIds.length > 0) {
             fetchedCategories = await db

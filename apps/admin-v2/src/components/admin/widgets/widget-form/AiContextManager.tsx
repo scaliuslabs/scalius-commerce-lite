@@ -20,7 +20,7 @@ import { MediaManager } from "../../media-manager";
 import { ImageIcon, Package, Tags, X, Check, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useAiContext } from "./useAiContext";
-import { getMaxImages } from "@scalius/core/modules/ai/ai-config";
+import { getEffectiveImageLimit } from "./ai-context-limits";
 import { toast } from "sonner";
 import type { MediaFile } from "./types";
 
@@ -64,9 +64,11 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
     hasMoreCategories,
     loadMoreCategories,
     isFetchingCategories,
+    maxProducts,
+    maxCategories,
   } = context;
 
-  const maxImagesForModel = selectedModel ? getMaxImages(selectedModel) : 10;
+  const maxImagesForModel = getEffectiveImageLimit(selectedModel);
 
   const addOneImage = (file: MediaFile) => {
     if (selectedImages.some((img) => img.url === file.url)) return;
@@ -113,7 +115,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
               className="w-full justify-start gap-2 h-9"
             >
               <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>Images ({selectedImages.length})</span>
+              <span>Images ({selectedImages.length}/{maxImagesForModel})</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent
@@ -149,7 +151,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
               className="w-full justify-start gap-2 h-9"
             >
               <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>Products ({selectedProducts.length})</span>
+              <span>Products ({selectedProducts.length}/{maxProducts})</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent
@@ -235,7 +237,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
               <Tags className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span>
                 Categories (
-                {allCategoriesSelected ? "All" : selectedCategories.length})
+                {allCategoriesSelected ? `All ${maxCategories}` : `${selectedCategories.length}/${maxCategories}`})
               </span>
             </Button>
           </PopoverTrigger>
@@ -255,6 +257,9 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                   Include All Categories
                 </Label>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Uses up to {maxCategories} categories alphabetically.
+              </p>
             </div>
             <Command
               className={cn(

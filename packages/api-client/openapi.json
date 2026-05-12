@@ -79329,11 +79329,35 @@
                               "nullable": true
                             }
                           }
+                        },
+                        "warnings": {
+                          "type": "object",
+                          "properties": {
+                            "productsTruncated": {
+                              "type": "boolean"
+                            },
+                            "categoriesTruncated": {
+                              "type": "boolean"
+                            },
+                            "maxProducts": {
+                              "type": "number"
+                            },
+                            "maxCategories": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "productsTruncated",
+                            "categoriesTruncated",
+                            "maxProducts",
+                            "maxCategories"
+                          ]
                         }
                       },
                       "required": [
                         "products",
-                        "categories"
+                        "categories",
+                        "warnings"
                       ]
                     }
                   },

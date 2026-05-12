@@ -25184,6 +25184,12 @@ export type PostApiV1AdminAiContextBatchDetailsResponses = {
                 url: string;
                 [key: string]: unknown | string;
             }>;
+            warnings: {
+                productsTruncated: boolean;
+                categoriesTruncated: boolean;
+                maxProducts: number;
+                maxCategories: number;
+            };
         };
     };
 };

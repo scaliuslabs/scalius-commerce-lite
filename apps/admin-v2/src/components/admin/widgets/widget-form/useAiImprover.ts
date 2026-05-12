@@ -20,6 +20,10 @@ import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
 import { getAiPrompts, getAiContextBatchDetails } from "@/lib/api.functions";
 import { readChatCompletionStream } from "./ai-stream";
+import {
+  notifyAiContextWarnings,
+  type AiContextBatchDetails,
+} from "./ai-context-warnings";
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
 import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
@@ -75,7 +79,8 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
             : aiContext.selectedCategories.map((c: Category) => c.id),
           allCategories: aiContext.allCategoriesSelected,
         },
-      }) as { products?: unknown[]; categories?: unknown[] };
+      }) as AiContextBatchDetails;
+      notifyAiContextWarnings(contextData);
 
       // Get latest sections from stagedGeneration state
       const sections = aiGenerator.stagedGeneration.sections;
