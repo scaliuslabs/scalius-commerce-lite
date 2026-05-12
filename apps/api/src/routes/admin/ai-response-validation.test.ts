@@ -14,8 +14,20 @@ describe("AI response validation", () => {
         <css>.hero { color: red; }</css>
       `),
     ).toBe(
-      `<htmljs>\n<section class="hero">Hello</section>\n</htmljs>\n\n<css>\n.hero { color: red; }\n</css>`,
+      `<htmljs>\n<section class="hero">Hello</section>\n</htmljs>\n\n<css>\n.hero{color:red}\n</css>`,
     );
+  });
+
+  it("sanitizes generated HTML attributes and stylesheet URLs before returning", () => {
+    const output = normalizeWidgetGenerationText(`
+      <htmljs><section onclick="alert(1)"><a href="javascript:alert(1)">Deal</a></section></htmljs>
+      <css>.promo { background-image: url("javascript:alert(1)"); color: blue; }</css>
+    `);
+
+    expect(output).toContain("<section><a>Deal</a></section>");
+    expect(output).not.toContain("onclick");
+    expect(output).not.toContain("javascript:");
+    expect(output).toContain("color:blue");
   });
 
   it("canonicalizes JSON widget output with htmljs", () => {
@@ -70,6 +82,7 @@ describe("AI response validation", () => {
     expect(JSON.parse(text)).toEqual({
       totalSections: 3,
       sectionDescriptions: ["Hero", "Featured collection", "Section 3"],
+      estimatedTokens: 2100,
     });
   });
 
