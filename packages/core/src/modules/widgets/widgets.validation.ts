@@ -88,8 +88,16 @@ const widgetBaseSchema = z.object({
     placements: z.array(widgetPlacementInputSchema).optional(),
 });
 
-/** Validates that collection-based placement rules have a referenceCollectionId */
-function validateCollectionRef(data: { placementRule?: string; referenceCollectionId?: string | null }) {
+/** Validates projected placement fields only when canonical placement rows are absent. */
+function validateCollectionRef(data: {
+    placementRule?: string;
+    referenceCollectionId?: string | null;
+    placements?: WidgetPlacementInput[];
+}) {
+    if (data.placements !== undefined) {
+        return true;
+    }
+
     if (
         data.placementRule !== undefined &&
         (data.placementRule === WidgetPlacementRule.BEFORE_COLLECTION ||

@@ -207,29 +207,11 @@ export const widgetFormSchema = z.object({
     WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
     WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
     WidgetPlacementRule.STANDALONE,
-  ]),
+  ]).default(WidgetPlacementRule.STANDALONE),
   referenceCollectionId: z.string().optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),
   placements: z.array(widgetPlacementFormSchema).default([]),
-}).refine(
-  (data) => {
-    if (data.placements.length > 0) {
-      return true;
-    }
-    if (
-      (data.placementRule === WidgetPlacementRule.BEFORE_COLLECTION ||
-        data.placementRule === WidgetPlacementRule.AFTER_COLLECTION) &&
-      !data.referenceCollectionId
-    ) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: 'A collection must be selected for "Before Collection" or "After Collection" placement.',
-    path: ['referenceCollectionId'],
-  }
-);
+});
 
 export type WidgetFormValues = z.infer<typeof widgetFormSchema>;
 
