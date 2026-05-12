@@ -269,6 +269,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const [editorMode, setEditorMode] = useState<EditorMode>('generation-preview');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isAiHelperOpen, setIsAiHelperOpen] = useState(() => isCreateMode);
+  const [livePreviewContent, setLivePreviewContent] = useState<WidgetContentDraft | null>(null);
 
   // Initialize hooks
   const aiContext = useAiContext();
@@ -302,6 +303,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     aiImprover.reset();
     setEditorMode('generation-preview');
     setIsEditorOpen(false);
+    setLivePreviewContent(null);
 
     if (!widget?.aiContext) {
       return;
@@ -433,16 +435,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       return;
     }
 
-    // Clear any AI-generated content to avoid confusion
+    // Live preview is only a read-only view of the current form fields.
     aiGenerator.setGeneratedContent(null);
+    setLivePreviewContent({ html, css: css || '' });
 
-    // Set temporary preview content
     setEditorMode('live-preview');
     setIsEditorOpen(true);
-
-    // Use a separate state or pass directly to editor
-    // For now, we'll set generated content but in live-preview mode
-    aiGenerator.setGeneratedContent({ html, css: css || '' });
   };
 
   /**
@@ -887,9 +885,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         isOpen={isEditorOpen}
         onClose={() => {
           setIsEditorOpen(false);
-          // Clear generated content if in live-preview mode to avoid conflicts
           if (editorMode === 'live-preview') {
-            aiGenerator.setGeneratedContent(null);
+            setLivePreviewContent(null);
           }
         }}
         onCancelProcessing={
@@ -897,8 +894,20 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
             ? aiImprover.cancel
             : aiGenerator.cancelGeneration
         }
-        content={editorMode === 'improvement' ? aiImprover.contentToImprove : aiGenerator.generatedContent}
-        rawOutput={editorMode === 'improvement' ? aiImprover.rawOutput : aiGenerator.rawOutput || undefined}
+        content={
+          editorMode === 'improvement'
+            ? aiImprover.contentToImprove
+            : editorMode === 'live-preview'
+              ? livePreviewContent
+              : aiGenerator.generatedContent
+        }
+        rawOutput={
+          editorMode === 'improvement'
+            ? aiImprover.rawOutput
+            : editorMode === 'generation-preview'
+              ? aiGenerator.rawOutput || undefined
+              : undefined
+        }
         error={editorMode === 'generation-preview' ? aiGenerator.generationError : undefined}
         mode={editorMode}
         onAccept={
@@ -908,6 +917,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
             ? () => {
                 toast.info('Already in the form.');
                 setIsEditorOpen(false);
+                setLivePreviewContent(null);
               }
             : handleAcceptPreview
         }
