@@ -15,7 +15,6 @@ import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
     paginatedEnvelope,
-    paginationSchema,
     errorResponses,
     messageResponse,
     idResponse,
@@ -27,6 +26,7 @@ import {
     productStatsSchema,
     productVariantSchema,
 } from "../../schemas/entities";
+import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -174,6 +174,7 @@ app.openapi(createProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsAdmin.createProduct(db, data);
+        await invalidateCatalogCaches("products", c);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("slug")) {
@@ -204,6 +205,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         await ProductsAdmin.bulkDeleteProducts(db, data.productIds, data.permanent);
+        await invalidateCatalogCaches("products", c);
         return noContent(c);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("delete")) {
@@ -266,6 +268,7 @@ app.openapi(updateProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         await ProductsAdmin.updateProduct(db, id, data);
+        await invalidateCatalogCaches("products", c);
         return ok(c, {});
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -296,6 +299,7 @@ app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await ProductsAdmin.deleteProduct(db, id);
+    await invalidateCatalogCaches("products", c);
     return noContent(c);
 });
 
@@ -322,6 +326,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await ProductsAdmin.restoreProduct(db, id);
+    await invalidateCatalogCaches("products", c);
     return ok(c, {});
 });
 
@@ -346,6 +351,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const { id } = c.req.valid("param");
     try {
         await ProductsAdmin.permanentlyDeleteProduct(db, id);
+        await invalidateCatalogCaches("products", c);
         return noContent(c);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("delete")) {
@@ -382,6 +388,7 @@ app.openapi(createVariantRoute, async (c) => {
     try {
         const result = await ProductsVariants.createVariant(db, id, data);
         if (!result) throw new NotFoundError("Failed to create variant");
+        await invalidateCatalogCaches("products", c);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -444,6 +451,7 @@ app.openapi(updateVariantRoute, async (c) => {
     try {
         const result = await ProductsVariants.updateVariant(db, id, variantId, data);
         if (!result) throw new NotFoundError("Variant not found");
+        await invalidateCatalogCaches("products", c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -475,6 +483,7 @@ app.openapi(deleteVariantRoute, async (c) => {
     const { id, variantId } = c.req.valid("param");
     try {
         await ProductsVariants.deleteVariant(db, id, variantId);
+        await invalidateCatalogCaches("products", c);
         return noContent(c);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -511,6 +520,7 @@ app.openapi(bulkCreateVariantsRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const variants = await ProductsVariants.bulkCreateVariants(db, id, data.variants);
+        await invalidateCatalogCaches("products", c);
         return created(c, { variants, count: variants.length });
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -540,6 +550,7 @@ app.openapi(bulkDeleteVariantsRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     await ProductsVariants.bulkDeleteVariants(db, id, data.variantIds);
+    await invalidateCatalogCaches("products", c);
     return noContent(c);
 });
 
@@ -569,6 +580,7 @@ app.openapi(bulkUpdateVariantsRoute, async (c) => {
     const data = c.req.valid("json");
     if (data.updates.length === 0) throw new ValidationError("No updates provided");
     await ProductsAdmin.bulkUpdateVariants(db, id, data.updates);
+    await invalidateCatalogCaches("products", c);
     return ok(c, {});
 });
 
@@ -597,6 +609,7 @@ app.openapi(duplicateVariantRoute, async (c) => {
     try {
         const variant = await ProductsVariants.duplicateVariant(db, id, variantId);
         if (!variant) throw new NotFoundError("Failed to duplicate variant");
+        await invalidateCatalogCaches("products", c);
         return created(c, variant);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -658,6 +671,7 @@ app.openapi(updateVariantSortOrderRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     await ProductsVariants.updateVariantSortOrder(db, id, data);
+    await invalidateCatalogCaches("products", c);
     return ok(c, { message: "Sort order updated successfully" });
 });
 

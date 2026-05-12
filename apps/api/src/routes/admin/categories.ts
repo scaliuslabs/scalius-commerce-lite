@@ -27,6 +27,7 @@ import {
     noContentResponse,
 } from "../../schemas/responses";
 import { categorySummarySchema } from "../../schemas/entities";
+import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -147,6 +148,7 @@ app.openapi(createCategoryRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createCategory(db, data);
+    await invalidateCatalogCaches("categories", c);
     return created(c, result);
 });
 
@@ -180,6 +182,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const { categoryIds, permanent } = c.req.valid("json");
     if (categoryIds.length === 0) throw new ValidationError("No category IDs provided");
     await bulkDeleteCategories(db, categoryIds, permanent);
+    await invalidateCatalogCaches("categories", c);
     return noContent(c);
 });
 
@@ -210,6 +213,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const { categoryIds } = c.req.valid("json");
     if (categoryIds.length === 0) throw new ValidationError("No category IDs provided");
     await restoreCategories(db, categoryIds);
+    await invalidateCatalogCaches("categories", c);
     return noContent(c);
 });
 
@@ -238,6 +242,7 @@ app.openapi(updateCategoryRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     await updateCategory(db, id, data);
+    await invalidateCatalogCaches("categories", c);
     return ok(c, {});
 });
 
@@ -261,6 +266,7 @@ app.openapi(deleteCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteCategory(db, id);
+    await invalidateCatalogCaches("categories", c);
     return noContent(c);
 });
 
@@ -284,6 +290,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await permanentlyDeleteCategory(db, id);
+    await invalidateCatalogCaches("categories", c);
     return noContent(c);
 });
 
@@ -310,6 +317,7 @@ app.openapi(restoreCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreCategories(db, [id]);
+    await invalidateCatalogCaches("categories", c);
     return ok(c, {});
 });
 

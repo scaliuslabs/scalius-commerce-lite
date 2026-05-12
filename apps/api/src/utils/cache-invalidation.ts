@@ -61,6 +61,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     storefrontPrefixes: [
       "global_all_collections",
       "collection_by_id_",
+      "widgets_scope_",
       "storefront_homepage_",
     ],
   },
@@ -157,11 +158,21 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
 // Admin path → group mapping
 // ---------------------------------------------------------------------------
 
+export const CATALOG_CACHE_GROUPS = {
+  products: ["products", "search", "collections"],
+  categories: ["categories", "products", "search", "collections"],
+  collections: ["collections"],
+  discounts: ["products", "search", "collections"],
+} as const;
+
+export type CatalogCacheDomain = keyof typeof CATALOG_CACHE_GROUPS;
+
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
-  "/api/v1/admin/products": ["products", "search"],
-  "/api/inventory": ["products"],
-  "/api/v1/admin/categories": ["categories", "search"],
-  "/api/v1/admin/collections": ["collections"],
+  "/api/v1/admin/products": [...CATALOG_CACHE_GROUPS.products],
+  "/api/v1/admin/inventory": [...CATALOG_CACHE_GROUPS.products],
+  "/api/inventory": [...CATALOG_CACHE_GROUPS.products],
+  "/api/v1/admin/categories": [...CATALOG_CACHE_GROUPS.categories],
+  "/api/v1/admin/collections": [...CATALOG_CACHE_GROUPS.collections],
   "/api/v1/admin/pages": ["pages"],
   "/api/v1/admin/widgets": ["homepage"],
   "/api/v1/admin/navigation": ["layout"],
@@ -184,7 +195,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/checkout-languages": ["checkout"],
   "/api/v1/admin/settings/meta-conversions": ["layout"],
   "/api/v1/admin/attributes": ["attributes", "products", "categories"],
-  "/api/v1/admin/discounts": ["products"],
+  "/api/v1/admin/discounts": [...CATALOG_CACHE_GROUPS.discounts],
 };
 
 // ---------------------------------------------------------------------------
@@ -296,6 +307,20 @@ export async function invalidateGroups(
   await Promise.all(
     uniquePrefixes.map((prefix) => deleteCacheByPattern(`${prefix}*`, kv)),
   );
+}
+
+/**
+ * Invalidate the API KV cache and schedule the storefront purge needed after a
+ * catalog write. Product and discount changes also clear collection caches
+ * because collection pages render product cards, images, and prices.
+ */
+export async function invalidateCatalogCaches(
+  domain: CatalogCacheDomain,
+  c: { env?: Env; executionCtx?: ExecutionContext },
+): Promise<void> {
+  const groups = [...CATALOG_CACHE_GROUPS[domain]];
+  await invalidateGroups(groups, c.env?.CACHE);
+  triggerStorefrontPurgeForGroups(groups, c.env, c.executionCtx);
 }
 
 /**
