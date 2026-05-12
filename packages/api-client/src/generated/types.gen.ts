@@ -4545,7 +4545,11 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 name: string;
                 slug: string;
                 price: number;
-                [key: string]: unknown | string | number;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null);
             }>;
             pagination: {
                 page: number;
@@ -21029,6 +21033,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
             openrouter?: {
                 enabled?: boolean;
                 defaultModel?: string;
+                allowedModels?: Array<string>;
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;
@@ -21037,6 +21042,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
             openai?: {
                 enabled?: boolean;
                 defaultModel?: string;
+                allowedModels?: Array<string>;
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;
@@ -21045,6 +21051,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
             gemini?: {
                 enabled?: boolean;
                 defaultModel?: string;
+                allowedModels?: Array<string>;
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;
@@ -21053,6 +21060,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
             cloudflare?: {
                 enabled?: boolean;
                 defaultModel?: string;
+                allowedModels?: Array<string>;
                 baseUrl?: string;
                 appName?: string;
                 appUrl?: string;

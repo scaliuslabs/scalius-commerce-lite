@@ -23,6 +23,7 @@ type PromptId = "widget" | "landing-page" | "collection";
 interface ProviderValues {
   enabled: boolean;
   defaultModel: string;
+  allowedModels: string[];
   baseUrl: string;
   appName: string;
   appUrl: string;
@@ -63,6 +64,7 @@ const PROMPTS: Array<{ id: PromptId; label: string }> = [
 const defaultProviderValues: ProviderValues = {
   enabled: false,
   defaultModel: "",
+  allowedModels: [],
   baseUrl: "",
   appName: "",
   appUrl: "",
@@ -114,6 +116,26 @@ const defaultValues: WidgetAiValues = {
   },
 };
 
+function normalizeAllowedModels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  const models: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const model = item.trim();
+    if (!model || model.length > 200 || seen.has(model)) continue;
+    seen.add(model);
+    models.push(model);
+  }
+
+  return models.slice(0, 50);
+}
+
+function parseAllowedModelsText(value: string): string[] {
+  return normalizeAllowedModels(value.split(/\r?\n|,/));
+}
+
 function normalizeProvider(id: ProviderId, value: unknown): ProviderValues {
   const data =
     value && typeof value === "object" && !Array.isArray(value)
@@ -123,6 +145,7 @@ function normalizeProvider(id: ProviderId, value: unknown): ProviderValues {
     ...defaultValues.providers[id],
     enabled: typeof data.enabled === "boolean" ? data.enabled : defaultValues.providers[id].enabled,
     defaultModel: typeof data.defaultModel === "string" ? data.defaultModel : defaultValues.providers[id].defaultModel,
+    allowedModels: normalizeAllowedModels(data.allowedModels),
     baseUrl: typeof data.baseUrl === "string" ? data.baseUrl : defaultValues.providers[id].baseUrl,
     appName: typeof data.appName === "string" ? data.appName : defaultValues.providers[id].appName,
     appUrl: typeof data.appUrl === "string" ? data.appUrl : defaultValues.providers[id].appUrl,
@@ -193,6 +216,7 @@ async function saveWidgetAi(values: WidgetAiValues) {
             {
               enabled: provider.enabled,
               defaultModel: provider.defaultModel.trim(),
+              allowedModels: normalizeAllowedModels(provider.allowedModels),
               baseUrl: provider.baseUrl.trim(),
               appName: provider.appName.trim(),
               appUrl: provider.appUrl.trim(),
@@ -223,10 +247,13 @@ export default function WidgetAiSettingsBuilder() {
     });
 
   const active = values.providers[values.activeProvider];
+  const activeHasUsableCredential = Boolean(
+    active?.apiKeyInput.trim() ||
+      active?.hasBinding ||
+      (active?.hasApiKey && !active?.clearApiKey),
+  );
   const activeReady = Boolean(
-    active?.enabled &&
-      active?.defaultModel.trim() &&
-      (active?.hasApiKey || active?.hasBinding || active?.apiKeyInput.trim()),
+    active?.enabled && active?.defaultModel.trim() && activeHasUsableCredential,
   );
 
   const setProviderValue = <K extends keyof ProviderValues>(
@@ -359,6 +386,27 @@ export default function WidgetAiSettingsBuilder() {
                     onChange={(event) => setProviderValue(provider.id, "defaultModel", event.target.value)}
                     placeholder={provider.id === "cloudflare" ? "@cf/vendor/model" : "Model ID"}
                   />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor={`${provider.id}-allowed-models`}>Additional allowed models</Label>
+                  <Textarea
+                    id={`${provider.id}-allowed-models`}
+                    name={`widget-ai-${provider.id}-allowed-models`}
+                    rows={3}
+                    value={valuesForProvider.allowedModels.join("\n")}
+                    onChange={(event) =>
+                      setProviderValue(
+                        provider.id,
+                        "allowedModels",
+                        parseAllowedModelsText(event.target.value),
+                      )
+                    }
+                    placeholder="One model ID per line. The default model is always allowed."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Widget generation can only use the default model and these additional model IDs.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

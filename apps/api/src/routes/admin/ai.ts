@@ -13,6 +13,7 @@ import {
   getTimeout,
   getWidgetAiRuntimeSettings,
   providerHasCredentials,
+  requireAllowedWidgetAiModel,
   type WidgetAiProvider,
   type WidgetAiRuntimeSettings,
 } from "@scalius/core/modules/ai";
@@ -20,7 +21,7 @@ import { ok } from "../../utils/api-response";
 import { RateLimitError, ValidationError } from "../../utils/api-error";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { listModelsForProvider } from "./ai-models";
+import { listAllowedModelsForProvider } from "./ai-models";
 import {
   normalizeStagedPlanOutput,
   normalizeStagedPlanText,
@@ -31,6 +32,12 @@ import {
 } from "./ai-response-validation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+const MAX_MESSAGES = 32;
+const MAX_TEXT_CHARS = GENERATION_CONFIG.context.maxPromptChars;
+const MAX_IMAGES = GENERATION_CONFIG.context.maxImages;
+const MAX_MODEL_ID_CHARS = 200;
+const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
 const providerEnum = z.enum(AI_PROVIDER_IDS);
 
@@ -53,7 +60,7 @@ const messageSchema = z.object({
 const generateSchema = z
   .object({
     provider: providerEnum.optional(),
-    model: z.string().optional(),
+    model: z.string().max(MAX_MODEL_ID_CHARS).optional(),
     messages: z.array(messageSchema).optional(),
     prompt: z.string().optional(),
     stream: z.boolean().optional(),
@@ -68,7 +75,7 @@ const generateSchema = z
 
 const generateStagedSchema = z.object({
   provider: providerEnum.optional(),
-  model: z.string().optional(),
+  model: z.string().max(MAX_MODEL_ID_CHARS).optional(),
   messages: z.array(messageSchema).min(1),
   stage: z.enum(["plan", "generate"]).optional(),
   sectionIndex: z.number().int().min(0).max(GENERATION_CONFIG.stagedGeneration.maxSections - 1).optional(),
@@ -83,12 +90,6 @@ const generateStagedSchema = z.object({
 type AiUserPart =
   | { type: "text"; text: string }
   | { type: "image"; image: URL; mediaType?: string };
-
-const MAX_MESSAGES = 32;
-const MAX_TEXT_CHARS = GENERATION_CONFIG.context.maxPromptChars;
-const MAX_IMAGES = GENERATION_CONFIG.context.maxImages;
-const MAX_MODEL_ID_CHARS = 200;
-const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
 type GenerateTextOptions = Parameters<typeof generateText>[0];
 type GenerationUsage = {
@@ -108,19 +109,6 @@ function shouldUseStructuredOutput(provider: WidgetAiProvider): boolean {
   // the Workers AI binding. Keep Cloudflare fast and reliable with text/tag
   // output until we add a native Cloudflare structured-output adapter.
   return provider !== "cloudflare";
-}
-
-function getModelId(
-  provider: WidgetAiProvider,
-  requestedModel: string | undefined,
-  settings: WidgetAiRuntimeSettings,
-): string {
-  const model = requestedModel?.trim() || settings.providers[provider].defaultModel;
-  if (!model) throw new ValidationError(ERROR_MESSAGES.modelNotSelected);
-  if (model.length > MAX_MODEL_ID_CHARS) {
-    throw new ValidationError("AI model ID is too long.");
-  }
-  return model;
 }
 
 function isAllowedImageUrl(value: string): boolean {
@@ -553,7 +541,7 @@ app.openapi(listModelsRoute, async (c) => {
   const settings = await runtimeSettings(c);
   const query = c.req.valid("query");
   const provider = getConfiguredProvider(settings, query.provider);
-  const models = await listModelsForProvider(provider, settings);
+  const models = await listAllowedModelsForProvider(provider, settings);
 
   return ok(c, {
     provider,
@@ -592,7 +580,7 @@ app.openapi(generateRoute, async (c) => {
   }
   const settings = await runtimeSettings(c);
   const provider = getConfiguredProvider(settings, payload.provider);
-  const modelId = getModelId(provider, payload.model, settings);
+  const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
   const messages = payload.messages
     ? normalizeMessages(payload.messages)
@@ -648,7 +636,7 @@ app.openapi(generateStagedRoute, async (c) => {
   validateMessagePayload(payload.messages);
   const settings = await runtimeSettings(c);
   const provider = getConfiguredProvider(settings, payload.provider);
-  const modelId = getModelId(provider, payload.model, settings);
+  const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
   const generationOptions = {
     model,

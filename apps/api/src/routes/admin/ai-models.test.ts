@@ -3,7 +3,10 @@ import {
   DEFAULT_WIDGET_AI_CONFIG,
   type WidgetAiRuntimeSettings,
 } from "@scalius/core/modules/ai";
-import { listModelsForProvider } from "./ai-models";
+import {
+  listAllowedModelsForProvider,
+  listModelsForProvider,
+} from "./ai-models";
 
 function runtimeSettings(
   overrides: Partial<WidgetAiRuntimeSettings> = {},
@@ -16,6 +19,7 @@ function runtimeSettings(
         ...DEFAULT_WIDGET_AI_CONFIG.providers.gemini,
         enabled: true,
         defaultModel: "gemini-2.5-pro",
+        allowedModels: [],
       },
     },
     apiKeys: { gemini: "gemini-secret-key" },
@@ -101,5 +105,49 @@ describe("AI provider model catalog", () => {
       }),
     ]);
   });
-});
 
+  it("only exposes admin-enabled models to widget generation callers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        models: [
+          {
+            name: "models/gemini-2.5-pro",
+            displayName: "Gemini 2.5 Pro",
+            supportedGenerationMethods: ["generateContent"],
+          },
+          {
+            name: "models/gemini-2.5-flash",
+            displayName: "Gemini 2.5 Flash",
+            supportedGenerationMethods: ["generateContent"],
+          },
+          {
+            name: "models/gemini-2.5-flash-lite",
+            displayName: "Gemini 2.5 Flash Lite",
+            supportedGenerationMethods: ["generateContent"],
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const models = await listAllowedModelsForProvider(
+      "gemini",
+      runtimeSettings({
+        providers: {
+          ...DEFAULT_WIDGET_AI_CONFIG.providers,
+          gemini: {
+            ...DEFAULT_WIDGET_AI_CONFIG.providers.gemini,
+            enabled: true,
+            defaultModel: "gemini-2.5-pro",
+            allowedModels: ["gemini-2.5-flash"],
+          },
+        },
+      }),
+    );
+
+    expect(models.map((model) => model.id)).toEqual([
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+    ]);
+  });
+});

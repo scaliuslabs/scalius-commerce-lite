@@ -15,6 +15,7 @@ const providerEnum = z.enum(AI_PROVIDER_IDS);
 const providerConfigSchema = z.object({
   enabled: z.boolean().optional(),
   defaultModel: z.string().max(200).optional(),
+  allowedModels: z.array(z.string().max(200)).max(50).optional(),
   baseUrl: z.string().max(200).optional(),
   appName: z.string().max(80).optional(),
   appUrl: z.string().max(200).optional(),
