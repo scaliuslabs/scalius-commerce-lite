@@ -73,6 +73,9 @@ export const useAiGenerator = (
   const [isApiKeySet, setIsApiKeySet] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [isAiSettingsLoading, setIsAiSettingsLoading] = useState(false);
+  const [aiSettingsError, setAiSettingsError] = useState<string | null>(null);
+  const [aiSettingsReloadToken, setAiSettingsReloadToken] = useState(0);
   const [generatedContent, setGeneratedContent] = useState<{ html: string; css: string; } | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
@@ -83,6 +86,10 @@ export const useAiGenerator = (
 
   // Staged generation hook
   const stagedGeneration = useStagedGeneration();
+
+  const reloadAiSettings = useCallback(() => {
+    setAiSettingsReloadToken((value) => value + 1);
+  }, []);
 
   const startGenerationRun = (): GenerationRun => {
     generationAbortRef.current?.abort();
@@ -128,6 +135,8 @@ export const useAiGenerator = (
     if (!shouldLoadSettings) return;
 
     let cancelled = false;
+    setIsAiSettingsLoading(true);
+    setAiSettingsError(null);
 
     async function loadAiSettings() {
       const settings = await fetchWidgetAiSettings();
@@ -176,12 +185,21 @@ export const useAiGenerator = (
       if (cancelled) return;
       if (import.meta.env.DEV) console.error("Failed to load widget AI settings:", error);
       setIsApiKeySet(false);
+      setAiModels([]);
+      setSelectedModel("");
+      setAiSettingsError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load widget AI settings.",
+      );
+    }).finally(() => {
+      if (!cancelled) setIsAiSettingsLoading(false);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [widget, shouldLoadSettings]);
+  }, [widget, shouldLoadSettings, aiSettingsReloadToken]);
 
   const handleAiRequest = async () => {
     if (!userPrompt.trim()) {
@@ -436,6 +454,9 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
     selectedModel,
     setSelectedModel,
     isApiKeySet,
+    isAiSettingsLoading,
+    aiSettingsError,
+    reloadAiSettings,
     modelSearchQuery,
     setModelSearchQuery,
     isModelSelectorOpen,

@@ -6,7 +6,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Wand2, ChevronDown, Clipboard, ChevronsUpDown, Check, Eye, Headphones, Layers, Sparkles } from 'lucide-react';
+import { Wand2, ChevronDown, Clipboard, ChevronsUpDown, Check, Eye, Headphones, Layers, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from '@scalius/shared/utils';
 import { AiContextManager } from './AiContextManager';
 import { useAiContext } from './useAiContext';
@@ -42,6 +42,9 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
     selectedModel,
     setSelectedModel,
     isApiKeySet,
+    isAiSettingsLoading,
+    aiSettingsError,
+    reloadAiSettings,
     modelSearchQuery,
     setModelSearchQuery,
     isModelSelectorOpen,
@@ -60,14 +63,20 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
                 role="combobox"
                 aria-expanded={isModelSelectorOpen}
                 className="w-full justify-between"
-                disabled={!isApiKeySet}
+                disabled={!isApiKeySet || isAiSettingsLoading}
             >
                 <span className="truncate">
-                {selectedModel
+                {isAiSettingsLoading
+                    ? "Loading models..."
+                    : selectedModel
                     ? aiModels.find((model) => model.id === selectedModel)?.name || selectedModel
                     : "Select a model..."}
                 </span>
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                {isAiSettingsLoading ? (
+                    <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-70" />
+                ) : (
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                )}
             </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[--radix-popover-trigger-width] overflow-hidden p-0">
@@ -183,7 +192,23 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
           <div className="space-y-2">
             <Label htmlFor="model">AI model</Label>
             {ModelSelector}
-            {!isApiKeySet && <p className="text-xs text-muted-foreground">Configure the active provider in General Settings &gt; Widget AI.</p>}
+            {aiSettingsError ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                <span>{aiSettingsError}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={reloadAiSettings}
+                  disabled={isAiSettingsLoading}
+                >
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  Retry
+                </Button>
+              </div>
+            ) : !isApiKeySet && !isAiSettingsLoading ? (
+              <p className="text-xs text-muted-foreground">Configure the active provider in General Settings &gt; Widget AI.</p>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between space-x-2 rounded-md border p-3">
@@ -279,7 +304,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
               <Button
                   type="button"
                   onClick={handleAiRequest}
-                  disabled={isLoadingPrompt || !userPrompt.trim() || !isApiKeySet}
+                  disabled={isLoadingPrompt || isAiSettingsLoading || !userPrompt.trim() || !isApiKeySet || !selectedModel}
                   size="lg"
               >
                   <Sparkles className="mr-2 h-4 w-4" /> Generate
