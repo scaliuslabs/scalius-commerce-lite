@@ -67,6 +67,15 @@ const canonicalUrl = `${storefrontUrl}/products/${product.slug}`;
 
 // OG image: 1200x630 for social sharing (per OG-05)
 const primaryImageUrl = images[0]?.url || product.imageUrl || null;
+const serializedProductImageUrl = primaryImageUrl
+  ? getOptimizedImageUrl(primaryImageUrl, {
+      width: 600,
+      height: 600,
+      quality: 85,
+      format: "auto",
+      fit: "cover",
+    })
+  : "";
 const ogImageUrl = primaryImageUrl
   ? getOptimizedImageUrl(primaryImageUrl, {
       width: 1200,
@@ -150,6 +159,14 @@ const breadcrumbJsonLd = JSON.stringify({
   "@type": "BreadcrumbList",
   itemListElement: breadcrumbItems,
 });
+
+const productCategoryAnalytics = productCategory
+  ? {
+      id: productCategory.id,
+      name: productCategory.name,
+      slug: productCategory.slug,
+    }
+  : null;
 ---
 
 <Layout
@@ -191,7 +208,7 @@ const breadcrumbJsonLd = JSON.stringify({
     data-product-name={product.name}
     data-product-price={String(discountedPrice)}
     data-product-original-price={String(product.price)}
-    data-product-image={images[0]?.url || ""}
+    data-product-image={serializedProductImageUrl}
     data-product-discount-type={product.discountType || ""}
     data-product-discount-percentage={String(product.discountPercentage || 0)}
     data-product-discount-amount={String(product.discountAmount || 0)}
@@ -202,7 +219,7 @@ const breadcrumbJsonLd = JSON.stringify({
       name: product.name,
       discountedPrice: discountedPrice,
     })}
-    data-fb-category-details={JSON.stringify(productCategory)}
+    data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
     data-fb-variants-details={JSON.stringify(variants.slice(0, 1))}
   >
     <div class="lg:pt-2">

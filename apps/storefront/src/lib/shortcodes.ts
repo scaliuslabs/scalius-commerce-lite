@@ -6,6 +6,7 @@ import {
   optimizeRichContentImages,
 } from "./rich-content-media";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
+import { withOptimizedProductPageImages } from "./serialized-media";
 import { normalizeWidgetCss, normalizeWidgetHtml } from "./widget-content";
 
 export interface ShortcodeMatch {
@@ -84,7 +85,9 @@ export async function renderProductShortcode(
     }
 
     // Encode as URI component for safe embedding in data attribute
-    const props = encodeURIComponent(JSON.stringify(productData));
+    const props = encodeURIComponent(
+      JSON.stringify(withOptimizedProductPageImages(productData)),
+    );
 
     // Render a placeholder div for the React component to hydrate into.
     return `<div class="product-shortcode-container" data-props="${props}"></div>`;
