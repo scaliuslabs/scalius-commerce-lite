@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { getProductBySlug } from "@/lib/api";
 import { getLayoutData } from "@/lib/api/storefront";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import type { CartItem } from "@/store/cart";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
@@ -89,19 +89,23 @@ export const GET: APIRoute = async ({ params, url }) => {
     }
 
     const primaryImageUrl =
-      images.find((img) => img.isPrimary)?.url || images[0]?.url || "";
+      images.find((img) => img.isPrimary && hasProductImage(img.url))?.url ||
+      images.find((img) => hasProductImage(img.url))?.url ||
+      product.imageUrl ||
+      "";
+    const cartImageUrl = getProductImageUrl(primaryImageUrl, {
+      width: 160,
+      height: 160,
+      quality: 75,
+      format: "auto",
+      fit: "contain",
+    });
     const cartItem: CartItem = {
       id: product.id,
       slug: product.slug,
       name: product.name,
       price: finalPrice,
-      image: primaryImageUrl
-        ? getOptimizedImageUrl(primaryImageUrl, {
-            width: 160,
-            height: 160,
-            quality: 75,
-          })
-        : "",
+      image: cartImageUrl,
       quantity: quantity,
       variantId: itemToAdd?.id,
       size: itemToAdd?.size || undefined,
@@ -162,7 +166,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       </head>
       <body>
         <div class="card">
-          <img src="${escapeHtml(cartItem.image || "")}" alt="${escapeHtml(cartItem.name)}" class="product-image">
+          <img src="${escapeHtml(cartImageUrl)}" alt="${escapeHtml(cartItem.name)}" class="product-image">
           <p class="product-name">${escapeHtml(cartItem.name)}</p>
           <p class="status-text" id="status-text">Adding to cart & preparing checkout...</p>
           <div class="loader"><div class="loader-bar"></div></div>

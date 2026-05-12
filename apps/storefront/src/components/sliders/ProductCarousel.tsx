@@ -14,14 +14,16 @@ import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getProductImageUrl } from "@/lib/product-media";
 import { getCurrencySymbol } from "@/lib/currency";
 
 function ProductCarouselCard({ product }: { product: Product }) {
-  const productImageUrl = getOptimizedImageUrl(product.imageUrl, {
+  const productImageUrl = getProductImageUrl(product.imageUrl, {
     width: 400,
     height: 400,
     quality: 80,
+    format: "auto",
+    fit: "contain",
   });
 
   const hasDiscount = product.discountedPrice < product.price;

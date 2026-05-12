@@ -168,7 +168,7 @@ const layoutData = await getLayoutData();
   import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
   import { escapeHtml } from "@scalius/shared/html-escape";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-  import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+  import { getProductImageUrl } from "@/lib/product-media";
 
 
 
@@ -201,8 +201,8 @@ const layoutData = await getLayoutData();
 
     // Item details layout (shown when expanded)
     const itemDetails = order.items.map((item) => {
-      const imageUrl = getOptimizedImageUrl(
-        item.productImage || "/placeholder.jpg",
+      const imageUrl = getProductImageUrl(
+        item.productImage,
         {
           width: 96,
           height: 96,

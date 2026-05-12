@@ -27,7 +27,7 @@ import {
 import React, { useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getProductImageUrl } from "@/lib/product-media";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -252,8 +252,8 @@ export default function CartFlyout() {
                     {/* Compact Image */}
                     <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
                       <img
-                        src={getOptimizedImageUrl(
-                          item.image || "/placeholder.jpg",
+                        src={getProductImageUrl(
+                          item.image,
                           {
                             width: 96,
                             height: 96,

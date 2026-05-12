@@ -6,7 +6,7 @@ import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import { loadPageWithLayout } from "@/lib/page-data";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 
 const { slug } = Astro.params;
@@ -66,18 +66,18 @@ const storefrontUrl = getRuntimeStorefrontUrl();
 const canonicalUrl = `${storefrontUrl}/products/${product.slug}`;
 
 // OG image: 1200x630 for social sharing (per OG-05)
-const primaryImageUrl = images[0]?.url || product.imageUrl || null;
-const serializedProductImageUrl = primaryImageUrl
-  ? getOptimizedImageUrl(primaryImageUrl, {
-      width: 600,
-      height: 600,
-      quality: 85,
-      format: "auto",
-      fit: "cover",
-    })
-  : "";
+const primaryImageUrl =
+  images.find((image) => hasProductImage(image.url))?.url ||
+  (hasProductImage(product.imageUrl) ? product.imageUrl : null);
+const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
+  width: 600,
+  height: 600,
+  quality: 85,
+  format: "auto",
+  fit: "contain",
+});
 const ogImageUrl = primaryImageUrl
-  ? getOptimizedImageUrl(primaryImageUrl, {
+  ? getProductImageUrl(primaryImageUrl, {
       width: 1200,
       height: 630,
       quality: 85,
@@ -181,16 +181,16 @@ const productCategoryAnalytics = productCategory
 >
   <Fragment slot="head">
     {
-      images.length > 0 && (
+      primaryImageUrl && (
         <link
           rel="preload"
           as="image"
-          href={getOptimizedImageUrl(images[0].url, {
+          href={getProductImageUrl(primaryImageUrl, {
             width: 600,
             height: 600,
             quality: 85,
             format: "auto",
-            fit: "cover",
+            fit: "contain",
           })}
           fetchpriority="high"
         />
