@@ -315,11 +315,13 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     DELETE: { permission: PERMISSIONS.WIDGETS_DELETE },
   },
   "/api/v1/admin/widgets/*/toggle-status": {
+    PATCH: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
     POST: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
     PUT: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
   },
   "/api/v1/admin/widgets/*/history": {
     GET: { permission: PERMISSIONS.WIDGETS_VIEW },
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
   "/api/v1/admin/widgets/*/history/*": {
     GET: { permission: PERMISSIONS.WIDGETS_VIEW },
