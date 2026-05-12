@@ -40,9 +40,9 @@ import {
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { parseAiContext, AiContextSchema, type AiContext, type ProductReference, type CategoryReference } from '@scalius/core/modules/ai/ai-context-schema';
+import { parseAiContext, AiContextSchema, type AiContext } from '@scalius/core/modules/ai/ai-context-schema';
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
-import type { ProductSearchResult } from './widget-form/types';
+import type { MediaFile, ProductSearchResult } from './widget-form/types';
 import { useAiContext } from './widget-form/useAiContext';
 import { useAiGenerator } from './widget-form/useAiGenerator';
 import { useAiImprover } from './widget-form/useAiImprover';
@@ -254,6 +254,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     [widget, isCreateMode],
   );
   const resetVersionRef = useRef<string | null>(null);
+  const aiContextVersionRef = useRef<string | null>(null);
   const {
     control,
     handleSubmit,
@@ -306,36 +307,60 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   // Load saved AI context from widget
   useEffect(() => {
-    if (widget?.aiContext) {
-      try {
-        const context = parseAiContext(widget.aiContext as string);
+    if (aiContextVersionRef.current === widgetFormVersion) return;
+    aiContextVersionRef.current = widgetFormVersion;
 
-        if (context.promptType) aiGenerator.setPromptType(context.promptType);
-        if (context.preferredAiModel) aiGenerator.setSelectedModel(context.preferredAiModel);
-        if (typeof context.useStagedMode === 'boolean') aiGenerator.setUseStagedMode(context.useStagedMode);
-        if (context.savedImages) aiContext.handleMultiImageSelect(context.savedImages);
-        if (context.savedProducts) context.savedProducts.forEach((p: ProductReference) => aiContext.handleProductSelect(p as ProductSearchResult));
-        if (context.savedCategories) context.savedCategories.forEach((c: CategoryReference) => aiContext.handleCategorySelect(c as unknown as Category));
-        if (typeof context.allCategoriesSelected === 'boolean') {
-          aiContext.handleToggleAllCategories(context.allCategoriesSelected);
-        }
+    aiContext.resetContext();
+    aiGenerator.setPromptType('widget');
+    aiGenerator.setUserPrompt('');
+    aiGenerator.setSelectedModel('');
+    aiGenerator.setGeneratedContent(null);
+    aiGenerator.setIsPreviewOpen(false);
+    aiGenerator.setUseStagedMode(true);
+    aiGenerator.stagedGeneration.reset();
+    aiImprover.reset();
+    setEditorMode('generation-preview');
+    setIsEditorOpen(false);
 
-        // Load improvement history
-        if (context.improvementHistory) {
-          aiImprover.loadHistory(context.improvementHistory);
-        }
-
-        // Load staged sections if available
-        if (context.stagedSections && context.stagedSections.length > 0) {
-          aiGenerator.stagedGeneration.updateSections(context.stagedSections);
-        }
-
-        toast.info('Loaded saved AI context for this widget.');
-      } catch (e: unknown) {
-        if (import.meta.env.DEV) console.error('Failed to parse widget AI context', e);
-      }
+    if (!widget?.aiContext) {
+      return;
     }
-  }, [widget]);
+
+    try {
+      const context = parseAiContext(widget.aiContext as string);
+
+      aiGenerator.setPromptType(context.promptType);
+      if (context.preferredAiModel) aiGenerator.setSelectedModel(context.preferredAiModel);
+      aiGenerator.setUseStagedMode(context.useStagedMode);
+      aiContext.replaceContext({
+        images: context.savedImages as unknown as MediaFile[],
+        products: context.savedProducts as ProductSearchResult[],
+        categories: context.savedCategories as unknown as Category[],
+        allCategories: context.allCategoriesSelected,
+      });
+
+      if (context.improvementHistory.length > 0) {
+        aiImprover.loadHistory(context.improvementHistory);
+      }
+
+      if (context.stagedSections.length > 0) {
+        aiGenerator.stagedGeneration.updateSections(context.stagedSections);
+      }
+
+      if (
+        context.savedImages.length > 0 ||
+        context.savedProducts.length > 0 ||
+        context.savedCategories.length > 0 ||
+        context.allCategoriesSelected ||
+        context.stagedSections.length > 0 ||
+        context.improvementHistory.length > 0
+      ) {
+        toast.info('Loaded saved AI context for this widget.');
+      }
+    } catch (e: unknown) {
+      if (import.meta.env.DEV) console.error('Failed to parse widget AI context', e);
+    }
+  }, [widgetFormVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-open fullscreen when generation starts
   useEffect(() => {

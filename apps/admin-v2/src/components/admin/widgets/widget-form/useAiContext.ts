@@ -21,13 +21,15 @@ interface RawProduct {
 
 const PAGE_SIZE = 10;
 
+interface AiContextSelection {
+  images?: MediaFile[];
+  products?: ProductSearchResult[];
+  categories?: Category[];
+  allCategories?: boolean;
+}
+
 export const useAiContext = (
-  initialContext?: {
-    images?: MediaFile[];
-    products?: ProductSearchResult[];
-    categories?: Category[];
-    allCategories?: boolean;
-  }
+  initialContext?: AiContextSelection,
 ) => {
   const [selectedImages, setSelectedImages] = useState<MediaFile[]>(initialContext?.images || []);
   const [selectedProducts, setSelectedProducts] = useState<ProductSearchResult[]>(initialContext?.products || []);
@@ -238,6 +240,17 @@ export const useAiContext = (
     }
   };
 
+  const replaceContext = useCallback((context: AiContextSelection = {}) => {
+    setSelectedImages(context.images ?? []);
+    setSelectedProducts(context.products ?? []);
+    setSelectedCategories(context.allCategories ? [] : context.categories ?? []);
+    setAllCategoriesSelected(Boolean(context.allCategories));
+  }, []);
+
+  const resetContext = useCallback(() => {
+    replaceContext();
+  }, [replaceContext]);
+
   // ─── Derived state ─────────────────────────────────────────────────
   const productsToShow = debouncedProductSearch.trim() ? productSearchResults : latestProducts;
   const currentHasMoreProducts = debouncedProductSearch.trim() ? hasMoreSearchProducts : hasMoreProducts;
@@ -256,6 +269,8 @@ export const useAiContext = (
     handleCategorySelect,
     removeCategory,
     handleToggleAllCategories,
+    replaceContext,
+    resetContext,
     allCategoriesList,
     isProductPopoverOpen,
     setIsProductPopoverOpen,
