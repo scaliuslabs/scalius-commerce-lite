@@ -108,6 +108,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
         <Popover>
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant="outline"
               className="w-full justify-start gap-2 h-9"
             >
@@ -143,6 +144,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
         >
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant="outline"
               className="w-full justify-start gap-2 h-9"
             >
@@ -226,6 +228,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
         <Popover>
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant="outline"
               className="w-full justify-start gap-2 h-9"
             >
@@ -322,6 +325,8 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                 <ImageIcon className="h-3 w-3 shrink-0" />
                 <span className="truncate">{f.filename}</span>
                 <button
+                  type="button"
+                  aria-label={`Remove image ${f.filename}`}
                   onClick={() => removeImage(f.url)}
                   className="rounded-full hover:bg-muted-foreground/20 p-0.5 shrink-0"
                 >
@@ -338,6 +343,8 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                 <Package className="h-3 w-3 shrink-0" />
                 <span className="truncate">{p.name}</span>
                 <button
+                  type="button"
+                  aria-label={`Remove product ${p.name}`}
                   onClick={() => removeProduct(p.id)}
                   className="rounded-full hover:bg-muted-foreground/20 p-0.5 shrink-0"
                 >
@@ -359,6 +366,8 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                 <Tags className="h-3 w-3 shrink-0" />
                 <span className="truncate">{c.name}</span>
                 <button
+                  type="button"
+                  aria-label={`Remove category ${c.name}`}
                   onClick={() => removeCategory(c.id)}
                   className="rounded-full hover:bg-muted-foreground/20 p-0.5 shrink-0"
                 >
