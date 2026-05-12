@@ -20,7 +20,6 @@ import {
   updateWidget,
   getWidgetHistory,
   createWidgetHistorySnapshot,
-  restoreWidgetHistory,
   deleteWidgetHistory,
 } from '~/lib/api.functions';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -39,7 +38,7 @@ import { FullScreenEditor, type EditorMode } from './widget-form/FullScreenEdito
 import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
 import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
 import { UnsavedChangesGuard } from '../shared/UnsavedChangesGuard';
-import { useNavigate, useRouter } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { getServerFnError } from '~/lib/api-helpers';
 import {
@@ -226,7 +225,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   submitButtonText,
 }) => {
   const navigate = useNavigate();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const widgetFormVersion = isCreateMode
     ? 'create'
@@ -246,7 +244,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     watch,
     setValue,
     reset,
-    getValues,
     setError,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<WidgetFormValues>({
@@ -260,7 +257,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<WidgetHistoryEntry | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [isRestoringHistory, setIsRestoringHistory] = useState(false);
   const [deletingHistoryIds, setDeletingHistoryIds] = useState<Set<string>>(() => new Set());
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
 
@@ -287,7 +283,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     setSelectedHistoryItem(null);
     setHistoryError(null);
     setIsHistoryLoading(false);
-    setIsRestoringHistory(false);
     setDeletingHistoryIds(new Set());
   }, [formDefaultValues, reset, widgetFormVersion]);
 
@@ -544,39 +539,21 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     }
   };
 
-  const handleRestore = async (historyId: string) => {
+  const handleRestore = (historyId: string) => {
     if (!widget?.id) return;
     const restoredEntry = history.find((entry) => entry.id === historyId);
-    setIsRestoringHistory(true);
-    try {
-      await restoreWidgetHistory({ data: { widgetId: widget.id, historyId } });
-      if (restoredEntry) {
-        reset({
-          ...getValues(),
-          htmlContent: restoredEntry.htmlContent,
-          cssContent: restoredEntry.cssContent || undefined,
-        });
-        setSelectedHistoryItem(restoredEntry);
-      }
-      try {
-        const refreshedHistory = await getWidgetHistory({ data: { widgetId: widget.id } });
-        const entries = refreshedHistory as WidgetHistoryEntry[];
-        setHistory(entries);
-        setSelectedHistoryItem(
-          entries.find((entry) => entry.id === historyId) ?? restoredEntry ?? entries[0] ?? null,
-        );
-      } catch {
-        // The restored form content is already applied; a history refresh can recover on next open.
-      }
-      toast.success('Version restored successfully!');
-      void router.invalidate();
-      queryClient.invalidateQueries({ queryKey: ['widgets', 'detail', widget.id] });
-      queryClient.invalidateQueries({ queryKey: ['widgets', 'list'] });
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to restore version');
-    } finally {
-      setIsRestoringHistory(false);
+    if (!restoredEntry) {
+      toast.error('Version not found.');
+      return;
     }
+
+    applyContentToForm({
+      html: restoredEntry.htmlContent,
+      css: restoredEntry.cssContent || '',
+    });
+    setSelectedHistoryItem(restoredEntry);
+    setIsHistoryOpen(false);
+    toast.success('Version content applied. Save the widget to keep it.');
   };
 
   const handleDeleteHistory = async (historyId: string) => {
@@ -799,7 +776,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     <div className="space-y-8">
       <UnsavedChangesGuard
         isDirty={shouldGuardNavigation}
-        isSubmitting={isSubmitting || isRestoringHistory}
+        isSubmitting={isSubmitting}
       />
       <div className="flex items-center justify-between">
         <div>
@@ -984,7 +961,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         setSelectedHistoryItem={setSelectedHistoryItem}
         isLoading={isHistoryLoading}
         error={historyError}
-        isRestoring={isRestoringHistory}
         deletingHistoryIds={deletingHistoryIds}
         handleRestore={handleRestore}
         handleDeleteHistory={handleDeleteHistory}
