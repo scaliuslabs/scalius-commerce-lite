@@ -53,6 +53,14 @@ export const widgetPlacementInputSchema = z.object({
         });
     }
 
+    if (placement.scope === WidgetPlacementScope.HOMEPAGE && placement.scopeId) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Homepage placements must not include a scopeId.",
+            path: ["scopeId"],
+        });
+    }
+
     if (
         isWidgetCollectionSlot(placement.slot) &&
         (!placement.anchorId || placement.anchorType !== WidgetPlacementAnchorType.COLLECTION)
@@ -63,6 +71,49 @@ export const widgetPlacementInputSchema = z.object({
             path: ["anchorId"],
         });
     }
+
+    if (
+        !isWidgetCollectionSlot(placement.slot) &&
+        (placement.anchorType != null || placement.anchorId != null)
+    ) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Only collection-anchored placements may include anchor fields.",
+            path: ["anchorId"],
+        });
+    }
+});
+
+function placementIdentity(placement: WidgetPlacementInput): string {
+    return [
+        placement.scope,
+        placement.scopeId ?? "",
+        placement.slot,
+        placement.anchorType ?? "",
+        placement.anchorId ?? "",
+    ].join("\u001f");
+}
+
+const widgetPlacementListSchema = z.array(widgetPlacementInputSchema).superRefine((placements, ctx) => {
+    const seen = new Map<string, number>();
+    placements.forEach((placement, index) => {
+        const key = placementIdentity(placement);
+        const firstIndex = seen.get(key);
+        if (firstIndex !== undefined) {
+            ctx.addIssue({
+                code: "custom",
+                message: "Duplicate widget placement target.",
+                path: [index],
+            });
+            ctx.addIssue({
+                code: "custom",
+                message: "Duplicate widget placement target.",
+                path: [firstIndex],
+            });
+            return;
+        }
+        seen.set(key, index);
+    });
 });
 
 /** Base shape without .refine() so .partial() works for the update schema */
@@ -82,7 +133,7 @@ const widgetBaseSchema = z.object({
     ]).default(WidgetPlacementRule.STANDALONE),
     referenceCollectionId: z.string().optional().nullable(),
     sortOrder: z.number().int().optional().default(0),
-    placements: z.array(widgetPlacementInputSchema).optional(),
+    placements: widgetPlacementListSchema.optional(),
 });
 
 /** Validates projected placement fields only when canonical placement rows are absent. */
@@ -111,6 +162,18 @@ const collectionRefMessage = {
     path: ["referenceCollectionId"] as string[],
 };
 
+function hasLegacyPlacementProjection(data: Partial<{
+    displayTarget: string;
+    placementRule: WidgetPlacementRule;
+    referenceCollectionId: string | null;
+    sortOrder: number;
+}>): boolean {
+    return data.displayTarget !== undefined ||
+        data.placementRule !== undefined ||
+        data.referenceCollectionId !== undefined ||
+        data.sortOrder !== undefined;
+}
+
 /** Schema for creating a new widget (POST /api/widgets) */
 export const createWidgetSchema = widgetBaseSchema.refine(
     validateCollectionRef,
@@ -118,10 +181,23 @@ export const createWidgetSchema = widgetBaseSchema.refine(
 );
 
 /** Schema for updating an existing widget (PUT /api/widgets/:id) */
-export const updateWidgetSchema = widgetBaseSchema.partial().refine(
-    validateCollectionRef,
-    collectionRefMessage,
-);
+export const updateWidgetSchema = widgetBaseSchema.partial().superRefine((data, ctx) => {
+    if (!validateCollectionRef(data)) {
+        ctx.addIssue({
+            code: "custom",
+            message: collectionRefMessage.message,
+            path: collectionRefMessage.path,
+        });
+    }
+
+    if (data.placements === undefined && hasLegacyPlacementProjection(data)) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Use canonical placements to change widget placement.",
+            path: ["placements"],
+        });
+    }
+});
 
 export type CreateWidgetInput = z.infer<typeof createWidgetSchema>;
 export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;

@@ -16,7 +16,7 @@ import type { WidgetHistory, WidgetPlacement } from "@scalius/database/schema";
 import { isNull, asc, and, sql, inArray, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError } from "@scalius/core/errors";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     createWidgetSchema,
     updateWidgetSchema,
@@ -37,6 +37,18 @@ type LegacyPlacementFields = {
     referenceCollectionId: string | null;
     sortOrder: number;
 };
+
+function hasLegacyPlacementProjection(data: Partial<{
+    displayTarget: string;
+    placementRule: WidgetPlacementRule;
+    referenceCollectionId: string | null;
+    sortOrder: number;
+}>): boolean {
+    return data.displayTarget !== undefined ||
+        data.placementRule !== undefined ||
+        data.referenceCollectionId !== undefined ||
+        data.sortOrder !== undefined;
+}
 
 type PublicWidgetBase = Pick<
     typeof widgets.$inferSelect,
@@ -191,6 +203,104 @@ function normalizePlacementInserts(
         isActive: placement.isActive ?? true,
         deletedAt: null,
     }));
+}
+
+function placementIdentity(placement: WidgetPlacementInput): string {
+    return [
+        placement.scope,
+        placement.scopeId ?? "",
+        placement.slot,
+        placement.anchorType ?? "",
+        placement.anchorId ?? "",
+    ].join("\u001f");
+}
+
+function assertUniquePlacements(placements: WidgetPlacementInput[]): void {
+    const seen = new Map<string, number>();
+    placements.forEach((placement, index) => {
+        const key = placementIdentity(placement);
+        const firstIndex = seen.get(key);
+        if (firstIndex !== undefined) {
+            throw new ValidationError(
+                `Duplicate widget placement target at positions ${firstIndex + 1} and ${index + 1}.`,
+            );
+        }
+        seen.set(key, index);
+    });
+}
+
+async function validatePlacementReferences(
+    db: Database,
+    placements: WidgetPlacementInput[],
+): Promise<void> {
+    assertUniquePlacements(placements);
+
+    const pageIds = new Set<string>();
+    const collectionIds = new Set<string>();
+
+    for (const placement of placements) {
+        if (placement.scope === WidgetPlacementScope.HOMEPAGE && placement.scopeId) {
+            throw new ValidationError("Homepage widget placements must not include a page scope.");
+        }
+
+        if (placement.scope === WidgetPlacementScope.PAGE) {
+            if (!placement.scopeId) {
+                throw new ValidationError("Page widget placements require a page.");
+            }
+            pageIds.add(placement.scopeId);
+        }
+
+        const isCollectionSlot =
+            placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
+            placement.slot === WidgetPlacementSlot.AFTER_COLLECTION;
+
+        if (isCollectionSlot) {
+            if (placement.anchorType !== WidgetPlacementAnchorType.COLLECTION || !placement.anchorId) {
+                throw new ValidationError("Collection widget placements require a collection anchor.");
+            }
+            collectionIds.add(placement.anchorId);
+        } else if (placement.anchorType != null || placement.anchorId != null) {
+            throw new ValidationError("Only collection widget placements may include anchor fields.");
+        }
+    }
+
+    if (pageIds.size > 0) {
+        const ids = [...pageIds];
+        const livePages = await db
+            .select({ id: pages.id })
+            .from(pages)
+            .where(and(
+                inArray(pages.id, ids),
+                eq(pages.isPublished, true),
+                isNull(pages.deletedAt),
+            ));
+        const found = new Set((livePages as Array<{ id: string }>).map((page) => page.id));
+        const missing = ids.filter((id) => !found.has(id));
+        if (missing.length > 0) {
+            throw new ValidationError(
+                `Widget placement references missing or unpublished pages: ${missing.join(", ")}.`,
+            );
+        }
+    }
+
+    if (collectionIds.size > 0) {
+        const ids = [...collectionIds];
+        const activeCollections = await db
+            .select({ id: collections.id })
+            .from(collections)
+            .where(and(
+                inArray(collections.id, ids),
+                eq(collections.isActive, true),
+                isNull(collections.deletedAt),
+            ));
+        const found = new Set((activeCollections as Array<{ id: string }>).map((collection) => collection.id));
+        const missing = ids.filter((id) => !found.has(id));
+        if (missing.length > 0) {
+            throw new ValidationError(
+                `Widget placement references missing or inactive collections: ${missing.join(", ")}.`,
+            );
+        }
+    }
 }
 
 function groupPlacementsByWidget(placements: WidgetPlacement[]) {
@@ -494,6 +604,7 @@ export async function getActiveWidgetPlacements(
 export async function createWidget(db: Database, data: CreateWidgetInput) {
     const widgetId = "wid_" + nanoid();
     const requestedPlacements = data.placements ?? placementFromLegacyFields(data);
+    await validatePlacementReferences(db, requestedPlacements);
     const legacyFields = legacyFieldsFromPlacement(requestedPlacements[0]);
 
     const batchOps: unknown[] = [
@@ -525,6 +636,9 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
 export async function updateWidget(db: Database, id: string, data: UpdateWidgetInput) {
     const existing = await getWidgetById(db, id);
     if (!existing) throw new NotFoundError("Widget not found");
+    if (data.placements === undefined && hasLegacyPlacementProjection(data)) {
+        throw new ValidationError("Use canonical placements to change widget placement.");
+    }
 
     const updateData: Record<string, unknown> = { updatedAt: sql`unixepoch()` };
     if (data.name !== undefined) updateData.name = data.name;
@@ -536,6 +650,7 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
     const requestedPlacements = data.placements;
 
     if (requestedPlacements !== undefined) {
+        await validatePlacementReferences(db, requestedPlacements);
         const legacyFields = legacyFieldsFromPlacement(requestedPlacements[0]);
         updateData.displayTarget = legacyFields.displayTarget;
         updateData.placementRule = legacyFields.placementRule;

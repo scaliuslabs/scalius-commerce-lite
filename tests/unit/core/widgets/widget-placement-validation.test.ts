@@ -7,6 +7,7 @@ import {
 } from "../../../../packages/database/src/schema";
 import {
   createWidgetSchema,
+  updateWidgetSchema,
   widgetPlacementInputSchema,
 } from "../../../../packages/core/src/modules/widgets/widgets.validation";
 
@@ -46,6 +47,48 @@ describe("widget placement validation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects homepage placements with page scope IDs", () => {
+    const result = widgetPlacementInputSchema.safeParse({
+      scope: WidgetPlacementScope.HOMEPAGE,
+      scopeId: "page_launch",
+      slot: WidgetPlacementSlot.TOP,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects anchor fields on non-collection slots", () => {
+    const result = widgetPlacementInputSchema.safeParse({
+      scope: WidgetPlacementScope.HOMEPAGE,
+      slot: WidgetPlacementSlot.TOP,
+      anchorType: WidgetPlacementAnchorType.COLLECTION,
+      anchorId: "col_1",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects duplicate canonical placement targets", () => {
+    const result = createWidgetSchema.safeParse({
+      name: "Homepage Hero",
+      htmlContent: "<section>Hero</section>",
+      placements: [
+        {
+          scope: WidgetPlacementScope.HOMEPAGE,
+          slot: WidgetPlacementSlot.TOP,
+          sortOrder: 1,
+        },
+        {
+          scope: WidgetPlacementScope.HOMEPAGE,
+          slot: WidgetPlacementSlot.TOP,
+          sortOrder: 2,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("rejects page content slots on homepage placements", () => {
     const result = widgetPlacementInputSchema.safeParse({
       scope: WidgetPlacementScope.HOMEPAGE,
@@ -80,5 +123,14 @@ describe("widget placement validation", () => {
     });
 
     expect(widget.placementRule).toBe(WidgetPlacementRule.BEFORE_COLLECTION);
+  });
+
+  it("rejects legacy-only placement updates", () => {
+    const result = updateWidgetSchema.safeParse({
+      placementRule: WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
+      sortOrder: 5,
+    });
+
+    expect(result.success).toBe(false);
   });
 });

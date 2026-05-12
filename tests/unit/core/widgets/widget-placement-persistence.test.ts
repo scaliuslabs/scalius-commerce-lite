@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   widgets,
   widgetPlacements,
+  WidgetPlacementAnchorType,
   WidgetPlacementRule,
   WidgetPlacementScope,
   WidgetPlacementSlot,
 } from "../../../../packages/database/src/schema";
 import {
   bulkDeleteWidgets,
+  createWidget,
   createHistoryEntry,
   deleteWidget,
   restoreWidgets,
@@ -94,7 +96,7 @@ describe("widget placement persistence", () => {
     ).toBe(false);
   });
 
-  it("does not let projected legacy fields replace canonical placements", async () => {
+  it("rejects projected legacy fields without canonical placements", async () => {
     const existingWidget = {
       id: "wid_1",
       name: "Landing hero",
@@ -128,11 +130,13 @@ describe("widget placement persistence", () => {
     };
     const db = createMockDb({ selectResult: existingWidget }) as any;
 
-    await updateWidget(db, "wid_1", {
-      placementRule: WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
-      referenceCollectionId: null,
-      sortOrder: 9,
-    });
+    await expect(
+      updateWidget(db, "wid_1", {
+        placementRule: WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
+        referenceCollectionId: null,
+        sortOrder: 9,
+      }),
+    ).rejects.toThrow("Use canonical placements to change widget placement.");
 
     expect(db._calls.some((call: { method: string }) => call.method === "delete")).toBe(false);
     expect(
@@ -141,6 +145,34 @@ describe("widget placement persistence", () => {
         .map((call: { args: unknown[] }) => call.args[0])
         .some(Array.isArray),
     ).toBe(false);
+  });
+
+  it("rejects collection placements that do not reference an active collection", async () => {
+    const db = createMockDb({ selectResult: [] }) as any;
+
+    await expect(
+      createWidget(db, {
+        name: "Collection promo",
+        htmlContent: "<section>Promo</section>",
+        isActive: true,
+        displayTarget: "homepage",
+        placementRule: WidgetPlacementRule.STANDALONE,
+        referenceCollectionId: null,
+        sortOrder: 0,
+        placements: [
+          {
+            scope: WidgetPlacementScope.HOMEPAGE,
+            slot: WidgetPlacementSlot.BEFORE_COLLECTION,
+            anchorType: WidgetPlacementAnchorType.COLLECTION,
+            anchorId: "col_missing",
+            sortOrder: 0,
+            isActive: true,
+          },
+        ],
+      }),
+    ).rejects.toThrow("missing or inactive collections");
+
+    expect(db._calls.some((call: { method: string }) => call.method === "insert.values")).toBe(false);
   });
 });
 
