@@ -5,6 +5,7 @@ import {
   optimizeCssImageUrls,
   optimizeRichContentImages,
 } from "./rich-content-media";
+import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
 import { withOptimizedProductPageImages } from "./serialized-media";
 import { normalizeWidgetCss, normalizeWidgetHtml } from "./widget-content";
@@ -61,7 +62,9 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
     let html = optimizeRichContentImages(
       normalizeWidgetHtml(widgetData.htmlContent),
     );
-    const css = optimizeCssImageUrls(normalizeWidgetCss(widgetData.cssContent));
+    const css = optimizeCssImageUrls(
+      sanitizeCssForStyleElement(normalizeWidgetCss(widgetData.cssContent)),
+    );
     if (css) {
       html = `<style>${scopeCss(css, scopeClass)}</style>${html}`;
     }

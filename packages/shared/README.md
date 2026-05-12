@@ -31,6 +31,7 @@ import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 import { scopeCss } from "@scalius/shared/css-scope";
 import { toISOString, fromUnixSeconds, nowUnixSeconds, unixToDate, formatDate } from "@scalius/shared/timestamps";
 import { getStatusBadgeClass } from "@scalius/shared/status-badges";
@@ -54,8 +55,9 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `tag-parser.ts` | 272 | XML-like tag extraction for LLM widget responses | `parseTagBasedResponse()`, `validateParsedWidget()`, `StreamingTagParser`, `getTagBasedExampleFormat()` |
 | `html-section-parser.ts` | 331 | DOM-based HTML section extraction for widget editing | `parseHtmlIntoSections()`, `reconstructWidgetFromSections()` |
 | `html-escape.ts` | 22 | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
-| `html-sanitize.ts` | 70 | Defense-in-depth XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` handlers, `javascript:`/`vbscript:`/dangerous `data:` URLs |
-| `css-scope.ts` | 223 | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
+| `html-sanitize.ts` | 352 | Defense-in-depth XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` handlers, `javascript:`/`vbscript:`/dangerous `data:` URLs |
+| `css-sanitize.ts` | 209 | Defense-in-depth sanitizer for admin-authored widget stylesheets | `sanitizeCssForStyleElement()` -- prevents style-tag breakout, removes external stylesheet/font at-rules, strips HTML tags, and neutralizes script-capable CSS values/URLs |
+| `css-scope.ts` | 222 | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
 | `timestamps.ts` | 82 | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
 | `barcode-utils.ts` | 30 | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
 | `barcode-svg.ts` | 206 | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
@@ -91,15 +93,16 @@ Runtime dependencies (listed in `package.json`):
 
 `json-repair.ts` and `tag-parser.ts` work together for AI-generated widget content. `tag-parser.ts` is preferred (tag-based extraction is more reliable than JSON from LLMs), with `json-repair.ts` as a fallback. Both support multi-strategy parsing: direct parse, markdown extraction, tag extraction, aggressive repair.
 
-### HTML Security
+### Widget Content Security
 
-Two complementary utilities:
+Widget HTML and CSS use complementary utilities:
 - `html-escape.ts` (`escapeHtml`) -- for escaping user-supplied values inserted into HTML templates (email templates, barcode labels). Prevents HTML injection.
 - `html-sanitize.ts` (`sanitizeHtml`) -- defense-in-depth sanitizer for admin-authored HTML (widgets). Strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` event handlers, `javascript:`/`vbscript:` URLs, and dangerous `data:` URLs while preserving all other HTML structure.
+- `css-sanitize.ts` (`sanitizeCssForStyleElement`) -- defense-in-depth sanitizer for full widget stylesheets before they are persisted or injected into `<style>` tags. It prevents `</style>` breakout, removes remote stylesheet/font at-rules (`@import`, `@font-face`, etc.), strips accidental HTML tags, and neutralizes script-capable CSS values such as `expression()`, `behavior`, `binding`, `javascript:`/`vbscript:`/`data:`/`file:` URLs, including CSS-escaped protocols.
 
 ### CSS Scoping
 
-`css-scope.ts` (`scopeCss`) prefixes all CSS selectors with a unique wrapper class to prevent widget styles from leaking into the rest of the page. Handles `@media`/`@supports`/`@layer`/`@container` at-rules (prefixes inner selectors), passes through `@keyframes`/`@font-face`, and rewrites `body`/`html`/`*`/`:root` selectors to the scope class.
+`css-scope.ts` (`scopeCss`) prefixes all CSS selectors with a unique wrapper class to prevent widget styles from leaking into the rest of the page. Handles `@media`/`@supports`/`@layer`/`@container` at-rules (prefixes inner selectors), preserves animation keyframes, and rewrites `body`/`html`/`*`/`:root` selectors to the scope class. Widget CSS should be passed through `sanitizeCssForStyleElement()` before `scopeCss()`.
 
 ### Timestamps
 
