@@ -56,8 +56,10 @@ import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { getServerFnError } from '~/lib/api-helpers';
 import {
+  isSupportedWidgetPlacementScope,
   isWidgetCollectionSlot,
   normalizeWidgetPlacementSlotForScope,
+  type SupportedWidgetPlacementScopeValue,
 } from '@scalius/shared/widget-placement';
 
 interface WidgetFormProps {
@@ -69,6 +71,9 @@ interface WidgetFormProps {
 }
 
 type WidgetPlacementFormValue = NonNullable<WidgetFormValues["placements"]>[number];
+type SupportedWidgetPlacement = NonNullable<Widget["placements"]>[number] & {
+  scope: SupportedWidgetPlacementScopeValue;
+};
 
 function homepagePlacement(
   slot: WidgetPlacementSlot,
@@ -107,7 +112,7 @@ function placementsFromLegacyWidget(widget: Widget): WidgetPlacementFormValue[] 
 }
 
 function normalizePlacementForForm(
-  placement: NonNullable<Widget["placements"]>[number],
+  placement: SupportedWidgetPlacement,
 ): WidgetPlacementFormValue {
   const slot = normalizeWidgetPlacementSlotForScope(
     placement.scope,
@@ -135,7 +140,11 @@ function placementsForForm(widget: Widget | null | undefined): WidgetPlacementFo
 
   if (widget.placements && widget.placements.length > 0) {
     return widget.placements
-      .filter((placement) => placement.deletedAt == null)
+      .filter(
+        (placement): placement is SupportedWidgetPlacement =>
+          placement.deletedAt == null &&
+          isSupportedWidgetPlacementScope(placement.scope),
+      )
       .map(normalizePlacementForForm);
   }
 

@@ -53,4 +53,19 @@ describe("widget placement validation", () => {
 
         expect(result.success).toBe(false);
     });
+
+    it("rejects placement scopes that do not render end to end yet", () => {
+        const result = createWidgetSchema.safeParse({
+            name: "Product Promo",
+            htmlContent: "<section>Product promo</section>",
+            placements: [{
+                ...placement,
+                scope: WidgetPlacementScope.PRODUCT,
+                scopeId: "prod_123",
+                slot: WidgetPlacementSlot.BEFORE_CONTENT,
+            }],
+        });
+
+        expect(result.success).toBe(false);
+    });
 });
