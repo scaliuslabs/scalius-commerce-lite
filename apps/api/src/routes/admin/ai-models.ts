@@ -1,4 +1,5 @@
 import {
+  getAllowedWidgetAiModels,
   supportsWidgetAiVisionInput,
   type WidgetAiProvider,
   type WidgetAiRuntimeSettings,
@@ -55,6 +56,19 @@ function configuredModel(
         },
       ]
     : [];
+}
+
+function configuredModelInfo(
+  provider: WidgetAiProvider,
+  model: string,
+): AiModelInfo {
+  return {
+    id: model,
+    name: model,
+    provider,
+    supportsVision: supportsVisionForModel(provider, model),
+    source: "configured",
+  };
 }
 
 function fallbackModels(
@@ -250,3 +264,15 @@ export async function listModelsForProvider(
   }
 }
 
+export async function listAllowedModelsForProvider(
+  provider: WidgetAiProvider,
+  settings: WidgetAiRuntimeSettings,
+): Promise<AiModelInfo[]> {
+  const allowedIds = getAllowedWidgetAiModels(settings, provider);
+  if (allowedIds.length === 0) return [];
+
+  const catalog = await listModelsForProvider(provider, settings);
+  const byId = new Map(catalog.map((model) => [model.id, model]));
+
+  return allowedIds.map((id) => byId.get(id) ?? configuredModelInfo(provider, id));
+}

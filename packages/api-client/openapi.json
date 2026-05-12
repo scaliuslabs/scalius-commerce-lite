@@ -13703,13 +13703,32 @@
                               },
                               "price": {
                                 "type": "number"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountPercentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountedPrice": {
+                                "type": "number"
                               }
                             },
                             "required": [
                               "id",
                               "name",
                               "slug",
-                              "price"
+                              "price",
+                              "discountType",
+                              "discountPercentage",
+                              "discountAmount",
+                              "discountedPrice"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -66020,6 +66039,14 @@
                             "type": "string",
                             "maxLength": 200
                           },
+                          "allowedModels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "maxItems": 50
+                          },
                           "baseUrl": {
                             "type": "string",
                             "maxLength": 200
@@ -66058,6 +66085,14 @@
                           "defaultModel": {
                             "type": "string",
                             "maxLength": 200
+                          },
+                          "allowedModels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "maxItems": 50
                           },
                           "baseUrl": {
                             "type": "string",
@@ -66098,6 +66133,14 @@
                             "type": "string",
                             "maxLength": 200
                           },
+                          "allowedModels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "maxItems": 50
+                          },
                           "baseUrl": {
                             "type": "string",
                             "maxLength": 200
@@ -66136,6 +66179,14 @@
                           "defaultModel": {
                             "type": "string",
                             "maxLength": 200
+                          },
+                          "allowedModels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "maxItems": 50
                           },
                           "baseUrl": {
                             "type": "string",
@@ -80803,7 +80854,8 @@
                     ]
                   },
                   "model": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 200
                   },
                   "messages": {
                     "type": "array",
@@ -81170,7 +81222,8 @@
                     ]
                   },
                   "model": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 200
                   },
                   "messages": {
                     "type": "array",

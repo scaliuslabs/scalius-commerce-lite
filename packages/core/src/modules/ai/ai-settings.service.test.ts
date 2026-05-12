@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_WIDGET_AI_CONFIG,
+  getAllowedWidgetAiModels,
   maskWidgetAiAdminSettings,
   normalizeWidgetAiConfig,
   providerHasCredentials,
+  requireAllowedWidgetAiModel,
   type WidgetAiRuntimeSettings,
 } from "./ai-settings.service";
+import { ValidationError } from "@scalius/core/errors";
 import { supportsWidgetAiVisionInput } from "./ai-config";
 import { DEFAULT_AI_PROMPTS } from "./default-prompts";
 
@@ -17,6 +20,13 @@ describe("widget AI settings", () => {
         openrouter: {
           enabled: "yes",
           defaultModel: 123,
+          allowedModels: [
+            " openai/gpt-5.4 ",
+            "",
+            "openai/gpt-5.4",
+            "x".repeat(201),
+            "anthropic/claude-sonnet-4.5",
+          ],
           baseUrl: " https://openrouter.ai/api/v1 ",
         },
       },
@@ -31,6 +41,10 @@ describe("widget AI settings", () => {
     expect(config.activeProvider).toBe(DEFAULT_WIDGET_AI_CONFIG.activeProvider);
     expect(config.providers.openrouter.enabled).toBe(false);
     expect(config.providers.openrouter.defaultModel).toBe("");
+    expect(config.providers.openrouter.allowedModels).toEqual([
+      "openai/gpt-5.4",
+      "anthropic/claude-sonnet-4.5",
+    ]);
     expect(config.providers.openrouter.baseUrl).toBe("https://openrouter.ai/api/v1");
     expect(config.providers.cloudflare.enabled).toBe(true);
     expect(config.providers.cloudflare.defaultModel).toBe("@cf/moonshotai/kimi-k2.6");
@@ -65,6 +79,56 @@ describe("widget AI settings", () => {
 
     expect(providerHasCredentials(runtime, "cloudflare")).toBe(true);
     expect(providerHasCredentials(runtime, "openai")).toBe(false);
+  });
+
+  it("uses the default model and configured allowlist as the allowed model set", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...DEFAULT_WIDGET_AI_CONFIG,
+      providers: {
+        ...DEFAULT_WIDGET_AI_CONFIG.providers,
+        cloudflare: {
+          ...DEFAULT_WIDGET_AI_CONFIG.providers.cloudflare,
+          defaultModel: "@cf/moonshotai/kimi-k2.6",
+          allowedModels: [
+            "@cf/openai/gpt-oss-120b",
+            "@cf/moonshotai/kimi-k2.6",
+          ],
+        },
+      },
+      apiKeys: {},
+      hasCloudflareBinding: true,
+    };
+
+    expect(getAllowedWidgetAiModels(runtime, "cloudflare")).toEqual([
+      "@cf/moonshotai/kimi-k2.6",
+      "@cf/openai/gpt-oss-120b",
+    ]);
+    expect(requireAllowedWidgetAiModel(runtime, "cloudflare", undefined)).toBe(
+      "@cf/moonshotai/kimi-k2.6",
+    );
+    expect(
+      requireAllowedWidgetAiModel(
+        runtime,
+        "cloudflare",
+        "@cf/openai/gpt-oss-120b",
+      ),
+    ).toBe("@cf/openai/gpt-oss-120b");
+  });
+
+  it("rejects widget generation models that are not enabled by settings", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...DEFAULT_WIDGET_AI_CONFIG,
+      apiKeys: {},
+      hasCloudflareBinding: true,
+    };
+
+    expect(() =>
+      requireAllowedWidgetAiModel(
+        runtime,
+        "cloudflare",
+        "@cf/openai/gpt-oss-120b",
+      ),
+    ).toThrow(ValidationError);
   });
 
   it("keeps Cloudflare widget generation text-only until image bytes are adapted server-side", () => {

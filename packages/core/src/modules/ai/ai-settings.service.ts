@@ -8,6 +8,7 @@ import {
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import {
   AI_PROVIDER_IDS,
+  ERROR_MESSAGES,
   GENERATION_CONFIG,
   SYSTEM_PROMPT_FALLBACKS,
   type PromptType,
@@ -46,6 +47,7 @@ const ALLOWED_BASE_URLS: Record<"openrouter" | "openai" | "gemini", string[]> = 
 export interface WidgetAiProviderConfig {
   enabled: boolean;
   defaultModel: string;
+  allowedModels: string[];
   baseUrl?: string;
   appName?: string;
   appUrl?: string;
@@ -96,6 +98,7 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
     openrouter: {
       enabled: false,
       defaultModel: "",
+      allowedModels: [],
       baseUrl: DEFAULT_BASE_URLS.openrouter,
       appName: "Scalius Commerce",
       appUrl: "",
@@ -103,16 +106,19 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
     openai: {
       enabled: false,
       defaultModel: "",
+      allowedModels: [],
       baseUrl: DEFAULT_BASE_URLS.openai,
     },
     gemini: {
       enabled: false,
       defaultModel: "",
+      allowedModels: [],
       baseUrl: DEFAULT_BASE_URLS.gemini,
     },
     cloudflare: {
       enabled: true,
       defaultModel: "@cf/moonshotai/kimi-k2.6",
+      allowedModels: [],
       accountId: "",
     },
   },
@@ -146,6 +152,23 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
 
 function asString(value: unknown, fallback = "") {
   return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizeModelList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  const models: string[] = [];
+
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const model = item.trim();
+    if (!model || model.length > 200 || seen.has(model)) continue;
+    seen.add(model);
+    models.push(model);
+  }
+
+  return models.slice(0, 50);
 }
 
 function normalizeCloudflareAccountId(value: unknown, fallback = ""): string {
@@ -214,6 +237,7 @@ function normalizeProvider(
     enabled:
       typeof input.enabled === "boolean" ? input.enabled : defaults.enabled,
     defaultModel: asString(input.defaultModel, defaults.defaultModel),
+    allowedModels: normalizeModelList(input.allowedModels),
   };
 
   if (provider === "openrouter") {
@@ -566,4 +590,47 @@ export function providerHasCredentials(
     );
   }
   return Boolean(settings.apiKeys[provider]);
+}
+
+export function getAllowedWidgetAiModels(
+  settings: WidgetAiRuntimeSettings,
+  provider: WidgetAiProvider,
+): string[] {
+  const providerSettings = settings.providers[provider];
+  const seen = new Set<string>();
+  const models: string[] = [];
+
+  for (const model of [
+    providerSettings.defaultModel,
+    ...providerSettings.allowedModels,
+  ]) {
+    const trimmed = model.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    models.push(trimmed);
+  }
+
+  return models;
+}
+
+export function requireAllowedWidgetAiModel(
+  settings: WidgetAiRuntimeSettings,
+  provider: WidgetAiProvider,
+  requestedModel: string | undefined,
+): string {
+  const model =
+    requestedModel?.trim() || settings.providers[provider].defaultModel.trim();
+  if (!model) throw new ValidationError(ERROR_MESSAGES.modelNotSelected);
+  if (model.length > 200) {
+    throw new ValidationError("AI model ID is too long.");
+  }
+
+  const allowedModels = getAllowedWidgetAiModels(settings, provider);
+  if (!allowedModels.includes(model)) {
+    throw new ValidationError(
+      `AI model "${model}" is not enabled for ${provider}. Add it in General Settings > Widget AI before using it.`,
+    );
+  }
+
+  return model;
 }
