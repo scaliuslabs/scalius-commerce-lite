@@ -953,7 +953,14 @@ export const getWidgetHistory = createServerFn({ method: "GET" })
 
 export const createWidgetHistorySnapshot = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { widgetId: string; snapshot: Record<string, unknown> }) => data,
+    (data: {
+      widgetId: string;
+      snapshot: {
+        reason?: string;
+        htmlContent?: string;
+        cssContent?: string | null;
+      };
+    }) => data,
   )
   .handler(async ({ data }) => {
     return apiPost(`/widgets/${data.widgetId}/history`, data.snapshot);

@@ -37,7 +37,7 @@ import {
   restoreWidgetHistory,
   deleteWidgetHistory,
 } from '~/lib/api.functions';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { parseAiContext, AiContextSchema, type AiContext, type ProductReference, type CategoryReference } from '@scalius/core/modules/ai/ai-context-schema';
@@ -235,6 +235,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   // Save version state
   const [isSaveVersionOpen, setIsSaveVersionOpen] = useState(false);
   const [versionReason, setVersionReason] = useState("");
+  const [isSavingVersion, setIsSavingVersion] = useState(false);
 
   // Editor state
   const [editorMode, setEditorMode] = useState<EditorMode>('generation-preview');
@@ -469,18 +470,34 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   const handleSaveVersion = async () => {
     if (!widget?.id) return;
+    const htmlContent = watch('htmlContent');
+    const cssContent = watch('cssContent');
+    if (!htmlContent || htmlContent.trim().length === 0) {
+      toast.error('Add HTML content before saving a version.');
+      return;
+    }
+
+    setIsSavingVersion(true);
     try {
-      await createWidgetHistorySnapshot({
+      const entry = await createWidgetHistorySnapshot({
         data: {
           widgetId: widget.id,
-          snapshot: { reason: versionReason.trim() || 'Manual save' },
+          snapshot: {
+            reason: versionReason.trim() || 'Manual save',
+            htmlContent,
+            cssContent: cssContent ?? null,
+          },
         },
-      });
+      }) as WidgetHistoryEntry;
       toast.success('Version saved!');
+      setHistory(prev => [entry, ...prev.filter(item => item.id !== entry.id)]);
+      setSelectedHistoryItem(entry);
       setIsSaveVersionOpen(false);
       setVersionReason('');
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to save version');
+    } finally {
+      setIsSavingVersion(false);
     }
   };
 
@@ -670,7 +687,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setVersionReason('')}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSaveVersion}>Save Version</AlertDialogAction>
+            <Button type="button" onClick={handleSaveVersion} disabled={isSavingVersion}>
+              {isSavingVersion ? 'Saving...' : 'Save Version'}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

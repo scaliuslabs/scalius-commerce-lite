@@ -438,7 +438,11 @@ const createHistoryRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({ reason: z.string().optional().default("Manual save") })
+                    schema: z.object({
+                        reason: z.string().optional().default("Manual save"),
+                        htmlContent: z.string().optional(),
+                        cssContent: z.string().nullable().optional(),
+                    })
                 }
             }
         }
@@ -455,8 +459,8 @@ const createHistoryRoute = createRoute({
 app.openapi(createHistoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { reason } = c.req.valid("json");
-    const entry = await createHistoryEntry(db, id, reason);
+    const { reason, htmlContent, cssContent } = c.req.valid("json");
+    const entry = await createHistoryEntry(db, id, reason, { htmlContent, cssContent });
     return created(c, entry);
 });
 
