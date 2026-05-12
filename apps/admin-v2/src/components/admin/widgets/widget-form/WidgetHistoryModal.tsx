@@ -16,7 +16,6 @@ interface WidgetHistoryModalProps {
   setSelectedHistoryItem: (item: WidgetHistoryEntry | null) => void;
   isLoading: boolean;
   error: string | null;
-  isRestoring: boolean;
   deletingHistoryIds: Set<string>;
   handleRestore: (historyId: string) => void;
   handleDeleteHistory: (historyId: string) => void;
@@ -31,7 +30,6 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
     setSelectedHistoryItem, 
     isLoading,
     error,
-    isRestoring,
     deletingHistoryIds,
     handleRestore, 
     handleDeleteHistory, 
@@ -44,7 +42,7 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
       <DialogContent className="max-w-7xl h-[90vh] flex flex-col">
           <DialogHeader>
               <DialogTitle>Version History for "{widgetName}"</DialogTitle>
-              <DialogDescription>Review and restore previous versions of this widget.</DialogDescription>
+              <DialogDescription>Preview a saved version, apply its content to the form, then save the widget when ready.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
               <div className="col-span-1 flex flex-col overflow-y-auto border-r pr-4">
@@ -86,7 +84,7 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
                               size="icon"
                               className="h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100"
                               aria-label={`Delete version from ${formatDate(h.createdAt)}`}
-                              disabled={isDeleting || isRestoring}
+                              disabled={isDeleting}
                               onClick={(e) => { e.stopPropagation(); handleDeleteHistory(h.id); }}
                           >
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -110,9 +108,8 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
                               <Button
                                   type="button"
                                   onClick={() => handleRestore(selectedHistoryItem.id)}
-                                  disabled={isRestoring}
                               >
-                                  {isRestoring ? "Restoring..." : "Restore This Version"}
+                                  Apply to Form
                               </Button>
                           </div>
                       </>
