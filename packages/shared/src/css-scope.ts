@@ -1,222 +1,293 @@
+import * as cssTree from "css-tree";
+import type {
+  Atrule,
+  EnterOrLeaveFn,
+  Identifier,
+  Rule,
+  SelectorList,
+  StringNode,
+  StyleSheet,
+  WalkContext,
+} from "css-tree";
+
+const ALLOWED_BLOCK_AT_RULES = new Set([
+  "container",
+  "keyframes",
+  "-webkit-keyframes",
+  "layer",
+  "media",
+  "supports",
+]);
+const KEYFRAMES_AT_RULES = new Set(["keyframes", "-webkit-keyframes"]);
+const CONTROL_CHARS_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B\u200C\u200D\uFEFF]/g;
+
 /**
  * Scopes CSS selectors under a unique wrapper class to prevent widget styles
  * from leaking into the rest of the page.
  *
- * Given raw CSS and a scope class (e.g. "sw-abc123"), every selector is
- * prefixed so `.btn { color: red }` becomes `.sw-abc123 .btn { color: red }`.
- *
- * Handles:
- * - Regular selectors (`.foo`, `#bar`, `div`)
- * - Comma-separated selector lists
- * - `@media` / `@supports` / `@layer` at-rules (prefixes inner selectors)
- * - `body` / `html` / `*` selectors → rewritten to the scope class
- * - `@keyframes`, `@font-face` → passed through unchanged
- * - Nested `@media` inside other at-rules
+ * In addition to selector scoping, widget keyframes are renamed per scope and
+ * animation declarations are rewritten to use those scoped names. At-rules are
+ * default-deny: only conditional grouping rules and keyframes are retained.
  */
 export function scopeCss(css: string, scopeClass: string): string {
-  if (!css || !scopeClass) return css;
+  const safeScopeClass = sanitizeCssIdentifier(scopeClass);
+  if (!css || !safeScopeClass) return "";
 
-  const scope = `.${scopeClass}`;
-  return processBlock(css, scope);
+  const ast = parseStylesheet(css);
+  if (!ast) return "";
+
+  removeUnsupportedAtRules(ast);
+  const keyframeNames = namespaceKeyframes(ast, safeScopeClass);
+  rewriteAnimationNames(ast, keyframeNames);
+  scopeRuleSelectors(ast, `.${safeScopeClass}`);
+
+  return cssTree.generate(ast);
 }
 
-function processBlock(css: string, scope: string): string {
-  const result: string[] = [];
-  let i = 0;
-
-  while (i < css.length) {
-    // Skip whitespace
-    if (/\s/.test(css[i]!)) {
-      result.push(css[i]!);
-      i++;
-      continue;
-    }
-
-    // Skip comments
-    if (css[i] === "/" && css[i + 1] === "*") {
-      const end = css.indexOf("*/", i + 2);
-      if (end === -1) {
-        result.push(css.slice(i));
-        break;
-      }
-      result.push(css.slice(i, end + 2));
-      i = end + 2;
-      continue;
-    }
-
-    // At-rule
-    if (css[i]! === "@") {
-      const atRule = extractAtRule(css, i);
-      if (!atRule) {
-        result.push(css[i]!);
-        i++;
-        continue;
-      }
-
-      const name = atRule.name.toLowerCase();
-
-      // Pass-through at-rules: don't prefix selectors inside these
-      if (name === "keyframes" || name === "-webkit-keyframes" || name === "font-face") {
-        result.push(css.slice(i, atRule.end));
-        i = atRule.end;
-        continue;
-      }
-
-      // Conditional at-rules: prefix selectors inside the block
-      if (name === "media" || name === "supports" || name === "layer" || name === "container") {
-        result.push(css.slice(i, atRule.bodyStart));
-        result.push(processBlock(css.slice(atRule.bodyStart, atRule.bodyEnd), scope));
-        result.push("}");
-        i = atRule.end;
-        continue;
-      }
-
-      // Other at-rules (e.g. @import, @charset) — pass through
-      if (atRule.bodyStart === -1) {
-        result.push(css.slice(i, atRule.end));
-        i = atRule.end;
-        continue;
-      }
-
-      // Unknown block at-rule — pass through
-      result.push(css.slice(i, atRule.end));
-      i = atRule.end;
-      continue;
-    }
-
-    // Regular rule: selector { ... }
-    const openBrace = findTopLevelChar(css, "{", i);
-    if (openBrace === -1) {
-      // No more rules, treat remainder as-is
-      result.push(css.slice(i));
-      break;
-    }
-
-    const closeBrace = findMatchingBrace(css, openBrace);
-    if (closeBrace === -1) {
-      result.push(css.slice(i));
-      break;
-    }
-
-    const selectorText = css.slice(i, openBrace).trim();
-    const body = css.slice(openBrace, closeBrace + 1);
-
-    if (selectorText) {
-      result.push(prefixSelectors(selectorText, scope));
-      result.push(" ");
-      result.push(body);
-    } else {
-      result.push(css.slice(i, closeBrace + 1));
-    }
-
-    i = closeBrace + 1;
+function parseStylesheet(css: string): StyleSheet | null {
+  try {
+    return cssTree.parse(css, {
+      context: "stylesheet",
+      positions: false,
+      parseAtrulePrelude: true,
+      parseRulePrelude: true,
+      parseValue: true,
+      parseCustomProperty: false,
+    }) as StyleSheet;
+  } catch {
+    return null;
   }
+}
 
-  return result.join("");
+function removeUnsupportedAtRules(ast: StyleSheet): void {
+  const enter: EnterOrLeaveFn = (node, item, list) => {
+    if (node.type !== "Atrule") return;
+    const name = normalizeCssIdentifier(node.name);
+    if (!ALLOWED_BLOCK_AT_RULES.has(name) || node.block === null) {
+      list.remove(item);
+    }
+  };
+
+  cssTree.walk(ast, {
+    enter,
+  });
+}
+
+function namespaceKeyframes(
+  ast: StyleSheet,
+  scopeClass: string,
+): Map<string, string> {
+  const keyframeNames = new Map<string, string>();
+
+  cssTree.walk(ast, {
+    visit: "Atrule",
+    enter(node) {
+      if (!isKeyframesAtRule(node)) return;
+
+      const nameNode = getKeyframesNameNode(node);
+      if (!nameNode) return;
+
+      const originalName =
+        nameNode.type === "Identifier" ? nameNode.name : nameNode.value;
+      const scopedName = sanitizeCssIdentifier(`${scopeClass}-${originalName}`);
+      if (!scopedName) return;
+
+      keyframeNames.set(originalName, scopedName);
+      if (nameNode.type === "Identifier") {
+        nameNode.name = scopedName;
+      } else {
+        nameNode.value = scopedName;
+      }
+    },
+  });
+
+  return keyframeNames;
+}
+
+function rewriteAnimationNames(
+  ast: StyleSheet,
+  keyframeNames: Map<string, string>,
+): void {
+  if (keyframeNames.size === 0) return;
+
+  cssTree.walk(ast, {
+    visit: "Declaration",
+    enter(node) {
+      const property = normalizeCssIdentifier(node.property);
+      if (property !== "animation" && property !== "animation-name") return;
+
+      const rewriteValueNode: EnterOrLeaveFn = (valueNode) => {
+        if (valueNode.type === "Identifier") {
+          const replacement = keyframeNames.get(valueNode.name);
+          if (replacement) valueNode.name = replacement;
+        }
+
+        if (valueNode.type === "String") {
+          const replacement = keyframeNames.get(valueNode.value);
+          if (replacement) valueNode.value = replacement;
+        }
+      };
+
+      cssTree.walk(node.value, {
+        enter: rewriteValueNode,
+      });
+    },
+  });
+}
+
+function scopeRuleSelectors(ast: StyleSheet, scope: string): void {
+  const enter = function (this: WalkContext, node: Rule) {
+    if (isKeyframesAtRule(this.atrule)) return;
+
+    const selector = cssTree.generate(node.prelude);
+    const scopedSelector = prefixSelectors(selector, scope);
+    const parsed = parseSelectorList(scopedSelector);
+    if (parsed) node.prelude = parsed;
+  };
+
+  cssTree.walk(ast, {
+    visit: "Rule",
+    enter,
+  });
+}
+
+function parseSelectorList(selector: string): SelectorList | null {
+  try {
+    return cssTree.parse(selector, {
+      context: "selectorList",
+      positions: false,
+      parseRulePrelude: true,
+    }) as SelectorList;
+  } catch {
+    return null;
+  }
+}
+
+function getKeyframesNameNode(node: Atrule): Identifier | StringNode | null {
+  const firstChild = node.prelude?.type === "AtrulePrelude"
+    ? node.prelude.children.first
+    : null;
+  if (firstChild?.type === "Identifier" || firstChild?.type === "String") {
+    return firstChild;
+  }
+  return null;
+}
+
+function isKeyframesAtRule(node: Atrule | null): boolean {
+  return node ? KEYFRAMES_AT_RULES.has(normalizeCssIdentifier(node.name)) : false;
 }
 
 /**
  * Split a selector list on commas, but not commas inside functional
- * pseudo-selectors like :is(), :where(), :not(), :has().
+ * pseudo-selectors, attribute selectors, or strings.
  */
 function splitSelectors(selectorText: string): string[] {
   const parts: string[] = [];
   let current = "";
   let depth = 0;
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
 
   for (let i = 0; i < selectorText.length; i++) {
-    const ch = selectorText[i];
-    if (ch === "(") {
+    const ch = selectorText[i]!;
+
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      current += ch;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      current += ch;
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      current += ch;
+      quote = ch;
+      continue;
+    }
+    if (ch === "(" || ch === "[") {
       depth++;
       current += ch;
-    } else if (ch === ")") {
+      continue;
+    }
+    if (ch === ")" || ch === "]") {
       depth = Math.max(0, depth - 1);
       current += ch;
-    } else if (ch === "," && depth === 0) {
+      continue;
+    }
+    if (ch === "," && depth === 0) {
       parts.push(current);
       current = "";
-    } else {
-      current += ch;
+      continue;
     }
+
+    current += ch;
   }
+
   parts.push(current);
   return parts;
 }
 
 function prefixSelectors(selectorText: string, scope: string): string {
   return splitSelectors(selectorText)
-    .map((sel) => {
-      const s = sel.trim();
-      if (!s) return s;
-
-      // Rewrite global selectors to the scope container itself
-      if (s === "body" || s === "html" || s === "*" || s === ":root") {
-        return scope;
-      }
-
-      // Selectors starting with body/html — strip the global part and scope
-      if (/^(body|html)\s+/.test(s)) {
-        return `${scope} ${s.replace(/^(body|html)\s+/, "")}`;
-      }
-
-      return `${scope} ${s}`;
-    })
+    .map((sel) => prefixSelector(sel.trim(), scope))
     .join(", ");
 }
 
-interface AtRuleInfo {
-  name: string;
-  /** Index right after the opening `{` (first char inside the block) */
-  bodyStart: number;
-  /** Index right after the opening `{` — -1 if no block (e.g. `@import`) */
-  bodyEnd: number;
-  /** Index one past the closing `}` or semicolon */
-  end: number;
-}
+function prefixSelector(selector: string, scope: string): string {
+  if (!selector) return selector;
 
-function extractAtRule(css: string, start: number): AtRuleInfo | null {
-  // Match the at-rule name
-  const nameMatch = css.slice(start).match(/^@([\w-]+)/);
-  if (!nameMatch) return null;
-
-  const name = nameMatch[1]!;
-
-  // Find either { or ; to determine if it's a block or statement at-rule
-  let j = start + nameMatch[0].length;
-  while (j < css.length) {
-    if (css[j]! === "{") {
-      const bodyStart = j + 1;
-      const closeBrace = findMatchingBrace(css, j);
-      if (closeBrace === -1) return null;
-      return { name, bodyStart, bodyEnd: closeBrace, end: closeBrace + 1 };
-    }
-    if (css[j]! === ";") {
-      return { name, bodyStart: -1, bodyEnd: -1, end: j + 1 };
-    }
-    j++;
+  if (selector === "body" || selector === "html" || selector === "*" || selector === ":root") {
+    return scope;
   }
 
-  return null;
-}
+  const rootMatch = selector.match(/^(body|html|:root)([^\s>+~]*)?(?:\s+|[>+~]\s*)?(.*)$/i);
+  if (rootMatch) {
+    const root = rootMatch[1]!;
+    const qualifier = rootMatch[2] ?? "";
+    const tail = rootMatch[3]?.replace(/^[>+~]\s*/, "").trim() ?? "";
 
-function findTopLevelChar(css: string, char: string, start: number): number {
-  let depth = 0;
-  for (let i = start; i < css.length; i++) {
-    if (depth === 0 && css[i] === char) return i;
-    if (css[i] === "{") depth++;
-    else if (css[i] === "}") depth--;
+    if (!qualifier && !tail) return scope;
+    if (!tail) return `${root}${qualifier} ${scope}`;
+    return `${root}${qualifier} ${scope} ${tail}`;
   }
-  return -1;
+
+  return `${scope} ${selector}`;
 }
 
-function findMatchingBrace(css: string, openIndex: number): number {
-  let depth = 1;
-  for (let i = openIndex + 1; i < css.length; i++) {
-    if (css[i] === "{") depth++;
-    else if (css[i] === "}") {
-      depth--;
-      if (depth === 0) return i;
+function sanitizeCssIdentifier(value: string): string {
+  const normalized = normalizeCssIdentifier(value)
+    .replace(/[^a-z0-9_-]/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!normalized) return "";
+  return /^[a-z_-]/i.test(normalized) ? normalized : `x-${normalized}`;
+}
+
+function normalizeCssIdentifier(value: string): string {
+  return decodeCssEscapes(value)
+    .replace(CONTROL_CHARS_RE, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function decodeCssEscapes(value: string): string {
+  return value.replace(/\\([0-9a-fA-F]{1,6}\s?|.)/g, (_match, escape: string) => {
+    const hex = escape.trim();
+    if (/^[0-9a-fA-F]+$/.test(hex)) {
+      const codePoint = Number.parseInt(hex, 16);
+      if (Number.isFinite(codePoint) && codePoint > 0 && codePoint <= 0x10ffff) {
+        return String.fromCodePoint(codePoint);
+      }
+      return "";
     }
-  }
-  return -1;
+    return escape;
+  });
 }

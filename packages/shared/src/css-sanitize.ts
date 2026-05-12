@@ -1,13 +1,25 @@
+import * as cssTree from "css-tree";
+import type {
+  Atrule,
+  Declaration,
+  EnterOrLeaveFn,
+  Raw,
+  StyleSheet,
+  Value,
+} from "css-tree";
+
 const CONTROL_CHARS_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B\u200C\u200D\uFEFF]/g;
 const STYLE_TAG_RE = /<\/?\s*style\b[^>]*>/gi;
 const SCRIPT_TAG_RE = /<\s*script\b[\s\S]*?<\/\s*script\s*>/gi;
 const HTML_TAG_RE = /<\/?[^>]+>/g;
 const CSS_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
-const UNSAFE_AT_RULE_STATEMENT_RE = /@(import|charset|namespace)\b[^;{}]*(?:;|$)/gi;
-const UNSAFE_AT_RULE_BLOCKS = new Set([
-  "document",
-  "-moz-document",
-  "font-face",
+const ALLOWED_BLOCK_AT_RULES = new Set([
+  "container",
+  "keyframes",
+  "-webkit-keyframes",
+  "layer",
+  "media",
+  "supports",
 ]);
 
 /**
@@ -20,22 +32,95 @@ const UNSAFE_AT_RULE_BLOCKS = new Set([
 export function sanitizeCssForStyleElement(css: string | null | undefined): string {
   if (!css) return "";
 
-  let sanitized = css
+  const stripped = css
     .replace(CONTROL_CHARS_RE, "")
     .replace(SCRIPT_TAG_RE, "")
     .replace(STYLE_TAG_RE, "")
     .replace(HTML_TAG_RE, "")
     .replace(CSS_COMMENT_RE, "");
 
-  sanitized = removeUnsafeAtRuleBlocks(sanitized);
-  sanitized = sanitized.replace(UNSAFE_AT_RULE_STATEMENT_RE, "");
-  sanitized = sanitized.replace(/expression\s*\(/gi, "blocked(");
-  sanitized = sanitized.replace(
-    /(^|[;{\s])(?:behavior|(?:-moz-|-webkit-)?binding)\s*:[^;}]+/gi,
-    "$1blocked: unset",
-  );
+  const ast = parseStylesheet(stripped);
+  if (!ast) return "";
 
-  return sanitizeCssUrls(sanitized);
+  sanitizeAst(ast);
+  return cssTree.generate(ast);
+}
+
+function parseStylesheet(css: string): StyleSheet | null {
+  try {
+    return cssTree.parse(css, {
+      context: "stylesheet",
+      positions: false,
+      parseValue: true,
+      parseCustomProperty: false,
+    }) as StyleSheet;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeAst(ast: StyleSheet): void {
+  const enter: EnterOrLeaveFn = (node, item, list) => {
+    if (node.type === "Atrule" && shouldRemoveAtRule(node)) {
+      list.remove(item);
+      return;
+    }
+
+    if (node.type === "Declaration" && shouldRemoveDeclaration(node)) {
+      list.remove(item);
+    }
+  };
+
+  cssTree.walk(ast, {
+    enter,
+  });
+}
+
+function shouldRemoveAtRule(node: Atrule): boolean {
+  const name = normalizeCssIdentifier(node.name);
+  if (!ALLOWED_BLOCK_AT_RULES.has(name)) return true;
+  return node.block === null;
+}
+
+function shouldRemoveDeclaration(node: Declaration): boolean {
+  const property = normalizeCssIdentifier(node.property);
+  if (!/^(?:-?[a-z][a-z0-9-]*|--[a-z0-9-]+)$/i.test(property)) return true;
+  if (/^(?:behavior|(?:-moz-|-webkit-)?binding)$/i.test(property)) return true;
+
+  const valueCss = cssTree.generate(node.value);
+  const sanitizedValue = sanitizeCssUrls(valueCss);
+  const compactValue = decodeCssEscapes(sanitizedValue)
+    .replace(CONTROL_CHARS_RE, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+
+  if (
+    compactValue.includes("expression(") ||
+    compactValue.includes("javascript:") ||
+    compactValue.includes("vbscript:") ||
+    compactValue.includes("file:")
+  ) {
+    return true;
+  }
+
+  if (sanitizedValue !== valueCss) {
+    node.value = parseCssValue(sanitizedValue);
+  }
+
+  return false;
+}
+
+function parseCssValue(value: string): Value | Raw {
+  try {
+    return cssTree.parse(value, {
+      context: "value",
+      positions: false,
+      parseValue: true,
+      parseCustomProperty: false,
+    }) as Value;
+  } catch {
+    return { type: "Raw", value };
+  }
 }
 
 function sanitizeCssUrls(css: string): string {
@@ -133,45 +218,6 @@ function isCssIdentifierChar(char: string): boolean {
   return /[a-zA-Z0-9_-]/.test(char);
 }
 
-function removeUnsafeAtRuleBlocks(css: string): string {
-  let result = "";
-  let index = 0;
-
-  while (index < css.length) {
-    const atIndex = css.indexOf("@", index);
-    if (atIndex === -1) {
-      result += css.slice(index);
-      break;
-    }
-
-    result += css.slice(index, atIndex);
-    const nameMatch = css.slice(atIndex).match(/^@([\w-]+)/);
-    if (!nameMatch) {
-      result += "@";
-      index = atIndex + 1;
-      continue;
-    }
-
-    const name = nameMatch[1]!.toLowerCase();
-    if (!UNSAFE_AT_RULE_BLOCKS.has(name)) {
-      result += "@";
-      index = atIndex + 1;
-      continue;
-    }
-
-    const openBrace = css.indexOf("{", atIndex + nameMatch[0].length);
-    if (openBrace === -1) {
-      index = atIndex + nameMatch[0].length;
-      continue;
-    }
-
-    const closeBrace = findMatchingBrace(css, openBrace);
-    index = closeBrace === -1 ? css.length : closeBrace + 1;
-  }
-
-  return result;
-}
-
 function isUnsafeCssUrl(rawUrl: string): boolean {
   if (!rawUrl) return false;
   const compact = decodeCssEscapes(rawUrl)
@@ -180,6 +226,13 @@ function isUnsafeCssUrl(rawUrl: string): boolean {
     .toLowerCase();
 
   return /^(?:javascript|vbscript|file|data):/.test(compact);
+}
+
+function normalizeCssIdentifier(value: string): string {
+  return decodeCssEscapes(value)
+    .replace(CONTROL_CHARS_RE, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
 }
 
 function decodeCssEscapes(value: string): string {
@@ -194,16 +247,4 @@ function decodeCssEscapes(value: string): string {
     }
     return escape;
   });
-}
-
-function findMatchingBrace(css: string, openIndex: number): number {
-  let depth = 1;
-  for (let i = openIndex + 1; i < css.length; i++) {
-    if (css[i] === "{") depth++;
-    if (css[i] === "}") {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
 }
