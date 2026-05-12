@@ -27,8 +27,12 @@ import { resolveMediaUrl } from "./media-url";
 // ---------------------------------------------------------------------------
 
 export interface ImageOptimizationOptions {
-  width?: number;
-  height?: number;
+  /**
+   * Set to `null` when the caller intentionally wants to omit the dimension
+   * from Cloudflare's transform params instead of inheriting the helper default.
+   */
+  width?: number | null;
+  height?: number | null;
   quality?: number;
   format?: "auto" | "webp" | "avif" | "json";
   fit?: "scale-down" | "contain" | "cover" | "crop" | "pad";

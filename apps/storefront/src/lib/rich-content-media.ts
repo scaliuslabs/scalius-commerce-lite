@@ -46,6 +46,7 @@ function responsiveVariant(src: string, width: number): string {
   if (isSvgAsset(src)) return resolveMediaUrl(src);
   return getOptimizedImageUrl(src, {
     width,
+    height: null,
     quality: width <= 400 ? 80 : 85,
     format: "auto",
     fit: "scale-down",
@@ -216,6 +217,7 @@ export function optimizeCssImageUrls(css: string): string {
       ? resolveMediaUrl(originalSrc)
       : getOptimizedImageUrl(originalSrc, {
           width: 1600,
+          height: null,
           quality: 85,
           format: "auto",
           fit: "cover",

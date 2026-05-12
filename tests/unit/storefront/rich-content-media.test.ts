@@ -66,6 +66,17 @@ describe("rich content image optimization behavior", () => {
     expect(optimized).toContain('loading="lazy"');
   });
 
+  it("keeps rich content responsive image variants width-only", () => {
+    const html =
+      '<img src="https://cloud.scalius.com/widgets/freeform-photo.jpg" alt="Freeform">';
+
+    const optimized = optimizeRichContentImages(html);
+
+    expect(optimized).toContain("width=600");
+    expect(optimized).toContain("width=1200");
+    expect(optimized).not.toContain("height=600");
+  });
+
   it("normalizes stale image loading attributes", () => {
     const html =
       '<img src="https://cloud.scalius.com/widgets/hero.jpg" loading="lazy" fetchpriority="low" decoding="sync" alt="Hero">';
