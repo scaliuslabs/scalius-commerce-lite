@@ -1,24 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "~/components/ui/badge";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
-import type { Widget, WidgetPlacementRule } from "~/types/api-responses";
-
-const placementRuleLabels: Record<string, string> = {
-  before_collection: "Before Collection",
-  after_collection: "After Collection",
-  fixed_top_homepage: "Fixed: Top of Homepage",
-  fixed_bottom_homepage: "Fixed: Bottom of Homepage",
-  standalone: "Standalone (Shortcode)",
-};
-
-interface CollectionOption {
-  id: string;
-  name: string;
-}
+import type { Widget, WidgetPlacement } from "~/types/api-responses";
 
 interface WidgetColumnOptions {
   showTrashed: boolean;
-  collections: CollectionOption[];
+  getCollectionName: (id: string) => string | null;
+  getPageTitle: (id: string) => string | null;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
@@ -26,18 +14,56 @@ interface WidgetColumnOptions {
   onCopyShortcode: (id: string) => void;
 }
 
-function formatPlacement(
-  rule: WidgetPlacementRule,
-  collectionId: string | null,
-  collections: CollectionOption[],
-): string {
-  if (rule === "before_collection" || rule === "after_collection") {
-    const collectionName = collectionId
-      ? collections.find((c) => c.id === collectionId)?.name ?? "Unknown"
-      : "N/A";
-    return `${placementRuleLabels[rule]}: ${collectionName}`;
+const scopeLabels: Record<string, string> = {
+  homepage: "Homepage",
+  page: "Page",
+  product: "Product",
+  category: "Category",
+  collection: "Collection",
+};
+
+const slotLabels: Record<string, string> = {
+  top: "top",
+  bottom: "bottom",
+  before_content: "before content",
+  after_content: "after content",
+  before_collection: "before collection",
+  after_collection: "after collection",
+};
+
+function placementTargetLabel(
+  placement: WidgetPlacement,
+  opts: Pick<WidgetColumnOptions, "getCollectionName" | "getPageTitle">,
+): string | null {
+  if (placement.scope === "page" && placement.scopeId) {
+    return opts.getPageTitle(placement.scopeId) ?? placement.scopeId;
   }
-  return placementRuleLabels[rule] || "Unknown";
+  if (placement.anchorType === "collection" && placement.anchorId) {
+    return opts.getCollectionName(placement.anchorId) ?? placement.anchorId;
+  }
+  return null;
+}
+
+function formatPlacementSummary(
+  widget: Widget,
+  opts: Pick<WidgetColumnOptions, "getCollectionName" | "getPageTitle">,
+): string {
+  const activePlacements = (widget.placements ?? [])
+    .filter((placement) => placement.deletedAt == null && placement.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  if (activePlacements.length === 0) {
+    return "Shortcode only";
+  }
+
+  const [firstPlacement] = activePlacements;
+  const scope = scopeLabels[firstPlacement.scope] ?? firstPlacement.scope;
+  const slot = slotLabels[firstPlacement.slot] ?? firstPlacement.slot;
+  const target = placementTargetLabel(firstPlacement, opts);
+  const extraCount = activePlacements.length - 1;
+  const suffix = extraCount > 0 ? ` + ${extraCount} more` : "";
+
+  return `${scope} ${slot}${target ? `: ${target}` : ""}${suffix}`;
 }
 
 export function getWidgetColumns(
@@ -59,11 +85,7 @@ export function getWidgetColumns(
       header: "Placement",
       cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">
-          {formatPlacement(
-            row.original.placementRule,
-            row.original.referenceCollectionId,
-            opts.collections,
-          )}
+          {formatPlacementSummary(row.original, opts)}
         </span>
       ),
       enableSorting: false,

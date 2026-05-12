@@ -178,6 +178,41 @@ function groupPlacementsByWidget(placements: WidgetPlacement[]) {
     return byWidget;
 }
 
+const slotSortRank: Record<string, number> = {
+    [WidgetPlacementSlot.TOP]: 10,
+    [WidgetPlacementSlot.BEFORE_CONTENT]: 20,
+    [WidgetPlacementSlot.BEFORE_COLLECTION]: 30,
+    [WidgetPlacementSlot.AFTER_COLLECTION]: 40,
+    [WidgetPlacementSlot.AFTER_CONTENT]: 50,
+    [WidgetPlacementSlot.BOTTOM]: 60,
+};
+
+function sortPlacementRows<
+    T extends {
+        name: string;
+        id: string;
+        placement: Pick<WidgetPlacement, "slot" | "sortOrder" | "anchorId">;
+    },
+>(rows: T[]): T[] {
+    return [...rows].sort((a, b) => {
+        const slotDiff =
+            (slotSortRank[a.placement.slot] ?? 999) -
+            (slotSortRank[b.placement.slot] ?? 999);
+        if (slotDiff !== 0) return slotDiff;
+
+        const anchorDiff = (a.placement.anchorId ?? "").localeCompare(
+            b.placement.anchorId ?? "",
+        );
+        if (anchorDiff !== 0) return anchorDiff;
+
+        const orderDiff = a.placement.sortOrder - b.placement.sortOrder;
+        if (orderDiff !== 0) return orderDiff;
+
+        const nameDiff = a.name.localeCompare(b.name);
+        return nameDiff !== 0 ? nameDiff : a.id.localeCompare(b.id);
+    });
+}
+
 // ─────────────────────────────────────────
 // Queries
 // ─────────────────────────────────────────
@@ -295,6 +330,33 @@ export async function getActiveWidgetById(db: Database, id: string) {
  *  WIRE: api-app should call this from routes/widgets.ts (getActiveHomepageWidgetsRoute handler)
  *  replacing the inline DB query at lines 137-147. Same query shape + sanitization. */
 export async function getActiveHomepageWidgets(db: Database) {
+    return getActiveWidgetPlacements(db, { scope: WidgetPlacementScope.HOMEPAGE });
+}
+
+export async function getActiveWidgetPlacements(
+    db: Database,
+    options: {
+        scope: WidgetPlacementScope;
+        scopeId?: string | null;
+        anchorIds?: string[];
+    },
+) {
+    const placementConditions = [
+        eq(widgets.isActive, true),
+        eq(widgetPlacements.scope, options.scope),
+        eq(widgetPlacements.isActive, true),
+        isNull(widgets.deletedAt),
+        isNull(widgetPlacements.deletedAt),
+    ];
+
+    if (options.scope !== WidgetPlacementScope.HOMEPAGE) {
+        placementConditions.push(eq(widgetPlacements.scopeId, options.scopeId ?? ""));
+    }
+
+    if (options.anchorIds && options.anchorIds.length > 0) {
+        placementConditions.push(inArray(widgetPlacements.anchorId, options.anchorIds));
+    }
+
     const result = await db
         .select({
             id: widgets.id,
@@ -314,16 +376,9 @@ export async function getActiveHomepageWidgets(db: Database) {
         })
         .from(widgetPlacements)
         .innerJoin(widgets, eq(widgetPlacements.widgetId, widgets.id))
-        .where(and(
-            eq(widgets.isActive, true),
-            eq(widgetPlacements.scope, WidgetPlacementScope.HOMEPAGE),
-            eq(widgetPlacements.isActive, true),
-            isNull(widgets.deletedAt),
-            isNull(widgetPlacements.deletedAt),
-        ))
-        .orderBy(asc(widgetPlacements.slot), asc(widgetPlacements.sortOrder), asc(widgets.name));
+        .where(and(...placementConditions));
 
-    return result.map((w) => ({
+    return sortPlacementRows(result).map((w) => ({
         ...w,
         htmlContent: w.htmlContent ? sanitizeWidgetHtml(w.htmlContent) : w.htmlContent,
         cssContent: w.cssContent ? sanitizeWidgetCss(w.cssContent) : w.cssContent,

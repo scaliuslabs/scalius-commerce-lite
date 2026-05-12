@@ -76,7 +76,7 @@ const widgetHistoryEntrySchema = z.object({
 }).passthrough();
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const WIDGET_CACHE_GROUPS = ["homepage"];
+const WIDGET_CACHE_GROUPS = ["homepage", "pages"];
 
 async function invalidateWidgetCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
     await invalidateGroups(WIDGET_CACHE_GROUPS, c.env?.CACHE);

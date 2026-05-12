@@ -7,10 +7,16 @@ import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { getHomepageData, getLayoutData } from "@scalius/core/modules/storefront/storefront.service";
+import {
+  getHomepageData,
+  getLayoutData,
+  getPageRenderData,
+} from "@scalius/core/modules/storefront/storefront.service";
+import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import { pageSchema, widgetSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // GET /storefront/homepage — consolidated homepage data
@@ -36,6 +42,39 @@ const homepageRoute = createRoute({
 app.openapi(homepageRoute, (async (c: any) => {
   const db = c.get("db");
   const data = await getHomepageData(db);
+  c.header("Cache-Control", "no-store, max-age=0");
+  return ok(c, data);
+}) as any);
+
+// GET /storefront/pages/slug/:slug — consolidated CMS page render data
+const pageBySlugRoute = createRoute({
+  method: "get",
+  path: "/pages/slug/{slug}",
+  tags: ["Storefront"],
+  summary: "Get CMS page content with active page-scoped widgets",
+  request: {
+    params: z.object({
+      slug: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Page render data",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        page: pageSchema,
+        widgets: z.array(widgetSchema),
+      })) } },
+    },
+    404: errorResponses[404],
+    500: errorResponses[500],
+  }
+});
+
+app.openapi(pageBySlugRoute, (async (c: any) => {
+  const db = c.get("db");
+  const { slug } = c.req.valid("param");
+  const data = await getPageRenderData(db, slug);
+  if (!data) throw new NotFoundError("Page not found");
   c.header("Cache-Control", "no-store, max-age=0");
   return ok(c, data);
 }) as any);

@@ -9,7 +9,12 @@
  * their original locations and are re-exported here.
  */
 import { z } from "zod";
-import { WidgetPlacementRule } from "@/types/api-responses";
+import {
+  WidgetPlacementAnchorType,
+  WidgetPlacementRule,
+  WidgetPlacementScope,
+  WidgetPlacementSlot,
+} from "@/types/api-responses";
 
 const mediaFileFormSchema = z.object({
   id: z.string(),
@@ -132,6 +137,53 @@ export type AnalyticsFormValues = z.infer<typeof analyticsFormSchema>;
 //  WIDGETS
 // ═══════════════════════════════════════════════════════════════════
 
+const widgetPlacementFormSchema = z.object({
+  id: z.string().optional(),
+  scope: z.enum([
+    WidgetPlacementScope.HOMEPAGE,
+    WidgetPlacementScope.PAGE,
+    WidgetPlacementScope.PRODUCT,
+    WidgetPlacementScope.CATEGORY,
+    WidgetPlacementScope.COLLECTION,
+  ]).default(WidgetPlacementScope.HOMEPAGE),
+  scopeId: z.string().optional().nullable(),
+  slot: z.enum([
+    WidgetPlacementSlot.TOP,
+    WidgetPlacementSlot.BOTTOM,
+    WidgetPlacementSlot.BEFORE_CONTENT,
+    WidgetPlacementSlot.AFTER_CONTENT,
+    WidgetPlacementSlot.BEFORE_COLLECTION,
+    WidgetPlacementSlot.AFTER_COLLECTION,
+  ]).default(WidgetPlacementSlot.TOP),
+  anchorType: z.enum([
+    WidgetPlacementAnchorType.COLLECTION,
+    WidgetPlacementAnchorType.CONTENT,
+  ]).optional().nullable(),
+  anchorId: z.string().optional().nullable(),
+  sortOrder: z.coerce.number().int().default(0),
+  isActive: z.boolean().default(true),
+}).superRefine((placement, ctx) => {
+  if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Select the target page for this placement.",
+      path: ["scopeId"],
+    });
+  }
+
+  if (
+    (placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
+      placement.slot === WidgetPlacementSlot.AFTER_COLLECTION) &&
+    (!placement.anchorId || placement.anchorType !== WidgetPlacementAnchorType.COLLECTION)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Select the collection this placement anchors to.",
+      path: ["anchorId"],
+    });
+  }
+});
+
 export const widgetFormSchema = z.object({
   name: z.string().min(3, 'Widget name must be at least 3 characters long.'),
   htmlContent: z.string().min(1, 'HTML content cannot be empty.'),
@@ -147,8 +199,12 @@ export const widgetFormSchema = z.object({
   ]),
   referenceCollectionId: z.string().optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),
+  placements: z.array(widgetPlacementFormSchema).default([]),
 }).refine(
   (data) => {
+    if (data.placements.length > 0) {
+      return true;
+    }
     if (
       (data.placementRule === WidgetPlacementRule.BEFORE_COLLECTION ||
         data.placementRule === WidgetPlacementRule.AFTER_COLLECTION) &&

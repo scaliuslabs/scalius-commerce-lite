@@ -1,0 +1,29 @@
+---
+import type { ApiWidget } from "@/lib/api";
+import WidgetBlock from "@/components/WidgetBlock.astro";
+import { getWidgetsForZone, type WidgetPlacementZone } from "@/lib/widget-placements";
+
+interface Props extends WidgetPlacementZone {
+  widgets: ApiWidget[];
+  class?: string;
+  itemClass?: string;
+}
+
+const {
+  widgets,
+  class: className = "",
+  itemClass = "",
+  ...zone
+} = Astro.props;
+const zoneWidgets = getWidgetsForZone(widgets, zone);
+---
+
+{
+  zoneWidgets.length > 0 && (
+    <div class:list={["widget-placement-zone", className]}>
+      {zoneWidgets.map((widget) => (
+        <WidgetBlock widget={widget} class={itemClass} />
+      ))}
+    </div>
+  )
+}

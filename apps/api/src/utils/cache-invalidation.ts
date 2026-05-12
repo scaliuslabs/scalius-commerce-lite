@@ -65,9 +65,9 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   pages: {
     label: "Pages",
     description: "Static content pages",
-    kvPrefixes: ["api:pages:"],
+    kvPrefixes: ["api:pages:", "api:storefront:page:"],
     bumpsHtml: true,
-    storefrontPrefixes: ["page_slug_", "all_pages_"],
+    storefrontPrefixes: ["page_slug_", "page_render_", "all_pages_"],
   },
   layout: {
     label: "Layout",

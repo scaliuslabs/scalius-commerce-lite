@@ -3,7 +3,8 @@
 // Dynamic route for CMS pages
 
 import Layout from "../layouts/Layout.astro";
-import { getPageBySlug, getLayoutData } from "../lib/api";
+import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
+import { getPageRenderData, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
 import {
@@ -55,16 +56,18 @@ if (!validSlugPattern.test(slug)) {
 }
 
 // === NOW SAFE TO MAKE API CALL ===
-// Parallel fetch: layout + page data
-const [layoutData, page] = await Promise.all([
+// Parallel fetch: layout + page render data
+const [layoutData, pageRenderData] = await Promise.all([
   getLayoutData(),
-  getPageBySlug(slug),
+  getPageRenderData(slug),
 ]);
 setRuntimeImageCdnPolicy(layoutData?.media);
 
+const page = pageRenderData?.page ?? null;
 if (!page) {
   return new Response(null, { status: 404 });
 }
+const pageWidgets = pageRenderData?.widgets ?? [];
 
 const title = page.metaTitle || page.title;
 const description = page.metaDescription || "";
@@ -117,6 +120,12 @@ const richContentClasses =
   ogImage={featuredImageUrl || undefined}
   ogType="website"
 >
+  <WidgetPlacementZone
+    widgets={pageWidgets}
+    scope="page"
+    scopeId={page.id}
+    slot="top"
+  />
   {
     isStandaloneShortcodePage ? (
       <>
@@ -131,7 +140,19 @@ const richContentClasses =
             />
           </div>
         )}
+        <WidgetPlacementZone
+          widgets={pageWidgets}
+          scope="page"
+          scopeId={page.id}
+          slot="before_content"
+        />
         <div class="w-full overflow-hidden" set:html={processedContent} />
+        <WidgetPlacementZone
+          widgets={pageWidgets}
+          scope="page"
+          scopeId={page.id}
+          slot="after_content"
+        />
       </>
     ) : (
       <div class="w-full max-w-7xl mx-auto px-4 py-8">
@@ -155,9 +176,25 @@ const richContentClasses =
           </figure>
         )}
 
+        <WidgetPlacementZone
+          widgets={pageWidgets}
+          scope="page"
+          scopeId={page.id}
+          slot="before_content"
+          itemClass="mb-8"
+        />
+
         <div class="w-full">
           <div class={richContentClasses} set:html={processedContent} />
         </div>
+
+        <WidgetPlacementZone
+          widgets={pageWidgets}
+          scope="page"
+          scopeId={page.id}
+          slot="after_content"
+          itemClass="mt-8"
+        />
 
         <div class="text-center mt-10 pt-6 border-t border-gray-100">
           <a
@@ -183,6 +220,12 @@ const richContentClasses =
       </div>
     )
   }
+  <WidgetPlacementZone
+    widgets={pageWidgets}
+    scope="page"
+    scopeId={page.id}
+    slot="bottom"
+  />
   {
     hasProductShortcode && (
       <script>import "../scripts/hydrateProductShortcodes.ts";</script>

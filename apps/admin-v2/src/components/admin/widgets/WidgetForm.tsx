@@ -14,7 +14,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { WidgetPlacementRule, type Widget, type Collection, type WidgetHistoryEntry, type Category } from '@/types/api-responses';
+import {
+  WidgetPlacementAnchorType,
+  WidgetPlacementRule,
+  WidgetPlacementScope,
+  WidgetPlacementSlot,
+  type Widget,
+  type Collection,
+  type WidgetHistoryEntry,
+  type Category,
+} from '@/types/api-responses';
 import { widgetFormSchema, type WidgetFormValues } from '@/lib/form-schemas';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -51,15 +60,122 @@ interface WidgetFormProps {
   widget?: Widget | null;
   isCreateMode: boolean;
   availableCollections: Pick<Collection, 'id' | 'name' | 'type'>[];
-  placementRules: WidgetPlacementRule[];
+  availablePages: Array<{ id: string; title: string; slug: string; sortOrder: number }>;
   submitButtonText: string;
+}
+
+type WidgetPlacementFormValue = NonNullable<WidgetFormValues["placements"]>[number];
+
+function homepagePlacement(
+  slot: WidgetPlacementSlot,
+  sortOrder: number,
+  anchorId?: string | null,
+): WidgetPlacementFormValue {
+  return {
+    scope: WidgetPlacementScope.HOMEPAGE,
+    scopeId: null,
+    slot,
+    anchorType:
+      slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
+      slot === WidgetPlacementSlot.AFTER_COLLECTION
+        ? WidgetPlacementAnchorType.COLLECTION
+        : null,
+    anchorId: anchorId ?? null,
+    sortOrder,
+    isActive: true,
+  };
+}
+
+function placementsFromLegacyWidget(widget: Widget): WidgetPlacementFormValue[] {
+  switch (widget.placementRule) {
+    case WidgetPlacementRule.BEFORE_COLLECTION:
+      return [homepagePlacement(WidgetPlacementSlot.BEFORE_COLLECTION, widget.sortOrder, widget.referenceCollectionId)];
+    case WidgetPlacementRule.AFTER_COLLECTION:
+      return [homepagePlacement(WidgetPlacementSlot.AFTER_COLLECTION, widget.sortOrder, widget.referenceCollectionId)];
+    case WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE:
+      return [homepagePlacement(WidgetPlacementSlot.BOTTOM, widget.sortOrder)];
+    case WidgetPlacementRule.FIXED_TOP_HOMEPAGE:
+      return [homepagePlacement(WidgetPlacementSlot.TOP, widget.sortOrder)];
+    case WidgetPlacementRule.STANDALONE:
+    default:
+      return [];
+  }
+}
+
+function normalizePlacementForForm(
+  placement: NonNullable<Widget["placements"]>[number],
+): WidgetPlacementFormValue {
+  return {
+    id: placement.id,
+    scope: placement.scope,
+    scopeId: placement.scopeId ?? null,
+    slot: placement.slot,
+    anchorType: placement.anchorType ?? null,
+    anchorId: placement.anchorId ?? null,
+    sortOrder: placement.sortOrder,
+    isActive: placement.isActive,
+  };
+}
+
+function placementsForForm(widget: Widget | null | undefined): WidgetPlacementFormValue[] {
+  if (!widget) {
+    return [homepagePlacement(WidgetPlacementSlot.TOP, 0)];
+  }
+
+  if (widget.placements && widget.placements.length > 0) {
+    return widget.placements
+      .filter((placement) => placement.deletedAt == null)
+      .map(normalizePlacementForForm);
+  }
+
+  return placementsFromLegacyWidget(widget);
+}
+
+function legacyProjectionFromPlacements(placements: WidgetPlacementFormValue[] | undefined) {
+  const placement = placements?.find((item) => item.isActive) ?? placements?.[0];
+  if (!placement || placement.scope !== WidgetPlacementScope.HOMEPAGE) {
+    return {
+      displayTarget: "homepage" as const,
+      placementRule: WidgetPlacementRule.STANDALONE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+    };
+  }
+
+  if (placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION) {
+    return {
+      displayTarget: "homepage" as const,
+      placementRule: WidgetPlacementRule.BEFORE_COLLECTION,
+      referenceCollectionId: placement.anchorId ?? null,
+      sortOrder: placement.sortOrder,
+    };
+  }
+
+  if (placement.slot === WidgetPlacementSlot.AFTER_COLLECTION) {
+    return {
+      displayTarget: "homepage" as const,
+      placementRule: WidgetPlacementRule.AFTER_COLLECTION,
+      referenceCollectionId: placement.anchorId ?? null,
+      sortOrder: placement.sortOrder,
+    };
+  }
+
+  return {
+    displayTarget: "homepage" as const,
+    placementRule:
+      placement.slot === WidgetPlacementSlot.BOTTOM
+        ? WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE
+        : WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
+    referenceCollectionId: null,
+    sortOrder: placement.sortOrder,
+  };
 }
 
 export const WidgetForm: React.FC<WidgetFormProps> = ({
   widget,
   isCreateMode,
   availableCollections,
-  placementRules,
+  availablePages,
   submitButtonText,
 }) => {
   const navigate = useNavigate();
@@ -84,6 +200,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           placementRule: widget.placementRule as WidgetPlacementRule,
           referenceCollectionId: widget.referenceCollectionId,
           sortOrder: widget.sortOrder,
+          placements: placementsForForm(widget),
         }
       : {
           name: '',
@@ -94,6 +211,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
           referenceCollectionId: null,
           sortOrder: 0,
+          placements: placementsForForm(null),
         },
   });
 
@@ -383,6 +501,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
     const submissionData = {
       ...data,
+      ...legacyProjectionFromPlacements(data.placements),
       aiContext: validatedContext as unknown as Record<string, unknown>,
     };
 
@@ -460,8 +579,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           errors={errors}
           watch={watch}
           register={register}
+          setValue={setValue}
           availableCollections={availableCollections}
-          placementRules={placementRules}
+          availablePages={availablePages}
         />
 
         <div className="flex justify-end gap-2">

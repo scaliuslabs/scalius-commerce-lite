@@ -39,7 +39,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
     expect(JSON.parse(String(init?.body))).toEqual({
       groups: ["pages"],
-      prefixes: ["page_slug_", "all_pages_"],
+      prefixes: ["page_slug_", "page_render_", "all_pages_"],
       bumpVersion: true,
     });
   });

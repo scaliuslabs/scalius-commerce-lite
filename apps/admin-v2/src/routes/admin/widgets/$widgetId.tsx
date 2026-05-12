@@ -3,7 +3,6 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { WidgetForm } from "~/components/admin/widgets/WidgetForm";
 import { widgetQueryOptions, widgetsQueryOptions } from "~/lib/api.queries";
 import type { Widget, WidgetListResponse } from "~/types/api-responses";
-import { WidgetPlacementRule } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/widgets/$widgetId")({
@@ -33,7 +32,9 @@ function WidgetFormPage() {
 
 function WidgetCreateForm() {
   const { data: listData } = useSuspenseQuery(widgetsQueryOptions({}));
-  const availableCollections = (listData as WidgetListResponse).availableCollections || [];
+  const widgetList = listData as WidgetListResponse;
+  const availableCollections = widgetList.availableCollections || [];
+  const availablePages = widgetList.availablePages || [];
 
   return (
     <div className="container mx-auto py-6">
@@ -41,7 +42,7 @@ function WidgetCreateForm() {
         widget={null}
         isCreateMode={true}
         availableCollections={availableCollections}
-        placementRules={Object.values(WidgetPlacementRule)}
+        availablePages={availablePages}
         submitButtonText="Create Widget"
       />
     </div>
@@ -54,7 +55,9 @@ function WidgetEditForm() {
   const { data: widgetData } = useSuspenseQuery(widgetQueryOptions(widgetId));
 
   const widget = widgetData as Widget;
-  const availableCollections = (listData as WidgetListResponse).availableCollections || [];
+  const widgetList = listData as WidgetListResponse;
+  const availableCollections = widgetList.availableCollections || [];
+  const availablePages = widgetList.availablePages || [];
 
   return (
     <div className="container mx-auto py-6">
@@ -62,7 +65,7 @@ function WidgetEditForm() {
         widget={widget}
         isCreateMode={false}
         availableCollections={availableCollections}
-        placementRules={Object.values(WidgetPlacementRule)}
+        availablePages={availablePages}
         submitButtonText="Save Changes"
       />
     </div>

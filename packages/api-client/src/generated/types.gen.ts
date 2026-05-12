@@ -1954,6 +1954,116 @@ export type GetApiV1StorefrontHomepageResponses = {
 
 export type GetApiV1StorefrontHomepageResponse = GetApiV1StorefrontHomepageResponses[keyof GetApiV1StorefrontHomepageResponses];
 
+export type GetApiV1StorefrontPagesSlugBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/pages/slug/{slug}';
+};
+
+export type GetApiV1StorefrontPagesSlugBySlugErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontPagesSlugBySlugError = GetApiV1StorefrontPagesSlugBySlugErrors[keyof GetApiV1StorefrontPagesSlugBySlugErrors];
+
+export type GetApiV1StorefrontPagesSlugBySlugResponses = {
+    /**
+     * Page render data
+     */
+    200: {
+        success: true;
+        data: {
+            page: {
+                id: string;
+                title: string;
+                slug: string;
+                content: string;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                isPublished: boolean;
+                hideHeader: boolean;
+                hideFooter: boolean;
+                hideTitle: boolean;
+                featuredImage?: {
+                    id: string;
+                    url: string;
+                    filename: string;
+                    size: number;
+                    mimeType?: string;
+                    altText?: string | null;
+                    width?: number | null;
+                    height?: number | null;
+                    folderId?: string | null;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    [key: string]: unknown | string | number | (string | null) | (number | null) | (number | null) | (string | null) | (string | number) | (string | number) | undefined;
+                } | null;
+                publishedAt?: string | number | unknown;
+                sortOrder: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+            };
+            widgets: Array<{
+                id: string;
+                name: string;
+                htmlContent: string;
+                cssContent: string | null;
+                aiContext: string | null;
+                isActive: boolean;
+                displayTarget: string;
+                placementRule: string;
+                referenceCollectionId: string | null;
+                sortOrder: number;
+                placements?: Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
+                }>;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1StorefrontPagesSlugBySlugResponse = GetApiV1StorefrontPagesSlugBySlugResponses[keyof GetApiV1StorefrontPagesSlugBySlugResponses];
+
 export type GetApiV1StorefrontLayoutData = {
     body?: never;
     path?: never;

@@ -4,18 +4,13 @@ import "../styles/global.css";
 import Collection2 from "@/components/collection2.astro";
 import Collection1 from "../components/collection1.astro";
 import Hero from "@/components/hero.astro";
+import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import {
   getHomepageData,
   type CollectionWithProducts,
-  type ApiWidget,
 } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
-import { scopeCss } from "@scalius/shared/css-scope";
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
-import {
-  optimizeCssImageUrls,
-  optimizeRichContentImages,
-} from "@/lib/rich-content-media";
 
 // Parallel fetch: layout data + homepage data
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
@@ -36,46 +31,6 @@ const homepageTitle =
 const homepageMetaDescription =
   seo.homepageMetaDescription || "Find the best products here.";
 
-const fixedTopWidgets: ApiWidget[] = [];
-const fixedBottomWidgets: ApiWidget[] = [];
-const widgetsBeforeCollection: Record<string, ApiWidget[]> = {};
-const widgetsAfterCollection: Record<string, ApiWidget[]> = {};
-
-activeWidgets.forEach((widget) => {
-  if (widget.placementRule === "fixed_top_homepage") {
-    fixedTopWidgets.push(widget);
-  } else if (widget.placementRule === "fixed_bottom_homepage") {
-    fixedBottomWidgets.push(widget);
-  } else if (
-    widget.placementRule === "before_collection" &&
-    widget.referenceCollectionId
-  ) {
-    if (!widgetsBeforeCollection[widget.referenceCollectionId]) {
-      widgetsBeforeCollection[widget.referenceCollectionId] = [];
-    }
-    widgetsBeforeCollection[widget.referenceCollectionId].push(widget);
-  } else if (
-    widget.placementRule === "after_collection" &&
-    widget.referenceCollectionId
-  ) {
-    if (!widgetsAfterCollection[widget.referenceCollectionId]) {
-      widgetsAfterCollection[widget.referenceCollectionId] = [];
-    }
-    widgetsAfterCollection[widget.referenceCollectionId].push(widget);
-  }
-});
-
-const sortBySortOrder = (a: ApiWidget, b: ApiWidget) =>
-  a.sortOrder - b.sortOrder;
-fixedTopWidgets.sort(sortBySortOrder);
-fixedBottomWidgets.sort(sortBySortOrder);
-Object.values(widgetsBeforeCollection).forEach((widgets) =>
-  widgets.sort(sortBySortOrder),
-);
-Object.values(widgetsAfterCollection).forEach((widgets) =>
-  widgets.sort(sortBySortOrder),
-);
-
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 
@@ -95,16 +50,6 @@ function isCollection2(
   return collection.type === "dynamic";
 }
 
-function widgetHtml(widget: ApiWidget): string {
-  return optimizeRichContentImages(widget.htmlContent || "");
-}
-
-function widgetCss(widget: ApiWidget): string {
-  return scopeCss(
-    optimizeCssImageUrls(widget.cssContent || ""),
-    `sw-${widget.id}`,
-  );
-}
 ---
 
 <Layout
@@ -114,16 +59,7 @@ function widgetCss(widget: ApiWidget): string {
   canonicalUrl={canonicalUrl}
   ogType="website"
 >
-  {
-    fixedTopWidgets.map((widget) => (
-      <div class={`widget-container cms-widget-frame sw-${widget.id}`}>
-        {widget.cssContent && (
-          <style set:html={widgetCss(widget)} />
-        )}
-        <div set:html={widgetHtml(widget)} />
-      </div>
-    ))
-  }
+  <WidgetPlacementZone widgets={activeWidgets} scope="homepage" slot="top" />
 
   <section class="w-full">
     <Hero hero={hero} />
@@ -133,16 +69,13 @@ function widgetCss(widget: ApiWidget): string {
     {
       activeCollections.map((collection) => (
         <Fragment key={collection.id}>
-          {(widgetsBeforeCollection[collection.id] || []).map((widget) => (
-            <div
-              class={`widget-container cms-widget-frame mb-2 sw-${widget.id}`}
-            >
-              {widget.cssContent && (
-                <style set:html={widgetCss(widget)} />
-              )}
-              <div set:html={widgetHtml(widget)} />
-            </div>
-          ))}
+          <WidgetPlacementZone
+            widgets={activeWidgets}
+            scope="homepage"
+            slot="before_collection"
+            anchorId={collection.id}
+            itemClass="mb-2"
+          />
 
           {isCollection1(collection) && (
             <Collection1
@@ -152,29 +85,17 @@ function widgetCss(widget: ApiWidget): string {
           )}
           {isCollection2(collection) && <Collection2 collection={collection} />}
 
-          {(widgetsAfterCollection[collection.id] || []).map((widget) => (
-            <div
-              class={`widget-container cms-widget-frame mt-2 sw-${widget.id}`}
-            >
-              {widget.cssContent && (
-                <style set:html={widgetCss(widget)} />
-              )}
-              <div set:html={widgetHtml(widget)} />
-            </div>
-          ))}
+          <WidgetPlacementZone
+            widgets={activeWidgets}
+            scope="homepage"
+            slot="after_collection"
+            anchorId={collection.id}
+            itemClass="mt-2"
+          />
         </Fragment>
       ))
     }
   </div>
 
-  {
-    fixedBottomWidgets.map((widget) => (
-      <div class={`widget-container cms-widget-frame mt-1 sw-${widget.id}`}>
-        {widget.cssContent && (
-          <style set:html={widgetCss(widget)} />
-        )}
-        <div set:html={widgetHtml(widget)} />
-      </div>
-    ))
-  }
+  <WidgetPlacementZone widgets={activeWidgets} scope="homepage" slot="bottom" itemClass="mt-1" />
 </Layout>
