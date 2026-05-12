@@ -304,16 +304,41 @@ function openAiCompatibleJson(
   };
 }
 
-function openAiCompatibleStream(textStream: AsyncIterable<string>): Response {
+function openAiCompatibleStream(
+  textStream: AsyncIterable<string>,
+  options?: {
+    finalize?: (rawText: string) => string | Promise<string>;
+  },
+): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let rawText = "";
+
       try {
         for await (const delta of textStream) {
           if (!delta) continue;
+          rawText += delta;
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`,
+            ),
+          );
+        }
+
+        if (options?.finalize) {
+          const finalContent = await options.finalize(rawText);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                choices: [
+                  {
+                    index: 0,
+                    message: { role: "assistant", content: finalContent },
+                    finish_reason: "stop",
+                  },
+                ],
+              })}\n\n`,
             ),
           );
         }
@@ -346,25 +371,36 @@ function openAiCompatibleStream(textStream: AsyncIterable<string>): Response {
   });
 }
 
-async function* validatedWidgetTextStream(
-  textStream: AsyncIterable<string>,
-): AsyncIterable<string> {
-  let fullText = "";
-
-  for await (const delta of textStream) {
-    fullText += delta;
-    yield delta;
-  }
-
-  normalizeWidgetGenerationText(fullText);
-}
-
 function usageFromResult(result: { totalUsage?: GenerationUsage }): GenerationUsage {
   return {
     inputTokens: result.totalUsage?.inputTokens,
     outputTokens: result.totalUsage?.outputTokens,
     totalTokens: result.totalUsage?.totalTokens,
   };
+}
+
+function addWidgetFormatRetryInstruction(options: GenerateTextOptions): GenerateTextOptions {
+  const messages = Array.isArray((options as { messages?: ModelMessage[] }).messages)
+    ? (options as { messages: ModelMessage[] }).messages
+    : [];
+  const retryOptions = {
+    ...options,
+    prompt: undefined,
+    messages: [
+      ...messages,
+      {
+        role: "user",
+        content:
+          "The previous streamed response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* valid CSS only */\n</css>",
+      },
+    ],
+    temperature:
+      typeof options.temperature === "number"
+        ? Math.min(options.temperature, 0.3)
+        : 0.3,
+    maxRetries: 1,
+  };
+  return retryOptions as GenerateTextOptions;
 }
 
 async function generateWidgetContent(
@@ -402,6 +438,21 @@ async function generateWidgetContent(
     text: normalizeWidgetGenerationText(result.text),
     usage: usageFromResult(result),
   };
+}
+
+async function finalizeStreamedWidgetContent(
+  rawText: string,
+  options: GenerateTextOptions,
+  provider: WidgetAiProvider,
+): Promise<string> {
+  try {
+    return normalizeWidgetGenerationText(rawText);
+  } catch (error) {
+    console.warn("Streamed widget response failed validation; retrying once:", error);
+    const retryOptions = addWidgetFormatRetryInstruction(options);
+    const retry = await generateWidgetContent(retryOptions, provider);
+    return retry.text;
+  }
 }
 
 async function generateStagedPlan(
@@ -538,7 +589,9 @@ app.openapi(generateRoute, async (c) => {
 
   if (payload.stream) {
     const result = streamText(generationOptions);
-    return openAiCompatibleStream(validatedWidgetTextStream(result.textStream));
+    return openAiCompatibleStream(result.textStream, {
+      finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, provider),
+    });
   }
 
   const result = await generateWidgetContent(generationOptions, provider);
