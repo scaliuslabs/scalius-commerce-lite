@@ -7,6 +7,7 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 import { resolveCollectionProducts } from "@scalius/core/modules/collections/collections.service";
+import { toIsoTimestamp } from "../utils/timestamps";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -28,18 +29,13 @@ const formatTimestamp = (
   collectionId: string,
   fieldName: string,
 ): string | null => {
-  try {
-    if (timestamp === null || timestamp === undefined) return null;
-    const numTimestamp = typeof timestamp === "number" ? timestamp : Number(timestamp);
-    if (isNaN(numTimestamp) || numTimestamp <= 0) return null;
-    const date = new Date(numTimestamp * 1000);
-    if (!isNaN(date.getTime())) return date.toISOString();
-  } catch {
+  const formatted = toIsoTimestamp(timestamp);
+  if (timestamp !== null && timestamp !== undefined && formatted === null) {
     console.warn(
       `Invalid ${fieldName} timestamp for collection ${collectionId}`,
     );
   }
-  return null;
+  return formatted;
 };
 
 const storefrontCollectionSchema = z.object({
