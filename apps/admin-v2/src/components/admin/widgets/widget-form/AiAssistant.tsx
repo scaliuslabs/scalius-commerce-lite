@@ -49,6 +49,8 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
     setModelSearchQuery,
     isModelSelectorOpen,
     setIsModelSelectorOpen,
+    effectivePromptType,
+    isPromptTypePlacementDerived,
     useStagedMode,
     setUseStagedMode,
     stagedGeneration,
@@ -187,25 +189,31 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
               onValueChange={(
                 value: "widget" | "landing-page" | "collection",
               ) => setPromptType(value)}
-              value={promptType}
+              value={isPromptTypePlacementDerived ? effectivePromptType : promptType}
               className="grid gap-2 sm:grid-cols-3"
             >
               <div className="flex items-center space-x-2 rounded-md border p-2">
-                <RadioGroupItem value="widget" id="type-widget" />
+                <RadioGroupItem value="widget" id="type-widget" disabled={isPromptTypePlacementDerived} />
                 <Label htmlFor="type-widget">Homepage Widget</Label>
               </div>
               <div className="flex items-center space-x-2 rounded-md border p-2">
                 <RadioGroupItem
                   value="landing-page"
                   id="type-landing-page"
+                  disabled={isPromptTypePlacementDerived}
                 />
                 <Label htmlFor="type-landing-page">Landing Section</Label>
               </div>
               <div className="flex items-center space-x-2 rounded-md border p-2">
-                <RadioGroupItem value="collection" id="type-collection" />
+                <RadioGroupItem value="collection" id="type-collection" disabled={isPromptTypePlacementDerived} />
                 <Label htmlFor="type-collection">Collection Section</Label>
               </div>
             </RadioGroup>
+            {isPromptTypePlacementDerived && (
+              <p className="text-xs text-muted-foreground">
+                Goal is derived from active placement so generated content matches where it will render.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

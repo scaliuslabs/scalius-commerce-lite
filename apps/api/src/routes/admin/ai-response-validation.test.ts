@@ -61,12 +61,20 @@ describe("AI response validation", () => {
     });
   });
 
-  it("rejects staged plans with mismatched sections", () => {
-    expect(() =>
-      normalizeStagedPlanText(JSON.stringify({
-        totalSections: 3,
-        sectionDescriptions: ["Hero", "Featured collection"],
-      })),
-    ).toThrow(ValidationError);
+  it("repairs staged plans with recoverable section mismatches", () => {
+    const text = normalizeStagedPlanText(JSON.stringify({
+      totalSections: 3,
+      sectionDescriptions: ["Hero", "Featured collection"],
+    }));
+
+    expect(JSON.parse(text)).toEqual({
+      totalSections: 3,
+      sectionDescriptions: ["Hero", "Featured collection", "Section 3"],
+    });
+  });
+
+  it("rejects staged plans without JSON", () => {
+    expect(() => normalizeStagedPlanText("Create a hero and products section."))
+      .toThrow(ValidationError);
   });
 });

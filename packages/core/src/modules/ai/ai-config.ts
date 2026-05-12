@@ -87,6 +87,7 @@ export const GENERATION_CONFIG = {
     maxImages: 10,
     maxProducts: 20,
     maxCategories: 50,
+    maxCollections: 12,
     maxPromptChars: 50000,
   },
 } as const;

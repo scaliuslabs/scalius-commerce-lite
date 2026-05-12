@@ -35,6 +35,7 @@ interface StagedGenerationState {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+const PREVIOUS_SECTION_CONTEXT_LIMIT = 6000;
 
 function createAbortError(): Error {
   const error = new Error('Generation cancelled');
@@ -48,6 +49,114 @@ function isAbortError(error: unknown): boolean {
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw createAbortError();
+}
+
+function textFromMessages(messages: PromptMessage[]): string {
+  return messages
+    .map((message) => {
+      if (typeof message.content === "string") return message.content;
+      return message.content
+        .filter((part) => part.type === "text" && typeof part.text === "string")
+        .map((part) => part.text)
+        .join("\n");
+    })
+    .join("\n");
+}
+
+function removeWidgetOutputInstructions(text: string): string {
+  const outputStart = text.indexOf("RESPONSE FORMAT - USE SIMPLE TAGS:");
+  if (outputStart < 0) return text;
+
+  const nextInstructionStart = text.indexOf('IMPORTANT: "BUY NOW"', outputStart);
+  if (nextInstructionStart < 0) {
+    return text.slice(0, outputStart).trim();
+  }
+
+  return `${text.slice(0, outputStart)}${text.slice(nextInstructionStart)}`.trim();
+}
+
+function createPlanningMessages(messages: PromptMessage[]): PromptMessage[] {
+  const planningContext = removeWidgetOutputInstructions(textFromMessages(messages));
+  return [
+    {
+      role: "user",
+      content: `${planningContext}
+
+Before generating the widget, create a concise implementation plan. Respond with ONLY a JSON object in this shape:
+{
+  "totalSections": <number of self-contained HTML sections needed>,
+  "sectionDescriptions": [<brief description for each section>],
+  "estimatedTokens": <optional estimated total tokens>
+}
+
+Guidelines:
+- Use 1-2 sections for simple widgets and 3-5 sections for rich homepage, collection, or landing page content.
+- Each section must be a complete, standalone HTML div with CSS-only interactions.
+- Do not include HTML, CSS, markdown, comments, or explanations in this planning response.
+- The sectionDescriptions array length must equal totalSections.`,
+    },
+  ];
+}
+
+function createDeterministicPlan(messages: PromptMessage[]): GenerationPlan {
+  const promptText = textFromMessages(messages).toLowerCase();
+  const wantsCollection =
+    promptText.includes("collection") ||
+    promptText.includes("products") ||
+    promptText.includes("product grid");
+  const wantsLanding =
+    promptText.includes("landing") ||
+    promptText.includes("campaign") ||
+    promptText.includes("homepage");
+  const totalSections = wantsLanding || wantsCollection ? 3 : 2;
+  const sectionDescriptions = wantsCollection
+    ? [
+        "Offer-led hero with a clear collection message",
+        "Product or category showcase using the provided storefront context",
+        "Trust, urgency, and call-to-action strip",
+      ]
+    : wantsLanding
+      ? [
+          "Hero section with the main value proposition",
+          "Supporting proof or feature section",
+          "Conversion-focused call-to-action section",
+        ]
+      : [
+          "Primary promotional section",
+          "Supporting call-to-action section",
+        ];
+
+  return {
+    totalSections,
+    sectionDescriptions: sectionDescriptions.slice(0, totalSections),
+  };
+}
+
+function compactPreviousSections(previousSections: SectionContent[]): string {
+  if (previousSections.length === 0) return "";
+
+  const newestFirst = [...previousSections].reverse();
+  const snippets: string[] = [];
+  let usedChars = 0;
+
+  for (const section of newestFirst) {
+    const snippet = `Section ${section.sectionIndex + 1}${section.description ? ` (${section.description})` : ""}:
+HTML summary:
+${section.html.slice(0, 900)}
+
+CSS summary:
+${section.css.slice(0, 900) || "No CSS"}`;
+    if (usedChars + snippet.length > PREVIOUS_SECTION_CONTEXT_LIMIT) break;
+    snippets.unshift(snippet);
+    usedChars += snippet.length;
+  }
+
+  if (snippets.length === 0) return "";
+
+  return `\n\nPREVIOUS SECTIONS CONTEXT:
+${snippets.join("\n\n")}
+
+IMPORTANT: Maintain the same design language, color rhythm, spacing, typography, and CTA style. Do not copy previous sections verbatim.`;
 }
 
 export function useStagedGeneration() {
@@ -88,25 +197,6 @@ export function useStagedGeneration() {
     messages: PromptMessage[],
     signal?: AbortSignal,
   ): Promise<GenerationPlan | null> => {
-    const planningPrompt = {
-      role: "user",
-      content: `Before generating the widget, create a plan. Analyze the request and respond with a JSON object containing:
-{
-  "totalSections": <number of self-contained HTML sections needed>,
-  "sectionDescriptions": [<array of brief descriptions for each section>],
-  "estimatedTokens": <estimated total tokens if you can estimate>
-}
-
-Guidelines:
-- Each section should be a complete, standalone HTML div with CSS-only interactions
-- Sections will be rendered progressively, so plan accordingly
-- Typical sections: hero/header, content blocks, CTA, footer
-- For simple widgets: 1-2 sections. For complex: 3-6 sections max
-- Keep each section under 1500 tokens if possible
-
-Respond ONLY with the JSON object, no markdown formatting.`,
-    };
-
     try {
       throwIfAborted(signal);
       const response = await fetch("/api/v1/admin/ai/generate-staged", {
@@ -116,7 +206,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
         body: JSON.stringify({
           provider,
           model,
-          messages: [...messages, planningPrompt],
+          messages: createPlanningMessages(messages),
           stage: 'plan',
           useCache: true,
         }),
@@ -162,8 +252,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
       return plan;
     } catch (error: unknown) {
       if (isAbortError(error)) throw error;
-      if (import.meta.env.DEV) console.error("Error creating plan:", error);
-      toast.error(`Planning failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (import.meta.env.DEV) console.error("Error creating staged generation plan:", error);
       return null;
     }
   }, []);
@@ -184,15 +273,7 @@ Respond ONLY with the JSON object, no markdown formatting.`,
   ): Promise<SectionContent | null> => {
     throwIfAborted(signal);
 
-    // Build context from previous sections
-    let previousContext = '';
-    if (previousSections.length > 0) {
-      previousContext = '\n\nPREVIOUS SECTIONS YOU GENERATED:\n' +
-        previousSections.map((sec, idx) =>
-          `Section ${idx + 1}:\n<htmljs>\n${sec.html}\n</htmljs>\n\n<css>\n${sec.css}\n</css>`
-        ).join('\n\n') +
-        '\n\nIMPORTANT: Maintain the SAME design language, colors, typography, and style as the previous sections.';
-    }
+    const previousContext = compactPreviousSections(previousSections);
 
     const sectionPrompt = {
       role: "user",
@@ -310,15 +391,10 @@ Respond with the section code in tag format.`,
     try {
       // Phase 1: Create plan
       toast.info("Planning widget structure...");
-      const plan = await createPlan(provider, model, messages, signal);
-
-      if (!plan) {
-        throwIfAborted(signal);
-        throw new Error("Failed to create generation plan");
-      }
+      const plan = await createPlan(provider, model, messages, signal)
+        ?? createDeterministicPlan(messages);
 
       setState(prev => ({ ...prev, plan, currentStage: 'generating' }));
-      toast.success(`Plan created: ${plan.totalSections} sections`);
 
       // Phase 2: Generate each section with accumulated context
       const generatedSections: SectionContent[] = [];
@@ -424,7 +500,6 @@ ${generatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${
         error: (error instanceof Error ? error.message : String(error)),
         isGenerating: false,
       }));
-      toast.error(`Generation failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }, [createPlan, generateSection]);
