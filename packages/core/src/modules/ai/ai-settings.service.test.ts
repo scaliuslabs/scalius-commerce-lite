@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_WIDGET_AI_CONFIG,
+  maskWidgetAiAdminSettings,
   normalizeWidgetAiConfig,
   providerHasCredentials,
   type WidgetAiRuntimeSettings,
 } from "./ai-settings.service";
+import { DEFAULT_AI_PROMPTS } from "./default-prompts";
 
 describe("widget AI settings", () => {
   it("normalizes malformed config to safe defaults", () => {
@@ -62,5 +64,29 @@ describe("widget AI settings", () => {
 
     expect(providerHasCredentials(runtime, "cloudflare")).toBe(true);
     expect(providerHasCredentials(runtime, "openai")).toBe(false);
+  });
+
+  it("masks runtime secrets from admin settings responses", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...DEFAULT_WIDGET_AI_CONFIG,
+      apiKeys: {
+        openai: "sk-prod-openai",
+        cloudflare: "cf-prod-token",
+      },
+      hasCloudflareBinding: true,
+    };
+
+    const adminSettings = maskWidgetAiAdminSettings(
+      runtime,
+      DEFAULT_AI_PROMPTS,
+    );
+    const serialized = JSON.stringify(adminSettings);
+
+    expect("apiKeys" in adminSettings).toBe(false);
+    expect(serialized).not.toContain("sk-prod-openai");
+    expect(serialized).not.toContain("cf-prod-token");
+    expect(adminSettings.providers.openai.hasApiKey).toBe(true);
+    expect(adminSettings.providers.cloudflare.hasApiKey).toBe(true);
+    expect(adminSettings.providers.cloudflare.hasBinding).toBe(true);
   });
 });

@@ -399,24 +399,21 @@ export async function getWidgetAiRuntimeSettings(
   };
 }
 
-export async function getWidgetAiAdminSettings(
-  db: Database,
-  env: Record<string, unknown> = {},
-  encryptionKey?: string,
-): Promise<WidgetAiAdminSettings> {
-  const runtime = await getWidgetAiRuntimeSettings(db, env, encryptionKey);
-  const prompts = await getWidgetAiPrompts(db);
-
+export function maskWidgetAiAdminSettings(
+  runtime: WidgetAiRuntimeSettings,
+  prompts: Record<PromptType, string>,
+): WidgetAiAdminSettings {
+  const { apiKeys, hasCloudflareBinding, ...config } = runtime;
   return {
-    ...runtime,
+    ...config,
     providers: Object.fromEntries(
       AI_PROVIDER_IDS.map((provider) => [
         provider,
         {
-          ...runtime.providers[provider],
-          hasApiKey: Boolean(runtime.apiKeys[provider]),
+          ...config.providers[provider],
+          hasApiKey: Boolean(apiKeys[provider]),
           ...(provider === "cloudflare"
-            ? { hasBinding: runtime.hasCloudflareBinding }
+            ? { hasBinding: hasCloudflareBinding }
             : {}),
         },
       ]),
@@ -424,6 +421,16 @@ export async function getWidgetAiAdminSettings(
     prompts,
     defaultPrompts: DEFAULT_AI_PROMPTS,
   };
+}
+
+export async function getWidgetAiAdminSettings(
+  db: Database,
+  env: Record<string, unknown> = {},
+  encryptionKey?: string,
+): Promise<WidgetAiAdminSettings> {
+  const runtime = await getWidgetAiRuntimeSettings(db, env, encryptionKey);
+  const prompts = await getWidgetAiPrompts(db);
+  return maskWidgetAiAdminSettings(runtime, prompts);
 }
 
 async function deleteSetting(
