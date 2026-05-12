@@ -96,9 +96,6 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <input type="hidden" {...register("displayTarget")} />
-        <input type="hidden" {...register("placementRule")} />
-        <input type="hidden" {...register("referenceCollectionId")} />
-        <input type="hidden" {...register("sortOrder")} />
 
         <div className="flex items-center justify-between rounded-md border p-3">
           <div className="flex items-center gap-3">
