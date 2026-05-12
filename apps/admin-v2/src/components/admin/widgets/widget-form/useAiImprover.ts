@@ -25,11 +25,11 @@ import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-contex
 import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
 import type { SectionContent } from './useStagedGeneration';
-import type { ProductSearchResult, Category } from './types';
 
 type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
 type AiProductData = StructuredPromptParams['selectedProducts'][number];
 type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
+type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
 type ImprovementRun = { id: number; signal: AbortSignal };
 
 interface ModelInfo {
@@ -112,17 +112,19 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
 
     try {
       // Fetch system prompt (returns plain text)
-      const systemPrompt = await getAiPrompts({ data: { type: aiGenerator.promptType } }) as string;
+      const systemPrompt = await getAiPrompts({ data: { type: aiGenerator.effectivePromptType } }) as string;
       if (!isActiveImprovementRun(run)) return false;
       if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
 
       // Fetch context details
       const contextData = await getAiContextBatchDetails({
         data: {
-          productIds: aiContext.selectedProducts.map((p: ProductSearchResult) => p.id),
+          productIds: aiGenerator.getMergedProductIds(),
           categoryIds: aiContext.allCategoriesSelected
             ? undefined
-            : aiContext.selectedCategories.map((c: Category) => c.id),
+            : aiGenerator.getMergedCategoryIds(),
+          collectionIds: aiGenerator.getMergedCollectionIds(),
+          anchorCollectionIds: aiGenerator.getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
       }) as AiContextBatchDetails;
@@ -183,12 +185,13 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
 
       const promptResult = await generateStructuredPrompt({
         systemPrompt,
-        improvementPrompt: promptToUse + historyContext + otherSectionsContext,
+        improvementPrompt: aiGenerator.getPlacementAwareInstructions(promptToUse) + historyContext + otherSectionsContext,
         existingHtml: codeToImprove.html,
         existingCss: codeToImprove.css,
         selectedImages: imageSelection.images,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
+        selectedCollections: (contextData.collections || []) as AiCollectionData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
         modelId: aiGenerator.selectedModel,
         supportsVision: isVisionModel,

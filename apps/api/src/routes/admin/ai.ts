@@ -403,6 +403,26 @@ function addWidgetFormatRetryInstruction(options: GenerateTextOptions): Generate
   return retryOptions as GenerateTextOptions;
 }
 
+function addStagedPlanRetryInstruction(options: GenerateTextOptions): GenerateTextOptions {
+  const messages = Array.isArray((options as { messages?: ModelMessage[] }).messages)
+    ? (options as { messages: ModelMessage[] }).messages
+    : [];
+  return {
+    ...options,
+    prompt: undefined,
+    messages: [
+      ...messages,
+      {
+        role: "user",
+        content:
+          "Return ONLY a valid JSON generation plan. No markdown, HTML, CSS, comments, or explanation. Shape: {\"totalSections\":3,\"sectionDescriptions\":[\"Hero\",\"Product showcase\",\"CTA\"],\"estimatedTokens\":1200}.",
+      },
+    ],
+    temperature: 0.1,
+    maxRetries: 1,
+  } as GenerateTextOptions;
+}
+
 async function generateWidgetContent(
   options: GenerateTextOptions,
   provider: WidgetAiProvider,
@@ -472,24 +492,30 @@ async function generateStagedPlan(
 
     if (result) {
       const output = stagedPlanOutputSchema.safeParse(result.output);
-      if (!output.success) {
-        throw new ValidationError(
-          "AI response did not include a valid staged generation plan.",
-          { issues: output.error.issues },
-        );
+      if (output.success) {
+        return {
+          text: normalizeStagedPlanOutput(output.data),
+          usage: usageFromResult(result),
+        };
       }
-      return {
-        text: normalizeStagedPlanOutput(output.data),
-        usage: usageFromResult(result),
-      };
+      console.warn("Structured staged plan output failed validation; falling back to text:", output.error);
     }
   }
 
   const result = await generateText(options);
-  return {
-    text: normalizeStagedPlanText(result.text),
-    usage: usageFromResult(result),
-  };
+  try {
+    return {
+      text: normalizeStagedPlanText(result.text),
+      usage: usageFromResult(result),
+    };
+  } catch (error) {
+    console.warn("Text staged plan failed validation; retrying once:", error);
+    const retry = await generateText(addStagedPlanRetryInstruction(options));
+    return {
+      text: normalizeStagedPlanText(retry.text),
+      usage: usageFromResult(retry),
+    };
+  }
 }
 
 async function runtimeSettings(c: any) {

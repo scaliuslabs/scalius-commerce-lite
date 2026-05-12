@@ -3,13 +3,14 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { Controller, useFieldArray } from 'react-hook-form';
 import type { Control, UseFormRegister, UseFormSetValue, UseFormWatch, FieldErrors } from 'react-hook-form';
-import { Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
 import {
   CONTENT_WIDGET_PLACEMENT_SLOTS,
   HOMEPAGE_WIDGET_PLACEMENT_SLOTS,
@@ -23,6 +24,7 @@ import {
 } from '@/types/api-responses';
 import type { WidgetFormValues } from '@/lib/form-schemas';
 import { WidgetTargetSelect } from './WidgetTargetSelect';
+import { cn } from '@scalius/shared/utils';
 
 interface WidgetPlacementProps {
   control: Control<WidgetFormValues>;
@@ -59,6 +61,69 @@ const slotLabels: Partial<Record<WidgetPlacementSlot, string>> = {
 
 const homepageSlots = HOMEPAGE_WIDGET_PLACEMENT_SLOTS;
 const pageSlots = CONTENT_WIDGET_PLACEMENT_SLOTS;
+
+type PlacementOptionSelectProps<TValue extends string> = {
+  value: TValue;
+  options: readonly TValue[];
+  labels: Partial<Record<TValue, string>>;
+  onChange: (value: TValue) => void;
+};
+
+function PlacementOptionSelect<TValue extends string>({
+  value,
+  options,
+  labels,
+  onChange,
+}: PlacementOptionSelectProps<TValue>) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-10 w-full justify-between px-3 font-normal"
+        >
+          <span className="truncate">{labels[value] ?? value}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        collisionPadding={16}
+        className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0"
+      >
+        <Command>
+          <CommandList>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option}
+                  value={labels[option] ?? option}
+                  onSelect={() => {
+                    onChange(option);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      option === value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <span>{labels[option] ?? option}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
   control,
@@ -190,9 +255,11 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                     name={`placements.${index}.scope`}
                     control={control}
                     render={({ field: scopeField }) => (
-                      <Select
+                      <PlacementOptionSelect
                         value={scopeField.value}
-                        onValueChange={(value: WidgetPlacementScope) => {
+                        options={placementScopes}
+                        labels={scopeLabels}
+                        onChange={(value) => {
                           const nextSlot = normalizeWidgetPlacementSlotForScope(
                             value,
                             slot,
@@ -205,18 +272,7 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                             setValue(`placements.${index}.slot`, nextSlot, { shouldDirty: true });
                           }
                         }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl bg-background">
-                          {placementScopes.map((value) => (
-                            <SelectItem key={value} value={value}>
-                              {scopeLabels[value] ?? value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     )}
                   />
                 </div>
@@ -257,9 +313,11 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                     name={`placements.${index}.slot`}
                     control={control}
                     render={({ field: slotField }) => (
-                      <Select
+                      <PlacementOptionSelect
                         value={slotField.value}
-                        onValueChange={(value: WidgetPlacementSlot) => {
+                        options={slotOptions}
+                        labels={slotLabels}
+                        onChange={(value) => {
                           slotField.onChange(value);
                           if (isWidgetCollectionSlot(value)) {
                             setValue(`placements.${index}.anchorType`, WidgetPlacementAnchorType.COLLECTION, { shouldDirty: true });
@@ -268,18 +326,7 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                             setValue(`placements.${index}.anchorId`, null, { shouldDirty: true });
                           }
                         }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl bg-background">
-                          {slotOptions.map((value) => (
-                            <SelectItem key={value} value={value}>
-                              {slotLabels[value] ?? value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     )}
                   />
                 </div>

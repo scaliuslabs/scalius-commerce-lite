@@ -80,6 +80,37 @@ interface CategoryContextData {
   imageUrl: string | null;
 }
 
+interface CollectionContextProduct {
+  id: string;
+  name: string;
+  slug: string;
+  url: string;
+  price: number;
+  discountedPrice: number;
+  imageUrl: string | null;
+  imageAlt: string | null;
+}
+
+interface CollectionContextCategory {
+  id: string;
+  name: string;
+  slug: string;
+  url: string;
+}
+
+interface CollectionContextData {
+  id: string;
+  name: string;
+  type: "manual" | "dynamic";
+  url: string;
+  title: string | null;
+  subtitle: string | null;
+  placementRoles: Array<"target" | "anchor">;
+  products: CollectionContextProduct[];
+  categories: CollectionContextCategory[];
+  featuredProduct: CollectionContextProduct | null;
+}
+
 interface MessageContent {
   type: "text" | "image_url";
   text?: string;
@@ -99,6 +130,7 @@ export interface StructuredPromptResult {
     imageCount: number;
     productCount: number;
     categoryCount: number;
+    collectionCount: number;
     isImprovement: boolean;
     estimatedTokens: number;
   };
@@ -326,6 +358,50 @@ function generateCategoryContext(
   return `\n\n${header}\n${categoryDescriptions}`;
 }
 
+function generateCollectionContext(collections: CollectionContextData[]): string {
+  if (collections.length === 0) return "";
+
+  const collectionDescriptions = collections.map((collection, index) => {
+    const roles = collection.placementRoles.length > 0
+      ? collection.placementRoles.join(", ")
+      : "context";
+    let details = `${index + 1}. Collection: ${collection.name}
+   - Collection ID: ${collection.id}
+   - Placement role: ${roles}
+   - Type: ${collection.type}
+   - URL: ${collection.url}`;
+
+    if (collection.title) {
+      details += `\n   - Storefront title: ${collection.title}`;
+    }
+    if (collection.subtitle) {
+      details += `\n   - Storefront subtitle: ${collection.subtitle}`;
+    }
+    if (collection.featuredProduct) {
+      details += `\n   - Featured product: ${collection.featuredProduct.name} (${collection.featuredProduct.url})`;
+    }
+    if (collection.categories.length > 0) {
+      details += `\n   - Source categories:\n${collection.categories
+        .map((category) => `     - ${category.name} (${category.url})`)
+        .join("\n")}`;
+    }
+    if (collection.products.length > 0) {
+      details += `\n   - Collection products:\n${collection.products
+        .map((product) => {
+          const priceDetail = product.discountedPrice !== product.price
+            ? `base ${product.price}, sale ${product.discountedPrice}`
+            : `${product.price}`;
+          return `     - ${product.name} (${product.url}) - price ${priceDetail}${product.imageUrl ? ` - image ${product.imageUrl}` : ""}`;
+        })
+        .join("\n")}`;
+    }
+
+    return details;
+  }).join("\n\n");
+
+  return `\n\nCOLLECTION CONTEXT:\nUse these storefront collections and their resolved products/categories when designing collection or collection-anchored widgets:\n${collectionDescriptions}`;
+}
+
 // ============================================================================
 // MULTIMODAL SUPPORT
 // ============================================================================
@@ -366,6 +442,7 @@ export async function generateStructuredPrompt({
   selectedImages,
   selectedProducts,
   selectedCategories,
+  selectedCollections = [],
   allCategoriesSelected,
   modelId,
   supportsVision,
@@ -380,6 +457,7 @@ export async function generateStructuredPrompt({
   selectedImages: MediaFile[];
   selectedProducts: ProductContextData[];
   selectedCategories: CategoryContextData[];
+  selectedCollections?: CollectionContextData[];
   allCategoriesSelected: boolean;
   modelId: string;
   supportsVision: boolean;
@@ -404,6 +482,18 @@ export async function generateStructuredPrompt({
     if (category.imageUrl) {
       allImageUrls.push(category.imageUrl);
     }
+  });
+
+  // 4. Collection product images
+  selectedCollections.forEach(collection => {
+    if (collection.featuredProduct?.imageUrl) {
+      allImageUrls.push(collection.featuredProduct.imageUrl);
+    }
+    collection.products.forEach(product => {
+      if (product.imageUrl) {
+        allImageUrls.push(product.imageUrl);
+      }
+    });
   });
 
   // Process ALL images for dimensions (for text context)
@@ -446,6 +536,7 @@ export async function generateStructuredPrompt({
   // Generate product and category context (includes text descriptions + URLs)
   const productContext = generateProductContext(selectedProducts);
   const categoryContext = generateCategoryContext(selectedCategories, allCategoriesSelected);
+  const collectionContext = generateCollectionContext(selectedCollections);
 
   // Build static context (cacheable)
   let staticContext = systemPrompt;
@@ -463,6 +554,7 @@ export async function generateStructuredPrompt({
   // Add context data (also static/cacheable)
   if (productContext) staticContext += productContext;
   if (categoryContext) staticContext += categoryContext;
+  if (collectionContext) staticContext += collectionContext;
   if (imageContext) staticContext += imageContext;
 
   // Build dynamic user request (NOT cacheable)
@@ -538,6 +630,7 @@ export async function generateStructuredPrompt({
       imageCount: selectedImages.length,
       productCount: selectedProducts.length,
       categoryCount: selectedCategories.length,
+      collectionCount: selectedCollections.length,
       isImprovement: !!improvementPrompt,
       estimatedTokens,
     }
@@ -561,6 +654,7 @@ export async function generateCompletePrompt({
   selectedImages,
   selectedProducts,
   selectedCategories,
+  selectedCollections = [],
   allCategoriesSelected,
 }: {
   systemPrompt: string;
@@ -571,6 +665,7 @@ export async function generateCompletePrompt({
   selectedImages: MediaFile[];
   selectedProducts: ProductContextData[];
   selectedCategories: CategoryContextData[];
+  selectedCollections?: CollectionContextData[];
   allCategoriesSelected: boolean;
 }): Promise<string> {
   const result = await generateStructuredPrompt({
@@ -582,6 +677,7 @@ export async function generateCompletePrompt({
     selectedImages,
     selectedProducts,
     selectedCategories,
+    selectedCollections,
     allCategoriesSelected,
     modelId: "default",
     supportsVision: false,

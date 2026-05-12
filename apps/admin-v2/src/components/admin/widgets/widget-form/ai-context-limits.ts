@@ -7,6 +7,7 @@ export const AI_CONTEXT_LIMITS = {
   maxImages: GENERATION_CONFIG.context.maxImages,
   maxProducts: GENERATION_CONFIG.context.maxProducts,
   maxCategories: GENERATION_CONFIG.context.maxCategories,
+  maxCollections: GENERATION_CONFIG.context.maxCollections,
 } as const;
 
 export function getEffectiveImageLimit(modelId?: string): number {

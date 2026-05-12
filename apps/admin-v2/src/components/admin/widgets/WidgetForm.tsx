@@ -185,6 +185,12 @@ function getPlacementAiContext(placements: WidgetPlacementFormValue[] | undefine
   const categoryIds = activePlacements
     .filter((placement) => placement.scope === WidgetPlacementScope.CATEGORY && placement.scopeId)
     .map((placement) => placement.scopeId as string);
+  const collectionIds = activePlacements
+    .filter((placement) => placement.scope === WidgetPlacementScope.COLLECTION && placement.scopeId)
+    .map((placement) => placement.scopeId as string);
+  const anchorCollectionIds = activePlacements
+    .filter((placement) => placement.anchorType === WidgetPlacementAnchorType.COLLECTION && placement.anchorId)
+    .map((placement) => placement.anchorId as string);
   const hasCollectionIntent = activePlacements.some(
     (placement) =>
       placement.scope === WidgetPlacementScope.COLLECTION ||
@@ -215,6 +221,8 @@ function getPlacementAiContext(placements: WidgetPlacementFormValue[] | undefine
   return {
     productIds: Array.from(new Set(productIds)),
     categoryIds: Array.from(new Set(categoryIds)),
+    collectionIds: Array.from(new Set(collectionIds)),
+    anchorCollectionIds: Array.from(new Set(anchorCollectionIds)),
     summary,
     suggestedPromptType,
     hasActivePlacements: activePlacements.length > 0,

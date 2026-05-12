@@ -21,6 +21,7 @@ type PromptMessage = StructuredPromptResult['messages'][number];
 type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
 type AiProductData = StructuredPromptParams['selectedProducts'][number];
 type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
+type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
 type GenerationRun = { id: number; signal: AbortSignal };
 
 interface ModelInfo {
@@ -41,6 +42,8 @@ interface WidgetAiSettings {
 export type AiPlacementContext = {
   productIds: string[];
   categoryIds: string[];
+  collectionIds: string[];
+  anchorCollectionIds: string[];
   summary: string;
   suggestedPromptType: 'widget' | 'landing-page' | 'collection';
   hasActivePlacements: boolean;
@@ -164,11 +167,27 @@ export const useAiGenerator = (
     [aiContext.selectedCategories, placementContext?.categoryIds],
   );
 
-  const getPlacementAwarePrompt = useCallback(() => {
-    const prompt = userPrompt.trim();
+  const getMergedCollectionIds = useCallback(
+    () => Array.from(new Set(placementContext?.collectionIds ?? []))
+      .slice(0, AI_CONTEXT_LIMITS.maxCollections),
+    [placementContext?.collectionIds],
+  );
+
+  const getMergedAnchorCollectionIds = useCallback(
+    () => Array.from(new Set(placementContext?.anchorCollectionIds ?? []))
+      .slice(0, AI_CONTEXT_LIMITS.maxCollections),
+    [placementContext?.anchorCollectionIds],
+  );
+
+  const getPlacementAwareInstructions = useCallback((instructions: string) => {
+    const prompt = instructions.trim();
     if (!placementContext?.summary) return prompt;
     return `${prompt}\n\nPlacement context: ${placementContext.summary}. Generate for this exact storefront placement and use only relevant calls to action.`;
-  }, [placementContext?.summary, userPrompt]);
+  }, [placementContext?.summary]);
+
+  const getPlacementAwarePrompt = useCallback(() => {
+    return getPlacementAwareInstructions(userPrompt);
+  }, [getPlacementAwareInstructions, userPrompt]);
 
   useEffect(() => {
     if (!shouldLoadSettings) return;
@@ -272,6 +291,8 @@ export const useAiGenerator = (
           categoryIds: aiContext.allCategoriesSelected
             ? undefined
             : getMergedCategoryIds(),
+          collectionIds: getMergedCollectionIds(),
+          anchorCollectionIds: getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
       }) as AiContextBatchDetails;
@@ -289,6 +310,7 @@ export const useAiGenerator = (
         selectedImages,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
+        selectedCollections: (contextData.collections || []) as AiCollectionData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
         modelId: selectedModel,
         supportsVision: isVisionModel,
@@ -424,6 +446,8 @@ export const useAiGenerator = (
           categoryIds: aiContext.allCategoriesSelected
             ? undefined
             : getMergedCategoryIds(),
+          collectionIds: getMergedCollectionIds(),
+          anchorCollectionIds: getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
       }) as AiContextBatchDetails;
@@ -436,6 +460,7 @@ export const useAiGenerator = (
         selectedImages,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
+        selectedCollections: (contextData.collections || []) as AiCollectionData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
       });
 
@@ -483,6 +508,7 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
   return {
     promptType,
     effectivePromptType,
+    isPromptTypePlacementDerived: Boolean(placementContext?.hasActivePlacements),
     setPromptType,
     userPrompt,
     setUserPrompt,
@@ -513,5 +539,10 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
     setUseStagedMode,
     stagedGeneration,
     generationProgress,
+    getMergedProductIds,
+    getMergedCategoryIds,
+    getMergedCollectionIds,
+    getMergedAnchorCollectionIds,
+    getPlacementAwareInstructions,
   };
 };

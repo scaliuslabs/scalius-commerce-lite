@@ -118,7 +118,38 @@ export function normalizeStagedPlanText(text: string): string {
     );
   }
 
-  const plan = stagedPlanOutputSchema.safeParse(parsed.data);
+  const planData = parsed.data as Record<string, unknown>;
+  const rawDescriptions = Array.isArray(planData.sectionDescriptions)
+    ? planData.sectionDescriptions
+    : [];
+  const sectionDescriptions = rawDescriptions
+    .map((description, index) => String(description || `Section ${index + 1}`).trim())
+    .filter(Boolean)
+    .slice(0, GENERATION_CONFIG.stagedGeneration.maxSections);
+  const rawTotalSections = Number(planData.totalSections);
+  const totalSections = Number.isFinite(rawTotalSections)
+    ? Math.min(
+        GENERATION_CONFIG.stagedGeneration.maxSections,
+        Math.max(GENERATION_CONFIG.stagedGeneration.minSections, Math.round(rawTotalSections)),
+      )
+    : sectionDescriptions.length;
+  const normalizedDescriptions = sectionDescriptions
+    .slice(0, totalSections)
+    .map((description, index) => description.slice(0, 160) || `Section ${index + 1}`);
+
+  while (normalizedDescriptions.length < totalSections) {
+    normalizedDescriptions.push(`Section ${normalizedDescriptions.length + 1}`);
+  }
+
+  const normalizedPlan = {
+    totalSections,
+    sectionDescriptions: normalizedDescriptions,
+    ...(Number.isFinite(Number(planData.estimatedTokens))
+      ? { estimatedTokens: Math.max(1, Math.round(Number(planData.estimatedTokens))) }
+      : {}),
+  };
+
+  const plan = stagedPlanOutputSchema.safeParse(normalizedPlan);
   if (!plan.success) {
     throw new ValidationError(
       "AI response did not include a valid staged generation plan.",
