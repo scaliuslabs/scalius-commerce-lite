@@ -13,7 +13,7 @@ import {
 import { widgetFormSchema, type WidgetFormValues } from '@/lib/form-schemas';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock, Save } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, Clock, Save, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import {
   createWidget,
@@ -58,6 +58,7 @@ type WidgetPlacementFormValue = NonNullable<WidgetFormValues["placements"]>[numb
 type SupportedWidgetPlacement = NonNullable<Widget["placements"]>[number] & {
   scope: SupportedWidgetPlacementScopeValue;
 };
+type WidgetContentDraft = { html: string; css: string };
 
 function homepagePlacement(
   slot: WidgetPlacementSlot,
@@ -372,8 +373,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       return;
     }
     if (aiGenerator.generatedContent) {
-      setValue('htmlContent', aiGenerator.generatedContent.html);
-      setValue('cssContent', aiGenerator.generatedContent.css);
+      applyContentToForm(aiGenerator.generatedContent);
       toast.success('Content applied to the form.');
     }
     setIsEditorOpen(false);
@@ -417,12 +417,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    */
   const handleAcceptImprovement = () => {
     if (aiImprover.contentToImprove) {
-      setValue('htmlContent', aiImprover.contentToImprove.html);
-      setValue('cssContent', aiImprover.contentToImprove.css);
+      applyContentToForm(aiImprover.contentToImprove);
       toast.success('Improved content applied to the form.');
     }
     setIsEditorOpen(false);
-    aiImprover.reset();
+    aiImprover.cancel({ silent: true });
+    aiImprover.setContentToImprove(null);
   };
 
   /**
@@ -490,8 +490,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    * Handle paste from modal
    */
   const handlePaste = (content: { html: string; css: string }) => {
-    setValue('htmlContent', content.html);
-    setValue('cssContent', content.css);
+    applyContentToForm(content);
   };
 
   /**
@@ -614,6 +613,14 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    */
   const onSubmit = async (data: WidgetFormValues) => {
     try {
+      const pendingContent = getPendingPreviewContent(data.htmlContent, data.cssContent ?? '');
+      if (pendingContent) {
+        toast.error('Apply or discard the preview content before saving this widget.');
+        setEditorMode(pendingContent.source === 'improvement' ? 'improvement' : 'generation-preview');
+        setIsEditorOpen(true);
+        return;
+      }
+
       if (data.isActive && data.htmlContent.trim().length === 0) {
         setError('htmlContent', {
           type: 'manual',
@@ -696,6 +703,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   ]);
 
   const isActive = watch('isActive');
+  const watchedHtmlContent = watch('htmlContent') || '';
+  const watchedCssContent = watch('cssContent') || '';
+  const pendingPreviewContent = getPendingPreviewContent(
+    watchedHtmlContent,
+    watchedCssContent,
+  );
   const primarySubmitLabel = isCreateMode
     ? isActive
       ? 'Create Active Widget'
@@ -703,6 +716,58 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     : isActive
       ? submitButtonText
       : 'Save Draft';
+
+  function applyContentToForm(content: WidgetContentDraft) {
+    setValue('htmlContent', content.html, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    setValue('cssContent', content.css, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  }
+
+  function getPendingPreviewContent(html: string, css: string) {
+    const generated = aiGenerator.generatedContent;
+    if (
+      generated &&
+      (generated.html !== html || generated.css !== css)
+    ) {
+      return {
+        source: 'generation' as const,
+        content: generated,
+      };
+    }
+
+    const improved = aiImprover.contentToImprove;
+    if (
+      improved &&
+      (improved.html !== html || improved.css !== css)
+    ) {
+      return {
+        source: 'improvement' as const,
+        content: improved,
+      };
+    }
+
+    return null;
+  }
+
+  function discardPendingPreviewContent() {
+    if (!pendingPreviewContent) return;
+
+    if (pendingPreviewContent.source === 'generation') {
+      aiGenerator.setGeneratedContent(null);
+    } else {
+      aiImprover.discardImprovement();
+    }
+
+    setIsEditorOpen(false);
+    toast.info('Preview content discarded.');
+  }
 
   return (
     <div className="space-y-8">
@@ -748,6 +813,47 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           register={register}
           setValue={setValue}
         />
+
+        {pendingPreviewContent && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+            <div className="flex min-w-0 items-center gap-2 text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>
+                {pendingPreviewContent.source === 'generation'
+                  ? 'Generated preview content is not applied to the form yet.'
+                  : 'Improved preview content is not applied to the form yet.'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  applyContentToForm(pendingPreviewContent.content);
+                  if (pendingPreviewContent.source === 'generation') {
+                    aiGenerator.setGeneratedContent(null);
+                  } else {
+                    aiImprover.cancel({ silent: true });
+                    aiImprover.setContentToImprove(null);
+                  }
+                  toast.success('Preview content applied.');
+                }}
+              >
+                <Check className="mr-2 h-4 w-4" />
+                Apply Preview
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={discardPendingPreviewContent}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Discard
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           {!isCreateMode && (
