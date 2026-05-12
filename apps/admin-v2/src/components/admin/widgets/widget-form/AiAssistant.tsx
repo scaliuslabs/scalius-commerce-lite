@@ -70,14 +70,14 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+        <PopoverContent className="w-[--radix-popover-trigger-width] overflow-hidden p-0">
             <Command>
                 <CommandInput
                     placeholder="Search for a model..."
                     value={modelSearchQuery}
                     onValueChange={setModelSearchQuery}
                 />
-                <CommandList>
+                <CommandList className="max-h-[min(300px,var(--radix-popover-content-available-height))]">
                     <CommandEmpty>No model found.</CommandEmpty>
                     <CommandGroup>
                         {aiModels

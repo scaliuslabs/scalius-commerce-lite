@@ -106,7 +106,7 @@ export function WidgetTargetSelect({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[--radix-popover-trigger-width] p-0"
+        className="w-[--radix-popover-trigger-width] overflow-hidden p-0"
       >
         <Command shouldFilter={false}>
           <CommandInput
@@ -115,7 +115,7 @@ export function WidgetTargetSelect({
             placeholder={searchPlaceholder ?? placeholder}
             className="h-10"
           />
-          <CommandList>
+          <CommandList className="max-h-[min(300px,var(--radix-popover-content-available-height))]">
             {isLoading ? (
               <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
