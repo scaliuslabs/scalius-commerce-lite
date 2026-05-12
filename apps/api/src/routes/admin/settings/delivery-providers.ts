@@ -3,7 +3,7 @@ import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from 
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
-import { NotFoundError, ValidationError } from "../../../utils/api-error";
+import { NotFoundError } from "../../../utils/api-error";
 import { getEncryptionKey } from "../../../utils/encryption-key";
 
 import { ok, created } from "../../../utils/api-response";
@@ -29,7 +29,7 @@ function unmaskedCredentials(
         if (unmasked.secretKey === MASKED_VALUE && existingCreds.secretKey) unmasked.secretKey = existingCreds.secretKey;
 
         return JSON.stringify(unmasked);
-    } catch (e: unknown) {
+    } catch {
         return newCredentials;
     }
 }
@@ -45,7 +45,7 @@ function maskCredentialsForClient(credentialsJson: string): string {
         if (masked.secretKey) masked.secretKey = MASKED_VALUE;
 
         return JSON.stringify(masked);
-    } catch (e: unknown) {
+    } catch {
         return credentialsJson;
     }
 }
@@ -75,18 +75,14 @@ const listRoute = createRoute({
 });
 
 app.openapi(listRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const providers = await getDeliveryProviders(db);
-        const maskedProviders = providers.map((provider) => ({
-            ...provider,
-            credentials: maskCredentialsForClient(provider.credentials)
-        }));
+    const db = c.get("db");
+    const providers = await getDeliveryProviders(db);
+    const maskedProviders = providers.map((provider) => ({
+        ...provider,
+        credentials: maskCredentialsForClient(provider.credentials)
+    }));
 
-        return ok(c, maskedProviders);
-    } catch (error: unknown) {
-        throw error;
-    }
+    return ok(c, maskedProviders);
 });
 
 // ── Create Provider ──
@@ -114,38 +110,34 @@ const createProviderRoute = createRoute({
 });
 
 app.openapi(createProviderRoute, (async (c: any) => {
-    try {
-        const db = c.get("db");
-        const validated = c.req.valid("json");
-        const credentials = typeof validated.credentials !== "string"
-            ? JSON.stringify(validated.credentials)
-            : validated.credentials;
-        const config = typeof validated.config !== "string"
-            ? JSON.stringify(validated.config)
-            : validated.config;
+    const db = c.get("db");
+    const validated = c.req.valid("json");
+    const credentials = typeof validated.credentials !== "string"
+        ? JSON.stringify(validated.credentials)
+        : validated.credentials;
+    const config = typeof validated.config !== "string"
+        ? JSON.stringify(validated.config)
+        : validated.config;
 
-        const provider = {
-            id: "",
-            name: validated.name,
-            type: validated.type,
-            isActive: validated.isActive,
-            credentials,
-            config,
-        };
+    const provider = {
+        id: "",
+        name: validated.name,
+        type: validated.type,
+        isActive: validated.isActive,
+        credentials,
+        config,
+    };
 
-        const savedProvider = await saveDeliveryProvider(db, provider, getEncryptionKey(c.env as Record<string, unknown>));
-        const savedCredentials = typeof savedProvider.credentials === 'string'
-            ? savedProvider.credentials
-            : JSON.stringify(savedProvider.credentials);
-        const maskedResponse = {
-            ...savedProvider,
-            credentials: maskCredentialsForClient(savedCredentials)
-        };
+    const savedProvider = await saveDeliveryProvider(db, provider, getEncryptionKey(c.env as Record<string, unknown>));
+    const savedCredentials = typeof savedProvider.credentials === 'string'
+        ? savedProvider.credentials
+        : JSON.stringify(savedProvider.credentials);
+    const maskedResponse = {
+        ...savedProvider,
+        credentials: maskCredentialsForClient(savedCredentials)
+    };
 
-        return created(c, maskedResponse);
-    } catch (error: unknown) {
-        throw error;
-    }
+    return created(c, maskedResponse);
 }) as any);
 
 // ── Update Provider ──
@@ -174,63 +166,59 @@ const updateProviderRoute = createRoute({
 });
 
 app.openapi(updateProviderRoute, (async (c: any) => {
-    try {
-        const db = c.get("db");
-        const validated = c.req.valid("json");
-        const credentials = validated.credentials && typeof validated.credentials !== "string"
-            ? JSON.stringify(validated.credentials)
-            : (validated.credentials as string | undefined);
-        const config = validated.config && typeof validated.config !== "string"
-            ? JSON.stringify(validated.config)
-            : (validated.config as string | undefined);
+    const db = c.get("db");
+    const validated = c.req.valid("json");
+    const credentials = validated.credentials && typeof validated.credentials !== "string"
+        ? JSON.stringify(validated.credentials)
+        : (validated.credentials as string | undefined);
+    const config = validated.config && typeof validated.config !== "string"
+        ? JSON.stringify(validated.config)
+        : (validated.config as string | undefined);
 
-        const existingProvider = await getDeliveryProvider(db, validated.id);
-        if (!existingProvider) {
-            const savedProvider = await saveDeliveryProvider(db, {
-                id: validated.id,
-                name: validated.name,
-                type: validated.type,
-                isActive: validated.isActive ?? true,
-                credentials: credentials || "{}",
-                config: config || "{}",
-            }, getEncryptionKey(c.env as Record<string, unknown>));
-            const newCredentials = typeof savedProvider.credentials === 'string'
-                ? savedProvider.credentials
-                : JSON.stringify(savedProvider.credentials);
-            const maskedResponse = {
-                ...savedProvider,
-                credentials: maskCredentialsForClient(newCredentials)
-            };
-            return created(c, maskedResponse);
-        }
-
-        const providerCredentials = credentials || JSON.stringify(existingProvider.credentials);
-        const existingCredentials = typeof existingProvider.credentials === 'string'
-            ? existingProvider.credentials
-            : JSON.stringify(existingProvider.credentials);
-        const unmaskedCreds = unmaskedCredentials(providerCredentials, existingCredentials);
-
+    const existingProvider = await getDeliveryProvider(db, validated.id);
+    if (!existingProvider) {
         const savedProvider = await saveDeliveryProvider(db, {
             id: validated.id,
             name: validated.name,
             type: validated.type,
-            isActive: validated.isActive !== undefined ? validated.isActive : existingProvider.isActive,
-            credentials: unmaskedCreds,
-            config: config || (typeof existingProvider.config === 'string' ? existingProvider.config : JSON.stringify(existingProvider.config)),
+            isActive: validated.isActive ?? true,
+            credentials: credentials || "{}",
+            config: config || "{}",
         }, getEncryptionKey(c.env as Record<string, unknown>));
-
-        const updatedCredentials = typeof savedProvider.credentials === 'string'
+        const newCredentials = typeof savedProvider.credentials === 'string'
             ? savedProvider.credentials
             : JSON.stringify(savedProvider.credentials);
         const maskedResponse = {
             ...savedProvider,
-            credentials: maskCredentialsForClient(updatedCredentials)
+            credentials: maskCredentialsForClient(newCredentials)
         };
-
-        return ok(c, maskedResponse);
-    } catch (error: unknown) {
-        throw error;
+        return created(c, maskedResponse);
     }
+
+    const providerCredentials = credentials || JSON.stringify(existingProvider.credentials);
+    const existingCredentials = typeof existingProvider.credentials === 'string'
+        ? existingProvider.credentials
+        : JSON.stringify(existingProvider.credentials);
+    const unmaskedCreds = unmaskedCredentials(providerCredentials, existingCredentials);
+
+    const savedProvider = await saveDeliveryProvider(db, {
+        id: validated.id,
+        name: validated.name,
+        type: validated.type,
+        isActive: validated.isActive !== undefined ? validated.isActive : existingProvider.isActive,
+        credentials: unmaskedCreds,
+        config: config || (typeof existingProvider.config === 'string' ? existingProvider.config : JSON.stringify(existingProvider.config)),
+    }, getEncryptionKey(c.env as Record<string, unknown>));
+
+    const updatedCredentials = typeof savedProvider.credentials === 'string'
+        ? savedProvider.credentials
+        : JSON.stringify(savedProvider.credentials);
+    const maskedResponse = {
+        ...savedProvider,
+        credentials: maskCredentialsForClient(updatedCredentials)
+    };
+
+    return ok(c, maskedResponse);
 }) as any);
 
 // ── Create Test Provider ──
@@ -262,36 +250,32 @@ const createTestRoute = createRoute({
 });
 
 app.openapi(createTestRoute, async (c) => {
+    const { type, credentials, config, name } = c.req.valid("json");
+
+    const mockProvider = {
+        id: "test_" + Date.now().toString(),
+        name,
+        type,
+        isActive: true,
+        credentials: typeof credentials === "string" ? credentials : JSON.stringify(credentials),
+        config: typeof config === "string" ? config : JSON.stringify(config),
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
+
     try {
-        const { type, credentials, config, name } = c.req.valid("json");
+        const providerInstance = await createProvider(mockProvider, getEncryptionKey(c.env as Record<string, unknown>), c.get("db"));
+        const result = await providerInstance.testConnection();
 
-        const mockProvider = {
-            id: "test_" + Date.now().toString(),
-            name,
-            type,
-            isActive: true,
-            credentials: typeof credentials === "string" ? credentials : JSON.stringify(credentials),
-            config: typeof config === "string" ? config : JSON.stringify(config),
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
-
-        try {
-            const providerInstance = await createProvider(mockProvider, getEncryptionKey(c.env as Record<string, unknown>), c.get("db"));
-            const result = await providerInstance.testConnection();
-
-            return ok(c, {
-                ...result,
-                provider: { type, name, credentials: "...", config: "..." }
-            });
-        } catch (testError: unknown) {
-            return ok(c, {
-                success: false,
-                message: testError instanceof Error ? testError.message : "Failed to test provider connection"
-            });
-        }
+        return ok(c, {
+            ...result,
+            provider: { type, name, credentials: "...", config: "..." }
+        });
     } catch (error: unknown) {
-        throw error;
+        return ok(c, {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to test provider connection"
+        });
     }
 });
 
@@ -312,19 +296,14 @@ const getProviderRoute = createRoute({
 });
 
 app.openapi(getProviderRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        const provider = await getDeliveryProvider(db, id);
-        if (!provider) throw new NotFoundError("Provider not found");
-        return ok(c, {
-            ...provider,
-            credentials: maskCredentialsForClient(provider.credentials),
-        });
-    } catch (error: unknown) {
-        if (error instanceof Error && error.name === "NotFoundError") throw error;
-        throw error;
-    }
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const provider = await getDeliveryProvider(db, id);
+    if (!provider) throw new NotFoundError("Provider not found");
+    return ok(c, {
+        ...provider,
+        credentials: maskCredentialsForClient(provider.credentials),
+    });
 });
 
 // ── Test Existing Provider ──
@@ -344,25 +323,20 @@ const testExistingRoute = createRoute({
 });
 
 app.openapi(testExistingRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        const provider = await getDeliveryProvider(db, id);
-        if (!provider) throw new NotFoundError("Provider not found");
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const provider = await getDeliveryProvider(db, id);
+    if (!provider) throw new NotFoundError("Provider not found");
 
-        try {
-            const providerInstance = await createProvider(provider, getEncryptionKey(c.env as Record<string, unknown>), db);
-            const result = await providerInstance.testConnection();
-            return ok(c, result);
-        } catch (testError: unknown) {
-            return ok(c, {
-                success: false,
-                message: testError instanceof Error ? testError.message : "Failed to test provider connection"
-            });
-        }
+    try {
+        const providerInstance = await createProvider(provider, getEncryptionKey(c.env as Record<string, unknown>), db);
+        const result = await providerInstance.testConnection();
+        return ok(c, result);
     } catch (error: unknown) {
-        if (error instanceof Error && error.name === "NotFoundError") throw error;
-        throw error;
+        return ok(c, {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to test provider connection"
+        });
     }
 });
 
@@ -383,14 +357,10 @@ const deleteProviderRoute = createRoute({
 });
 
 app.openapi(deleteProviderRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
-        return ok(c, {});
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
+    return ok(c, {});
 });
 
 export { app as deliveryProvidersRoutes };

@@ -357,26 +357,22 @@ const get2faInfoRoute = createRoute({
 });
 
 app.openapi(get2faInfoRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const sessionUser = c.get("user");
+    const db = c.get("db");
+    const sessionUser = c.get("user");
 
-        const userData = await db
-            .select({ twoFactorMethod: user.twoFactorMethod, twoFactorEnabled: user.twoFactorEnabled, email: user.email })
-            .from(user)
-            .where(eq(user.id, sessionUser.id))
-            .get();
+    const userData = await db
+        .select({ twoFactorMethod: user.twoFactorMethod, twoFactorEnabled: user.twoFactorEnabled, email: user.email })
+        .from(user)
+        .where(eq(user.id, sessionUser.id))
+        .get();
 
-        if (!userData) throw new NotFoundError("User not found");
+    if (!userData) throw new NotFoundError("User not found");
 
-        return ok(c, {
-            method: userData.twoFactorMethod || "email",
-            twoFactorEnabled: userData.twoFactorEnabled,
-            email: userData.email
-        });
-    } catch (error: unknown) {
-        throw error;
-    }
+    return ok(c, {
+        method: userData.twoFactorMethod || "email",
+        twoFactorEnabled: userData.twoFactorEnabled,
+        email: userData.email
+    });
 });
 
 const mark2faVerifiedRoute = createRoute({
@@ -391,21 +387,17 @@ const mark2faVerifiedRoute = createRoute({
 });
 
 app.openapi(mark2faVerifiedRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const sessionUser = c.get("user");
-        const session = c.get("session");
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const session = c.get("session");
 
-        if (!sessionUser.twoFactorEnabled) {
-            throw new ForbiddenError("Two-factor authentication is not enabled for this account");
-        }
-
-        await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
-
-        return ok(c, { message: "Session marked as 2FA verified" });
-    } catch (error: unknown) {
-        throw error;
+    if (!sessionUser.twoFactorEnabled) {
+        throw new ForbiddenError("Two-factor authentication is not enabled for this account");
     }
+
+    await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
+
+    return ok(c, { message: "Session marked as 2FA verified" });
 });
 
 const update2faMethodRoute = createRoute({
@@ -423,17 +415,13 @@ const update2faMethodRoute = createRoute({
 });
 
 app.openapi(update2faMethodRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const sessionUser = c.get("user");
-        const { method } = c.req.valid("json");
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const { method } = c.req.valid("json");
 
-        await db.update(user).set({ twoFactorMethod: method }).where(eq(user.id, sessionUser.id));
+    await db.update(user).set({ twoFactorMethod: method }).where(eq(user.id, sessionUser.id));
 
-        return ok(c, {});
-    } catch (error: unknown) {
-        throw error;
-    }
+    return ok(c, {});
 });
 
 const verify2faRoute = createRoute({
@@ -575,61 +563,57 @@ const setupRoute = createRoute({
 });
 
 setupApp.openapi(setupRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const env = c.env as Env;
+    const db = c.get("db");
+    const env = c.env as Env;
 
-        // Check admin exists FIRST (before rate limiting) — this is the primary guard
-        const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
-        const adminExists = (adminResult[0]?.count ?? 0) > 0;
+    // Check admin exists FIRST (before rate limiting) — this is the primary guard
+    const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
+    const adminExists = (adminResult[0]?.count ?? 0) > 0;
 
-        if (adminExists) {
-            const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-            console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${ip}`);
-            throw new ForbiddenError("An admin user already exists. Please use the login page.");
-        }
-
-        // KV-based rate limiting + creation lock: prevents both brute force and
-        // concurrent first-admin creation race conditions.
+    if (adminExists) {
         const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-        const rateLimitKey = `setup_rate:${ip}`;
-        const setupLockKey = "setup:admin_creation_lock";
-        const kv = env.CACHE as KVNamespace | undefined;
-        if (kv) {
-            const raw = await kv.get(rateLimitKey);
-            const attempts = raw ? parseInt(raw, 10) : 0;
-            if (attempts >= 5) {
-                throw new RateLimitError("Too many setup attempts. Try again later.", 3600);
-            }
-            await kv.put(rateLimitKey, String(attempts + 1), { expirationTtl: 3600 });
-
-            // Acquire a short-lived lock to prevent concurrent admin creation.
-            // If another request is already creating the first admin, this will fail.
-            const existingLock = await kv.get(setupLockKey);
-            if (existingLock) {
-                throw new ConflictError("Admin setup is already in progress. Please wait.");
-            }
-            await kv.put(setupLockKey, "1", { expirationTtl: 60 });
-        }
-
-        const auth = createAuth(env);
-
-        const { name, email, password } = c.req.valid("json");
-
-        const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
-        if (!signUpResult || !signUpResult.user) {
-            throw new ServiceUnavailableError("Could not create user account");
-        }
-
-        await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
-
-        const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-        await autoSeedRbacIfNeeded(db);
-
-        return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
-    } catch (error: unknown) {
-        throw error;
+        console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${ip}`);
+        throw new ForbiddenError("An admin user already exists. Please use the login page.");
     }
+
+    // KV-based rate limiting + creation lock: prevents both brute force and
+    // concurrent first-admin creation race conditions.
+    const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
+    const rateLimitKey = `setup_rate:${ip}`;
+    const setupLockKey = "setup:admin_creation_lock";
+    const kv = env.CACHE as KVNamespace | undefined;
+    if (kv) {
+        const raw = await kv.get(rateLimitKey);
+        const attempts = raw ? parseInt(raw, 10) : 0;
+        if (attempts >= 5) {
+            throw new RateLimitError("Too many setup attempts. Try again later.", 3600);
+        }
+        await kv.put(rateLimitKey, String(attempts + 1), { expirationTtl: 3600 });
+
+        // Acquire a short-lived lock to prevent concurrent admin creation.
+        // If another request is already creating the first admin, this will fail.
+        const existingLock = await kv.get(setupLockKey);
+        if (existingLock) {
+            throw new ConflictError("Admin setup is already in progress. Please wait.");
+        }
+        await kv.put(setupLockKey, "1", { expirationTtl: 60 });
+    }
+
+    const auth = createAuth(env);
+
+    const { name, email, password } = c.req.valid("json");
+
+    const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
+    if (!signUpResult || !signUpResult.user) {
+        throw new ServiceUnavailableError("Could not create user account");
+    }
+
+    await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
+
+    const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
+    await autoSeedRbacIfNeeded(db);
+
+    return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
 });
 
 export { app as adminAuthManagementRoutes, setupApp as authSetupRoutes };

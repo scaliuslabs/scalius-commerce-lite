@@ -27,6 +27,14 @@ const updateHeroSliderSchema = z.object({
     isActive: z.boolean().optional()
 });
 
+const parseSliderImages = (images: string): unknown[] => {
+    try {
+        return JSON.parse(images);
+    } catch {
+        return [];
+    }
+};
+
 // ── List Sliders ──
 
 const heroSliderSchema = z.object({
@@ -51,14 +59,10 @@ const listRoute = createRoute({
 });
 
 app.openapi(listRoute, (async (c: any) => {
-    try {
-        const db = c.get("db");
-        const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
-        const parsedData = data.map((slider: any) => ({ ...slider, images: (() => { try { return JSON.parse(slider.images); } catch { return []; } })() }));
-        return ok(c, parsedData);
-    } catch (error: unknown) {
-        throw error;
-    }
+    const db = c.get("db");
+    const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
+    const parsedData = data.map((slider: any) => ({ ...slider, images: parseSliderImages(slider.images) }));
+    return ok(c, parsedData);
 }) as any);
 
 // ── Create Slider ──
@@ -76,33 +80,27 @@ const createSliderRoute = createRoute({
 });
 
 app.openapi(createSliderRoute, (async (c: any) => {
-    try {
-        const db = c.get("db");
-        const data = c.req.valid("json");
-        const existingSlider = await db.select().from(heroSliders).where(sql`type = ${data.type} AND deleted_at IS NULL`).get();
+    const db = c.get("db");
+    const data = c.req.valid("json");
+    const existingSlider = await db.select().from(heroSliders).where(sql`type = ${data.type} AND deleted_at IS NULL`).get();
 
-        if (existingSlider) {
-            throw new ConflictError(`A ${data.type} slider already exists`);
-        }
-
-        const sliderId = "slider_" + nanoid();
-        const sliderArr = await db.insert(heroSliders).values({
-            id: sliderId,
-            type: data.type,
-            images: JSON.stringify(data.images),
-            isActive: data.isActive ?? true,
-            createdAt: sql`(unixepoch())`,
-            updatedAt: sql`(unixepoch())`
-        }).returning();
-        const slider = sliderArr[0];
-        if (!slider) throw new ValidationError("Failed to create slider");
-
-        let parsedImages: unknown[] = [];
-        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
-        return created(c, { ...slider, images: parsedImages });
-    } catch (error: unknown) {
-        throw error;
+    if (existingSlider) {
+        throw new ConflictError(`A ${data.type} slider already exists`);
     }
+
+    const sliderId = "slider_" + nanoid();
+    const sliderArr = await db.insert(heroSliders).values({
+        id: sliderId,
+        type: data.type,
+        images: JSON.stringify(data.images),
+        isActive: data.isActive ?? true,
+        createdAt: sql`(unixepoch())`,
+        updatedAt: sql`(unixepoch())`
+    }).returning();
+    const slider = sliderArr[0];
+    if (!slider) throw new ValidationError("Failed to create slider");
+
+    return created(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
 // ── Get Slider ──
@@ -122,18 +120,12 @@ const getByIdRoute = createRoute({
 });
 
 app.openapi(getByIdRoute, (async (c: any) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
-        if (!slider) throw new NotFoundError("Slider not found");
-        let parsedImages: unknown[] = [];
-        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
-        return ok(c, { ...slider, images: parsedImages });
-    } catch (error: unknown) {
-        throw error;
-    }
+    if (!slider) throw new NotFoundError("Slider not found");
+    return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
 // ── Update Slider ──
@@ -154,29 +146,23 @@ const updateSliderRoute = createRoute({
 });
 
 app.openapi(updateSliderRoute, (async (c: any) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        const data = c.req.valid("json");
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
 
-        const updateData = {
-            ...data,
-            images: data.images ? JSON.stringify(data.images) : undefined,
-            updatedAt: sql`(unixepoch())`
-        };
+    const updateData = {
+        ...data,
+        images: data.images ? JSON.stringify(data.images) : undefined,
+        updatedAt: sql`(unixepoch())`
+    };
 
-        const [slider] = await db.update(heroSliders)
-            .set(updateData)
-            .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
-            .returning();
+    const [slider] = await db.update(heroSliders)
+        .set(updateData)
+        .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
+        .returning();
 
-        if (!slider) throw new NotFoundError("Slider not found");
-        let parsedImages: unknown[] = [];
-        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
-        return ok(c, { ...slider, images: parsedImages });
-    } catch (error: unknown) {
-        throw error;
-    }
+    if (!slider) throw new NotFoundError("Slider not found");
+    return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
 // ── Delete Slider ──
@@ -196,21 +182,15 @@ const deleteSliderRoute = createRoute({
 });
 
 app.openapi(deleteSliderRoute, (async (c: any) => {
-    try {
-        const db = c.get("db");
-        const { id } = c.req.valid("param");
-        const [slider] = await db.update(heroSliders)
-            .set({ deletedAt: sql`(unixepoch())` })
-            .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
-            .returning();
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const [slider] = await db.update(heroSliders)
+        .set({ deletedAt: sql`(unixepoch())` })
+        .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
+        .returning();
 
-        if (!slider) throw new NotFoundError("Slider not found");
-        let parsedImages: unknown[] = [];
-        try { parsedImages = JSON.parse(slider.images); } catch { parsedImages = []; }
-        return ok(c, { ...slider, images: parsedImages });
-    } catch (error: unknown) {
-        throw error;
-    }
+    if (!slider) throw new NotFoundError("Slider not found");
+    return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
 export { app as heroSlidersRoutes };
