@@ -213,6 +213,18 @@ function getWidgetFormDefaultValues(
   };
 }
 
+function getSavedAiContextCreatedAt(aiContext: string | null | undefined): number {
+  if (!aiContext) return Date.now();
+  try {
+    const savedContext = parseAiContext(aiContext);
+    return typeof savedContext.createdAt === 'number'
+      ? savedContext.createdAt
+      : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+
 export const WidgetForm: React.FC<WidgetFormProps> = ({
   widget,
   isCreateMode,
@@ -583,35 +595,35 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
    * Form submission with AI context persistence
    */
   const onSubmit = async (data: WidgetFormValues) => {
-    // Build AI context with all state
-    const contextToSave: Partial<AiContext> = {
-      promptType: aiGenerator.promptType,
-      preferredAiModel: aiGenerator.selectedModel,
-      useStagedMode: aiGenerator.useStagedMode,
-      savedImages: aiContext.selectedImages,
-      savedProducts: aiContext.selectedProducts,
-      savedCategories: aiContext.selectedCategories,
-      allCategoriesSelected: aiContext.allCategoriesSelected,
-      stagedPlan: aiGenerator.stagedGeneration.plan || undefined,
-      stagedSections: aiGenerator.stagedGeneration.sections,
-      improvementHistory: aiImprover.improvementHistory,
-      createdAt: widget?.aiContext ? parseAiContext(widget.aiContext as string).createdAt : Date.now(),
-    };
-
-    // Pass aiContext as a validated object (not a string).
-    // The API schema expects z.record() and the service calls JSON.stringify() before DB insert.
-    const validatedContext = AiContextSchema.parse({
-      ...contextToSave,
-      lastModified: Date.now(),
-    });
-
-    const submissionData = {
-      ...data,
-      ...legacyProjectionFromPlacements(data.placements),
-      aiContext: validatedContext as unknown as Record<string, unknown>,
-    };
-
     try {
+      // Build AI context with all state.
+      const contextToSave: Partial<AiContext> = {
+        promptType: aiGenerator.promptType,
+        preferredAiModel: aiGenerator.selectedModel,
+        useStagedMode: aiGenerator.useStagedMode,
+        savedImages: aiContext.selectedImages,
+        savedProducts: aiContext.selectedProducts,
+        savedCategories: aiContext.selectedCategories,
+        allCategoriesSelected: aiContext.allCategoriesSelected,
+        stagedPlan: aiGenerator.stagedGeneration.plan || undefined,
+        stagedSections: aiGenerator.stagedGeneration.sections,
+        improvementHistory: aiImprover.improvementHistory,
+        createdAt: getSavedAiContextCreatedAt(widget?.aiContext),
+      };
+
+      // Pass aiContext as a validated object (not a string).
+      // The API schema expects z.record() and the service calls JSON.stringify() before DB insert.
+      const validatedContext = AiContextSchema.parse({
+        ...contextToSave,
+        lastModified: Date.now(),
+      });
+
+      const submissionData = {
+        ...data,
+        ...legacyProjectionFromPlacements(data.placements),
+        aiContext: validatedContext as unknown as Record<string, unknown>,
+      };
+
       if (isCreateMode) {
         await createWidget({ data: submissionData });
       } else {
