@@ -95,6 +95,16 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       return false;
     }
 
+    if (!aiGenerator.isApiKeySet) {
+      toast.error(ERROR_MESSAGES.apiKeyMissing);
+      return false;
+    }
+
+    if (!aiGenerator.selectedModel) {
+      toast.error(ERROR_MESSAGES.modelNotSelected);
+      return false;
+    }
+
     const run = startImprovementRun();
 
     setIsImproving(true);

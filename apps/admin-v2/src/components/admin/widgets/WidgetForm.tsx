@@ -38,6 +38,7 @@ import { WidgetPlacement } from './widget-form/WidgetPlacement';
 import { FullScreenEditor, type EditorMode } from './widget-form/FullScreenEditor';
 import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
 import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
+import { UnsavedChangesGuard } from '../shared/UnsavedChangesGuard';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { getServerFnError } from '~/lib/api-helpers';
@@ -247,7 +248,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     reset,
     getValues,
     setError,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<WidgetFormValues>({
     resolver: zodResolver(widgetFormSchema),
     defaultValues: formDefaultValues,
@@ -275,7 +276,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   // Initialize hooks
   const aiContext = useAiContext();
-  const aiGenerator = useAiGenerator(aiContext, widget, isAiHelperOpen);
+  const aiGenerator = useAiGenerator(aiContext, widget, true);
   const aiImprover = useAiImprover({ aiContext, aiGenerator });
 
   useEffect(() => {
@@ -458,6 +459,30 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
     if (!html || html.trim().length === 0) {
       toast.error('No content to improve. Add HTML content first.');
+      return;
+    }
+
+    if (aiGenerator.isAiSettingsLoading) {
+      setIsAiHelperOpen(true);
+      toast.info('Widget AI settings are still loading. Try again in a moment.');
+      return;
+    }
+
+    if (aiGenerator.aiSettingsError) {
+      setIsAiHelperOpen(true);
+      toast.error(aiGenerator.aiSettingsError);
+      return;
+    }
+
+    if (!aiGenerator.isApiKeySet) {
+      setIsAiHelperOpen(true);
+      toast.error('Configure the active provider in General Settings > Widget AI before improving content.');
+      return;
+    }
+
+    if (!aiGenerator.selectedModel) {
+      setIsAiHelperOpen(true);
+      toast.error('Select an AI model before improving content.');
       return;
     }
 
@@ -709,6 +734,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     watchedHtmlContent,
     watchedCssContent,
   );
+  const shouldGuardNavigation = isDirty || Boolean(pendingPreviewContent);
   const primarySubmitLabel = isCreateMode
     ? isActive
       ? 'Create Active Widget'
@@ -771,6 +797,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   return (
     <div className="space-y-8">
+      <UnsavedChangesGuard
+        isDirty={shouldGuardNavigation}
+        isSubmitting={isSubmitting || isRestoringHistory}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
