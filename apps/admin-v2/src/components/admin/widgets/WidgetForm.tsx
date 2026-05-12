@@ -67,6 +67,8 @@ interface WidgetFormProps {
   isCreateMode: boolean;
   availableCollections: Pick<Collection, 'id' | 'name' | 'type'>[];
   availablePages: Array<{ id: string; title: string; slug: string; sortOrder: number }>;
+  availableProducts: Array<{ id: string; name: string; slug: string }>;
+  availableCategories: Array<{ id: string; name: string; slug: string }>;
   submitButtonText: string;
 }
 
@@ -239,6 +241,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   isCreateMode,
   availableCollections,
   availablePages,
+  availableProducts,
+  availableCategories,
   submitButtonText,
 }) => {
   const navigate = useNavigate();
@@ -764,6 +768,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           setValue={setValue}
           availableCollections={availableCollections}
           availablePages={availablePages}
+          availableProducts={availableProducts}
+          availableCategories={availableCategories}
         />
 
         <div className="flex justify-end gap-2">

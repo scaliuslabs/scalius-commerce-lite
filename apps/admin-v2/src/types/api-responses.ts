@@ -511,6 +511,16 @@ export interface WidgetListResponse {
     slug: string;
     sortOrder: number;
   }>;
+  availableProducts?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+  }>;
+  availableCategories?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+  }>;
 }
 
 // ---------------------------------------------------------------------------

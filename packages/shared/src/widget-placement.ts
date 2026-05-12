@@ -15,6 +15,8 @@ export const CONTENT_WIDGET_PLACEMENT_SLOTS = [
 export const SUPPORTED_WIDGET_PLACEMENT_SCOPES = [
   "homepage",
   "page",
+  "product",
+  "category",
 ] as const;
 
 export type SupportedWidgetPlacementScopeValue =

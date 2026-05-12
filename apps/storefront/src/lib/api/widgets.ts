@@ -6,8 +6,11 @@ import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { unwrapData } from "./unwrap";
 import {
   getApiV1WidgetsActiveHomepage,
+  getApiV1WidgetsActiveScopeByScope,
   getApiV1WidgetsById,
 } from "@scalius/api-client/sdk";
+
+type ScopedWidgetScope = "homepage" | "page" | "product" | "category";
 
 /**
  * Fetches all widgets that are active and configured for the homepage.
@@ -27,6 +30,35 @@ export async function getActiveHomepageWidgets(): Promise<ApiWidget[] | null> {
         return unwrapData<{ widgets: ApiWidget[] }>(data)?.widgets ?? null;
       } catch (error: unknown) {
         console.error("Error fetching active homepage widgets:", error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.LONG },
+  );
+}
+
+export async function getActiveWidgetsForScope(
+  scope: ScopedWidgetScope,
+  scopeId?: string | null,
+): Promise<ApiWidget[] | null> {
+  if (scope !== "homepage" && !scopeId) {
+    console.error("getActiveWidgetsForScope: scopeId is required for scoped widgets.");
+    return null;
+  }
+
+  return withEdgeCache(
+    `widgets_scope_${scope}_${scopeId ?? "global"}`,
+    async () => {
+      try {
+        const { data, error } = await getApiV1WidgetsActiveScopeByScope({
+          client: getConfiguredSdkClient(),
+          path: { scope },
+          query: scope === "homepage" ? {} : { scopeId: scopeId ?? undefined },
+        });
+        if (error) return null;
+        return unwrapData<{ widgets: ApiWidget[] }>(data)?.widgets ?? null;
+      } catch (error: unknown) {
+        console.error(`Error fetching active ${scope} widgets:`, error);
         return null;
       }
     },

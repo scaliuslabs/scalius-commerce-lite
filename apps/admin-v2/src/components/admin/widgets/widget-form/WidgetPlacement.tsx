@@ -31,16 +31,22 @@ interface WidgetPlacementProps {
   setValue: UseFormSetValue<WidgetFormValues>;
   availableCollections: Pick<Collection, "id" | "name" | "type">[];
   availablePages: Array<{ id: string; title: string; slug: string; sortOrder: number }>;
+  availableProducts: Array<{ id: string; name: string; slug: string }>;
+  availableCategories: Array<{ id: string; name: string; slug: string }>;
 }
 
 const scopeLabels: Partial<Record<WidgetPlacementScope, string>> = {
   [WidgetPlacementScope.HOMEPAGE]: "Homepage",
   [WidgetPlacementScope.PAGE]: "Page",
+  [WidgetPlacementScope.PRODUCT]: "Product",
+  [WidgetPlacementScope.CATEGORY]: "Category",
 };
 
 const placementScopes = [
   WidgetPlacementScope.HOMEPAGE,
   WidgetPlacementScope.PAGE,
+  WidgetPlacementScope.PRODUCT,
+  WidgetPlacementScope.CATEGORY,
 ] as const;
 
 const slotLabels: Partial<Record<WidgetPlacementSlot, string>> = {
@@ -63,6 +69,8 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
   setValue,
   availableCollections,
   availablePages,
+  availableProducts,
+  availableCategories,
 }) => {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -124,7 +132,40 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
           const scope = placement?.scope ?? WidgetPlacementScope.HOMEPAGE;
           const slot = placement?.slot ?? WidgetPlacementSlot.TOP;
           const slotOptions =
-            scope === WidgetPlacementScope.PAGE ? pageSlots : homepageSlots;
+            scope === WidgetPlacementScope.HOMEPAGE ? homepageSlots : pageSlots;
+          const requiresScopeTarget = scope !== WidgetPlacementScope.HOMEPAGE;
+          const scopeTarget =
+            scope === WidgetPlacementScope.PAGE
+              ? {
+                  label: "Page",
+                  placeholder: "Select page",
+                  options: availablePages.map((page) => ({
+                    id: page.id,
+                    label: page.title,
+                    description: page.slug,
+                  })),
+                }
+              : scope === WidgetPlacementScope.PRODUCT
+                ? {
+                    label: "Product",
+                    placeholder: "Select product",
+                    options: availableProducts.map((product) => ({
+                      id: product.id,
+                      label: product.name,
+                      description: product.slug,
+                    })),
+                  }
+                : scope === WidgetPlacementScope.CATEGORY
+                  ? {
+                      label: "Category",
+                      placeholder: "Select category",
+                      options: availableCategories.map((category) => ({
+                        id: category.id,
+                        label: category.name,
+                        description: category.slug,
+                      })),
+                    }
+                  : null;
           const placementErrors = errors.placements?.[index];
 
           return (
@@ -168,24 +209,24 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{scope === WidgetPlacementScope.PAGE ? "Page" : "Slot"}</Label>
-                  {scope === WidgetPlacementScope.PAGE ? (
+                  <Label>{scopeTarget?.label ?? "Slot"}</Label>
+                  {requiresScopeTarget && scopeTarget ? (
                     <>
                       <Controller
                         name={`placements.${index}.scopeId`}
                         control={control}
-                        render={({ field: pageField }) => (
+                        render={({ field: scopeTargetField }) => (
                           <Select
-                            value={pageField.value ?? undefined}
-                            onValueChange={pageField.onChange}
+                            value={scopeTargetField.value ?? undefined}
+                            onValueChange={scopeTargetField.onChange}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Select page" />
+                              <SelectValue placeholder={scopeTarget.placeholder} />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl bg-background">
-                              {availablePages.map((page) => (
-                                <SelectItem key={page.id} value={page.id}>
-                                  {page.title}
+                              {scopeTarget.options.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                  {option.label} ({option.description})
                                 </SelectItem>
                               ))}
                             </SelectContent>

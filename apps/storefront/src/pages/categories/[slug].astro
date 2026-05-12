@@ -12,14 +12,17 @@ import {
   type FilterableAttribute,
   type LayoutData,
   type Category,
+  type ApiWidget,
 } from "@/lib/api";
 import CategoryFilters from "@/components/CategoryFilters";
 import RichContent from "@/components/RichContent.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import {
   getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
+import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   SlidersHorizontal,
@@ -42,6 +45,7 @@ let category: Category | null = null;
 let productsResponse: PaginatedResponse<Product> | null = null;
 let attributes: FilterableAttribute[] = [];
 let layoutData: LayoutData | null = null;
+let categoryWidgets: ApiWidget[] = [];
 let error: string | null = null;
 
 try {
@@ -71,13 +75,15 @@ try {
   }
 
   // Fetch products and attributes in parallel
-  const [fetchedProducts, fetchedAttributes] = await Promise.all([
+  const [fetchedProducts, fetchedAttributes, fetchedWidgets] = await Promise.all([
     getProductsByCategory(slug, productListOptions),
     getFilterableAttributes({ categorySlug: slug }),
+    getActiveWidgetsForScope("category", category.id),
   ]);
 
   productsResponse = fetchedProducts;
   attributes = fetchedAttributes || [];
+  categoryWidgets = fetchedWidgets || [];
 } catch (e: unknown) {
   console.error("Error fetching category data:", e);
   error = "An error occurred while fetching products. Please try again.";
@@ -212,6 +218,14 @@ const collectionJsonLd = category
     data-category-name={category?.name}
     data-products-for-analytics={JSON.stringify(analyticsProductData)}
   >
+    <WidgetPlacementZone
+      widgets={categoryWidgets}
+      scope="category"
+      scopeId={category?.id}
+      slot="top"
+      priority
+    />
+
     <div class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <nav class="text-sm mb-4">
@@ -251,6 +265,14 @@ const collectionJsonLd = category
         </div>
       </div>
     </div>
+
+    <WidgetPlacementZone
+      widgets={categoryWidgets}
+      scope="category"
+      scopeId={category?.id}
+      slot="before_content"
+      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
+    />
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       <div class="flex flex-col lg:flex-row gap-6">
@@ -456,6 +478,22 @@ const collectionJsonLd = category
         </div>
       </div>
     </div>
+
+    <WidgetPlacementZone
+      widgets={categoryWidgets}
+      scope="category"
+      scopeId={category?.id}
+      slot="after_content"
+      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
+    />
+
+    <WidgetPlacementZone
+      widgets={categoryWidgets}
+      scope="category"
+      scopeId={category?.id}
+      slot="bottom"
+      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
+    />
   </main>
 </Layout>
 
