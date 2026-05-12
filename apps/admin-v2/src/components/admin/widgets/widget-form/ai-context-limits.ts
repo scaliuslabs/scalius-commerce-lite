@@ -10,16 +10,21 @@ export const AI_CONTEXT_LIMITS = {
   maxCollections: GENERATION_CONFIG.context.maxCollections,
 } as const;
 
-export function getEffectiveImageLimit(modelId?: string): number {
-  const modelLimit = modelId ? getMaxImages(modelId) : AI_CONTEXT_LIMITS.maxImages;
+export function getEffectiveImageLimit(modelId?: string, maxImagesOverride?: number): number {
+  const modelLimit = typeof maxImagesOverride === "number" && Number.isFinite(maxImagesOverride)
+    ? maxImagesOverride
+    : modelId
+      ? getMaxImages(modelId)
+      : AI_CONTEXT_LIMITS.maxImages;
   return Math.min(modelLimit, AI_CONTEXT_LIMITS.maxImages);
 }
 
 export function limitImagesForModel<T>(
   images: readonly T[],
   modelId?: string,
+  maxImagesOverride?: number,
 ): { images: T[]; limit: number; truncated: number } {
-  const limit = getEffectiveImageLimit(modelId);
+  const limit = getEffectiveImageLimit(modelId, maxImagesOverride);
   const limitedImages = images.slice(0, limit);
 
   return {

@@ -14,6 +14,7 @@ import {
   getWidgetAiRuntimeSettings,
   providerHasCredentials,
   requireAllowedWidgetAiModel,
+  resolveWidgetAiModelCapabilities,
   type WidgetAiProvider,
   type WidgetAiRuntimeSettings,
 } from "@scalius/core/modules/ai";
@@ -98,14 +99,6 @@ type GenerationUsage = {
 interface WidgetGenerationResult {
   text: string;
   usage: GenerationUsage;
-}
-
-function shouldUseStructuredOutput(provider: WidgetAiProvider): boolean {
-  // Cloudflare documents structured outputs for Kimi, but the current
-  // workers-ai-provider + AI SDK output path can trigger upstream 504s with
-  // the Workers AI binding. Keep Cloudflare fast and reliable with text/tag
-  // output until we add a native Cloudflare structured-output adapter.
-  return provider !== "cloudflare";
 }
 
 function isAllowedImageUrl(value: string): boolean {
@@ -425,9 +418,9 @@ function addStagedPlanRetryInstruction(options: GenerateTextOptions): GenerateTe
 
 async function generateWidgetContent(
   options: GenerateTextOptions,
-  provider: WidgetAiProvider,
+  capabilities: { supportsStructuredOutput: boolean },
 ): Promise<WidgetGenerationResult> {
-  if (shouldUseStructuredOutput(provider)) {
+  if (capabilities.supportsStructuredOutput) {
     const result = await generateText({
       ...options,
       output: Output.object({
@@ -463,23 +456,23 @@ async function generateWidgetContent(
 async function finalizeStreamedWidgetContent(
   rawText: string,
   options: GenerateTextOptions,
-  provider: WidgetAiProvider,
+  capabilities: { supportsStructuredOutput: boolean },
 ): Promise<string> {
   try {
     return normalizeWidgetGenerationText(rawText);
   } catch (error) {
     console.warn("Streamed widget response failed validation; retrying once:", error);
     const retryOptions = addWidgetFormatRetryInstruction(options);
-    const retry = await generateWidgetContent(retryOptions, provider);
+    const retry = await generateWidgetContent(retryOptions, capabilities);
     return retry.text;
   }
 }
 
 async function generateStagedPlan(
   options: GenerateTextOptions,
-  provider: WidgetAiProvider,
+  capabilities: { supportsStructuredOutput: boolean },
 ): Promise<WidgetGenerationResult> {
-  if (shouldUseStructuredOutput(provider)) {
+  if (capabilities.supportsStructuredOutput) {
     const result = await generateText({
       ...options,
       output: Output.object({
@@ -595,6 +588,11 @@ app.openapi(generateRoute, async (c) => {
   const provider = getConfiguredProvider(settings, payload.provider);
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
+  const capabilities = resolveWidgetAiModelCapabilities(
+    provider,
+    modelId,
+    settings.providers[provider].capabilities,
+  );
   const messages = payload.messages
     ? normalizeMessages(payload.messages)
     : promptToMessages(payload.prompt ?? "", payload.images);
@@ -616,11 +614,11 @@ app.openapi(generateRoute, async (c) => {
   if (payload.stream) {
     const result = streamText(generationOptions);
     return openAiCompatibleStream(result.textStream, {
-      finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, provider),
+      finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, capabilities),
     });
   }
 
-  const result = await generateWidgetContent(generationOptions, provider);
+  const result = await generateWidgetContent(generationOptions, capabilities);
   return ok(
     c,
     openAiCompatibleJson(result.text, provider, modelId, result.usage),
@@ -654,6 +652,11 @@ app.openapi(generateStagedRoute, async (c) => {
   const provider = getConfiguredProvider(settings, payload.provider);
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
+  const capabilities = resolveWidgetAiModelCapabilities(
+    provider,
+    modelId,
+    settings.providers[provider].capabilities,
+  );
   const generationOptions = {
     model,
     messages: normalizeMessages(payload.messages),
@@ -673,8 +676,8 @@ app.openapi(generateStagedRoute, async (c) => {
 
   const result =
     payload.stage === "plan"
-      ? await generateStagedPlan(generationOptions, provider)
-      : await generateWidgetContent(generationOptions, provider);
+      ? await generateStagedPlan(generationOptions, capabilities)
+      : await generateWidgetContent(generationOptions, capabilities);
 
   const response = {
     ...openAiCompatibleJson(result.text, provider, modelId, result.usage),

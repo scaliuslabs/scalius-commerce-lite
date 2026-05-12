@@ -19,11 +19,20 @@ import { CheckCircle2, KeyRound, Loader2, RotateCcw, Save, Trash2 } from "lucide
 
 type ProviderId = "openrouter" | "openai" | "gemini" | "cloudflare";
 type PromptId = "widget" | "landing-page" | "collection";
+type StructuredOutputMode = "auto" | "sdk" | "text";
+type VisionInputMode = "auto" | "enabled" | "disabled";
+
+interface ProviderCapabilityValues {
+  structuredOutput: StructuredOutputMode;
+  visionInput: VisionInputMode;
+  maxImages: number;
+}
 
 interface ProviderValues {
   enabled: boolean;
   defaultModel: string;
   allowedModels: string[];
+  capabilities: ProviderCapabilityValues;
   baseUrl: string;
   appName: string;
   appUrl: string;
@@ -61,10 +70,27 @@ const PROMPTS: Array<{ id: PromptId; label: string }> = [
   { id: "collection", label: "Collection Page" },
 ];
 
+const STRUCTURED_OUTPUT_OPTIONS: Array<{ value: StructuredOutputMode; label: string }> = [
+  { value: "auto", label: "Auto" },
+  { value: "sdk", label: "Force SDK schema" },
+  { value: "text", label: "Text tags" },
+];
+
+const VISION_INPUT_OPTIONS: Array<{ value: VisionInputMode; label: string }> = [
+  { value: "auto", label: "Auto" },
+  { value: "enabled", label: "Force on" },
+  { value: "disabled", label: "Off" },
+];
+
 const defaultProviderValues: ProviderValues = {
   enabled: false,
   defaultModel: "",
   allowedModels: [],
+  capabilities: {
+    structuredOutput: "auto",
+    visionInput: "auto",
+    maxImages: 10,
+  },
   baseUrl: "",
   appName: "",
   appUrl: "",
@@ -132,6 +158,33 @@ function normalizeAllowedModels(value: unknown): string[] {
   return models.slice(0, 50);
 }
 
+function normalizeStructuredOutputMode(value: unknown): StructuredOutputMode {
+  return value === "sdk" || value === "text" || value === "auto" ? value : "auto";
+}
+
+function normalizeVisionInputMode(value: unknown): VisionInputMode {
+  return value === "enabled" || value === "disabled" || value === "auto" ? value : "auto";
+}
+
+function normalizeMaxImages(value: unknown): number {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numberValue)) return 10;
+  return Math.min(10, Math.max(0, Math.round(numberValue)));
+}
+
+function normalizeCapabilities(value: unknown): ProviderCapabilityValues {
+  const data =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Partial<ProviderCapabilityValues>)
+      : {};
+
+  return {
+    structuredOutput: normalizeStructuredOutputMode(data.structuredOutput),
+    visionInput: normalizeVisionInputMode(data.visionInput),
+    maxImages: normalizeMaxImages(data.maxImages),
+  };
+}
+
 function parseAllowedModelsText(value: string): string[] {
   return normalizeAllowedModels(value.split(/\r?\n|,/));
 }
@@ -146,6 +199,7 @@ function normalizeProvider(id: ProviderId, value: unknown): ProviderValues {
     enabled: typeof data.enabled === "boolean" ? data.enabled : defaultValues.providers[id].enabled,
     defaultModel: typeof data.defaultModel === "string" ? data.defaultModel : defaultValues.providers[id].defaultModel,
     allowedModels: normalizeAllowedModels(data.allowedModels),
+    capabilities: normalizeCapabilities(data.capabilities),
     baseUrl: typeof data.baseUrl === "string" ? data.baseUrl : defaultValues.providers[id].baseUrl,
     appName: typeof data.appName === "string" ? data.appName : defaultValues.providers[id].appName,
     appUrl: typeof data.appUrl === "string" ? data.appUrl : defaultValues.providers[id].appUrl,
@@ -217,6 +271,11 @@ async function saveWidgetAi(values: WidgetAiValues) {
               enabled: provider.enabled,
               defaultModel: provider.defaultModel.trim(),
               allowedModels: normalizeAllowedModels(provider.allowedModels),
+              capabilities: {
+                structuredOutput: provider.capabilities.structuredOutput,
+                visionInput: provider.capabilities.visionInput,
+                maxImages: normalizeMaxImages(provider.capabilities.maxImages),
+              },
               baseUrl: provider.baseUrl.trim(),
               appName: provider.appName.trim(),
               appUrl: provider.appUrl.trim(),
@@ -268,6 +327,26 @@ export default function WidgetAiSettingsBuilder() {
         [provider]: {
           ...prev.providers[provider],
           [key]: value,
+        },
+      },
+    }));
+  };
+
+  const setProviderCapabilityValue = <K extends keyof ProviderCapabilityValues>(
+    provider: ProviderId,
+    key: K,
+    value: ProviderCapabilityValues[K],
+  ) => {
+    setValues((prev) => ({
+      ...prev,
+      providers: {
+        ...prev.providers,
+        [provider]: {
+          ...prev.providers[provider],
+          capabilities: {
+            ...prev.providers[provider].capabilities,
+            [key]: value,
+          },
         },
       },
     }));
@@ -407,6 +486,77 @@ export default function WidgetAiSettingsBuilder() {
                   <p className="text-xs text-muted-foreground">
                     Widget generation can only use the default model and these additional model IDs.
                   </p>
+                </div>
+
+                <div className="grid gap-4 rounded-md border bg-muted/20 p-3 md:col-span-2 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor={`${provider.id}-structured-output`}>Structured output</Label>
+                    <Select
+                      value={valuesForProvider.capabilities.structuredOutput}
+                      onValueChange={(value) =>
+                        setProviderCapabilityValue(
+                          provider.id,
+                          "structuredOutput",
+                          value as StructuredOutputMode,
+                        )
+                      }
+                    >
+                      <SelectTrigger id={`${provider.id}-structured-output`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STRUCTURED_OUTPUT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`${provider.id}-vision-input`}>Image input</Label>
+                    <Select
+                      value={valuesForProvider.capabilities.visionInput}
+                      onValueChange={(value) =>
+                        setProviderCapabilityValue(
+                          provider.id,
+                          "visionInput",
+                          value as VisionInputMode,
+                        )
+                      }
+                    >
+                      <SelectTrigger id={`${provider.id}-vision-input`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VISION_INPUT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`${provider.id}-max-images`}>Max images</Label>
+                    <Input
+                      id={`${provider.id}-max-images`}
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={1}
+                      value={valuesForProvider.capabilities.maxImages}
+                      onChange={(event) =>
+                        setProviderCapabilityValue(
+                          provider.id,
+                          "maxImages",
+                          normalizeMaxImages(event.target.value),
+                        )
+                      }
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">

@@ -8,11 +8,17 @@ import {
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import {
   AI_PROVIDER_IDS,
+  DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES,
   ERROR_MESSAGES,
   GENERATION_CONFIG,
   SYSTEM_PROMPT_FALLBACKS,
+  WIDGET_AI_STRUCTURED_OUTPUT_MODES,
+  WIDGET_AI_VISION_INPUT_MODES,
   type PromptType,
+  type WidgetAiProviderCapabilityConfig,
   type WidgetAiProvider,
+  type WidgetAiStructuredOutputMode,
+  type WidgetAiVisionInputMode,
 } from "./ai-config";
 import { AI_PROMPT_TYPES, DEFAULT_AI_PROMPTS } from "./default-prompts";
 
@@ -48,6 +54,7 @@ export interface WidgetAiProviderConfig {
   enabled: boolean;
   defaultModel: string;
   allowedModels: string[];
+  capabilities: WidgetAiProviderCapabilityConfig;
   baseUrl?: string;
   appName?: string;
   appUrl?: string;
@@ -99,6 +106,7 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
       enabled: false,
       defaultModel: "",
       allowedModels: [],
+      capabilities: DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES.openrouter,
       baseUrl: DEFAULT_BASE_URLS.openrouter,
       appName: "Scalius Commerce",
       appUrl: "",
@@ -107,18 +115,21 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
       enabled: false,
       defaultModel: "",
       allowedModels: [],
+      capabilities: DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES.openai,
       baseUrl: DEFAULT_BASE_URLS.openai,
     },
     gemini: {
       enabled: false,
       defaultModel: "",
       allowedModels: [],
+      capabilities: DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES.gemini,
       baseUrl: DEFAULT_BASE_URLS.gemini,
     },
     cloudflare: {
       enabled: true,
       defaultModel: "@cf/moonshotai/kimi-k2.6",
       allowedModels: [],
+      capabilities: DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES.cloudflare,
       accountId: "",
     },
   },
@@ -169,6 +180,42 @@ function normalizeModelList(value: unknown): string[] {
   }
 
   return models.slice(0, 50);
+}
+
+function normalizeStructuredOutputMode(value: unknown): WidgetAiStructuredOutputMode {
+  return typeof value === "string" &&
+    (WIDGET_AI_STRUCTURED_OUTPUT_MODES as readonly string[]).includes(value)
+    ? (value as WidgetAiStructuredOutputMode)
+    : "auto";
+}
+
+function normalizeVisionInputMode(value: unknown): WidgetAiVisionInputMode {
+  return typeof value === "string" &&
+    (WIDGET_AI_VISION_INPUT_MODES as readonly string[]).includes(value)
+    ? (value as WidgetAiVisionInputMode)
+    : "auto";
+}
+
+function normalizeCapabilityConfig(
+  provider: WidgetAiProvider,
+  value: unknown,
+): WidgetAiProviderCapabilityConfig {
+  const defaults = DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES[provider];
+  const input =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const rawMaxImages = input.maxImages;
+  const maxImages =
+    typeof rawMaxImages === "number" && Number.isFinite(rawMaxImages)
+      ? Math.min(GENERATION_CONFIG.context.maxImages, Math.max(0, Math.round(rawMaxImages)))
+      : defaults.maxImages;
+
+  return {
+    structuredOutput: normalizeStructuredOutputMode(input.structuredOutput ?? defaults.structuredOutput),
+    visionInput: normalizeVisionInputMode(input.visionInput ?? defaults.visionInput),
+    ...(typeof maxImages === "number" ? { maxImages } : {}),
+  };
 }
 
 function normalizeCloudflareAccountId(value: unknown, fallback = ""): string {
@@ -238,6 +285,10 @@ function normalizeProvider(
       typeof input.enabled === "boolean" ? input.enabled : defaults.enabled,
     defaultModel: asString(input.defaultModel, defaults.defaultModel),
     allowedModels: normalizeModelList(input.allowedModels),
+    capabilities: normalizeCapabilityConfig(
+      provider,
+      input.capabilities ?? defaults.capabilities,
+    ),
   };
 
   if (provider === "openrouter") {

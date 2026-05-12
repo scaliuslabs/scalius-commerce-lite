@@ -412,9 +412,12 @@ function generateCollectionContext(collections: CollectionContextData[]): string
  */
 export function prepareImagesForMultimodal(
   images: MediaFile[],
-  modelId: string
+  modelId: string,
+  maxImagesOverride?: number,
 ): Array<{ type: "image_url"; image_url: { url: string } }> {
-  const maxImages = getMaxImages(modelId);
+  const maxImages = typeof maxImagesOverride === "number" && Number.isFinite(maxImagesOverride)
+    ? maxImagesOverride
+    : getMaxImages(modelId);
   const imagesToUse = images.slice(0, maxImages);
 
   if (images.length > maxImages) {
@@ -446,6 +449,7 @@ export async function generateStructuredPrompt({
   allCategoriesSelected,
   modelId,
   supportsVision,
+  maxImagesOverride,
   sectionIndex,
   totalSections,
 }: {
@@ -461,6 +465,7 @@ export async function generateStructuredPrompt({
   allCategoriesSelected: boolean;
   modelId: string;
   supportsVision: boolean;
+  maxImagesOverride?: number;
   sectionIndex?: number;
   totalSections?: number;
 }): Promise<StructuredPromptResult> {
@@ -500,7 +505,9 @@ export async function generateStructuredPrompt({
   let imageContext = "";
   const multimodalImages: MessageContent[] = [];
 
-  const maxImages = getMaxImages(modelId);
+  const maxImages = typeof maxImagesOverride === "number" && Number.isFinite(maxImagesOverride)
+    ? Math.min(maxImagesOverride, getMaxImages(modelId))
+    : getMaxImages(modelId);
   const cappedImageUrls = Array.from(new Set(allImageUrls)).slice(0, maxImages);
 
   if (cappedImageUrls.length > 0) {
