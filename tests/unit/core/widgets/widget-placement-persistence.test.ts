@@ -8,6 +8,7 @@ import {
   WidgetPlacementSlot,
 } from "../../../../packages/database/src/schema";
 import {
+  bulkActivateWidgets,
   bulkDeleteWidgets,
   createWidget,
   createHistoryEntry,
@@ -17,6 +18,68 @@ import {
   updateWidget,
 } from "../../../../packages/core/src/modules/widgets/widgets.service";
 import { createMockDb } from "../../../setup";
+
+function createQueuedSelectDb(results: unknown[]) {
+  const queue = [...results];
+  const calls: Array<{ method: string; args: unknown[] }> = [];
+
+  const chainable = (method: string, result: unknown) => {
+    const chain: Record<string, (...args: unknown[]) => unknown> & {
+      get?: () => unknown;
+      then?: (resolve: (value: unknown) => void) => Promise<void>;
+    } = {};
+    for (const m of [
+      "from",
+      "where",
+      "set",
+      "values",
+      "returning",
+      "orderBy",
+      "limit",
+      "offset",
+      "innerJoin",
+      "leftJoin",
+    ]) {
+      chain[m] = (...args: unknown[]) => {
+        calls.push({ method: `${method}.${m}`, args });
+        return chain;
+      };
+    }
+    chain.get = () => {
+      calls.push({ method: `${method}.get`, args: [] });
+      return result ?? null;
+    };
+    chain.then = (resolve: (value: unknown) => void) => {
+      const value = Array.isArray(result) ? result : result ? [result] : [];
+      return Promise.resolve(value).then(resolve);
+    };
+    return chain;
+  };
+
+  return {
+    select: vi.fn((...args: unknown[]) => {
+      calls.push({ method: "select", args });
+      return chainable("select", queue.shift());
+    }),
+    update: vi.fn((...args: unknown[]) => {
+      calls.push({ method: "update", args });
+      return chainable("update", []);
+    }),
+    insert: vi.fn((...args: unknown[]) => {
+      calls.push({ method: "insert", args });
+      return chainable("insert", [{ id: "mock-id" }]);
+    }),
+    delete: vi.fn((...args: unknown[]) => {
+      calls.push({ method: "delete", args });
+      return chainable("delete", undefined);
+    }),
+    batch: vi.fn(async (stmts: unknown[]) => {
+      calls.push({ method: "batch", args: stmts });
+      return stmts.map(() => []);
+    }),
+    _calls: calls,
+  };
+}
 
 describe("widget placement persistence", () => {
   it("hydrates selected placement targets without duplicating search results", async () => {
@@ -258,6 +321,77 @@ describe("widget placement persistence", () => {
       .map((call: { args: unknown[] }) => call.args[0])
       .find(Array.isArray);
     expect(placementInsert).toBeUndefined();
+  });
+
+  it("rejects activating an existing widget with stale placement targets", async () => {
+    const existingWidget = {
+      id: "wid_stale",
+      name: "Product promo",
+      htmlContent: "<section>Promo</section>",
+      cssContent: "",
+      aiContext: null,
+      isActive: false,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.STANDALONE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    };
+    const stalePlacement = {
+      id: "wpl_stale",
+      widgetId: "wid_stale",
+      scope: WidgetPlacementScope.PRODUCT,
+      scopeId: "prod_missing",
+      slot: WidgetPlacementSlot.TOP,
+      anchorType: null,
+      anchorId: null,
+      sortOrder: 0,
+      isActive: true,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    };
+    const db = createQueuedSelectDb([existingWidget, [stalePlacement], []]) as any;
+
+    await expect(
+      updateWidget(db, "wid_stale", {
+        isActive: true,
+      }),
+    ).rejects.toThrow("missing or inactive products");
+
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects bulk activation when existing placements have stale targets", async () => {
+    const existingWidget = {
+      id: "wid_bulk_stale",
+      name: "Bulk Product promo",
+      htmlContent: "<section>Promo</section>",
+      isActive: false,
+    };
+    const stalePlacement = {
+      id: "wpl_bulk_stale",
+      widgetId: "wid_bulk_stale",
+      scope: WidgetPlacementScope.PRODUCT,
+      scopeId: "prod_missing",
+      slot: WidgetPlacementSlot.TOP,
+      anchorType: null,
+      anchorId: null,
+      sortOrder: 0,
+      isActive: true,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    };
+    const db = createQueuedSelectDb([[existingWidget], [stalePlacement], []]) as any;
+
+    await expect(
+      bulkActivateWidgets(db, ["wid_bulk_stale"]),
+    ).rejects.toThrow("missing or inactive products");
+
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it("rejects collection placements that do not reference an active collection", async () => {
