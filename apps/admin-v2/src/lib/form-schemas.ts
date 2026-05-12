@@ -146,9 +146,6 @@ const widgetPlacementFormSchema = z.object({
   scope: z.enum([
     WidgetPlacementScope.HOMEPAGE,
     WidgetPlacementScope.PAGE,
-    WidgetPlacementScope.PRODUCT,
-    WidgetPlacementScope.CATEGORY,
-    WidgetPlacementScope.COLLECTION,
   ]).default(WidgetPlacementScope.HOMEPAGE),
   scopeId: z.string().optional().nullable(),
   slot: z.enum([
@@ -175,7 +172,7 @@ const widgetPlacementFormSchema = z.object({
     });
   }
 
-  if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
+  if (placement.scope === WidgetPlacementScope.PAGE && !placement.scopeId) {
     ctx.addIssue({
       code: "custom",
       message: "Select the target page for this placement.",

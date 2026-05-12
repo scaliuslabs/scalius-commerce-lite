@@ -12,6 +12,14 @@ export const CONTENT_WIDGET_PLACEMENT_SLOTS = [
   "after_content",
 ] as const;
 
+export const SUPPORTED_WIDGET_PLACEMENT_SCOPES = [
+  "homepage",
+  "page",
+] as const;
+
+export type SupportedWidgetPlacementScopeValue =
+  (typeof SUPPORTED_WIDGET_PLACEMENT_SCOPES)[number];
+
 export type WidgetPlacementScopeValue =
   | "homepage"
   | "page"
@@ -25,6 +33,13 @@ export type WidgetPlacementSlotValue =
 
 const homepageSlots = new Set<string>(HOMEPAGE_WIDGET_PLACEMENT_SLOTS);
 const contentSlots = new Set<string>(CONTENT_WIDGET_PLACEMENT_SLOTS);
+const supportedScopes = new Set<string>(SUPPORTED_WIDGET_PLACEMENT_SCOPES);
+
+export function isSupportedWidgetPlacementScope(
+  scope: string | null | undefined,
+): scope is SupportedWidgetPlacementScopeValue {
+  return !!scope && supportedScopes.has(scope);
+}
 
 export function isHomepageWidgetPlacementScope(
   scope: string | null | undefined,
@@ -42,6 +57,7 @@ export function isWidgetPlacementSlotAllowedForScope(
   scope: string | null | undefined,
   slot: string | null | undefined,
 ): boolean {
+  if (!isSupportedWidgetPlacementScope(scope)) return false;
   if (!slot) return false;
   return isHomepageWidgetPlacementScope(scope)
     ? homepageSlots.has(slot)

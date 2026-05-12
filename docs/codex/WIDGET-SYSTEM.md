@@ -50,7 +50,7 @@ Widgets are reusable content blocks. Placement is a separate concern and now has
 
 Canonical placement fields:
 
-- `scope`: `homepage`, `page`, `product`, `category`, or `collection`
+- `scope`: currently `homepage` or `page`
 - `scopeId`: required for non-homepage scopes
 - `slot`: top/bottom/content/collection anchor slot
 - `anchorType` + `anchorId`: used when a placement is anchored to a collection or content region
@@ -64,3 +64,4 @@ Current implementation notes:
 - CMS page rendering reads canonical page-scoped placements through `/storefront/pages/slug/{slug}` and renders `top`, `before_content`, `after_content`, and `bottom` zones around the page body.
 - Shortcodes remain an escape hatch for exact inline placement, not the primary page-builder model.
 - Widget mutations invalidate both homepage and page render caches because one reusable widget can appear on either surface.
+- Product, category, and collection scoped placements are not accepted by admin/API validation until the admin chooser, storefront fetch path, cache invalidation, and page render zones exist end to end.
