@@ -48,6 +48,7 @@ export async function readChatCompletionStream(response: Response): Promise<stri
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
+  let finalContent: string | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -62,7 +63,7 @@ export async function readChatCompletionStream(response: Response): Promise<stri
       if (!line.startsWith("data: ")) continue;
 
       const chunk = line.slice(6);
-      if (chunk === "[DONE]") return content;
+      if (chunk === "[DONE]") return finalContent ?? content;
 
       let parsed: ChatCompletionLike;
       try {
@@ -77,8 +78,13 @@ export async function readChatCompletionStream(response: Response): Promise<stri
 
       const delta = parsed.choices?.[0]?.delta?.content;
       if (delta) content += delta;
+
+      const replacement = parsed.choices?.[0]?.message?.content;
+      if (typeof replacement === "string") {
+        finalContent = replacement;
+      }
     }
   }
 
-  return content;
+  return finalContent ?? content;
 }
