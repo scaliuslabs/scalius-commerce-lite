@@ -5,6 +5,7 @@ import {
   getEffectiveImageLimit,
   uniqueByLimit,
 } from "../../../apps/admin-v2/src/components/admin/widgets/widget-form/ai-context-limits";
+import { toSelectableProducts } from "../../../apps/admin-v2/src/components/admin/widgets/widget-form/ai-product-selector";
 
 describe("widget AI context limits", () => {
   it("uses the lower of model and API image limits", () => {
@@ -47,5 +48,37 @@ describe("widget AI context limits", () => {
     ]);
     expect(result.added).toBe(1);
     expect(result.skipped).toBe(1);
+  });
+
+  it("keeps inactive products out of AI context selector results", () => {
+    const products = toSelectableProducts([
+      {
+        id: "prod_active",
+        name: "Active",
+        slug: "active",
+        price: 100,
+        isActive: true,
+        primaryImage: "https://cloud.scalius.com/active.webp",
+      },
+      {
+        id: "prod_inactive",
+        name: "Inactive",
+        slug: "inactive",
+        price: 100,
+        isActive: false,
+        primaryImage: "https://cloud.scalius.com/inactive.webp",
+      },
+      {
+        id: "prod_unspecified",
+        name: "Unspecified",
+        slug: "unspecified",
+        primaryImage: null,
+      },
+    ]);
+
+    expect(products.map((product) => product.id)).toEqual([
+      "prod_active",
+      "prod_unspecified",
+    ]);
   });
 });

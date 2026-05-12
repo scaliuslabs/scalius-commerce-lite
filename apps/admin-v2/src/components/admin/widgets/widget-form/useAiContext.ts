@@ -10,19 +10,10 @@ import {
   appendUniqueWithinLimit,
   uniqueByLimit,
 } from "./ai-context-limits";
-
-interface RawProduct {
-  id: string;
-  name: string;
-  slug: string;
-  price?: number;
-  isActive?: boolean;
-  category?: { name: string };
-  sku?: string;
-  variantCount?: number;
-  imageCount?: number;
-  primaryImage: string | null;
-}
+import {
+  toSelectableProducts,
+  type RawProduct,
+} from "./ai-product-selector";
 
 const PAGE_SIZE = 10;
 
@@ -103,18 +94,9 @@ export const useAiContext = (
       }) as Record<string, unknown>;
       if (requestId !== productBrowseRequestId.current) return;
 
-      const newProducts: ProductSearchResult[] = ((data.products || []) as RawProduct[]).map((p) => ({
-        id: p.id,
-        name: p.name,
-        slug: p.slug,
-        price: p.price,
-        isActive: p.isActive,
-        category: p.category,
-        sku: p.sku,
-        variantCount: p.variantCount,
-        imageCount: p.imageCount,
-        primaryImage: p.primaryImage,
-      }));
+      const newProducts = toSelectableProducts(
+        (data.products || []) as RawProduct[],
+      );
       setLatestProducts((prev) => pageToFetch === 1 ? newProducts : [...prev, ...newProducts]);
       setProductPage(pageToFetch);
       const pagination = data.pagination as Record<string, unknown>;
@@ -138,18 +120,9 @@ export const useAiContext = (
       }) as Record<string, unknown>;
       if (requestId !== productSearchRequestId.current) return;
 
-      const newProducts: ProductSearchResult[] = ((data.products || []) as RawProduct[]).map((p) => ({
-        id: p.id,
-        name: p.name,
-        slug: p.slug,
-        price: p.price,
-        isActive: p.isActive,
-        category: p.category,
-        sku: p.sku,
-        variantCount: p.variantCount,
-        imageCount: p.imageCount,
-        primaryImage: p.primaryImage,
-      }));
+      const newProducts = toSelectableProducts(
+        (data.products || []) as RawProduct[],
+      );
       setProductSearchResults((prev) => pageToFetch === 1 ? newProducts : [...prev, ...newProducts]);
       setProductSearchPage(pageToFetch);
       const pagination = data.pagination as Record<string, unknown>;
