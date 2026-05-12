@@ -11,7 +11,7 @@
  * - Cleaner, more maintainable code
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -182,6 +182,37 @@ function legacyProjectionFromPlacements(placements: WidgetPlacementFormValue[] |
   };
 }
 
+function getWidgetFormDefaultValues(
+  widget: Widget | null | undefined,
+  isCreateMode: boolean,
+): WidgetFormValues {
+  if (widget && !isCreateMode) {
+    return {
+      name: widget.name,
+      htmlContent: widget.htmlContent,
+      cssContent: widget.cssContent || undefined,
+      isActive: widget.isActive,
+      displayTarget: widget.displayTarget as 'homepage',
+      placementRule: widget.placementRule as WidgetPlacementRule,
+      referenceCollectionId: widget.referenceCollectionId,
+      sortOrder: widget.sortOrder,
+      placements: placementsForForm(widget),
+    };
+  }
+
+  return {
+    name: '',
+    htmlContent: '',
+    cssContent: undefined,
+    isActive: true,
+    displayTarget: 'homepage',
+    placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
+    referenceCollectionId: null,
+    sortOrder: 0,
+    placements: placementsForForm(null),
+  };
+}
+
 export const WidgetForm: React.FC<WidgetFormProps> = ({
   widget,
   isCreateMode,
@@ -192,44 +223,38 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const navigate = useNavigate();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const widgetFormVersion = isCreateMode
+    ? 'create'
+    : widget
+      ? `${widget.id}:${String(widget.updatedAt)}`
+      : 'empty';
+  const formDefaultValues = useMemo(
+    () => getWidgetFormDefaultValues(widget, isCreateMode),
+    [widget, isCreateMode],
+  );
+  const resetVersionRef = useRef<string | null>(null);
   const {
     control,
     handleSubmit,
     register,
     watch,
     setValue,
+    reset,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<WidgetFormValues>({
     resolver: zodResolver(widgetFormSchema),
-    defaultValues: widget && !isCreateMode
-      ? {
-          name: widget.name,
-          htmlContent: widget.htmlContent,
-          cssContent: widget.cssContent || undefined,
-          isActive: widget.isActive,
-          displayTarget: widget.displayTarget as 'homepage',
-          placementRule: widget.placementRule as WidgetPlacementRule,
-          referenceCollectionId: widget.referenceCollectionId,
-          sortOrder: widget.sortOrder,
-          placements: placementsForForm(widget),
-        }
-      : {
-          name: '',
-          htmlContent: '',
-          cssContent: undefined,
-          isActive: true,
-          displayTarget: 'homepage',
-          placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
-          referenceCollectionId: null,
-          sortOrder: 0,
-          placements: placementsForForm(null),
-        },
+    defaultValues: formDefaultValues,
   });
 
   // Version history state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [history, setHistory] = useState<WidgetHistoryEntry[]>([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<WidgetHistoryEntry | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isRestoringHistory, setIsRestoringHistory] = useState(false);
+  const [deletingHistoryIds, setDeletingHistoryIds] = useState<Set<string>>(() => new Set());
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
 
   // Save version state
@@ -245,6 +270,18 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const aiContext = useAiContext();
   const aiGenerator = useAiGenerator(aiContext, widget);
   const aiImprover = useAiImprover({ aiContext, aiGenerator });
+
+  useEffect(() => {
+    if (resetVersionRef.current === widgetFormVersion) return;
+    resetVersionRef.current = widgetFormVersion;
+    reset(formDefaultValues);
+    setHistory([]);
+    setSelectedHistoryItem(null);
+    setHistoryError(null);
+    setIsHistoryLoading(false);
+    setIsRestoringHistory(false);
+    setDeletingHistoryIds(new Set());
+  }, [formDefaultValues, reset, widgetFormVersion]);
 
   // Load saved AI context from widget
   useEffect(() => {
@@ -433,29 +470,64 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   const openHistory = async () => {
     if (widget?.id) {
       setIsHistoryOpen(true);
+      setIsHistoryLoading(true);
+      setHistoryError(null);
+      setSelectedHistoryItem(null);
+      setHistory([]);
       try {
         const data = await getWidgetHistory({ data: { widgetId: widget.id } });
-        setHistory(data as WidgetHistoryEntry[]);
+        const entries = data as WidgetHistoryEntry[];
+        setHistory(entries);
+        setSelectedHistoryItem(entries[0] ?? null);
       } catch (error: unknown) {
-        toast.error('Failed to load version history');
+        const message = error instanceof Error ? error.message : 'Failed to load version history';
+        setHistoryError(message);
+        toast.error(message);
         setHistory([]);
+      } finally {
+        setIsHistoryLoading(false);
       }
     }
   };
 
   const handleRestore = async (historyId: string) => {
     if (!widget?.id) return;
+    const restoredEntry = history.find((entry) => entry.id === historyId);
+    setIsRestoringHistory(true);
     try {
       await restoreWidgetHistory({ data: { widgetId: widget.id, historyId } });
+      if (restoredEntry) {
+        reset({
+          ...getValues(),
+          htmlContent: restoredEntry.htmlContent,
+          cssContent: restoredEntry.cssContent || undefined,
+        });
+        setSelectedHistoryItem(restoredEntry);
+      }
+      try {
+        const refreshedHistory = await getWidgetHistory({ data: { widgetId: widget.id } });
+        const entries = refreshedHistory as WidgetHistoryEntry[];
+        setHistory(entries);
+        setSelectedHistoryItem(
+          entries.find((entry) => entry.id === historyId) ?? restoredEntry ?? entries[0] ?? null,
+        );
+      } catch {
+        // The restored form content is already applied; a history refresh can recover on next open.
+      }
       toast.success('Version restored successfully!');
-      router.invalidate();
+      void router.invalidate();
+      queryClient.invalidateQueries({ queryKey: ['widgets', 'detail', widget.id] });
+      queryClient.invalidateQueries({ queryKey: ['widgets', 'list'] });
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to restore version');
+    } finally {
+      setIsRestoringHistory(false);
     }
   };
 
   const handleDeleteHistory = async (historyId: string) => {
     if (!widget?.id) return;
+    setDeletingHistoryIds((prev) => new Set(prev).add(historyId));
     try {
       await deleteWidgetHistory({ data: { widgetId: widget.id, historyId } });
       toast.success('Version deleted successfully!');
@@ -465,6 +537,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete version');
+    } finally {
+      setDeletingHistoryIds((prev) => {
+        const next = new Set(prev);
+        next.delete(historyId);
+        return next;
+      });
     }
   };
 
@@ -701,6 +779,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         history={history}
         selectedHistoryItem={selectedHistoryItem}
         setSelectedHistoryItem={setSelectedHistoryItem}
+        isLoading={isHistoryLoading}
+        error={historyError}
+        isRestoring={isRestoringHistory}
+        deletingHistoryIds={deletingHistoryIds}
         handleRestore={handleRestore}
         handleDeleteHistory={handleDeleteHistory}
         widgetName={widget?.name || ''}
