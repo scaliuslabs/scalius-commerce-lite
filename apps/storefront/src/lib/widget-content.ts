@@ -1,3 +1,27 @@
+import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
+import { scopeCss } from "@scalius/shared/css-scope";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import {
+  optimizeCssImageUrls,
+  optimizeRichContentImages,
+} from "./rich-content-media";
+
+interface WidgetContentInput {
+  id: string;
+  htmlContent?: string | null;
+  cssContent?: string | null;
+}
+
+interface PrepareWidgetContentOptions {
+  priority?: boolean;
+}
+
+export interface PreparedWidgetContent {
+  scopeClass: string;
+  html: string;
+  css: string;
+}
+
 function stripCodeFence(content: string): string {
   const trimmed = content.trim();
   const match = trimmed.match(/^```(?:html|css)?\s*([\s\S]*?)\s*```$/i);
@@ -39,4 +63,27 @@ export function normalizeWidgetCss(css: string | null | undefined): string {
   let normalized = stripCodeFence(css);
   normalized = stripTagWrapper(normalized, "css");
   return repairGeneratedCssComments(normalized);
+}
+
+export function getWidgetScopeClass(widgetId: string): string {
+  return `sw-${widgetId}`;
+}
+
+export function prepareWidgetContent(
+  widget: WidgetContentInput,
+  options: PrepareWidgetContentOptions = {},
+): PreparedWidgetContent {
+  const scopeClass = getWidgetScopeClass(widget.id);
+  const html = optimizeRichContentImages(
+    sanitizeHtml(normalizeWidgetHtml(widget.htmlContent ?? "")),
+    { priority: options.priority },
+  );
+  const css = scopeCss(
+    optimizeCssImageUrls(
+      sanitizeCssForStyleElement(normalizeWidgetCss(widget.cssContent)),
+    ),
+    scopeClass,
+  );
+
+  return { scopeClass, html, css };
 }
