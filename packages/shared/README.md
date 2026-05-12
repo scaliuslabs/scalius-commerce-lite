@@ -33,6 +33,7 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 import { scopeCss } from "@scalius/shared/css-scope";
+import { normalizeWidgetPlacementSlotForScope } from "@scalius/shared/widget-placement";
 import { toISOString, fromUnixSeconds, nowUnixSeconds, unixToDate, formatDate } from "@scalius/shared/timestamps";
 import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 ```
@@ -58,6 +59,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `html-sanitize.ts` | 352 | Defense-in-depth XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` handlers, `javascript:`/`vbscript:`/dangerous `data:` URLs |
 | `css-sanitize.ts` | 209 | Defense-in-depth sanitizer for admin-authored widget stylesheets | `sanitizeCssForStyleElement()` -- prevents style-tag breakout, removes external stylesheet/font at-rules, strips HTML tags, and neutralizes script-capable CSS values/URLs |
 | `css-scope.ts` | 222 | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
+| `widget-placement.ts` | 64 | Canonical widget placement scope/slot rules shared by admin and API validation | `isWidgetPlacementSlotAllowedForScope()`, `normalizeWidgetPlacementSlotForScope()`, `isWidgetCollectionSlot()` |
 | `timestamps.ts` | 82 | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
 | `barcode-utils.ts` | 30 | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
 | `barcode-svg.ts` | 206 | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
@@ -103,6 +105,10 @@ Widget HTML and CSS use complementary utilities:
 ### CSS Scoping
 
 `css-scope.ts` (`scopeCss`) prefixes all CSS selectors with a unique wrapper class to prevent widget styles from leaking into the rest of the page. Handles `@media`/`@supports`/`@layer`/`@container` at-rules (prefixes inner selectors), preserves animation keyframes, and rewrites `body`/`html`/`*`/`:root` selectors to the scope class. Widget CSS should be passed through `sanitizeCssForStyleElement()` before `scopeCss()`.
+
+### Widget Placement
+
+`widget-placement.ts` keeps scope/slot rules canonical across admin forms and API validation. Homepage placements support top, bottom, before collection, and after collection slots. Page-like scoped placements support top, bottom, before content, and after content slots. Use `normalizeWidgetPlacementSlotForScope()` when a UI changes scope so hidden stale slot values cannot be submitted.
 
 ### Timestamps
 

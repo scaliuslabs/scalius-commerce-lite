@@ -55,6 +55,10 @@ import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { getServerFnError } from '~/lib/api-helpers';
+import {
+  isWidgetCollectionSlot,
+  normalizeWidgetPlacementSlotForScope,
+} from '@scalius/shared/widget-placement';
 
 interface WidgetFormProps {
   widget?: Widget | null;
@@ -105,13 +109,20 @@ function placementsFromLegacyWidget(widget: Widget): WidgetPlacementFormValue[] 
 function normalizePlacementForForm(
   placement: NonNullable<Widget["placements"]>[number],
 ): WidgetPlacementFormValue {
+  const slot = normalizeWidgetPlacementSlotForScope(
+    placement.scope,
+    placement.slot,
+  ) as WidgetPlacementSlot;
+  const anchorType = isWidgetCollectionSlot(slot)
+    ? WidgetPlacementAnchorType.COLLECTION
+    : null;
   return {
     id: placement.id,
     scope: placement.scope,
     scopeId: placement.scopeId ?? null,
-    slot: placement.slot,
-    anchorType: placement.anchorType ?? null,
-    anchorId: placement.anchorId ?? null,
+    slot,
+    anchorType,
+    anchorId: isWidgetCollectionSlot(slot) ? placement.anchorId ?? null : null,
     sortOrder: placement.sortOrder,
     isActive: placement.isActive,
   };

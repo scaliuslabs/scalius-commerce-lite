@@ -15,6 +15,10 @@ import {
   WidgetPlacementScope,
   WidgetPlacementSlot,
 } from "@/types/api-responses";
+import {
+  isWidgetCollectionSlot,
+  isWidgetPlacementSlotAllowedForScope,
+} from "@scalius/shared/widget-placement";
 
 const mediaFileFormSchema = z.object({
   id: z.string(),
@@ -163,6 +167,14 @@ const widgetPlacementFormSchema = z.object({
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
 }).superRefine((placement, ctx) => {
+  if (!isWidgetPlacementSlotAllowedForScope(placement.scope, placement.slot)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Select a valid position for this placement scope.",
+      path: ["slot"],
+    });
+  }
+
   if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
     ctx.addIssue({
       code: "custom",
@@ -172,8 +184,7 @@ const widgetPlacementFormSchema = z.object({
   }
 
   if (
-    (placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
-      placement.slot === WidgetPlacementSlot.AFTER_COLLECTION) &&
+    isWidgetCollectionSlot(placement.slot) &&
     (!placement.anchorId || placement.anchorType !== WidgetPlacementAnchorType.COLLECTION)
   ) {
     ctx.addIssue({

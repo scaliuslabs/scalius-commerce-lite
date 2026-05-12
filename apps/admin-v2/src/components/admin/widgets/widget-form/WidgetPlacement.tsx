@@ -10,6 +10,12 @@ import { Controller, useFieldArray } from 'react-hook-form';
 import type { Control, UseFormRegister, UseFormSetValue, UseFormWatch, FieldErrors } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import {
+  CONTENT_WIDGET_PLACEMENT_SLOTS,
+  HOMEPAGE_WIDGET_PLACEMENT_SLOTS,
+  isWidgetCollectionSlot,
+  normalizeWidgetPlacementSlotForScope,
+} from '@scalius/shared/widget-placement';
+import {
   WidgetPlacementAnchorType,
   WidgetPlacementScope,
   WidgetPlacementSlot,
@@ -46,23 +52,8 @@ const slotLabels: Partial<Record<WidgetPlacementSlot, string>> = {
   [WidgetPlacementSlot.AFTER_COLLECTION]: "After collection",
 };
 
-const homepageSlots = [
-  WidgetPlacementSlot.TOP,
-  WidgetPlacementSlot.BOTTOM,
-  WidgetPlacementSlot.BEFORE_COLLECTION,
-  WidgetPlacementSlot.AFTER_COLLECTION,
-];
-
-const pageSlots = [
-  WidgetPlacementSlot.TOP,
-  WidgetPlacementSlot.BOTTOM,
-  WidgetPlacementSlot.BEFORE_CONTENT,
-  WidgetPlacementSlot.AFTER_CONTENT,
-];
-
-const isCollectionSlot = (slot: WidgetPlacementSlot | undefined) =>
-  slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
-  slot === WidgetPlacementSlot.AFTER_COLLECTION;
+const homepageSlots = HOMEPAGE_WIDGET_PLACEMENT_SLOTS;
+const pageSlots = CONTENT_WIDGET_PLACEMENT_SLOTS;
 
 export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
   control,
@@ -151,15 +142,16 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                       <Select
                         value={scopeField.value}
                         onValueChange={(value: WidgetPlacementScope) => {
+                          const nextSlot = normalizeWidgetPlacementSlotForScope(
+                            value,
+                            slot,
+                          ) as WidgetPlacementSlot;
                           scopeField.onChange(value);
                           setValue(`placements.${index}.scopeId`, null, { shouldDirty: true });
                           setValue(`placements.${index}.anchorType`, null, { shouldDirty: true });
                           setValue(`placements.${index}.anchorId`, null, { shouldDirty: true });
-                          if (
-                            value === WidgetPlacementScope.PAGE &&
-                            isCollectionSlot(slot)
-                          ) {
-                            setValue(`placements.${index}.slot`, WidgetPlacementSlot.BEFORE_CONTENT, { shouldDirty: true });
+                          if (nextSlot !== slot) {
+                            setValue(`placements.${index}.slot`, nextSlot, { shouldDirty: true });
                           }
                         }}
                       >
@@ -226,7 +218,7 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                         value={slotField.value}
                         onValueChange={(value: WidgetPlacementSlot) => {
                           slotField.onChange(value);
-                          if (isCollectionSlot(value)) {
+                          if (isWidgetCollectionSlot(value)) {
                             setValue(`placements.${index}.anchorType`, WidgetPlacementAnchorType.COLLECTION, { shouldDirty: true });
                           } else {
                             setValue(`placements.${index}.anchorType`, null, { shouldDirty: true });
@@ -281,7 +273,7 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
                 </div>
               </div>
 
-              {isCollectionSlot(slot) && (
+              {isWidgetCollectionSlot(slot) && (
                 <div className="mt-3 max-w-md space-y-2">
                   <Label>Collection</Label>
                   <Controller
