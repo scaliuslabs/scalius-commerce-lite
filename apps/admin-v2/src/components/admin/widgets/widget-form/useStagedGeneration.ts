@@ -36,6 +36,7 @@ interface StagedGenerationState {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const PREVIOUS_SECTION_CONTEXT_LIMIT = 6000;
+const SECTION_GAP_CSS = "clamp(0.75rem, 1.8vw, 1.35rem)";
 
 function createAbortError(): Error {
   const error = new Error('Generation cancelled');
@@ -90,8 +91,14 @@ Before generating the widget, create a concise implementation plan. Respond with
 }
 
 Guidelines:
-- Use 1-2 sections for simple widgets and 3-5 sections for rich homepage, collection, or landing page content.
+- Choose section count by destination:
+  - Homepage widget: usually 2-4 cohesive bands such as offer/category signal, featured products or categories, trust/urgency, and CTA.
+  - Landing section set: usually 4-6 campaign bands such as hero/offer, product or collection showcase, proof, objection handling, urgency, and final CTA.
+  - Collection section: usually 2-4 practical merchandising bands such as collection intro, product grid/comparison, buying guide, and CTA/trust strip.
+- Plan the output as ONE continuous composition. Section descriptions must state each section's role in that flow, not isolated ideas.
 - Each section must be a complete, standalone HTML div with CSS-only interactions.
+- Every section must share one visual system: color tokens, typography, image treatment, button style, radius scale, and spacing rhythm.
+- Avoid huge vertical gaps. Root section wrappers should not rely on large top/bottom margins or spacer blocks.
 - Do not include HTML, CSS, markdown, comments, or explanations in this planning response.
 - The sectionDescriptions array length must equal totalSections.`,
     },
@@ -101,26 +108,38 @@ Guidelines:
 function createDeterministicPlan(messages: PromptMessage[]): GenerationPlan {
   const promptText = textFromMessages(messages).toLowerCase();
   const wantsCollection =
+    promptText.includes("collection page designer") ||
+    promptText.includes("collection section") ||
     promptText.includes("collection") ||
     promptText.includes("products") ||
     promptText.includes("product grid");
   const wantsLanding =
+    promptText.includes("landing page designer") ||
     promptText.includes("landing") ||
-    promptText.includes("campaign") ||
+    promptText.includes("campaign");
+  const wantsHomepage =
+    promptText.includes("homepage widget designer") ||
     promptText.includes("homepage");
-  const totalSections = wantsLanding || wantsCollection ? 3 : 2;
-  const sectionDescriptions = wantsCollection
+  const totalSections = wantsLanding ? 4 : wantsHomepage || wantsCollection ? 3 : 2;
+  const sectionDescriptions = wantsLanding
     ? [
-        "Offer-led hero with a clear collection message",
-        "Product or category showcase using the provided storefront context",
-        "Trust, urgency, and call-to-action strip",
+        "Campaign hero/offer that establishes the shared visual system",
+        "Product or collection showcase that continues the hero rhythm",
+        "Proof, benefits, or objection handling using the same design language",
+        "Final conversion CTA with tight spacing from the prior section",
       ]
-    : wantsLanding
+    : wantsHomepage
       ? [
-          "Hero section with the main value proposition",
-          "Supporting proof or feature section",
-          "Conversion-focused call-to-action section",
+          "Homepage offer/category signal that establishes the visual system",
+          "Featured product or collection discovery band",
+          "Trust, urgency, or CTA band that closes the homepage widget",
         ]
+    : wantsCollection
+    ? [
+        "Collection intro with the core merchandising promise",
+        "Product or category comparison using the provided storefront context",
+        "Trust, urgency, and call-to-action strip connected to the product grid",
+      ]
       : [
           "Primary promotional section",
           "Supporting call-to-action section",
@@ -157,6 +176,12 @@ ${section.css.slice(0, 900) || "No CSS"}`;
 ${snippets.join("\n\n")}
 
 IMPORTANT: Maintain the same design language, color rhythm, spacing, typography, and CTA style. Do not copy previous sections verbatim.`;
+}
+
+function describePlan(planDescriptions: string[]): string {
+  return planDescriptions
+    .map((description, index) => `${index + 1}. ${description}`)
+    .join("\n");
 }
 
 export function useStagedGeneration() {
@@ -266,6 +291,7 @@ export function useStagedGeneration() {
     messages: PromptMessage[],
     sectionIndex: number,
     sectionDescription: string,
+    allSectionDescriptions: string[],
     totalSections: number,
     previousSections: SectionContent[],
     retryAttempt = 0,
@@ -274,12 +300,16 @@ export function useStagedGeneration() {
     throwIfAborted(signal);
 
     const previousContext = compactPreviousSections(previousSections);
+    const planOutline = describePlan(allSectionDescriptions);
 
     const sectionPrompt = {
       role: "user",
       content: `Generate section ${sectionIndex + 1} of ${totalSections}.
 
-Section Description: ${sectionDescription}${previousContext}
+Overall flow so far:
+${planOutline}
+
+Current Section Role: ${sectionDescription}${previousContext}
 
 Requirements:
 - Use tag-based format with <htmljs> and <css> tags
@@ -287,6 +317,9 @@ Requirements:
 - CSS should be scoped to this section
 - This section will be combined with others, so use unique IDs/classes
 - CRITICAL: Match the visual style, colors, fonts, and design of previous sections for consistency
+- CRITICAL: This section sits directly next to the other generated sections. Do not add large margin-top, margin-bottom, min-height, empty spacer divs, or unrelated visual resets.
+- Use internal padding for section content. Root section wrappers should usually use margin: 0 and box-sizing: border-box.
+- Keep CTAs, card treatments, image crops, and typography aligned with the overall flow.
 
 ${sectionIndex > 0 ? 'Note: Continue the design system from previous sections.' : 'Note: This is the first section - establish a cohesive design system!'}
 
@@ -358,7 +391,18 @@ Respond with the section code in tag format.`,
         const delay = RETRY_DELAY_MS * Math.pow(2, retryAttempt);
         toast.info(`Retrying section ${sectionIndex + 1} in ${delay / 1000}s...`);
         await sleep(delay, signal);
-        return generateSection(provider, model, messages, sectionIndex, sectionDescription, totalSections, previousSections, retryAttempt + 1, signal);
+        return generateSection(
+          provider,
+          model,
+          messages,
+          sectionIndex,
+          sectionDescription,
+          allSectionDescriptions,
+          totalSections,
+          previousSections,
+          retryAttempt + 1,
+          signal,
+        );
       }
 
       toast.error(`Failed to generate section ${sectionIndex + 1}: ${error instanceof Error ? error.message : String(error)}`);
@@ -411,6 +455,7 @@ Respond with the section code in tag format.`,
           messages,
           i,
           plan.sectionDescriptions[i],
+          plan.sectionDescriptions,
           plan.totalSections,
           generatedSections,  // Accumulating context from previous sections
           0,
@@ -439,32 +484,35 @@ Respond with the section code in tag format.`,
         }
       }
 
-      // Phase 3: Combine all sections with proper spacing
+      // Phase 3: Combine all sections with modest spacing. Generated sections
+      // own their internal padding; the wrapper should not create dead zones.
       const combinedHtml = `<div class="widget-container">\n${generatedSections.map((s, idx) => `  <div class="widget-section widget-section-${idx + 1}" data-section="${idx + 1}">\n    ${s.html.split('\n').map(line => '    ' + line).join('\n')}\n  </div>`).join('\n')}\n</div>`;
 
       const combinedCss = `
-/* Widget Container Spacing */
+/* Widget Container Composition */
 .widget-container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: ${SECTION_GAP_CSS};
   width: 100%;
+  margin: 0;
 }
 
 .widget-section {
   width: 100%;
+  margin: 0;
 }
 
 /* Mobile Responsive Spacing */
 @media (max-width: 768px) {
   .widget-container {
-    gap: 1.5rem;
+    gap: 1rem;
   }
 }
 
 @media (max-width: 480px) {
   .widget-container {
-    gap: 1rem;
+    gap: 0.75rem;
   }
 }
 

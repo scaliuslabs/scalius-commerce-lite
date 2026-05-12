@@ -23,28 +23,28 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     description: "Product listings, search results, and homepage product sections",
     kvPrefixes: ["api:products:", "api:search:", "api:storefront:homepage:"],
     bumpsHtml: true,
-    storefrontPrefixes: ["product_slug_", "product_variants_", "all_products_", "category_products_", "storefront_homepage_"],
+    storefrontPrefixes: ["product_slug_", "product_variants_", "all_products_", "category_products_", "widgets_scope_", "storefront_homepage_"],
   },
   categories: {
     label: "Categories",
     description: "Category pages, navigation menus, and search",
     kvPrefixes: ["api:categories:", "api:navigation:", "api:search:", "api:attributes:category", "api:storefront:homepage:"],
     bumpsHtml: true,
-    storefrontPrefixes: ["category_slug_", "global_all_categories", "category_products_", "filterable_attrs_category_", "storefront_homepage_"],
+    storefrontPrefixes: ["category_slug_", "global_all_categories", "category_products_", "filterable_attrs_category_", "widgets_scope_", "storefront_homepage_"],
   },
   collections: {
     label: "Collections",
     description: "Collection pages and homepage collection sections",
     kvPrefixes: ["api:collections:", "api:storefront:homepage:"],
     bumpsHtml: true,
-    storefrontPrefixes: ["global_all_collections", "collection_by_id_", "storefront_homepage_"],
+    storefrontPrefixes: ["global_all_collections", "collection_by_id_", "widgets_scope_", "storefront_homepage_"],
   },
   pages: {
     label: "Pages",
     description: "Static content pages",
-    kvPrefixes: ["api:pages:"],
+    kvPrefixes: ["api:pages:", "api:storefront:page:"],
     bumpsHtml: true,
-    storefrontPrefixes: ["page_slug_", "all_pages_"],
+    storefrontPrefixes: ["page_slug_", "page_render_", "all_pages_"],
   },
   layout: {
     label: "Layout",
@@ -52,6 +52,13 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     kvPrefixes: ["api:header:", "api:footer:", "api:navigation:", "api:analytics:", "api:storefront:layout:", "api:storefront:csp:"],
     bumpsHtml: true,
     storefrontPrefixes: ["storefront_layout_", "global_header_data", "global_footer_data", "global_navigation_", "global_analytics_config", "global_security_settings"],
+  },
+  media: {
+    label: "Media",
+    description: "CDN host policy and image optimization settings",
+    kvPrefixes: ["api:storefront:layout:", "api:storefront:homepage:"],
+    bumpsHtml: true,
+    storefrontPrefixes: ["storefront_layout_", "storefront_homepage_"],
   },
   homepage: {
     label: "Homepage",
@@ -87,13 +94,31 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
 // Admin path → group mapping
 // ---------------------------------------------------------------------------
 
+export const CATALOG_CACHE_GROUPS = {
+  products: ["products", "search", "collections"],
+  categories: ["categories", "products", "search", "collections"],
+  collections: ["collections"],
+  discounts: ["products", "search", "collections"],
+} as const;
+
+export type CatalogCacheDomain = keyof typeof CATALOG_CACHE_GROUPS;
+
+export const WIDGET_CACHE_GROUPS = [
+  "homepage",
+  "pages",
+  "products",
+  "categories",
+  "collections",
+] as const;
+
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
-  "/api/v1/admin/products": ["products", "search"],
-  "/api/inventory": ["products"],
-  "/api/v1/admin/categories": ["categories", "search"],
-  "/api/v1/admin/collections": ["collections"],
+  "/api/v1/admin/products": [...CATALOG_CACHE_GROUPS.products],
+  "/api/v1/admin/inventory": [...CATALOG_CACHE_GROUPS.products],
+  "/api/inventory": [...CATALOG_CACHE_GROUPS.products],
+  "/api/v1/admin/categories": [...CATALOG_CACHE_GROUPS.categories],
+  "/api/v1/admin/collections": [...CATALOG_CACHE_GROUPS.collections],
   "/api/v1/admin/pages": ["pages"],
-  "/api/v1/admin/widgets": ["homepage"],
+  "/api/v1/admin/widgets": [...WIDGET_CACHE_GROUPS],
   "/api/v1/admin/navigation": ["layout"],
   "/api/v1/admin/analytics": ["layout"],
   "/api/v1/admin/settings/header": ["layout"],
@@ -102,6 +127,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/seo": ["homepage"],
   "/api/v1/admin/settings/security": ["layout"],
   "/api/v1/admin/settings/theme": ["layout"],
+  "/api/v1/admin/settings/media": ["media"],
   "/api/v1/admin/settings/currency": ["layout", "products"],
   "/api/v1/admin/settings/auth": ["checkout"],
   "/api/v1/admin/settings/delivery-locations": ["checkout"],
@@ -113,7 +139,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/checkout-languages": ["checkout"],
   "/api/v1/admin/settings/meta-conversions": ["layout"],
   "/api/v1/admin/attributes": ["attributes", "products", "categories"],
-  "/api/v1/admin/discounts": ["products"],
+  "/api/v1/admin/discounts": [...CATALOG_CACHE_GROUPS.discounts],
 };
 
 // ---------------------------------------------------------------------------

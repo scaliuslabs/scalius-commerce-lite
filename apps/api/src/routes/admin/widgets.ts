@@ -30,7 +30,8 @@ import {
 import { widgetPlacementSchema, widgetSchema } from "../../schemas/entities";
 import {
     invalidateGroups,
-    triggerStorefrontPurgeForGroups,
+    purgeStorefrontForGroups,
+    WIDGET_CACHE_GROUPS,
 } from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -98,11 +99,10 @@ const widgetHistoryEntrySchema = z.object({
 }).passthrough();
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const WIDGET_CACHE_GROUPS = ["homepage", "pages", "products", "categories"];
 
 async function invalidateWidgetCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
-    await invalidateGroups(WIDGET_CACHE_GROUPS, c.env?.CACHE);
-    triggerStorefrontPurgeForGroups(WIDGET_CACHE_GROUPS, c.env, c.executionCtx);
+    await invalidateGroups([...WIDGET_CACHE_GROUPS], c.env?.CACHE);
+    await purgeStorefrontForGroups([...WIDGET_CACHE_GROUPS], c.env);
 }
 
 // ── List Widgets ──
