@@ -10,11 +10,12 @@ import { scopeCss } from "@scalius/shared/css-scope";
 interface Props {
   widget: ApiWidget;
   class?: string;
+  priority?: boolean;
 }
 
-const { widget, class: className = "" } = Astro.props;
+const { widget, class: className = "", priority = false } = Astro.props;
 const scopeClass = `sw-${widget.id}`;
-const html = optimizeRichContentImages(widget.htmlContent || "");
+const html = optimizeRichContentImages(widget.htmlContent || "", { priority });
 const css = scopeCss(
   optimizeCssImageUrls(sanitizeCssForStyleElement(widget.cssContent)),
   scopeClass,
