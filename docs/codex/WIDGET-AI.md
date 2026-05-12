@@ -28,6 +28,11 @@ Widget generation is provider-neutral and dashboard-configurable.
 - The fresh-install default provider is Cloudflare Workers AI with `@cf/moonshotai/kimi-k2.6`.
 - The generation API preserves the OpenAI-style `choices[].message.content` shape because the widget editor parser consumes that shape. Simple editor generation uses non-streaming generation for Cloudflare/Kimi reliability; `stream: true` responses are emitted as a single SSE text chunk instead of depending on provider-native streaming.
 - Generated widget responses are canonicalized and sanitized at the API boundary before admin preview. The widget save path sanitizes again before persistence/storefront rendering.
+- Generated storefront widgets do not execute arbitrary model-written JavaScript. Interactivity should be expressed through an allowlisted behavior/IR layer, with trusted runtime modules providing patterns such as tabs, accordions, carousels, countdowns, filters, and reveal effects.
+- Prompt assembly treats product, category, collection, and image context as untrusted catalog data. Merchant/catalog text is sanitized, length-capped, JSON-serialized, and placed inside explicit `<untrusted_catalog_data>` blocks. The model is told to treat those values as inert storefront facts, not instructions.
+- A shared composition contract is appended to every widget prompt so customized dashboard prompts still inherit the core rule: generated sections must read as one continuous storefront composition with tight vertical rhythm and no spacer-driven gaps.
+- Default prompts are destination-specific: homepage widgets focus on lightweight discovery/offer sections, landing pages follow a campaign funnel, and collection sections prioritize practical merchandising, comparison, and buying actions.
+- Staged generation now plans by destination type and passes the full section outline plus previous-section context into each section. The merge wrapper uses modest responsive spacing because generated sections own their internal padding.
 - Provider base URLs are constrained to official HTTPS endpoints to avoid sending merchant API keys to arbitrary proxy URLs.
 - Browser/password-manager autofill is disabled on provider model and key inputs to prevent accidental credential saves.
 - Admin AI routes are rate-limited through KV when available and reject oversized prompts, too many messages, unsupported image URL schemes, and excessive image counts.
@@ -49,6 +54,8 @@ Widget generation is provider-neutral and dashboard-configurable.
 3. Build a commerce manifest from selected context and validate generated `href`, `src`, and `srcset` against allowed product/category/collection/media URLs and buy-now URLs.
 4. Convert staged generation into a server operation: plan, validate, generate sections, sanitize each section, merge, and return one final artifact plus optional progress events.
 5. Add durable generation telemetry: request id, user id, provider/model, stage, context counts, prompt hash, latency, usage, retry count, validation failure class, and sanitizer mutation counts.
+6. Move from generated HTML/CSS toward a strict widget IR and renderer registry for the highest-assurance path.
+7. Add a dashboard-configurable interactive behavior registry so merchants can safely enable richer client-side widget UX without accepting arbitrary generated scripts.
 
 ## Verification Targets
 

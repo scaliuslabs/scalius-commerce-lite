@@ -27,7 +27,7 @@ import {
 import { pageSchema } from "../../schemas/entities";
 import {
     invalidateGroups,
-    triggerStorefrontPurgeForGroups,
+    purgeStorefrontForGroups,
 } from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -37,7 +37,7 @@ const PAGE_CACHE_GROUPS = ["pages"];
 
 async function invalidatePageCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
     await invalidateGroups(PAGE_CACHE_GROUPS, c.env?.CACHE);
-    triggerStorefrontPurgeForGroups(PAGE_CACHE_GROUPS, c.env, c.executionCtx);
+    await purgeStorefrontForGroups(PAGE_CACHE_GROUPS, c.env);
 }
 
 // ── List Pages ──

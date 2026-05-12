@@ -167,6 +167,14 @@ export const CATALOG_CACHE_GROUPS = {
 
 export type CatalogCacheDomain = keyof typeof CATALOG_CACHE_GROUPS;
 
+export const WIDGET_CACHE_GROUPS = [
+  "homepage",
+  "pages",
+  "products",
+  "categories",
+  "collections",
+] as const;
+
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/products": [...CATALOG_CACHE_GROUPS.products],
   "/api/v1/admin/inventory": [...CATALOG_CACHE_GROUPS.products],
@@ -174,7 +182,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/categories": [...CATALOG_CACHE_GROUPS.categories],
   "/api/v1/admin/collections": [...CATALOG_CACHE_GROUPS.collections],
   "/api/v1/admin/pages": ["pages"],
-  "/api/v1/admin/widgets": ["homepage"],
+  "/api/v1/admin/widgets": [...WIDGET_CACHE_GROUPS],
   "/api/v1/admin/navigation": ["layout"],
   "/api/v1/admin/analytics": ["layout"],
   "/api/v1/admin/settings/header": ["layout"],
@@ -237,6 +245,56 @@ export function getStorefrontPrefixesForGroups(groups: string[]): string[] {
   return [...prefixes];
 }
 
+export interface StorefrontPurgeResult {
+  attempted: boolean;
+  ok: boolean;
+  status?: number;
+  skippedReason?: "no-valid-groups" | "missing-config";
+}
+
+/**
+ * Execute the storefront purge request and report whether it succeeded.
+ * Content writes that immediately affect rendered pages can await this helper
+ * so the next storefront request sees the bumped HTML/cache version.
+ */
+export async function purgeStorefrontForGroups(
+  groups: string[],
+  env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+): Promise<StorefrontPurgeResult> {
+  const validGroups = groups.filter((g) => g in INVALIDATION_GROUPS);
+  if (validGroups.length === 0) {
+    return { attempted: false, ok: false, skippedReason: "no-valid-groups" };
+  }
+
+  const purgeUrl = env?.PURGE_URL;
+  const purgeToken = env?.PURGE_TOKEN;
+  if (!purgeUrl || !purgeToken) {
+    return { attempted: false, ok: false, skippedReason: "missing-config" };
+  }
+
+  const urlWithToken = new URL(purgeUrl);
+  urlWithToken.searchParams.set("token", purgeToken);
+
+  const response = await fetch(urlWithToken.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      groups: validGroups,
+      prefixes: getStorefrontPrefixesForGroups(validGroups),
+      bumpVersion: shouldBumpStorefrontVersion(validGroups),
+    }),
+  });
+
+  if (!response.ok) {
+    console.error("[Cache] Storefront group purge failed:", {
+      status: response.status,
+      groups: validGroups,
+    });
+  }
+
+  return { attempted: true, ok: response.ok, status: response.status };
+}
+
 /**
  * Trigger the storefront purge endpoint for the given invalidation groups.
  *
@@ -257,18 +315,7 @@ export function triggerStorefrontPurgeForGroups(
   const purgeToken = env?.PURGE_TOKEN;
   if (!purgeUrl || !purgeToken) return;
 
-  const urlWithToken = new URL(purgeUrl);
-  urlWithToken.searchParams.set("token", purgeToken);
-
-  const purgePromise = fetch(urlWithToken.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      groups: validGroups,
-      prefixes: getStorefrontPrefixesForGroups(validGroups),
-      bumpVersion: shouldBumpStorefrontVersion(validGroups),
-    }),
-  }).catch((err) =>
+  const purgePromise = purgeStorefrontForGroups(validGroups, env).catch((err) =>
     console.error("[Cache] Storefront group purge failed:", err),
   );
 
@@ -320,7 +367,7 @@ export async function invalidateCatalogCaches(
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];
   await invalidateGroups(groups, c.env?.CACHE);
-  triggerStorefrontPurgeForGroups(groups, c.env, c.executionCtx);
+  await purgeStorefrontForGroups(groups, c.env);
 }
 
 /**
