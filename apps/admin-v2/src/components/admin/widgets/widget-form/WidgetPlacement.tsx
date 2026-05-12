@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Controller, useFieldArray } from 'react-hook-form';
 import type { Control, UseFormRegister, UseFormSetValue, UseFormWatch, FieldErrors } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
@@ -72,6 +73,7 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
     keyName: "fieldKey",
   });
   const placements = watch("placements") ?? [];
+  const isWidgetActive = watch("isActive");
   const placementListMessage =
     typeof errors.placements?.message === "string"
       ? errors.placements.message
@@ -95,7 +97,12 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
-          <CardTitle>Placement & Status</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Placement & Status</CardTitle>
+            <Badge variant={isWidgetActive ? "default" : "secondary"}>
+              {isWidgetActive ? "Active" : "Draft"}
+            </Badge>
+          </div>
           <Button type="button" variant="outline" size="sm" onClick={addPlacement}>
             <Plus className="mr-2 h-4 w-4" />
             Add placement
@@ -125,9 +132,11 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
               Active
             </Label>
           </div>
-          {fields.length === 0 && (
-            <span className="text-sm text-muted-foreground">Shortcode only</span>
-          )}
+          <span className="text-sm text-muted-foreground">
+            {fields.length === 0
+              ? "Shortcode only"
+              : `${fields.length} placement${fields.length === 1 ? "" : "s"}`}
+          </span>
         </div>
 
         {fields.map((field, index) => {

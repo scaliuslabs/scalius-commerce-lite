@@ -1,16 +1,3 @@
-/**
- * WidgetForm (Refactored) - Clean, maintainable widget creation/editing form
- *
- * Major improvements:
- * - Uses Zod schema for type-safe aiContext
- * - Extracted improvement logic to useAiImprover hook
- * - Unified FullScreenEditor (replaces two modal components)
- * - Persistent improvement history in aiContext
- * - HTML parsing for non-staged widgets
- * - No localStorage usage
- * - Cleaner, more maintainable code
- */
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -283,7 +270,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   // Editor state
   const [editorMode, setEditorMode] = useState<EditorMode>('generation-preview');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [isAiHelperOpen, setIsAiHelperOpen] = useState(false);
+  const [isAiHelperOpen, setIsAiHelperOpen] = useState(() => isCreateMode);
 
   // Initialize hooks
   const aiContext = useAiContext();
@@ -625,22 +612,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   /**
    * Form submission with AI context persistence
    */
-  const onSubmit = async (
-    data: WidgetFormValues,
-    intent: 'save' | 'draft' | 'publish' = 'save',
-  ) => {
+  const onSubmit = async (data: WidgetFormValues) => {
     try {
-      const activationData = {
-        ...data,
-        isActive:
-          intent === 'draft'
-            ? false
-            : intent === 'publish'
-              ? true
-              : data.isActive,
-      };
-
-      if (activationData.isActive && activationData.htmlContent.trim().length === 0) {
+      if (data.isActive && data.htmlContent.trim().length === 0) {
         setError('htmlContent', {
           type: 'manual',
           message: 'HTML content is required before publishing this widget.',
@@ -672,8 +646,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       });
 
       const submissionData = {
-        ...activationData,
-        ...legacyProjectionFromPlacements(activationData.placements),
+        ...data,
+        ...legacyProjectionFromPlacements(data.placements),
         aiContext: validatedContext as unknown as Record<string, unknown>,
       };
 
@@ -685,14 +659,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       }
       // Invalidate queries so list page shows fresh data
       queryClient.invalidateQueries({ queryKey: ['widgets', 'list'] });
-      const action =
-        intent === 'draft'
-          ? 'saved as draft'
-          : intent === 'publish'
-            ? 'published'
-            : isCreateMode
-              ? 'created'
-              : 'updated';
+      const action = isCreateMode
+        ? data.isActive
+          ? 'created and activated'
+          : 'created as a draft'
+        : data.isActive
+          ? 'saved as active'
+          : 'saved as a draft';
       toast.success(`Widget ${action} successfully!`);
       void navigate({ to: '/admin/widgets' });
     } catch (error: unknown) {
@@ -722,6 +695,15 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     aiGenerator.stagedGeneration.sections.length, // Force update when length changes
   ]);
 
+  const isActive = watch('isActive');
+  const primarySubmitLabel = isCreateMode
+    ? isActive
+      ? 'Create Active Widget'
+      : 'Create Draft'
+    : isActive
+      ? submitButtonText
+      : 'Save Draft';
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -741,7 +723,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         </Button>
       </div>
 
-      <form onSubmit={handleSubmit((data) => onSubmit(data, 'save'))} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <AiAssistant
           widget={widget}
           aiContext={aiContext}
@@ -779,35 +761,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
             </>
           )}
           <Button
-            type="button"
-            variant="outline"
+            type="submit"
             disabled={isSubmitting}
-            onClick={() => {
-              void handleSubmit((data) => onSubmit(data, 'draft'))();
-            }}
           >
-            {isSubmitting ? 'Saving...' : 'Save Draft'}
-          </Button>
-          {!isCreateMode && (
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Saving...' : submitButtonText}
-            </Button>
-          )}
-          <Button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => {
-              void handleSubmit((data) => onSubmit(data, 'publish'))();
-            }}
-          >
-            {isSubmitting
-              ? 'Publishing...'
-              : isCreateMode
-                ? 'Create & Publish'
-                : 'Publish'}
+            {isSubmitting ? 'Saving...' : primarySubmitLabel}
           </Button>
         </div>
       </form>
