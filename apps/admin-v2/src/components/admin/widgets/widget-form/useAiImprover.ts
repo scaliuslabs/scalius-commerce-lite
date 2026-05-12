@@ -57,6 +57,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
   const [rawOutput, setRawOutput] = useState<string>(''); // Capture raw LLM output for debugging
   const improvementRunIdRef = useRef(0);
   const improvementAbortRef = useRef<AbortController | null>(null);
+  const improvementBaselineRef = useRef<ImprovementHistoryEntry[]>([]);
 
   const startImprovementRun = (): ImprovementRun => {
     improvementAbortRef.current?.abort();
@@ -337,8 +338,15 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
    */
   const startImprovement = useCallback((content: { html: string; css: string }) => {
     setContentToImprove(content);
-    setImprovementHistory([]);
-  }, []);
+    improvementBaselineRef.current = improvementHistory;
+  }, [improvementHistory]);
+
+  const discardImprovement = useCallback(() => {
+    cancel({ silent: true });
+    setContentToImprove(null);
+    setImprovementHistory(improvementBaselineRef.current);
+    setRawOutput('');
+  }, [cancel]);
 
   /**
    * Reset improvement state
@@ -347,6 +355,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
     cancel({ silent: true });
     setContentToImprove(null);
     setImprovementHistory([]);
+    improvementBaselineRef.current = [];
     setRawOutput('');
   }, [cancel]);
 
@@ -354,6 +363,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
    * Load improvement history (e.g., from saved aiContext)
    */
   const loadHistory = useCallback((history: ImprovementHistoryEntry[]) => {
+    improvementBaselineRef.current = history;
     setImprovementHistory(history);
   }, []);
 
@@ -371,6 +381,7 @@ ${updatedSections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.
     reset,
     cancel,
     loadHistory,
+    discardImprovement,
     setContentToImprove,
   };
 }
