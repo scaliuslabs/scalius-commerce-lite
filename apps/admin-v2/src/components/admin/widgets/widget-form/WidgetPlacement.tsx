@@ -74,6 +74,7 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
   });
   const placements = watch("placements") ?? [];
   const isWidgetActive = watch("isActive");
+  const activePlacementCount = placements.filter((placement) => placement.isActive).length;
   const placementListMessage =
     typeof errors.placements?.message === "string"
       ? errors.placements.message
@@ -133,9 +134,9 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
             </Label>
           </div>
           <span className="text-sm text-muted-foreground">
-            {fields.length === 0
+            {activePlacementCount === 0
               ? "Shortcode only"
-              : `${fields.length} placement${fields.length === 1 ? "" : "s"}`}
+              : `${activePlacementCount} active placement${activePlacementCount === 1 ? "" : "s"}`}
           </span>
         </div>
 
@@ -356,7 +357,9 @@ export const WidgetPlacement: React.FC<WidgetPlacementProps> = ({
 
         {fields.length === 0 && (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            This widget will only render where its shortcode is embedded.
+            {isWidgetActive
+              ? "Active shortcode widget. It renders only where its shortcode is embedded."
+              : "Draft shortcode widget. Add a placement to render it automatically."}
           </div>
         )}
       </CardContent>

@@ -79,12 +79,15 @@ export function WidgetTargetSelect({
 
   const options = data?.targets ?? [];
   const selectedOption = options.find((option) => option.id === value);
+  const isSelectedTargetUnavailable = Boolean(value && !isLoading && !selectedOption);
   const selectedLabel = selectedOption
     ? selectedOption.description
       ? `${selectedOption.label} (${selectedOption.description})`
       : selectedOption.label
     : value
-      ? "Loading target..."
+      ? isLoading
+        ? "Loading target..."
+        : "Target unavailable"
       : placeholder;
 
   return (
@@ -104,6 +107,7 @@ export function WidgetTargetSelect({
           className={cn(
             "h-10 w-full justify-between px-3 font-normal",
             !value && "text-muted-foreground",
+            isSelectedTargetUnavailable && "border-destructive/50 text-destructive",
           )}
         >
           <span className="truncate">{selectedLabel}</span>
@@ -117,6 +121,11 @@ export function WidgetTargetSelect({
         className="w-[min(max(var(--radix-popover-trigger-width),22rem),calc(100vw-2rem))] overflow-hidden p-0"
       >
         <Command shouldFilter={false}>
+          {isSelectedTargetUnavailable && (
+            <div className="border-b bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              Saved target is unavailable. Choose another target.
+            </div>
+          )}
           <CommandInput
             value={search}
             onValueChange={setSearch}

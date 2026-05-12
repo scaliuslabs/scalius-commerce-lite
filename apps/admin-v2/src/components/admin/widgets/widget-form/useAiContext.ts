@@ -257,7 +257,10 @@ export const useAiContext = (
 
   // ─── Product handlers ──────────────────────────────────────────────
   const handleProductSelect = (product: ProductSearchResult) => {
-    if (selectedProducts.some((p) => p.id === product.id)) return;
+    if (selectedProducts.some((p) => p.id === product.id)) {
+      removeProduct(product.id);
+      return;
+    }
     if (selectedProducts.length >= AI_CONTEXT_LIMITS.maxProducts) {
       toast.error(`Widget AI can use up to ${AI_CONTEXT_LIMITS.maxProducts} products.`);
       return;

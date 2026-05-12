@@ -101,7 +101,15 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
                     <CommandEmpty>No model found.</CommandEmpty>
                     <CommandGroup>
                         {aiModels
-                            .filter(model => model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()))
+                            .filter((model) => {
+                                const query = modelSearchQuery.trim().toLowerCase();
+                                if (!query) return true;
+                                return [
+                                    model.name,
+                                    model.id,
+                                    model.provider ?? activeProvider,
+                                ].some((value) => value.toLowerCase().includes(query));
+                            })
                             .map((model) => (
                                 <CommandItem
                                     key={model.id}
@@ -118,7 +126,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
                                             selectedModel === model.id ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    <span className="flex-1">{model.name}</span>
+                                    <span className="min-w-0 flex-1 truncate">{model.name}</span>
                                     <div className="flex gap-1 ml-2">
                                         {model.supportsVision && (
                                             <span title="Supports vision (images)">
