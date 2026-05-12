@@ -69,7 +69,16 @@ if (!page) {
   return new Response(null, { status: 404 });
 }
 let pageWidgets = pageRenderData?.widgets ?? [];
-if (pageWidgets.length === 0) {
+const hasRenderablePagePlacement = pageWidgets.some((widget) =>
+  widget.placements?.some(
+    (placement) =>
+      placement.isActive &&
+      placement.deletedAt == null &&
+      placement.scope === "page" &&
+      placement.scopeId === page.id,
+  ),
+);
+if (!hasRenderablePagePlacement) {
   pageWidgets = (await getActiveWidgetsForScope("page", page.id)) ?? [];
 }
 
