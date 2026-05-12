@@ -19,11 +19,16 @@ interface AiAssistantProps {
   widget: Widget | undefined | null;
   aiContext: ReturnType<typeof useAiContext>;
   aiGenerator: ReturnType<typeof useAiGenerator>;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator }) => {
-  const [isAiHelperOpen, setIsAiHelperOpen] = React.useState(false);
-
+export const AiAssistant: React.FC<AiAssistantProps> = ({
+  aiContext,
+  aiGenerator,
+  isOpen,
+  onOpenChange,
+}) => {
   const {
     promptType,
     setPromptType,
@@ -118,7 +123,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
   return (
     <Card
       onClick={() => {
-        setIsAiHelperOpen(!isAiHelperOpen);
+        onOpenChange(!isOpen);
       }}
       className="cursor-pointer hover:bg-muted/50 transition-colors overflow-hidden"
     >
@@ -137,11 +142,11 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
         <ChevronDown
           className={cn(
             "h-5 w-5 text-muted-foreground transition-transform duration-300",
-            isAiHelperOpen && "rotate-180",
+            isOpen && "rotate-180",
           )}
         />
       </div>
-      {isAiHelperOpen && (
+      {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
           className="cursor-auto border-t p-4 space-y-4"

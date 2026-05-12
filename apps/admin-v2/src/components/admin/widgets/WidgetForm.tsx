@@ -283,10 +283,11 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   // Editor state
   const [editorMode, setEditorMode] = useState<EditorMode>('generation-preview');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isAiHelperOpen, setIsAiHelperOpen] = useState(false);
 
   // Initialize hooks
   const aiContext = useAiContext();
-  const aiGenerator = useAiGenerator(aiContext, widget);
+  const aiGenerator = useAiGenerator(aiContext, widget, isAiHelperOpen);
   const aiImprover = useAiImprover({ aiContext, aiGenerator });
 
   useEffect(() => {
@@ -648,18 +649,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         return;
       }
 
-      if (
-        activationData.isActive &&
-        !activationData.placements.some((placement) => placement.isActive)
-      ) {
-        setError('placements', {
-          type: 'manual',
-          message: 'Add at least one active placement before publishing this widget.',
-        });
-        toast.error('Add at least one active placement before publishing this widget.');
-        return;
-      }
-
       // Build AI context with all state.
       const contextToSave: Partial<AiContext> = {
         promptType: aiGenerator.promptType,
@@ -753,7 +742,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       </div>
 
       <form onSubmit={handleSubmit((data) => onSubmit(data, 'save'))} className="space-y-6">
-        <AiAssistant widget={widget} aiContext={aiContext} aiGenerator={aiGenerator} />
+        <AiAssistant
+          widget={widget}
+          aiContext={aiContext}
+          aiGenerator={aiGenerator}
+          isOpen={isAiHelperOpen}
+          onOpenChange={setIsAiHelperOpen}
+        />
 
         <WidgetDetails
           register={register}

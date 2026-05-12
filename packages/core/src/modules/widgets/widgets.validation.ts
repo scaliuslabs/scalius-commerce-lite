@@ -183,27 +183,6 @@ function hasRenderableWidgetContent(data: { htmlContent?: string }): boolean {
     return typeof data.htmlContent === "string" && data.htmlContent.trim().length > 0;
 }
 
-function hasActivePlacement(placements: WidgetPlacementInput[] | undefined): boolean {
-    return (placements ?? []).some((placement) => placement.isActive !== false);
-}
-
-function hasActiveLegacyPlacement(data: {
-    placementRule?: WidgetPlacementRule;
-    referenceCollectionId?: string | null;
-}): boolean {
-    if (!data.placementRule || data.placementRule === WidgetPlacementRule.STANDALONE) {
-        return false;
-    }
-    if (
-        (data.placementRule === WidgetPlacementRule.BEFORE_COLLECTION ||
-            data.placementRule === WidgetPlacementRule.AFTER_COLLECTION) &&
-        !data.referenceCollectionId
-    ) {
-        return false;
-    }
-    return true;
-}
-
 function validatePublishableWidget(
     data: {
         htmlContent?: string;
@@ -221,17 +200,6 @@ function validatePublishableWidget(
             code: "custom",
             message: "HTML content is required before publishing a widget.",
             path: ["htmlContent"],
-        });
-    }
-
-    const hasPlacement = data.placements !== undefined
-        ? hasActivePlacement(data.placements)
-        : hasActiveLegacyPlacement(data);
-    if (!hasPlacement) {
-        ctx.addIssue({
-            code: "custom",
-            message: "Add at least one active placement before publishing this widget.",
-            path: ["placements"],
         });
     }
 }
@@ -273,13 +241,6 @@ function validateUpdateWidget(data: UpdateWidgetInputDraft, ctx: z.RefinementCtx
         });
     }
 
-    if (data.isActive === true && data.placements !== undefined && !hasActivePlacement(data.placements)) {
-        ctx.addIssue({
-            code: "custom",
-            message: "Add at least one active placement before publishing this widget.",
-            path: ["placements"],
-        });
-    }
 }
 
 /** Schema for creating a new widget (POST /api/widgets) */

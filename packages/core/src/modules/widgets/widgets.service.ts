@@ -229,20 +229,9 @@ function hasRenderableWidgetContent(htmlContent: string | null | undefined): boo
     return typeof htmlContent === "string" && htmlContent.trim().length > 0;
 }
 
-function hasActivePlacement(
-    placements: Array<{ isActive?: boolean | null }> | undefined,
-): boolean {
-    return (placements ?? []).some((placement) => placement.isActive !== false);
-}
-
-function assertPublishableWidgetState(
-    state: { htmlContent?: string | null; placements?: Array<{ isActive?: boolean | null }> },
-): void {
+function assertPublishableWidgetState(state: { htmlContent?: string | null }): void {
     if (!hasRenderableWidgetContent(state.htmlContent)) {
         throw new ValidationError("HTML content is required before publishing a widget.");
-    }
-    if (!hasActivePlacement(state.placements)) {
-        throw new ValidationError("Add at least one active placement before publishing this widget.");
     }
 }
 
@@ -392,28 +381,12 @@ async function validateWidgetActivationBatch(db: Database, ids: string[]): Promi
         throw new ValidationError(`Cannot activate missing widgets: ${missingIds.join(", ")}.`);
     }
 
-    const placements = await db
-        .select({ widgetId: widgetPlacements.widgetId, isActive: widgetPlacements.isActive })
-        .from(widgetPlacements)
-        .where(and(
-            inArray(widgetPlacements.widgetId, requestedIds),
-            isNull(widgetPlacements.deletedAt),
-        ));
-
-    const placementsByWidget = new Map<string, Array<{ isActive?: boolean | null }>>();
-    for (const placement of placements as Array<{ widgetId: string; isActive: boolean | null }>) {
-        const list = placementsByWidget.get(placement.widgetId) ?? [];
-        list.push(placement);
-        placementsByWidget.set(placement.widgetId, list);
-    }
-
     for (const id of requestedIds) {
         const widget = widgetsById.get(id);
         if (!widget) continue;
         try {
             assertPublishableWidgetState({
                 htmlContent: widget.htmlContent,
-                placements: placementsByWidget.get(id) ?? [],
             });
         } catch (error) {
             if (error instanceof ValidationError) {
@@ -922,7 +895,6 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
     if (data.isActive) {
         assertPublishableWidgetState({
             htmlContent: data.htmlContent,
-            placements: requestedPlacements,
         });
     }
     const legacyFields = legacyFieldsFromPlacement(requestedPlacements[0]);
@@ -982,7 +954,6 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
     if (nextIsActive) {
         assertPublishableWidgetState({
             htmlContent: data.htmlContent ?? existing.htmlContent,
-            placements: requestedPlacements ?? existing.placements,
         });
     }
 
