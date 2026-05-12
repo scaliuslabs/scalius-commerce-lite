@@ -422,25 +422,7 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.aiContext !== undefined) updateData.aiContext = data.aiContext ? JSON.stringify(data.aiContext) : null;
 
-    const shouldReplacePlacements =
-        data.placements !== undefined ||
-        data.placementRule !== undefined ||
-        data.referenceCollectionId !== undefined ||
-        data.sortOrder !== undefined;
-
-    let requestedPlacements: WidgetPlacementInput[] | undefined;
-    if (data.placements !== undefined) {
-        requestedPlacements = data.placements;
-    } else if (shouldReplacePlacements) {
-        requestedPlacements = placementFromLegacyFields({
-            placementRule: data.placementRule ?? existing.placementRule,
-            referenceCollectionId:
-                data.referenceCollectionId !== undefined
-                    ? data.referenceCollectionId
-                    : existing.referenceCollectionId,
-            sortOrder: data.sortOrder ?? existing.sortOrder,
-        });
-    }
+    const requestedPlacements = data.placements;
 
     if (requestedPlacements !== undefined) {
         const legacyFields = legacyFieldsFromPlacement(requestedPlacements[0]);
@@ -456,9 +438,8 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
 
     if (requestedPlacements !== undefined) {
         batchOps.push(
-            db.update(widgetPlacements)
-                .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-                .where(and(eq(widgetPlacements.widgetId, id), isNull(widgetPlacements.deletedAt))),
+            db.delete(widgetPlacements)
+                .where(eq(widgetPlacements.widgetId, id)),
         );
         const placementInserts = normalizePlacementInserts(id, requestedPlacements);
         if (placementInserts.length > 0) {
@@ -476,14 +457,15 @@ export async function deleteWidget(db: Database, id: string): Promise<void> {
     const existing = await getWidgetById(db, id);
     if (!existing) throw new NotFoundError("Widget not found");
 
+    const deletedAt = new Date();
     await db.batch([
         db
             .update(widgets)
-            .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+            .set({ deletedAt, updatedAt: deletedAt })
             .where(eq(widgets.id, id)),
         db
             .update(widgetPlacements)
-            .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+            .set({ deletedAt, updatedAt: deletedAt })
             .where(and(eq(widgetPlacements.widgetId, id), isNull(widgetPlacements.deletedAt))),
     ] as any);
 }
@@ -493,14 +475,15 @@ export async function bulkDeleteWidgets(db: Database, ids: string[], permanent =
     if (permanent) {
         await db.delete(widgets).where(inArray(widgets.id, ids));
     } else {
+        const deletedAt = new Date();
         await db.batch([
             db
                 .update(widgets)
-                .set({ deletedAt: sql`unixepoch()` })
+                .set({ deletedAt, updatedAt: deletedAt })
                 .where(inArray(widgets.id, ids)),
             db
                 .update(widgetPlacements)
-                .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                .set({ deletedAt, updatedAt: deletedAt })
                 .where(and(inArray(widgetPlacements.widgetId, ids), isNull(widgetPlacements.deletedAt))),
         ] as any);
     }
@@ -519,8 +502,18 @@ export async function bulkDeactivateWidgets(db: Database, ids: string[]): Promis
 export async function restoreWidgets(db: Database, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     await db.batch([
+        db
+            .update(widgetPlacements)
+            .set({ deletedAt: null, updatedAt: sql`unixepoch()` })
+            .where(and(
+                inArray(widgetPlacements.widgetId, ids),
+                sql`${widgetPlacements.deletedAt} = (
+                    select ${widgets.deletedAt}
+                    from ${widgets}
+                    where ${widgets.id} = ${widgetPlacements.widgetId}
+                )`,
+            )),
         db.update(widgets).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(inArray(widgets.id, ids)),
-        db.update(widgetPlacements).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(inArray(widgetPlacements.widgetId, ids)),
     ] as any);
 }
 

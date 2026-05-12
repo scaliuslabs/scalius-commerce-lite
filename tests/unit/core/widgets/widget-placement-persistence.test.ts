@@ -1,11 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  widgets,
+  widgetPlacements,
   WidgetPlacementRule,
   WidgetPlacementScope,
   WidgetPlacementSlot,
 } from "../../../../packages/database/src/schema";
 import {
+  bulkDeleteWidgets,
   createHistoryEntry,
+  deleteWidget,
+  restoreWidgets,
   updateWidget,
 } from "../../../../packages/core/src/modules/widgets/widgets.service";
 import { createMockDb } from "../../../setup";
@@ -75,6 +80,141 @@ describe("widget placement persistence", () => {
     });
     expect(placementInsert[0]?.id).toEqual(expect.stringMatching(/^wpl_/));
     expect(placementInsert[0]?.id).not.toBe("wpl_existing");
+
+    const deleteTargets = db._calls
+      .filter((call: { method: string }) => call.method === "delete")
+      .map((call: { args: unknown[] }) => call.args[0]);
+    expect(deleteTargets).toContain(widgetPlacements);
+    expect(
+      db._calls.some((call: { method: string }) => call.method === "update.set"
+        && typeof call.args[0] === "object"
+        && call.args[0] !== null
+        && "deletedAt" in call.args[0]
+      ),
+    ).toBe(false);
+  });
+
+  it("does not let projected legacy fields replace canonical placements", async () => {
+    const existingWidget = {
+      id: "wid_1",
+      name: "Landing hero",
+      htmlContent: "<section>Hero</section>",
+      cssContent: "",
+      aiContext: null,
+      isActive: true,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      placements: [
+        {
+          id: "wpl_existing",
+          widgetId: "wid_1",
+          scope: WidgetPlacementScope.HOMEPAGE,
+          scopeId: null,
+          slot: WidgetPlacementSlot.TOP,
+          anchorType: null,
+          anchorId: null,
+          sortOrder: 0,
+          isActive: true,
+          createdAt: 1,
+          updatedAt: 1,
+          deletedAt: null,
+        },
+      ],
+    };
+    const db = createMockDb({ selectResult: existingWidget }) as any;
+
+    await updateWidget(db, "wid_1", {
+      placementRule: WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE,
+      referenceCollectionId: null,
+      sortOrder: 9,
+    });
+
+    expect(db._calls.some((call: { method: string }) => call.method === "delete")).toBe(false);
+    expect(
+      db._calls
+        .filter((call: { method: string }) => call.method === "insert.values")
+        .map((call: { args: unknown[] }) => call.args[0])
+        .some(Array.isArray),
+    ).toBe(false);
+  });
+});
+
+describe("widget restore persistence", () => {
+  it("uses the same deletion timestamp for widgets and active placements", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-02T03:04:05Z"));
+    const deletedAt = new Date("2026-01-02T03:04:05Z");
+    const existingWidget = {
+      id: "wid_1",
+      name: "Landing hero",
+      htmlContent: "<section>Hero</section>",
+      cssContent: "",
+      aiContext: null,
+      isActive: true,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      placements: [],
+    };
+    const db = createMockDb({ selectResult: existingWidget }) as any;
+
+    try {
+      await deleteWidget(db, "wid_1");
+
+      const setPayloads = db._calls
+        .filter((call: { method: string }) => call.method === "update.set")
+        .map((call: { args: unknown[] }) => call.args[0]);
+
+      expect(setPayloads).toEqual([
+        { deletedAt, updatedAt: deletedAt },
+        { deletedAt, updatedAt: deletedAt },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bulk soft delete uses the same deletion timestamp for widgets and active placements", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-02T03:04:05Z"));
+    const deletedAt = new Date("2026-01-02T03:04:05Z");
+    const db = createMockDb() as any;
+
+    try {
+      await bulkDeleteWidgets(db, ["wid_1", "wid_2"]);
+
+      const setPayloads = db._calls
+        .filter((call: { method: string }) => call.method === "update.set")
+        .map((call: { args: unknown[] }) => call.args[0]);
+
+      expect(setPayloads).toEqual([
+        { deletedAt, updatedAt: deletedAt },
+        { deletedAt, updatedAt: deletedAt },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restores only placements deleted with the widget", async () => {
+    const db = createMockDb() as any;
+
+    await restoreWidgets(db, ["wid_1", "wid_2"]);
+
+    const updateTargets = db._calls
+      .filter((call: { method: string }) => call.method === "update")
+      .map((call: { args: unknown[] }) => call.args[0]);
+
+    expect(updateTargets).toEqual([widgetPlacements, widgets]);
   });
 });
 
