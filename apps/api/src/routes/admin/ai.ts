@@ -13,6 +13,7 @@ import {
   getTimeout,
   getWidgetAiRuntimeSettings,
   providerHasCredentials,
+  supportsWidgetAiVisionInput,
   type WidgetAiProvider,
   type WidgetAiRuntimeSettings,
 } from "@scalius/core/modules/ai";
@@ -147,16 +148,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 function supportsVisionForModel(provider: WidgetAiProvider, model: string): boolean {
-  if (provider === "gemini") return true;
-  if (provider === "cloudflare") {
-    // The Workers AI provider does not accept remote image URL parts. Keep
-    // Cloudflare text-only until the server converts selected images to bytes.
-    return false;
-  }
-  if (provider === "openai") {
-    return /gpt-4o|gpt-5|vision/i.test(model);
-  }
-  return false;
+  return supportsWidgetAiVisionInput(provider, model);
 }
 
 function configuredModel(
@@ -191,14 +183,14 @@ function fallbackModels(
         id: "@cf/moonshotai/kimi-k2.6",
         name: "Kimi K2.6",
         provider,
-        supportsVision: true,
+        supportsVision: supportsVisionForModel(provider, "@cf/moonshotai/kimi-k2.6"),
         source: "fallback",
       },
       {
         id: "@cf/openai/gpt-oss-120b",
         name: "GPT OSS 120B",
         provider,
-        supportsVision: false,
+        supportsVision: supportsVisionForModel(provider, "@cf/openai/gpt-oss-120b"),
         source: "fallback",
       },
     ],
@@ -331,7 +323,7 @@ async function listCloudflareModels(
         provider,
         description:
           typeof model.description === "string" ? model.description : null,
-        supportsVision: /vision|kimi/i.test(id),
+        supportsVision: supportsVisionForModel(provider, id),
         modality: "text->text",
         source: "api" as const,
       };
