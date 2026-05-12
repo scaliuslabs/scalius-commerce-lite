@@ -1692,7 +1692,6 @@ export type GetApiV1WidgetsByIdResponses = {
                 name: string;
                 htmlContent: string;
                 cssContent: string | null;
-                aiContext: string | null;
                 isActive: boolean;
                 displayTarget: string;
                 placementRule: string;
@@ -1711,7 +1710,6 @@ export type GetApiV1WidgetsByIdResponses = {
                     createdAt: string | number | unknown;
                     updatedAt: string | number | unknown;
                     deletedAt: string | number | unknown;
-                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
                 }>;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -1758,7 +1756,6 @@ export type GetApiV1WidgetsActiveHomepageResponses = {
                 name: string;
                 htmlContent: string;
                 cssContent: string | null;
-                aiContext: string | null;
                 isActive: boolean;
                 displayTarget: string;
                 placementRule: string;
@@ -1777,7 +1774,6 @@ export type GetApiV1WidgetsActiveHomepageResponses = {
                     createdAt: string | number | unknown;
                     updatedAt: string | number | unknown;
                     deletedAt: string | number | unknown;
-                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
                 }>;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -1934,7 +1930,32 @@ export type GetApiV1StorefrontHomepageResponses = {
                 [key: string]: unknown;
             };
             widgets: Array<{
-                [key: string]: unknown;
+                id: string;
+                name: string;
+                htmlContent: string;
+                cssContent: string | null;
+                isActive: boolean;
+                displayTarget: string;
+                placementRule: string;
+                referenceCollectionId: string | null;
+                sortOrder: number;
+                placements?: Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                }>;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             }>;
             collections: Array<{
                 [key: string]: unknown;
@@ -1944,7 +1965,32 @@ export type GetApiV1StorefrontHomepageResponses = {
             } | {
                 [key: string]: unknown;
             } | Array<{
-                [key: string]: unknown;
+                id: string;
+                name: string;
+                htmlContent: string;
+                cssContent: string | null;
+                isActive: boolean;
+                displayTarget: string;
+                placementRule: string;
+                referenceCollectionId: string | null;
+                sortOrder: number;
+                placements?: Array<{
+                    id: string;
+                    widgetId: string;
+                    scope: string;
+                    scopeId: string | null;
+                    slot: string;
+                    anchorType: string | null;
+                    anchorId: string | null;
+                    sortOrder: number;
+                    isActive: boolean;
+                    createdAt: string | number | unknown;
+                    updatedAt: string | number | unknown;
+                    deletedAt: string | number | unknown;
+                }>;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
             }> | Array<{
                 [key: string]: unknown;
             }>;
@@ -2033,7 +2079,6 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                 name: string;
                 htmlContent: string;
                 cssContent: string | null;
-                aiContext: string | null;
                 isActive: boolean;
                 displayTarget: string;
                 placementRule: string;
@@ -2052,7 +2097,6 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                     createdAt: string | number | unknown;
                     updatedAt: string | number | unknown;
                     deletedAt: string | number | unknown;
-                    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | number | boolean | (string | number | unknown) | (string | number | unknown) | (string | number | unknown);
                 }>;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -8795,7 +8839,7 @@ export type PostApiV1AdminWidgetsData = {
         sortOrder?: number;
         placements?: Array<{
             id?: string;
-            scope?: 'homepage' | 'page' | 'product' | 'category' | 'collection';
+            scope?: 'homepage' | 'page';
             scopeId?: string | null;
             slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
             anchorType?: 'collection' | 'content' | null;
@@ -9426,7 +9470,7 @@ export type PutApiV1AdminWidgetsByIdData = {
         sortOrder?: number;
         placements?: Array<{
             id?: string;
-            scope?: 'homepage' | 'page' | 'product' | 'category' | 'collection';
+            scope?: 'homepage' | 'page';
             scopeId?: string | null;
             slot?: 'top' | 'bottom' | 'before_content' | 'after_content' | 'before_collection' | 'after_collection';
             anchorType?: 'collection' | 'content' | null;
@@ -9901,6 +9945,8 @@ export type GetApiV1AdminWidgetsByIdHistoryResponse = GetApiV1AdminWidgetsByIdHi
 export type PostApiV1AdminWidgetsByIdHistoryData = {
     body?: {
         reason?: string;
+        htmlContent?: string;
+        cssContent?: string | null;
     };
     path: {
         id: string;

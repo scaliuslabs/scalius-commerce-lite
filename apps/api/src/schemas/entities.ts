@@ -413,6 +413,21 @@ export const widgetPlacementSchema = z
   })
   .passthrough();
 
+export const publicWidgetPlacementSchema = z.object({
+  id: z.string(),
+  widgetId: z.string(),
+  scope: z.string(),
+  scopeId: z.string().nullable(),
+  slot: z.string(),
+  anchorType: z.string().nullable(),
+  anchorId: z.string().nullable(),
+  sortOrder: z.number(),
+  isActive: z.boolean(),
+  createdAt: z.union([z.string(), z.number()]).nullable(),
+  updatedAt: z.union([z.string(), z.number()]).nullable(),
+  deletedAt: z.union([z.string(), z.number()]).nullable(),
+});
+
 export const widgetSchema = z
   .object({
     id: z.string(),
@@ -430,6 +445,10 @@ export const widgetSchema = z
     updatedAt: z.union([z.string(), z.number()]).nullable(),
     deletedAt: z.union([z.string(), z.number()]).nullable(),
   })
+
+export const publicWidgetSchema = widgetSchema.omit({ aiContext: true }).extend({
+  placements: z.array(publicWidgetPlacementSchema).optional(),
+});
 
 // ─────────────────────────────────────────
 // Attributes
