@@ -50,6 +50,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
     <Popover open={isModelSelectorOpen} onOpenChange={setIsModelSelectorOpen}>
         <PopoverTrigger asChild>
             <Button
+                type="button"
                 variant="outline"
                 role="combobox"
                 aria-expanded={isModelSelectorOpen}
