@@ -135,7 +135,7 @@ function normalizePlacementForForm(
 
 function placementsForForm(widget: Widget | null | undefined): WidgetPlacementFormValue[] {
   if (!widget) {
-    return [homepagePlacement(WidgetPlacementSlot.TOP, 0)];
+    return [];
   }
 
   if (widget.placements && widget.placements.length > 0) {
@@ -213,9 +213,9 @@ function getWidgetFormDefaultValues(
     name: '',
     htmlContent: '',
     cssContent: undefined,
-    isActive: true,
+    isActive: false,
     displayTarget: 'homepage',
-    placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
+    placementRule: WidgetPlacementRule.STANDALONE,
     referenceCollectionId: null,
     sortOrder: 0,
     placements: placementsForForm(null),
@@ -628,8 +628,30 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   /**
    * Form submission with AI context persistence
    */
-  const onSubmit = async (data: WidgetFormValues) => {
+  const onSubmit = async (
+    data: WidgetFormValues,
+    intent: 'save' | 'draft' | 'publish' = 'save',
+  ) => {
     try {
+      if (
+        intent === 'publish' &&
+        data.placements.length > 0 &&
+        !data.placements.some((placement) => placement.isActive)
+      ) {
+        toast.error('Activate at least one placement before publishing this widget.');
+        return;
+      }
+
+      const activationData = {
+        ...data,
+        isActive:
+          intent === 'draft'
+            ? false
+            : intent === 'publish'
+              ? true
+              : data.isActive,
+      };
+
       // Build AI context with all state.
       const contextToSave: Partial<AiContext> = {
         promptType: aiGenerator.promptType,
@@ -653,8 +675,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       });
 
       const submissionData = {
-        ...data,
-        ...legacyProjectionFromPlacements(data.placements),
+        ...activationData,
+        ...legacyProjectionFromPlacements(activationData.placements),
         aiContext: validatedContext as unknown as Record<string, unknown>,
       };
 
@@ -666,7 +688,15 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       }
       // Invalidate queries so list page shows fresh data
       queryClient.invalidateQueries({ queryKey: ['widgets', 'list'] });
-      toast.success(`Widget ${isCreateMode ? 'created' : 'updated'} successfully!`);
+      const action =
+        intent === 'draft'
+          ? 'saved as draft'
+          : intent === 'publish'
+            ? 'published'
+            : isCreateMode
+              ? 'created'
+              : 'updated';
+      toast.success(`Widget ${action} successfully!`);
       void navigate({ to: '/admin/widgets' });
     } catch (error: unknown) {
       toast.error(
@@ -714,7 +744,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
         </Button>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit((data) => onSubmit(data, 'save'))} className="space-y-6">
         <AiAssistant widget={widget} aiContext={aiContext} aiGenerator={aiGenerator} />
 
         <WidgetDetails
@@ -747,8 +777,36 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
               </Button>
             </>
           )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : submitButtonText}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isSubmitting}
+            onClick={() => {
+              void handleSubmit((data) => onSubmit(data, 'draft'))();
+            }}
+          >
+            {isSubmitting ? 'Saving...' : 'Save Draft'}
+          </Button>
+          {!isCreateMode && (
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Saving...' : submitButtonText}
+            </Button>
+          )}
+          <Button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => {
+              void handleSubmit((data) => onSubmit(data, 'publish'))();
+            }}
+          >
+            {isSubmitting
+              ? 'Publishing...'
+              : isCreateMode
+                ? 'Create & Publish'
+                : 'Publish'}
           </Button>
         </div>
       </form>
