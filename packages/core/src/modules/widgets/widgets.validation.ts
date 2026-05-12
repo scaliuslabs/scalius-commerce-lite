@@ -9,6 +9,10 @@ import {
     WidgetPlacementScope,
     WidgetPlacementSlot,
 } from "@scalius/database/schema";
+import {
+    isWidgetCollectionSlot,
+    isWidgetPlacementSlotAllowedForScope,
+} from "@scalius/shared/widget-placement";
 
 export const widgetPlacementInputSchema = z.object({
     id: z.string().optional(),
@@ -36,6 +40,14 @@ export const widgetPlacementInputSchema = z.object({
     sortOrder: z.number().int().optional().default(0),
     isActive: z.boolean().optional().default(true),
 }).superRefine((placement, ctx) => {
+    if (!isWidgetPlacementSlotAllowedForScope(placement.scope, placement.slot)) {
+        ctx.addIssue({
+            code: "custom",
+            message: "This placement slot is not valid for the selected scope.",
+            path: ["slot"],
+        });
+    }
+
     if (placement.scope !== WidgetPlacementScope.HOMEPAGE && !placement.scopeId) {
         ctx.addIssue({
             code: "custom",
@@ -45,8 +57,7 @@ export const widgetPlacementInputSchema = z.object({
     }
 
     if (
-        (placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
-            placement.slot === WidgetPlacementSlot.AFTER_COLLECTION) &&
+        isWidgetCollectionSlot(placement.slot) &&
         (!placement.anchorId || placement.anchorType !== WidgetPlacementAnchorType.COLLECTION)
     ) {
         ctx.addIssue({

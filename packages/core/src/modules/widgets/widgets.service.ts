@@ -144,7 +144,7 @@ function normalizePlacementInserts(
     placements: WidgetPlacementInput[] | undefined,
 ): WidgetPlacementInsert[] {
     return (placements ?? []).map((placement) => ({
-        id: placement.id ?? "wpl_" + nanoid(),
+        id: "wpl_" + nanoid(),
         widgetId,
         scope: placement.scope,
         scopeId: placement.scopeId ?? null,
