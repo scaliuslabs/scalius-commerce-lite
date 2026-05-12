@@ -14,6 +14,20 @@ export function getEffectiveImageLimit(modelId?: string): number {
   return Math.min(modelLimit, AI_CONTEXT_LIMITS.maxImages);
 }
 
+export function limitImagesForModel<T>(
+  images: readonly T[],
+  modelId?: string,
+): { images: T[]; limit: number; truncated: number } {
+  const limit = getEffectiveImageLimit(modelId);
+  const limitedImages = images.slice(0, limit);
+
+  return {
+    images: limitedImages,
+    limit,
+    truncated: Math.max(0, images.length - limitedImages.length),
+  };
+}
+
 export function uniqueByLimit<T>(
   items: T[],
   getKey: (item: T) => string,

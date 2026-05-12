@@ -20,6 +20,7 @@ import {
   notifyAiContextWarnings,
   type AiContextBatchDetails,
 } from "./ai-context-warnings";
+import { limitImagesForModel } from "./ai-context-limits";
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
 import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
@@ -160,13 +161,22 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       // Generate structured prompt for improvement
       const currentModel = aiGenerator.aiModels.find((m: ModelInfo) => m.id === aiGenerator.selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
+      const imageSelection = limitImagesForModel(
+        aiContext.selectedImages,
+        aiGenerator.selectedModel,
+      );
+      if (imageSelection.truncated > 0) {
+        toast.warning(
+          `Using the first ${imageSelection.limit} selected images for this model. ${imageSelection.truncated} ${imageSelection.truncated === 1 ? "image was" : "images were"} skipped.`,
+        );
+      }
 
       const promptResult = await generateStructuredPrompt({
         systemPrompt,
         improvementPrompt: promptToUse + historyContext + otherSectionsContext,
         existingHtml: codeToImprove.html,
         existingCss: codeToImprove.css,
-        selectedImages: aiContext.selectedImages,
+        selectedImages: imageSelection.images,
         selectedProducts: (contextData.products || []) as AiProductData[],
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
