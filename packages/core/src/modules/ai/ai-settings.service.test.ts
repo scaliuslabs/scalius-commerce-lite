@@ -151,7 +151,7 @@ describe("widget AI settings", () => {
       supportsStructuredOutput: false,
       structuredOutputMode: "text",
       supportsVisionInput: false,
-      maxImages: 0,
+      maxImages: 10,
     });
 
     expect(resolveWidgetAiModelCapabilities("openai", "gpt-5.4")).toMatchObject({
