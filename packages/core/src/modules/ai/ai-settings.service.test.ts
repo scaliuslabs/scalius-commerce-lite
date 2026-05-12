@@ -6,6 +6,7 @@ import {
   providerHasCredentials,
   type WidgetAiRuntimeSettings,
 } from "./ai-settings.service";
+import { supportsWidgetAiVisionInput } from "./ai-config";
 import { DEFAULT_AI_PROMPTS } from "./default-prompts";
 
 describe("widget AI settings", () => {
@@ -64,6 +65,14 @@ describe("widget AI settings", () => {
 
     expect(providerHasCredentials(runtime, "cloudflare")).toBe(true);
     expect(providerHasCredentials(runtime, "openai")).toBe(false);
+  });
+
+  it("keeps Cloudflare widget generation text-only until image bytes are adapted server-side", () => {
+    expect(supportsWidgetAiVisionInput("cloudflare", "@cf/moonshotai/kimi-k2.6")).toBe(false);
+    expect(supportsWidgetAiVisionInput("cloudflare", "@cf/openai/gpt-oss-120b")).toBe(false);
+    expect(supportsWidgetAiVisionInput("gemini", "gemini-3-pro")).toBe(true);
+    expect(supportsWidgetAiVisionInput("openai", "gpt-5.4")).toBe(true);
+    expect(supportsWidgetAiVisionInput("openrouter", "google/gemini-3-pro")).toBe(false);
   });
 
   it("masks runtime secrets from admin settings responses", () => {

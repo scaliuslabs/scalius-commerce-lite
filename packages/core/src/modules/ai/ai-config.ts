@@ -316,6 +316,25 @@ export function shouldUseStagedGeneration(_promptLength: number, userEnabled: bo
 }
 
 /**
+ * Whether the widget generator may send native image parts to a provider/model.
+ *
+ * This is deliberately stricter than a model catalog's marketing capability:
+ * the current widget context carries remote image URLs, and Workers AI needs a
+ * native byte-based adapter before Cloudflare models can receive images safely.
+ */
+export function supportsWidgetAiVisionInput(
+  provider: WidgetAiProvider,
+  modelId: string,
+): boolean {
+  if (provider === "cloudflare") return false;
+  if (provider === "gemini") return true;
+  if (provider === "openai") {
+    return /gpt-4o|gpt-4\.1|gpt-5|vision|omni/i.test(modelId);
+  }
+  return false;
+}
+
+/**
  * Get appropriate timeout for operation type
  */
 export function getTimeout(operation: 'planning' | 'generation' | 'improvement' | 'default'): number {
