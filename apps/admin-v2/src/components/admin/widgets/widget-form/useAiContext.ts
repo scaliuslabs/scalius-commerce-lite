@@ -64,6 +64,20 @@ export const useAiContext = (
   const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false);
   const debouncedCategorySearch = useDebounce(categorySearchQuery, 300);
 
+  const setProductPopoverOpen = useCallback((open: boolean) => {
+    setIsProductPopoverOpen(open);
+    if (!open) {
+      setProductSearchQuery("");
+    }
+  }, []);
+
+  const setCategoryPopoverOpen = useCallback((open: boolean) => {
+    setIsCategoryPopoverOpen(open);
+    if (!open) {
+      setCategorySearchQuery("");
+    }
+  }, []);
+
   const startProductRequest = useCallback(() => {
     pendingProductRequests.current += 1;
     setIsFetchingProducts(true);
@@ -326,7 +340,7 @@ export const useAiContext = (
     resetContext,
     allCategoriesList,
     isProductPopoverOpen,
-    setIsProductPopoverOpen,
+    setIsProductPopoverOpen: setProductPopoverOpen,
     productSearchQuery,
     setProductSearchQuery,
     isFetchingProducts,
@@ -340,7 +354,7 @@ export const useAiContext = (
     categorySearchQuery,
     setCategorySearchQuery,
     isCategoryPopoverOpen,
-    setIsCategoryPopoverOpen,
+    setIsCategoryPopoverOpen: setCategoryPopoverOpen,
     hasMoreCategories,
     loadMoreCategories,
     isFetchingCategories,

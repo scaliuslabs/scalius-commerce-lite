@@ -88,7 +88,13 @@ export function WidgetTargetSelect({
       : placeholder;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSearch("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -106,7 +112,9 @@ export function WidgetTargetSelect({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[--radix-popover-trigger-width] overflow-hidden p-0"
+        collisionPadding={16}
+        sideOffset={6}
+        className="w-[min(max(var(--radix-popover-trigger-width),22rem),calc(100vw-2rem))] overflow-hidden p-0"
       >
         <Command shouldFilter={false}>
           <CommandInput
@@ -115,7 +123,7 @@ export function WidgetTargetSelect({
             placeholder={searchPlaceholder ?? placeholder}
             className="h-10"
           />
-          <CommandList className="max-h-[min(300px,var(--radix-popover-content-available-height))]">
+          <CommandList className="max-h-[clamp(9rem,calc(var(--radix-popover-content-available-height)-2.75rem),20rem)]">
             {isLoading ? (
               <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />

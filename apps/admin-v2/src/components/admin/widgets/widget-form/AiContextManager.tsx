@@ -105,10 +105,12 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
       ? "grid grid-cols-1 gap-2"
       : "grid grid-cols-1 md:grid-cols-3 gap-3";
 
-  const popoverWidth = "w-[min(340px,calc(100vw-2rem))]";
+  const popoverWidth = "w-[min(max(var(--radix-popover-trigger-width),22rem),calc(100vw-2rem))]";
   const popoverZIndex = variant === "compact" ? "z-[101]" : "";
   const commandListClass =
-    "max-h-[min(300px,var(--radix-popover-content-available-height))]";
+    "max-h-[clamp(9rem,calc(var(--radix-popover-content-available-height)-2.75rem),20rem)]";
+  const categoryCommandListClass =
+    "max-h-[clamp(8rem,calc(var(--radix-popover-content-available-height)-7rem),18rem)]";
 
   return (
     <>
@@ -128,6 +130,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
             className={cn(popoverWidth, popoverZIndex, "overflow-hidden p-0")}
             align="start"
             sideOffset={5}
+            collisionPadding={16}
           >
             <div className="p-3 border-b">
               <MediaManager
@@ -169,6 +172,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
             className={cn(popoverWidth, popoverZIndex, "overflow-hidden p-0")}
             align="start"
             sideOffset={5}
+            collisionPadding={16}
           >
             <Command shouldFilter={false}>
               <CommandInput
@@ -259,6 +263,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
             className={cn(popoverWidth, popoverZIndex, "overflow-hidden p-0")}
             align="start"
             sideOffset={5}
+            collisionPadding={16}
           >
             <div className="p-3 border-b">
               <div className="flex items-center space-x-2">
@@ -286,7 +291,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
                 value={categorySearchQuery}
                 onValueChange={setCategorySearchQuery}
               />
-              <CommandList className={commandListClass}>
+              <CommandList className={categoryCommandListClass}>
                 <CommandEmpty>
                   {isFetchingCategories ? "Loading..." : "No categories found."}
                 </CommandEmpty>
