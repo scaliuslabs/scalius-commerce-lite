@@ -6,6 +6,21 @@ export interface ChatCompletionLike {
   error?: { message?: string };
 }
 
+export async function readApiErrorMessage(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const payload = await response.json() as {
+      message?: string;
+      error?: { message?: string };
+    };
+    return payload.error?.message || payload.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function extractChatCompletionContent(payload: unknown): string {
   const data =
     payload && typeof payload === "object" && "data" in payload
