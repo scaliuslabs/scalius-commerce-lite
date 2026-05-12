@@ -36,6 +36,7 @@ interface ModelInfo {
   id: string;
   name: string;
   supportsVision?: boolean;
+  maxImages?: number;
   supportsAudio?: boolean;
   modality?: string;
 }
@@ -176,6 +177,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       const imageSelection = limitImagesForModel(
         aiContext.selectedImages,
         aiGenerator.selectedModel,
+        currentModel?.maxImages,
       );
       if (imageSelection.truncated > 0) {
         toast.warning(
@@ -195,6 +197,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         allCategoriesSelected: aiContext.allCategoriesSelected,
         modelId: aiGenerator.selectedModel,
         supportsVision: isVisionModel,
+        maxImagesOverride: currentModel?.maxImages,
         sectionIndex: targetSection,
         totalSections: sections.length,
       });

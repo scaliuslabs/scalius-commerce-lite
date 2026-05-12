@@ -29,6 +29,7 @@ interface ModelInfo {
   name: string;
   provider?: string;
   supportsVision?: boolean;
+  maxImages?: number;
   supportsAudio?: boolean;
   modality?: string;
 }
@@ -136,7 +137,12 @@ export const useAiGenerator = (
 
   const getModelLimitedImages = useCallback(
     (options?: { warn?: boolean }) => {
-      const result = limitImagesForModel(aiContext.selectedImages, selectedModel);
+      const selectedModelInfo = aiModels.find((model) => model.id === selectedModel);
+      const result = limitImagesForModel(
+        aiContext.selectedImages,
+        selectedModel,
+        selectedModelInfo?.maxImages,
+      );
       if (options?.warn && result.truncated > 0) {
         toast.warning(
           `Using the first ${result.limit} selected images for this model. ${result.truncated} ${result.truncated === 1 ? "image was" : "images were"} skipped.`,
@@ -144,7 +150,7 @@ export const useAiGenerator = (
       }
       return result.images;
     },
-    [aiContext.selectedImages, selectedModel],
+    [aiContext.selectedImages, aiModels, selectedModel],
   );
 
   const effectivePromptType = placementContext?.hasActivePlacements
@@ -314,6 +320,7 @@ export const useAiGenerator = (
         allCategoriesSelected: aiContext.allCategoriesSelected,
         modelId: selectedModel,
         supportsVision: isVisionModel,
+        maxImagesOverride: currentModel?.maxImages,
       });
       if (!isActiveGenerationRun(run)) return;
 

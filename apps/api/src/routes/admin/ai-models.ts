@@ -1,6 +1,6 @@
 import {
   getAllowedWidgetAiModels,
-  supportsWidgetAiVisionInput,
+  resolveWidgetAiModelCapabilities,
   type WidgetAiProvider,
   type WidgetAiRuntimeSettings,
 } from "@scalius/core/modules/ai";
@@ -13,6 +13,10 @@ export interface AiModelInfo {
   description?: string | null;
   context_length?: number;
   supportsVision: boolean;
+  supportsStructuredOutput: boolean;
+  structuredOutputMode: "sdk" | "text";
+  maxImages: number;
+  capabilityNotes?: string[];
   supportsAudio?: boolean;
   modality?: string;
   source?: "api" | "configured" | "fallback";
@@ -36,8 +40,34 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function supportsVisionForModel(provider: WidgetAiProvider, model: string): boolean {
-  return supportsWidgetAiVisionInput(provider, model);
+function capabilitiesForModel(
+  provider: WidgetAiProvider,
+  model: string,
+  settings: WidgetAiRuntimeSettings,
+) {
+  return resolveWidgetAiModelCapabilities(
+    provider,
+    model,
+    settings.providers[provider].capabilities,
+  );
+}
+
+function withCapabilities(
+  model: Omit<
+    AiModelInfo,
+    "supportsVision" | "supportsStructuredOutput" | "structuredOutputMode" | "maxImages" | "capabilityNotes"
+  >,
+  settings: WidgetAiRuntimeSettings,
+): AiModelInfo {
+  const capabilities = capabilitiesForModel(model.provider, model.id, settings);
+  return {
+    ...model,
+    supportsVision: capabilities.supportsVisionInput,
+    supportsStructuredOutput: capabilities.supportsStructuredOutput,
+    structuredOutputMode: capabilities.structuredOutputMode,
+    maxImages: capabilities.maxImages,
+    ...(capabilities.notes.length > 0 ? { capabilityNotes: capabilities.notes } : {}),
+  };
 }
 
 function configuredModel(
@@ -47,13 +77,12 @@ function configuredModel(
   const model = settings.providers[provider].defaultModel;
   return model
     ? [
-        {
+        withCapabilities({
           id: model,
           name: model,
           provider,
-          supportsVision: supportsVisionForModel(provider, model),
           source: "configured",
-        },
+        }, settings),
       ]
     : [];
 }
@@ -61,14 +90,14 @@ function configuredModel(
 function configuredModelInfo(
   provider: WidgetAiProvider,
   model: string,
+  settings: WidgetAiRuntimeSettings,
 ): AiModelInfo {
-  return {
+  return withCapabilities({
     id: model,
     name: model,
     provider,
-    supportsVision: supportsVisionForModel(provider, model),
     source: "configured",
-  };
+  }, settings);
 }
 
 function fallbackModels(
@@ -81,20 +110,18 @@ function fallbackModels(
     openai: [],
     gemini: [],
     cloudflare: [
-      {
+      withCapabilities({
         id: "@cf/moonshotai/kimi-k2.6",
         name: "Kimi K2.6",
         provider,
-        supportsVision: supportsVisionForModel(provider, "@cf/moonshotai/kimi-k2.6"),
         source: "fallback",
-      },
-      {
+      }, settings),
+      withCapabilities({
         id: "@cf/openai/gpt-oss-120b",
         name: "GPT OSS 120B",
         provider,
-        supportsVision: supportsVisionForModel(provider, "@cf/openai/gpt-oss-120b"),
         source: "fallback",
-      },
+      }, settings),
     ],
   };
   const seen = new Set<string>();
@@ -119,7 +146,7 @@ async function listOpenRouterModels(
     const architecture = model.architecture as
       | { input_modalities?: string[]; output_modalities?: string[]; modality?: string }
       | undefined;
-    return {
+    return withCapabilities({
       id: String(model.id ?? ""),
       name: String(model.name ?? model.id ?? ""),
       provider,
@@ -127,11 +154,10 @@ async function listOpenRouterModels(
         typeof model.description === "string" ? model.description : null,
       context_length:
         typeof model.context_length === "number" ? model.context_length : undefined,
-      supportsVision: architecture?.input_modalities?.includes("image") ?? false,
       supportsAudio: architecture?.input_modalities?.includes("audio") ?? false,
       modality: architecture?.modality ?? "text->text",
       source: "api" as const,
-    };
+    }, settings);
   }).filter((model) => model.id);
 }
 
@@ -150,15 +176,14 @@ async function listOpenAiModels(
   return (data.data ?? [])
     .map((model) => {
       const id = model.id ?? "";
-      return {
+      return withCapabilities({
         id,
         name: id,
         provider,
         description: model.owned_by ? `Owned by ${model.owned_by}` : null,
-        supportsVision: /gpt-4o|gpt-4\.1|gpt-5|vision|omni/i.test(id),
         modality: "text->text",
         source: "api" as const,
-      };
+      }, settings);
     })
     .filter((model) => model.id)
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -205,16 +230,15 @@ async function listGeminiModels(
     .filter((model) => model.supportedGenerationMethods?.includes("generateContent"))
     .map((model) => {
       const id = (model.name ?? "").replace(/^models\//, "");
-      return {
+      return withCapabilities({
         id,
         name: model.displayName || id,
         provider,
         description: model.description ?? null,
         context_length: model.inputTokenLimit,
-        supportsVision: /gemini/i.test(id),
         modality: "text->text",
         source: "api" as const,
-      };
+      }, settings);
     })
     .filter((model) => model.id);
 }
@@ -235,16 +259,15 @@ async function listCloudflareModels(
   return (data.result ?? [])
     .map((model) => {
       const id = String(model.name ?? model.id ?? "");
-      return {
+      return withCapabilities({
         id,
         name: String(model.display_name ?? model.name ?? id),
         provider,
         description:
           typeof model.description === "string" ? model.description : null,
-        supportsVision: supportsVisionForModel(provider, id),
         modality: "text->text",
         source: "api" as const,
-      };
+      }, settings);
     })
     .filter((model) => model.id);
 }
@@ -274,5 +297,5 @@ export async function listAllowedModelsForProvider(
   const catalog = await listModelsForProvider(provider, settings);
   const byId = new Map(catalog.map((model) => [model.id, model]));
 
-  return allowedIds.map((id) => byId.get(id) ?? configuredModelInfo(provider, id));
+  return allowedIds.map((id) => byId.get(id) ?? configuredModelInfo(provider, id, settings));
 }

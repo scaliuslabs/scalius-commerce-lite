@@ -9,7 +9,10 @@ import {
   type WidgetAiRuntimeSettings,
 } from "./ai-settings.service";
 import { ValidationError } from "@scalius/core/errors";
-import { supportsWidgetAiVisionInput } from "./ai-config";
+import {
+  resolveWidgetAiModelCapabilities,
+  supportsWidgetAiVisionInput,
+} from "./ai-config";
 import { DEFAULT_AI_PROMPTS } from "./default-prompts";
 
 describe("widget AI settings", () => {
@@ -45,6 +48,10 @@ describe("widget AI settings", () => {
       "openai/gpt-5.4",
       "anthropic/claude-sonnet-4.5",
     ]);
+    expect(config.providers.openrouter.capabilities).toEqual({
+      structuredOutput: "auto",
+      visionInput: "auto",
+    });
     expect(config.providers.openrouter.baseUrl).toBe("https://openrouter.ai/api/v1");
     expect(config.providers.cloudflare.enabled).toBe(true);
     expect(config.providers.cloudflare.defaultModel).toBe("@cf/moonshotai/kimi-k2.6");
@@ -137,6 +144,33 @@ describe("widget AI settings", () => {
     expect(supportsWidgetAiVisionInput("gemini", "gemini-3-pro")).toBe(true);
     expect(supportsWidgetAiVisionInput("openai", "gpt-5.4")).toBe(true);
     expect(supportsWidgetAiVisionInput("openrouter", "google/gemini-3-pro")).toBe(false);
+  });
+
+  it("resolves provider capabilities with admin overrides", () => {
+    expect(resolveWidgetAiModelCapabilities("cloudflare", "@cf/moonshotai/kimi-k2.6")).toMatchObject({
+      supportsStructuredOutput: false,
+      structuredOutputMode: "text",
+      supportsVisionInput: false,
+      maxImages: 0,
+    });
+
+    expect(resolveWidgetAiModelCapabilities("openai", "gpt-5.4")).toMatchObject({
+      supportsStructuredOutput: true,
+      structuredOutputMode: "sdk",
+      supportsVisionInput: true,
+      maxImages: 10,
+    });
+
+    const forced = resolveWidgetAiModelCapabilities("cloudflare", "@cf/moonshotai/kimi-k2.6", {
+      structuredOutput: "sdk",
+      visionInput: "enabled",
+      maxImages: 4,
+    });
+
+    expect(forced.supportsStructuredOutput).toBe(true);
+    expect(forced.supportsVisionInput).toBe(true);
+    expect(forced.maxImages).toBe(4);
+    expect(forced.notes).toHaveLength(2);
   });
 
   it("masks runtime secrets from admin settings responses", () => {

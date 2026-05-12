@@ -28,6 +28,7 @@ interface AiContextManagerProps {
   context: ReturnType<typeof useAiContext>;
   selectedModel?: string;
   supportsVision?: boolean;
+  maxImages?: number;
   variant?: "default" | "compact";
 }
 
@@ -35,6 +36,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
   context,
   selectedModel,
   supportsVision = false,
+  maxImages,
   variant = "default",
 }) => {
   const [isImagePopoverOpen, setIsImagePopoverOpen] = React.useState(false);
@@ -71,7 +73,7 @@ export const AiContextManager: React.FC<AiContextManagerProps> = ({
     maxCategories,
   } = context;
 
-  const maxImagesForModel = getEffectiveImageLimit(selectedModel);
+  const maxImagesForModel = getEffectiveImageLimit(selectedModel, maxImages);
   const imageOverage = Math.max(0, selectedImages.length - maxImagesForModel);
 
   const addOneImage = (file: MediaFile) => {

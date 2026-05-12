@@ -17,6 +17,48 @@ export const SYSTEM_PROMPT_CACHE_TTL = 300;
 // ============================================================================
 
 export const AI_PROVIDER_IDS = ["openrouter", "openai", "gemini", "cloudflare"] as const;
+export const WIDGET_AI_STRUCTURED_OUTPUT_MODES = ["auto", "sdk", "text"] as const;
+export const WIDGET_AI_VISION_INPUT_MODES = ["auto", "enabled", "disabled"] as const;
+
+export type WidgetAiProvider = (typeof AI_PROVIDER_IDS)[number];
+export type WidgetAiStructuredOutputMode = (typeof WIDGET_AI_STRUCTURED_OUTPUT_MODES)[number];
+export type WidgetAiVisionInputMode = (typeof WIDGET_AI_VISION_INPUT_MODES)[number];
+
+export interface WidgetAiProviderCapabilityConfig {
+  structuredOutput: WidgetAiStructuredOutputMode;
+  visionInput: WidgetAiVisionInputMode;
+  maxImages?: number;
+}
+
+export interface ResolvedWidgetAiModelCapabilities {
+  structuredOutputMode: "sdk" | "text";
+  supportsStructuredOutput: boolean;
+  supportsVisionInput: boolean;
+  maxImages: number;
+  notes: string[];
+}
+
+export const DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES: Record<
+  WidgetAiProvider,
+  WidgetAiProviderCapabilityConfig
+> = {
+  openrouter: {
+    structuredOutput: "auto",
+    visionInput: "auto",
+  },
+  openai: {
+    structuredOutput: "auto",
+    visionInput: "auto",
+  },
+  gemini: {
+    structuredOutput: "auto",
+    visionInput: "auto",
+  },
+  cloudflare: {
+    structuredOutput: "auto",
+    visionInput: "auto",
+  },
+};
 
 // Model capability thresholds
 export const MODEL_CAPABILITIES = {
@@ -283,6 +325,90 @@ export function getMaxImages(modelId: string): number {
     || MODEL_CAPABILITIES.maxImages.default;
 }
 
+function inferSdkStructuredOutputSupport(
+  provider: WidgetAiProvider,
+  _modelId: string,
+): boolean {
+  if (provider === "cloudflare") {
+    // Kimi K2.6 supports structured outputs in Workers AI, but the current
+    // workers-ai-provider + AI SDK output adapter is not reliable enough to
+    // make SDK schema mode the default. Admins can still force SDK mode.
+    return false;
+  }
+  return provider === "openrouter" || provider === "openai" || provider === "gemini";
+}
+
+function inferVisionInputSupport(
+  provider: WidgetAiProvider,
+  modelId: string,
+): boolean {
+  if (provider === "cloudflare") return false;
+  if (provider === "gemini") return true;
+  if (provider === "openai") {
+    return /gpt-4o|gpt-4\.1|gpt-5|vision|omni/i.test(modelId);
+  }
+  return false;
+}
+
+function clampImageLimit(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(GENERATION_CONFIG.context.maxImages, Math.max(0, Math.round(value)));
+}
+
+export function resolveWidgetAiModelCapabilities(
+  provider: WidgetAiProvider,
+  modelId: string,
+  config: Partial<WidgetAiProviderCapabilityConfig> = {},
+): ResolvedWidgetAiModelCapabilities {
+  const defaults = DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES[provider];
+  const structuredOutput = config.structuredOutput ?? defaults.structuredOutput;
+  const visionInput = config.visionInput ?? defaults.visionInput;
+  const inferredStructured = inferSdkStructuredOutputSupport(provider, modelId);
+  const inferredVision = inferVisionInputSupport(provider, modelId);
+  const notes: string[] = [];
+
+  const supportsStructuredOutput =
+    structuredOutput === "sdk"
+      ? true
+      : structuredOutput === "text"
+        ? false
+        : inferredStructured;
+
+  if (structuredOutput === "sdk" && !inferredStructured) {
+    notes.push("Structured output is forced on for a provider/model that normally uses text fallback.");
+  }
+  if (structuredOutput === "text" && inferredStructured) {
+    notes.push("Structured output is disabled by admin configuration.");
+  }
+
+  const supportsVisionInput =
+    visionInput === "enabled"
+      ? true
+      : visionInput === "disabled"
+        ? false
+        : inferredVision;
+
+  if (visionInput === "enabled" && !inferredVision) {
+    notes.push("Vision input is forced on; verify the provider accepts remote image URL parts.");
+  }
+  if (visionInput === "disabled" && inferredVision) {
+    notes.push("Vision input is disabled by admin configuration.");
+  }
+
+  const inferredMaxImages = Math.min(getMaxImages(modelId), GENERATION_CONFIG.context.maxImages);
+  const maxImages = supportsVisionInput
+    ? clampImageLimit(config.maxImages, inferredMaxImages)
+    : 0;
+
+  return {
+    structuredOutputMode: supportsStructuredOutput ? "sdk" : "text",
+    supportsStructuredOutput,
+    supportsVisionInput,
+    maxImages,
+    notes,
+  };
+}
+
 /**
  * Calculate delay for retry attempt with exponential backoff
  */
@@ -326,13 +452,9 @@ export function shouldUseStagedGeneration(_promptLength: number, userEnabled: bo
 export function supportsWidgetAiVisionInput(
   provider: WidgetAiProvider,
   modelId: string,
+  config?: Partial<WidgetAiProviderCapabilityConfig>,
 ): boolean {
-  if (provider === "cloudflare") return false;
-  if (provider === "gemini") return true;
-  if (provider === "openai") {
-    return /gpt-4o|gpt-4\.1|gpt-5|vision|omni/i.test(modelId);
-  }
-  return false;
+  return resolveWidgetAiModelCapabilities(provider, modelId, config).supportsVisionInput;
 }
 
 /**
@@ -347,6 +469,5 @@ export function getTimeout(operation: 'planning' | 'generation' | 'improvement' 
 // ============================================================================
 
 export type PromptType = (typeof AI_PROMPT_TYPES)[number];
-export type WidgetAiProvider = (typeof AI_PROVIDER_IDS)[number];
 export type ModelProvider = 'anthropic' | 'openai' | 'google' | 'default';
 export type OperationType = 'planning' | 'generation' | 'improvement' | 'default';

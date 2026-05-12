@@ -55,6 +55,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
     setUseStagedMode,
     stagedGeneration,
   } = aiGenerator;
+  const selectedModelInfo = aiModels.find((model) => model.id === selectedModel);
 
   const ModelSelector = (
     <Popover
@@ -77,7 +78,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
                 {isAiSettingsLoading
                     ? "Loading models..."
                     : selectedModel
-                    ? aiModels.find((model) => model.id === selectedModel)?.name || selectedModel
+                    ? selectedModelInfo?.name || selectedModel
                     : "Select a model..."}
                 </span>
                 {isAiSettingsLoading ? (
@@ -302,7 +303,8 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({
             <AiContextManager
               context={aiContext}
               selectedModel={selectedModel}
-              supportsVision={aiModels.find(m => m.id === selectedModel)?.supportsVision || false}
+              supportsVision={selectedModelInfo?.supportsVision || false}
+              maxImages={selectedModelInfo?.maxImages}
             />
           </div>
 
