@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getOptimizedImageUrl } from "../../../packages/shared/src/image-optimizer";
+import { resolveMediaUrl } from "../../../packages/shared/src/media-url";
 
 const cdnBase = "https://cloud.scalius.com";
 
@@ -158,6 +159,34 @@ describe("storefront image optimization URLs", () => {
 
     expect(optimized).toContain("https://cloud.scalius.com/cdn-cgi/image/");
     expect(optimized).toContain("/products/image.webp?version=1");
+  });
+
+  it("canonicalizes configured host aliases even when optimization is disabled", () => {
+    const raw = getOptimizedImageUrl(
+      "https://old-cdn.example.com/products/image.webp?version=1",
+      { width: 400, height: 400 },
+      {
+        enabled: false,
+        cdnBase,
+        cdnHosts: ["cloud.scalius.com"],
+        cdnHostAliases: ["old-cdn.example.com"],
+        isDev: false,
+      },
+    );
+
+    expect(raw).toBe(
+      "https://cloud.scalius.com/products/image.webp?version=1",
+    );
+  });
+
+  it("uses the media resolver to canonicalize configured CDN aliases", () => {
+    expect(
+      resolveMediaUrl(
+        "https://old-cdn.example.com/products/image.webp?version=1#view",
+        cdnBase,
+        { cdnHostAliases: ["old-cdn.example.com"] },
+      ),
+    ).toBe("https://cloud.scalius.com/products/image.webp?version=1#view");
   });
 
   it("honors the dashboard image optimization toggle", () => {

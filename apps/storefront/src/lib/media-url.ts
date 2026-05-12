@@ -141,5 +141,7 @@ export function getImageOptimizationEnabled(): boolean {
  * Resolve a media URL using the storefront's runtime CDN base.
  */
 export function resolveMediaUrl(url: string | null | undefined): string {
-  return sharedResolveMediaUrl(url, getCdnBase());
+  return sharedResolveMediaUrl(url, getCdnBase(), {
+    cdnHostAliases: getCdnCanonicalHostAliases(),
+  });
 }

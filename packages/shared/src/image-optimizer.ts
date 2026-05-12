@@ -313,8 +313,10 @@ export function getOptimizedImageUrl(
   const allowedHosts = getAllowedCdnHosts(ctx, cdnBase);
   const aliasHosts = getAliasCdnHosts(ctx);
 
-  // Resolve bare keys to full CDN URLs
-  const resolved = resolveMediaUrl(originalUrl, cdnBase);
+  const resolutionOptions = { cdnHostAliases: ctx?.cdnHostAliases };
+
+  // Resolve bare keys and configured CDN aliases to canonical URLs.
+  const resolved = resolveMediaUrl(originalUrl, cdnBase, resolutionOptions);
   if (!resolved) return "";
 
   const isAlreadyOptimized = resolved.includes(CLOUDFLARE_IMAGE_PATH);
@@ -322,7 +324,7 @@ export function getOptimizedImageUrl(
     ? extractCloudflareImageOriginalUrl(resolved)
     : null;
   const sourceUrl = unwrappedOriginal
-    ? resolveMediaUrl(unwrappedOriginal, cdnBase)
+    ? resolveMediaUrl(unwrappedOriginal, cdnBase, resolutionOptions)
     : resolved;
 
   if (ctx?.enabled === false) return sourceUrl;
