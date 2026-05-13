@@ -44,6 +44,8 @@ import type { Order } from "./types";
 import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orderPaymentsQueryOptions, orderCodQueryOptions } from "@/lib/api.queries";
 import { useUpdateOrderCod, useRefundOrder } from "@/lib/api.mutations";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 interface OrderPayment {
   id: string;
@@ -112,6 +114,8 @@ interface PaymentCardProps {
 export function PaymentCard({ order }: PaymentCardProps) {
   const queryClient = useQueryClient();
   const { symbol } = useCurrency();
+  const { hasPermission } = usePermissions();
+  const canRefund = hasPermission(PERMISSIONS.ORDERS_REFUND);
   const [historyExpanded, setHistoryExpanded] = React.useState(false);
 
   // Refund state
@@ -376,7 +380,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           )}
 
           {/* Refund action button */}
-          {(order.paidAmount ?? 0) > 0 && order.paymentStatus !== "refunded" && (
+          {canRefund && (order.paidAmount ?? 0) > 0 && order.paymentStatus !== "refunded" && (
             <div className="flex justify-end pt-2">
               <Button
                 variant="outline"

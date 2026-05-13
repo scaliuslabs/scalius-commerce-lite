@@ -38,6 +38,15 @@ describe("admin route permissions", () => {
     });
   });
 
+  it("protects refund endpoints with the dedicated refund permission", () => {
+    expect(getRoutePermission("/api/v1/admin/orders/order_123/refund", "POST")).toEqual({
+      permission: PERMISSIONS.ORDERS_REFUND,
+    });
+    expect(getRoutePermission("/api/v1/admin/orders/order_123/return", "POST")).toEqual({
+      permission: PERMISSIONS.ORDERS_CHANGE_STATUS,
+    });
+  });
+
   it("normalizes trailing slashes and leaves unknown admin routes unmapped for fail-closed middleware", () => {
     expect(getRoutePermission("/api/v1/admin/dashboard/", "GET")).toEqual({
       permission: PERMISSIONS.DASHBOARD_VIEW,

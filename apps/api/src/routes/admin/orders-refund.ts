@@ -1,6 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { processReturn, processRefund } from "@scalius/core/modules/payments/refund-service";
-import { ValidationError } from "../../utils/api-error";
+import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope } from "../../schemas/responses";
@@ -45,6 +47,13 @@ app.openapi(returnOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const db = c.get("db");
+    if (data.autoRefund) {
+        const user = c.get("user") as { id?: string } | undefined;
+        const userPerms = user?.id ? await getUserPermissions(db, user.id) : new Set<string>();
+        if (!userPerms.has(PERMISSIONS.ORDERS_REFUND)) {
+            throw new ForbiddenError("Refund permission is required to auto-refund a returned order");
+        }
+    }
     const envCache = c.env?.CACHE;
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false }, encryptionKey);

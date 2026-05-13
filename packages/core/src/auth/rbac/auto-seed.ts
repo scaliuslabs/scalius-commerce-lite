@@ -32,8 +32,11 @@ async function isRbacSeeded(db: Database): Promise<boolean> {
  */
 async function seedPermissions(db: Database): Promise<void> {
   const allPermissions = getAllPermissions();
+  const existingPermissions = await db.select({ name: permissions.name }).from(permissions);
+  const existingNames = new Set(existingPermissions.map((permission) => permission.name));
 
   for (const perm of allPermissions) {
+    if (existingNames.has(perm.name)) continue;
     try {
       await db.insert(permissions).values({
         id: crypto.randomUUID(),
@@ -77,6 +80,7 @@ async function seedRoles(db: Database): Promise<void> {
       permissions: Object.values(PERMISSIONS).filter(
         (p) =>
           !p.includes("permanent_delete") &&
+          p !== PERMISSIONS.ORDERS_REFUND &&
           p !== PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT &&
           p !== PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT &&
           p !== PERMISSIONS.TEAM_MANAGE_ROLES
@@ -250,22 +254,18 @@ export async function autoSeedRbacIfNeeded(db: Database): Promise<void> {
 
     if (!seeded) {
       console.log("RBAC: Auto-seeding permissions and roles...");
-      await seedPermissions(db);
-      await seedRoles(db);
-      await setFirstAdminAsSuperAdmin(db);
+    } else {
+      console.log("RBAC: Syncing missing permissions and system role grants...");
+    }
+
+    await seedPermissions(db);
+    await seedRoles(db);
+    await setFirstAdminAsSuperAdmin(db);
+
+    if (!seeded) {
       console.log("RBAC: Auto-seeding complete.");
     } else {
-      // Check if first admin needs super admin status
-      const firstAdmin = await db
-        .select({ id: user.id, isSuperAdmin: user.isSuperAdmin })
-        .from(user)
-        .where(eq(user.role, "admin"))
-        .orderBy(asc(user.createdAt))
-        .limit(1);
-
-      if (firstAdmin.length > 0 && firstAdmin[0] && !firstAdmin[0].isSuperAdmin) {
-        await setFirstAdminAsSuperAdmin(db);
-      }
+      console.log("RBAC: Permission sync complete.");
     }
 
     seedingChecked = true;

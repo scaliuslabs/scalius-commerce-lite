@@ -96,6 +96,23 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("requires the dedicated refund permission for direct refund endpoints", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.ORDERS_EDIT]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(createContext("/api/v1/admin/orders/order_1/refund", "POST") as never, next),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action",
+    });
+
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.ORDERS_REFUND]));
+    await adminAuthMiddleware(createContext("/api/v1/admin/orders/order_1/refund", "POST") as never, next);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("allows scanner sessions only on exact scanner workflow endpoints", async () => {
     mocks.getAuth.mockReturnValue({
       api: { getSession: vi.fn().mockResolvedValue(null) },

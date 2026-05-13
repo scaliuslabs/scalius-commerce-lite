@@ -30,12 +30,16 @@ import { Receipt, Loader2, Undo2 } from "lucide-react";
 import type { Order } from "./types";
 import { getAvailableTransitions } from "./types";
 import { useUpdateOrderStatus, useReturnOrder } from "@/lib/api.mutations";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 interface OrderStatusCardProps {
   order: Order;
 }
 
 export function OrderStatusCard({ order }: OrderStatusCardProps) {
+  const { hasPermission } = usePermissions();
+  const canRefund = hasPermission(PERMISSIONS.ORDERS_REFUND);
   const [returnReason, setReturnReason] = useState("");
   const [autoRefund, setAutoRefund] = useState(false);
   const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false);
@@ -54,7 +58,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
     }
 
     returnMutation.mutate(
-      { orderId: order.id, reason: returnReason, autoRefund },
+      { orderId: order.id, reason: returnReason, autoRefund: autoRefund && canRefund },
       {
         onSuccess: () => {
           setIsReturnDialogOpen(false);
@@ -64,6 +68,10 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   };
 
   const isReturnable = ["delivered", "completed", "shipped"].includes(order.status.toLowerCase());
+  const canAutoRefund =
+    canRefund &&
+    order.paymentStatus !== "unpaid" &&
+    order.paymentStatus !== "refunded";
 
   return (
     <Card className="overflow-hidden">
@@ -142,8 +150,8 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                   <Checkbox
                     id="auto-refund"
                     checked={autoRefund}
-                    onCheckedChange={(checked) => setAutoRefund(checked as boolean)}
-                    disabled={order.paymentStatus === "unpaid" || order.paymentStatus === "refunded"}
+                    onCheckedChange={(checked) => setAutoRefund(Boolean(checked) && canAutoRefund)}
+                    disabled={!canAutoRefund}
                   />
                   <div className="space-y-1 leading-none">
                     <Label
@@ -155,6 +163,8 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                     <p className="text-xs text-muted-foreground">
                       {order.paymentStatus === "unpaid" || order.paymentStatus === "refunded"
                         ? "Not available (no refundable payment)"
+                        : !canRefund
+                          ? "Requires refund permission"
                         : "Will attempt to automatically refund the paid amount via the original payment gateway."}
                     </p>
                   </div>
