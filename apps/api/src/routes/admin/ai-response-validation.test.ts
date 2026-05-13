@@ -85,6 +85,21 @@ describe('AI response validation', () => {
     ).toContain('Explore the range');
   });
 
+  it('rejects invented catalog cards when no catalog facts were provided', () => {
+    expect(() =>
+      normalizeWidgetGenerationText(
+        `<htmljs>
+          <section>
+            <a href="#" aria-label="View Core Daily details">Core Daily</a>
+            <span>Available in 3 finishes</span>
+          </section>
+        </htmljs>
+        <css>section{padding:24px}</css>`,
+        { commerceFactsProvided: false },
+      ),
+    ).toThrow(ValidationError);
+  });
+
   it('provides a deterministic safe fallback for no-context generations', () => {
     const output = createNoContextFallbackWidget();
 
