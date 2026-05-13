@@ -6,6 +6,10 @@ import { apiContext } from "@/lib/api/context";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { setEdgeCacheContext, cacheContextAls } from "@/lib/edge-cache";
 import { BUILD_ID } from "@/config/build-id";
+import {
+  isCacheableHtmlResponse,
+  requestHasPrivateSession,
+} from "@/lib/cache-policy";
 
 // Timeout constants to prevent hanging on slow/unavailable services
 const KV_TIMEOUT_MS = 1000;
@@ -87,6 +91,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
     regex.test(url.pathname),
   );
   const isGetRequest = request.method === "GET";
+  const hasPrivateSession = requestHasPrivateSession(request.headers);
 
   // Only enable caching if we're in Cloudflare environment and have KV binding
   const isCloudflareEnv = isCloudflareEnvironment();
@@ -152,6 +157,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   if (
     isGetRequest &&
     isCacheablePath &&
+    !hasPrivateSession &&
     kvBinding &&
     isCloudflareEnv &&
     cfCache
@@ -192,10 +198,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
       const response = await next();
 
-      if (
-        response.status === 200 &&
-        response.headers.get("Content-Type")?.includes("text/html")
-      ) {
+      if (isCacheableHtmlResponse(response)) {
         // Force browsers to ALWAYS revalidate HTML with server.
         // `no-cache` is more aggressive than `max-age=0, must-revalidate`
         // and ensures browser never uses stale HTML after deployments.
@@ -241,7 +244,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   // Pages that must NEVER be cached (contain user-specific or payment-sensitive data)
   const isNoCachePage = /^\/(cart|checkout)\/?$/.test(url.pathname);
 
-  if (isNoCachePage) {
+  if (isNoCachePage || (hasPrivateSession && isGetRequest && isCacheablePath)) {
     // Force no-store unconditionally — override any existing Cache-Control
     response.headers.set(
       "Cache-Control",
@@ -249,7 +252,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
     );
     response.headers.set("Pragma", "no-cache");
     response.headers.set("Expires", "0");
-    response.headers.set("X-Cache-Status", "NO_CACHE");
+    response.headers.set("X-Cache-Status", isNoCachePage ? "NO_CACHE" : "BYPASS_AUTH");
   } else if (isCloudflareEnv) {
     response.headers.set("X-Cache-Status", "BYPASS");
     if (!response.headers.has("Cache-Control")) {
