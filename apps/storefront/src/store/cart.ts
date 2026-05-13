@@ -1,4 +1,3 @@
-//src/store/cart.ts
 import { map } from "nanostores";
 
 
@@ -34,28 +33,154 @@ export type CartStore = {
   discount: Discount | null;
 };
 
-// Load initial state from localStorage
-const initialState: CartStore =
-  typeof window !== "undefined"
-    ? JSON.parse(
-        localStorage.getItem("cart") ||
-          '{"items":{},"totalItems":0,"totalAmount":0,"discount":null}',
-      )
-    : {
-        items: {},
-        totalItems: 0,
-        totalAmount: 0,
-        discount: null,
-      };
+const EMPTY_CART_STATE: CartStore = {
+  items: {},
+  totalItems: 0,
+  totalAmount: 0,
+  discount: null,
+};
 
-// Initialize cart store
-export const cartStore = map<CartStore>(initialState);
+let hasHydratedFromStorage = false;
+let canPersistToStorage = false;
 
-// Save to localStorage whenever store changes
+export const cartStore = map<CartStore>({ ...EMPTY_CART_STATE });
+
 if (typeof window !== "undefined") {
   cartStore.subscribe((state) => {
-    localStorage.setItem("cart", JSON.stringify(state));
+    if (!canPersistToStorage) return;
+    try {
+      localStorage.setItem("cart", JSON.stringify(state));
+    } catch (error) {
+      console.warn("Could not persist cart state.", error);
+    }
   });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeStoredCartItem(value: unknown): CartItem | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== "string" || typeof value.name !== "string") return null;
+
+  return {
+    id: value.id,
+    slug: typeof value.slug === "string" ? value.slug : undefined,
+    name: value.name,
+    price: toNumber(value.price),
+    quantity: Math.max(1, Math.floor(toNumber(value.quantity, 1))),
+    image: typeof value.image === "string" ? value.image : undefined,
+    variantId: typeof value.variantId === "string" ? value.variantId : undefined,
+    size: typeof value.size === "string" ? value.size : undefined,
+    color: typeof value.color === "string" ? value.color : undefined,
+    freeDelivery:
+      typeof value.freeDelivery === "boolean" ? value.freeDelivery : undefined,
+  };
+}
+
+function normalizeStoredDiscount(value: unknown): Discount | null {
+  if (!isRecord(value)) return null;
+  if (
+    typeof value.id !== "string" ||
+    typeof value.code !== "string" ||
+    typeof value.type !== "string" ||
+    typeof value.valueType !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    code: value.code,
+    type: value.type,
+    valueType: value.valueType,
+    discountValue: toNumber(value.discountValue),
+    discountAmount: toNumber(value.discountAmount),
+    combineWithProductDiscounts:
+      typeof value.combineWithProductDiscounts === "boolean"
+        ? value.combineWithProductDiscounts
+        : undefined,
+    combineWithOrderDiscounts:
+      typeof value.combineWithOrderDiscounts === "boolean"
+        ? value.combineWithOrderDiscounts
+        : undefined,
+    combineWithShippingDiscounts:
+      typeof value.combineWithShippingDiscounts === "boolean"
+        ? value.combineWithShippingDiscounts
+        : undefined,
+  };
+}
+
+function normalizeCartTotals(state: CartStore): CartStore {
+  const items = Object.values(state.items);
+  return {
+    ...state,
+    totalItems: items.reduce((total, item) => total + item.quantity, 0),
+    totalAmount: items.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0,
+    ),
+  };
+}
+
+export function normalizeStoredCart(value: unknown): CartStore {
+  if (!isRecord(value) || !isRecord(value.items)) {
+    return { ...EMPTY_CART_STATE };
+  }
+
+  const items: Record<string, CartItem> = {};
+  for (const [key, item] of Object.entries(value.items)) {
+    const normalized = normalizeStoredCartItem(item);
+    if (normalized) items[key] = normalized;
+  }
+
+  return normalizeCartTotals({
+    items,
+    totalItems: 0,
+    totalAmount: 0,
+    discount: normalizeStoredDiscount(value.discount),
+  });
+}
+
+export function hydrateCartFromStorage(): CartStore {
+  if (typeof window === "undefined") return cartStore.get();
+  if (hasHydratedFromStorage) return cartStore.get();
+
+  hasHydratedFromStorage = true;
+  try {
+    const storedCart = localStorage.getItem("cart");
+    if (storedCart) {
+      cartStore.set(normalizeStoredCart(JSON.parse(storedCart)));
+    }
+  } catch (error) {
+    console.warn("Could not hydrate cart state.", error);
+    cartStore.set({ ...EMPTY_CART_STATE });
+  } finally {
+    canPersistToStorage = true;
+  }
+
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent("cart-updated"));
+  }
+
+  return cartStore.get();
+}
+
+function ensureCartHydrated(): void {
+  if (typeof window !== "undefined") {
+    hydrateCartFromStorage();
+  }
+}
+
+function emitCartUpdated(): void {
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent("cart-updated"));
+  }
 }
 
 // Generate unique cart item key
@@ -82,6 +207,7 @@ function generateCartItemKey(
 export function addToCart(
   item: Omit<CartItem, "quantity"> & { quantity?: number },
 ) {
+  ensureCartHydrated();
   // Reset discount when cart contents change
   if (cartStore.get().discount) {
     cartStore.setKey("discount", null);
@@ -112,14 +238,12 @@ export function addToCart(
 
   updateCartTotals();
 
-  // Dispatch event for cross-component communication
-  if (typeof document !== "undefined") {
-    document.dispatchEvent(new CustomEvent("cart-updated"));
-  }
+  emitCartUpdated();
 }
 
 // Remove item from cart
 export function removeFromCart(itemId: string, variantId?: string) {
+  ensureCartHydrated();
   // Reset discount when cart contents change
   if (cartStore.get().discount) {
     cartStore.setKey("discount", null);
@@ -149,6 +273,7 @@ export function removeFromCart(itemId: string, variantId?: string) {
 
   cartStore.setKey("items", newItems);
   updateCartTotals();
+  emitCartUpdated();
 }
 
 // Update item quantity
@@ -157,6 +282,7 @@ export function updateQuantity(
   variantId: string | undefined,
   quantity: number,
 ) {
+  ensureCartHydrated();
   const currentItems = cartStore.get().items;
 
   // Try to find the item using different key patterns
@@ -199,40 +325,40 @@ export function updateQuantity(
   });
 
   updateCartTotals();
+  emitCartUpdated();
 }
 
 // Apply discount to cart
 export function applyDiscount(discount: Discount) {
+  ensureCartHydrated();
   cartStore.setKey("discount", discount);
   updateCartTotals();
 
-  // Dispatch event for cross-component communication
   if (typeof document !== "undefined") {
     document.dispatchEvent(new CustomEvent("discount-applied"));
-    document.dispatchEvent(new CustomEvent("cart-updated"));
   }
+  emitCartUpdated();
 }
 
 // Remove discount from cart
 export function removeDiscount() {
+  ensureCartHydrated();
   cartStore.setKey("discount", null);
   updateCartTotals();
 
-  // Dispatch event for cross-component communication
   if (typeof document !== "undefined") {
     document.dispatchEvent(new CustomEvent("discount-removed"));
-    document.dispatchEvent(new CustomEvent("cart-updated"));
   }
+  emitCartUpdated();
 }
 
 // Clear cart
 export function clearCart() {
+  ensureCartHydrated();
   cartStore.set({
-    items: {},
-    totalItems: 0,
-    totalAmount: 0,
-    discount: null,
+    ...EMPTY_CART_STATE,
   });
+  emitCartUpdated();
 }
 
 // Update cart totals

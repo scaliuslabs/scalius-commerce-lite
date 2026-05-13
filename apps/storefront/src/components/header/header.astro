@@ -55,7 +55,7 @@ const headerData: HeaderData = {
 </header>
 
 <script>
-  import { cartStore } from "@/store/cart";
+  import { cartStore, hydrateCartFromStorage } from "@/store/cart";
   import { debounce } from "@/lib/utils";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
@@ -64,6 +64,8 @@ const headerData: HeaderData = {
   }, 50);
 
   function initializeHeader() {
+    hydrateCartFromStorage();
+
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();
       const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
