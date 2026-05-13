@@ -137,7 +137,7 @@ const richContentClasses =
     widgets={pageWidgets}
     scope="page"
     scopeId={page.id}
-    slot="top"
+    placementSlot="top"
     priority
   />
   {
@@ -158,14 +158,14 @@ const richContentClasses =
           widgets={pageWidgets}
           scope="page"
           scopeId={page.id}
-          slot="before_content"
+          placementSlot="before_content"
         />
         <div class="w-full overflow-hidden" set:html={processedContent} />
         <WidgetPlacementZone
           widgets={pageWidgets}
           scope="page"
           scopeId={page.id}
-          slot="after_content"
+          placementSlot="after_content"
         />
       </>
     ) : (
@@ -194,7 +194,7 @@ const richContentClasses =
           widgets={pageWidgets}
           scope="page"
           scopeId={page.id}
-          slot="before_content"
+          placementSlot="before_content"
           itemClass="mb-8"
         />
 
@@ -206,7 +206,7 @@ const richContentClasses =
           widgets={pageWidgets}
           scope="page"
           scopeId={page.id}
-          slot="after_content"
+          placementSlot="after_content"
           itemClass="mt-8"
         />
 
@@ -238,7 +238,7 @@ const richContentClasses =
     widgets={pageWidgets}
     scope="page"
     scopeId={page.id}
-    slot="bottom"
+    placementSlot="bottom"
   />
   {
     hasProductShortcode && (
