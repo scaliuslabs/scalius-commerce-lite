@@ -109,7 +109,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
   const [improvementPrompt, setImprovementPrompt] = useState('');
   const [targetSection, setTargetSection] = useState<'all' | number>('all');
   const [showHistory, setShowHistory] = useState(false);
-  const [previewFrameHeight, setPreviewFrameHeight] = useState(360);
+  const [previewFrameHeight, setPreviewFrameHeight] = useState(220);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -126,7 +126,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
   }, [isOpen, mode, content, rawOutput]);
 
   useEffect(() => {
-    setPreviewFrameHeight(360);
+    setPreviewFrameHeight(220);
   }, [content?.html, content?.css, previewWidth]);
 
   if (!isOpen) return null;
@@ -135,20 +135,22 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
     const iframe = event.currentTarget;
     const measure = () => {
       try {
-        const documentElement = iframe.contentDocument?.documentElement;
-        const body = iframe.contentDocument?.body;
+        const iframeDocument = iframe.contentDocument;
+        const contentRoot = iframeDocument?.querySelector<HTMLElement>(
+          '[data-scalius-widget-root="true"], .widget-container, body > *',
+        );
+        const rootRect = contentRoot?.getBoundingClientRect();
         const measuredHeight = Math.max(
-          documentElement?.scrollHeight ?? 0,
-          documentElement?.offsetHeight ?? 0,
-          body?.scrollHeight ?? 0,
-          body?.offsetHeight ?? 0,
+          rootRect?.height ?? 0,
+          contentRoot?.scrollHeight ?? 0,
+          contentRoot?.offsetHeight ?? 0,
         );
 
         if (measuredHeight > 0) {
-          setPreviewFrameHeight(Math.min(4800, Math.max(160, Math.ceil(measuredHeight))));
+          setPreviewFrameHeight(Math.min(4800, Math.max(96, Math.ceil(measuredHeight))));
         }
       } catch {
-        setPreviewFrameHeight(360);
+        setPreviewFrameHeight(220);
       }
     };
 
