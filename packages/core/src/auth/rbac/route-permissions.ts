@@ -1013,6 +1013,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.WIDGETS_EDIT },
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
+  "/api/v1/admin/widget-generation-runs": {
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
+  "/api/v1/admin/widget-generation-runs/*": {
+    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
 
 };
 

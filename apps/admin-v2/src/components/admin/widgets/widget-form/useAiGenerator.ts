@@ -12,7 +12,8 @@ import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
-import { getAiPrompts, getAiContextBatchDetails, generateWidgetFromIntent } from '@/lib/api.functions';
+import { getAiPrompts, getAiContextBatchDetails } from '@/lib/api.functions';
+import { runWidgetGeneration, type WidgetGenerationRunEvent } from './widget-generation-run-stream';
 
 type StructuredPromptParams = Parameters<typeof generateCompletePrompt>[0];
 type AiProductData = StructuredPromptParams['selectedProducts'][number];
@@ -20,6 +21,12 @@ type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
 type GenerationRun = { id: number; signal: AbortSignal };
 const SERVER_GENERATION_TIMEOUT_MS = 95_000;
+const GENERATION_STEP_LABELS: Record<string, string> = {
+  load_settings: 'Checking AI provider settings...',
+  hydrate_context: 'Loading selected products and collections...',
+  build_prompt: 'Building the storefront brief...',
+  generate: 'Generating the widget artifact...',
+};
 
 interface ModelInfo {
   id: string;
@@ -80,6 +87,12 @@ function withGenerationTimeout<T>(promise: Promise<T>, signal: AbortSignal): Pro
       },
     );
   });
+}
+
+function toastForGenerationEvent(event: WidgetGenerationRunEvent): void {
+  if (event.type !== 'step.started') return;
+  const label = GENERATION_STEP_LABELS[event.step];
+  if (label) toast.info(label);
 }
 
 async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
@@ -318,29 +331,32 @@ export const useAiGenerator = (
       if (useStaged) {
         toast.info('Generating a cohesive composition from server-owned context...');
       }
-      const result = await withGenerationTimeout(generateWidgetFromIntent({
-        data: {
-          provider: activeProvider,
-          model: selectedModel,
-          promptType: effectivePromptType,
-          userPrompt: getPlacementAwarePrompt(),
-          selectedImages,
-          productIds: getMergedProductIds(),
-          categoryIds: getMergedCategoryIds(),
-          collectionIds: getMergedCollectionIds(),
-          anchorCollectionIds: getMergedAnchorCollectionIds(),
-          allCategoriesSelected: aiContext.allCategoriesSelected,
-          supportsVision: isVisionModel,
-          maxImages: currentModel?.maxImages,
+      const result = await withGenerationTimeout(runWidgetGeneration({
+        provider: activeProvider,
+        model: selectedModel,
+        promptType: effectivePromptType,
+        operation: 'create',
+        userPrompt: getPlacementAwarePrompt(),
+        selectedImages,
+        productIds: getMergedProductIds(),
+        categoryIds: getMergedCategoryIds(),
+        collectionIds: getMergedCollectionIds(),
+        anchorCollectionIds: getMergedAnchorCollectionIds(),
+        allCategoriesSelected: aiContext.allCategoriesSelected,
+        supportsVision: isVisionModel,
+        maxImages: currentModel?.maxImages,
+      }, {
+        signal: run.signal,
+        onEvent: (event) => {
+          toastForGenerationEvent(event);
+          if (event.type === 'warning') {
+            notifyAiContextWarnings({ warnings: event.warnings as AiContextBatchDetails['warnings'] } as AiContextBatchDetails);
+          }
         },
-      }) as Promise<{
-        content: string;
-        warnings?: AiContextBatchDetails['warnings'];
-      }>, run.signal);
+      }), run.signal);
       if (!isActiveGenerationRun(run)) return;
-      notifyAiContextWarnings({ warnings: result.warnings } as AiContextBatchDetails);
-      setRawOutput(result.content);
-      setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(result.content)));
+      setRawOutput(result.raw);
+      setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(result.raw)));
     } catch (error: unknown) {
       if (isAbortError(error) || run.signal.aborted) {
         return;

@@ -72,6 +72,7 @@ import {
 import { adminAiContextRoutes } from "./routes/admin/ai-context";
 import { adminAiPromptsRoutes } from "./routes/admin/ai-prompts";
 import { adminAiRoutes } from "./routes/admin/ai";
+import { adminWidgetGenerationRunRoutes } from "./routes/admin/widget-generation-runs";
 import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
@@ -299,6 +300,7 @@ app.route("/admin/auth", adminAuthManagementRoutes);
 app.route("/admin/ai-context", adminAiContextRoutes);
 app.route("/admin/ai-prompts", adminAiPromptsRoutes);
 app.route("/admin/ai", adminAiRoutes);
+app.route("/admin/widget-generation-runs", adminWidgetGenerationRunRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
