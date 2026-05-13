@@ -20,7 +20,7 @@ type AiProductData = StructuredPromptParams['selectedProducts'][number];
 type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
 type GenerationRun = { id: number; controller: AbortController; signal: AbortSignal };
-const SERVER_GENERATION_TIMEOUT_MS = 95_000;
+const SERVER_GENERATION_TIMEOUT_MS = 150_000;
 const GENERATION_STEP_LABELS: Record<string, string> = {
   load_settings: 'Checking AI provider settings...',
   hydrate_context: 'Loading selected products and collections...',
