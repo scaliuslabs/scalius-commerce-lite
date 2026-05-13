@@ -20,6 +20,7 @@ import {
   MODEL_CAPABILITIES,
 } from './ai-config';
 import { sanitizeHtml } from '@scalius/shared/html-sanitize';
+import type { AiPromptType } from './default-prompts';
 
 // ============================================================================
 // TYPES
@@ -136,6 +137,29 @@ export interface StructuredPromptResult {
     estimatedTokens: number;
   };
 }
+
+const GOAL_CONTRACTS: Record<AiPromptType, string> = {
+  widget: `HOMEPAGE WIDGET CONTRACT:
+- Generate a compact homepage module or short connected section set, not a full campaign page.
+- Usual structure: opening store/category signal, featured products or categories, lightweight trust/urgency, and one broad CTA.
+- The visual rhythm should be reusable inside an existing homepage: compact to medium density, strong scanning, restrained vertical space.
+- Avoid FAQ-heavy layouts, long objection handling, deep campaign storytelling, and dense comparison tables unless the merchant explicitly asks.
+- Default to 1-3 connected visual bands that feel like one insertable homepage composition.`,
+
+  "landing-page": `LANDING SECTION CONTRACT:
+- Generate a campaign-style landing section set inside the existing storefront shell.
+- Usual structure: specific offer/promise hero, product or collection showcase, value proof, objection handling, trust/urgency, and final CTA.
+- The visual rhythm should feel more campaign-led than a homepage widget: clearer narrative, stronger proof, repeated but restrained conversion actions.
+- Avoid broad store discovery, generic category browsing, and plain product-grid-only output unless the merchant explicitly asks.
+- Default to a connected conversion flow that sells one offer, audience promise, product line, or collection.`,
+
+  collection: `COLLECTION SECTION CONTRACT:
+- Generate practical collection merchandising, not a homepage banner or generic landing campaign.
+- Product information is the center: product names, prices, discounts, availability or variant cues, product links, and buy-now links when supplied.
+- Usual structure: compact collection intro, product grid/comparison or buying guide, and a tight trust/action strip.
+- The visual rhythm should be scan-first and commerce-dense with restrained hero treatment.
+- Avoid unrelated storytelling, oversized hero-only designs, and invented reviews, claims, products, prices, or shipping promises.`,
+};
 
 // ============================================================================
 // CACHING HELPERS
@@ -525,6 +549,7 @@ export async function generateStructuredPrompt({
   modelId,
   supportsVision,
   maxImagesOverride,
+  promptType = "widget",
   sectionIndex,
   totalSections,
 }: {
@@ -541,6 +566,7 @@ export async function generateStructuredPrompt({
   modelId: string;
   supportsVision: boolean;
   maxImagesOverride?: number;
+  promptType?: AiPromptType;
   sectionIndex?: number;
   totalSections?: number;
 }): Promise<StructuredPromptResult> {
@@ -622,6 +648,7 @@ export async function generateStructuredPrompt({
 
   // Build static context (cacheable)
   let staticContext = systemPrompt;
+  staticContext += `\n\n${GOAL_CONTRACTS[promptType]}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.composition}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.json}`;
   staticContext += `\n${PROMPT_INSTRUCTIONS.buyNow}`;
@@ -739,6 +766,7 @@ export async function generateCompletePrompt({
   selectedCategories,
   selectedCollections = [],
   allCategoriesSelected,
+  promptType = "widget",
 }: {
   systemPrompt: string;
   userPrompt?: string;
@@ -750,6 +778,7 @@ export async function generateCompletePrompt({
   selectedCategories: CategoryContextData[];
   selectedCollections?: CollectionContextData[];
   allCategoriesSelected: boolean;
+  promptType?: AiPromptType;
 }): Promise<string> {
   const result = await generateStructuredPrompt({
     systemPrompt,
@@ -762,6 +791,7 @@ export async function generateCompletePrompt({
     selectedCategories,
     selectedCollections,
     allCategoriesSelected,
+    promptType,
     modelId: "default",
     supportsVision: false,
     sectionIndex: undefined,

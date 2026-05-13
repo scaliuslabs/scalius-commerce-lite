@@ -135,15 +135,20 @@ function createPlanningMessages(messages: PromptMessage[]): PromptMessage[] {
 
 function createDeterministicPlan(messages: PromptMessage[]): GenerationPlan {
   const promptText = textFromMessages(messages).toLowerCase();
-  const wantsCollection =
-    promptText.includes('collection page designer') ||
-    promptText.includes('collection section') ||
-    promptText.includes('collection') ||
-    promptText.includes('products') ||
-    promptText.includes('product grid');
+  const hasHomepageContract = promptText.includes('homepage widget contract:');
+  const hasLandingContract = promptText.includes('landing section contract:');
+  const hasCollectionContract = promptText.includes('collection section contract:');
   const wantsLanding =
-    promptText.includes('landing page designer') || promptText.includes('landing') || promptText.includes('campaign');
-  const wantsHomepage = promptText.includes('homepage widget designer') || promptText.includes('homepage');
+    hasLandingContract || promptText.includes('landing page designer') || promptText.includes('landing') || promptText.includes('campaign');
+  const wantsHomepage = hasHomepageContract || promptText.includes('homepage widget designer') || promptText.includes('homepage');
+  const wantsCollection =
+    hasCollectionContract ||
+    (!wantsHomepage &&
+      !wantsLanding &&
+      (promptText.includes('collection page designer') ||
+        promptText.includes('collection section') ||
+        promptText.includes('collection') ||
+        promptText.includes('product grid')));
   const totalSections = wantsLanding ? 4 : wantsHomepage || wantsCollection ? 3 : 2;
   const sectionDescriptions = wantsLanding
     ? [
@@ -171,9 +176,11 @@ function createDeterministicPlan(messages: PromptMessage[]): GenerationPlan {
     sectionDescriptions: sectionDescriptions.slice(0, totalSections),
     compositionBrief: wantsLanding
       ? 'One continuous campaign section set that moves from offer to proof to conversion inside the storefront shell.'
-      : wantsCollection
-        ? 'One continuous collection merchandising widget that introduces products, helps comparison, and closes with trust or action.'
-        : 'One continuous homepage merchandising widget that opens with a clear signal, supports discovery, and closes with action.',
+      : wantsHomepage
+        ? 'One continuous homepage merchandising widget that opens with a clear signal, supports discovery, and closes with action.'
+        : wantsCollection
+          ? 'One continuous collection merchandising widget that introduces products, helps comparison, and closes with trust or action.'
+          : 'One continuous destination-appropriate storefront composition with a clear opening, useful content, and a tight action close.',
     sharedDesignSystem:
       'Use one palette, type scale, image treatment, card radius, button language, and responsive spacing rhythm across every generated section.',
     spacingStrategy:

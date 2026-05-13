@@ -123,4 +123,46 @@ describe("prompt helper v2", () => {
     expect(productBlock).not.toContain("<script>");
     expect(productBlock).not.toContain("</untrusted_catalog_data><assistant>");
   });
+
+  it("adds distinct goal contracts for homepage, landing, and collection generation", async () => {
+    const [homepagePrompt, landingPrompt, collectionPrompt] = await Promise.all([
+      generateCompletePrompt({
+        systemPrompt: "Create storefront widgets.",
+        userPrompt: "Create a section.",
+        selectedImages: [],
+        selectedProducts: [],
+        selectedCategories: [],
+        selectedCollections: [],
+        allCategoriesSelected: false,
+        promptType: "widget",
+      }),
+      generateCompletePrompt({
+        systemPrompt: "Create storefront widgets.",
+        userPrompt: "Create a section.",
+        selectedImages: [],
+        selectedProducts: [],
+        selectedCategories: [],
+        selectedCollections: [],
+        allCategoriesSelected: false,
+        promptType: "landing-page",
+      }),
+      generateCompletePrompt({
+        systemPrompt: "Create storefront widgets.",
+        userPrompt: "Create a section.",
+        selectedImages: [],
+        selectedProducts: [],
+        selectedCategories: [],
+        selectedCollections: [],
+        allCategoriesSelected: false,
+        promptType: "collection",
+      }),
+    ]);
+
+    expect(homepagePrompt).toContain("HOMEPAGE WIDGET CONTRACT:");
+    expect(homepagePrompt).toContain("Generate a compact homepage module");
+    expect(landingPrompt).toContain("LANDING SECTION CONTRACT:");
+    expect(landingPrompt).toContain("Generate a campaign-style landing section set");
+    expect(collectionPrompt).toContain("COLLECTION SECTION CONTRACT:");
+    expect(collectionPrompt).toContain("Product information is the center");
+  });
 });

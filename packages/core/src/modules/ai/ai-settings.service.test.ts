@@ -58,7 +58,7 @@ describe("widget AI settings", () => {
     expect(config.generation.planningTemperature).toBe(0);
     expect(config.generation.generationTemperature).toBe(2);
     expect(config.generation.maxOutputTokens).toBe(64000);
-    expect(config.generation.stagedGenerationDefault).toBe(true);
+    expect(config.generation.stagedGenerationDefault).toBe(false);
   });
 
   it("rejects arbitrary provider base URLs", () => {

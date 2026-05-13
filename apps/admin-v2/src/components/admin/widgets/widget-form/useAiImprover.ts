@@ -201,6 +201,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           modelId: aiGenerator.selectedModel,
           supportsVision: isVisionModel,
           maxImagesOverride: currentModel?.maxImages,
+          promptType: aiGenerator.effectivePromptType,
           sectionIndex: targetSection,
           totalSections: sections.length,
         });

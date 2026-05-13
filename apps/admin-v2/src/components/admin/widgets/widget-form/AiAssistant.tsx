@@ -240,7 +240,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                       Staged generation
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Generate complex widgets in sections with progressive rendering
+                      Slower multi-call mode for very large compositions. Leave off for fast generation.
                     </p>
                   </div>
                 </div>

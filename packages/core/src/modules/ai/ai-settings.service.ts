@@ -138,7 +138,7 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
     generationTemperature: GENERATION_CONFIG.temperature.generation,
     improvementTemperature: GENERATION_CONFIG.temperature.improvement,
     maxOutputTokens: 12000,
-    stagedGenerationDefault: true,
+    stagedGenerationDefault: false,
   },
 };
 

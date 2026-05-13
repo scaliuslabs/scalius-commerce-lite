@@ -379,7 +379,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     aiGenerator.setSelectedModel('');
     aiGenerator.setGeneratedContent(null);
     aiGenerator.setIsPreviewOpen(false);
-    aiGenerator.setUseStagedMode(true);
+    aiGenerator.setUseStagedMode(false);
     aiImprover.reset();
     setEditorMode('generation-preview');
     setIsEditorOpen(false);
