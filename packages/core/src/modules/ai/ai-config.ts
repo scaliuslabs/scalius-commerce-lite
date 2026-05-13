@@ -107,10 +107,10 @@ export const GENERATION_CONFIG = {
 
   // Staged generation thresholds
   stagedGeneration: {
-    autoEnableThreshold: 500,  // Auto-enable staged mode if prompt > 500 chars
+    autoEnableThreshold: 500,  // Reserved threshold; staged mode stays explicit until server orchestration replaces client fan-out
     maxSections: 10,            // Maximum sections per widget
     minSections: 1,             // Minimum sections
-    sectionDelayMs: 500,        // Delay between section generation
+    sectionDelayMs: 0,          // No artificial delay; provider/rate-limit handling owns pacing
   },
 
   // Timeouts

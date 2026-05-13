@@ -72,6 +72,8 @@ export interface WidgetNormalizationOptions {
   commerceFactsProvided?: boolean;
 }
 
+export type WidgetPromptType = 'widget' | 'landing-page' | 'collection';
+
 export const widgetOutputObjectSpec = {
   name: 'WidgetGeneration',
   description:
@@ -198,20 +200,41 @@ export function normalizeWidgetOutput(output: WidgetOutput, options?: WidgetNorm
   return normalizeWidgetGenerationText(widgetOutputToTaggedText(output), options);
 }
 
-export function createNoContextFallbackWidget(): string {
+const NO_CONTEXT_FALLBACKS: Record<WidgetPromptType, { label: string; title: string; body: string; actions: string[] }> = {
+  widget: {
+    label: 'Store discovery',
+    title: 'Explore the range',
+    body: 'Find a fresh pick for your everyday routine, then continue browsing the store.',
+    actions: ['Browse options', 'Compare picks', 'Choose your fit'],
+  },
+  'landing-page': {
+    label: 'Campaign section',
+    title: 'Start with the right pick',
+    body: 'Introduce a focused offer area with clean benefits, clear movement, and room for real products once selected.',
+    actions: ['See the flow', 'Browse choices', 'Take the next step'],
+  },
+  collection: {
+    label: 'Collection guide',
+    title: 'Compare the lineup',
+    body: 'Help shoppers scan choices, compare needs, and continue into the collection without invented product claims.',
+    actions: ['Browse styles', 'Compare needs', 'Narrow choices'],
+  },
+};
+
+export function createNoContextFallbackWidget(promptType: WidgetPromptType = 'widget'): string {
+  const fallback = NO_CONTEXT_FALLBACKS[promptType] ?? NO_CONTEXT_FALLBACKS.widget;
+
   return normalizeWidgetGenerationText(
     `<htmljs>
       <section class="sc-ai-safe-widget" aria-label="Store discovery">
         <div class="sc-ai-safe-widget__inner">
           <div class="sc-ai-safe-widget__copy">
-            <p class="sc-ai-safe-widget__eyebrow">Store discovery</p>
-            <h2>Explore the range</h2>
-            <p>Find a fresh pick for your everyday routine, then continue browsing the store.</p>
+            <p class="sc-ai-safe-widget__eyebrow">${fallback.label}</p>
+            <h2>${fallback.title}</h2>
+            <p>${fallback.body}</p>
           </div>
           <div class="sc-ai-safe-widget__actions" aria-label="Suggested browsing paths">
-            <span>Browse options</span>
-            <span>Compare picks</span>
-            <span>Choose your fit</span>
+            ${fallback.actions.map((action) => `<span>${action}</span>`).join('\n            ')}
           </div>
         </div>
       </section>

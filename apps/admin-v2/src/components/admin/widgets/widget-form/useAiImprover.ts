@@ -218,6 +218,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
             model: aiGenerator.selectedModel,
             stream: true,
             operation: 'improve',
+            promptType: aiGenerator.effectivePromptType,
           }),
         });
         if (!isActiveImprovementRun(run)) return false;

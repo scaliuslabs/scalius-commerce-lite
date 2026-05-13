@@ -8,6 +8,7 @@ import { GENERATION_CONFIG } from '@scalius/core/modules/ai/ai-config';
 import { extractChatCompletionContent, readApiErrorMessage } from './ai-stream';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
+type AiPromptType = 'widget' | 'landing-page' | 'collection';
 
 interface GenerationPlan {
   totalSections: number;
@@ -61,6 +62,15 @@ const COMPOSITION_BOUNDARY_GUARD_CSS = `
 
 type WidgetData = { html: string; css: string };
 
+const DESTINATION_STAGE_CONTRACTS: Record<AiPromptType, string> = {
+  widget:
+    'Homepage Widget: compact insertable homepage merchandising, usually 1-3 connected bands focused on discovery, featured picks/categories, and a light action close.',
+  'landing-page':
+    'Landing Section: connected campaign flow inside the storefront shell, moving from promise/offer to proof, product support, and final CTA.',
+  collection:
+    'Collection Section: commerce-dense merchandising, product comparison, buying-guide cues, and direct selection support rather than broad campaign storytelling.',
+};
+
 function createAbortError(): Error {
   const error = new Error('Generation cancelled');
   error.name = 'AbortError';
@@ -99,12 +109,14 @@ function removeWidgetOutputInstructions(text: string): string {
   return `${text.slice(0, outputStart)}${text.slice(nextInstructionStart)}`.trim();
 }
 
-function createPlanningMessages(messages: PromptMessage[]): PromptMessage[] {
+function createPlanningMessages(messages: PromptMessage[], promptType: AiPromptType): PromptMessage[] {
   const planningContext = removeWidgetOutputInstructions(textFromMessages(messages));
   return [
     {
       role: 'user',
       content: `${planningContext}
+
+	Selected destination: ${DESTINATION_STAGE_CONTRACTS[promptType]}
 
 	Before generating the widget, create a concise implementation plan. Respond with ONLY a JSON object in this shape:
 	{
@@ -133,37 +145,38 @@ function createPlanningMessages(messages: PromptMessage[]): PromptMessage[] {
   ];
 }
 
-function createDeterministicPlan(messages: PromptMessage[]): GenerationPlan {
+function inferPromptTypeFromMessages(messages: PromptMessage[]): AiPromptType {
   const promptText = textFromMessages(messages).toLowerCase();
   const hasHomepageContract = promptText.includes('homepage widget contract:');
   const hasLandingContract = promptText.includes('landing section contract:');
   const hasCollectionContract = promptText.includes('collection section contract:');
-  const wantsLanding =
-    hasLandingContract || promptText.includes('landing page designer') || promptText.includes('landing') || promptText.includes('campaign');
-  const wantsHomepage = hasHomepageContract || promptText.includes('homepage widget designer') || promptText.includes('homepage');
-  const wantsCollection =
-    hasCollectionContract ||
-    (!wantsHomepage &&
-      !wantsLanding &&
-      (promptText.includes('collection page designer') ||
-        promptText.includes('collection section') ||
-        promptText.includes('collection') ||
-        promptText.includes('product grid')));
-  const totalSections = wantsLanding ? 4 : wantsHomepage || wantsCollection ? 3 : 2;
-  const sectionDescriptions = wantsLanding
+
+  if (hasHomepageContract) return 'widget';
+  if (hasCollectionContract) return 'collection';
+  if (hasLandingContract) return 'landing-page';
+  if (promptText.includes('homepage widget designer')) return 'widget';
+  if (promptText.includes('collection page designer') || promptText.includes('collection section')) return 'collection';
+  if (promptText.includes('landing page designer')) return 'landing-page';
+  return 'widget';
+}
+
+function createDeterministicPlan(messages: PromptMessage[], promptType?: AiPromptType): GenerationPlan {
+  const destination = promptType ?? inferPromptTypeFromMessages(messages);
+  const totalSections = destination === 'landing-page' ? 4 : destination === 'widget' || destination === 'collection' ? 3 : 2;
+  const sectionDescriptions = destination === 'landing-page'
     ? [
         'Campaign hero/offer that establishes the shared visual system',
         'Product or collection showcase that continues the hero rhythm',
         'Proof, benefits, or objection handling using the same design language',
         'Final conversion CTA with tight spacing from the prior section',
       ]
-    : wantsHomepage
+    : destination === 'widget'
       ? [
           'Homepage offer/category signal that establishes the visual system',
           'Featured product or collection discovery band',
           'Trust, urgency, or CTA band that closes the homepage widget',
         ]
-      : wantsCollection
+      : destination === 'collection'
         ? [
             'Collection intro with the core merchandising promise',
             'Product or category comparison using the provided storefront context',
@@ -174,11 +187,11 @@ function createDeterministicPlan(messages: PromptMessage[]): GenerationPlan {
   return {
     totalSections,
     sectionDescriptions: sectionDescriptions.slice(0, totalSections),
-    compositionBrief: wantsLanding
+    compositionBrief: destination === 'landing-page'
       ? 'One continuous campaign section set that moves from offer to proof to conversion inside the storefront shell.'
-      : wantsHomepage
+      : destination === 'widget'
         ? 'One continuous homepage merchandising widget that opens with a clear signal, supports discovery, and closes with action.'
-        : wantsCollection
+        : destination === 'collection'
           ? 'One continuous collection merchandising widget that introduces products, helps comparison, and closes with trust or action.'
           : 'One continuous destination-appropriate storefront composition with a clear opening, useful content, and a tight action close.',
     sharedDesignSystem:
@@ -432,6 +445,7 @@ export function useStagedGeneration() {
       provider: string,
       model: string,
       messages: PromptMessage[],
+      promptType: AiPromptType,
       signal?: AbortSignal,
     ): Promise<GenerationPlan | null> => {
       try {
@@ -443,7 +457,8 @@ export function useStagedGeneration() {
           body: JSON.stringify({
             provider,
             model,
-            messages: createPlanningMessages(messages),
+            promptType,
+            messages: createPlanningMessages(messages, promptType),
             stage: 'plan',
             useCache: true,
           }),
@@ -501,6 +516,7 @@ export function useStagedGeneration() {
       provider: string,
       model: string,
       messages: PromptMessage[],
+      promptType: AiPromptType,
       sectionIndex: number,
       plan: GenerationPlan,
       previousSections: SectionContent[],
@@ -518,6 +534,8 @@ export function useStagedGeneration() {
       const sectionPrompt = {
         role: 'user',
         content: `Generate section ${sectionIndex + 1} of ${plan.totalSections} as a progressive slice of ONE widget, not a separate widget.
+
+Destination: ${DESTINATION_STAGE_CONTRACTS[promptType]}
 
 Composition contract:
 ${planOutline}
@@ -548,6 +566,7 @@ Respond with the section code in tag format.`,
           body: JSON.stringify({
             provider,
             model,
+            promptType,
             messages: [...messages, sectionPrompt],
             stage: 'generate',
             sectionIndex,
@@ -583,6 +602,7 @@ Respond with the section code in tag format.`,
             provider,
             model,
             messages,
+            promptType,
             sectionIndex,
             plan,
             previousSections,
@@ -612,6 +632,7 @@ Respond with the section code in tag format.`,
       model: string,
       plan: GenerationPlan,
       generatedSections: SectionContent[],
+      promptType: AiPromptType,
       fallback: WidgetData,
       signal?: AbortSignal,
     ): Promise<WidgetData | null> => {
@@ -633,6 +654,8 @@ Respond with the section code in tag format.`,
         content: `You are the final composition editor for a production ecommerce widget.
 
 Your job is to transform the drafted staged sections below into ONE continuous, polished widget.
+
+Destination: ${DESTINATION_STAGE_CONTRACTS[promptType]}
 
 Composition contract:
 ${describePlan(plan)}
@@ -657,6 +680,7 @@ Finalization rules:
         body: JSON.stringify({
           provider,
           model,
+          promptType,
           messages: [finalizerPrompt],
           stage: 'finalize',
           totalSections: generatedSections.length,
@@ -681,6 +705,7 @@ Finalization rules:
       provider: string,
       model: string,
       messages: PromptMessage[],
+      promptType: AiPromptType,
       onSectionComplete?: (section: SectionContent, index: number, total: number, preview: WidgetData) => void,
       signal?: AbortSignal,
     ): Promise<{ html: string; css: string } | null> => {
@@ -699,7 +724,7 @@ Finalization rules:
       try {
         // Phase 1: Create plan
         toast.info('Planning widget structure...');
-        const plan = (await createPlan(provider, model, messages, signal)) ?? createDeterministicPlan(messages);
+        const plan = (await createPlan(provider, model, messages, promptType, signal)) ?? createDeterministicPlan(messages, promptType);
 
         setState((prev) => ({ ...prev, plan, currentStage: 'generating' }));
 
@@ -716,6 +741,7 @@ Finalization rules:
             provider,
             model,
             messages,
+            promptType,
             i,
             plan,
             generatedSections, // Accumulating context from previous sections
@@ -741,7 +767,8 @@ Finalization rules:
 
           // Small delay between sections to avoid rate limits
           if (i < plan.totalSections - 1) {
-            await sleep(500, signal);
+            const delayMs = Math.max(0, GENERATION_CONFIG.stagedGeneration.sectionDelayMs);
+            if (delayMs > 0) await sleep(delayMs, signal);
           }
         }
 
@@ -758,6 +785,7 @@ Finalization rules:
             model,
             plan,
             generatedSections,
+            promptType,
             fallbackWidget,
             signal,
           );
