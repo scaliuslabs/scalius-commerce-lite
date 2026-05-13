@@ -161,6 +161,7 @@ describe("prompt helper v2", () => {
     expect(homepagePrompt).toContain("HOMEPAGE WIDGET CONTRACT:");
     expect(homepagePrompt).toContain("Generate a compact homepage module");
     expect(homepagePrompt).toContain("FAST GENERATION BUDGET:");
+    expect(homepagePrompt).toContain("Never invent product names, prices, discounts");
     expect(landingPrompt).toContain("LANDING SECTION CONTRACT:");
     expect(landingPrompt).toContain("Generate a campaign-style landing section set");
     expect(collectionPrompt).toContain("COLLECTION SECTION CONTRACT:");
