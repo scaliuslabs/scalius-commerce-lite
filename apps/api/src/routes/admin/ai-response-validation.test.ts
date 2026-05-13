@@ -54,6 +54,36 @@ describe('AI response validation', () => {
     );
   });
 
+  it('rejects unsupported commerce claims when no catalog facts were provided', () => {
+    expect(() =>
+      normalizeWidgetGenerationText(
+        `<htmljs>
+          <section>
+            <h2>Limited Release Energy</h2>
+            <p>Fast Delivery and Satisfaction Guaranteed.</p>
+          </section>
+        </htmljs>
+        <css>section{padding:24px}</css>`,
+        { commerceFactsProvided: false },
+      ),
+    ).toThrow(ValidationError);
+  });
+
+  it('allows generic non-factual no-context widgets', () => {
+    expect(
+      normalizeWidgetGenerationText(
+        `<htmljs>
+          <section>
+            <h2>Explore the range</h2>
+            <p>Find a fresh pick for your everyday routine.</p>
+          </section>
+        </htmljs>
+        <css>section{padding:24px}</css>`,
+        { commerceFactsProvided: false },
+      ),
+    ).toContain('Explore the range');
+  });
+
   it('canonicalizes valid staged plans', () => {
     const text = normalizeStagedPlanText(
       JSON.stringify({

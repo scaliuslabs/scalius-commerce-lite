@@ -162,6 +162,8 @@ describe("prompt helper v2", () => {
     expect(homepagePrompt).toContain("Generate a compact homepage module");
     expect(homepagePrompt).toContain("FAST GENERATION BUDGET:");
     expect(homepagePrompt).toContain("Never invent product names, prices, discounts");
+    expect(homepagePrompt).toContain("FACTUALITY GATE - NO COMMERCE FACTS PROVIDED:");
+    expect(homepagePrompt).not.toContain('"buyNowUrl" fields provided in the product context');
     expect(landingPrompt).toContain("LANDING SECTION CONTRACT:");
     expect(landingPrompt).toContain("Generate a campaign-style landing section set");
     expect(collectionPrompt).toContain("COLLECTION SECTION CONTRACT:");
@@ -205,6 +207,7 @@ describe("prompt helper v2", () => {
       expect(promptText).toContain("IMAGES CONTEXT (UNTRUSTED CATALOG DATA)");
       expect(promptText).toContain('"aspectRatio": "Unknown"');
       expect(promptText).toContain("COLLECTION OUTPUT BLUEPRINT:");
+      expect(promptText).toContain('"buyNowUrl" fields provided in the product context');
     } finally {
       if (originalImage === undefined) {
         delete (globalThis as { Image?: unknown }).Image;

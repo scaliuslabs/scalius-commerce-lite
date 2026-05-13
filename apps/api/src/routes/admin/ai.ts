@@ -50,6 +50,7 @@ const MAX_TEXT_CHARS = GENERATION_CONFIG.context.maxPromptChars;
 const MAX_IMAGES = GENERATION_CONFIG.context.maxImages;
 const MAX_MODEL_ID_CHARS = 200;
 const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+const NO_COMMERCE_FACTS_PROMPT_MARKER = 'FACTUALITY GATE - NO COMMERCE FACTS PROVIDED';
 
 const providerEnum = z.enum(AI_PROVIDER_IDS);
 
@@ -405,6 +406,34 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? '');
 }
 
+function contentIncludesNoCommerceFactsMarker(content: unknown): boolean {
+  if (typeof content === 'string') {
+    return content.includes(NO_COMMERCE_FACTS_PROMPT_MARKER);
+  }
+
+  if (!Array.isArray(content)) return false;
+
+  return content.some((part) => {
+    if (typeof part === 'string') {
+      return part.includes(NO_COMMERCE_FACTS_PROMPT_MARKER);
+    }
+
+    if (!part || typeof part !== 'object') return false;
+    const text = (part as { text?: unknown }).text;
+    return typeof text === 'string' && text.includes(NO_COMMERCE_FACTS_PROMPT_MARKER);
+  });
+}
+
+function shouldEnforceNoContextCommercePolicy(options: GenerateTextOptions): boolean {
+  const prompt = (options as { prompt?: unknown }).prompt;
+  if (contentIncludesNoCommerceFactsMarker(prompt)) return true;
+
+  const messages = (options as { messages?: Array<{ content?: unknown }> }).messages;
+  return Array.isArray(messages)
+    ? messages.some((message) => contentIncludesNoCommerceFactsMarker(message.content))
+    : false;
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('aborted'));
 }
@@ -457,6 +486,7 @@ function addWidgetFormatRetryInstruction(options: GenerateTextOptions): Generate
   const messages = Array.isArray((options as { messages?: ModelMessage[] }).messages)
     ? (options as { messages: ModelMessage[] }).messages
     : [];
+  const noContextCommercePolicy = shouldEnforceNoContextCommercePolicy(options);
   const retryOptions = {
     ...options,
     prompt: undefined,
@@ -464,11 +494,17 @@ function addWidgetFormatRetryInstruction(options: GenerateTextOptions): Generate
       ...messages,
       {
         role: 'user',
-        content:
-          'The previous streamed response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* valid CSS only */\n</css>',
+        content: [
+          'The previous response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* valid CSS only */\n</css>',
+          noContextCommercePolicy
+            ? 'No product, category, collection, policy, pricing, delivery, review, or media facts were provided. Use generic non-factual commerce copy only. Do not mention delivery, shipping, guarantees, reviews, ratings, discounts, limited/new/latest releases, absolute URLs, or buy-now links.'
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
       },
     ],
-    temperature: typeof options.temperature === 'number' ? Math.min(options.temperature, 0.3) : 0.3,
+    temperature: typeof options.temperature === 'number' ? Math.min(options.temperature, noContextCommercePolicy ? 0.2 : 0.3) : 0.3,
     maxRetries: 1,
   };
   return retryOptions as GenerateTextOptions;
@@ -498,6 +534,10 @@ async function generateWidgetContent(
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },
 ): Promise<WidgetGenerationResult> {
+  const normalizationOptions = {
+    commerceFactsProvided: !shouldEnforceNoContextCommercePolicy(options),
+  };
+
   if (capabilities.supportsStructuredOutput) {
     const result = await generateText({
       ...options,
@@ -517,7 +557,7 @@ async function generateWidgetContent(
         });
       }
       return {
-        text: normalizeWidgetOutput(output.data),
+        text: normalizeWidgetOutput(output.data, normalizationOptions),
         usage: usageFromResult(result),
       };
     }
@@ -526,7 +566,7 @@ async function generateWidgetContent(
   const result = await generateTextWithTransientRetry(options, 'Widget generation');
   try {
     return {
-      text: normalizeWidgetGenerationText(result.text),
+      text: normalizeWidgetGenerationText(result.text, normalizationOptions),
       usage: usageFromResult(result),
     };
   } catch (error) {
@@ -536,7 +576,7 @@ async function generateWidgetContent(
       'Widget format repair',
     );
     return {
-      text: normalizeWidgetGenerationText(retry.text),
+      text: normalizeWidgetGenerationText(retry.text, normalizationOptions),
       usage: usageFromResult(retry),
     };
   }
@@ -547,8 +587,12 @@ async function finalizeStreamedWidgetContent(
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },
 ): Promise<string> {
+  const normalizationOptions = {
+    commerceFactsProvided: !shouldEnforceNoContextCommercePolicy(options),
+  };
+
   try {
-    return normalizeWidgetGenerationText(rawText);
+    return normalizeWidgetGenerationText(rawText, normalizationOptions);
   } catch (error) {
     console.warn('Streamed widget response failed validation; retrying once:', error);
     const retryOptions = addWidgetFormatRetryInstruction(options);
