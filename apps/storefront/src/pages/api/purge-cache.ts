@@ -3,6 +3,7 @@ import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 import { smartCache } from "@/lib/smart-cache";
 import { clearL1ByPrefixes } from "@/lib/edge-cache";
+import { getPurgeTokenFromHeaders, PURGE_TOKEN_HEADER } from "@/lib/purge-auth";
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
 
@@ -112,9 +113,7 @@ async function warmCriticalCaches(baseUrl: string): Promise<void> {
   );
 }
 
-export const GET: APIRoute = async ({ url, locals }) => {
-  const providedToken = url.searchParams.get("token");
-
+export const GET: APIRoute = async ({ request, url, locals }) => {
   const hostname = url.hostname;
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
 
@@ -133,6 +132,18 @@ export const GET: APIRoute = async ({ url, locals }) => {
     );
   }
 
+  // Never accept purge credentials in URLs. Query strings are commonly logged
+  // by proxies, analytics, and browser history; callers must use a header.
+  if (url.searchParams.has("token")) {
+    return new Response(
+      JSON.stringify({
+        error: `Purge token must be sent with Authorization: Bearer or ${PURGE_TOKEN_HEADER}`,
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const providedToken = getPurgeTokenFromHeaders(request.headers);
   if (!providedToken || !(await timingSafeCompare(providedToken, secretToken))) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
@@ -202,10 +213,26 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     );
   }
 
-  // Token can be in URL params or request body
-  let providedToken = url.searchParams.get("token");
+  // Never accept purge credentials in URLs. Query strings are commonly logged
+  // by proxies, analytics, and browser history; callers must use a header.
+  if (url.searchParams.has("token")) {
+    return new Response(
+      JSON.stringify({
+        error: `Purge token must be sent with Authorization: Bearer or ${PURGE_TOKEN_HEADER}`,
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
-  let body: { groups?: string[]; prefixes?: string[]; bumpVersion?: boolean; token?: string } = {};
+  const providedToken = getPurgeTokenFromHeaders(request.headers);
+  if (!providedToken || !(await timingSafeCompare(providedToken, secretToken))) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  let body: { groups?: string[]; prefixes?: string[]; bumpVersion?: boolean } = {};
   try {
     body = await request.json();
   } catch {
@@ -213,18 +240,6 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       JSON.stringify({ error: "Invalid JSON body" }),
       { status: 400, headers: { "Content-Type": "application/json" } },
     );
-  }
-
-  if (!providedToken) {
-    // Also check body for token as fallback
-    providedToken = body.token ?? null;
-  }
-
-  if (!providedToken || !(await timingSafeCompare(providedToken, secretToken))) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
   }
 
   const { groups = [], prefixes = [], bumpVersion = false } = body;
