@@ -7,7 +7,7 @@ import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/widgets/$widgetId")({
   loader: async ({ context: { queryClient }, params }) => {
-    const isCreateMode = params.widgetId === "create";
+    const isCreateMode = params.widgetId === "create" || params.widgetId === "new";
     if (!isCreateMode) {
       await queryClient.ensureQueryData({ ...widgetQueryOptions(params.widgetId), staleTime: Infinity });
     }
