@@ -127,20 +127,23 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     const routePermission = getRoutePermission(pathname, method);
 
-    if (routePermission) {
-        let hasRequiredPermission = false;
+    if (!routePermission) {
+        console.warn("[AdminAuth] Missing RBAC route mapping:", method, pathname);
+        throw new ForbiddenError("This admin endpoint is not configured for RBAC");
+    }
 
-        if (routePermission.permission) {
-            hasRequiredPermission = userPerms.has(routePermission.permission);
-        } else if (routePermission.anyOf) {
-            hasRequiredPermission = routePermission.anyOf.some((p: string) => userPerms.has(p));
-        } else if (routePermission.allOf) {
-            hasRequiredPermission = routePermission.allOf.every((p: string) => userPerms.has(p));
-        }
+    let hasRequiredPermission = false;
 
-        if (!hasRequiredPermission) {
-            throw new ForbiddenError("You do not have permission to perform this action");
-        }
+    if (routePermission.permission) {
+        hasRequiredPermission = userPerms.has(routePermission.permission);
+    } else if (routePermission.anyOf) {
+        hasRequiredPermission = routePermission.anyOf.some((p: string) => userPerms.has(p));
+    } else if (routePermission.allOf) {
+        hasRequiredPermission = routePermission.allOf.every((p: string) => userPerms.has(p));
+    }
+
+    if (!hasRequiredPermission) {
+        throw new ForbiddenError("You do not have permission to perform this action");
     }
 
     // Passed all authentication and authorization checks
