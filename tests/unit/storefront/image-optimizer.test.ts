@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getOptimizedImageUrl } from "../../../packages/shared/src/image-optimizer";
+import {
+  getOptimizedImageUrl,
+  getResponsiveSrcSet,
+} from "../../../packages/shared/src/image-optimizer";
 import { resolveMediaUrl } from "../../../packages/shared/src/media-url";
 
 const cdnBase = "https://cloud.scalius.com";
@@ -203,5 +206,34 @@ describe("storefront image optimization URLs", () => {
     );
 
     expect(raw).toBe("https://cloud.scalius.com/products/image.webp");
+  });
+
+  it("does not route vector assets through Cloudflare Image Resizing", () => {
+    expect(
+      getOptimizedImageUrl(
+        "https://cloud.scalius.com/logos/brand.svg?version=1",
+        { width: 240, height: 80, fit: "contain" },
+        { cdnBase, cdnHosts: ["cloud.scalius.com"], isDev: false },
+      ),
+    ).toBe("https://cloud.scalius.com/logos/brand.svg?version=1");
+
+    expect(
+      getOptimizedImageUrl(
+        "legacy/logo.svg",
+        { width: 240, height: 80, fit: "contain" },
+        { cdnBase, cdnHosts: ["cloud.scalius.com"], isDev: false },
+      ),
+    ).toBe("https://cloud.scalius.com/legacy/logo.svg");
+  });
+
+  it("does not build responsive srcsets for vector assets", () => {
+    expect(
+      getResponsiveSrcSet(
+        "https://cloud.scalius.com/logos/brand.svg",
+        [320, 640],
+        { fit: "contain" },
+        { cdnBase, cdnHosts: ["cloud.scalius.com"], isDev: false },
+      ),
+    ).toBe("");
   });
 });

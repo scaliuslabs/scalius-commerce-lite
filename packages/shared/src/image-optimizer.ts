@@ -166,6 +166,21 @@ function extractCloudflareImageOriginalUrl(url: string): string | null {
   }
 }
 
+/** @internal Pure — true for image formats Cloudflare Image Resizing should not transform. */
+function isNonResizableImageUrl(value: string): boolean {
+  const withoutHash = value.split("#", 1)[0] ?? "";
+  const withoutQuery = withoutHash.split("?", 1)[0] ?? "";
+  const pathname = (() => {
+    try {
+      return new URL(value).pathname;
+    } catch {
+      return withoutQuery;
+    }
+  })().toLowerCase();
+
+  return /\.(?:svg|svgz|ico)$/.test(pathname);
+}
+
 /** @internal Pure — extracts a lowercase hostname from a URL or host-like value. */
 function toHostname(value: string | undefined): string {
   const raw = value?.trim();
@@ -329,6 +344,8 @@ export function getOptimizedImageUrl(
 
   if (ctx?.enabled === false) return sourceUrl;
 
+  if (isNonResizableImageUrl(sourceUrl)) return sourceUrl;
+
   // Keep already optimized URLs idempotent unless the caller asks for a
   // context-specific transform such as a new width, height, fit, or quality.
   if (isAlreadyOptimized && !hasRequestedTransformOptions(options)) {
@@ -469,6 +486,11 @@ export function getResponsiveSrcSet(
   ctx?: ImageContext,
 ): string {
   if (!imageUrl || imageUrl.trim() === "") return "";
+  const cdnBase = ctx?.cdnBase ?? detectCdnBase();
+  const sourceUrl = resolveMediaUrl(imageUrl, cdnBase, {
+    cdnHostAliases: ctx?.cdnHostAliases,
+  });
+  if (!sourceUrl || isNonResizableImageUrl(sourceUrl)) return "";
 
   return widths
     .map((width) => {
