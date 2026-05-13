@@ -38,8 +38,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { cn } from '@scalius/shared/utils';
-import { sanitizeHtml } from '@scalius/shared/html-sanitize';
-import { sanitizeCssForStyleElement } from '@scalius/shared/css-sanitize';
+import { prepareScopedWidgetContent } from '@scalius/shared/widget-rendering';
 import { toast } from 'sonner';
 import { AiContextManager } from './AiContextManager';
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
@@ -194,7 +193,14 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
     'live-preview': 'Live Preview',
   };
 
-  const previewCss = sanitizeCssForStyleElement(content?.css);
+  const previewContent = content
+    ? prepareScopedWidgetContent({
+        id: 'preview',
+        htmlContent: content.html,
+        cssContent: content.css,
+      })
+    : null;
+  const previewCss = previewContent?.css ?? '';
 
   return (
     <div className="fixed inset-0 bg-background z-[100] flex flex-col">
@@ -421,7 +427,9 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                         </style>
                       </head>
                       <body>
-                        ${sanitizeHtml(content.html)}
+                        <div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ''}" data-widget-id="preview" data-scalius-widget-root="true">
+                          <div>${previewContent?.html ?? ''}</div>
+                        </div>
                       </body>
                     </html>
                   ` : ''}

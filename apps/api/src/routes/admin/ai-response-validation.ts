@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { GENERATION_CONFIG, ERROR_MESSAGES } from '@scalius/core/modules/ai';
-import { sanitizeCssForStyleElement } from '@scalius/shared/css-sanitize';
+import { sanitizeCssForStyleElementWithReport } from '@scalius/shared/css-sanitize';
 import { sanitizeHtml } from '@scalius/shared/html-sanitize';
+import { normalizeWidgetParts } from '@scalius/shared/widget-rendering';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget, type ParsedWidget } from '@scalius/shared/tag-parser';
 import { ValidationError } from '../../utils/api-error';
@@ -157,9 +158,18 @@ function assertNoUnsupportedCommerceClaims(widget: ParsedWidget): void {
 }
 
 function sanitizeGeneratedWidget(widget: ParsedWidget, options?: WidgetNormalizationOptions): ParsedWidget {
+  const normalized = normalizeWidgetParts({
+    htmlContent: widget.html,
+    cssContent: widget.css,
+  });
+  const cssReport = sanitizeCssForStyleElementWithReport(normalized.css);
+  if (normalized.css.trim() && !cssReport.css.trim()) {
+    throw new ValidationError('AI response CSS could not be safely parsed. Please regenerate the widget.');
+  }
+
   const sanitized = {
-    html: sanitizeHtml(widget.html),
-    css: sanitizeCssForStyleElement(widget.css),
+    html: sanitizeHtml(normalized.html),
+    css: cssReport.css,
     raw: widget.raw,
   };
 
