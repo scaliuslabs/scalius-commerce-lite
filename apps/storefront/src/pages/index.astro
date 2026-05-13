@@ -59,7 +59,12 @@ function isCollection2(
   canonicalUrl={canonicalUrl}
   ogType="website"
 >
-  <WidgetPlacementZone widgets={activeWidgets} scope="homepage" slot="top" priority />
+  <WidgetPlacementZone
+    widgets={activeWidgets}
+    scope="homepage"
+    placementSlot="top"
+    priority
+  />
 
   <section class="w-full">
     <Hero hero={hero} />
@@ -72,7 +77,7 @@ function isCollection2(
           <WidgetPlacementZone
             widgets={activeWidgets}
             scope="homepage"
-            slot="before_collection"
+            placementSlot="before_collection"
             anchorId={collection.id}
             itemClass="mb-2"
           />
@@ -88,7 +93,7 @@ function isCollection2(
           <WidgetPlacementZone
             widgets={activeWidgets}
             scope="homepage"
-            slot="after_collection"
+            placementSlot="after_collection"
             anchorId={collection.id}
             itemClass="mt-2"
           />
@@ -97,5 +102,10 @@ function isCollection2(
     }
   </div>
 
-  <WidgetPlacementZone widgets={activeWidgets} scope="homepage" slot="bottom" itemClass="mt-1" />
+  <WidgetPlacementZone
+    widgets={activeWidgets}
+    scope="homepage"
+    placementSlot="bottom"
+    itemClass="mt-1"
+  />
 </Layout>

@@ -3,8 +3,9 @@ import type { ApiWidget } from "@/lib/api";
 import WidgetBlock from "@/components/WidgetBlock.astro";
 import { getWidgetsForZone, type WidgetPlacementZone } from "@/lib/widget-placements";
 
-interface Props extends WidgetPlacementZone {
+interface Props extends Omit<WidgetPlacementZone, "slot"> {
   widgets: ApiWidget[];
+  placementSlot: WidgetPlacementZone["slot"];
   class?: string;
   itemClass?: string;
   priority?: boolean;
@@ -12,12 +13,16 @@ interface Props extends WidgetPlacementZone {
 
 const {
   widgets,
+  placementSlot,
   class: className = "",
   itemClass = "",
   priority = false,
   ...zone
 } = Astro.props;
-const zoneWidgets = getWidgetsForZone(widgets, zone);
+const zoneWidgets = getWidgetsForZone(widgets, {
+  ...zone,
+  slot: placementSlot,
+});
 ---
 
 {
