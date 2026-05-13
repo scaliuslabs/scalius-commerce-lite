@@ -28,6 +28,14 @@ export type QueuedReservationEntry = {
     orderId: string;
 };
 
+type CheckoutStatus = "processing" | "completed" | "failed";
+type CheckoutStatusDetails = {
+    retrying?: boolean;
+    attempt?: number;
+    lastError?: string;
+    nextRetryAt?: number;
+};
+
 // ── KV checkout status helper ───────────────────────────────────────────────
 
 /**
@@ -37,8 +45,9 @@ export type QueuedReservationEntry = {
 export async function setCheckoutStatus(
     env: Env,
     token: string,
-    status: "processing" | "completed" | "failed",
+    status: CheckoutStatus,
     error?: string,
+    details?: CheckoutStatusDetails,
 ): Promise<void> {
     if (!env.CACHE) {
         console.warn(`[Queue] CACHE not bound when trying to set status to ${status}`);
@@ -54,13 +63,38 @@ export async function setCheckoutStatus(
 
         await env.CACHE.put(
             kvKey,
-            JSON.stringify({ ...existing, status, error, updatedAt: Date.now() }),
+            JSON.stringify({
+                ...existing,
+                status,
+                error,
+                retrying: details?.retrying,
+                attempt: details?.attempt,
+                lastError: details?.lastError,
+                nextRetryAt: details?.nextRetryAt,
+                updatedAt: Date.now(),
+            }),
             { expirationTtl: 86400 }, // Keep final status for 24h
         );
         console.log(`[Queue] Successfully wrote ${status} to KV`);
     } catch (kvErr: unknown) {
         console.error(`[Queue] Failed to write KV status ${status}:`, kvErr);
     }
+}
+
+export async function setCheckoutRetryStatus(
+    env: Env,
+    msg: Message<OrderIngestQueueMessage>,
+    lastError: string,
+    delaySeconds: number,
+): Promise<void> {
+    const attempt = (msg as Message<OrderIngestQueueMessage> & { attempts?: unknown }).attempts;
+
+    await setCheckoutStatus(env, msg.body.checkoutToken, "processing", undefined, {
+        retrying: true,
+        attempt: typeof attempt === "number" ? attempt : undefined,
+        lastError,
+        nextRetryAt: Date.now() + delaySeconds * 1000,
+    });
 }
 
 async function releaseReservationsByOrder(
@@ -441,10 +475,11 @@ export async function handleOrderIngestBatch(
                         console.error("[Queue] Multi-pool rollback release failed:", releaseErr),
                     );
                 }
-                // Hard fail the entire batch — Cloudflare will retry
+                // Keep checkout polling non-terminal while Cloudflare retries the batch.
                 for (const msg of batch.messages) {
-                    await setCheckoutStatus(env, msg.body.checkoutToken, "failed", "Insufficient stock preventing batch ingestion.");
-                    msg.retry({ delaySeconds: 15 });
+                    const delaySeconds = 15;
+                    await setCheckoutRetryStatus(env, msg, "Insufficient stock preventing batch ingestion.", delaySeconds);
+                    msg.retry({ delaySeconds });
                 }
                 return;
             }
@@ -497,8 +532,9 @@ export async function handleOrderIngestBatch(
         // Handle messages that failed during preparation (pre-DB)
         for (const failed of failedMessages) {
             console.log(`[Queue] Failing individual prep for ${failed.msg.body.checkoutToken}`);
-            await setCheckoutStatus(env, failed.msg.body.checkoutToken, "failed", failed.reason);
-            failed.msg.retry({ delaySeconds: 30 });
+            const delaySeconds = 30;
+            await setCheckoutRetryStatus(env, failed.msg, failed.reason, delaySeconds);
+            failed.msg.retry({ delaySeconds });
         }
 
         console.log(`[Queue] Batch processing completely finished`);
@@ -529,13 +565,14 @@ export async function handleOrderIngestBatch(
 
         // Retry every message in the batch
         for (const msg of batch.messages) {
-            await setCheckoutStatus(
+            const delaySeconds = 15;
+            await setCheckoutRetryStatus(
                 env,
-                msg.body.checkoutToken,
-                "failed",
+                msg,
                 "Database write error during heavy traffic. Retrying.",
+                delaySeconds,
             );
-            msg.retry({ delaySeconds: 15 });
+            msg.retry({ delaySeconds });
         }
     }
 }
