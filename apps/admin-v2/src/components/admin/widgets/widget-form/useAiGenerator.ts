@@ -5,11 +5,14 @@ import {
   generateStructuredPrompt,
   type StructuredPromptResult,
 } from '@scalius/core/modules/ai/prompt-helper-v2';
-import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
-import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
 import { extractChatCompletionContent } from './ai-stream';
+import {
+  normalizeGeneratedWidgetContent,
+  parseGeneratedWidgetContent,
+} from './widget-generation-content';
+import { fetchWidgetAi } from './ai-request';
 import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
 import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
 import type { useAiContext } from './useAiContext';
@@ -340,10 +343,7 @@ export const useAiGenerator = (
         if (result) {
           setGeneratedContent(result);
         } else {
-          if (!isActiveGenerationRun(run)) return;
-          toast.info('Deep composition could not finish; retrying as a standard widget.');
-          stagedGeneration.reset();
-          await handleSimpleGeneration(promptResult.messages, run);
+          throw new Error('Composition generation could not finish. Please try again.');
         }
       } else {
         // SIMPLE GENERATION
@@ -369,7 +369,7 @@ export const useAiGenerator = (
   };
 
   const handleSimpleGeneration = async (messages: PromptMessage[], run: GenerationRun) => {
-    const response = await fetch('/api/v1/admin/ai/generate', {
+    const response = await fetchWidgetAi('/api/v1/admin/ai/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: run.signal,
@@ -380,6 +380,7 @@ export const useAiGenerator = (
         stream: false,
         operation: 'create',
         promptType: effectivePromptType,
+        compositionMode: true,
       }),
     });
 
@@ -394,33 +395,7 @@ export const useAiGenerator = (
     if (!isActiveGenerationRun(run)) return;
     setRawOutput(content);
 
-    // Try tag-based parsing first (primary), then fall back to JSON
-    const tagResult = parseTagBasedResponse(content);
-
-    if (tagResult.success && tagResult.data) {
-      const validation = validateParsedWidget(tagResult.data);
-      if (validation.valid) {
-        setGeneratedContent(tagResult.data as { html: string; css: string });
-      } else {
-        if (import.meta.env.DEV) console.error('Invalid widget structure:', validation.error);
-        throw new Error(`Invalid response: ${validation.error}`);
-      }
-    } else {
-      // Fallback to JSON parsing
-      const jsonParsed = parseJSONSafely(content);
-      if (jsonParsed.success) {
-        const validation = validateWidgetJSON(jsonParsed.data);
-        if (validation.valid) {
-          setGeneratedContent(jsonParsed.data as { html: string; css: string });
-        } else {
-          if (import.meta.env.DEV) console.error('Invalid widget structure:', validation.error);
-          throw new Error(`Invalid response: ${validation.error}`);
-        }
-      } else {
-        if (import.meta.env.DEV) console.error('Failed to parse response:', tagResult.error, content);
-        throw new Error('Failed to parse AI response.');
-      }
-    }
+    setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(content)));
   };
 
   const handleCopyPrompt = async () => {
