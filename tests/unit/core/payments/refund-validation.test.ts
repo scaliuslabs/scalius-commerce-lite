@@ -18,12 +18,15 @@ const PaymentStatus = {
 
 const OrderStatus = {
   PENDING: "pending",
+  PROCESSING: "processing",
   CONFIRMED: "confirmed",
   SHIPPED: "shipped",
   DELIVERED: "delivered",
   COMPLETED: "completed",
   CANCELLED: "cancelled",
   RETURNED: "returned",
+  REFUNDED: "refunded",
+  PARTIALLY_REFUNDED: "partially_refunded",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -45,7 +48,51 @@ interface RefundValidationResult {
   isFullRefund: boolean;
   newPaidAmount: number;
   newPaymentStatus: string;
+  nextOrderStatus?: string;
   shouldReleaseInventory: boolean;
+}
+
+interface RefundClaimState {
+  orderVersion: number;
+  paidAmount: number;
+  paymentStatus: string;
+  pendingRefund: boolean;
+}
+
+interface RefundClaimResult {
+  claimed: boolean;
+  shouldCallProvider: boolean;
+  shouldCleanupClaim: boolean;
+  error?: "pending_refund" | "cas_conflict" | "amount_exceeds_paid";
+  nextState: RefundClaimState;
+}
+
+const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
+  OrderStatus.PENDING,
+  OrderStatus.PROCESSING,
+  OrderStatus.CONFIRMED,
+]);
+
+function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean): string | undefined {
+  if (!isFullRefund) {
+    return [OrderStatus.DELIVERED, OrderStatus.COMPLETED].includes(currentStatus)
+      ? OrderStatus.PARTIALLY_REFUNDED
+      : undefined;
+  }
+
+  if ([OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.RETURNED, OrderStatus.PARTIALLY_REFUNDED].includes(currentStatus)) {
+    return OrderStatus.REFUNDED;
+  }
+
+  if (PRE_FULFILLMENT_REFUND_STATUSES.has(currentStatus)) {
+    return OrderStatus.CANCELLED;
+  }
+
+  return undefined;
+}
+
+function shouldReleaseInventoryForFullRefund(currentStatus: string, nextStatus: string | undefined): boolean {
+  return nextStatus === OrderStatus.CANCELLED && PRE_FULFILLMENT_REFUND_STATUSES.has(currentStatus);
 }
 
 function validateRefund(
@@ -96,9 +143,8 @@ function validateRefund(
 
   const newPaidAmount = Math.max(0, order.paidAmount - refundAmount);
   const newPaymentStatus = isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL;
-
-  // Full refund releases inventory; partial does NOT
-  const shouldReleaseInventory = isFullRefund;
+  const nextOrderStatus = getOrderStatusAfterRefund(order.status, isFullRefund);
+  const shouldReleaseInventory = isFullRefund && shouldReleaseInventoryForFullRefund(order.status, nextOrderStatus);
 
   return {
     valid: true,
@@ -106,7 +152,78 @@ function validateRefund(
     isFullRefund,
     newPaidAmount,
     newPaymentStatus,
+    nextOrderStatus,
     shouldReleaseInventory,
+  };
+}
+
+function claimRefundBeforeProvider(
+  state: RefundClaimState,
+  observedVersion: number,
+  refundAmount: number,
+): RefundClaimResult {
+  if (state.pendingRefund) {
+    return {
+      claimed: false,
+      shouldCallProvider: false,
+      shouldCleanupClaim: false,
+      error: "pending_refund",
+      nextState: state,
+    };
+  }
+
+  if (refundAmount > state.paidAmount) {
+    return {
+      claimed: false,
+      shouldCallProvider: false,
+      shouldCleanupClaim: false,
+      error: "amount_exceeds_paid",
+      nextState: state,
+    };
+  }
+
+  // Mirrors UPDATE orders ... WHERE version = observedVersion RETURNING id.
+  if (state.orderVersion !== observedVersion) {
+    return {
+      claimed: false,
+      shouldCallProvider: false,
+      shouldCleanupClaim: true,
+      error: "cas_conflict",
+      nextState: state,
+    };
+  }
+
+  const nextPaidAmount = Math.max(0, state.paidAmount - refundAmount);
+  return {
+    claimed: true,
+    shouldCallProvider: true,
+    shouldCleanupClaim: false,
+    nextState: {
+      orderVersion: state.orderVersion + 1,
+      paidAmount: nextPaidAmount,
+      paymentStatus: nextPaidAmount === 0 ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL,
+      pendingRefund: true,
+    },
+  };
+}
+
+function releaseFailedProviderClaim(
+  state: RefundClaimState,
+  refundAmount: number,
+  originalPaymentStatus: string,
+): RefundClaimState {
+  return {
+    orderVersion: state.orderVersion + 1,
+    paidAmount: state.paidAmount + refundAmount,
+    paymentStatus: originalPaymentStatus,
+    pendingRefund: false,
+  };
+}
+
+function finalizeSuccessfulProviderClaim(state: RefundClaimState): RefundClaimState {
+  return {
+    ...state,
+    pendingRefund: false,
   };
 }
 
@@ -225,7 +342,7 @@ describe("refund validation", () => {
   });
 
   describe("inventory release on refund", () => {
-    it("releases inventory on full refund", () => {
+    it("cancels and releases reserved inventory on pre-fulfillment full refund", () => {
       const result = validateRefund(
         {
           totalAmount: 2500,
@@ -237,7 +354,40 @@ describe("refund validation", () => {
         2500
       );
 
+      expect(result.nextOrderStatus).toBe(OrderStatus.CANCELLED);
       expect(result.shouldReleaseInventory).toBe(true);
+    });
+
+    it("does NOT restore inventory when a shipped order is fully refunded", () => {
+      const result = validateRefund(
+        {
+          totalAmount: 2500,
+          paidAmount: 2500,
+          paymentStatus: PaymentStatus.PAID,
+          paymentMethod: "stripe",
+          status: OrderStatus.SHIPPED,
+        },
+        2500
+      );
+
+      expect(result.nextOrderStatus).toBeUndefined();
+      expect(result.shouldReleaseInventory).toBe(false);
+    });
+
+    it("marks delivered full refunds as refunded without direct inventory release", () => {
+      const result = validateRefund(
+        {
+          totalAmount: 2500,
+          paidAmount: 2500,
+          paymentStatus: PaymentStatus.PAID,
+          paymentMethod: "stripe",
+          status: OrderStatus.DELIVERED,
+        },
+        2500
+      );
+
+      expect(result.nextOrderStatus).toBe(OrderStatus.REFUNDED);
+      expect(result.shouldReleaseInventory).toBe(false);
     });
 
     it("does NOT release inventory on partial refund", () => {
@@ -315,6 +465,96 @@ describe("refund validation", () => {
       const result = validateRefund(order, 1500);
       expect(result.valid).toBe(false);
       expect(result.error).toContain("exceeds paid amount");
+    });
+  });
+
+  describe("concurrency claim before provider dispatch", () => {
+    it("does not call the provider when the order-version CAS loses", () => {
+      const state: RefundClaimState = {
+        orderVersion: 8,
+        paidAmount: 100,
+        paymentStatus: PaymentStatus.PAID,
+        pendingRefund: false,
+      };
+
+      const result = claimRefundBeforeProvider(state, 7, 100);
+
+      expect(result.claimed).toBe(false);
+      expect(result.shouldCallProvider).toBe(false);
+      expect(result.shouldCleanupClaim).toBe(true);
+      expect(result.error).toBe("cas_conflict");
+      expect(result.nextState).toEqual(state);
+    });
+
+    it("blocks a second refund while the first refund claim is pending", () => {
+      const first = claimRefundBeforeProvider({
+        orderVersion: 7,
+        paidAmount: 100,
+        paymentStatus: PaymentStatus.PAID,
+        pendingRefund: false,
+      }, 7, 100);
+
+      expect(first.shouldCallProvider).toBe(true);
+
+      const second = claimRefundBeforeProvider(first.nextState, 8, 100);
+
+      expect(second.claimed).toBe(false);
+      expect(second.shouldCallProvider).toBe(false);
+      expect(second.error).toBe("pending_refund");
+    });
+
+    it("reserves refundable amount before provider dispatch", () => {
+      const result = claimRefundBeforeProvider({
+        orderVersion: 3,
+        paidAmount: 100,
+        paymentStatus: PaymentStatus.PAID,
+        pendingRefund: false,
+      }, 3, 40);
+
+      expect(result.claimed).toBe(true);
+      expect(result.shouldCallProvider).toBe(true);
+      expect(result.nextState).toMatchObject({
+        orderVersion: 4,
+        paidAmount: 60,
+        paymentStatus: PaymentStatus.PARTIAL,
+        pendingRefund: true,
+      });
+    });
+
+    it("releases the local claim when provider refund fails", () => {
+      const claimed = claimRefundBeforeProvider({
+        orderVersion: 3,
+        paidAmount: 100,
+        paymentStatus: PaymentStatus.PAID,
+        pendingRefund: false,
+      }, 3, 40);
+
+      const released = releaseFailedProviderClaim(claimed.nextState, 40, PaymentStatus.PAID);
+
+      expect(released).toEqual({
+        orderVersion: 5,
+        paidAmount: 100,
+        paymentStatus: PaymentStatus.PAID,
+        pendingRefund: false,
+      });
+    });
+
+    it("keeps the reserved amount after provider refund succeeds", () => {
+      const claimed = claimRefundBeforeProvider({
+        orderVersion: 3,
+        paidAmount: 100,
+        paymentStatus: PaymentStatus.PAID,
+        pendingRefund: false,
+      }, 3, 100);
+
+      const finalized = finalizeSuccessfulProviderClaim(claimed.nextState);
+
+      expect(finalized).toMatchObject({
+        orderVersion: 4,
+        paidAmount: 0,
+        paymentStatus: PaymentStatus.REFUNDED,
+        pendingRefund: false,
+      });
     });
   });
 });
