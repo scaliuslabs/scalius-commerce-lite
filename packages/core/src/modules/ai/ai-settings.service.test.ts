@@ -57,7 +57,7 @@ describe("widget AI settings", () => {
     expect(config.providers.cloudflare.defaultModel).toBe("@cf/moonshotai/kimi-k2.6");
     expect(config.generation.planningTemperature).toBe(0);
     expect(config.generation.generationTemperature).toBe(2);
-    expect(config.generation.fastGenerationMaxOutputTokens).toBe(4500);
+    expect(config.generation.fastGenerationMaxOutputTokens).toBe(2200);
     expect(config.generation.maxOutputTokens).toBe(64000);
     expect(config.generation.stagedGenerationDefault).toBe(false);
   });
