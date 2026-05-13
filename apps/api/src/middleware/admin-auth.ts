@@ -5,6 +5,13 @@ import { getAuth } from "@scalius/core/auth";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
+import {
+    SCANNER_COOKIE_NAME,
+    getScannerSessionKey,
+    isAllowedScannerApiRequest,
+    parseCookie,
+    type ScannerSessionPayload,
+} from "@scalius/shared/scanner-auth";
 
 interface User {
     id: string;
@@ -12,6 +19,10 @@ interface User {
     name: string;
     role: string;
     [key: string]: unknown;
+}
+
+interface ScannerKv {
+    get(key: string): Promise<string | null>;
 }
 
 /**
@@ -57,32 +68,28 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         }
     }
 
-    // 3. Try Scanner Token (for warehouse scanner app)
+    // 3. Try Scanner Session Cookie (for warehouse scanner app)
     if (!user) {
-        const scannerToken = c.req.header("X-Scanner-Token");
-        if (scannerToken) {
-            try {
-                const kv = (c.env as Record<string, unknown>).CACHE as { get: (key: string) => Promise<string | null> } | undefined;
-                if (kv) {
-                    const raw = await kv.get(`scanner:token:${scannerToken}`);
-                    if (raw) {
-                        const payload = JSON.parse(raw);
-                        if (payload.claimed) {
-                            // Scanner token is valid — create a synthetic user with LIMITED permissions
-                            // Use a fixed non-admin ID so it doesn't inherit the creating admin's super-admin status
-                            user = {
-                                id: `scanner:${payload.adminId || "unknown"}`,
-                                email: "scanner@system",
-                                name: payload.adminName || "Scanner",
-                                role: "scanner", // NOT "admin" — prevents full admin access
-                                _isScannerToken: true,
-                            };
-                        }
-                    }
+        try {
+            const sessionId = parseCookie(c.req.header("Cookie"), SCANNER_COOKIE_NAME);
+            const kv = (c.env as Record<string, unknown>).CACHE as ScannerKv | undefined;
+            if (sessionId && kv) {
+                const raw = await kv.get(await getScannerSessionKey(sessionId));
+                if (raw) {
+                    const payload = JSON.parse(raw) as ScannerSessionPayload;
+                    // Scanner sessions are limited principals. Use a synthetic ID so they
+                    // never inherit the creating admin's role or super-admin status.
+                    user = {
+                        id: `scanner:${payload.adminId || "unknown"}`,
+                        email: "scanner@system",
+                        name: payload.adminName || "Scanner",
+                        role: "scanner",
+                        _isScannerSession: true,
+                    };
                 }
-            } catch (error: unknown) {
-                console.warn("[AdminAuth] Scanner token verification failed:", error instanceof Error ? error.message : "Unknown error");
             }
+        } catch (error: unknown) {
+            console.warn("[AdminAuth] Scanner session verification failed:", error instanceof Error ? error.message : "Unknown error");
         }
     }
 
@@ -95,13 +102,13 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // Inject user into Hono context
     c.set("user", user);
 
-    // Scanner token — restrict to inventory endpoints only
-    if ((user as Record<string, unknown>)._isScannerToken) {
+    // Scanner session — restrict to the exact scanner workflow endpoints only.
+    if ((user as Record<string, unknown>)._isScannerSession) {
         const pathname = new URL(c.req.url).pathname;
-        if (!pathname.includes("/inventory/")) {
-            throw new ForbiddenError("Scanner tokens can only access inventory endpoints");
+        if (!isAllowedScannerApiRequest(pathname, c.req.method)) {
+            throw new ForbiddenError("Scanner sessions can only access scanner inventory endpoints");
         }
-        // Skip full RBAC check — scanner has implicit inventory permission
+        // Skip full RBAC check — scanner has implicit permission only for the allowlisted endpoints.
         await next();
         return;
     }
