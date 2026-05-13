@@ -13,9 +13,10 @@ export const MediaFileSchema = z.object({
   url: z.url(),
   filename: z.string(),
   size: z.number(),
-  createdAt: z.date().or(z.string()).transform(val =>
-    typeof val === 'string' ? new Date(val) : val
-  ),
+  createdAt: z
+    .date()
+    .or(z.string())
+    .transform((val) => (typeof val === 'string' ? new Date(val) : val)),
 });
 
 // Product reference schema (minimal data for context)
@@ -56,6 +57,10 @@ export const StagedSectionSchema = z.object({
 export const StagedGenerationPlanSchema = z.object({
   totalSections: z.number(),
   sectionDescriptions: z.array(z.string()),
+  compositionBrief: z.string().optional(),
+  sharedDesignSystem: z.string().optional(),
+  spacingStrategy: z.string().optional(),
+  sectionContinuity: z.array(z.string()).optional(),
   estimatedTokens: z.number().optional(),
 });
 
@@ -169,10 +174,7 @@ export function serializeAiContext(context: Partial<AiContext>): string {
 /**
  * Merge new context data with existing context
  */
-export function mergeAiContext(
-  existing: Partial<AiContext>,
-  updates: Partial<AiContext>
-): AiContext {
+export function mergeAiContext(existing: Partial<AiContext>, updates: Partial<AiContext>): AiContext {
   return AiContextSchema.parse({
     ...existing,
     ...updates,

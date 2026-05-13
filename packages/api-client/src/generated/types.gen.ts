@@ -25763,7 +25763,7 @@ export type PostApiV1AdminAiGenerateStagedData = {
                 } | undefined;
             }>;
         }>;
-        stage?: 'plan' | 'generate';
+        stage?: 'plan' | 'generate' | 'finalize';
         sectionIndex?: number;
         totalSections?: number;
     };

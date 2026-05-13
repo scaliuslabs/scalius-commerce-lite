@@ -1,17 +1,17 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { generateCompletePrompt, generateStructuredPrompt, type StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
+import {
+  generateCompletePrompt,
+  generateStructuredPrompt,
+  type StructuredPromptResult,
+} from '@scalius/core/modules/ai/prompt-helper-v2';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
 import { extractChatCompletionContent } from './ai-stream';
-import {
-  notifyAiContextWarnings,
-  type AiContextBatchDetails,
-} from "./ai-context-warnings";
-import { AI_CONTEXT_LIMITS, limitImagesForModel } from "./ai-context-limits";
+import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
+import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
@@ -56,7 +56,7 @@ function isAbortError(error: unknown): boolean {
 
 async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
   const response = await fetch('/api/v1/admin/settings/widget-ai');
-  const payload = await response.json() as {
+  const payload = (await response.json()) as {
     success?: boolean;
     data?: WidgetAiSettings;
     error?: { message?: string };
@@ -75,21 +75,22 @@ export const useAiGenerator = (
   shouldLoadSettings = true,
   placementContext?: AiPlacementContext,
 ) => {
-  const [promptType, setPromptType] = useState<
-    'widget' | 'landing-page' | 'collection'
-  >('widget');
+  const [promptType, setPromptType] = useState<'widget' | 'landing-page' | 'collection'>('widget');
   const [userPrompt, setUserPrompt] = useState('');
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [aiModels, setAiModels] = useState<ModelInfo[]>([]);
   const [activeProvider, setActiveProvider] = useState('openrouter');
-  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const [isApiKeySet, setIsApiKeySet] = useState(false);
-  const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isAiSettingsLoading, setIsAiSettingsLoading] = useState(false);
   const [aiSettingsError, setAiSettingsError] = useState<string | null>(null);
   const [aiSettingsReloadToken, setAiSettingsReloadToken] = useState(0);
-  const [generatedContent, setGeneratedContent] = useState<{ html: string; css: string; } | null>(null);
+  const [generatedContent, setGeneratedContent] = useState<{
+    html: string;
+    css: string;
+  } | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -129,7 +130,7 @@ export const useAiGenerator = (
       setRawOutput(null);
       setIsPreviewOpen(false);
       if (!options?.silent) {
-        toast.info("Generation cancelled.");
+        toast.info('Generation cancelled.');
       }
     },
     [stagedGeneration],
@@ -138,14 +139,10 @@ export const useAiGenerator = (
   const getModelLimitedImages = useCallback(
     (options?: { warn?: boolean }) => {
       const selectedModelInfo = aiModels.find((model) => model.id === selectedModel);
-      const result = limitImagesForModel(
-        aiContext.selectedImages,
-        selectedModel,
-        selectedModelInfo?.maxImages,
-      );
+      const result = limitImagesForModel(aiContext.selectedImages, selectedModel, selectedModelInfo?.maxImages);
       if (options?.warn && result.truncated > 0) {
         toast.warning(
-          `Using the first ${result.limit} selected images for this model. ${result.truncated} ${result.truncated === 1 ? "image was" : "images were"} skipped.`,
+          `Using the first ${result.limit} selected images for this model. ${result.truncated} ${result.truncated === 1 ? 'image was' : 'images were'} skipped.`,
         );
       }
       return result.images;
@@ -153,43 +150,45 @@ export const useAiGenerator = (
     [aiContext.selectedImages, aiModels, selectedModel],
   );
 
-  const effectivePromptType = placementContext?.hasActivePlacements
-    ? placementContext.suggestedPromptType
-    : promptType;
+  const effectivePromptType = placementContext?.hasActivePlacements ? placementContext.suggestedPromptType : promptType;
 
   const getMergedProductIds = useCallback(
-    () => Array.from(new Set([
-      ...aiContext.selectedProducts.map((p: ProductSearchResult) => p.id),
-      ...(placementContext?.productIds ?? []),
-    ])).slice(0, AI_CONTEXT_LIMITS.maxProducts),
+    () =>
+      Array.from(
+        new Set([
+          ...aiContext.selectedProducts.map((p: ProductSearchResult) => p.id),
+          ...(placementContext?.productIds ?? []),
+        ]),
+      ).slice(0, AI_CONTEXT_LIMITS.maxProducts),
     [aiContext.selectedProducts, placementContext?.productIds],
   );
 
   const getMergedCategoryIds = useCallback(
-    () => Array.from(new Set([
-      ...aiContext.selectedCategories.map((c: Category) => c.id),
-      ...(placementContext?.categoryIds ?? []),
-    ])).slice(0, AI_CONTEXT_LIMITS.maxCategories),
+    () =>
+      Array.from(
+        new Set([...aiContext.selectedCategories.map((c: Category) => c.id), ...(placementContext?.categoryIds ?? [])]),
+      ).slice(0, AI_CONTEXT_LIMITS.maxCategories),
     [aiContext.selectedCategories, placementContext?.categoryIds],
   );
 
   const getMergedCollectionIds = useCallback(
-    () => Array.from(new Set(placementContext?.collectionIds ?? []))
-      .slice(0, AI_CONTEXT_LIMITS.maxCollections),
+    () => Array.from(new Set(placementContext?.collectionIds ?? [])).slice(0, AI_CONTEXT_LIMITS.maxCollections),
     [placementContext?.collectionIds],
   );
 
   const getMergedAnchorCollectionIds = useCallback(
-    () => Array.from(new Set(placementContext?.anchorCollectionIds ?? []))
-      .slice(0, AI_CONTEXT_LIMITS.maxCollections),
+    () => Array.from(new Set(placementContext?.anchorCollectionIds ?? [])).slice(0, AI_CONTEXT_LIMITS.maxCollections),
     [placementContext?.anchorCollectionIds],
   );
 
-  const getPlacementAwareInstructions = useCallback((instructions: string) => {
-    const prompt = instructions.trim();
-    if (!placementContext?.summary) return prompt;
-    return `${prompt}\n\nPlacement context: ${placementContext.summary}. Generate for this exact storefront placement and use only relevant calls to action.`;
-  }, [placementContext?.summary]);
+  const getPlacementAwareInstructions = useCallback(
+    (instructions: string) => {
+      const prompt = instructions.trim();
+      if (!placementContext?.summary) return prompt;
+      return `${prompt}\n\nPlacement context: ${placementContext.summary}. Generate for this exact storefront placement and use only relevant calls to action.`;
+    },
+    [placementContext?.summary],
+  );
 
   const getPlacementAwarePrompt = useCallback(() => {
     return getPlacementAwareInstructions(userPrompt);
@@ -206,7 +205,7 @@ export const useAiGenerator = (
       const settings = await fetchWidgetAiSettings();
       if (cancelled) return;
 
-      const provider = settings.activeProvider || "openrouter";
+      const provider = settings.activeProvider || 'openrouter';
       const providerSettings = settings.providers?.[provider];
       const configured = Boolean(providerSettings?.hasApiKey || providerSettings?.hasBinding);
 
@@ -215,7 +214,7 @@ export const useAiGenerator = (
       setUseStagedMode(settings.generation?.stagedGenerationDefault !== false);
 
       const response = await fetch(`/api/v1/admin/ai/models?provider=${encodeURIComponent(provider)}`);
-      const modelData = await response.json() as {
+      const modelData = (await response.json()) as {
         success?: boolean;
         data?: { models?: ModelInfo[]; defaultModel?: string };
         models?: ModelInfo[];
@@ -224,7 +223,8 @@ export const useAiGenerator = (
       if (cancelled) return;
 
       const models = modelData.data?.models || modelData.models || [];
-      const defaultModel = modelData.data?.defaultModel || modelData.defaultModel || providerSettings?.defaultModel || "";
+      const defaultModel =
+        modelData.data?.defaultModel || modelData.defaultModel || providerSettings?.defaultModel || '';
       setAiModels(models);
 
       let widgetModel: string | null = null;
@@ -241,24 +241,22 @@ export const useAiGenerator = (
       } else if (defaultModel) {
         setSelectedModel(defaultModel);
       } else {
-        setSelectedModel("");
+        setSelectedModel('');
       }
     }
 
-    loadAiSettings().catch((error) => {
-      if (cancelled) return;
-      if (import.meta.env.DEV) console.error("Failed to load widget AI settings:", error);
-      setIsApiKeySet(false);
-      setAiModels([]);
-      setSelectedModel("");
-      setAiSettingsError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load widget AI settings.",
-      );
-    }).finally(() => {
-      if (!cancelled) setIsAiSettingsLoading(false);
-    });
+    loadAiSettings()
+      .catch((error) => {
+        if (cancelled) return;
+        if (import.meta.env.DEV) console.error('Failed to load widget AI settings:', error);
+        setIsApiKeySet(false);
+        setAiModels([]);
+        setSelectedModel('');
+        setAiSettingsError(error instanceof Error ? error.message : 'Failed to load widget AI settings.');
+      })
+      .finally(() => {
+        if (!cancelled) setIsAiSettingsLoading(false);
+      });
 
     return () => {
       cancelled = true;
@@ -286,27 +284,27 @@ export const useAiGenerator = (
 
     try {
       // 1. Fetch system prompt (returns plain text)
-      const systemPrompt = await getAiPrompts({ data: { type: effectivePromptType } }) as string;
+      const systemPrompt = (await getAiPrompts({
+        data: { type: effectivePromptType },
+      })) as string;
       if (!isActiveGenerationRun(run)) return;
       if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
 
       // 2. Fetch context details
-      const contextData = await getAiContextBatchDetails({
+      const contextData = (await getAiContextBatchDetails({
         data: {
           productIds: getMergedProductIds(),
-          categoryIds: aiContext.allCategoriesSelected
-            ? undefined
-            : getMergedCategoryIds(),
+          categoryIds: aiContext.allCategoriesSelected ? undefined : getMergedCategoryIds(),
           collectionIds: getMergedCollectionIds(),
           anchorCollectionIds: getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
-      }) as AiContextBatchDetails;
+      })) as AiContextBatchDetails;
       if (!isActiveGenerationRun(run)) return;
       notifyAiContextWarnings(contextData);
 
       // 3. Generate structured prompt with caching support
-      const currentModel = aiModels.find(m => m.id === selectedModel);
+      const currentModel = aiModels.find((m) => m.id === selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
       const selectedImages = getModelLimitedImages({ warn: true });
 
@@ -325,10 +323,7 @@ export const useAiGenerator = (
       if (!isActiveGenerationRun(run)) return;
 
       // 4. Decide: staged vs simple generation
-      const useStaged = shouldUseStagedGeneration(
-        promptResult.metadata.estimatedTokens * 4,
-        useStagedMode
-      );
+      const useStaged = shouldUseStagedGeneration(promptResult.metadata.estimatedTokens * 4, useStagedMode);
 
       if (useStaged) {
         // STAGED GENERATION
@@ -336,13 +331,9 @@ export const useAiGenerator = (
           activeProvider,
           selectedModel,
           promptResult.messages,
-          (section) => {
+          (_section, _index, _total, preview) => {
             if (!isActiveGenerationRun(run)) return;
-            // Progressive rendering callback
-            setGeneratedContent(prev => ({
-              html: (prev?.html || '') + '\n\n' + section.html,
-              css: (prev?.css || '') + '\n\n' + section.css,
-            }));
+            setGeneratedContent(preview);
           },
           run.signal,
         );
@@ -352,7 +343,7 @@ export const useAiGenerator = (
           setGeneratedContent(result);
         } else {
           if (!isActiveGenerationRun(run)) return;
-          toast.info("Staged generation could not finish; retrying as a single widget.");
+          toast.info('Staged generation could not finish; retrying as a single widget.');
           stagedGeneration.reset();
           await handleSimpleGeneration(promptResult.messages, run);
         }
@@ -360,7 +351,6 @@ export const useAiGenerator = (
         // SIMPLE GENERATION
         await handleSimpleGeneration(promptResult.messages, run);
       }
-
     } catch (error: unknown) {
       if (isAbortError(error) || run.signal.aborted) {
         return;
@@ -380,13 +370,10 @@ export const useAiGenerator = (
     }
   };
 
-  const handleSimpleGeneration = async (
-    messages: PromptMessage[],
-    run: GenerationRun,
-  ) => {
-    const response = await fetch("/api/v1/admin/ai/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+  const handleSimpleGeneration = async (messages: PromptMessage[], run: GenerationRun) => {
+    const response = await fetch('/api/v1/admin/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       signal: run.signal,
       body: JSON.stringify({
         provider: activeProvider,
@@ -400,7 +387,7 @@ export const useAiGenerator = (
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.message || errorData.error?.message || "Failed to generate content.");
+      throw new Error(errorData.message || errorData.error?.message || 'Failed to generate content.');
     }
 
     const content = extractChatCompletionContent(await response.json());
@@ -415,7 +402,7 @@ export const useAiGenerator = (
       if (validation.valid) {
         setGeneratedContent(tagResult.data as { html: string; css: string });
       } else {
-        if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
+        if (import.meta.env.DEV) console.error('Invalid widget structure:', validation.error);
         throw new Error(`Invalid response: ${validation.error}`);
       }
     } else {
@@ -426,12 +413,12 @@ export const useAiGenerator = (
         if (validation.valid) {
           setGeneratedContent(jsonParsed.data as { html: string; css: string });
         } else {
-          if (import.meta.env.DEV) console.error("Invalid widget structure:", validation.error);
+          if (import.meta.env.DEV) console.error('Invalid widget structure:', validation.error);
           throw new Error(`Invalid response: ${validation.error}`);
         }
       } else {
-        if (import.meta.env.DEV) console.error("Failed to parse response:", tagResult.error, content);
-        throw new Error("Failed to parse AI response.");
+        if (import.meta.env.DEV) console.error('Failed to parse response:', tagResult.error, content);
+        throw new Error('Failed to parse AI response.');
       }
     }
   };
@@ -442,22 +429,22 @@ export const useAiGenerator = (
       return;
     }
 
-    const toastId = toast.loading("Preparing standalone prompt...");
+    const toastId = toast.loading('Preparing standalone prompt...');
     try {
-      const systemPrompt = await getAiPrompts({ data: { type: effectivePromptType } }) as string;
-      if (!systemPrompt) throw new Error("Could not fetch system prompt.");
+      const systemPrompt = (await getAiPrompts({
+        data: { type: effectivePromptType },
+      })) as string;
+      if (!systemPrompt) throw new Error('Could not fetch system prompt.');
 
-      const contextData = await getAiContextBatchDetails({
+      const contextData = (await getAiContextBatchDetails({
         data: {
           productIds: getMergedProductIds(),
-          categoryIds: aiContext.allCategoriesSelected
-            ? undefined
-            : getMergedCategoryIds(),
+          categoryIds: aiContext.allCategoriesSelected ? undefined : getMergedCategoryIds(),
           collectionIds: getMergedCollectionIds(),
           anchorCollectionIds: getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
-      }) as AiContextBatchDetails;
+      })) as AiContextBatchDetails;
       notifyAiContextWarnings(contextData);
       const selectedImages = getModelLimitedImages({ warn: true });
 
@@ -496,21 +483,31 @@ Do NOT use markdown code blocks. Do NOT use JSON format. Use ONLY the <htmljs> a
 ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(s) provided above. Use them in your HTML.` : ''}`;
 
       await navigator.clipboard.writeText(standalonePrompt);
-      toast.success("Standalone prompt copied! Paste it into any AI chatbot.", { id: toastId });
-
+      toast.success('Standalone prompt copied! Paste it into any AI chatbot.', {
+        id: toastId,
+      });
     } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error preparing prompt for copy:", error);
+      if (import.meta.env.DEV) console.error('Error preparing prompt for copy:', error);
       toast.error(`Failed to copy prompt: ${error instanceof Error ? error.message : String(error)}`, { id: toastId });
     }
   };
 
   // Compute generation progress for preview
-  const generationProgress = stagedGeneration.plan ? {
-    currentStage: stagedGeneration.currentStage === 'planning' ? 'Planning widget structure...' : `Generating section ${stagedGeneration.currentSectionIndex + 1} of ${stagedGeneration.plan.totalSections}`,
-    currentSection: stagedGeneration.currentSectionIndex,
-    totalSections: stagedGeneration.plan.totalSections,
-    percentage: Math.round(((stagedGeneration.currentSectionIndex + (stagedGeneration.currentStage === 'complete' ? 1 : 0)) / stagedGeneration.plan.totalSections) * 100)
-  } : undefined;
+  const generationProgress = stagedGeneration.plan
+    ? {
+        currentStage:
+          stagedGeneration.currentStage === 'planning'
+            ? 'Planning widget structure...'
+            : `Generating section ${stagedGeneration.currentSectionIndex + 1} of ${stagedGeneration.plan.totalSections}`,
+        currentSection: stagedGeneration.currentSectionIndex,
+        totalSections: stagedGeneration.plan.totalSections,
+        percentage: Math.round(
+          ((stagedGeneration.currentSectionIndex + (stagedGeneration.currentStage === 'complete' ? 1 : 0)) /
+            stagedGeneration.plan.totalSections) *
+            100,
+        ),
+      }
+    : undefined;
 
   return {
     promptType,

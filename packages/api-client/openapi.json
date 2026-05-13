@@ -81674,7 +81674,8 @@
                     "type": "string",
                     "enum": [
                       "plan",
-                      "generate"
+                      "generate",
+                      "finalize"
                     ]
                   },
                   "sectionIndex": {
