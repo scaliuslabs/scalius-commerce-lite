@@ -116,7 +116,7 @@ export const GENERATION_CONFIG = {
   // Timeouts
   timeouts: {
     default: 60000,      // 60 seconds
-    planning: 60000,     // 60 seconds for structured planning on slower high-quality models
+    planning: 120000,    // 2 minutes for planning on slower high-quality default models
     generation: 120000,  // 2 minutes for generation
     improvement: 90000,  // 90 seconds for improvements
   },

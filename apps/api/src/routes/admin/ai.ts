@@ -478,10 +478,19 @@ async function generateWidgetContent(
   }
 
   const result = await generateText(options);
-  return {
-    text: normalizeWidgetGenerationText(result.text),
-    usage: usageFromResult(result),
-  };
+  try {
+    return {
+      text: normalizeWidgetGenerationText(result.text),
+      usage: usageFromResult(result),
+    };
+  } catch (error) {
+    console.warn('Widget response failed validation; retrying once:', error);
+    const retry = await generateText(addWidgetFormatRetryInstruction(options));
+    return {
+      text: normalizeWidgetGenerationText(retry.text),
+      usage: usageFromResult(retry),
+    };
+  }
 }
 
 async function finalizeStreamedWidgetContent(
