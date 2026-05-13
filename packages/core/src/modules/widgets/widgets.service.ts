@@ -1230,6 +1230,10 @@ export async function restoreFromHistory(
         .from(widgetHistory)
         .where(and(eq(widgetHistory.id, historyId), eq(widgetHistory.widgetId, widgetId)));
     if (!entry) throw new NotFoundError("History entry not found");
+    const restoredContent = normalizePersistentWidgetContent({
+        htmlContent: entry.htmlContent,
+        cssContent: entry.cssContent,
+    });
 
     // Atomic: snapshot current state + restore from history in a single batch
     await db.batch([
@@ -1242,8 +1246,8 @@ export async function restoreFromHistory(
         }),
         db.update(widgets)
             .set({
-                htmlContent: entry.htmlContent,
-                cssContent: entry.cssContent,
+                htmlContent: restoredContent.htmlContent,
+                cssContent: restoredContent.cssContent,
                 updatedAt: sql`unixepoch()`,
             })
             .where(eq(widgets.id, widgetId)),

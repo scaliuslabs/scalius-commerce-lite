@@ -31,5 +31,16 @@ describe('widget generation content parsing', () => {
     expect(content.css).toContain('.promo { color: red; }');
     expect(content.css).toContain('Scalius composition boundary guard');
   });
-});
 
+  it('preserves supported JSON aliases instead of dropping generated CSS', () => {
+    const content = parseGeneratedWidgetContent(
+      JSON.stringify({
+        htmljs: '<section class="promo"><h2>Deal</h2></section>',
+        cssContent: '.promo { color: red; }',
+      }),
+    );
+
+    expect(content.html).toContain('class="promo"');
+    expect(content.css).toContain('.promo { color: red; }');
+  });
+});

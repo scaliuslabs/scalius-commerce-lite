@@ -4,8 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
-import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
+import { normalizeGeneratedWidgetContent, parseGeneratedWidgetContent } from './widget-generation-content';
 
 interface WidgetPasteModalProps {
   isOpen: boolean;
@@ -22,40 +21,14 @@ export const WidgetPasteModal: React.FC<WidgetPasteModalProps> = ({ isOpen, onOp
       return;
     }
 
-    // Try tag-based format first (this is what Copy Prompt generates)
-    const tagResult = parseTagBasedResponse(jsonInput);
-
-    if (tagResult.success && tagResult.data) {
-      const validation = validateParsedWidget(tagResult.data);
-      if (validation.valid) {
-        onApply({ html: tagResult.data.html, css: tagResult.data.css || '' });
-        toast.success("Tag-based content applied successfully!");
-        onOpenChange(false);
-        setJsonInput("");
-        return;
-      }
+    try {
+      onApply(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(jsonInput)));
+      toast.success("Widget content applied successfully!");
+      onOpenChange(false);
+      setJsonInput("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid widget content.");
     }
-
-    // Fallback to JSON format
-    const jsonResult = parseJSONSafely(jsonInput);
-
-    if (jsonResult.success && jsonResult.data) {
-      const validation = validateWidgetJSON(jsonResult.data);
-      if (validation.valid) {
-        const widgetData = jsonResult.data as Record<string, unknown>;
-        onApply({ html: String(widgetData.html || widgetData.htmljs || ''), css: String(widgetData.css || '') });
-        toast.success("JSON content applied successfully!");
-        onOpenChange(false);
-        setJsonInput("");
-        return;
-      } else {
-        toast.error(`Invalid JSON structure: ${validation.error}`);
-        return;
-      }
-    }
-
-    // Both parsing methods failed
-    toast.error("Invalid format. Please paste either tag-based format (<htmljs>/<css>) or valid JSON.");
   };
 
   return (

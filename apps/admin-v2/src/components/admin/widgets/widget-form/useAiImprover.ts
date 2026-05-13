@@ -10,24 +10,17 @@
 
 import { useRef, useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { generateStructuredPrompt } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { reconstructWidgetFromSections } from '@scalius/shared/html-section-parser';
-import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
-import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-config';
-import { getAiPrompts, getAiContextBatchDetails } from '@/lib/api.functions';
-import { readApiErrorMessage, readChatCompletionStream } from './ai-stream';
 import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
 import { limitImagesForModel } from './ai-context-limits';
+import { normalizeGeneratedWidgetContent, parseGeneratedWidgetContent } from './widget-generation-content';
+import { runWidgetGeneration } from './widget-generation-run-stream';
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
 import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
 import type { SectionContent } from './useStagedGeneration';
 
-type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
-type AiProductData = StructuredPromptParams['selectedProducts'][number];
-type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
-type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
 type ImprovementRun = { id: number; signal: AbortSignal };
 
 interface ModelInfo {
@@ -110,24 +103,6 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       setCurrentImprovementTarget(targetSection);
 
       try {
-        // Fetch system prompt (returns plain text)
-        const systemPrompt = (await getAiPrompts({ data: { type: aiGenerator.effectivePromptType } })) as string;
-        if (!isActiveImprovementRun(run)) return false;
-        if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
-
-        // Fetch context details
-        const contextData = (await getAiContextBatchDetails({
-          data: {
-            productIds: aiGenerator.getMergedProductIds(),
-            categoryIds: aiContext.allCategoriesSelected ? undefined : aiGenerator.getMergedCategoryIds(),
-            collectionIds: aiGenerator.getMergedCollectionIds(),
-            anchorCollectionIds: aiGenerator.getMergedAnchorCollectionIds(),
-            allCategories: aiContext.allCategoriesSelected,
-          },
-        })) as AiContextBatchDetails;
-        if (!isActiveImprovementRun(run)) return false;
-        notifyAiContextWarnings(contextData);
-
         // Get latest sections from stagedGeneration state
         const sections = aiGenerator.stagedGeneration.sections;
 
@@ -145,35 +120,6 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           toast.info(`Improving Section ${targetSection + 1} of ${sections.length}`);
         }
 
-        // Build improvement history context
-        const historyContext =
-          improvementHistory.length > 0
-            ? `\n\nPREVIOUS IMPROVEMENTS:\n${improvementHistory
-                .map(
-                  (h, i) =>
-                    `${i + 1}. ${h.section !== undefined ? `Section ${h.section + 1}` : 'Whole widget'}: "${h.prompt}"`,
-                )
-                .join(
-                  '\n',
-                )}\n\nIMPORTANT: Build upon these previous improvements. Do not revert any of the changes made in the history above.`
-            : '';
-
-        // Build other sections context (for awareness when improving specific section)
-        let otherSectionsContext = '';
-        if (targetSection !== undefined && sections.length > 1) {
-          const otherSections = sections
-            .map((s: SectionContent, idx: number) => {
-              if (idx === targetSection) return null; // Skip the target section
-              return `Section ${idx + 1}${s.description ? ` (${s.description})` : ''}:\n\`\`\`html\n${s.html}\n\`\`\`\n\`\`\`css\n${s.css || '/* No CSS */'}\n\`\`\``;
-            })
-            .filter(Boolean);
-
-          if (otherSections.length > 0) {
-            otherSectionsContext = `\n\nOTHER SECTIONS CONTEXT (for visual consistency and reference):\nYou are improving Section ${targetSection + 1} of ${sections.length}. Here are the other sections for context:\n\n${otherSections.join('\n\n')}\n\nIMPORTANT: Your improvement should maintain visual consistency with these sections. You can reference their styling and structure, but you should ONLY modify Section ${targetSection + 1}.`;
-          }
-        }
-
-        // Generate structured prompt for improvement
         const currentModel = aiGenerator.aiModels.find((m: ModelInfo) => m.id === aiGenerator.selectedModel);
         const isVisionModel = currentModel?.supportsVision || false;
         const imageSelection = limitImagesForModel(
@@ -187,83 +133,41 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           );
         }
 
-        const promptResult = await generateStructuredPrompt({
-          systemPrompt,
-          improvementPrompt:
-            aiGenerator.getPlacementAwareInstructions(promptToUse) + historyContext + otherSectionsContext,
+        const result = await runWidgetGeneration({
+          provider: aiGenerator.activeProvider,
+          model: aiGenerator.selectedModel,
+          promptType: aiGenerator.effectivePromptType,
+          operation: 'improve',
+          userPrompt: aiGenerator.getPlacementAwareInstructions(promptToUse),
+          deepComposition: true,
           existingHtml: codeToImprove.html,
           existingCss: codeToImprove.css,
+          targetSection,
+          sections: sections.map((section: SectionContent) => ({
+            html: section.html,
+            css: section.css,
+            description: section.description,
+          })),
+          improvementHistory,
           selectedImages: imageSelection.images,
-          selectedProducts: (contextData.products || []) as AiProductData[],
-          selectedCategories: (contextData.categories || []) as AiCategoryData[],
-          selectedCollections: (contextData.collections || []) as AiCollectionData[],
+          productIds: aiGenerator.getMergedProductIds(),
+          categoryIds: aiContext.allCategoriesSelected ? undefined : aiGenerator.getMergedCategoryIds(),
+          collectionIds: aiGenerator.getMergedCollectionIds(),
+          anchorCollectionIds: aiGenerator.getMergedAnchorCollectionIds(),
           allCategoriesSelected: aiContext.allCategoriesSelected,
-          modelId: aiGenerator.selectedModel,
           supportsVision: isVisionModel,
-          maxImagesOverride: currentModel?.maxImages,
-          promptType: aiGenerator.effectivePromptType,
-          sectionIndex: targetSection,
-          totalSections: sections.length,
-        });
-        if (!isActiveImprovementRun(run)) return false;
-
-        // Call API with structured messages
-        const response = await fetch('/api/v1/admin/ai/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          maxImages: currentModel?.maxImages,
+        }, {
           signal: run.signal,
-          body: JSON.stringify({
-            provider: aiGenerator.activeProvider,
-            messages: promptResult.messages,
-            model: aiGenerator.selectedModel,
-            stream: true,
-            operation: 'improve',
-            promptType: aiGenerator.effectivePromptType,
-          }),
+          onEvent: (event) => {
+            if (event.type === 'warning') {
+              notifyAiContextWarnings({ warnings: event.warnings as AiContextBatchDetails['warnings'] } as AiContextBatchDetails);
+            }
+          },
         });
         if (!isActiveImprovementRun(run)) return false;
-
-        if (!response.ok || !response.body) {
-          throw new Error(await readApiErrorMessage(response, 'Failed to generate content.'));
-        }
-
-        const accumulatedJson = await readChatCompletionStream(response);
-        if (!isActiveImprovementRun(run)) return false;
-        setRawOutput(accumulatedJson);
-
-        // Try tag-based parsing first, then fall back to JSON
-        const tagResult = parseTagBasedResponse(accumulatedJson);
-
-        let improvedContent;
-
-        if (tagResult.success && tagResult.data) {
-          const validation = validateParsedWidget(tagResult.data);
-          if (!validation.valid) {
-            if (import.meta.env.DEV) console.error('Tag-based validation failed:', validation.error);
-            if (import.meta.env.DEV) console.error('Parsed data:', tagResult.data);
-            throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
-          }
-          improvedContent = tagResult.data as { html: string; css: string };
-        } else {
-          // Fallback to JSON parsing
-          const parsed = parseJSONSafely(accumulatedJson);
-          if (!parsed.success) {
-            if (import.meta.env.DEV) console.error('All parsing strategies failed');
-            if (import.meta.env.DEV) console.error('Tag error:', tagResult.error);
-            if (import.meta.env.DEV) console.error('JSON error:', parsed.error);
-            throw new Error(
-              `Parsing failed: Neither tag-based nor JSON format detected. Check browser console for raw output.`,
-            );
-          }
-
-          const validation = validateWidgetJSON(parsed.data);
-          if (!validation.valid) {
-            if (import.meta.env.DEV) console.error('JSON validation failed:', validation.error);
-            if (import.meta.env.DEV) console.error('Parsed data:', parsed.data);
-            throw new Error(`Invalid response: ${validation.error}. Check browser console for raw output.`);
-          }
-          improvedContent = parsed.data as { html: string; css: string };
-        }
+        setRawOutput(result.raw);
+        const improvedContent = normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(result.raw));
 
         // Section-specific improvement: merge back into full widget
         if (targetSection !== undefined && sections.length > 0) {
