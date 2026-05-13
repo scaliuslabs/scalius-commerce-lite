@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
+import { stripWidgetRuntimeMarkup } from '@scalius/shared/widget-rendering';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import {
@@ -39,18 +40,15 @@ type WidgetData = { html: string; css: string };
 const COMPOSITION_BOUNDARY_GUARD_CSS = `
 
 /* Scalius composition boundary guard */
-.widget-container,
 [data-scalius-widget-root="true"] {
   gap: 0;
   margin: 0;
 }
 
-.widget-container > .widget-section:first-child > *:first-child,
 [data-scalius-widget-root="true"] > :first-child {
   margin-top: 0;
 }
 
-.widget-container > .widget-section:last-child > *:last-child,
 [data-scalius-widget-root="true"] > :last-child {
   margin-bottom: 0;
 }`;
@@ -101,9 +99,7 @@ function parseWidgetData(content: string): WidgetData {
 }
 
 function applyCompositionBoundaryGuard(widget: WidgetData): WidgetData {
-  const html = widget.html.includes('data-scalius-widget-root=')
-    ? widget.html
-    : `<div class="widget-container" data-scalius-widget-root="true">\n${widget.html}\n</div>`;
+  const html = stripWidgetRuntimeMarkup(widget.html);
   return { html, css: `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}` };
 }
 

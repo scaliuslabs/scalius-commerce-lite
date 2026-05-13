@@ -30,7 +30,8 @@ describe("widget destination contracts", () => {
 
     expect(contract).toContain("SERVER COMPOSITION BLUEPRINT");
     expect(contract).toContain("SINGLE-PASS COMPOSITION RULES");
-    expect(contract).toContain('data-scalius-widget-root="true"');
+    expect(contract).toContain("platform adds the runtime wrapper");
+    expect(contract).toContain("do not use widget-container");
     expect(contract).toContain("Final conversion CTA");
   });
 });

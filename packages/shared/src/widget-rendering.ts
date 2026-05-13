@@ -4,8 +4,19 @@ import {
 } from "./css-sanitize";
 import { scopeCss } from "./css-scope";
 import { sanitizeHtml } from "./html-sanitize";
+import { DomUtils, parseDocument } from "htmlparser2";
+import { isTag, type ChildNode, type Element } from "domhandler";
 
 const STYLE_BLOCK_RE = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+const RESERVED_WIDGET_RUNTIME_CLASSES = new Set([
+  "widget-container",
+  "cms-widget-frame",
+  "widget-placement-zone",
+]);
+const RESERVED_WIDGET_RUNTIME_ATTRIBUTES = new Set([
+  "data-scalius-widget-root",
+  "data-widget-id",
+]);
 
 export interface WidgetContentInput {
   id: string;
@@ -74,6 +85,72 @@ export function normalizeWidgetCss(css: string | null | undefined): string {
   return repairGeneratedCssComments(normalized);
 }
 
+/**
+ * Generated widget HTML is content only. The storefront/admin preview add the
+ * runtime root wrapper, so model-authored runtime classes or attrs must not be
+ * saved as part of merchant content.
+ */
+export function stripWidgetRuntimeMarkup(html: string): string {
+  if (!html.trim()) return "";
+
+  const runtimeWrapperNodes = new WeakSet<Element>();
+  const document = parseDocument(html, {
+    decodeEntities: true,
+    lowerCaseAttributeNames: true,
+    lowerCaseTags: true,
+  });
+
+  function visit(nodes: ChildNode[] = []): void {
+    for (const node of nodes) {
+      if (!isTag(node)) continue;
+
+      const attributes = node.attribs ?? {};
+      const originalClassNames = String(attributes.class ?? "")
+        .split(/\s+/)
+        .filter(Boolean);
+      const hadRuntimeClass = originalClassNames.some((className) =>
+        RESERVED_WIDGET_RUNTIME_CLASSES.has(className),
+      );
+      const hadRuntimeAttribute = Object.keys(attributes).some((name) =>
+        RESERVED_WIDGET_RUNTIME_ATTRIBUTES.has(name.toLowerCase()),
+      );
+
+      if (hadRuntimeClass || hadRuntimeAttribute) {
+        runtimeWrapperNodes.add(node);
+      }
+
+      for (const attributeName of Object.keys(attributes)) {
+        if (RESERVED_WIDGET_RUNTIME_ATTRIBUTES.has(attributeName.toLowerCase())) {
+          delete attributes[attributeName];
+        }
+      }
+
+      if (originalClassNames.length > 0) {
+        const classNames = originalClassNames.filter(
+          (className) => !RESERVED_WIDGET_RUNTIME_CLASSES.has(className),
+        );
+        if (classNames.length > 0) {
+          attributes.class = classNames.join(" ");
+        } else {
+          delete attributes.class;
+        }
+      }
+
+      node.attribs = attributes;
+      visit(node.children ?? []);
+    }
+  }
+
+  visit(document.children);
+
+  const children = document.children.flatMap((node) => {
+    if (!isNeutralRuntimeWrapper(node, runtimeWrapperNodes)) return [node];
+    return node.children ?? [];
+  });
+
+  return DomUtils.getOuterHTML(children);
+}
+
 export function getWidgetScopeClass(widgetId: string): string {
   const normalized = `sw-${widgetId}`
     .toLowerCase()
@@ -88,7 +165,7 @@ export function normalizeWidgetParts(input: {
   htmlContent?: string | null;
   cssContent?: string | null;
 }): NormalizedWidgetParts {
-  const normalizedHtml = normalizeWidgetHtml(input.htmlContent ?? "");
+  const normalizedHtml = stripWidgetRuntimeMarkup(normalizeWidgetHtml(input.htmlContent ?? ""));
   const extractedCssBlocks: string[] = [];
   const html = normalizedHtml.replace(STYLE_BLOCK_RE, (_match, css: string) => {
     if (css.trim()) extractedCssBlocks.push(css.trim());
@@ -116,4 +193,15 @@ export function prepareScopedWidgetContent(
   const css = scopeCss(transformedCss, scopeClass);
 
   return { scopeClass, html, css, cssReport };
+}
+
+function isNeutralRuntimeWrapper(
+  node: ChildNode,
+  runtimeWrapperNodes: WeakSet<Element>,
+): node is Element {
+  if (!isTag(node) || node.name !== "div" || !runtimeWrapperNodes.has(node)) {
+    return false;
+  }
+
+  return Object.keys(node.attribs ?? {}).length === 0;
 }

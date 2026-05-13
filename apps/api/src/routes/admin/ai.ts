@@ -161,8 +161,8 @@ function withDestinationRuntimeContract(
 SERVER PERFORMANCE CONTRACT:
 - Produce one complete artifact in this call. Do not wait for a later stage to make it coherent.
 - Use no JavaScript, no script tags, and no markdown.
-- Use one root wrapper with data-scalius-widget-root="true" when possible.
-- Root wrappers should use margin: 0 and avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.${compositionContract}`,
+- The platform owns runtime wrappers. Do not emit widget-container, cms-widget-frame, widget-placement-zone, data-scalius-widget-root, or data-widget-id in generated HTML.
+- Use one content wrapper or section with destination-specific classes and margin: 0. Avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.${compositionContract}`,
     } as ModelMessage,
   ];
 }

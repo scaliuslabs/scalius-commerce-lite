@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeWidgetParts,
   prepareScopedWidgetContent,
+  stripWidgetRuntimeMarkup,
 } from "./widget-rendering";
 
 describe("widget rendering helpers", () => {
@@ -41,5 +42,38 @@ describe("widget rendering helpers", () => {
     expect(prepared.html).not.toMatch(/onclick|script|style/i);
     expect(prepared.css).toContain(".sw-wid_test-123 .hero");
     expect(prepared.css).toContain(".sw-wid_test-123 .card");
+  });
+
+  it("removes model-authored runtime widget wrappers before rendering", () => {
+    const parts = normalizeWidgetParts({
+      htmlContent: `
+        <div class="widget-container cms-widget-frame" data-widget-id="fake" data-scalius-widget-root="true">
+          <section class="campaign">
+            <h2>Energy picks</h2>
+          </section>
+        </div>
+      `,
+      cssContent: ".widget-container { margin: 0; } .campaign { padding: 24px; }",
+    });
+
+    expect(parts.html).toContain('<section class="campaign">');
+    expect(parts.html).not.toContain("widget-container");
+    expect(parts.html).not.toContain("cms-widget-frame");
+    expect(parts.html).not.toContain("data-scalius-widget-root");
+    expect(parts.html).not.toContain("data-widget-id");
+  });
+
+  it("keeps non-runtime classes when stripping reserved widget classes", () => {
+    const html = stripWidgetRuntimeMarkup(`
+      <section class="widget-container campaign-shell" data-widget-id="model-owned">
+        <div class="widget-placement-zone content-band">Copy</div>
+      </section>
+    `);
+
+    expect(html).toContain('class="campaign-shell"');
+    expect(html).toContain('class="content-band"');
+    expect(html).not.toContain("widget-container");
+    expect(html).not.toContain("widget-placement-zone");
+    expect(html).not.toContain("data-widget-id");
   });
 });

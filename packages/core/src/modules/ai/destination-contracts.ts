@@ -121,7 +121,8 @@ ${describeWidgetCompositionPlan(plan)}
 
 SINGLE-PASS COMPOSITION RULES:
 - Think through the full composition internally, then return one complete <htmljs> and <css> artifact.
-- Use exactly one root wrapper with data-scalius-widget-root="true" and destination-specific classes.
+- Return content markup only. The platform adds the runtime wrapper, so do not use widget-container, cms-widget-frame, widget-placement-zone, data-scalius-widget-root, or data-widget-id in HTML.
+- Use one destination-specific top-level composition element or section with your own classes.
 - If the output has multiple visual bands, they must be children of the same root and must look like one connected composition, not separate widgets.
 - Keep generated CSS compact, scoped, and purposeful. Avoid repeated card systems, giant min-heights, viewport-height filler, spacer divs, oversized margins, and dead vertical gaps.
 - Homepage widgets should remain compact; landing sections should be campaign-like; collection sections should be product-comparison led.`;
