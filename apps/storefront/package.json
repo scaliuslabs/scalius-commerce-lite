@@ -14,7 +14,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.6",
+    "@astrojs/check": "^0.9.9",
     "@astrojs/partytown": "^2.1.4",
     "@astrojs/react": "^5.0.0",
     "@nanostores/react": "^1.0.0",
@@ -31,7 +31,7 @@
     "@scalius/shared": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "astro": "^6.0.4",
+    "astro": "^6.3.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
@@ -49,13 +49,13 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@astrojs/cloudflare": "^13.1.1",
-    "@cloudflare/workers-types": "^4.20260313.1",
+    "@astrojs/cloudflare": "^13.5.0",
+    "@cloudflare/workers-types": "^4.20260511.1",
     "@tailwindcss/typography": "^0.5.19",
-    "@tailwindcss/vite": "^4.2.1",
+    "@tailwindcss/vite": "^4.3.0",
     "prettier": "^3.7.4",
     "prettier-plugin-astro": "^0.14.1",
-    "vite": "^7.3.1",
-    "wrangler": "^4.73.0"
+    "vite": "^8.0.12",
+    "wrangler": "4.90.1"
   }
 }

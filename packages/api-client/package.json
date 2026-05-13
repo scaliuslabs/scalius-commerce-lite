@@ -19,7 +19,7 @@
     "@hey-api/client-fetch": "^0.8.0"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.66.0",
+    "@hey-api/openapi-ts": "^0.97.1",
     "@scalius/tsconfig": "workspace:*",
     "tsx": "^4.19.0"
   }

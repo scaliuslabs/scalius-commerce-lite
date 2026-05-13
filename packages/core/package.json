@@ -50,15 +50,15 @@
   },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.3.1",
-    "currency.js": "^2.0.4",
     "@polar-sh/sdk": "^0.46.4",
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.5.5",
-    "drizzle-orm": "^0.45.1",
-    "fast-xml-parser": "^5.5.5",
-    "firebase": "^12.0.0",
+    "better-auth": "^1.6.11",
+    "currency.js": "^2.0.4",
+    "drizzle-orm": "^0.45.2",
+    "fast-xml-parser": "^5.8.0",
+    "firebase": "^12.13.0",
     "mimetext": "^3.0.28",
     "nanoid": "^5.1.6",
     "standardwebhooks": "^1.0.0",
@@ -70,10 +70,10 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260313.1",
+    "@cloudflare/workers-types": "^4.20260511.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.6"
   },
   "license": "UNLICENSED"
 }

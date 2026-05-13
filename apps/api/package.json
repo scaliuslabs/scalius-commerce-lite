@@ -28,11 +28,11 @@
     "@scalius/shared": "workspace:*",
     "ai": "^6.0.177",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.5.5",
-    "drizzle-orm": "^0.45.1",
-    "fast-xml-parser": "^5.5.5",
-    "firebase": "^12.0.0",
-    "hono": "^4.12.7",
+    "better-auth": "^1.6.11",
+    "drizzle-orm": "^0.45.2",
+    "fast-xml-parser": "^5.8.0",
+    "firebase": "^12.13.0",
+    "hono": "^4.12.18",
     "jsonwebtoken": "^9.0.3",
     "mimetext": "^3.0.28",
     "nanoid": "^5.1.6",
@@ -42,11 +42,11 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260313.1",
+    "@cloudflare/workers-types": "^4.20260511.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.0",
-    "wrangler": "^4.73.0"
+    "vitest": "^4.1.6",
+    "wrangler": "4.90.1"
   }
 }

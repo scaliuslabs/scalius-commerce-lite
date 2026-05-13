@@ -106,9 +106,7 @@ Use remote deployment for:
 When doing this:
 
 1. deploy with `pnpm run deploy`
-2. verify login using:
-   - email: `ahmedrifatkonok@gmail.com`
-   - password: `RemoteAdminX2026!`
+2. verify login using an approved production admin account from the team's password manager or secure operations vault
 3. test only the remote-only scenarios
 4. capture any new findings back into `audit/REMEDIATION_TRACKER.md`
 
