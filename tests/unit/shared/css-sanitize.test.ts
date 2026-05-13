@@ -117,4 +117,28 @@ describe("sanitizeCssForStyleElement", () => {
     expect(scoped).toContain("@supports");
     expect(scoped).toContain(".sw-safe .grid");
   });
+
+  it("clamps safe-but-bad generated layout spacing that creates widget gaps", () => {
+    const sanitized = sanitizeCssForStyleElement(`
+      .generated-widget {
+        margin: 160px auto 144px;
+        margin-top: -220px;
+        padding: clamp(80px, 12vw, 220px) 24px 14rem;
+        padding-bottom: -80px;
+        gap: 96px 120px;
+        min-height: 100vh;
+        height: 900px;
+      }
+    `);
+
+    expect(sanitized).toContain("margin:48px auto 48px");
+    expect(sanitized).toContain("margin-top:-48px");
+    expect(sanitized).toContain("padding:120px 24px 120px");
+    expect(sanitized).toContain("padding-bottom:0");
+    expect(sanitized).toContain("gap:64px 64px");
+    expect(sanitized).toContain("min-height:560px");
+    expect(sanitized).toContain("height:720px");
+    expect(sanitized).not.toContain("100vh");
+    expect(sanitized).not.toContain("900px");
+  });
 });

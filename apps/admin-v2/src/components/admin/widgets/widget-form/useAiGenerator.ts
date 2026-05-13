@@ -98,7 +98,7 @@ export const useAiGenerator = (
   const generationRunIdRef = useRef(0);
   const generationAbortRef = useRef<AbortController | null>(null);
 
-  // Staged generation hook
+  // Deep composition hook (keeps the existing state shape used by section editing).
   const stagedGeneration = useStagedGeneration();
 
   const reloadAiSettings = useCallback(() => {
@@ -341,7 +341,7 @@ export const useAiGenerator = (
           setGeneratedContent(result);
         } else {
           if (!isActiveGenerationRun(run)) return;
-          toast.info('Staged generation could not finish; retrying as a single widget.');
+          toast.info('Deep composition could not finish; retrying as a standard widget.');
           stagedGeneration.reset();
           await handleSimpleGeneration(promptResult.messages, run);
         }
@@ -498,21 +498,20 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
     stagedGeneration.isGenerating || stagedGeneration.plan
       ? (() => {
           const totalSections = stagedGeneration.plan?.totalSections ?? 1;
-          const completedSections = Math.min(stagedGeneration.sections.length, totalSections);
 
           if (stagedGeneration.currentStage === 'planning') {
             return {
-              currentStage: 'Planning widget structure...',
+              currentStage: 'Preparing composition blueprint...',
               totalSections,
-              percentage: 5,
+              percentage: 10,
             };
           }
 
-          if (stagedGeneration.currentStage === 'polishing') {
+          if (stagedGeneration.currentStage === 'generating') {
             return {
-              currentStage: 'Polishing composition...',
+              currentStage: 'Generating one cohesive widget...',
               totalSections,
-              percentage: 95,
+              percentage: 70,
             };
           }
 
@@ -525,10 +524,10 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
           }
 
           return {
-            currentStage: `Generating section ${Math.min(stagedGeneration.currentSectionIndex + 1, totalSections)} of ${totalSections}`,
+            currentStage: 'Finalizing composition...',
             currentSection: stagedGeneration.currentSectionIndex,
             totalSections,
-            percentage: Math.min(90, 10 + Math.round((completedSections / totalSections) * 80)),
+            percentage: 90,
           };
         })()
       : undefined;

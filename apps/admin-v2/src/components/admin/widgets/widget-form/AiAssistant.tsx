@@ -237,10 +237,10 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                   <Layers className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-0.5">
                     <Label htmlFor="staged-mode" className="text-sm font-medium cursor-pointer">
-                      Staged generation
+                      Deep composition
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Slower multi-call mode for very large compositions. Leave off for fast generation.
+                      Adds a destination blueprint while still generating in one fast model call.
                     </p>
                   </div>
                 </div>
@@ -257,18 +257,17 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">
                       {stagedGeneration.currentStage === 'planning'
-                        ? 'Planning...'
-                        : stagedGeneration.currentStage === 'polishing'
-                          ? 'Polishing composition...'
-                          : `Generating Section ${stagedGeneration.currentSectionIndex + 1} of ${stagedGeneration.plan.totalSections}`}
+                        ? 'Preparing blueprint...'
+                        : stagedGeneration.currentStage === 'complete'
+                          ? 'Widget generation complete'
+                          : 'Generating one cohesive widget...'}
                     </span>
                     <span className="text-muted-foreground">
-                      {stagedGeneration.currentStage === 'polishing'
-                        ? '95'
-                        : Math.round(
-                            ((stagedGeneration.currentSectionIndex + 1) / stagedGeneration.plan.totalSections) * 100,
-                          )}
-                      %
+                      {stagedGeneration.currentStage === 'planning'
+                        ? '10%'
+                        : stagedGeneration.currentStage === 'complete'
+                          ? '100%'
+                          : '70%'}
                     </span>
                   </div>
                   <div className="w-full bg-background rounded-full h-2 overflow-hidden">
@@ -276,9 +275,11 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                       className="bg-primary h-full transition-all duration-300"
                       style={{
                         width:
-                          stagedGeneration.currentStage === 'polishing'
-                            ? '95%'
-                            : `${((stagedGeneration.currentSectionIndex + 1) / stagedGeneration.plan.totalSections) * 100}%`,
+                          stagedGeneration.currentStage === 'planning'
+                            ? '10%'
+                            : stagedGeneration.currentStage === 'complete'
+                              ? '100%'
+                              : '70%',
                       }}
                     />
                   </div>
@@ -289,19 +290,19 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                           key={i}
                           className={cn(
                             'flex items-center gap-2',
-                            i < stagedGeneration.currentSectionIndex && 'text-primary',
-                            i === stagedGeneration.currentSectionIndex && 'font-medium',
+                            stagedGeneration.currentStage === 'complete' && 'text-primary',
+                            stagedGeneration.currentStage !== 'complete' && i === 0 && 'font-medium',
                           )}
                         >
                           <span
                             className={cn(
                               'w-4 h-4 rounded-full border flex items-center justify-center text-[10px]',
-                              i < stagedGeneration.currentSectionIndex &&
+                              stagedGeneration.currentStage === 'complete' &&
                                 'bg-primary text-primary-foreground border-primary',
-                              i === stagedGeneration.currentSectionIndex && 'border-primary',
+                              stagedGeneration.currentStage !== 'complete' && i === 0 && 'border-primary',
                             )}
                           >
-                            {i < stagedGeneration.currentSectionIndex ? '✓' : i + 1}
+                            {stagedGeneration.currentStage === 'complete' ? '✓' : i + 1}
                           </span>
                           <span>{desc}</span>
                         </div>
@@ -360,7 +361,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
               <div className="mt-2 space-y-1">
                 <p>Uses only HTML/CSS. Scripts are rejected before storefront rendering.</p>
                 <p>Selected products provide real buy-now URLs, pricing, images, and category context.</p>
-                <p>Staged mode is best for rich multi-section storefront content.</p>
+                <p>Deep composition adds a destination blueprint without serial section calls.</p>
               </div>
             </div>
           </div>
