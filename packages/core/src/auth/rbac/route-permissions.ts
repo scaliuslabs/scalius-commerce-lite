@@ -258,7 +258,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
   },
   "/api/v1/admin/orders/*/refund": {
-    POST: { permission: PERMISSIONS.ORDERS_EDIT },
+    POST: { permission: PERMISSIONS.ORDERS_REFUND },
   },
   "/api/v1/admin/orders/*/fulfillment-status": {
     PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },

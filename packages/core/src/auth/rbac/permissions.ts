@@ -35,7 +35,7 @@ export const PERMISSIONS = {
   COLLECTIONS_TOGGLE_STATUS: "collections.toggle_status",
 
   // =============================================
-  // Orders (7 permissions)
+  // Orders (8 permissions)
   // =============================================
   ORDERS_VIEW: "orders.view",
   ORDERS_CREATE: "orders.create",
@@ -44,6 +44,7 @@ export const PERMISSIONS = {
   ORDERS_RESTORE: "orders.restore",
   ORDERS_CHANGE_STATUS: "orders.change_status",
   ORDERS_MANAGE_SHIPMENTS: "orders.manage_shipments",
+  ORDERS_REFUND: "orders.refund",
 
   // =============================================
   // Customers (6 permissions)
@@ -413,6 +414,15 @@ export const PERMISSION_METADATA: Record<
     action: "manage_shipments",
     category: "Orders",
     isSensitive: false,
+  },
+  [PERMISSIONS.ORDERS_REFUND]: {
+    name: PERMISSIONS.ORDERS_REFUND,
+    displayName: "Refund Orders",
+    description: "Issue manual refunds and auto-refunds for returned orders",
+    resource: "orders",
+    action: "refund",
+    category: "Orders",
+    isSensitive: true,
   },
 
   // Customers
