@@ -71,6 +71,13 @@ function createBatch(messages: Array<Message<PaymentQueueMessage>>): MessageBatc
   return {
     queue: "payment-events-queue",
     messages,
+    metadata: {
+      metrics: {
+        backlogCount: messages.length,
+        backlogBytes: 0,
+        oldestMessageTimestamp: messages[0]?.timestamp,
+      },
+    },
     ackAll: vi.fn(),
     retryAll: vi.fn(),
   };

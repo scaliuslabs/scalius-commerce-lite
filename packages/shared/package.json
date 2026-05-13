@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260313.1",
+    "@cloudflare/workers-types": "^4.20260511.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/css-tree": "^2.3.11",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.6"
   },
   "dependencies": {
     "clsx": "^2.1.1",

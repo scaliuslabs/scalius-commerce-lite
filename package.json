@@ -29,13 +29,13 @@
     "@eslint/js": "^10.0.1",
     "@scalius/tsconfig": "workspace:*",
     "drizzle-kit": "^0.31.9",
-    "eslint": "^10.0.3",
+    "eslint": "^10.3.0",
     "eslint-plugin-astro": "^1.6.0",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.4.0",
     "turbo": "^2.8.17",
-    "typescript-eslint": "^8.57.0",
-    "vitest": "^4.1.0"
+    "typescript-eslint": "^8.59.3",
+    "vitest": "^4.1.6"
   },
   "packageManager": "pnpm@10.26.1",
   "overrides": {
@@ -61,16 +61,20 @@
       ]
     },
     "overrides": {
+      "picomatch": ">=2.3.2",
+      "yaml": ">=2.8.3",
+      "dompurify": ">=3.4.0",
+      "postcss": ">=8.5.10",
       "jws": "^3.2.3",
       "esbuild": "^0.25.0",
       "mdast-util-to-hast": "^13.2.1",
       "markdown-it": ">=14.1.1",
       "devalue": ">=5.6.2",
-      "h3": ">=1.15.5",
+      "h3": ">=1.15.9",
       "diff": ">=5.2.2",
       "lodash": ">=4.17.23",
-      "undici": ">=7.18.2",
-      "wrangler": ">=4.76.0"
+      "undici": ">=7.24.4",
+      "wrangler": ">=4.90.1"
     }
   }
 }
