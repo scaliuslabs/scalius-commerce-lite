@@ -1,7 +1,7 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import {
   generateText,
   NoObjectGeneratedError,
@@ -10,9 +10,9 @@ import {
   UnsupportedFunctionalityError,
   type LanguageModel,
   type ModelMessage,
-} from "ai";
-import { createWorkersAI } from "workers-ai-provider";
-import { getClientIp, rateLimit } from "@scalius/shared/rate-limit";
+} from 'ai';
+import { createWorkersAI } from 'workers-ai-provider';
+import { getClientIp, rateLimit } from '@scalius/shared/rate-limit';
 import {
   AI_PROVIDER_IDS,
   GENERATION_CONFIG,
@@ -25,12 +25,12 @@ import {
   resolveWidgetAiModelCapabilities,
   type WidgetAiProvider,
   type WidgetAiRuntimeSettings,
-} from "@scalius/core/modules/ai";
-import { ok } from "../../utils/api-response";
-import { RateLimitError, ValidationError } from "../../utils/api-error";
-import { errorResponses, successEnvelope } from "../../schemas/responses";
-import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { listAllowedModelsForProvider } from "./ai-models";
+} from '@scalius/core/modules/ai';
+import { ok } from '../../utils/api-response';
+import { RateLimitError, ValidationError } from '../../utils/api-error';
+import { errorResponses, successEnvelope } from '../../schemas/responses';
+import { getCredentialEncryptionKey } from '../../utils/encryption-key';
+import { listAllowedModelsForProvider } from './ai-models';
 import {
   normalizeStagedPlanOutput,
   normalizeStagedPlanText,
@@ -40,8 +40,8 @@ import {
   stagedPlanOutputSchema,
   widgetOutputObjectSpec,
   widgetOutputSchema,
-} from "./ai-response-validation";
-import { normalizeMessages } from "./ai-message-normalization";
+} from './ai-response-validation';
+import { normalizeMessages } from './ai-message-normalization';
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -65,7 +65,7 @@ const messagePartSchema = z
   .passthrough();
 
 const messageSchema = z.object({
-  role: z.enum(["system", "user", "assistant"]),
+  role: z.enum(['system', 'user', 'assistant']),
   content: z.union([z.string(), z.array(messagePartSchema)]),
 });
 
@@ -76,21 +76,24 @@ const generateSchema = z
     messages: z.array(messageSchema).optional(),
     prompt: z.string().optional(),
     stream: z.boolean().optional(),
-    images: z
-      .array(z.object({ url: z.string(), mimeType: z.string().optional() }).passthrough())
-      .optional(),
-    operation: z.enum(["create", "improve"]).optional(),
+    images: z.array(z.object({ url: z.string(), mimeType: z.string().optional() }).passthrough()).optional(),
+    operation: z.enum(['create', 'improve']).optional(),
   })
   .refine((data) => data.messages || data.prompt, {
-    message: "Messages or prompt is required.",
+    message: 'Messages or prompt is required.',
   });
 
 const generateStagedSchema = z.object({
   provider: providerEnum.optional(),
   model: z.string().max(MAX_MODEL_ID_CHARS).optional(),
   messages: z.array(messageSchema).min(1),
-  stage: z.enum(["plan", "generate"]).optional(),
-  sectionIndex: z.number().int().min(0).max(GENERATION_CONFIG.stagedGeneration.maxSections - 1).optional(),
+  stage: z.enum(['plan', 'generate', 'finalize']).optional(),
+  sectionIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(GENERATION_CONFIG.stagedGeneration.maxSections - 1)
+    .optional(),
   totalSections: z
     .number()
     .int()
@@ -114,23 +117,23 @@ interface WidgetGenerationResult {
 function isAllowedImageUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "data:";
+    return url.protocol === 'https:' || url.protocol === 'data:';
   } catch {
     return false;
   }
 }
 
-function countMessageText(content: z.infer<typeof messageSchema>["content"]): number {
-  if (typeof content === "string") return content.length;
+function countMessageText(content: z.infer<typeof messageSchema>['content']): number {
+  if (typeof content === 'string') return content.length;
   return content.reduce((total, part) => {
-    if (typeof part.text === "string") return total + part.text.length;
+    if (typeof part.text === 'string') return total + part.text.length;
     const imageUrl = part.image_url?.url ?? part.image;
     return total + (imageUrl ? String(imageUrl).length : 0);
   }, 0);
 }
 
-function countMessageImages(content: z.infer<typeof messageSchema>["content"]): number {
-  if (typeof content === "string") return 0;
+function countMessageImages(content: z.infer<typeof messageSchema>['content']): number {
+  if (typeof content === 'string') return 0;
   return content.reduce((total, part) => {
     return total + (part.image_url?.url || part.image ? 1 : 0);
   }, 0);
@@ -152,20 +155,17 @@ function validateMessagePayload(messages: Array<z.infer<typeof messageSchema>>):
   }
 
   for (const message of messages) {
-    if (typeof message.content === "string") continue;
+    if (typeof message.content === 'string') continue;
     for (const part of message.content) {
       const imageUrl = part.image_url?.url ?? part.image;
       if (imageUrl && !isAllowedImageUrl(String(imageUrl))) {
-        throw new ValidationError("AI image URLs must use HTTPS or data URLs.");
+        throw new ValidationError('AI image URLs must use HTTPS or data URLs.');
       }
     }
   }
 }
 
-function validatePromptPayload(
-  prompt: string,
-  images: Array<{ url: string; mimeType?: string }> | undefined,
-): void {
+function validatePromptPayload(prompt: string, images: Array<{ url: string; mimeType?: string }> | undefined): void {
   if (prompt.length > MAX_TEXT_CHARS) {
     throw new ValidationError(`AI prompt is too large. Maximum is ${MAX_TEXT_CHARS} characters.`);
   }
@@ -174,7 +174,7 @@ function validatePromptPayload(
   }
   for (const image of images ?? []) {
     if (!isAllowedImageUrl(image.url)) {
-      throw new ValidationError("AI image URLs must use HTTPS or data URLs.");
+      throw new ValidationError('AI image URLs must use HTTPS or data URLs.');
     }
   }
 }
@@ -183,7 +183,7 @@ async function enforceAiRateLimit(c: any): Promise<void> {
   const kv = c.env.CACHE as KVNamespace | undefined;
   if (!kv) return;
 
-  const user = c.get("user") as { id?: string } | undefined;
+  const user = c.get('user') as { id?: string } | undefined;
   const identity = user?.id || getClientIp(c.req.raw);
   const result = await rateLimit({
     kv,
@@ -193,10 +193,7 @@ async function enforceAiRateLimit(c: any): Promise<void> {
   });
 
   if (!result.allowed) {
-    throw new RateLimitError(
-      ERROR_MESSAGES.rateLimitError,
-      Math.ceil((result.resetAt - Date.now()) / 1000),
-    );
+    throw new RateLimitError(ERROR_MESSAGES.rateLimitError, Math.ceil((result.resetAt - Date.now()) / 1000));
   }
 }
 
@@ -210,18 +207,18 @@ function getLanguageModel(
     throw new ValidationError(ERROR_MESSAGES.apiKeyMissing);
   }
 
-  if (provider === "openrouter") {
+  if (provider === 'openrouter') {
     const openrouter = createOpenRouter({
       apiKey: settings.apiKeys.openrouter,
       baseURL: settings.providers.openrouter.baseUrl,
       appName: settings.providers.openrouter.appName || undefined,
       appUrl: settings.providers.openrouter.appUrl || undefined,
-      compatibility: "strict",
+      compatibility: 'strict',
     });
     return openrouter(modelId);
   }
 
-  if (provider === "openai") {
+  if (provider === 'openai') {
     const openai = createOpenAI({
       apiKey: settings.apiKeys.openai,
       baseURL: settings.providers.openai.baseUrl,
@@ -229,7 +226,7 @@ function getLanguageModel(
     return openai(modelId);
   }
 
-  if (provider === "gemini") {
+  if (provider === 'gemini') {
     const google = createGoogleGenerativeAI({
       apiKey: settings.apiKeys.gemini,
       baseURL: settings.providers.gemini.baseUrl,
@@ -255,22 +252,22 @@ function promptToMessages(
   prompt: string,
   images: Array<{ url: string; mimeType?: string }> | undefined,
 ): ModelMessage[] {
-  if (!images?.length) return [{ role: "user", content: prompt }];
+  if (!images?.length) return [{ role: 'user', content: prompt }];
   return [
     {
-      role: "user",
+      role: 'user',
       content: [
-        { type: "text", text: prompt },
+        { type: 'text', text: prompt },
         ...images.map((image) => {
           try {
             return {
-              type: "image" as const,
+              type: 'image' as const,
               image: new URL(image.url),
               mediaType: image.mimeType,
             };
           } catch {
             return {
-              type: "text" as const,
+              type: 'text' as const,
               text: `[Image: ${image.url}]`,
             };
           }
@@ -288,15 +285,15 @@ function openAiCompatibleJson(
 ) {
   return {
     id: crypto.randomUUID(),
-    object: "chat.completion",
+    object: 'chat.completion',
     created: Math.floor(Date.now() / 1000),
     provider,
     model,
     choices: [
       {
         index: 0,
-        message: { role: "assistant", content: text },
-        finish_reason: "stop",
+        message: { role: 'assistant', content: text },
+        finish_reason: 'stop',
       },
     ],
     usage: {
@@ -316,16 +313,14 @@ function openAiCompatibleStream(
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      let rawText = "";
+      let rawText = '';
 
       try {
         for await (const delta of textStream) {
           if (!delta) continue;
           rawText += delta;
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`,
-            ),
+            encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`),
           );
         }
 
@@ -337,8 +332,8 @@ function openAiCompatibleStream(
                 choices: [
                   {
                     index: 0,
-                    message: { role: "assistant", content: finalContent },
-                    finish_reason: "stop",
+                    message: { role: 'assistant', content: finalContent },
+                    finish_reason: 'stop',
                   },
                 ],
               })}\n\n`,
@@ -350,16 +345,13 @@ function openAiCompatibleStream(
           encoder.encode(
             `data: ${JSON.stringify({
               error: {
-                message:
-                  error instanceof Error
-                    ? error.message
-                    : "AI stream failed",
+                message: error instanceof Error ? error.message : 'AI stream failed',
               },
             })}\n\n`,
           ),
         );
       } finally {
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       }
     },
@@ -367,9 +359,9 @@ function openAiCompatibleStream(
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
     },
   });
 }
@@ -385,8 +377,8 @@ function usageFromResult(result: { totalUsage?: GenerationUsage }): GenerationUs
 function structuredGenerationFailureDetails(error: unknown): Record<string, unknown> {
   if (NoObjectGeneratedError.isInstance(error)) {
     return {
-      type: "NoObjectGeneratedError",
-      cause: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ""),
+      type: 'NoObjectGeneratedError',
+      cause: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ''),
       finishReason: error.finishReason,
       usage: error.usage,
       response: error.response,
@@ -396,7 +388,7 @@ function structuredGenerationFailureDetails(error: unknown): Record<string, unkn
 
   if (UnsupportedFunctionalityError.isInstance(error)) {
     return {
-      type: "UnsupportedFunctionalityError",
+      type: 'UnsupportedFunctionalityError',
       functionality: error.functionality,
       message: error.message,
     };
@@ -409,7 +401,10 @@ function structuredGenerationFailureDetails(error: unknown): Record<string, unkn
 }
 
 function warnStructuredGenerationFallback(scope: string, error: unknown): void {
-  console.warn(`${scope} structured generation failed; falling back to text.`, structuredGenerationFailureDetails(error));
+  console.warn(
+    `${scope} structured generation failed; falling back to text.`,
+    structuredGenerationFailureDetails(error),
+  );
 }
 
 function addWidgetFormatRetryInstruction(options: GenerateTextOptions): GenerateTextOptions {
@@ -422,15 +417,12 @@ function addWidgetFormatRetryInstruction(options: GenerateTextOptions): Generate
     messages: [
       ...messages,
       {
-        role: "user",
+        role: 'user',
         content:
-          "The previous streamed response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* valid CSS only */\n</css>",
+          'The previous streamed response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* valid CSS only */\n</css>',
       },
     ],
-    temperature:
-      typeof options.temperature === "number"
-        ? Math.min(options.temperature, 0.3)
-        : 0.3,
+    temperature: typeof options.temperature === 'number' ? Math.min(options.temperature, 0.3) : 0.3,
     maxRetries: 1,
   };
   return retryOptions as GenerateTextOptions;
@@ -446,9 +438,9 @@ function addStagedPlanRetryInstruction(options: GenerateTextOptions): GenerateTe
     messages: [
       ...messages,
       {
-        role: "user",
+        role: 'user',
         content:
-          "Return ONLY a valid JSON generation plan. No markdown, HTML, CSS, comments, or explanation. Shape: {\"totalSections\":3,\"sectionDescriptions\":[\"Hero\",\"Product showcase\",\"CTA\"],\"estimatedTokens\":1200}.",
+          'Return ONLY a valid JSON generation plan. No markdown, HTML, CSS, comments, or explanation. Shape: {"totalSections":3,"compositionBrief":"One continuous homepage merchandising widget","sharedDesignSystem":"Dark campaign palette, consistent cards and CTAs","spacingStrategy":"Final wrapper has gap 0; sections connect with shared background and internal padding","sectionDescriptions":["Hero","Product showcase","CTA"],"sectionContinuity":["Establish design tokens","Continue with same background and product cards","Close without external spacing"],"estimatedTokens":1200}.',
       },
     ],
     temperature: 0.1,
@@ -467,17 +459,16 @@ async function generateWidgetContent(
         ...widgetOutputObjectSpec,
       }),
     }).catch((error) => {
-      warnStructuredGenerationFallback("Widget", error);
+      warnStructuredGenerationFallback('Widget', error);
       return null;
     });
 
     if (result) {
       const output = widgetOutputSchema.safeParse(result.output);
       if (!output.success) {
-        throw new ValidationError(
-          ERROR_MESSAGES.jsonParseFailed,
-          { issues: output.error.issues },
-        );
+        throw new ValidationError(ERROR_MESSAGES.jsonParseFailed, {
+          issues: output.error.issues,
+        });
       }
       return {
         text: normalizeWidgetOutput(output.data),
@@ -501,7 +492,7 @@ async function finalizeStreamedWidgetContent(
   try {
     return normalizeWidgetGenerationText(rawText);
   } catch (error) {
-    console.warn("Streamed widget response failed validation; retrying once:", error);
+    console.warn('Streamed widget response failed validation; retrying once:', error);
     const retryOptions = addWidgetFormatRetryInstruction(options);
     const retry = await generateWidgetContent(retryOptions, capabilities);
     return retry.text;
@@ -519,7 +510,7 @@ async function generateStagedPlan(
         ...stagedPlanOutputObjectSpec,
       }),
     }).catch((error) => {
-      warnStructuredGenerationFallback("Staged plan", error);
+      warnStructuredGenerationFallback('Staged plan', error);
       return null;
     });
 
@@ -531,7 +522,7 @@ async function generateStagedPlan(
           usage: usageFromResult(result),
         };
       }
-      console.warn("Structured staged plan output failed validation; falling back to text:", output.error);
+      console.warn('Structured staged plan output failed validation; falling back to text:', output.error);
     }
   }
 
@@ -542,7 +533,7 @@ async function generateStagedPlan(
       usage: usageFromResult(result),
     };
   } catch (error) {
-    console.warn("Text staged plan failed validation; retrying once:", error);
+    console.warn('Text staged plan failed validation; retrying once:', error);
     const retry = await generateText(addStagedPlanRetryInstruction(options));
     return {
       text: normalizeStagedPlanText(retry.text),
@@ -552,23 +543,23 @@ async function generateStagedPlan(
 }
 
 async function runtimeSettings(c: any) {
-  const db = c.get("db");
+  const db = c.get('db');
   return getWidgetAiRuntimeSettings(db, c.env, getCredentialEncryptionKey(c.env));
 }
 
 const listModelsRoute = createRoute({
-  method: "get",
-  path: "/models",
-  tags: ["Admin - AI"],
-  summary: "List available models for the configured AI provider",
+  method: 'get',
+  path: '/models',
+  tags: ['Admin - AI'],
+  summary: 'List available models for the configured AI provider',
   request: {
     query: z.object({ provider: providerEnum.optional() }),
   },
   responses: {
     200: {
-      description: "AI model list",
+      description: 'AI model list',
       content: {
-        "application/json": {
+        'application/json': {
           schema: successEnvelope(
             z.object({
               provider: providerEnum,
@@ -585,7 +576,7 @@ const listModelsRoute = createRoute({
 
 app.openapi(listModelsRoute, async (c) => {
   const settings = await runtimeSettings(c);
-  const query = c.req.valid("query");
+  const query = c.req.valid('query');
   const provider = getConfiguredProvider(settings, query.provider);
   const models = await listAllowedModelsForProvider(provider, settings);
 
@@ -597,19 +588,21 @@ app.openapi(listModelsRoute, async (c) => {
 });
 
 const generateRoute = createRoute({
-  method: "post",
-  path: "/generate",
-  tags: ["Admin - AI"],
-  summary: "Generate widget content with the configured AI provider",
+  method: 'post',
+  path: '/generate',
+  tags: ['Admin - AI'],
+  summary: 'Generate widget content with the configured AI provider',
   request: {
-    body: { content: { "application/json": { schema: generateSchema } } },
+    body: { content: { 'application/json': { schema: generateSchema } } },
   },
   responses: {
     200: {
-      description: "Generation result",
+      description: 'Generation result',
       content: {
-        "application/json": { schema: successEnvelope(z.object({}).passthrough()) },
-        "text/event-stream": { schema: z.string() },
+        'application/json': {
+          schema: successEnvelope(z.object({}).passthrough()),
+        },
+        'text/event-stream': { schema: z.string() },
       },
     },
     ...errorResponses,
@@ -618,35 +611,33 @@ const generateRoute = createRoute({
 
 app.openapi(generateRoute, async (c) => {
   await enforceAiRateLimit(c);
-  const payload = c.req.valid("json");
+  const payload = c.req.valid('json');
   if (payload.messages) {
     validateMessagePayload(payload.messages);
   } else {
-    validatePromptPayload(payload.prompt ?? "", payload.images);
+    validatePromptPayload(payload.prompt ?? '', payload.images);
   }
   const settings = await runtimeSettings(c);
   const provider = getConfiguredProvider(settings, payload.provider);
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
-  const capabilities = resolveWidgetAiModelCapabilities(
-    provider,
-    modelId,
-    settings.providers[provider].capabilities,
-  );
+  const capabilities = resolveWidgetAiModelCapabilities(provider, modelId, settings.providers[provider].capabilities);
   const messages = payload.messages
     ? normalizeMessages(payload.messages)
-    : promptToMessages(payload.prompt ?? "", payload.images);
+    : promptToMessages(payload.prompt ?? '', payload.images);
 
   const generationOptions = {
     model,
     messages,
     allowSystemInMessages: true,
     temperature:
-      payload.operation === "improve"
+      payload.operation === 'improve'
         ? settings.generation.improvementTemperature
         : settings.generation.generationTemperature,
     maxOutputTokens: settings.generation.maxOutputTokens,
-    timeout: { totalMs: getTimeout(payload.operation === "improve" ? "improvement" : "generation") },
+    timeout: {
+      totalMs: getTimeout(payload.operation === 'improve' ? 'improvement' : 'generation'),
+    },
     maxRetries: 2,
     abortSignal: c.req.raw.signal,
   };
@@ -659,25 +650,24 @@ app.openapi(generateRoute, async (c) => {
   }
 
   const result = await generateWidgetContent(generationOptions, capabilities);
-  return ok(
-    c,
-    openAiCompatibleJson(result.text, provider, modelId, result.usage),
-  );
+  return ok(c, openAiCompatibleJson(result.text, provider, modelId, result.usage));
 });
 
 const generateStagedRoute = createRoute({
-  method: "post",
-  path: "/generate-staged",
-  tags: ["Admin - AI"],
-  summary: "Generate staged widget content with the configured AI provider",
+  method: 'post',
+  path: '/generate-staged',
+  tags: ['Admin - AI'],
+  summary: 'Generate staged widget content with the configured AI provider',
   request: {
-    body: { content: { "application/json": { schema: generateStagedSchema } } },
+    body: { content: { 'application/json': { schema: generateStagedSchema } } },
   },
   responses: {
     200: {
-      description: "Staged generation result",
+      description: 'Staged generation result',
       content: {
-        "application/json": { schema: successEnvelope(z.object({}).passthrough()) },
+        'application/json': {
+          schema: successEnvelope(z.object({}).passthrough()),
+        },
       },
     },
     ...errorResponses,
@@ -686,36 +676,38 @@ const generateStagedRoute = createRoute({
 
 app.openapi(generateStagedRoute, async (c) => {
   await enforceAiRateLimit(c);
-  const payload = c.req.valid("json");
+  const payload = c.req.valid('json');
   validateMessagePayload(payload.messages);
   const settings = await runtimeSettings(c);
   const provider = getConfiguredProvider(settings, payload.provider);
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
-  const capabilities = resolveWidgetAiModelCapabilities(
-    provider,
-    modelId,
-    settings.providers[provider].capabilities,
-  );
+  const capabilities = resolveWidgetAiModelCapabilities(provider, modelId, settings.providers[provider].capabilities);
   const generationOptions = {
     model,
     messages: normalizeMessages(payload.messages),
     allowSystemInMessages: true,
     temperature:
-      payload.stage === "plan"
+      payload.stage === 'plan'
         ? settings.generation.planningTemperature
-        : settings.generation.generationTemperature,
+        : payload.stage === 'finalize'
+          ? Math.min(settings.generation.improvementTemperature, 0.45)
+          : settings.generation.generationTemperature,
     maxOutputTokens: settings.generation.maxOutputTokens,
     timeout: {
       totalMs:
-        payload.stage === "plan" ? getTimeout("planning") : getTimeout("generation"),
+        payload.stage === 'plan'
+          ? getTimeout('planning')
+          : payload.stage === 'finalize'
+            ? getTimeout('improvement')
+            : getTimeout('generation'),
     },
     maxRetries: 2,
     abortSignal: c.req.raw.signal,
   };
 
   const result =
-    payload.stage === "plan"
+    payload.stage === 'plan'
       ? await generateStagedPlan(generationOptions, capabilities)
       : await generateWidgetContent(generationOptions, capabilities);
 
