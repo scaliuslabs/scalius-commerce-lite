@@ -27,10 +27,12 @@ const clientGen = readFileSync(clientGenPath, "utf8").replaceAll(
 );
 writeFileSync(clientGenPath, ensureFinalNewline(clientGen));
 
-const sdkGen = readFileSync(sdkGenPath, "utf8").replaceAll(
-  "from './client';",
-  "from './client-core';",
-);
+const sdkGen = readFileSync(sdkGenPath, "utf8")
+  .replaceAll("from './client';", "from './client-core';")
+  .replaceAll(
+    "Options2<TData, ThrowOnError, TResponse>",
+    "Options2<TData, ThrowOnError>",
+  );
 writeFileSync(sdkGenPath, ensureFinalNewline(sdkGen));
 
 console.log("Rewrote generated imports to ./client-core");

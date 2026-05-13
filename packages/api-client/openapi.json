@@ -66752,41 +66752,77 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "action": {
-                    "type": "string",
-                    "enum": [
-                      "collected",
-                      "failed",
-                      "returned"
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "collected"
+                        ]
+                      },
+                      "collectedBy": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "collectedAmount": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "receiptUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "collectedBy",
+                      "collectedAmount"
                     ]
                   },
-                  "collectedBy": {
-                    "type": "string"
-                  },
-                  "collectedAmount": {
-                    "type": "number"
-                  },
-                  "receiptUrl": {
-                    "type": "string"
-                  },
-                  "reason": {
-                    "type": "string",
-                    "enum": [
-                      "not_home",
-                      "refused",
-                      "no_cash",
-                      "wrong_address",
-                      "other"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "failed"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "not_home",
+                          "refused",
+                          "no_cash",
+                          "wrong_address",
+                          "other"
+                        ]
+                      },
+                      "notes": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "reason"
                     ]
                   },
-                  "notes": {
-                    "type": "string"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "returned"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "action"
+                    ]
                   }
-                },
-                "required": [
-                  "action"
                 ]
               }
             }
@@ -81338,6 +81374,17 @@
                       "create",
                       "improve"
                     ]
+                  },
+                  "promptType": {
+                    "type": "string",
+                    "enum": [
+                      "widget",
+                      "landing-page",
+                      "collection"
+                    ]
+                  },
+                  "compositionMode": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -81606,6 +81653,14 @@
                   "model": {
                     "type": "string",
                     "maxLength": 200
+                  },
+                  "promptType": {
+                    "type": "string",
+                    "enum": [
+                      "widget",
+                      "landing-page",
+                      "collection"
+                    ]
                   },
                   "messages": {
                     "type": "array",

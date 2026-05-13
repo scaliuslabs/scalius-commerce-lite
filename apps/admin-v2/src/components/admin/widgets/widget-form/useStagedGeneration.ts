@@ -3,21 +3,17 @@ import { toast } from 'sonner';
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
+import {
+  createWidgetCompositionPlan,
+  type WidgetCompositionPlan,
+} from '@scalius/core/modules/ai';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { extractChatCompletionContent, readApiErrorMessage } from './ai-stream';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 type AiPromptType = 'widget' | 'landing-page' | 'collection';
 
-interface GenerationPlan {
-  totalSections: number;
-  sectionDescriptions: string[];
-  compositionBrief: string;
-  sharedDesignSystem: string;
-  spacingStrategy: string;
-  sectionContinuity: string[];
-  estimatedTokens?: number;
-}
+type GenerationPlan = WidgetCompositionPlan;
 
 export interface SectionContent {
   html: string;
@@ -59,70 +55,6 @@ const COMPOSITION_BOUNDARY_GUARD_CSS = `
   margin-bottom: 0;
 }`;
 
-const DESTINATION_STAGE_CONTRACTS: Record<AiPromptType, string> = {
-  widget:
-    'Homepage Widget: compact homepage merchandising inserted into an existing homepage. Prioritize discovery, featured products/categories, trust, and one light action close. Do not build a full landing page.',
-  'landing-page':
-    'Landing Section: campaign-style conversion flow inside the storefront shell. Move from offer/promise to proof, product support, objection handling, urgency/trust, and final CTA.',
-  collection:
-    'Collection Section: commerce-dense collection merchandising. Product comparison, prices, links, variant cues, buying-guide support, and direct selection matter more than broad storytelling.',
-};
-
-const DESTINATION_BLUEPRINTS: Record<
-  AiPromptType,
-  {
-    totalSections: number;
-    compositionBrief: string;
-    sections: string[];
-    designSystem: string;
-    spacing: string;
-  }
-> = {
-  widget: {
-    totalSections: 2,
-    compositionBrief:
-      'One fast homepage merchandising module that opens with a clear store/category signal and closes with compact discovery/action support.',
-    sections: [
-      'Compact opening band with the strongest merchandising signal, one primary CTA, and restrained visual weight',
-      'Discovery/support band for selected products, categories, collections, trust cues, or a final action without landing-page length',
-    ],
-    designSystem:
-      'Reusable homepage rhythm: medium density, strong hierarchy, compact cards, consistent CTA style, and lightweight visual transitions.',
-    spacing:
-      'Keep the root compact; bands share background tokens or tight dividers and use internal padding instead of external margins.',
-  },
-  'landing-page': {
-    totalSections: 5,
-    compositionBrief:
-      'One continuous campaign section set that sells a specific offer, audience promise, product line, or collection inside the existing storefront shell.',
-    sections: [
-      'Campaign hero/offer with a specific promise and primary CTA',
-      'Product or collection showcase that makes the offer concrete',
-      'Benefits, proof, or use-case explanation that supports the choice without invented claims',
-      'Objection handling, urgency, trust, or comparison content tied to provided facts',
-      'Final conversion CTA that closes the campaign stronger than the opening',
-    ],
-    designSystem:
-      'Campaign art direction: stronger narrative hierarchy, repeated but restrained CTA language, cohesive product/media treatment, and a clear conversion progression.',
-    spacing:
-      'Make sections read as one page story with connected backgrounds/dividers; no disconnected cards, spacer bands, or full-viewport gaps.',
-  },
-  collection: {
-    totalSections: 3,
-    compositionBrief:
-      'One practical collection merchandising flow that introduces the collection, helps shoppers compare products, and ends with a tight trust/action strip.',
-    sections: [
-      'Collection intro with the shopper promise and compact navigation/filter-like cues',
-      'Product grid, comparison, buying guide, or shop-by-need layout using provided product facts prominently',
-      'Tight trust/action strip that supports selection without broad campaign storytelling',
-    ],
-    designSystem:
-      'Commerce-first system: dense scan layout, prominent price/link hierarchy, stable product cards, restrained copy, and practical comparison affordances.',
-    spacing:
-      'Keep vertical rhythm tight for collection browsing; product content should dominate and adjacent blocks should connect without whitespace gaps.',
-  },
-};
-
 function createAbortError(): Error {
   const error = new Error('Generation cancelled');
   error.name = 'AbortError';
@@ -135,72 +67,6 @@ function isAbortError(error: unknown): boolean {
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw createAbortError();
-}
-
-function createDeterministicPlan(promptType: AiPromptType): GenerationPlan {
-  const blueprint = DESTINATION_BLUEPRINTS[promptType];
-  return {
-    totalSections: blueprint.totalSections,
-    sectionDescriptions: blueprint.sections,
-    compositionBrief: blueprint.compositionBrief,
-    sharedDesignSystem: blueprint.designSystem,
-    spacingStrategy: blueprint.spacing,
-    sectionContinuity: blueprint.sections.map((section, index) =>
-      index === 0
-        ? `${section}; establish the shared design system and hand off naturally to the next band.`
-        : `${section}; continue the prior band's palette, typography, spacing rhythm, and CTA treatment without outer gaps.`,
-    ),
-  };
-}
-
-function describePlan(plan: GenerationPlan): string {
-  return [
-    `Complete composition: ${plan.compositionBrief}`,
-    `Shared design system: ${plan.sharedDesignSystem}`,
-    `Spacing strategy: ${plan.spacingStrategy}`,
-    'Expected flow:',
-    ...plan.sectionDescriptions.map(
-      (description, index) => `${index + 1}. ${description} Continuity: ${plan.sectionContinuity[index]}`,
-    ),
-  ].join('\n');
-}
-
-function createSinglePassMessages(
-  messages: PromptMessage[],
-  promptType: AiPromptType,
-  plan: GenerationPlan,
-): PromptMessage[] {
-  return [
-    ...messages,
-    {
-      role: 'user',
-      content: `Generate the final widget in ONE model response using the destination blueprint below. Do not output a plan.
-
-Destination:
-${DESTINATION_STAGE_CONTRACTS[promptType]}
-
-Blueprint:
-${describePlan(plan)}
-
-Single-pass generation rules:
-- Think through the full composition internally, then return one complete <htmljs> and <css> artifact.
-- Use exactly one root wrapper with data-scalius-widget-root="true" and destination-specific classes.
-- If the output has multiple visual bands, they must be children of the same root and must look like one connected composition, not separate widgets.
-- Do not create client-side JavaScript, script tags, markdown, external CSS, tracking pixels, hidden forms, unrelated page headers, or footers.
-- Keep generated CSS compact, scoped, and purposeful. Avoid repeated card systems, giant min-heights, viewport-height filler, spacer divs, oversized margins, and dead vertical gaps.
-- Use only provided catalog facts, URLs, product images, prices, discounts, stock, delivery/trust claims, and category/collection names. If a fact is not provided, keep copy generic and non-factual.
-- Homepage widgets should remain compact; landing sections should be campaign-like; collection sections should be product-comparison led.
-
-Return only:
-<htmljs>
-...
-</htmljs>
-
-<css>
-...
-</css>`,
-    },
-  ];
 }
 
 function parseWidgetData(content: string): WidgetData {
@@ -298,7 +164,8 @@ export function useStagedGeneration() {
           provider,
           model,
           promptType,
-          messages: createSinglePassMessages(messages, promptType, plan),
+          messages,
+          compositionMode: true,
           stream: false,
           operation: 'create',
         }),
@@ -326,7 +193,7 @@ export function useStagedGeneration() {
     ): Promise<WidgetData | null> => {
       throwIfAborted(signal);
 
-      const plan = createDeterministicPlan(promptType);
+      const plan = createWidgetCompositionPlan(promptType);
       setState({
         isGenerating: true,
         currentStage: 'planning',
