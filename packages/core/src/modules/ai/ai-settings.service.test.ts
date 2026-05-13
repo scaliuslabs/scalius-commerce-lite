@@ -37,7 +37,6 @@ describe("widget AI settings", () => {
         planningTemperature: -2,
         generationTemperature: 4,
         maxOutputTokens: 100000,
-        stagedGenerationDefault: "yes",
       },
     });
 
@@ -59,7 +58,6 @@ describe("widget AI settings", () => {
     expect(config.generation.generationTemperature).toBe(2);
     expect(config.generation.fastGenerationMaxOutputTokens).toBe(2200);
     expect(config.generation.maxOutputTokens).toBe(64000);
-    expect(config.generation.stagedGenerationDefault).toBe(false);
   });
 
   it("rejects arbitrary provider base URLs", () => {

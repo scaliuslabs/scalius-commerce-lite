@@ -66246,9 +66246,6 @@
                         "type": "integer",
                         "minimum": 512,
                         "maximum": 64000
-                      },
-                      "stagedGenerationDefault": {
-                        "type": "boolean"
                       }
                     }
                   },

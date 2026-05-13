@@ -7,6 +7,8 @@ export type WidgetGenerationRunEvent =
   | { type: "step.completed"; step: string; elapsedMs: number; metadata?: Record<string, unknown> }
   | { type: "tool.started"; tool: string }
   | { type: "tool.completed"; tool: string; elapsedMs: number; metadata?: Record<string, unknown> }
+  | { type: "draft.delta"; delta: string }
+  | { type: "preview.patch"; html: string; css: string; metadata?: Record<string, unknown> }
   | { type: "artifact.validated"; metadata?: Record<string, unknown> }
   | { type: "warning"; warnings: unknown }
   | { type: "artifact"; raw: string; metadata?: Record<string, unknown> }
@@ -19,7 +21,6 @@ export interface WidgetGenerationRunRequest {
   promptType: "widget" | "landing-page" | "collection";
   operation: "create" | "improve";
   userPrompt: string;
-  deepComposition?: boolean;
   existingHtml?: string;
   existingCss?: string;
   targetSection?: number;
@@ -31,8 +32,6 @@ export interface WidgetGenerationRunRequest {
   collectionIds?: string[];
   anchorCollectionIds?: string[];
   allCategoriesSelected?: boolean;
-  supportsVision?: boolean;
-  maxImages?: number;
 }
 
 export interface WidgetGenerationRunResult {
@@ -60,6 +59,7 @@ export async function runWidgetGeneration(
   options: {
     signal?: AbortSignal;
     onEvent?: (event: WidgetGenerationRunEvent) => void;
+    onDraft?: (raw: string) => void;
   } = {},
 ): Promise<WidgetGenerationRunResult> {
   const response = await fetchWidgetAi("/api/v1/admin/widget-generation-runs", {
@@ -87,6 +87,11 @@ export async function runWidgetGeneration(
     if (!event) return;
     events.push(event);
     options.onEvent?.(event);
+    if (event.type === "draft.delta") {
+      raw += event.delta;
+      options.onDraft?.(raw);
+      return;
+    }
     if (event.type === "artifact") raw = event.raw;
     if (event.type === "run.failed") {
       throw new Error(event.error.message);

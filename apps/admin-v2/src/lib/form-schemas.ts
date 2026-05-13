@@ -168,6 +168,8 @@ const widgetPlacementFormSchema = z.object({
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
 }).superRefine((placement, ctx) => {
+  if (!placement.isActive) return;
+
   if (!isWidgetPlacementSlotAllowedForScope(placement.scope, placement.slot)) {
     ctx.addIssue({
       code: "custom",
@@ -232,16 +234,17 @@ export const widgetFormSchema = z.object({
   sortOrder: z.coerce.number().int().default(0),
   placements: z.array(widgetPlacementFormSchema).default([]),
 }).superRefine((data, ctx) => {
-  for (const duplicate of findDuplicateWidgetPlacementIndexes(data.placements)) {
+  const activePlacements = data.placements.filter((placement) => placement.isActive);
+  for (const duplicate of findDuplicateWidgetPlacementIndexes(activePlacements)) {
     ctx.addIssue({
       code: "custom",
       message: "Duplicate placement target.",
-      path: ["placements", duplicate.duplicateIndex],
+      path: ["placements", data.placements.indexOf(activePlacements[duplicate.duplicateIndex]!)],
     });
     ctx.addIssue({
       code: "custom",
       message: "Duplicate placement target.",
-      path: ["placements", duplicate.firstIndex],
+      path: ["placements", data.placements.indexOf(activePlacements[duplicate.firstIndex]!)],
     });
   }
 });

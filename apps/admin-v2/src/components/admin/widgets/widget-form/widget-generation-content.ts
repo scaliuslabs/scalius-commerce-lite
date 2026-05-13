@@ -1,6 +1,9 @@
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
-import { stripWidgetRuntimeMarkup } from '@scalius/shared/widget-rendering';
+import {
+  evaluateWidgetRenderability,
+  stripWidgetRuntimeMarkup,
+} from '@scalius/shared/widget-rendering';
 
 export type GeneratedWidgetContent = { html: string; css: string };
 
@@ -27,6 +30,26 @@ function assertUsableCss(css: string): void {
   }
 }
 
+function assertRenderableWidgetContent(widget: GeneratedWidgetContent): void {
+  const report = evaluateWidgetRenderability({
+    id: 'preview-validation',
+    htmlContent: widget.html,
+    cssContent: widget.css,
+  });
+
+  if (report.hasInputHtml && !report.hasRenderableHtml) {
+    throw new Error(
+      report.warnings[0] || 'Generated widget HTML could not be rendered safely. Please regenerate.',
+    );
+  }
+
+  if (!report.hasRenderableCss) {
+    throw new Error(
+      report.warnings[0] || 'Generated widget CSS could not be rendered safely. Please regenerate.',
+    );
+  }
+}
+
 export function parseGeneratedWidgetContent(content: string): GeneratedWidgetContent {
   const tagResult = parseTagBasedResponse(content);
 
@@ -37,10 +60,12 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
     }
 
     assertUsableCss(tagResult.data.css || '');
-    return {
+    const widget = {
       html: tagResult.data.html,
       css: tagResult.data.css || '',
     };
+    assertRenderableWidgetContent(widget);
+    return widget;
   }
 
   const parsed = parseJSONSafely(content);
@@ -63,10 +88,12 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
   const html = widgetData.html || widgetData.htmljs || widgetData.htmlContent || '';
   const css = widgetData.css || widgetData.cssContent || '';
   assertUsableCss(css);
-  return {
+  const widget = {
     html,
     css,
   };
+  assertRenderableWidgetContent(widget);
+  return widget;
 }
 
 export function normalizeGeneratedWidgetContent(widget: GeneratedWidgetContent): GeneratedWidgetContent {

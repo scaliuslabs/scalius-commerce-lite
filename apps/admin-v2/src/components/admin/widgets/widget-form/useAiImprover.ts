@@ -121,7 +121,6 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         }
 
         const currentModel = aiGenerator.aiModels.find((m: ModelInfo) => m.id === aiGenerator.selectedModel);
-        const isVisionModel = currentModel?.supportsVision || false;
         const imageSelection = limitImagesForModel(
           aiContext.selectedImages,
           aiGenerator.selectedModel,
@@ -139,7 +138,6 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           promptType: aiGenerator.effectivePromptType,
           operation: 'improve',
           userPrompt: aiGenerator.getPlacementAwareInstructions(promptToUse),
-          deepComposition: true,
           existingHtml: codeToImprove.html,
           existingCss: codeToImprove.css,
           targetSection,
@@ -155,8 +153,6 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           collectionIds: aiGenerator.getMergedCollectionIds(),
           anchorCollectionIds: aiGenerator.getMergedAnchorCollectionIds(),
           allCategoriesSelected: aiContext.allCategoriesSelected,
-          supportsVision: isVisionModel,
-          maxImages: currentModel?.maxImages,
         }, {
           signal: run.signal,
           onEvent: (event) => {

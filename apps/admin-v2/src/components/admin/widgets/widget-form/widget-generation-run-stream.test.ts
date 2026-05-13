@@ -47,6 +47,52 @@ describe("runWidgetGeneration", () => {
     expect(seen).toEqual(["run.started", "step.started", "artifact", "run.completed"]);
   });
 
+  it("accumulates draft deltas before the final artifact", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const body = [
+          sse("run.started", { type: "run.started", runId: "run_1", operation: "create" }),
+          sse("draft.delta", { type: "draft.delta", delta: "<htmljs>" }),
+          sse("draft.delta", { type: "draft.delta", delta: "<section>Draft</section>" }),
+          sse("preview.patch", {
+            type: "preview.patch",
+            html: "<section>Scaffold</section>",
+            css: ".x{color:red}",
+            metadata: { draft: true },
+          }),
+          sse("artifact", {
+            type: "artifact",
+            raw: "<htmljs><section>Final</section></htmljs><css>.x{color:red}</css>",
+          }),
+          sse("run.completed", { type: "run.completed", runId: "run_1" }),
+        ].join("");
+        return new Response(streamFromChunks([body]), {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }),
+    );
+
+    const drafts: string[] = [];
+    const events: string[] = [];
+    const result = await runWidgetGeneration(
+      {
+        promptType: "widget",
+        operation: "create",
+        userPrompt: "Create a hero",
+      },
+      {
+        onDraft: (raw) => drafts.push(raw),
+        onEvent: (event) => events.push(event.type),
+      },
+    );
+
+    expect(drafts).toEqual(["<htmljs>", "<htmljs><section>Draft</section>"]);
+    expect(events).toContain("preview.patch");
+    expect(result.raw).toContain("Final");
+  });
+
   it("throws when the run emits run.failed", async () => {
     vi.stubGlobal(
       "fetch",

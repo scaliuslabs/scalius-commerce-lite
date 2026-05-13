@@ -379,7 +379,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     aiGenerator.setSelectedModel('');
     aiGenerator.setGeneratedContent(null);
     aiGenerator.setIsPreviewOpen(false);
-    aiGenerator.setUseStagedMode(false);
     aiImprover.reset();
     setEditorMode('generation-preview');
     setIsEditorOpen(false);
@@ -394,7 +393,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
 
       aiGenerator.setPromptType(context.promptType);
       if (context.preferredAiModel) aiGenerator.setSelectedModel(context.preferredAiModel);
-      aiGenerator.setUseStagedMode(context.useStagedMode);
       aiContext.replaceContext({
         images: context.savedImages as unknown as MediaFile[],
         products: context.savedProducts as ProductSearchResult[],
@@ -710,16 +708,20 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
         return;
       }
 
+      const currentSections = stagedSectionsFromContent({
+        html: data.htmlContent,
+        css: data.cssContent ?? '',
+      });
+
       // Build AI context with all state.
       const contextToSave: Partial<AiContext> = {
         promptType: aiGenerator.effectivePromptType,
         preferredAiModel: aiGenerator.selectedModel,
-        useStagedMode: aiGenerator.useStagedMode,
         savedImages: aiContext.selectedImages,
         savedProducts: aiContext.selectedProducts,
         savedCategories: aiContext.selectedCategories,
         allCategoriesSelected: aiContext.allCategoriesSelected,
-        stagedSections: aiGenerator.stagedGeneration.sections,
+        stagedSections: currentSections,
         improvementHistory: aiImprover.improvementHistory,
         createdAt: getSavedAiContextCreatedAt(widget?.aiContext),
       };
@@ -976,7 +978,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
             ? aiImprover.contentToImprove
             : editorMode === 'live-preview'
               ? livePreviewContent
-              : aiGenerator.generatedContent
+              : aiGenerator.generatedContent ?? aiGenerator.draftContent
         }
         rawOutput={
           editorMode === 'improvement'

@@ -14,6 +14,24 @@ describe('widget generation content parsing', () => {
     ).toThrow('missing usable CSS');
   });
 
+  it('rejects generated CSS that sanitizes away before preview', () => {
+    expect(() =>
+      parseGeneratedWidgetContent(`
+        <htmljs><section class="promo"><h2>Deal</h2></section></htmljs>
+        <css>.promo[ { color: red; }</css>
+      `),
+    ).toThrow(/CSS/i);
+  });
+
+  it('rejects generated HTML that sanitizes away before preview', () => {
+    expect(() =>
+      parseGeneratedWidgetContent(`
+        <htmljs><script>alert(1)</script></htmljs>
+        <css>.promo { color: red; }</css>
+      `),
+    ).toThrow(/HTML/i);
+  });
+
   it('strips platform runtime wrappers before previewing generated content', () => {
     const content = normalizeGeneratedWidgetContent(
       parseGeneratedWidgetContent(`

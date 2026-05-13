@@ -118,11 +118,13 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
       setActiveView('preview');
     } else {
       setShowPanel(mode === 'improvement');
-      if (!content && rawOutput) {
+      if (mode === 'generation-preview' && isProcessing && content) {
+        setActiveView('preview');
+      } else if (!content && rawOutput) {
         setActiveView('raw');
       }
     }
-  }, [isOpen, mode, content, rawOutput]);
+  }, [isOpen, mode, content, rawOutput, isProcessing]);
 
   useEffect(() => {
     setPreviewFrameHeight(220);

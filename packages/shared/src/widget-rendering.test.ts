@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  evaluateWidgetRenderability,
   normalizeWidgetParts,
   prepareScopedWidgetContent,
   stripWidgetRuntimeMarkup,
@@ -75,5 +76,29 @@ describe("widget rendering helpers", () => {
     expect(html).not.toContain("widget-container");
     expect(html).not.toContain("widget-placement-zone");
     expect(html).not.toContain("data-widget-id");
+  });
+
+  it("reports CSS that cannot survive sanitization and scoping", () => {
+    const report = evaluateWidgetRenderability({
+      id: "wid_bad_css",
+      htmlContent: '<section class="hero">Hero</section>',
+      cssContent: ".hero[ { color: red; }",
+    });
+
+    expect(report.hasInputCss).toBe(true);
+    expect(report.hasRenderableCss).toBe(false);
+    expect(report.warnings.join(" ")).toMatch(/removed|discarded/i);
+  });
+
+  it("reports HTML that cannot survive sanitization", () => {
+    const report = evaluateWidgetRenderability({
+      id: "wid_bad_html",
+      htmlContent: "<script>alert(1)</script>",
+      cssContent: ".hero { color: red; }",
+    });
+
+    expect(report.hasInputHtml).toBe(true);
+    expect(report.hasRenderableHtml).toBe(false);
+    expect(report.warnings.join(" ")).toMatch(/html was removed/i);
   });
 });

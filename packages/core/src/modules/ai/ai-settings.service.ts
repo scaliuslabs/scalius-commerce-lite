@@ -70,7 +70,6 @@ export interface WidgetAiGenerationConfig {
     improvementTemperature: number;
     fastGenerationMaxOutputTokens: number;
     maxOutputTokens: number;
-    stagedGenerationDefault: boolean;
   };
 }
 
@@ -140,7 +139,6 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
     improvementTemperature: GENERATION_CONFIG.temperature.improvement,
     fastGenerationMaxOutputTokens: 2200,
     maxOutputTokens: 8000,
-    stagedGenerationDefault: false,
   },
 };
 
@@ -379,10 +377,6 @@ export function normalizeWidgetAiConfig(
           64000,
         ),
       ),
-      stagedGenerationDefault:
-        typeof rawGeneration.stagedGenerationDefault === "boolean"
-          ? rawGeneration.stagedGenerationDefault
-          : DEFAULT_WIDGET_AI_CONFIG.generation.stagedGenerationDefault,
     },
   };
 }

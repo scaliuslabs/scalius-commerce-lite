@@ -69,7 +69,6 @@ export const AiContextSchema = z.object({
   // Generation settings
   promptType: z.enum(['widget', 'landing-page', 'collection']).default('widget'),
   preferredAiModel: z.string().optional(),
-  useStagedMode: z.boolean().default(false),
 
   // Context data
   savedImages: z.array(MediaFileSchema).default([]),
@@ -131,7 +130,6 @@ export function parseAiContext(jsonString: string | null | undefined): AiContext
       const recovered = {
         promptType: parsed.promptType || 'widget',
         preferredAiModel: parsed.preferredAiModel || undefined,
-        useStagedMode: parsed.useStagedMode || false,
         savedImages: Array.isArray(parsed.savedImages) ? parsed.savedImages : [],
         savedProducts: Array.isArray(parsed.savedProducts) ? parsed.savedProducts : [],
         savedCategories: Array.isArray(parsed.savedCategories) ? parsed.savedCategories : [],

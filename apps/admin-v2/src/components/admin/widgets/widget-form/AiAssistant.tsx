@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import {
   Wand2,
   ChevronDown,
@@ -13,7 +12,6 @@ import {
   Check,
   Eye,
   Headphones,
-  Layers,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -57,9 +55,6 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
     setIsModelSelectorOpen,
     effectivePromptType,
     isPromptTypePlacementDerived,
-    useStagedMode,
-    setUseStagedMode,
-    stagedGeneration,
   } = aiGenerator;
   const selectedModelInfo = aiModels.find((model) => model.id === selectedModel);
 
@@ -230,26 +225,6 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                     Configure the active provider in General Settings &gt; Widget AI.
                   </p>
                 ) : null}
-              </div>
-
-              <div className="flex items-center justify-between space-x-2 rounded-md border p-3">
-                <div className="flex items-center space-x-3">
-                  <Layers className="h-5 w-5 text-muted-foreground" />
-                  <div className="space-y-0.5">
-                    <Label htmlFor="staged-mode" className="text-sm font-medium cursor-pointer">
-                      Composition blueprint
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Adds page-specific structure for complex widgets while keeping one server-owned generation run.
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  id="staged-mode"
-                  checked={useStagedMode}
-                  onCheckedChange={setUseStagedMode}
-                  disabled={!isApiKeySet}
-                />
               </div>
 
               <div className="space-y-4">

@@ -127,6 +127,44 @@ describe("widget placement validation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("allows disabled placement drafts to keep incomplete target data", () => {
+    const widget = createWidgetSchema.parse({
+      name: "Paused placement draft",
+      htmlContent: "<section>Hero</section>",
+      placements: [
+        {
+          scope: WidgetPlacementScope.PRODUCT,
+          slot: WidgetPlacementSlot.TOP,
+          isActive: false,
+        },
+      ],
+    });
+
+    expect(widget.placements?.[0]?.isActive).toBe(false);
+  });
+
+  it("ignores disabled placements when checking duplicate active targets", () => {
+    const widget = createWidgetSchema.parse({
+      name: "Homepage Hero",
+      htmlContent: "<section>Hero</section>",
+      placements: [
+        {
+          scope: WidgetPlacementScope.HOMEPAGE,
+          slot: WidgetPlacementSlot.TOP,
+          sortOrder: 1,
+        },
+        {
+          scope: WidgetPlacementScope.HOMEPAGE,
+          slot: WidgetPlacementSlot.TOP,
+          sortOrder: 2,
+          isActive: false,
+        },
+      ],
+    });
+
+    expect(widget.placements).toHaveLength(2);
+  });
+
   it("allows inactive drafts without final HTML or placements", () => {
     const widget = createWidgetSchema.parse({
       name: "Launch Draft",

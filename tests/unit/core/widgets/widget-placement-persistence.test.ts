@@ -562,6 +562,32 @@ describe("widget restore persistence", () => {
 
     expect(updateTargets).toEqual([widgetPlacements, widgets]);
   });
+
+  it("rejects widget CSS that cannot render after sanitization", async () => {
+    const existingWidget = {
+      id: "wid_1",
+      name: "Landing hero",
+      htmlContent: "<section>Published</section>",
+      cssContent: ".published { color: blue; }",
+      aiContext: null,
+      isActive: true,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.FIXED_TOP_HOMEPAGE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      placements: [],
+    };
+    const db = createMockDb({ selectResult: existingWidget }) as any;
+
+    await expect(
+      updateWidget(db, "wid_1", {
+        cssContent: ".broken[ { color: red; }",
+      }),
+    ).rejects.toThrow(/CSS/i);
+  });
 });
 
 describe("widget history persistence", () => {
