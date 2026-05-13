@@ -28,6 +28,18 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getEncryptionKey } from "./utils/encryption-key";
 
+type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
+
+function assertPaymentConfirmed(
+  result: PaymentConfirmationResult,
+  gateway: "stripe" | "sslcommerz" | "polar",
+  orderId: string,
+): void {
+  if (!result.success) {
+    throw new Error(`${gateway} payment confirmation failed for order ${orderId}: ${result.error ?? "unknown error"}`);
+  }
+}
+
 // Re-export so webhook routes can import message types from one place.
 export type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 
@@ -251,7 +263,7 @@ async function processQueueMessage(
       // e.g. USD/BDT: ÷100, JPY: ÷1, BHD: ÷1000
       const stripeDecimals = getDecimalPlaces(payload.currency);
       const amountInMajor = payload.amount / Math.pow(10, stripeDecimals);
-      await processPaymentConfirmed(db, {
+      const result = await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "stripe",
         paymentType: (payload.metadata?.paymentType as "full" | "deposit" | "balance") ?? "full",
@@ -260,6 +272,7 @@ async function processQueueMessage(
         amount: amountInMajor,
         metadata: { currency: payload.currency },
       });
+      assertPaymentConfirmed(result, "stripe", payload.orderId);
       console.log(`[Queue] Stripe payment confirmed for order ${payload.orderId}`);
       break;
     }
@@ -286,7 +299,7 @@ async function processQueueMessage(
     // ── SSLCommerz ─────────────────────────────────────────────────────────
 
     case "payment.sslcommerz.confirmed": {
-      await processPaymentConfirmed(db, {
+      const result = await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "sslcommerz",
         paymentType: (payload.paymentType as "full" | "deposit" | "balance") ?? "full",
@@ -296,6 +309,7 @@ async function processQueueMessage(
         amount: payload.amount,
         metadata: { currency: payload.currency, cardType: payload.cardType, cardBrand: payload.cardBrand },
       });
+      assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
       console.log(`[Queue] SSLCommerz payment confirmed for order ${payload.orderId}`);
       break;
     }
@@ -325,7 +339,7 @@ async function processQueueMessage(
         ? originalAmount
         : gatewayAmountMajor;
 
-      await processPaymentConfirmed(db, {
+      const result = await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "polar",
         paymentType: (payload.paymentType as "full" | "deposit" | "balance") ?? "full",
@@ -338,6 +352,7 @@ async function processQueueMessage(
           ...payload.metadata,
         },
       });
+      assertPaymentConfirmed(result, "polar", payload.orderId);
       console.log(`[Queue] Polar payment confirmed for order ${payload.orderId} (recorded: ${recordAmount}, gateway: ${gatewayAmountMajor} ${polarCurrency})`);
       break;
     }
