@@ -81,6 +81,7 @@ export async function runWidgetGeneration(
   const events: WidgetGenerationRunEvent[] = [];
   let buffer = "";
   let raw = "";
+  let receivedArtifact = false;
 
   const handleBlock = (block: string) => {
     const event = parseSseEvent(block);
@@ -92,7 +93,10 @@ export async function runWidgetGeneration(
       options.onDraft?.(raw);
       return;
     }
-    if (event.type === "artifact") raw = event.raw;
+    if (event.type === "artifact") {
+      raw = event.raw;
+      receivedArtifact = true;
+    }
     if (event.type === "run.failed") {
       throw new Error(event.error.message);
     }
@@ -114,7 +118,7 @@ export async function runWidgetGeneration(
   if (buffer.trim()) {
     handleBlock(buffer);
   }
-  if (!raw.trim()) {
+  if (!receivedArtifact || !raw.trim()) {
     throw new Error("Widget generation finished without an artifact.");
   }
 

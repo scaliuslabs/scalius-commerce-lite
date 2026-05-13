@@ -118,4 +118,30 @@ describe("runWidgetGeneration", () => {
       }),
     ).rejects.toThrow("Provider failed");
   });
+
+  it("does not treat streamed draft text as a completed artifact", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          streamFromChunks([
+            [
+              sse("run.started", { type: "run.started", runId: "run_1", operation: "create" }),
+              sse("draft.delta", { type: "draft.delta", delta: "<htmljs><section>Draft only</section></htmljs>" }),
+              sse("run.completed", { type: "run.completed", runId: "run_1" }),
+            ].join(""),
+          ]),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        ),
+      ),
+    );
+
+    await expect(
+      runWidgetGeneration({
+        promptType: "widget",
+        operation: "create",
+        userPrompt: "Create a hero",
+      }),
+    ).rejects.toThrow("Widget generation finished without an artifact.");
+  });
 });
