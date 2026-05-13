@@ -5,7 +5,7 @@
 // we test the business logic by replicating the key algorithms as pure functions
 // and verifying the invariants that the hardening session established.
 
-import { describe, it, expect, vi } from "vitest";
+import { beforeAll, beforeEach, describe, it, expect, vi } from "vitest";
 import { seedVariant } from "../../../setup";
 
 // ---------------------------------------------------------------------------
@@ -525,5 +525,216 @@ describe("CAS (optimistic locking) behavior", () => {
     );
 
     expect(backoffs).toEqual([50, 100, 200]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inventory transition failure hardening
+// ---------------------------------------------------------------------------
+
+const inventoryTransitionMocks = vi.hoisted(() => ({
+  deductMultiple: vi.fn(),
+  releaseMultiple: vi.fn(),
+  reserveMultiple: vi.fn(),
+  restoreDeductedMultiple: vi.fn(),
+  checkAndAlertLowStock: vi.fn(),
+}));
+
+vi.mock("../../../../packages/core/src/modules/inventory/deduct", () => ({
+  deductMultiple: inventoryTransitionMocks.deductMultiple,
+}));
+
+vi.mock("../../../../packages/core/src/modules/inventory/release", () => ({
+  releaseMultiple: inventoryTransitionMocks.releaseMultiple,
+}));
+
+vi.mock("../../../../packages/core/src/modules/inventory/reserve", () => ({
+  reserveMultiple: inventoryTransitionMocks.reserveMultiple,
+}));
+
+vi.mock("../../../../packages/core/src/modules/inventory/restore", () => ({
+  restoreDeductedMultiple: inventoryTransitionMocks.restoreDeductedMultiple,
+}));
+
+vi.mock("../../../../packages/core/src/modules/inventory/alerts", () => ({
+  checkAndAlertLowStock: inventoryTransitionMocks.checkAndAlertLowStock,
+}));
+
+let applyInventoryForStatusChange: typeof import("../../../../packages/core/src/modules/inventory/inventory-transitions").applyInventoryForStatusChange;
+
+const TRANSITION_ORDER_ID = "ord_inventory_hardening";
+const TRANSITION_ITEM = { variantId: "var_1", quantity: 2 };
+const TRANSITION_VARIANT = { id: "var_1" };
+
+type MockChain = {
+  from: ReturnType<typeof vi.fn>;
+  where: ReturnType<typeof vi.fn>;
+  set: ReturnType<typeof vi.fn>;
+  get: ReturnType<typeof vi.fn>;
+  all: ReturnType<typeof vi.fn>;
+};
+
+function createChain(result: unknown): MockChain {
+  const chain = {} as MockChain;
+  chain.from = vi.fn(() => chain);
+  chain.where = vi.fn(() => chain);
+  chain.set = vi.fn(() => chain);
+  chain.get = vi.fn(async () => result ?? null);
+  chain.all = vi.fn(async () => {
+    if (Array.isArray(result)) return result;
+    return result ? [result] : [];
+  });
+  return chain;
+}
+
+function createTransitionDb(selectResults: unknown[]) {
+  let selectIndex = 0;
+
+  return {
+    select: vi.fn(() => createChain(selectResults[selectIndex++])),
+    update: vi.fn(() => createChain([{ id: TRANSITION_ORDER_ID }])),
+    batch: vi.fn(async () => []),
+  };
+}
+
+function orderWithInventoryAction(inventoryAction: string) {
+  return {
+    id: TRANSITION_ORDER_ID,
+    status: "confirmed",
+    inventoryAction,
+    inventoryPool: "regular",
+  };
+}
+
+function failedTransitionResult(operation: string) {
+  return {
+    success: false,
+    results: [
+      {
+        success: false,
+        variantId: TRANSITION_ITEM.variantId,
+        previousStock: 0,
+        newStock: 0,
+        error: `${operation} failed`,
+      },
+    ],
+    error: `${operation} failed`,
+  };
+}
+
+describe("inventory status transition hardening", () => {
+  beforeAll(async () => {
+    ({ applyInventoryForStatusChange } = await import(
+      "../../../../packages/core/src/modules/inventory/inventory-transitions"
+    ));
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    inventoryTransitionMocks.checkAndAlertLowStock.mockResolvedValue(undefined);
+  });
+
+  it("throws and skips the inventoryAction batch when deduction fails", async () => {
+    const db = createTransitionDb([orderWithInventoryAction("reserved"), [TRANSITION_ITEM]]);
+    inventoryTransitionMocks.deductMultiple.mockResolvedValue(failedTransitionResult("deduct"));
+
+    await expect(
+      applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "shipped"),
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: `Inventory deduct failed for order ${TRANSITION_ORDER_ID}: deduct failed`,
+    });
+
+    expect(inventoryTransitionMocks.deductMultiple).toHaveBeenCalledWith(
+      db,
+      [{ variantId: TRANSITION_ITEM.variantId, quantity: TRANSITION_ITEM.quantity, pool: "regular" }],
+      TRANSITION_ORDER_ID,
+    );
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(inventoryTransitionMocks.checkAndAlertLowStock).not.toHaveBeenCalled();
+  });
+
+  it("throws and skips the inventoryAction batch when release reports failure", async () => {
+    const db = createTransitionDb([
+      orderWithInventoryAction("reserved"),
+      [TRANSITION_ITEM],
+      [TRANSITION_VARIANT],
+    ]);
+    inventoryTransitionMocks.releaseMultiple.mockResolvedValue(failedTransitionResult("release"));
+
+    await expect(
+      applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "cancelled"),
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: `Inventory release failed for order ${TRANSITION_ORDER_ID}: release failed`,
+    });
+
+    expect(inventoryTransitionMocks.releaseMultiple).toHaveBeenCalledWith(
+      db,
+      [{ variantId: TRANSITION_ITEM.variantId, quantity: TRANSITION_ITEM.quantity, pool: "regular" }],
+      TRANSITION_ORDER_ID,
+    );
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("checks release variants before calling the best-effort release helper", async () => {
+    const db = createTransitionDb([orderWithInventoryAction("reserved"), [TRANSITION_ITEM], []]);
+
+    await expect(
+      applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "cancelled"),
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: `Inventory release failed for order ${TRANSITION_ORDER_ID}: Missing variant: ${TRANSITION_ITEM.variantId}`,
+    });
+
+    expect(inventoryTransitionMocks.releaseMultiple).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("throws and skips the inventoryAction batch when re-reservation fails", async () => {
+    const db = createTransitionDb([orderWithInventoryAction("restored"), [TRANSITION_ITEM]]);
+    inventoryTransitionMocks.reserveMultiple.mockResolvedValue(failedTransitionResult("reserve"));
+
+    await expect(
+      applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "pending"),
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: `Inventory reserve failed for order ${TRANSITION_ORDER_ID}: reserve failed`,
+    });
+
+    expect(inventoryTransitionMocks.reserveMultiple).toHaveBeenCalledWith(
+      db,
+      [{ variantId: TRANSITION_ITEM.variantId, quantity: TRANSITION_ITEM.quantity, pool: "regular" }],
+      TRANSITION_ORDER_ID,
+    );
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("throws and skips the inventoryAction batch when deducted-stock restore fails", async () => {
+    const db = createTransitionDb([
+      orderWithInventoryAction("deducted"),
+      [TRANSITION_ITEM],
+      [TRANSITION_VARIANT],
+    ]);
+    inventoryTransitionMocks.restoreDeductedMultiple.mockResolvedValue(failedTransitionResult("restore"));
+
+    await expect(
+      applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "returned"),
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: `Inventory restore failed for order ${TRANSITION_ORDER_ID}: restore failed`,
+    });
+
+    expect(inventoryTransitionMocks.restoreDeductedMultiple).toHaveBeenCalledWith(
+      db,
+      [{ variantId: TRANSITION_ITEM.variantId, quantity: TRANSITION_ITEM.quantity, pool: "regular" }],
+      TRANSITION_ORDER_ID,
+    );
+    expect(db.batch).not.toHaveBeenCalled();
   });
 });
