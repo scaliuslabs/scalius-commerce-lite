@@ -151,14 +151,14 @@ describe("widget AI settings", () => {
       supportsStructuredOutput: false,
       structuredOutputMode: "text",
       supportsVisionInput: false,
-      maxImages: 10,
+      maxImages: 6,
     });
 
     expect(resolveWidgetAiModelCapabilities("openai", "gpt-5.4")).toMatchObject({
       supportsStructuredOutput: true,
       structuredOutputMode: "sdk",
       supportsVisionInput: true,
-      maxImages: 10,
+      maxImages: 6,
     });
 
     const forced = resolveWidgetAiModelCapabilities("cloudflare", "@cf/moonshotai/kimi-k2.6", {

@@ -131,10 +131,10 @@ export const GENERATION_CONFIG = {
 
   // Context limits
   context: {
-    maxImages: 10,
-    maxProducts: 20,
-    maxCategories: 50,
-    maxCollections: 12,
+    maxImages: 6,
+    maxProducts: 12,
+    maxCategories: 24,
+    maxCollections: 6,
     maxPromptChars: 50000,
   },
 } as const;

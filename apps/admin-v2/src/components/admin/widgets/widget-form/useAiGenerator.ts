@@ -9,7 +9,7 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
-import { extractChatCompletionContent } from './ai-stream';
+import { extractChatCompletionContent, readChatCompletionStream } from './ai-stream';
 import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
 import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
 import type { useAiContext } from './useAiContext';
@@ -283,15 +283,10 @@ export const useAiGenerator = (
     setIsPreviewOpen(true);
 
     try {
-      // 1. Fetch system prompt (returns plain text)
-      const systemPrompt = (await getAiPrompts({
+      const promptPromise = getAiPrompts({
         data: { type: effectivePromptType },
-      })) as string;
-      if (!isActiveGenerationRun(run)) return;
-      if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
-
-      // 2. Fetch context details
-      const contextData = (await getAiContextBatchDetails({
+      }) as Promise<string>;
+      const contextPromise = getAiContextBatchDetails({
         data: {
           productIds: getMergedProductIds(),
           categoryIds: aiContext.allCategoriesSelected ? undefined : getMergedCategoryIds(),
@@ -299,11 +294,13 @@ export const useAiGenerator = (
           anchorCollectionIds: getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
-      })) as AiContextBatchDetails;
+      }) as Promise<AiContextBatchDetails>;
+
+      const [systemPrompt, contextData] = await Promise.all([promptPromise, contextPromise]);
       if (!isActiveGenerationRun(run)) return;
+      if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
       notifyAiContextWarnings(contextData);
 
-      // 3. Generate structured prompt with caching support
       const currentModel = aiModels.find((m) => m.id === selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
       const selectedImages = getModelLimitedImages({ warn: true });
@@ -323,7 +320,6 @@ export const useAiGenerator = (
       });
       if (!isActiveGenerationRun(run)) return;
 
-      // 4. Decide: staged vs simple generation
       const useStaged = shouldUseStagedGeneration(promptResult.metadata.estimatedTokens * 4, useStagedMode);
 
       if (useStaged) {
@@ -380,7 +376,7 @@ export const useAiGenerator = (
         provider: activeProvider,
         messages: messages,
         model: selectedModel,
-        stream: false,
+        stream: true,
       }),
     });
 
@@ -391,7 +387,7 @@ export const useAiGenerator = (
       throw new Error(errorData.message || errorData.error?.message || 'Failed to generate content.');
     }
 
-    const content = extractChatCompletionContent(await response.json());
+    const content = response.body ? await readChatCompletionStream(response) : extractChatCompletionContent(await response.json());
     if (!isActiveGenerationRun(run)) return;
     setRawOutput(content);
 
@@ -432,12 +428,10 @@ export const useAiGenerator = (
 
     const toastId = toast.loading('Preparing standalone prompt...');
     try {
-      const systemPrompt = (await getAiPrompts({
+      const promptPromise = getAiPrompts({
         data: { type: effectivePromptType },
-      })) as string;
-      if (!systemPrompt) throw new Error('Could not fetch system prompt.');
-
-      const contextData = (await getAiContextBatchDetails({
+      }) as Promise<string>;
+      const contextPromise = getAiContextBatchDetails({
         data: {
           productIds: getMergedProductIds(),
           categoryIds: aiContext.allCategoriesSelected ? undefined : getMergedCategoryIds(),
@@ -445,7 +439,9 @@ export const useAiGenerator = (
           anchorCollectionIds: getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
-      })) as AiContextBatchDetails;
+      }) as Promise<AiContextBatchDetails>;
+      const [systemPrompt, contextData] = await Promise.all([promptPromise, contextPromise]);
+      if (!systemPrompt) throw new Error('Could not fetch system prompt.');
       notifyAiContextWarnings(contextData);
       const selectedImages = getModelLimitedImages({ warn: true });
 
