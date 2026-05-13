@@ -12,7 +12,11 @@ const { widget, class: className = "", priority = false } = Astro.props;
 const { scopeClass, html, css } = prepareWidgetContent(widget, { priority });
 ---
 
-<div class:list={["widget-container cms-widget-frame", scopeClass, className]} data-widget-id={widget.id}>
+<div
+  class:list={["widget-container cms-widget-frame", scopeClass, className]}
+  data-widget-id={widget.id}
+  data-scalius-widget-root="true"
+>
   {css && <style set:html={css} />}
   <div set:html={html} />
 </div>

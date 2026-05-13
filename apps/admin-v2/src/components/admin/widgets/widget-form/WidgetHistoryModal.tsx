@@ -1,8 +1,7 @@
 
 import React from 'react';
 import { formatDate } from '@scalius/shared/timestamps';
-import { sanitizeHtml } from '@scalius/shared/html-sanitize';
-import { sanitizeCssForStyleElement } from '@scalius/shared/css-sanitize';
+import { prepareScopedWidgetContent } from '@scalius/shared/widget-rendering';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { GitCommitHorizontal, Trash2 } from 'lucide-react';
@@ -36,6 +35,13 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
     widgetName 
 }) => {
   const canPreview = !isLoading && !error && selectedHistoryItem;
+  const previewContent = selectedHistoryItem
+    ? prepareScopedWidgetContent({
+        id: selectedHistoryItem.widgetId || selectedHistoryItem.id,
+        htmlContent: selectedHistoryItem.htmlContent,
+        cssContent: selectedHistoryItem.cssContent,
+      })
+    : null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -98,7 +104,7 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
                       <>
                           <div className="flex-1 overflow-auto border rounded-md">
                               <iframe
-                                  srcDoc={`<style>${sanitizeCssForStyleElement(selectedHistoryItem.cssContent)}</style>${sanitizeHtml(selectedHistoryItem.htmlContent)}`}
+                                  srcDoc={`<style>${previewContent?.css ?? ""}</style><div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ""}" data-widget-id="${selectedHistoryItem.widgetId}" data-scalius-widget-root="true"><div>${previewContent?.html ?? ""}</div></div>`}
                                   className="w-full h-full"
                                   sandbox=""
                                   title="History Preview"

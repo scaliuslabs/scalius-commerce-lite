@@ -30,6 +30,23 @@ describe('AI response validation', () => {
     expect(output).toContain('color:blue');
   });
 
+  it('extracts generated style tags into the returned stylesheet', () => {
+    const output = normalizeWidgetGenerationText(`
+      <htmljs>
+        <section class="promo">
+          <style>.promo { color: red; }</style>
+          <h2>Deal</h2>
+        </section>
+      </htmljs>
+      <css>.promo h2 { margin: 0; }</css>
+    `);
+
+    expect(output).toContain('<section class="promo">');
+    expect(output).not.toContain('<style>');
+    expect(output).toContain('.promo h2');
+    expect(output).toContain('.promo{color:red}');
+  });
+
   it('canonicalizes JSON widget output with htmljs', () => {
     expect(
       normalizeWidgetGenerationText(

@@ -5,6 +5,7 @@ import type {
   Raw,
   StyleSheet,
   Value,
+  WalkContext,
 } from "css-tree";
 import cssTree from "./css-tree-runtime";
 
@@ -30,6 +31,13 @@ const LAYOUT_LIMITS_PX = {
   fixedHeight: 720,
 } as const;
 
+export interface CssSanitizeReport {
+  css: string;
+  recovered: boolean;
+  discardedBlockCount: number;
+  warnings: string[];
+}
+
 /**
  * Sanitizes full stylesheet text before it is injected into a `<style>` tag.
  *
@@ -38,20 +46,51 @@ const LAYOUT_LIMITS_PX = {
  * the style element, load remote styles/fonts, or use script-capable CSS.
  */
 export function sanitizeCssForStyleElement(css: string | null | undefined): string {
-  if (!css) return "";
+  return sanitizeCssForStyleElementWithReport(css).css;
+}
 
-  const stripped = css
+export function sanitizeCssForStyleElementWithReport(
+  css: string | null | undefined,
+): CssSanitizeReport {
+  if (!css) {
+    return { css: "", recovered: false, discardedBlockCount: 0, warnings: [] };
+  }
+
+  const stripped = stripCssInput(css);
+  if (!stripped.trim()) {
+    return { css: "", recovered: false, discardedBlockCount: 0, warnings: [] };
+  }
+
+  const ast = parseStylesheet(stripped);
+  if (ast && !hasUnsafeRawNodes(ast)) {
+    sanitizeAst(ast);
+    return {
+      css: cssTree.generate(ast),
+      recovered: false,
+      discardedBlockCount: 0,
+      warnings: [],
+    };
+  }
+
+  const recovered = recoverStylesheet(stripped);
+  return {
+    css: recovered.css,
+    recovered: true,
+    discardedBlockCount: recovered.discardedBlockCount,
+    warnings:
+      recovered.css.length > 0
+        ? ["Recovered valid CSS blocks after discarding malformed generated CSS."]
+        : ["Discarded malformed generated CSS."],
+  };
+}
+
+function stripCssInput(css: string): string {
+  return css
     .replace(CONTROL_CHARS_RE, "")
     .replace(SCRIPT_TAG_RE, "")
     .replace(STYLE_TAG_RE, "")
     .replace(HTML_TAG_RE, "")
     .replace(CSS_COMMENT_RE, "");
-
-  const ast = parseStylesheet(stripped);
-  if (!ast) return "";
-
-  sanitizeAst(ast);
-  return cssTree.generate(ast);
 }
 
 function parseStylesheet(css: string): StyleSheet | null {
@@ -59,12 +98,121 @@ function parseStylesheet(css: string): StyleSheet | null {
     return cssTree.parse(css, {
       context: "stylesheet",
       positions: false,
+      parseAtrulePrelude: true,
+      parseRulePrelude: true,
       parseValue: true,
       parseCustomProperty: false,
     }) as StyleSheet;
   } catch {
     return null;
   }
+}
+
+function recoverStylesheet(css: string): { css: string; discardedBlockCount: number } {
+  const blocks = extractTopLevelCssBlocks(css);
+  const sanitizedBlocks: string[] = [];
+  let discardedBlockCount = 0;
+
+  for (const block of blocks) {
+    const ast = parseStylesheet(block);
+    if (!ast || hasUnsafeRawNodes(ast)) {
+      discardedBlockCount += 1;
+      continue;
+    }
+
+    sanitizeAst(ast);
+    const sanitized = cssTree.generate(ast).trim();
+    if (sanitized) {
+      sanitizedBlocks.push(sanitized);
+    } else {
+      discardedBlockCount += 1;
+    }
+  }
+
+  if (blocks.length === 0 && css.trim()) {
+    discardedBlockCount = 1;
+  }
+
+  return {
+    css: sanitizedBlocks.join("\n"),
+    discardedBlockCount,
+  };
+}
+
+function extractTopLevelCssBlocks(css: string): string[] {
+  const blocks: string[] = [];
+  let blockStart = 0;
+  let depth = 0;
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (let index = 0; index < css.length; index++) {
+    const char = css[index]!;
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "{") {
+      if (depth === 0) {
+        blockStart = findRuleStart(css, blockStart, index);
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (char !== "}") continue;
+
+    depth = Math.max(0, depth - 1);
+    if (depth === 0) {
+      const block = css.slice(blockStart, index + 1).trim();
+      if (block) blocks.push(block);
+      blockStart = index + 1;
+    }
+  }
+
+  return blocks;
+}
+
+function hasUnsafeRawNodes(ast: StyleSheet): boolean {
+  let hasRaw = false;
+  const enter: EnterOrLeaveFn = function (this: WalkContext, node) {
+    if (this.declaration?.property?.startsWith("--")) {
+      return;
+    }
+
+    if (node.type === "Raw") {
+      hasRaw = true;
+    }
+  };
+
+  cssTree.walk(ast, {
+    enter,
+  });
+  return hasRaw;
+}
+
+function findRuleStart(css: string, previousEnd: number, openBrace: number): number {
+  const prefix = css.slice(previousEnd, openBrace);
+  const lastCloseBrace = prefix.lastIndexOf("}");
+  const lastSemicolon = prefix.lastIndexOf(";");
+  return previousEnd + Math.max(lastCloseBrace, lastSemicolon, -1) + 1;
 }
 
 function sanitizeAst(ast: StyleSheet): void {
