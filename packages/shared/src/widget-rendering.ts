@@ -50,6 +50,10 @@ export interface PrepareScopedWidgetContentOptions {
   transformCss?: (css: string) => string;
 }
 
+export function hasLikelyTruncatedCss(css: string): boolean {
+  return /:\s*}/.test(css) || /[,{]\s*$/.test(css.trim());
+}
+
 function stripCodeFence(content: string): string {
   const trimmed = content.trim();
   const match = trimmed.match(/^```(?:html|css)?\s*([\s\S]*?)\s*```$/i);

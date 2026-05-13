@@ -30,6 +30,7 @@ import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 import {
     evaluateWidgetRenderability,
+    hasLikelyTruncatedCss,
     normalizeWidgetParts,
 } from "@scalius/shared/widget-rendering";
 import { findDuplicateWidgetPlacementIndexes } from "@scalius/shared/widget-placement";
@@ -123,6 +124,9 @@ function normalizePersistentWidgetContent(input: {
     cssContent?: string | null;
 }): { htmlContent: string; cssContent?: string | null } {
     const normalized = normalizeWidgetParts(input);
+    if (hasLikelyTruncatedCss(normalized.css)) {
+        throw new ValidationError("Widget CSS is malformed or incomplete.");
+    }
     const renderability = evaluateWidgetRenderability({
         id: "persistence-validation",
         htmlContent: normalized.html,
@@ -132,6 +136,9 @@ function normalizePersistentWidgetContent(input: {
         throw new ValidationError(
             renderability.warnings[0] || "Widget HTML could not be rendered safely.",
         );
+    }
+    if (renderability.cssReport.warnings.length > 0) {
+        throw new ValidationError("Widget CSS is malformed or incomplete.");
     }
     if (renderability.hasInputCss && !renderability.hasRenderableCss) {
         throw new ValidationError(
