@@ -34,6 +34,100 @@ export interface RefundResult {
     error?: string;
 }
 
+const REFUND_IN_PROGRESS_MESSAGE = "A refund is already in progress for this order. Please wait and retry.";
+const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
+    OrderStatus.PENDING,
+    OrderStatus.PROCESSING,
+    OrderStatus.CONFIRMED,
+]);
+
+function getRefundClaimId(orderId: string, orderVersion: number): string {
+    return `refund_${orderId}_${orderVersion}`;
+}
+
+function isConstraintError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /constraint|unique|primary key/i.test(message);
+}
+
+function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean): string | undefined {
+    if (!isFullRefund) {
+        return canTransitionTo("order", currentStatus, OrderStatus.PARTIALLY_REFUNDED)
+            ? OrderStatus.PARTIALLY_REFUNDED
+            : undefined;
+    }
+
+    if (canTransitionTo("order", currentStatus, OrderStatus.REFUNDED)) {
+        return OrderStatus.REFUNDED;
+    }
+
+    if (
+        PRE_FULFILLMENT_REFUND_STATUSES.has(currentStatus) &&
+        canTransitionTo("order", currentStatus, OrderStatus.CANCELLED)
+    ) {
+        return OrderStatus.CANCELLED;
+    }
+
+    return undefined;
+}
+
+function shouldReleaseInventoryForFullRefund(currentStatus: string, nextStatus: string | undefined): boolean {
+    return nextStatus === OrderStatus.CANCELLED && PRE_FULFILLMENT_REFUND_STATUSES.has(currentStatus);
+}
+
+async function assertNoPendingRefund(db: Database, orderId: string): Promise<void> {
+    const pendingRefund = await db
+        .select({ id: orderPayments.id })
+        .from(orderPayments)
+        .where(
+            and(
+                eq(orderPayments.orderId, orderId),
+                eq(orderPayments.paymentType, "refund"),
+                eq(orderPayments.status, "pending"),
+            ),
+        )
+        .get();
+
+    if (pendingRefund) {
+        throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
+    }
+}
+
+async function releaseRefundClaim(
+    db: Database,
+    params: {
+        orderId: string;
+        refundPaymentId: string;
+        refundAmount: number;
+        originalPaymentStatus: string;
+        reason: string;
+        gateway: PaymentGateway;
+        error: unknown;
+    },
+): Promise<void> {
+    const message = params.error instanceof Error ? params.error.message : String(params.error);
+
+    await db.batch([
+        db.update(orderPayments).set({
+            status: "failed",
+            metadata: JSON.stringify({
+                reason: params.reason,
+                gateway: params.gateway,
+                error: message,
+                failedAt: new Date().toISOString(),
+            }),
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(orderPayments.id, params.refundPaymentId)),
+        db.update(orders).set({
+            paidAmount: sql`${orders.paidAmount} + ${params.refundAmount}`,
+            paymentStatus: params.originalPaymentStatus,
+            version: sql`${orders.version} + 1`,
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(orders.id, params.orderId)),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any);
+}
+
 // ---------------------------------------------------------------------------
 // Gateway transaction ID resolution
 // ---------------------------------------------------------------------------
@@ -173,9 +267,10 @@ async function dispatchRefund(
  * Process a refund for an order.
  *
  * 1. Finds the payment record (or uses specified gateway)
- * 2. Dispatches to the correct gateway API via PaymentProvider
- * 3. Updates order payment status
- * 4. Releases inventory on full refund
+ * 2. Claims refund capacity locally before provider dispatch
+ * 3. Dispatches to the correct gateway API via PaymentProvider
+ * 4. Finalizes order payment status
+ * 5. Releases inventory on full refund
  */
 export async function processRefund(
     db: Database,
@@ -210,6 +305,8 @@ export async function processRefund(
         throw new ConflictError("Order is already fully refunded");
     }
 
+    await assertNoPendingRefund(db, params.orderId);
+
     // Determine and validate refund amount before any gateway calls
     const paidAmount = order.paidAmount ?? 0;
     const refundAmount = roundPrice(params.amount ?? (order.paidAmount ?? order.totalAmount));
@@ -221,27 +318,6 @@ export async function processRefund(
     if (refundAmount > paidAmount) {
         throw new ValidationError(
             `Refund amount (${refundAmount}) exceeds paid amount (${paidAmount})`
-        );
-    }
-
-    // Check cumulative refunds already issued against this order
-    const alreadyRefundedRow = await db
-        .select({ total: sql<number>`COALESCE(SUM(${orderPayments.amount}), 0)` })
-        .from(orderPayments)
-        .where(
-            and(
-                eq(orderPayments.orderId, params.orderId),
-                eq(orderPayments.status, "refunded")
-            )
-        )
-        .get();
-
-    const totalAlreadyRefunded = alreadyRefundedRow?.total ?? 0;
-
-    if (totalAlreadyRefunded + refundAmount > paidAmount) {
-        throw new ValidationError(
-            `Refund of ${refundAmount} would exceed the remaining refundable amount. ` +
-            `Already refunded: ${totalAlreadyRefunded}, paid: ${paidAmount}`
         );
     }
 
@@ -270,81 +346,123 @@ export async function processRefund(
     const currencyConfig = await getCurrencyConfig(db, kv);
     const currencyDecimals = getDecimalPlaces(currencyConfig.code);
 
-    // 3. Dispatch to gateway via unified PaymentProvider interface
-    const refundId = await dispatchRefund(
-        db, kv, gateway as PaymentGateway, payment, refundAmount, isFullRefund, currencyDecimals, params, encryptionKey
-    );
-
-    // 4. Record refund in orderPayments + update order atomically
-    const refundPaymentId = crypto.randomUUID();
     const newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundAmount));
+    const newPaymentStatus = isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL;
+    const refundPaymentId = getRefundClaimId(params.orderId, order.version);
+    const claimVersion = order.version + 1;
 
-    // Determine new order status based on refund type and state machine constraints.
-    // Only delivered, completed, and partially_refunded can transition to refunded/partially_refunded.
-    const orderStatusUpdate: Record<string, unknown> = {};
-    if (isFullRefund && canTransitionTo("order", order.status, OrderStatus.REFUNDED)) {
-        orderStatusUpdate.status = OrderStatus.REFUNDED;
-    } else if (!isFullRefund && canTransitionTo("order", order.status, OrderStatus.PARTIALLY_REFUNDED)) {
-        orderStatusUpdate.status = OrderStatus.PARTIALLY_REFUNDED;
+    // 3. Claim refund capacity locally before calling the gateway. The deterministic
+    // refund ID and order-version CAS ensure that concurrent callers cannot both
+    // pass this point and hit the external provider.
+    let claimResults: [unknown, Array<{ id: string; version: number }>];
+    try {
+        claimResults = await db.batch([
+            db.insert(orderPayments).values({
+                id: refundPaymentId,
+                orderId: params.orderId,
+                amount: refundAmount,
+                currency: currencyConfig.code,
+                paymentMethod: gateway,
+                paymentType: "refund",
+                status: "pending",
+                metadata: JSON.stringify({
+                    reason: params.reason,
+                    gateway,
+                    claimVersion,
+                    claimedAt: new Date().toISOString(),
+                }),
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }),
+            db.update(orders).set({
+                paidAmount: newPaidAmount,
+                paymentStatus: newPaymentStatus,
+                version: claimVersion,
+                updatedAt: sql`unixepoch()`,
+            }).where(and(
+                eq(orders.id, params.orderId),
+                eq(orders.version, order.version),
+                sql`${orders.paidAmount} >= ${refundAmount}`,
+            )).returning({ id: orders.id, version: orders.version }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+        ] as any) as any;
+    } catch (error: unknown) {
+        if (isConstraintError(error)) {
+            throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
+        }
+        throw error;
     }
 
-    // CAS: Use version to prevent concurrent refund races. If another refund
-    // modified this order between our read and this write, the WHERE clause
-    // won't match and the order update silently applies to 0 rows.
-    const nextVersion = order.version + 1;
-
-    await db.batch([
-        db.insert(orderPayments).values({
-            id: refundPaymentId,
-            orderId: params.orderId,
-            amount: refundAmount,
-            currency: currencyConfig.code,
-            paymentMethod: gateway,
-            paymentType: "refund",
-            status: "refunded",
-            // Refund records must NOT copy the original payment's unique gateway IDs —
-            // partial unique indexes (e.g., UNIQUE(orderId, stripePaymentIntentId))
-            // would reject the insert. Refund is identified by metadata.refundId instead.
-            metadata: JSON.stringify({ refundId, reason: params.reason, gateway }),
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        }),
-        db.update(orders).set({
-            paidAmount: newPaidAmount,
-            paymentStatus: isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL,
-            version: nextVersion,
-            ...orderStatusUpdate,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(eq(orders.id, params.orderId), eq(orders.version, order.version))),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    ] as any);
-
-    // Verify CAS succeeded — if version didn't advance, a concurrent refund beat us.
-    // The refund payment record was inserted but the order wasn't updated, which is
-    // inconsistent. We must clean up the orphaned refund record and fail.
-    const postOrder = await db
-        .select({ version: orders.version })
-        .from(orders)
-        .where(eq(orders.id, params.orderId))
-        .get();
-
-    if (postOrder && postOrder.version !== nextVersion) {
-        // CAS failed: another refund modified the order concurrently.
-        // Remove the orphaned refund payment record we just inserted.
+    const claimedOrder = claimResults[1]?.[0];
+    if (!claimedOrder) {
         await db.delete(orderPayments).where(eq(orderPayments.id, refundPaymentId));
         throw new ConflictError(
             "Refund failed due to a concurrent modification. Please retry."
         );
     }
 
+    // 4. Dispatch to gateway via unified PaymentProvider interface after the
+    // local claim succeeds. If the provider rejects the refund, release the
+    // reserved paid amount and mark the claim failed.
+    let refundId: string | undefined;
+    try {
+        refundId = await dispatchRefund(
+            db, kv, gateway as PaymentGateway, payment, refundAmount, isFullRefund, currencyDecimals, params, encryptionKey
+        );
+    } catch (error: unknown) {
+        await releaseRefundClaim(db, {
+            orderId: params.orderId,
+            refundPaymentId,
+            refundAmount,
+            originalPaymentStatus: order.paymentStatus,
+            reason: params.reason,
+            gateway: gateway as PaymentGateway,
+            error,
+        });
+        throw error;
+    }
+
+    await db.update(orderPayments).set({
+        status: "refunded",
+        // Refund records must NOT copy the original payment's unique gateway IDs —
+        // partial unique indexes (e.g., UNIQUE(orderId, stripePaymentIntentId))
+        // would reject the insert. Refund is identified by metadata.refundId instead.
+        metadata: JSON.stringify({
+            refundId,
+            reason: params.reason,
+            gateway,
+            claimVersion,
+            refundedAt: new Date().toISOString(),
+        }),
+        updatedAt: sql`unixepoch()`,
+    }).where(eq(orderPayments.id, refundPaymentId));
+
+    // Determine new order status based on refund type and state machine constraints.
+    // Pre-fulfillment full refunds cancel the order and release reservations.
+    // Fulfilled/returned full refunds mark payment/order as refunded without
+    // restocking physical inventory; returns own that inventory transition.
+    const nextOrderStatus = getOrderStatusAfterRefund(order.status, isFullRefund);
+    const orderStatusUpdate: Record<string, unknown> = nextOrderStatus
+        ? { status: nextOrderStatus }
+        : {};
+
+    if (Object.keys(orderStatusUpdate).length > 0) {
+        await db.update(orders).set({
+            ...orderStatusUpdate,
+            version: sql`${orders.version} + 1`,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(orders.id, params.orderId),
+            eq(orders.version, claimedOrder.version),
+        ));
+    }
+
     // 5. Handle inventory on full refund:
-    //    - If still reserved (pre-ship): release reservations
-    //    - If already deducted (shipped): do NOT auto-restore (admin must manually adjust)
-    // Note: partial refunds intentionally do NOT restore inventory — a partial refund
-    // does not imply the items were returned. Inventory is only restored on full refund
-    // or via the explicit return flow (processReturn).
-    if (isFullRefund) {
-        await applyInventoryForStatusChange(db, params.orderId, "cancelled");
+    //    - Pre-fulfillment cancellation releases reserved stock.
+    //    - Shipped/delivered/completed refunds do NOT auto-restore stock.
+    //      Use the explicit return flow when merchandise comes back.
+    if (isFullRefund && shouldReleaseInventoryForFullRefund(order.status, nextOrderStatus)) {
+        await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
     }
 
     return {
