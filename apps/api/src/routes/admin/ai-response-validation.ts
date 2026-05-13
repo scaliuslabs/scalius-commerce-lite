@@ -207,42 +207,55 @@ export function normalizeWidgetOutput(output: WidgetOutput, options?: WidgetNorm
   return normalizeWidgetGenerationText(widgetOutputToTaggedText(output), options);
 }
 
-const NO_CONTEXT_FALLBACKS: Record<WidgetPromptType, { label: string; title: string; body: string; actions: string[] }> = {
+const NO_CONTEXT_FALLBACKS: Record<
+  WidgetPromptType,
+  {
+    ariaLabel: string;
+    label: string;
+    title: string;
+    body: string;
+    items: string[];
+  }
+> = {
   widget: {
-    label: 'Store discovery',
+    ariaLabel: 'Homepage discovery widget',
+    label: 'Homepage discovery',
     title: 'Explore the range',
-    body: 'Find a fresh pick for your everyday routine, then continue browsing the store.',
-    actions: ['Browse options', 'Compare picks', 'Choose your fit'],
+    body: 'Give shoppers a quick store entry point with simple paths they can scan before browsing deeper.',
+    items: ['Browse options', 'Compare picks', 'Choose your fit'],
   },
   'landing-page': {
-    label: 'Campaign section',
+    ariaLabel: 'Campaign landing section',
+    label: 'Campaign flow',
     title: 'Start with the right pick',
-    body: 'Introduce a focused offer area with clean benefits, clear movement, and room for real products once selected.',
-    actions: ['See the flow', 'Browse choices', 'Take the next step'],
+    body: 'Shape a focused conversion area with a clear promise, supporting steps, and room for real products once selected.',
+    items: ['Open with a promise', 'Support the choice', 'Close with action'],
   },
   collection: {
+    ariaLabel: 'Collection comparison guide',
     label: 'Collection guide',
     title: 'Compare the lineup',
-    body: 'Help shoppers scan choices, compare needs, and continue into the collection without invented product claims.',
-    actions: ['Browse styles', 'Compare needs', 'Narrow choices'],
+    body: 'Help shoppers scan choices, compare needs, and continue through the collection without invented product claims.',
+    items: ['Collection intro', 'Comparison cues', 'Decision support'],
   },
 };
 
 export function createNoContextFallbackWidget(promptType: WidgetPromptType = 'widget'): string {
   const fallback = NO_CONTEXT_FALLBACKS[promptType] ?? NO_CONTEXT_FALLBACKS.widget;
+  const variantClass = `sc-ai-safe-widget--${promptType.replace(/[^a-z0-9]+/g, '-')}`;
 
   return normalizeWidgetGenerationText(
     `<htmljs>
-      <section class="sc-ai-safe-widget" aria-label="Store discovery">
+      <section class="sc-ai-safe-widget ${variantClass}" aria-label="${fallback.ariaLabel}">
         <div class="sc-ai-safe-widget__inner">
           <div class="sc-ai-safe-widget__copy">
             <p class="sc-ai-safe-widget__eyebrow">${fallback.label}</p>
             <h2>${fallback.title}</h2>
             <p>${fallback.body}</p>
           </div>
-          <div class="sc-ai-safe-widget__actions" aria-label="Suggested browsing paths">
-            ${fallback.actions.map((action) => `<span>${action}</span>`).join('\n            ')}
-          </div>
+          <ol class="sc-ai-safe-widget__items" aria-label="${fallback.label} structure">
+            ${fallback.items.map((item) => `<li>${item}</li>`).join('\n            ')}
+          </ol>
         </div>
       </section>
     </htmljs>
@@ -252,6 +265,12 @@ export function createNoContextFallbackWidget(promptType: WidgetPromptType = 'wi
         padding: 28px 16px;
         color: #121417;
         background: linear-gradient(135deg, #f6f7f9 0%, #ffffff 48%, #eef7f1 100%);
+      }
+      .sc-ai-safe-widget--landing-page {
+        background: linear-gradient(135deg, #fff7ed 0%, #ffffff 50%, #edf6ff 100%);
+      }
+      .sc-ai-safe-widget--collection {
+        background: linear-gradient(135deg, #f8fafc 0%, #ffffff 46%, #f3f6f4 100%);
       }
       .sc-ai-safe-widget__inner {
         max-width: 1120px;
@@ -280,26 +299,47 @@ export function createNoContextFallbackWidget(promptType: WidgetPromptType = 'wi
         font-size: 16px;
         line-height: 1.55;
       }
-      .sc-ai-safe-widget__actions {
-        display: flex;
-        flex-wrap: wrap;
+      .sc-ai-safe-widget__items {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
         gap: 8px;
-        justify-content: flex-end;
+        min-width: 220px;
       }
-      .sc-ai-safe-widget__actions span {
+      .sc-ai-safe-widget__items li {
         border: 1px solid #d5dce3;
-        border-radius: 999px;
-        padding: 9px 13px;
+        border-radius: 10px;
+        padding: 10px 12px;
         background: rgba(255,255,255,0.72);
         font-size: 14px;
         font-weight: 700;
+      }
+      .sc-ai-safe-widget--widget .sc-ai-safe-widget__items {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .sc-ai-safe-widget--landing-page .sc-ai-safe-widget__items li {
+        border-left: 4px solid #d97706;
+      }
+      .sc-ai-safe-widget--collection .sc-ai-safe-widget__items li {
+        display: flex;
+        justify-content: space-between;
+      }
+      .sc-ai-safe-widget--collection .sc-ai-safe-widget__items li::after {
+        content: 'Guide';
+        color: #5f6b76;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
       }
       @media (max-width: 720px) {
         .sc-ai-safe-widget__inner {
           grid-template-columns: 1fr;
         }
-        .sc-ai-safe-widget__actions {
-          justify-content: flex-start;
+        .sc-ai-safe-widget__items,
+        .sc-ai-safe-widget--widget .sc-ai-safe-widget__items {
+          grid-template-columns: 1fr;
+          min-width: 0;
         }
       }
     </css>`,

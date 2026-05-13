@@ -112,9 +112,15 @@ describe('AI response validation', () => {
   it('uses destination-aware deterministic safe fallbacks', () => {
     const collectionOutput = createNoContextFallbackWidget('collection');
     const landingOutput = createNoContextFallbackWidget('landing-page');
+    const homepageOutput = createNoContextFallbackWidget('widget');
 
+    expect(homepageOutput).toContain('Homepage discovery widget');
     expect(collectionOutput).toContain('Compare the lineup');
+    expect(collectionOutput).toContain('Collection comparison guide');
+    expect(collectionOutput).not.toContain('Store discovery');
     expect(landingOutput).toContain('Start with the right pick');
+    expect(landingOutput).toContain('Campaign landing section');
+    expect(landingOutput).not.toContain('Homepage discovery widget');
     expect(collectionOutput).not.toMatch(/https?:\/\//i);
     expect(landingOutput).not.toMatch(/https?:\/\//i);
   });
