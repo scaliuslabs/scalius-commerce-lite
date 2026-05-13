@@ -2,6 +2,7 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import {
   evaluateWidgetRenderability,
+  hasLikelyTruncatedCss,
   stripWidgetRuntimeMarkup,
 } from '@scalius/shared/widget-rendering';
 
@@ -28,6 +29,9 @@ function assertUsableCss(css: string): void {
   if (!trimmed || !/[{}]/.test(trimmed)) {
     throw new Error('Generated widget is missing usable CSS. Please regenerate.');
   }
+  if (hasLikelyTruncatedCss(trimmed)) {
+    throw new Error('Generated widget CSS was malformed or incomplete. Please regenerate.');
+  }
 }
 
 function assertRenderableWidgetContent(widget: GeneratedWidgetContent): void {
@@ -41,6 +45,10 @@ function assertRenderableWidgetContent(widget: GeneratedWidgetContent): void {
     throw new Error(
       report.warnings[0] || 'Generated widget HTML could not be rendered safely. Please regenerate.',
     );
+  }
+
+  if (report.cssReport.warnings.length > 0) {
+    throw new Error('Generated widget CSS was malformed or incomplete. Please regenerate.');
   }
 
   if (!report.hasRenderableCss) {

@@ -90,6 +90,15 @@ describe('AI response validation', () => {
     ).toThrow(ValidationError);
   });
 
+  it('rejects truncated generated CSS instead of recovering a partial design', () => {
+    expect(() =>
+      normalizeWidgetGenerationText(`
+        <htmljs><section class="promo"><a class="cta">Deal</a></section></htmljs>
+        <css>.promo { padding: 24px; }.cta { display: inline-flex; align-items: }</css>
+      `),
+    ).toThrow(ValidationError);
+  });
+
   it('rejects unsupported commerce claims when no catalog facts were provided', () => {
     expect(() =>
       normalizeWidgetGenerationText(

@@ -575,7 +575,7 @@ function addWidgetFormatRetryInstruction(options: GenerateTextOptions): Generate
       {
         role: 'user',
         content: [
-          'The previous response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* valid CSS only */\n</css>',
+          'The previous response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with complete non-truncated CSS, no dangling declarations, no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* complete valid CSS only */\n</css>',
           noContextCommercePolicy
             ? 'No product, category, collection, policy, pricing, delivery, review, or media facts were provided. Use generic non-factual commerce copy only. Do not mention delivery, shipping, guarantees, reviews, ratings, discounts, limited/new/latest releases, absolute URLs, or buy-now links.'
             : '',

@@ -23,6 +23,15 @@ describe('widget generation content parsing', () => {
     ).toThrow(/CSS/i);
   });
 
+  it('rejects generated CSS that only partially recovers after a truncated declaration', () => {
+    expect(() =>
+      parseGeneratedWidgetContent(`
+        <htmljs><section class="promo"><a class="cta">Deal</a></section></htmljs>
+        <css>.promo { padding: 24px; }.cta { display: inline-flex; align-items: }</css>
+      `),
+    ).toThrow(/malformed|incomplete/i);
+  });
+
   it('rejects generated HTML that sanitizes away before preview', () => {
     expect(() =>
       parseGeneratedWidgetContent(`

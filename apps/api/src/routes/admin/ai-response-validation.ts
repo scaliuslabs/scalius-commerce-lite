@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { GENERATION_CONFIG, ERROR_MESSAGES } from '@scalius/core/modules/ai';
 import { sanitizeCssForStyleElementWithReport } from '@scalius/shared/css-sanitize';
 import { sanitizeHtml } from '@scalius/shared/html-sanitize';
-import { normalizeWidgetParts } from '@scalius/shared/widget-rendering';
+import { hasLikelyTruncatedCss, normalizeWidgetParts } from '@scalius/shared/widget-rendering';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget, type ParsedWidget } from '@scalius/shared/tag-parser';
 import { ValidationError } from '../../utils/api-error';
@@ -118,6 +118,9 @@ function assertGeneratedWidgetIsSafe(widget: ParsedWidget): void {
   if (!css || !/[{}]/.test(css)) {
     throw new ValidationError('AI response did not include usable CSS. Widgets must be styled before preview or save.');
   }
+  if (hasLikelyTruncatedCss(css)) {
+    throw new ValidationError('AI response CSS appears truncated or incomplete. Please regenerate the widget.');
+  }
 }
 
 function stripHtmlToText(html: string): string {
@@ -170,6 +173,9 @@ function sanitizeGeneratedWidget(widget: ParsedWidget, options?: WidgetNormaliza
   const cssReport = sanitizeCssForStyleElementWithReport(normalized.css);
   if (normalized.css.trim() && !cssReport.css.trim()) {
     throw new ValidationError('AI response CSS could not be safely parsed. Please regenerate the widget.');
+  }
+  if (normalized.css.trim() && cssReport.warnings.length > 0) {
+    throw new ValidationError('AI response CSS was malformed or incomplete. Please regenerate the widget.');
   }
 
   const sanitized = {
