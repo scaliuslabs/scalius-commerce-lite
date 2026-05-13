@@ -36,6 +36,7 @@ import {
   normalizeStagedPlanText,
   normalizeWidgetGenerationText,
   normalizeWidgetOutput,
+  createNoContextFallbackWidget,
   stagedPlanOutputObjectSpec,
   stagedPlanOutputSchema,
   widgetOutputObjectSpec,
@@ -530,6 +531,15 @@ function addStagedPlanRetryInstruction(options: GenerateTextOptions): GenerateTe
   } as GenerateTextOptions;
 }
 
+function fallbackNoContextWidgetIfAllowed(options: GenerateTextOptions): WidgetGenerationResult | null {
+  if (!shouldEnforceNoContextCommercePolicy(options)) return null;
+  console.warn('No-context widget generation could not produce a policy-safe artifact; returning deterministic safe fallback.');
+  return {
+    text: createNoContextFallbackWidget(),
+    usage: {},
+  };
+}
+
 async function generateWidgetContent(
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },
@@ -575,10 +585,16 @@ async function generateWidgetContent(
       addWidgetFormatRetryInstruction(options),
       'Widget format repair',
     );
-    return {
-      text: normalizeWidgetGenerationText(retry.text, normalizationOptions),
-      usage: usageFromResult(retry),
-    };
+    try {
+      return {
+        text: normalizeWidgetGenerationText(retry.text, normalizationOptions),
+        usage: usageFromResult(retry),
+      };
+    } catch (retryError) {
+      const fallback = fallbackNoContextWidgetIfAllowed(options);
+      if (fallback) return fallback;
+      throw retryError;
+    }
   }
 }
 
@@ -596,8 +612,14 @@ async function finalizeStreamedWidgetContent(
   } catch (error) {
     console.warn('Streamed widget response failed validation; retrying once:', error);
     const retryOptions = addWidgetFormatRetryInstruction(options);
-    const retry = await generateWidgetContent(retryOptions, capabilities);
-    return retry.text;
+    try {
+      const retry = await generateWidgetContent(retryOptions, capabilities);
+      return retry.text;
+    } catch (retryError) {
+      const fallback = fallbackNoContextWidgetIfAllowed(options);
+      if (fallback) return fallback.text;
+      throw retryError;
+    }
   }
 }
 
