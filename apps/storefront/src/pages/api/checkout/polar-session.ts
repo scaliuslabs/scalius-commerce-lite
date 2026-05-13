@@ -39,9 +39,8 @@ export const POST: APIRoute = async ({ request }) => {
             headers: { "Content-Type": "application/json" },
         });
     } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.error("[checkout/polar-session] Proxy error:", errMsg);
-        return new Response(JSON.stringify({ error: `Payment gateway error: ${errMsg}` }), {
+        console.error("[checkout/polar-session] Proxy error:", err);
+        return new Response(JSON.stringify({ error: "Payment gateway error" }), {
             status: 500,
             headers: { "Content-Type": "application/json" },
         });

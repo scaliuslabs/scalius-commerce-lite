@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { ApiError } from "./api-error";
 
 /** Standard success response shape: { success: true, data: T } */
 export interface ApiSuccessResponse<T> {
@@ -20,6 +21,58 @@ export interface ApiErrorResponse {
     code: string;
     message: string;
     details?: unknown;
+  };
+}
+
+type ErrorStatusCode = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503;
+
+const INTERNAL_ERROR_MESSAGE = "Internal Server Error";
+
+function toErrorStatusCode(status: number): ErrorStatusCode {
+  const allowedStatuses: ErrorStatusCode[] = [
+    400,
+    401,
+    403,
+    404,
+    409,
+    422,
+    429,
+    500,
+    503,
+  ];
+
+  return allowedStatuses.includes(status as ErrorStatusCode)
+    ? (status as ErrorStatusCode)
+    : 500;
+}
+
+export function errorResponseFromError(err: unknown): {
+  body: ApiErrorResponse;
+  status: ErrorStatusCode;
+} {
+  if (err instanceof ApiError) {
+    return {
+      body: {
+        success: false,
+        error: {
+          code: err.code,
+          message: err.message,
+          details: err.details,
+        },
+      },
+      status: toErrorStatusCode(err.status),
+    };
+  }
+
+  return {
+    body: {
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: INTERNAL_ERROR_MESSAGE,
+      },
+    },
+    status: 500,
   };
 }
 
