@@ -193,11 +193,10 @@ function extractTopLevelCssBlocks(css: string): string[] {
 function hasUnsafeRawNodes(ast: StyleSheet): boolean {
   let hasRaw = false;
   const enter: EnterOrLeaveFn = function (this: WalkContext, node) {
-    if (this.declaration?.property?.startsWith("--")) {
-      return;
-    }
-
     if (node.type === "Raw") {
+      if (this.declaration) {
+        return;
+      }
       hasRaw = true;
     }
   };
