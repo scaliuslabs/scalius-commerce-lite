@@ -124,32 +124,38 @@ function nextId(): string {
 
 export function ScannerApp({ token }: ScannerAppProps) {
   // ---- Auth ----
-  const [authState, setAuthState] = useState<"verifying" | "error" | "ready">(
-    token ? "verifying" : "error",
-  );
+  const [authState, setAuthState] = useState<"verifying" | "error" | "ready">("verifying");
   const [authError, setAuthError] = useState("");
   const [adminName, setAdminName] = useState("Admin");
   const sessionStart = useRef(Date.now());
 
   useEffect(() => {
-    if (!token) {
-      setAuthState("error");
-      setAuthError("No scanner token provided. Ask an admin to generate a QR code.");
-      return;
-    }
-    fetch(`/api/scanner-token?token=${encodeURIComponent(token)}`)
+    const verificationUrl = token
+      ? `/api/scanner-token?token=${encodeURIComponent(token)}`
+      : "/api/scanner-token";
+
+    fetch(verificationUrl)
       .then((res) => {
-        if (!res.ok) throw new Error("Invalid or expired token");
+        if (!res.ok) throw new Error("Invalid or expired scanner session");
         return res.json();
       })
       .then((json) => {
         const data = unwrapEnvelope<Record<string, string>>(json);
         setAdminName(data.adminName || "Admin");
         setAuthState("ready");
+        if (token) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("token");
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        }
       })
       .catch((err: unknown) => {
         setAuthState("error");
-        setAuthError(err instanceof Error ? err.message : "Token verification failed");
+        setAuthError(
+          err instanceof Error
+            ? err.message
+            : "Scanner verification failed. Ask an admin to generate a new QR code.",
+        );
       });
   }, [token]);
 
@@ -202,9 +208,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
   const lookupBarcode = useCallback(
     async (code: string): Promise<ScannedProduct | null> => {
       const url = `/api/v1/admin/inventory/scanner/lookup?code=${encodeURIComponent(code)}`;
-      const res = await fetch(url, {
-        headers: { "X-Scanner-Token": token },
-      });
+      const res = await fetch(url);
       if (!res.ok) {
         if (res.status === 404) return null;
         const body = await res.json().catch(() => null);
@@ -230,7 +234,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         weight: null,
       } satisfies ScannedProduct;
     },
-    [token],
+    [],
   );
 
   // ---- Quick mode stock adjust (fire-and-forget with optimistic feedback) ----
@@ -279,7 +283,6 @@ export function ScannerApp({ token }: ScannerAppProps) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Scanner-Token": token,
           },
           body: JSON.stringify({
             variantId: product.variantId,
@@ -307,7 +310,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         );
       }
     },
-    [token, showFlash, beep, haptic],
+    [showFlash, beep, haptic],
   );
 
   // ---- Handle scan from camera or keyboard wedge ----
@@ -402,7 +405,6 @@ export function ScannerApp({ token }: ScannerAppProps) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Scanner-Token": token,
           },
           body: JSON.stringify(body),
         });
@@ -462,7 +464,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         throw err; // Let ManualSheet display the error
       }
     },
-    [token, manualBarcode, showFlash, beep, haptic],
+    [manualBarcode, showFlash, beep, haptic],
   );
 
   // ---- Manual mode cancel ----
@@ -482,7 +484,6 @@ export function ScannerApp({ token }: ScannerAppProps) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Scanner-Token": token,
           },
           body: JSON.stringify({
             variantId: item.product.variantId,
@@ -507,7 +508,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         haptic("error");
       }
     },
-    [token, lastResult, haptic, beep],
+    [lastResult, haptic, beep],
   );
 
   // ---- Camera active ----
@@ -531,7 +532,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
       <div className="flex h-dvh items-center justify-center bg-zinc-950 text-white">
         <div className="text-center">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
-          <p className="text-sm text-zinc-400">Verifying scanner token...</p>
+          <p className="text-sm text-zinc-400">Verifying scanner session...</p>
         </div>
       </div>
     );

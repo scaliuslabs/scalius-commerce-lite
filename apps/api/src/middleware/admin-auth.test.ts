@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import {
+  SCANNER_COOKIE_NAME,
+  getScannerSessionKey,
+  type ScannerSessionPayload,
+} from "@scalius/shared/scanner-auth";
 
 const mocks = vi.hoisted(() => ({
   getAuth: vi.fn(),
@@ -16,11 +21,18 @@ vi.mock("@scalius/core/auth/rbac/helpers", () => ({
 
 import { adminAuthMiddleware } from "./admin-auth";
 
-function createContext(pathname: string, method = "GET") {
-  const request = new Request(`https://api.scalius.test${pathname}`, { method });
+function createContext(
+  pathname: string,
+  method = "GET",
+  options: { headers?: HeadersInit; env?: Record<string, unknown> } = {},
+) {
+  const request = new Request(`https://api.scalius.test${pathname}`, {
+    method,
+    headers: options.headers,
+  });
 
   return {
-    env: {},
+    env: options.env ?? {},
     req: {
       raw: request,
       url: request.url,
@@ -80,6 +92,91 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       status: 403,
       code: "FORBIDDEN",
       message: "You do not have permission to perform this action",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("allows scanner sessions only on exact scanner workflow endpoints", async () => {
+    mocks.getAuth.mockReturnValue({
+      api: { getSession: vi.fn().mockResolvedValue(null) },
+    });
+    const sessionId = "scanner-session";
+    const session: ScannerSessionPayload = {
+      adminId: "admin_1",
+      adminName: "Warehouse",
+      createdAt: Date.now(),
+    };
+    const sessionKey = await getScannerSessionKey(sessionId);
+    const kv = {
+      get: vi.fn().mockImplementation((key: string) =>
+        Promise.resolve(key === sessionKey ? JSON.stringify(session) : null),
+      ),
+    };
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/inventory/scanner/lookup?code=ABC", "GET", {
+        headers: { Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}` },
+        env: { CACHE: kv },
+      }) as never,
+      next,
+    );
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+  });
+
+  it("rejects scanner sessions on broader inventory endpoints", async () => {
+    mocks.getAuth.mockReturnValue({
+      api: { getSession: vi.fn().mockResolvedValue(null) },
+    });
+    const sessionId = "scanner-session";
+    const sessionKey = await getScannerSessionKey(sessionId);
+    const kv = {
+      get: vi.fn().mockResolvedValue(
+        JSON.stringify({
+          adminId: "admin_1",
+          adminName: "Warehouse",
+          createdAt: Date.now(),
+        } satisfies ScannerSessionPayload),
+      ),
+    };
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/inventory/variant_1/adjust", "POST", {
+          headers: { Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}` },
+          env: { CACHE: kv },
+        }) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Scanner sessions can only access scanner inventory endpoints",
+    });
+    expect(kv.get).toHaveBeenCalledWith(sessionKey);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("does not accept raw scanner QR tokens as API credentials", async () => {
+    mocks.getAuth.mockReturnValue({
+      api: { getSession: vi.fn().mockResolvedValue(null) },
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/inventory/scanner/lookup?code=ABC", "GET", {
+          headers: { "X-Scanner-Token": "raw-qr-token" },
+          env: { CACHE: { get: vi.fn().mockResolvedValue(null) } },
+        }) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
     });
     expect(next).not.toHaveBeenCalled();
   });
