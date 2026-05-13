@@ -1,7 +1,7 @@
 // src/lib/inventory/index.ts
 // Public API for inventory management module
 
-export { reserveStock, reserveMultiple, reserveStockBatch } from "./reserve";
+export { reserveStock, reserveMultiple, reserveStockBatch, validateStockBatchAvailability } from "./reserve";
 export { deductStock, deductMultiple } from "./deduct";
 export { releaseReservation, releaseMultiple } from "./release";
 export { restoreDeductedStock, restoreDeductedMultiple } from "./restore";
