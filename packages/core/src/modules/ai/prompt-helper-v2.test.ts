@@ -166,8 +166,10 @@ describe("prompt helper v2", () => {
     expect(homepagePrompt).not.toContain('"buyNowUrl" fields provided in the product context');
     expect(landingPrompt).toContain("LANDING SECTION CONTRACT:");
     expect(landingPrompt).toContain("Generate a campaign-style landing section set");
+    expect(landingPrompt).toContain("objection handling or benefits");
     expect(collectionPrompt).toContain("COLLECTION SECTION CONTRACT:");
     expect(collectionPrompt).toContain("Product information is the center");
+    expect(collectionPrompt).toContain("product grid/comparison/buying-guide content");
   });
 
   it("does not load image dimensions before creating the generation prompt", async () => {

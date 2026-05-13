@@ -428,7 +428,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                       </head>
                       <body>
                         <div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ''}" data-widget-id="preview" data-scalius-widget-root="true">
-                          <div>${previewContent?.html ?? ''}</div>
+                          ${previewContent?.html ?? ''}
                         </div>
                       </body>
                     </html>

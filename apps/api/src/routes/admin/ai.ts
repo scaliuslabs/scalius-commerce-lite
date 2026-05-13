@@ -18,11 +18,13 @@ import {
   GENERATION_CONFIG,
   ERROR_MESSAGES,
   getConfiguredProvider,
+  createWidgetCompositionContract,
   getTimeout,
   getWidgetAiRuntimeSettings,
   providerHasCredentials,
   requireAllowedWidgetAiModel,
   resolveWidgetAiModelCapabilities,
+  WIDGET_DESTINATION_RUNTIME_CONTRACTS,
   type WidgetAiProvider,
   type WidgetAiRuntimeSettings,
 } from '@scalius/core/modules/ai';
@@ -83,6 +85,7 @@ const generateSchema = z
     images: z.array(z.object({ url: z.string(), mimeType: z.string().optional() }).passthrough()).optional(),
     operation: z.enum(['create', 'improve']).optional(),
     promptType: promptTypeEnum.optional(),
+    compositionMode: z.boolean().optional(),
   })
   .refine((data) => data.messages || data.prompt, {
     message: 'Messages or prompt is required.',
@@ -121,24 +124,6 @@ interface WidgetGenerationResult {
   usage: GenerationUsage;
 }
 
-const DESTINATION_RUNTIME_CONTRACTS: Record<WidgetPromptType, string> = {
-  widget: `SERVER DESTINATION CONTRACT: Homepage Widget
-- Generate a compact insertable homepage module, usually 1-2 connected bands inside one root wrapper.
-- Prioritize store/category signal, featured picks/categories, simple discovery paths, trust cues, and a light action close.
-- Use homepage density: strong scanning and medium visual weight, not a full-page campaign.
-- Avoid full campaign funnels, long proof stacks, FAQ blocks, oversized heroes, dense comparison tables, and large external gaps.`,
-  'landing-page': `SERVER DESTINATION CONTRACT: Landing Section
-- Generate one connected campaign section set inside the existing storefront shell and one root wrapper.
-- Use a deliberate conversion flow: promise/offer, product/collection support, proof or benefits, objection handling, trust/urgency, and final CTA.
-- Use landing-page density: more narrative and persuasive than a homepage widget, with repeated CTAs only where they advance conversion.
-- Do not collapse into a generic product grid or homepage discovery banner unless the merchant explicitly asks.`,
-  collection: `SERVER DESTINATION CONTRACT: Collection Section
-- Generate practical collection merchandising inside one root wrapper, not a generic homepage banner or campaign microsite.
-- Product comparison, product cards, buying-guide cues, prices/links supplied in context, and scan-first density are the priority.
-- At least half of the meaningful content should help shoppers compare or choose products.
-- Keep hero treatment restrained and make product facts more prominent than decorative copy.`,
-};
-
 function modelMessageContentText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
@@ -160,18 +145,24 @@ function inferPromptTypeFromMessages(messages: ModelMessage[]): WidgetPromptType
   return 'widget';
 }
 
-function withDestinationRuntimeContract(messages: ModelMessage[], promptType: WidgetPromptType): ModelMessage[] {
+function withDestinationRuntimeContract(
+  messages: ModelMessage[],
+  promptType: WidgetPromptType,
+  options: { compositionMode?: boolean } = {},
+): ModelMessage[] {
+  const compositionContract = options.compositionMode ? `\n\n${createWidgetCompositionContract(promptType)}` : '';
+
   return [
     ...messages,
     {
       role: 'system',
-      content: `${DESTINATION_RUNTIME_CONTRACTS[promptType]}
+      content: `${WIDGET_DESTINATION_RUNTIME_CONTRACTS[promptType]}
 
 SERVER PERFORMANCE CONTRACT:
 - Produce one complete artifact in this call. Do not wait for a later stage to make it coherent.
 - Use no JavaScript, no script tags, and no markdown.
 - Use one root wrapper with data-scalius-widget-root="true" when possible.
-- Root wrappers should use margin: 0 and avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.`,
+- Root wrappers should use margin: 0 and avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.${compositionContract}`,
     } as ModelMessage,
   ];
 }
@@ -521,49 +512,6 @@ function shouldEnforceNoContextCommercePolicy(options: GenerateTextOptions): boo
     : false;
 }
 
-function contentIncludesImageContext(content: unknown): boolean {
-  if (typeof content === 'string') {
-    return content.includes('<untrusted_catalog_data type="images">') || content.includes('IMAGES CONTEXT');
-  }
-
-  if (!Array.isArray(content)) return false;
-
-  return content.some((part) => {
-    if (typeof part === 'string') return contentIncludesImageContext(part);
-    if (!part || typeof part !== 'object') return false;
-
-    const imageUrl = (part as { image_url?: unknown }).image_url;
-    const image = (part as { image?: unknown }).image;
-    if (imageUrl || image) return true;
-
-    return contentIncludesImageContext((part as { text?: unknown }).text);
-  });
-}
-
-function generationHasImageContext(options: GenerateTextOptions): boolean {
-  if (contentIncludesImageContext((options as { prompt?: unknown }).prompt)) return true;
-
-  const messages = (options as { messages?: Array<{ content?: unknown }> }).messages;
-  return Array.isArray(messages)
-    ? messages.some((message) => contentIncludesImageContext(message.content))
-    : false;
-}
-
-function shouldUseInstantNoContextFallback(
-  options: GenerateTextOptions,
-  operation: 'create' | 'improve' | undefined,
-): boolean {
-  return (
-    operation !== 'improve' &&
-    shouldEnforceNoContextCommercePolicy(options) &&
-    !generationHasImageContext(options)
-  );
-}
-
-async function* singleChunkTextStream(text: string): AsyncIterable<string> {
-  yield text;
-}
-
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('aborted'));
 }
@@ -893,7 +841,9 @@ app.openapi(generateRoute, async (c) => {
     ? normalizeMessages(payload.messages)
     : promptToMessages(payload.prompt ?? '', payload.images);
   const promptType = payload.promptType ?? inferPromptTypeFromMessages(normalizedMessages);
-  const messages = withDestinationRuntimeContract(normalizedMessages, promptType);
+  const messages = withDestinationRuntimeContract(normalizedMessages, promptType, {
+    compositionMode: payload.compositionMode === true,
+  });
 
   const generationOptions = {
     model,
@@ -913,20 +863,10 @@ app.openapi(generateRoute, async (c) => {
   };
 
   if (payload.stream) {
-    if (shouldUseInstantNoContextFallback(generationOptions, payload.operation)) {
-      const fallback = createNoContextFallbackWidget(promptType);
-      return openAiCompatibleStream(singleChunkTextStream(fallback));
-    }
-
     const result = streamText(generationOptions);
     return openAiCompatibleStream(result.textStream, {
       finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, capabilities, promptType),
     });
-  }
-
-  if (shouldUseInstantNoContextFallback(generationOptions, payload.operation)) {
-    const fallback = createNoContextFallbackWidget(promptType);
-    return ok(c, openAiCompatibleJson(fallback, provider, modelId, {}));
   }
 
   const result = await generateWidgetContent(generationOptions, capabilities, promptType);
@@ -967,7 +907,9 @@ app.openapi(generateStagedRoute, async (c) => {
   const promptType = payload.promptType ?? inferPromptTypeFromMessages(normalizedMessages);
   const generationOptions = {
     model,
-    messages: withDestinationRuntimeContract(normalizedMessages, promptType),
+    messages: withDestinationRuntimeContract(normalizedMessages, promptType, {
+      compositionMode: payload.stage !== 'plan',
+    }),
     allowSystemInMessages: true,
     temperature:
       payload.stage === 'plan'
