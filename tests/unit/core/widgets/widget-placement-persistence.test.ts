@@ -448,6 +448,46 @@ describe("widget placement persistence", () => {
 
     expect(db._calls.some((call: { method: string }) => call.method === "insert.values")).toBe(false);
   });
+
+  it("persists embedded style tags as css content instead of dropping them on save", async () => {
+    const createdWidget = {
+      id: "wid_created",
+      name: "Styled widget",
+      htmlContent: '<section class="promo"><h2>Deal</h2></section>',
+      cssContent: ".promo{color:red}",
+      isActive: false,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.STANDALONE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      aiContext: null,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      placements: [],
+    };
+    const db = createMockDb({ selectResult: createdWidget }) as any;
+
+    await createWidget(db, {
+      name: "Styled widget",
+      htmlContent: '<section class="promo"><style>.promo { color: red; }</style><h2>Deal</h2></section>',
+      isActive: false,
+      displayTarget: "homepage",
+      placementRule: WidgetPlacementRule.STANDALONE,
+      referenceCollectionId: null,
+      sortOrder: 0,
+      placements: [],
+    });
+
+    const widgetInsert = db._calls
+      .filter((call: { method: string }) => call.method === "insert.values")
+      .map((call: { args: unknown[] }) => call.args[0])
+      .find((value: unknown) => !Array.isArray(value)) as Record<string, unknown>;
+
+    expect(widgetInsert.htmlContent).toContain('<section class="promo">');
+    expect(widgetInsert.htmlContent).not.toContain("<style>");
+    expect(widgetInsert.cssContent).toContain(".promo{color:red}");
+  });
 });
 
 describe("widget restore persistence", () => {

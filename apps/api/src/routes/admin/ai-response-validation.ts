@@ -10,7 +10,7 @@ import { ValidationError } from '../../utils/api-error';
 export const widgetOutputSchema = z
   .object({
     html: z.string().min(1).describe('Complete widget HTML fragment. Do not include script tags or markdown fences.'),
-    css: z.string().describe('Complete widget stylesheet. Use an empty string if no CSS is needed.'),
+    css: z.string().min(1).describe('Complete widget stylesheet. Widgets must include usable CSS.'),
   })
   .strict()
   .describe('Validated storefront widget code returned by the AI generator.');
@@ -112,6 +112,11 @@ function assertGeneratedWidgetIsSafe(widget: ParsedWidget): void {
 
   if (/<\/?script\b/i.test(widget.html)) {
     throw new ValidationError('AI response included script tags. Widgets must use HTML and CSS only.');
+  }
+
+  const css = widget.css.trim();
+  if (!css || !/[{}]/.test(css)) {
+    throw new ValidationError('AI response did not include usable CSS. Widgets must be styled before preview or save.');
   }
 }
 

@@ -104,7 +104,7 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
                       <>
                           <div className="flex-1 overflow-auto border rounded-md">
                               <iframe
-                                  srcDoc={`<style>${previewContent?.css ?? ""}</style><div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ""}" data-widget-id="${selectedHistoryItem.widgetId}" data-scalius-widget-root="true"><div>${previewContent?.html ?? ""}</div></div>`}
+                                  srcDoc={`<style>${previewContent?.css ?? ""}</style><div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ""}" data-widget-id="${selectedHistoryItem.widgetId}" data-scalius-widget-root="true">${previewContent?.html ?? ""}</div>`}
                                   className="w-full h-full"
                                   sandbox=""
                                   title="History Preview"

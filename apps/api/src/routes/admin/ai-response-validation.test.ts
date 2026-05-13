@@ -81,6 +81,15 @@ describe('AI response validation', () => {
     );
   });
 
+  it('rejects widgets without usable CSS', () => {
+    expect(() =>
+      normalizeWidgetGenerationText(`
+        <htmljs><section class="promo"><h2>Deal</h2></section></htmljs>
+        <css></css>
+      `),
+    ).toThrow(ValidationError);
+  });
+
   it('rejects unsupported commerce claims when no catalog facts were provided', () => {
     expect(() =>
       normalizeWidgetGenerationText(

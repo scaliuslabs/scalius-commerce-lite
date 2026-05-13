@@ -1,15 +1,18 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
-import { stripWidgetRuntimeMarkup } from '@scalius/shared/widget-rendering';
-import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
-import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import {
   createWidgetCompositionPlan,
   type WidgetCompositionPlan,
 } from '@scalius/core/modules/ai';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { extractChatCompletionContent, readApiErrorMessage } from './ai-stream';
+import {
+  normalizeGeneratedWidgetContent,
+  parseGeneratedWidgetContent,
+  type GeneratedWidgetContent,
+} from './widget-generation-content';
+import { fetchWidgetAi } from './ai-request';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 type AiPromptType = 'widget' | 'landing-page' | 'collection';
@@ -35,23 +38,7 @@ interface StagedGenerationState {
   retryCount: number;
 }
 
-type WidgetData = { html: string; css: string };
-
-const COMPOSITION_BOUNDARY_GUARD_CSS = `
-
-/* Scalius composition boundary guard */
-[data-scalius-widget-root="true"] {
-  gap: 0;
-  margin: 0;
-}
-
-[data-scalius-widget-root="true"] > :first-child {
-  margin-top: 0;
-}
-
-[data-scalius-widget-root="true"] > :last-child {
-  margin-bottom: 0;
-}`;
+type WidgetData = GeneratedWidgetContent;
 
 function createAbortError(): Error {
   const error = new Error('Generation cancelled');
@@ -65,42 +52,6 @@ function isAbortError(error: unknown): boolean {
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw createAbortError();
-}
-
-function parseWidgetData(content: string): WidgetData {
-  const tagResult = parseTagBasedResponse(content);
-
-  if (tagResult.success && tagResult.data) {
-    const validation = validateParsedWidget(tagResult.data);
-    if (!validation.valid) {
-      throw new Error(validation.error || 'Invalid widget structure');
-    }
-    return {
-      html: tagResult.data.html,
-      css: tagResult.data.css || '',
-    };
-  }
-
-  const parsed = parseJSONSafely(content);
-  if (!parsed.success) {
-    throw new Error(parsed.error || 'Failed to parse response');
-  }
-
-  const validation = validateWidgetJSON(parsed.data);
-  if (!validation.valid) {
-    throw new Error(validation.error || 'Invalid widget structure');
-  }
-
-  const widgetData = parsed.data as { html: string; css?: string };
-  return {
-    html: widgetData.html,
-    css: widgetData.css || '',
-  };
-}
-
-function applyCompositionBoundaryGuard(widget: WidgetData): WidgetData {
-  const html = stripWidgetRuntimeMarkup(widget.html);
-  return { html, css: `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}` };
 }
 
 function sectionsFromWidgetData(content: WidgetData, plan: GenerationPlan): SectionContent[] {
@@ -152,7 +103,7 @@ export function useStagedGeneration() {
       plan: GenerationPlan,
       signal?: AbortSignal,
     ): Promise<WidgetData> => {
-      const response = await fetch('/api/v1/admin/ai/generate', {
+      const response = await fetchWidgetAi('/api/v1/admin/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal,
@@ -173,7 +124,7 @@ export function useStagedGeneration() {
 
       const content = extractChatCompletionContent(await response.json());
       throwIfAborted(signal);
-      return applyCompositionBoundaryGuard(parseWidgetData(content));
+      return normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(content));
     },
     [],
   );

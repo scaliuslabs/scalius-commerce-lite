@@ -28,6 +28,7 @@ import {
 } from "./widgets.validation";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
+import { normalizeWidgetParts } from "@scalius/shared/widget-rendering";
 import { findDuplicateWidgetPlacementIndexes } from "@scalius/shared/widget-placement";
 
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
@@ -112,6 +113,17 @@ export function sanitizeWidgetHtml(html: string): string {
 /** Strip dangerous CSS patterns from widget stylesheets before persistence/rendering. */
 export function sanitizeWidgetCss(css: string): string {
     return sanitizeCssForStyleElement(css);
+}
+
+function normalizePersistentWidgetContent(input: {
+    htmlContent: string;
+    cssContent?: string | null;
+}): { htmlContent: string; cssContent?: string | null } {
+    const normalized = normalizeWidgetParts(input);
+    return {
+        htmlContent: sanitizeWidgetHtml(normalized.html),
+        cssContent: normalized.css ? sanitizeWidgetCss(normalized.css) : normalized.css || input.cssContent,
+    };
 }
 
 function legacyFieldsFromPlacement(placement?: WidgetPlacementInput | WidgetPlacement | null): LegacyPlacementFields {
@@ -983,10 +995,14 @@ export async function getActiveWidgetPlacements(
 export async function createWidget(db: Database, data: CreateWidgetInput) {
     const widgetId = "wid_" + nanoid();
     const requestedPlacements = data.placements ?? placementFromLegacyFields(data);
+    const content = normalizePersistentWidgetContent({
+        htmlContent: data.htmlContent,
+        cssContent: data.cssContent,
+    });
     await validatePlacementReferences(db, requestedPlacements);
     if (data.isActive) {
         assertPublishableWidgetState({
-            htmlContent: data.htmlContent,
+            htmlContent: content.htmlContent,
         });
     }
     const legacyFields = legacyFieldsFromPlacement(requestedPlacements[0]);
@@ -995,8 +1011,8 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
         db.insert(widgets).values({
             id: widgetId,
             name: data.name,
-            htmlContent: sanitizeWidgetHtml(data.htmlContent),
-            cssContent: data.cssContent ? sanitizeWidgetCss(data.cssContent) : data.cssContent,
+            htmlContent: content.htmlContent,
+            cssContent: content.cssContent,
             isActive: data.isActive,
             displayTarget: legacyFields.displayTarget,
             placementRule: legacyFields.placementRule,
@@ -1026,8 +1042,19 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
 
     const updateData: Record<string, unknown> = { updatedAt: sql`unixepoch()` };
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.htmlContent !== undefined) updateData.htmlContent = sanitizeWidgetHtml(data.htmlContent);
-    if (data.cssContent !== undefined) updateData.cssContent = data.cssContent ? sanitizeWidgetCss(data.cssContent) : data.cssContent;
+    const content =
+        data.htmlContent !== undefined || data.cssContent !== undefined
+            ? normalizePersistentWidgetContent({
+                htmlContent: data.htmlContent ?? existing.htmlContent,
+                cssContent: data.cssContent !== undefined ? data.cssContent : existing.cssContent,
+            })
+            : null;
+    if (content) {
+        updateData.htmlContent = content.htmlContent;
+        if (data.cssContent !== undefined || data.htmlContent !== undefined) {
+            updateData.cssContent = content.cssContent;
+        }
+    }
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.aiContext !== undefined) updateData.aiContext = data.aiContext ? JSON.stringify(data.aiContext) : null;
 
@@ -1045,7 +1072,7 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
     const nextIsActive = data.isActive ?? existing.isActive;
     if (nextIsActive) {
         assertPublishableWidgetState({
-            htmlContent: data.htmlContent ?? existing.htmlContent,
+            htmlContent: content?.htmlContent ?? existing.htmlContent,
         });
         if (requestedPlacements === undefined) {
             await validatePlacementReferences(db, toActivePlacementInputs(existing.placements as WidgetPlacement[]));
@@ -1153,13 +1180,17 @@ export async function createHistoryEntry(
 
     const htmlContent =
         snapshot?.htmlContent !== undefined
-            ? sanitizeWidgetHtml(snapshot.htmlContent)
+            ? normalizePersistentWidgetContent({
+                htmlContent: snapshot.htmlContent,
+                cssContent: snapshot.cssContent,
+            }).htmlContent
             : widget.htmlContent;
     const cssContent =
-        snapshot?.cssContent !== undefined
-            ? snapshot.cssContent
-                ? sanitizeWidgetCss(snapshot.cssContent)
-                : snapshot.cssContent
+        snapshot?.htmlContent !== undefined || snapshot?.cssContent !== undefined
+            ? normalizePersistentWidgetContent({
+                htmlContent: snapshot?.htmlContent ?? widget.htmlContent,
+                cssContent: snapshot?.cssContent !== undefined ? snapshot.cssContent : widget.cssContent,
+            }).cssContent
             : widget.cssContent;
 
     return db
