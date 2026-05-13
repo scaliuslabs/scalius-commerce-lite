@@ -493,21 +493,44 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
   };
 
   // Compute generation progress for preview
-  const generationProgress = stagedGeneration.plan
-    ? {
-        currentStage:
-          stagedGeneration.currentStage === 'planning'
-            ? 'Planning widget structure...'
-            : `Generating section ${stagedGeneration.currentSectionIndex + 1} of ${stagedGeneration.plan.totalSections}`,
-        currentSection: stagedGeneration.currentSectionIndex,
-        totalSections: stagedGeneration.plan.totalSections,
-        percentage: Math.round(
-          ((stagedGeneration.currentSectionIndex + (stagedGeneration.currentStage === 'complete' ? 1 : 0)) /
-            stagedGeneration.plan.totalSections) *
-            100,
-        ),
-      }
-    : undefined;
+  const generationProgress =
+    stagedGeneration.isGenerating || stagedGeneration.plan
+      ? (() => {
+          const totalSections = stagedGeneration.plan?.totalSections ?? 1;
+          const completedSections = Math.min(stagedGeneration.sections.length, totalSections);
+
+          if (stagedGeneration.currentStage === 'planning') {
+            return {
+              currentStage: 'Planning widget structure...',
+              totalSections,
+              percentage: 5,
+            };
+          }
+
+          if (stagedGeneration.currentStage === 'polishing') {
+            return {
+              currentStage: 'Polishing composition...',
+              totalSections,
+              percentage: 95,
+            };
+          }
+
+          if (stagedGeneration.currentStage === 'complete') {
+            return {
+              currentStage: 'Widget generation complete',
+              totalSections,
+              percentage: 100,
+            };
+          }
+
+          return {
+            currentStage: `Generating section ${Math.min(stagedGeneration.currentSectionIndex + 1, totalSections)} of ${totalSections}`,
+            currentSection: stagedGeneration.currentSectionIndex,
+            totalSections,
+            percentage: Math.min(90, 10 + Math.round((completedSections / totalSections) * 80)),
+          };
+        })()
+      : undefined;
 
   return {
     promptType,
