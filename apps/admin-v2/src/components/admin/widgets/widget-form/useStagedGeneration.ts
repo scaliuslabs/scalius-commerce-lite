@@ -4,7 +4,7 @@ import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
-import { readApiErrorMessage, readChatCompletionStream } from './ai-stream';
+import { extractChatCompletionContent, readApiErrorMessage } from './ai-stream';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 type AiPromptType = 'widget' | 'landing-page' | 'collection';
@@ -299,7 +299,7 @@ export function useStagedGeneration() {
           model,
           promptType,
           messages: createSinglePassMessages(messages, promptType, plan),
-          stream: true,
+          stream: false,
           operation: 'create',
         }),
       });
@@ -308,7 +308,7 @@ export function useStagedGeneration() {
         throw new Error(await readApiErrorMessage(response, `HTTP ${response.status}`));
       }
 
-      const content = await readChatCompletionStream(response);
+      const content = extractChatCompletionContent(await response.json());
       throwIfAborted(signal);
       return applyCompositionBoundaryGuard(parseWidgetData(content));
     },

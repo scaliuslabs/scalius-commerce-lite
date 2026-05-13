@@ -9,7 +9,7 @@ import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
-import { extractChatCompletionContent, readChatCompletionStream } from './ai-stream';
+import { extractChatCompletionContent } from './ai-stream';
 import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
 import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
 import type { useAiContext } from './useAiContext';
@@ -377,7 +377,7 @@ export const useAiGenerator = (
         provider: activeProvider,
         messages: messages,
         model: selectedModel,
-        stream: true,
+        stream: false,
         operation: 'create',
         promptType: effectivePromptType,
       }),
@@ -390,7 +390,7 @@ export const useAiGenerator = (
       throw new Error(errorData.message || errorData.error?.message || 'Failed to generate content.');
     }
 
-    const content = response.body ? await readChatCompletionStream(response) : extractChatCompletionContent(await response.json());
+    const content = extractChatCompletionContent(await response.json());
     if (!isActiveGenerationRun(run)) return;
     setRawOutput(content);
 

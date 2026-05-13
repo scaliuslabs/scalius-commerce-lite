@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readChatCompletionStream } from "./ai-stream";
+import { extractChatCompletionContent, readChatCompletionStream } from "./ai-stream";
 
 function streamResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -36,5 +36,22 @@ describe("readChatCompletionStream", () => {
     ]);
 
     await expect(readChatCompletionStream(response)).rejects.toThrow("provider failed");
+  });
+});
+
+describe("extractChatCompletionContent", () => {
+  it("unwraps API success envelopes around chat completion responses", () => {
+    const content = extractChatCompletionContent({
+      success: true,
+      data: {
+        choices: [
+          {
+            message: { content: "<htmljs>final</htmljs>\n<css></css>" },
+          },
+        ],
+      },
+    });
+
+    expect(content).toBe("<htmljs>final</htmljs>\n<css></css>");
   });
 });
