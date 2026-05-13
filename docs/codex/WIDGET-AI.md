@@ -70,3 +70,11 @@ Widget generation is provider-neutral and dashboard-configurable.
 - `/api/v1/admin/ai/generate-staged` returns JSON with `choices[0].message.content`; plans are structured JSON strings, sections are tag-format widget content.
 - Admin `General Settings > Widget AI` can save provider config, model IDs, prompt overrides, and key replacement/clearing.
 - Admin widget editor can load active provider models and generate/improve content through `/api/v1/admin/ai/*`.
+
+## 2026-05-13 Refactor Notes
+
+- Create generation no longer has two materially different browser pipelines. The React hook sends merchant intent and selected context IDs to a server function, and the server function assembles prompts/context before calling the API generation route.
+- The old standard path now receives the same composition contract as the former deep-composition path.
+- Generated create artifacts must include usable CSS. Empty-CSS widgets are rejected before preview/save.
+- Widget save normalizes generated content before persistence, extracting embedded `<style>` blocks into `cssContent` so preview and storefront rendering stay consistent.
+- Current next step: promote the server function into a first-class API widget-run route with progress events and an internal tool registry, then expose the registry as MCP once the run contract is stable.
