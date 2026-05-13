@@ -2,7 +2,15 @@
 // Tests the payment processing logic from process-payment.ts.
 // Covers idempotency, partial/full payment, status transitions.
 
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+
+const settingsMocks = vi.hoisted(() => ({
+  getCurrencyConfig: vi.fn(),
+}));
+
+vi.mock("../../../../packages/core/src/modules/settings/settings.service", () => ({
+  getCurrencyConfig: settingsMocks.getCurrencyConfig,
+}));
 
 // ---------------------------------------------------------------------------
 // Enums (from src/db/schema/enums.ts)
@@ -256,6 +264,166 @@ describe("processPaymentConfirmed logic", () => {
       const result = computePaymentResult(order, 99.985, false);
       expect(result.isFullyPaid).toBe(true);
       expect(result.newPaymentStatus).toBe(PaymentStatus.PAID);
+    });
+  });
+});
+
+function createSelectQuery(value: unknown) {
+  const query: Record<string, unknown> = {};
+  const returnSelf = () => query;
+  query.from = vi.fn(returnSelf);
+  query.where = vi.fn(returnSelf);
+  query.get = vi.fn(() => Promise.resolve(value));
+  return query;
+}
+
+function createUpdateQuery(label: string) {
+  const statement = { label };
+  const query: Record<string, unknown> = {};
+  const returnSelf = () => query;
+  query.set = vi.fn(returnSelf);
+  query.where = vi.fn(returnSelf);
+  query.returning = vi.fn(() => statement);
+  return query;
+}
+
+function createPaymentDb(options: {
+  existingPayment?: { id: string; amount: number; status: string } | null;
+  orders: Array<{
+    id: string;
+    totalAmount: number;
+    paidAmount: number;
+    balanceDue: number;
+    paymentStatus: string;
+    status: string;
+    inventoryPool: string;
+    version: number;
+  }>;
+  batchResults: unknown[];
+}) {
+  const selectValues: unknown[] = [options.existingPayment ?? null, ...options.orders];
+  let updateCount = 0;
+  return {
+    select: vi.fn(() => createSelectQuery(selectValues.shift() ?? null)),
+    insert: vi.fn(() => ({ values: vi.fn(() => Promise.resolve(undefined)) })),
+    update: vi.fn(() => {
+      updateCount += 1;
+      return createUpdateQuery(`update-${updateCount}`);
+    }),
+    batch: vi.fn(() => Promise.resolve(options.batchResults.shift())),
+  };
+}
+
+async function loadProcessPaymentConfirmed() {
+  const module = await import("../../../../packages/core/src/modules/payments/process-payment");
+  return module.processPaymentConfirmed;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  settingsMocks.getCurrencyConfig.mockResolvedValue({ code: "BDT" });
+});
+
+describe("processPaymentConfirmed atomic persistence", () => {
+  it("applies order, payment, and deposit plan writes in one guarded batch", async () => {
+    const db = createPaymentDb({
+      orders: [{
+        id: "ord_test",
+        totalAmount: 2500,
+        paidAmount: 0,
+        balanceDue: 2500,
+        paymentStatus: PaymentStatus.UNPAID,
+        status: OrderStatus.PENDING,
+        inventoryPool: "regular",
+        version: 1,
+      }],
+      batchResults: [[[{ id: "ord_test" }], [{ id: "pay_test" }], []]],
+    });
+    const processPaymentConfirmed = await loadProcessPaymentConfirmed();
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "ord_test",
+      amount: 1000,
+      paymentGateway: "stripe",
+      paymentType: "deposit",
+      stripePaymentIntentId: "pi_test",
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(db.batch).toHaveBeenCalledOnce();
+    expect(vi.mocked(db.batch).mock.calls[0]?.[0]).toHaveLength(3);
+  });
+
+  it("retries the guarded batch when both order and payment guards lose the race", async () => {
+    const db = createPaymentDb({
+      orders: [
+        {
+          id: "ord_test",
+          totalAmount: 2500,
+          paidAmount: 0,
+          balanceDue: 2500,
+          paymentStatus: PaymentStatus.UNPAID,
+          status: OrderStatus.PENDING,
+          inventoryPool: "regular",
+          version: 1,
+        },
+        {
+          id: "ord_test",
+          totalAmount: 2500,
+          paidAmount: 500,
+          balanceDue: 2000,
+          paymentStatus: PaymentStatus.PARTIAL,
+          status: OrderStatus.PENDING,
+          inventoryPool: "regular",
+          version: 2,
+        },
+      ],
+      batchResults: [
+        [[], []],
+        [[{ id: "ord_test" }], [{ id: "pay_test" }]],
+      ],
+    });
+    const processPaymentConfirmed = await loadProcessPaymentConfirmed();
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "ord_test",
+      amount: 1000,
+      paymentGateway: "stripe",
+      paymentType: "full",
+      stripePaymentIntentId: "pi_test",
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(db.batch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not treat a split order/payment batch result as successful", async () => {
+    const db = createPaymentDb({
+      orders: [{
+        id: "ord_test",
+        totalAmount: 2500,
+        paidAmount: 0,
+        balanceDue: 2500,
+        paymentStatus: PaymentStatus.UNPAID,
+        status: OrderStatus.PENDING,
+        inventoryPool: "regular",
+        version: 1,
+      }],
+      batchResults: [[[{ id: "ord_test" }], []]],
+    });
+    const processPaymentConfirmed = await loadProcessPaymentConfirmed();
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "ord_test",
+      amount: 1000,
+      paymentGateway: "stripe",
+      paymentType: "full",
+      stripePaymentIntentId: "pi_test",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Payment application changed concurrently; retry required",
     });
   });
 });
