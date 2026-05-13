@@ -580,7 +580,10 @@ async function generateWidgetContent(
       usage: usageFromResult(result),
     };
   } catch (error) {
-    console.warn('Widget response failed validation; retrying once:', error);
+    console.warn('Widget response failed validation; using fallback or retrying once:', error);
+    const fallback = fallbackNoContextWidgetIfAllowed(options);
+    if (fallback) return fallback;
+
     const retry = await generateTextWithTransientRetry(
       addWidgetFormatRetryInstruction(options),
       'Widget format repair',
@@ -610,7 +613,10 @@ async function finalizeStreamedWidgetContent(
   try {
     return normalizeWidgetGenerationText(rawText, normalizationOptions);
   } catch (error) {
-    console.warn('Streamed widget response failed validation; retrying once:', error);
+    console.warn('Streamed widget response failed validation; using fallback or retrying once:', error);
+    const fallback = fallbackNoContextWidgetIfAllowed(options);
+    if (fallback) return fallback.text;
+
     const retryOptions = addWidgetFormatRetryInstruction(options);
     try {
       const retry = await generateWidgetContent(retryOptions, capabilities);
