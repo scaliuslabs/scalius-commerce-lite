@@ -60,7 +60,7 @@ describe("storefront shortcode content helpers", () => {
   it("prepares widget HTML and CSS through one normalized rendering path", () => {
     const prepared = prepareWidgetContent(
       {
-        id: "wid_123",
+        id: "wid_AbC_123",
         htmlContent:
           "<htmljs><section onclick=\"alert(1)\"><script>alert(1)</script><img src=\"https://cloud.scalius.com/widgets/hero.jpg\" alt=\"Hero\"></section></htmljs>",
         cssContent:
@@ -69,13 +69,13 @@ describe("storefront shortcode content helpers", () => {
       { priority: true },
     );
 
-    expect(prepared.scopeClass).toBe("sw-wid_123");
+    expect(prepared.scopeClass).toBe("sw-wid_abc_123");
     expect(prepared.html).not.toContain("htmljs");
     expect(prepared.html).not.toContain("script");
     expect(prepared.html).not.toContain("onclick");
     expect(prepared.html).toContain("/cdn-cgi/image/");
     expect(prepared.html).toContain('fetchpriority="high"');
-    expect(prepared.css).toContain(".sw-wid_123 .hero");
+    expect(prepared.css).toContain(".sw-wid_abc_123 .hero");
     expect(prepared.css).toContain("/cdn-cgi/image/");
     expect(prepared.css).not.toContain("@import");
   });

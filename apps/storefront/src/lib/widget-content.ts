@@ -66,7 +66,13 @@ export function normalizeWidgetCss(css: string | null | undefined): string {
 }
 
 export function getWidgetScopeClass(widgetId: string): string {
-  return `sw-${widgetId}`;
+  const normalized = `sw-${widgetId}`
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || "sw-widget";
 }
 
 export function prepareWidgetContent(
