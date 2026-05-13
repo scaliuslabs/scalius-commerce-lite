@@ -517,6 +517,49 @@ function shouldEnforceNoContextCommercePolicy(options: GenerateTextOptions): boo
     : false;
 }
 
+function contentIncludesImageContext(content: unknown): boolean {
+  if (typeof content === 'string') {
+    return content.includes('<untrusted_catalog_data type="images">') || content.includes('IMAGES CONTEXT');
+  }
+
+  if (!Array.isArray(content)) return false;
+
+  return content.some((part) => {
+    if (typeof part === 'string') return contentIncludesImageContext(part);
+    if (!part || typeof part !== 'object') return false;
+
+    const imageUrl = (part as { image_url?: unknown }).image_url;
+    const image = (part as { image?: unknown }).image;
+    if (imageUrl || image) return true;
+
+    return contentIncludesImageContext((part as { text?: unknown }).text);
+  });
+}
+
+function generationHasImageContext(options: GenerateTextOptions): boolean {
+  if (contentIncludesImageContext((options as { prompt?: unknown }).prompt)) return true;
+
+  const messages = (options as { messages?: Array<{ content?: unknown }> }).messages;
+  return Array.isArray(messages)
+    ? messages.some((message) => contentIncludesImageContext(message.content))
+    : false;
+}
+
+function shouldUseInstantNoContextFallback(
+  options: GenerateTextOptions,
+  operation: 'create' | 'improve' | undefined,
+): boolean {
+  return (
+    operation !== 'improve' &&
+    shouldEnforceNoContextCommercePolicy(options) &&
+    !generationHasImageContext(options)
+  );
+}
+
+async function* singleChunkTextStream(text: string): AsyncIterable<string> {
+  yield text;
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('aborted'));
 }
@@ -866,10 +909,20 @@ app.openapi(generateRoute, async (c) => {
   };
 
   if (payload.stream) {
+    if (shouldUseInstantNoContextFallback(generationOptions, payload.operation)) {
+      const fallback = createNoContextFallbackWidget(promptType);
+      return openAiCompatibleStream(singleChunkTextStream(fallback));
+    }
+
     const result = streamText(generationOptions);
     return openAiCompatibleStream(result.textStream, {
       finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, capabilities, promptType),
     });
+  }
+
+  if (shouldUseInstantNoContextFallback(generationOptions, payload.operation)) {
+    const fallback = createNoContextFallbackWidget(promptType);
+    return ok(c, openAiCompatibleJson(fallback, provider, modelId, {}));
   }
 
   const result = await generateWidgetContent(generationOptions, capabilities, promptType);
