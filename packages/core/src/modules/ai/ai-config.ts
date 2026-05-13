@@ -107,7 +107,7 @@ export const GENERATION_CONFIG = {
 
   // Staged generation thresholds
   stagedGeneration: {
-    autoEnableThreshold: 500,  // Reserved threshold; staged mode stays explicit until server orchestration replaces client fan-out
+    autoEnableThreshold: 500,  // Reserved threshold; composition blueprint stays explicit.
     maxSections: 10,            // Maximum sections per widget
     minSections: 1,             // Minimum sections
     sectionDelayMs: 0,          // No artificial delay; provider/rate-limit handling owns pacing

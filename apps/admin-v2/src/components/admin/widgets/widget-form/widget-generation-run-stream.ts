@@ -5,6 +5,9 @@ export type WidgetGenerationRunEvent =
   | { type: "run.started"; runId: string; operation: "create" | "improve" }
   | { type: "step.started"; step: string }
   | { type: "step.completed"; step: string; elapsedMs: number; metadata?: Record<string, unknown> }
+  | { type: "tool.started"; tool: string }
+  | { type: "tool.completed"; tool: string; elapsedMs: number; metadata?: Record<string, unknown> }
+  | { type: "artifact.validated"; metadata?: Record<string, unknown> }
   | { type: "warning"; warnings: unknown }
   | { type: "artifact"; raw: string; metadata?: Record<string, unknown> }
   | { type: "run.completed"; runId: string; usage?: unknown }

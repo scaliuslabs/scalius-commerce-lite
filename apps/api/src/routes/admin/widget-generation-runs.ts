@@ -18,6 +18,11 @@ import {
 } from "./ai";
 import { normalizeMessages } from "./ai-message-normalization";
 import { resolveAiContextBatchDetails } from "./ai-context";
+import {
+  createWidgetGenerationToolRunner,
+  type WidgetGenerationToolEvent,
+  type WidgetGenerationToolName,
+} from "./widget-generation-tools";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -77,8 +82,9 @@ const widgetGenerationRunSchema = z.object({
 
 type WidgetGenerationRunEvent =
   | { type: "run.started"; runId: string; operation: "create" | "improve" }
-  | { type: "step.started"; step: string }
-  | { type: "step.completed"; step: string; elapsedMs: number; metadata?: Record<string, unknown> }
+  | WidgetGenerationToolEvent
+  | { type: "step.started"; step: WidgetGenerationToolName }
+  | { type: "step.completed"; step: WidgetGenerationToolName; elapsedMs: number; metadata?: Record<string, unknown> }
   | { type: "warning"; warnings: unknown }
   | { type: "artifact"; raw: string; metadata?: Record<string, unknown> }
   | { type: "run.completed"; runId: string; usage?: unknown }
@@ -165,28 +171,13 @@ app.post("/", async (c) => {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const emit = (event: WidgetGenerationRunEvent) => controller.enqueue(encodeSse(event));
-      const timedStep = async <T>(
-        step: string,
-        action: () => Promise<T>,
-        metadata?: (value: T) => Record<string, unknown>,
-      ): Promise<T> => {
-        const startedAt = Date.now();
-        emit({ type: "step.started", step });
-        const value = await action();
-        emit({
-          type: "step.completed",
-          step,
-          elapsedMs: Date.now() - startedAt,
-          metadata: metadata?.(value),
-        });
-        return value;
-      };
+      const tools = createWidgetGenerationToolRunner(emit, emit);
 
       try {
         emit({ type: "run.started", runId, operation: payload.operation });
         await enforceAiRateLimit(c);
 
-        const settings = await timedStep("load_settings", () => runtimeSettings(c));
+        const settings = await tools.run("load_settings", () => runtimeSettings(c));
         const provider = getConfiguredProvider(settings, payload.provider) as WidgetAiProvider;
         const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
         const capabilities = resolveWidgetAiModelCapabilities(
@@ -196,7 +187,7 @@ app.post("/", async (c) => {
         );
         const model = getLanguageModel(provider, modelId, settings, c.env);
 
-        const contextData = await timedStep(
+        const contextData = await tools.run(
           "hydrate_context",
           () =>
             resolveAiContextBatchDetails({
@@ -218,7 +209,7 @@ app.post("/", async (c) => {
         );
         emit({ type: "warning", warnings: contextData.warnings });
 
-        const promptResult = await timedStep(
+        const promptResult = await tools.run(
           "build_prompt",
           async () => {
             const systemPrompt = await getWidgetAiPrompt(db, payload.promptType);
@@ -248,7 +239,7 @@ app.post("/", async (c) => {
           }),
         );
 
-        const result = await timedStep("generate", async () => {
+        const result = await tools.run("generate", async () => {
           const messages = withDestinationRuntimeContract(
             normalizeMessages(promptResult.messages),
             payload.promptType,
@@ -273,6 +264,11 @@ app.post("/", async (c) => {
             capabilities,
             payload.promptType,
           );
+        });
+        tools.artifactValidated({
+          provider,
+          model: modelId,
+          format: "tagged-html-css",
         });
 
         emit({
