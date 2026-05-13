@@ -115,7 +115,7 @@ A reservation is considered expired when:
 2. It was created more than `maxAgeMinutes` ago (default: 30)
 3. It has an `orderId` (not null)
 4. No corresponding `deducted` / `preorder_deducted` movement exists for the same order+variant
-5. No corresponding `released` movement with notes containing "expired reservation" exists (prevents double-release)
+5. No corresponding `released` movement exists for the same order+variant (prevents double-release after cancellations, payment failures, queue rollbacks, or previous sweeps)
 
 The sweep groups by `(variantId, orderId)`, sums quantities, and for each expired group:
 - Decrements `reservedStock` on the variant (clamped to 0 via `MAX(0, ...)`)
@@ -220,7 +220,7 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 1. **`reserveMultiple()`** -- Sequential. Reserves one variant at a time with individual CAS. On any failure, rolls back all previously successful reservations. Suitable for small order sizes.
 
-2. **`reserveStockBatch()`** -- Atomic. Reads all variant states upfront, validates ALL availability before writing, batches all CAS updates into a single `db.batch()` call. If any CAS update fails (empty return), rolls back successful ones via a second `db.batch()` and retries the entire operation. Deduplicates variant IDs by merging quantities. Prevents orphaned reservations.
+2. **`reserveStockBatch()`** -- Atomic. Reads all variant states upfront, validates ALL availability before writing, batches all CAS updates into a single `db.batch()` call. If any CAS update fails (empty return), rolls back successful ones via a second `db.batch()` and retries the entire operation. Deduplicates variant IDs for stock counter updates while keeping per-order audit movements. Prevents orphaned reservations.
 
 ### Deduct
 

@@ -227,7 +227,8 @@ export async function reserveStockBatch(
     return { success: true, results: [] };
   }
 
-  // Deduplicate: if the same variantId appears multiple times, merge quantities
+  // Deduplicate stock counter updates by variant. Audit movements are grouped
+  // separately by variant + order so every order keeps its own reservation trail.
   const merged = new Map<string, { variantId: string; quantity: number; orderId?: string }>();
   for (const item of items) {
     const existing = merged.get(item.variantId);
@@ -238,9 +239,7 @@ export async function reserveStockBatch(
     }
   }
   const entries = Array.from(merged.values());
-
-  // Use the first item's orderId as the batch orderId (all items should share it)
-  const orderId = items[0]?.orderId;
+  const movementEntries = groupReservationMovementsForAudit(items);
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     // Phase 1: Read all variant states
@@ -418,7 +417,7 @@ export async function reserveStockBatch(
       };
     }
 
-    // Phase 6: All succeeded — record movements (best-effort, non-blocking)
+    // Phase 6: All succeeded — record movements (best-effort via recordMovement)
     const results: StockOperationResult[] = [];
     for (const entry of entries) {
       const variant = variants.get(entry.variantId)!;
@@ -428,15 +427,28 @@ export async function reserveStockBatch(
         : variant.stock;
 
       results.push({ success: true, variantId: entry.variantId, previousStock, newStock });
+    }
+
+    const preorderRunningStock = new Map<string, number>();
+    for (const entry of movementEntries) {
+      const variant = variants.get(entry.variantId)!;
+      const previousStock = pool === "preorder"
+        ? preorderRunningStock.get(entry.variantId) ?? variant.preorderStock
+        : variant.stock;
+      const newStock = pool === "preorder" ? previousStock - entry.quantity : variant.stock;
+
+      if (pool === "preorder") {
+        preorderRunningStock.set(entry.variantId, newStock);
+      }
 
       await recordMovement(db, {
         variantId: entry.variantId,
-        orderId,
+        orderId: entry.orderId,
         type: pool === "preorder" ? "preorder_reserved" : "reserved",
         quantity: entry.quantity,
         previousStock,
         newStock,
-        notes: `Reserved ${entry.quantity} units (batch)${orderId ? ` for order ${orderId}` : ""}`,
+        notes: `Reserved ${entry.quantity} units (batch)${entry.orderId ? ` for order ${entry.orderId}` : ""}`,
       });
     }
 
@@ -449,6 +461,26 @@ export async function reserveStockBatch(
     results: [],
     error: `Failed to reserve stock batch after ${MAX_RETRIES} retries`,
   };
+}
+
+export function groupReservationMovementsForAudit(
+  items: { variantId: string; quantity: number; orderId?: string }[],
+): { variantId: string; quantity: number; orderId?: string }[] {
+  const grouped = new Map<string, { variantId: string; quantity: number; orderId?: string }>();
+
+  for (const item of items) {
+    const orderKey = item.orderId ?? "";
+    const key = `${item.variantId}\0${orderKey}`;
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      grouped.set(key, { ...item });
+    }
+  }
+
+  return Array.from(grouped.values());
 }
 
 /**
