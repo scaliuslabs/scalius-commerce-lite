@@ -123,17 +123,20 @@ interface WidgetGenerationResult {
 
 const DESTINATION_RUNTIME_CONTRACTS: Record<WidgetPromptType, string> = {
   widget: `SERVER DESTINATION CONTRACT: Homepage Widget
-- Generate a compact insertable homepage module, usually 1-2 connected bands.
-- Prioritize discovery, featured picks/categories, and a light action close.
-- Avoid full campaign funnels, long proof stacks, FAQ blocks, and large external gaps.`,
+- Generate a compact insertable homepage module, usually 1-2 connected bands inside one root wrapper.
+- Prioritize store/category signal, featured picks/categories, simple discovery paths, trust cues, and a light action close.
+- Use homepage density: strong scanning and medium visual weight, not a full-page campaign.
+- Avoid full campaign funnels, long proof stacks, FAQ blocks, oversized heroes, dense comparison tables, and large external gaps.`,
   'landing-page': `SERVER DESTINATION CONTRACT: Landing Section
-- Generate one connected campaign section set inside the existing storefront shell.
-- Use a deliberate conversion flow: promise/offer, supporting proof or benefits, product/collection support, and final CTA.
-- It should feel more narrative than a homepage widget, but still share one visual system and tight section rhythm.`,
+- Generate one connected campaign section set inside the existing storefront shell and one root wrapper.
+- Use a deliberate conversion flow: promise/offer, product/collection support, proof or benefits, objection handling, trust/urgency, and final CTA.
+- Use landing-page density: more narrative and persuasive than a homepage widget, with repeated CTAs only where they advance conversion.
+- Do not collapse into a generic product grid or homepage discovery banner unless the merchant explicitly asks.`,
   collection: `SERVER DESTINATION CONTRACT: Collection Section
-- Generate practical collection merchandising, not a generic homepage banner.
+- Generate practical collection merchandising inside one root wrapper, not a generic homepage banner or campaign microsite.
 - Product comparison, product cards, buying-guide cues, prices/links supplied in context, and scan-first density are the priority.
-- At least half of the meaningful content should help shoppers compare or choose products.`,
+- At least half of the meaningful content should help shoppers compare or choose products.
+- Keep hero treatment restrained and make product facts more prominent than decorative copy.`,
 };
 
 function modelMessageContentText(content: unknown): string {
@@ -167,7 +170,8 @@ function withDestinationRuntimeContract(messages: ModelMessage[], promptType: Wi
 SERVER PERFORMANCE CONTRACT:
 - Produce one complete artifact in this call. Do not wait for a later stage to make it coherent.
 - Use no JavaScript, no script tags, and no markdown.
-- Root wrappers should use margin: 0 and avoid min-height: 100vh, large spacer elements, or disconnected full-page bands.`,
+- Use one root wrapper with data-scalius-widget-root="true" when possible.
+- Root wrappers should use margin: 0 and avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.`,
     } as ModelMessage,
   ];
 }
@@ -179,9 +183,9 @@ function getCreateOutputBudget(settings: WidgetAiRuntimeSettings, promptType: Wi
   const maxBudget = settings.generation.maxOutputTokens;
   const targetBudget =
     promptType === 'landing-page'
-      ? Math.max(fastBudget, 4200)
+      ? Math.max(fastBudget, 3600)
       : promptType === 'collection'
-        ? Math.max(fastBudget, 3400)
+        ? Math.max(fastBudget, 3000)
         : fastBudget;
 
   return Math.min(maxBudget, targetBudget);

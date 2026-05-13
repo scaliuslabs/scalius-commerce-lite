@@ -4,8 +4,7 @@ import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
-import { GENERATION_CONFIG } from '@scalius/core/modules/ai/ai-config';
-import { extractChatCompletionContent, readApiErrorMessage } from './ai-stream';
+import { readApiErrorMessage, readChatCompletionStream } from './ai-stream';
 
 type PromptMessage = StructuredPromptResult['messages'][number];
 type AiPromptType = 'widget' | 'landing-page' | 'collection';
@@ -39,36 +38,89 @@ interface StagedGenerationState {
   retryCount: number;
 }
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
-const PREVIOUS_SECTION_CONTEXT_LIMIT = 6000;
-const FINALIZATION_DRAFT_LIMIT = 36_000;
-const SECTION_GAP_CSS = '0';
+type WidgetData = { html: string; css: string };
+
 const COMPOSITION_BOUNDARY_GUARD_CSS = `
 
 /* Scalius composition boundary guard */
-.widget-container {
+.widget-container,
+[data-scalius-widget-root="true"] {
   gap: 0;
   margin: 0;
 }
 
-.widget-container > .widget-section:first-child > *:first-child {
+.widget-container > .widget-section:first-child > *:first-child,
+[data-scalius-widget-root="true"] > :first-child {
   margin-top: 0;
 }
 
-.widget-container > .widget-section:last-child > *:last-child {
+.widget-container > .widget-section:last-child > *:last-child,
+[data-scalius-widget-root="true"] > :last-child {
   margin-bottom: 0;
 }`;
 
-type WidgetData = { html: string; css: string };
-
 const DESTINATION_STAGE_CONTRACTS: Record<AiPromptType, string> = {
   widget:
-    'Homepage Widget: compact insertable homepage merchandising, usually 1-3 connected bands focused on discovery, featured picks/categories, and a light action close.',
+    'Homepage Widget: compact homepage merchandising inserted into an existing homepage. Prioritize discovery, featured products/categories, trust, and one light action close. Do not build a full landing page.',
   'landing-page':
-    'Landing Section: connected campaign flow inside the storefront shell, moving from promise/offer to proof, product support, and final CTA.',
+    'Landing Section: campaign-style conversion flow inside the storefront shell. Move from offer/promise to proof, product support, objection handling, urgency/trust, and final CTA.',
   collection:
-    'Collection Section: commerce-dense merchandising, product comparison, buying-guide cues, and direct selection support rather than broad campaign storytelling.',
+    'Collection Section: commerce-dense collection merchandising. Product comparison, prices, links, variant cues, buying-guide support, and direct selection matter more than broad storytelling.',
+};
+
+const DESTINATION_BLUEPRINTS: Record<
+  AiPromptType,
+  {
+    totalSections: number;
+    compositionBrief: string;
+    sections: string[];
+    designSystem: string;
+    spacing: string;
+  }
+> = {
+  widget: {
+    totalSections: 2,
+    compositionBrief:
+      'One fast homepage merchandising module that opens with a clear store/category signal and closes with compact discovery/action support.',
+    sections: [
+      'Compact opening band with the strongest merchandising signal, one primary CTA, and restrained visual weight',
+      'Discovery/support band for selected products, categories, collections, trust cues, or a final action without landing-page length',
+    ],
+    designSystem:
+      'Reusable homepage rhythm: medium density, strong hierarchy, compact cards, consistent CTA style, and lightweight visual transitions.',
+    spacing:
+      'Keep the root compact; bands share background tokens or tight dividers and use internal padding instead of external margins.',
+  },
+  'landing-page': {
+    totalSections: 5,
+    compositionBrief:
+      'One continuous campaign section set that sells a specific offer, audience promise, product line, or collection inside the existing storefront shell.',
+    sections: [
+      'Campaign hero/offer with a specific promise and primary CTA',
+      'Product or collection showcase that makes the offer concrete',
+      'Benefits, proof, or use-case explanation that supports the choice without invented claims',
+      'Objection handling, urgency, trust, or comparison content tied to provided facts',
+      'Final conversion CTA that closes the campaign stronger than the opening',
+    ],
+    designSystem:
+      'Campaign art direction: stronger narrative hierarchy, repeated but restrained CTA language, cohesive product/media treatment, and a clear conversion progression.',
+    spacing:
+      'Make sections read as one page story with connected backgrounds/dividers; no disconnected cards, spacer bands, or full-viewport gaps.',
+  },
+  collection: {
+    totalSections: 3,
+    compositionBrief:
+      'One practical collection merchandising flow that introduces the collection, helps shoppers compare products, and ends with a tight trust/action strip.',
+    sections: [
+      'Collection intro with the shopper promise and compact navigation/filter-like cues',
+      'Product grid, comparison, buying guide, or shop-by-need layout using provided product facts prominently',
+      'Tight trust/action strip that supports selection without broad campaign storytelling',
+    ],
+    designSystem:
+      'Commerce-first system: dense scan layout, prominent price/link hierarchy, stable product cards, restrained copy, and practical comparison affordances.',
+    spacing:
+      'Keep vertical rhythm tight for collection browsing; product content should dominate and adjacent blocks should connect without whitespace gaps.',
+  },
 };
 
 function createAbortError(): Error {
@@ -85,212 +137,19 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw createAbortError();
 }
 
-function textFromMessages(messages: PromptMessage[]): string {
-  return messages
-    .map((message) => {
-      if (typeof message.content === 'string') return message.content;
-      return message.content
-        .filter((part) => part.type === 'text' && typeof part.text === 'string')
-        .map((part) => part.text)
-        .join('\n');
-    })
-    .join('\n');
-}
-
-function removeWidgetOutputInstructions(text: string): string {
-  const outputStart = text.indexOf('RESPONSE FORMAT - USE SIMPLE TAGS:');
-  if (outputStart < 0) return text;
-
-  const nextInstructionStart = text.indexOf('IMPORTANT: "BUY NOW"', outputStart);
-  if (nextInstructionStart < 0) {
-    return text.slice(0, outputStart).trim();
-  }
-
-  return `${text.slice(0, outputStart)}${text.slice(nextInstructionStart)}`.trim();
-}
-
-function createPlanningMessages(messages: PromptMessage[], promptType: AiPromptType): PromptMessage[] {
-  const planningContext = removeWidgetOutputInstructions(textFromMessages(messages));
-  return [
-    {
-      role: 'user',
-      content: `${planningContext}
-
-	Selected destination: ${DESTINATION_STAGE_CONTRACTS[promptType]}
-
-	Before generating the widget, create a concise implementation plan. Respond with ONLY a JSON object in this shape:
-	{
-	  "totalSections": <number of progressive sections needed>,
-	  "compositionBrief": "<one sentence describing the complete widget as a single composition>",
-	  "sharedDesignSystem": "<specific reusable art direction: colors, typography, cards, buttons, image treatment>",
-	  "spacingStrategy": "<how sections connect without blank gaps; assume final wrapper gap is 0>",
-	  "sectionDescriptions": [<brief role for each section in the single composition>],
-	  "sectionContinuity": [<how each section connects to the previous/next section>],
-	  "estimatedTokens": <optional estimated total tokens>
-	}
-
-	Guidelines:
-- Choose section count by destination:
-  - Homepage widget: usually 2-4 cohesive bands such as offer/category signal, featured products or categories, trust/urgency, and CTA.
-  - Landing section set: usually 4-6 campaign bands such as hero/offer, product or collection showcase, proof, objection handling, urgency, and final CTA.
-  - Collection section: usually 2-4 practical merchandising bands such as collection intro, product grid/comparison, buying guide, and CTA/trust strip.
-	- Plan the output as ONE continuous composition. Section descriptions must state each section's role in that flow, not isolated ideas.
-	- Each generated section is only a progressive slice of the same widget, not an independent widget.
-	- Every section must share one visual system: color tokens, typography, image treatment, button style, radius scale, and spacing rhythm.
-	- The final composition wrapper uses gap: 0. The spacingStrategy and sectionContinuity fields must explain how visual continuity is achieved through internal padding, shared backgrounds, overlap, dividers, or shape transitions.
-	- Avoid huge vertical gaps. Root section wrappers should not rely on large top/bottom margins or spacer blocks.
-	- Do not include HTML, CSS, markdown, comments, or explanations in this planning response.
-	- The sectionDescriptions and sectionContinuity array lengths must equal totalSections.`,
-    },
-  ];
-}
-
-function inferPromptTypeFromMessages(messages: PromptMessage[]): AiPromptType {
-  const promptText = textFromMessages(messages).toLowerCase();
-  const hasHomepageContract = promptText.includes('homepage widget contract:');
-  const hasLandingContract = promptText.includes('landing section contract:');
-  const hasCollectionContract = promptText.includes('collection section contract:');
-
-  if (hasHomepageContract) return 'widget';
-  if (hasCollectionContract) return 'collection';
-  if (hasLandingContract) return 'landing-page';
-  if (promptText.includes('homepage widget designer')) return 'widget';
-  if (promptText.includes('collection page designer') || promptText.includes('collection section')) return 'collection';
-  if (promptText.includes('landing page designer')) return 'landing-page';
-  return 'widget';
-}
-
-function createDeterministicPlan(messages: PromptMessage[], promptType?: AiPromptType): GenerationPlan {
-  const destination = promptType ?? inferPromptTypeFromMessages(messages);
-  const totalSections = destination === 'landing-page' ? 4 : destination === 'widget' || destination === 'collection' ? 3 : 2;
-  const sectionDescriptions = destination === 'landing-page'
-    ? [
-        'Campaign hero/offer that establishes the shared visual system',
-        'Product or collection showcase that continues the hero rhythm',
-        'Proof, benefits, or objection handling using the same design language',
-        'Final conversion CTA with tight spacing from the prior section',
-      ]
-    : destination === 'widget'
-      ? [
-          'Homepage offer/category signal that establishes the visual system',
-          'Featured product or collection discovery band',
-          'Trust, urgency, or CTA band that closes the homepage widget',
-        ]
-      : destination === 'collection'
-        ? [
-            'Collection intro with the core merchandising promise',
-            'Product or category comparison using the provided storefront context',
-            'Trust, urgency, and call-to-action strip connected to the product grid',
-          ]
-        : ['Primary promotional section', 'Supporting call-to-action section'];
-
+function createDeterministicPlan(promptType: AiPromptType): GenerationPlan {
+  const blueprint = DESTINATION_BLUEPRINTS[promptType];
   return {
-    totalSections,
-    sectionDescriptions: sectionDescriptions.slice(0, totalSections),
-    compositionBrief: destination === 'landing-page'
-      ? 'One continuous campaign section set that moves from offer to proof to conversion inside the storefront shell.'
-      : destination === 'widget'
-        ? 'One continuous homepage merchandising widget that opens with a clear signal, supports discovery, and closes with action.'
-        : destination === 'collection'
-          ? 'One continuous collection merchandising widget that introduces products, helps comparison, and closes with trust or action.'
-          : 'One continuous destination-appropriate storefront composition with a clear opening, useful content, and a tight action close.',
-    sharedDesignSystem:
-      'Use one palette, type scale, image treatment, card radius, button language, and responsive spacing rhythm across every generated section.',
-    spacingStrategy:
-      'The final wrapper uses gap: 0; connect adjacent sections with shared backgrounds, intentional dividers, or internal padding rather than external margins.',
-    sectionContinuity: sectionDescriptions
-      .slice(0, totalSections)
-      .map((description, index) =>
-        index === 0
-          ? `${description}; establish the shared visual system and leave a natural handoff to the next section.`
-          : `${description}; continue the prior section's visual language without outer spacing or unrelated resets.`,
-      ),
-  };
-}
-
-function compactPreviousSections(previousSections: SectionContent[]): string {
-  if (previousSections.length === 0) return '';
-
-  const newestFirst = [...previousSections].reverse();
-  const snippets: string[] = [];
-  let usedChars = 0;
-
-  for (const section of newestFirst) {
-    const snippet = `Section ${section.sectionIndex + 1}${section.description ? ` (${section.description})` : ''}:
-HTML summary:
-${section.html.slice(0, 900)}
-
-CSS summary:
-${section.css.slice(0, 900) || 'No CSS'}`;
-    if (usedChars + snippet.length > PREVIOUS_SECTION_CONTEXT_LIMIT) break;
-    snippets.unshift(snippet);
-    usedChars += snippet.length;
-  }
-
-  if (snippets.length === 0) return '';
-
-  return `\n\nPREVIOUS SECTIONS CONTEXT:
-${snippets.join('\n\n')}
-
-	IMPORTANT: Maintain the same design language, color rhythm, spacing, typography, and CTA style. Do not copy previous sections verbatim.`;
-}
-
-function normalizePlan(plan: GenerationPlan): GenerationPlan {
-  const totalSections = Math.min(
-    GENERATION_CONFIG.stagedGeneration.maxSections,
-    Math.max(
-      GENERATION_CONFIG.stagedGeneration.minSections,
-      Math.round(Number(plan.totalSections) || GENERATION_CONFIG.stagedGeneration.minSections),
+    totalSections: blueprint.totalSections,
+    sectionDescriptions: blueprint.sections,
+    compositionBrief: blueprint.compositionBrief,
+    sharedDesignSystem: blueprint.designSystem,
+    spacingStrategy: blueprint.spacing,
+    sectionContinuity: blueprint.sections.map((section, index) =>
+      index === 0
+        ? `${section}; establish the shared design system and hand off naturally to the next band.`
+        : `${section}; continue the prior band's palette, typography, spacing rhythm, and CTA treatment without outer gaps.`,
     ),
-  );
-  const sectionDescriptions = Array.isArray(plan.sectionDescriptions)
-    ? plan.sectionDescriptions
-        .slice(0, totalSections)
-        .map((description, index) => String(description || `Section ${index + 1}`).slice(0, 160))
-    : [];
-
-  while (sectionDescriptions.length < totalSections) {
-    sectionDescriptions.push(`Section ${sectionDescriptions.length + 1}`);
-  }
-
-  const sectionContinuity = Array.isArray(plan.sectionContinuity)
-    ? plan.sectionContinuity
-        .slice(0, totalSections)
-        .map((instruction, index) =>
-          String(
-            instruction ||
-              (index === 0
-                ? 'Establish the shared visual system and hand off naturally to the next section.'
-                : 'Continue the shared visual system from the previous section without external spacing.'),
-          ).slice(0, 200),
-        )
-    : [];
-
-  while (sectionContinuity.length < totalSections) {
-    sectionContinuity.push(
-      sectionContinuity.length === 0
-        ? 'Establish the shared visual system and hand off naturally to the next section.'
-        : 'Continue the shared visual system from the previous section without external spacing.',
-    );
-  }
-
-  return {
-    totalSections,
-    sectionDescriptions,
-    compositionBrief: String(
-      plan.compositionBrief ||
-        'One continuous storefront widget composition with a clear opening, supporting merchandising, and conversion close.',
-    ).slice(0, 500),
-    sharedDesignSystem: String(
-      plan.sharedDesignSystem ||
-        'Reuse one color palette, type scale, image treatment, card style, button language, and responsive spacing rhythm across every section.',
-    ).slice(0, 500),
-    spacingStrategy: String(
-      plan.spacingStrategy ||
-        'The final wrapper places sections with zero external gap; each section uses internal padding and intentional dividers or shared backgrounds to connect.',
-    ).slice(0, 360),
-    sectionContinuity,
-    estimatedTokens: plan.estimatedTokens,
   };
 }
 
@@ -299,11 +158,49 @@ function describePlan(plan: GenerationPlan): string {
     `Complete composition: ${plan.compositionBrief}`,
     `Shared design system: ${plan.sharedDesignSystem}`,
     `Spacing strategy: ${plan.spacingStrategy}`,
-    'Section flow:',
+    'Expected flow:',
     ...plan.sectionDescriptions.map(
       (description, index) => `${index + 1}. ${description} Continuity: ${plan.sectionContinuity[index]}`,
     ),
   ].join('\n');
+}
+
+function createSinglePassMessages(
+  messages: PromptMessage[],
+  promptType: AiPromptType,
+  plan: GenerationPlan,
+): PromptMessage[] {
+  return [
+    ...messages,
+    {
+      role: 'user',
+      content: `Generate the final widget in ONE model response using the destination blueprint below. Do not output a plan.
+
+Destination:
+${DESTINATION_STAGE_CONTRACTS[promptType]}
+
+Blueprint:
+${describePlan(plan)}
+
+Single-pass generation rules:
+- Think through the full composition internally, then return one complete <htmljs> and <css> artifact.
+- Use exactly one root wrapper with data-scalius-widget-root="true" and destination-specific classes.
+- If the output has multiple visual bands, they must be children of the same root and must look like one connected composition, not separate widgets.
+- Do not create client-side JavaScript, script tags, markdown, external CSS, tracking pixels, hidden forms, unrelated page headers, or footers.
+- Keep generated CSS compact, scoped, and purposeful. Avoid repeated card systems, giant min-heights, viewport-height filler, spacer divs, oversized margins, and dead vertical gaps.
+- Use only provided catalog facts, URLs, product images, prices, discounts, stock, delivery/trust claims, and category/collection names. If a fact is not provided, keep copy generic and non-factual.
+- Homepage widgets should remain compact; landing sections should be campaign-like; collection sections should be product-comparison led.
+
+Return only:
+<htmljs>
+...
+</htmljs>
+
+<css>
+...
+</css>`,
+    },
+  ];
 }
 
 function parseWidgetData(content: string): WidgetData {
@@ -338,74 +235,39 @@ function parseWidgetData(content: string): WidgetData {
 }
 
 function applyCompositionBoundaryGuard(widget: WidgetData): WidgetData {
-  const css = `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}`;
-  return { html: widget.html, css };
+  const html = widget.html.includes('data-scalius-widget-root=')
+    ? widget.html
+    : `<div class="widget-container" data-scalius-widget-root="true">\n${widget.html}\n</div>`;
+  return { html, css: `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}` };
 }
 
-function sectionsFromWidgetData(
-  content: WidgetData,
-  plan: GenerationPlan,
-  fallbackSections: SectionContent[],
-): SectionContent[] {
+function sectionsFromWidgetData(content: WidgetData, plan: GenerationPlan): SectionContent[] {
   try {
     const parsedSections = parseHtmlIntoSections(content.html, content.css || '');
-    if (parsedSections.length === 0) return fallbackSections;
-
-    return parsedSections.map((section, index) => ({
-      html: section.html,
-      css: section.css,
-      sectionIndex: index,
-      description: plan.sectionDescriptions[index] || section.description || `Section ${index + 1}`,
-      id: section.id,
-      timestamp: section.timestamp,
-    }));
+    if (parsedSections.length > 0) {
+      return parsedSections.map((section, index) => ({
+        html: section.html,
+        css: section.css,
+        sectionIndex: index,
+        description: plan.sectionDescriptions[index] || section.description || `Section ${index + 1}`,
+        id: section.id,
+        timestamp: section.timestamp,
+      }));
+    }
   } catch (error: unknown) {
-    if (import.meta.env.DEV) console.warn('Failed to parse finalized widget sections; keeping draft sections.', error);
-    return fallbackSections;
+    if (import.meta.env.DEV) console.warn('Failed to parse generated widget sections.', error);
   }
-}
 
-function indentHtml(html: string): string {
-  return html
-    .split('\n')
-    .map((line) => '    ' + line)
-    .join('\n');
-}
-
-function buildCombinedWidget(generatedSections: SectionContent[]): WidgetData {
-  const combinedHtml = `<div class="widget-container">\n${generatedSections.map((s, idx) => `  <div class="widget-section widget-section-${idx + 1}" data-section="${idx + 1}">\n${indentHtml(s.html)}\n  </div>`).join('\n')}\n</div>`;
-
-  const combinedCss = `
-	/* Widget Container Composition */
-	.widget-container {
-	  display: flex;
-	  flex-direction: column;
-	  gap: ${SECTION_GAP_CSS};
-	  width: 100%;
-	  margin: 0;
-	}
-
-	.widget-section {
-	  width: 100%;
-	  margin: 0;
-	}
-
-	.widget-section > :first-child {
-	  margin-top: 0;
-	}
-
-	.widget-section > :last-child {
-	  margin-bottom: 0;
-	}
-
-	/* Section-specific styles */
-	${generatedSections
-    .map((s, idx) => (s.css ? `/* Section ${idx + 1} styles */\n${s.css}` : ''))
-    .filter(Boolean)
-    .join('\n\n')}
-	`;
-
-  return { html: combinedHtml, css: combinedCss };
+  return [
+    {
+      html: content.html,
+      css: content.css,
+      sectionIndex: 0,
+      description: plan.compositionBrief,
+      id: `composition-${Date.now()}`,
+      timestamp: Date.now(),
+    },
+  ];
 }
 
 export function useStagedGeneration() {
@@ -419,261 +281,16 @@ export function useStagedGeneration() {
     retryCount: 0,
   });
 
-  const sleep = (ms: number, signal?: AbortSignal) =>
-    new Promise<void>((resolve, reject) => {
-      if (signal?.aborted) {
-        reject(createAbortError());
-        return;
-      }
-
-      const timeout = window.setTimeout(resolve, ms);
-      signal?.addEventListener(
-        'abort',
-        () => {
-          window.clearTimeout(timeout);
-          reject(createAbortError());
-        },
-        { once: true },
-      );
-    });
-
-  /**
-   * Step 1: Ask LLM to create a generation plan
-   */
-  const createPlan = useCallback(
+  const generateSinglePassComposition = useCallback(
     async (
       provider: string,
       model: string,
       messages: PromptMessage[],
       promptType: AiPromptType,
-      signal?: AbortSignal,
-    ): Promise<GenerationPlan | null> => {
-      try {
-        throwIfAborted(signal);
-        const response = await fetch('/api/v1/admin/ai/generate-staged', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal,
-          body: JSON.stringify({
-            provider,
-            model,
-            promptType,
-            messages: createPlanningMessages(messages, promptType),
-            stage: 'plan',
-            useCache: true,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(await readApiErrorMessage(response, 'Failed to create plan'));
-        }
-
-        const content = extractChatCompletionContent(await response.json());
-
-        const parsed = parseJSONSafely(content);
-        if (!parsed.success) {
-          throw new Error(parsed.error || 'Failed to parse plan JSON');
-        }
-
-        const plan = normalizePlan(parsed.data as GenerationPlan);
-
-        // Validate plan structure
-        if (!plan.totalSections || !Array.isArray(plan.sectionDescriptions) || !Array.isArray(plan.sectionContinuity)) {
-          throw new Error('Invalid plan structure');
-        }
-
-        if (
-          plan.totalSections !== plan.sectionDescriptions.length ||
-          plan.totalSections !== plan.sectionContinuity.length
-        ) {
-          throw new Error('Plan section count mismatch');
-        }
-
-        if (
-          plan.totalSections < GENERATION_CONFIG.stagedGeneration.minSections ||
-          plan.totalSections > GENERATION_CONFIG.stagedGeneration.maxSections
-        ) {
-          throw new Error(
-            `Plan requested ${plan.totalSections} sections. Use ${GENERATION_CONFIG.stagedGeneration.minSections}-${GENERATION_CONFIG.stagedGeneration.maxSections} sections.`,
-          );
-        }
-
-        return plan;
-      } catch (error: unknown) {
-        if (isAbortError(error)) throw error;
-        if (import.meta.env.DEV) console.error('Error creating staged generation plan:', error);
-        return null;
-      }
-    },
-    [],
-  );
-
-  /**
-   * Step 2: Generate a specific section with full conversation history
-   */
-  const generateSection = useCallback(
-    async (
-      provider: string,
-      model: string,
-      messages: PromptMessage[],
-      promptType: AiPromptType,
-      sectionIndex: number,
       plan: GenerationPlan,
-      previousSections: SectionContent[],
-      retryAttempt = 0,
       signal?: AbortSignal,
-    ): Promise<SectionContent | null> => {
-      throwIfAborted(signal);
-
-      const previousContext = compactPreviousSections(previousSections);
-      const planOutline = describePlan(plan);
-      const sectionDescription = plan.sectionDescriptions[sectionIndex] || `Section ${sectionIndex + 1}`;
-      const sectionContinuity =
-        plan.sectionContinuity[sectionIndex] || 'Continue the shared composition without external spacing.';
-
-      const sectionPrompt = {
-        role: 'user',
-        content: `Generate section ${sectionIndex + 1} of ${plan.totalSections} as a progressive slice of ONE widget, not a separate widget.
-
-Destination: ${DESTINATION_STAGE_CONTRACTS[promptType]}
-
-Composition contract:
-${planOutline}
-
-Current section role: ${sectionDescription}
-Continuity requirement: ${sectionContinuity}${previousContext}
-
-Requirements:
-- Use tag-based format with <htmljs> and <css> tags
-- HTML must be a complete, self-contained <div> with no JavaScript or script tags
-- CSS should be scoped to this section's unique classes, but must reuse the shared design system above
-- This section will be combined with others in a wrapper with gap: 0, so use unique IDs/classes and no assumptions about outside spacing
-- CRITICAL: This is part of one continuous composition. Do not create a detached card, isolated full page, unrelated palette, or new typography system.
-- CRITICAL: Do not add margin-top, margin-bottom, min-height, empty spacer divs, decorative blank bands, or CSS resets that create visible separation between sections.
-- Use internal padding for section content. Root section wrappers must use margin: 0, box-sizing: border-box, and either share the adjacent background or include an intentional divider/transition.
-- Keep CTAs, card treatments, image crops, and typography aligned with the overall flow.
-
-${sectionIndex > 0 ? 'Note: Continue the design system from previous sections and make the top edge visually connect to the prior bottom edge.' : 'Note: This is the first section - establish the cohesive design system and avoid ending with disconnected whitespace.'}
-
-Respond with the section code in tag format.`,
-      };
-
-      try {
-        const response = await fetch('/api/v1/admin/ai/generate-staged', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal,
-          body: JSON.stringify({
-            provider,
-            model,
-            promptType,
-            messages: [...messages, sectionPrompt],
-            stage: 'generate',
-            sectionIndex,
-            totalSections: plan.totalSections,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(await readApiErrorMessage(response, `HTTP ${response.status}`));
-        }
-
-        const content = extractChatCompletionContent(await response.json());
-        const widgetData = parseWidgetData(content);
-
-        return {
-          html: widgetData.html,
-          css: widgetData.css || '',
-          sectionIndex,
-          description: sectionDescription,
-          id: `section-${sectionIndex}-${Date.now()}`,
-          timestamp: Date.now(),
-        };
-      } catch (error: unknown) {
-        if (isAbortError(error)) throw error;
-        if (import.meta.env.DEV) console.error(`Error generating section ${sectionIndex}:`, error);
-
-        // Retry logic with exponential backoff
-        if (retryAttempt < MAX_RETRIES) {
-          const delay = RETRY_DELAY_MS * Math.pow(2, retryAttempt);
-          toast.info(`Retrying section ${sectionIndex + 1} in ${delay / 1000}s...`);
-          await sleep(delay, signal);
-          return generateSection(
-            provider,
-            model,
-            messages,
-            promptType,
-            sectionIndex,
-            plan,
-            previousSections,
-            retryAttempt + 1,
-            signal,
-          );
-        }
-
-        toast.error(
-          `Failed to generate section ${sectionIndex + 1}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        return null;
-      }
-    },
-    [],
-  );
-
-  /**
-   * Step 3: Recompose the progressive sections into one final widget.
-   *
-   * Staged generation is for progress and model focus; the saved artifact should
-   * still read like one deliberate storefront composition.
-   */
-  const finalizeComposition = useCallback(
-    async (
-      provider: string,
-      model: string,
-      plan: GenerationPlan,
-      generatedSections: SectionContent[],
-      promptType: AiPromptType,
-      fallback: WidgetData,
-      signal?: AbortSignal,
-    ): Promise<WidgetData | null> => {
-      throwIfAborted(signal);
-
-      const draft = `<htmljs>\n${fallback.html}\n</htmljs>\n\n<css>\n${fallback.css}\n</css>`;
-      if (draft.length > FINALIZATION_DRAFT_LIMIT) {
-        if (import.meta.env.DEV) {
-          console.info('Skipping staged widget finalization; draft is too large.', {
-            draftLength: draft.length,
-            limit: FINALIZATION_DRAFT_LIMIT,
-          });
-        }
-        return null;
-      }
-
-      const finalizerPrompt: PromptMessage = {
-        role: 'user',
-        content: `You are the final composition editor for a production ecommerce widget.
-
-Your job is to transform the drafted staged sections below into ONE continuous, polished widget.
-
-Destination: ${DESTINATION_STAGE_CONTRACTS[promptType]}
-
-Composition contract:
-${describePlan(plan)}
-
-Drafted staged sections:
-${draft}
-
-Finalization rules:
-- Return only <htmljs> and <css> tags.
-- Preserve all real product names, URLs, image URLs, prices, categories, and claims already present in the draft. Do not invent new catalog facts.
-- Merge the staged slices into one cohesive composition with one root wrapper.
-- Remove accidental external gaps, spacer blocks, duplicated wrappers, and section-level margins that make bands look disconnected.
-- The final root wrapper should use gap: 0 unless an intentional divider is visually designed in CSS.
-- Keep CSS scoped to generated classes and do not include JavaScript, script tags, external stylesheets, tracking pixels, hidden forms, markdown, or explanations.
-- Keep the result responsive, accessible, and safe for insertion inside an existing storefront page.`,
-      };
-
-      const response = await fetch('/api/v1/admin/ai/generate-staged', {
+    ): Promise<WidgetData> => {
+      const response = await fetch('/api/v1/admin/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal,
@@ -681,25 +298,23 @@ Finalization rules:
           provider,
           model,
           promptType,
-          messages: [finalizerPrompt],
-          stage: 'finalize',
-          totalSections: generatedSections.length,
+          messages: createSinglePassMessages(messages, promptType, plan),
+          stream: true,
+          operation: 'create',
         }),
       });
 
       if (!response.ok) {
-        throw new Error(await readApiErrorMessage(response, 'Failed to polish composition'));
+        throw new Error(await readApiErrorMessage(response, `HTTP ${response.status}`));
       }
 
-      const content = extractChatCompletionContent(await response.json());
+      const content = await readChatCompletionStream(response);
+      throwIfAborted(signal);
       return applyCompositionBoundaryGuard(parseWidgetData(content));
     },
     [],
   );
 
-  /**
-   * Main generation orchestrator
-   */
   const startStagedGeneration = useCallback(
     async (
       provider: string,
@@ -708,13 +323,14 @@ Finalization rules:
       promptType: AiPromptType,
       onSectionComplete?: (section: SectionContent, index: number, total: number, preview: WidgetData) => void,
       signal?: AbortSignal,
-    ): Promise<{ html: string; css: string } | null> => {
+    ): Promise<WidgetData | null> => {
       throwIfAborted(signal);
 
+      const plan = createDeterministicPlan(promptType);
       setState({
         isGenerating: true,
         currentStage: 'planning',
-        plan: null,
+        plan,
         sections: [],
         currentSectionIndex: 0,
         error: null,
@@ -722,88 +338,24 @@ Finalization rules:
       });
 
       try {
-        // Phase 1: Create plan
-        toast.info('Planning widget structure...');
-        const plan = (await createPlan(provider, model, messages, promptType, signal)) ?? createDeterministicPlan(messages, promptType);
+        toast.info('Preparing a cohesive composition blueprint...');
+        throwIfAborted(signal);
+        setState((prev) => ({ ...prev, currentStage: 'generating' }));
 
-        setState((prev) => ({ ...prev, plan, currentStage: 'generating' }));
+        toast.info('Generating one cohesive widget...');
+        const finalWidget = await generateSinglePassComposition(provider, model, messages, promptType, plan, signal);
+        const finalSections = sectionsFromWidgetData(finalWidget, plan);
 
-        // Phase 2: Generate each section with accumulated context
-        const generatedSections: SectionContent[] = [];
-
-        for (let i = 0; i < plan.totalSections; i++) {
-          throwIfAborted(signal);
-          setState((prev) => ({ ...prev, currentSectionIndex: i }));
-          toast.info(`Generating section ${i + 1} of ${plan.totalSections}...`);
-
-          // Pass all previously generated sections for consistency
-          const section = await generateSection(
-            provider,
-            model,
-            messages,
-            promptType,
-            i,
-            plan,
-            generatedSections, // Accumulating context from previous sections
-            0,
-            signal,
-          );
-
-          if (!section) {
-            throwIfAborted(signal);
-            throw new Error(`Failed to generate section ${i + 1}`);
-          }
-
-          generatedSections.push(section);
-          // Update sections with new array reference to trigger re-renders
-          setState((prev) => ({ ...prev, sections: [...generatedSections] }));
-
-          // Callback for progressive rendering
-          if (onSectionComplete) {
-            onSectionComplete(section, i, plan.totalSections, buildCombinedWidget(generatedSections));
-          }
-
-          toast.success(`Section ${i + 1}/${plan.totalSections} complete`);
-
-          // Small delay between sections to avoid rate limits
-          if (i < plan.totalSections - 1) {
-            const delayMs = Math.max(0, GENERATION_CONFIG.stagedGeneration.sectionDelayMs);
-            if (delayMs > 0) await sleep(delayMs, signal);
-          }
-        }
-
-        const fallbackWidget = buildCombinedWidget(generatedSections);
-        let finalWidget = fallbackWidget;
-        let finalSections = generatedSections;
-
-        try {
-          throwIfAborted(signal);
-          setState((prev) => ({ ...prev, currentStage: 'polishing' }));
-          toast.info('Polishing sections into one composition...');
-          const polishedWidget = await finalizeComposition(
-            provider,
-            model,
-            plan,
-            generatedSections,
-            promptType,
-            fallbackWidget,
-            signal,
-          );
-          if (polishedWidget) {
-            finalWidget = polishedWidget;
-            finalSections = sectionsFromWidgetData(polishedWidget, plan, generatedSections);
-          }
-        } catch (error: unknown) {
-          if (isAbortError(error)) throw error;
-          if (import.meta.env.DEV) console.warn('Staged composition polish failed; using combined sections.', error);
-          toast.warning('Composition polish could not finish; using the generated sections.');
+        if (onSectionComplete && finalSections[0]) {
+          onSectionComplete(finalSections[0], 0, finalSections.length, finalWidget);
         }
 
         setState((prev) => ({
           ...prev,
           currentStage: 'complete',
           isGenerating: false,
-          sections: [...finalSections],
+          currentSectionIndex: Math.max(0, finalSections.length - 1),
+          sections: finalSections,
         }));
         toast.success('Widget generation complete!');
 
@@ -822,7 +374,7 @@ Finalization rules:
           return null;
         }
 
-        if (import.meta.env.DEV) console.error('Staged generation error:', error);
+        if (import.meta.env.DEV) console.error('Composition generation error:', error);
         setState((prev) => ({
           ...prev,
           currentStage: 'error',
@@ -832,7 +384,7 @@ Finalization rules:
         return null;
       }
     },
-    [createPlan, finalizeComposition, generateSection],
+    [generateSinglePassComposition],
   );
 
   const reset = useCallback(() => {
@@ -850,7 +402,7 @@ Finalization rules:
   const updateSections = useCallback((updatedSections: SectionContent[]) => {
     setState((prev) => ({
       ...prev,
-      sections: [...updatedSections], // Create new array to ensure reference changes
+      sections: [...updatedSections],
     }));
   }, []);
 
