@@ -122,7 +122,6 @@ export async function processPaymentConfirmed(
       }
     }
 
-    let isFullyPaid = false;
     let paymentApplied = false;
     for (let attempt = 0; attempt < PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS; attempt += 1) {
       // ── 1. Fetch the latest order version for a CAS-safe amount update ──
@@ -151,33 +150,85 @@ export async function processPaymentConfirmed(
 
       const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
       const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
-      isFullyPaid = pricesEqual(newBalanceDue, 0);
+      const isFullyPaid = pricesEqual(newBalanceDue, 0);
       const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
       const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
 
       validateTransition("order", order.status, newStatus);
       validateTransition("payment", order.paymentStatus, newPaymentStatus);
 
-      const orderUpdate = await db.update(orders).set({
-        status: newStatus,
-        paidAmount: newPaidAmount,
-        balanceDue: newBalanceDue,
-        paymentStatus: newPaymentStatus,
-        version: order.version + 1,
-        updatedAt: sql`unixepoch()`,
-      }).where(and(
-        eq(orders.id, params.orderId),
-        eq(orders.version, order.version),
-      )).returning({ id: orders.id });
+      const nextVersion = order.version + 1;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch statements are heterogeneous.
+      const batchStatements: any[] = [
+        db.update(orders).set({
+          status: newStatus,
+          paidAmount: newPaidAmount,
+          balanceDue: newBalanceDue,
+          paymentStatus: newPaymentStatus,
+          version: nextVersion,
+          updatedAt: sql`unixepoch()`,
+        }).where(and(
+          eq(orders.id, params.orderId),
+          eq(orders.version, order.version),
+          sql`EXISTS (
+            SELECT 1 FROM order_payments
+            WHERE id = ${paymentId}
+              AND order_id = ${params.orderId}
+              AND status = 'pending'
+          )`,
+        )).returning({ id: orders.id }),
+        db.update(orderPayments).set({
+          status: "succeeded",
+          updatedAt: sql`unixepoch()`,
+        }).where(and(
+          eq(orderPayments.id, paymentId),
+          eq(orderPayments.orderId, params.orderId),
+          eq(orderPayments.status, "pending"),
+          sql`EXISTS (
+            SELECT 1 FROM orders
+            WHERE id = ${params.orderId}
+              AND version = ${nextVersion}
+              AND paid_amount = ${newPaidAmount}
+              AND balance_due = ${newBalanceDue}
+              AND payment_status = ${newPaymentStatus}
+          )`,
+        )).returning({ id: orderPayments.id }),
+      ];
 
-      if (orderUpdate.length === 0) {
-        continue;
+      if (params.paymentType === "deposit") {
+        batchStatements.push(
+          db
+            .update(paymentPlans)
+            .set({
+              status: "deposit_paid",
+              depositPaidAt: sql`unixepoch()`,
+              updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(paymentPlans.orderId, params.orderId)),
+        );
+      } else if (params.paymentType === "balance" && isFullyPaid) {
+        batchStatements.push(
+          db
+            .update(paymentPlans)
+            .set({
+              status: "fully_paid",
+              balancePaidAt: sql`unixepoch()`,
+              updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(paymentPlans.orderId, params.orderId)),
+        );
       }
 
-      await db.update(orderPayments).set({
-        status: "succeeded",
-        updatedAt: sql`unixepoch()`,
-      }).where(eq(orderPayments.id, paymentId));
+      const batchResult = await db.batch(batchStatements as any) as unknown[];
+      const orderUpdate = batchResult[0] as Array<{ id: string }> | undefined;
+      const paymentUpdate = batchResult[1] as Array<{ id: string }> | undefined;
+
+      if ((orderUpdate?.length ?? 0) === 0 && (paymentUpdate?.length ?? 0) === 0) {
+        continue;
+      }
+      if ((orderUpdate?.length ?? 0) === 0 || (paymentUpdate?.length ?? 0) === 0) {
+        return { success: false, error: "Payment application changed concurrently; retry required" };
+      }
 
       paymentApplied = true;
       break;
@@ -187,26 +238,6 @@ export async function processPaymentConfirmed(
       return { success: false, error: "Order was modified concurrently while applying payment; retry required" };
     }
 
-    // ── 4. Update payment plan if applicable ──
-    if (params.paymentType === "deposit") {
-      await db
-        .update(paymentPlans)
-        .set({
-          status: "deposit_paid",
-          depositPaidAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(paymentPlans.orderId, params.orderId));
-    } else if (params.paymentType === "balance" && isFullyPaid) {
-      await db
-        .update(paymentPlans)
-        .set({
-          status: "fully_paid",
-          balancePaidAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(paymentPlans.orderId, params.orderId));
-    }
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Payment processing error";
