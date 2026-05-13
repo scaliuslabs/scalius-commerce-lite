@@ -30,6 +30,9 @@ describe("admin route permissions", () => {
     expect(
       getRoutePermission("/api/v1/admin/settings/delivery-providers/provider_123", "DELETE"),
     ).toEqual({ permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT });
+    expect(getRoutePermission("/api/v1/admin/settings/delivery-locations", "DELETE")).toEqual({
+      permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT,
+    });
     expect(getRoutePermission("/api/v1/cache/clear-group", "POST")).toEqual({
       permission: PERMISSIONS.SETTINGS_CACHE_MANAGE,
     });
@@ -40,5 +43,6 @@ describe("admin route permissions", () => {
       permission: PERMISSIONS.DASHBOARD_VIEW,
     });
     expect(getRoutePermission("/api/v1/admin/not-a-real-route", "GET")).toBeNull();
+    expect(getRoutePermission("/api/v1/admin/settings/not-a-real-route", "GET")).toBeNull();
   });
 });
