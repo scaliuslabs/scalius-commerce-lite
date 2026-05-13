@@ -1,6 +1,7 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { generateStructuredPrompt } from "@scalius/core/modules/ai/prompt-helper-v2";
 import {
+  GENERATION_CONFIG,
   getConfiguredProvider,
   getTimeout,
   getWidgetAiPrompt,
@@ -10,13 +11,15 @@ import {
 } from "@scalius/core/modules/ai";
 import {
   enforceAiRateLimit,
-  generateWidgetContent,
   getCreateOutputBudget,
   getLanguageModel,
   runtimeSettings,
+  streamWidgetContent,
   withDestinationRuntimeContract,
 } from "./ai";
+import { normalizeWidgetGenerationText } from "./ai-response-validation";
 import { normalizeMessages } from "./ai-message-normalization";
+import { parseTagBasedResponse } from "@scalius/shared/tag-parser";
 import { resolveAiContextBatchDetails } from "./ai-context";
 import {
   createWidgetGenerationToolRunner,
@@ -28,6 +31,32 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const promptTypeSchema = z.enum(["widget", "landing-page", "collection"]);
 const providerSchema = z.enum(["openrouter", "openai", "gemini", "cloudflare"]);
+const MAX_IMAGE_URL_LENGTH = 4096;
+
+function isAllowedWidgetImageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "data:";
+  } catch {
+    return false;
+  }
+}
+
+const selectedImageSchema = z
+  .object({
+    id: z.string().max(200).optional(),
+    url: z
+      .string()
+      .min(1)
+      .max(MAX_IMAGE_URL_LENGTH)
+      .refine(isAllowedWidgetImageUrl, "Image URLs must use HTTPS or data URLs."),
+    filename: z.string().max(500).optional(),
+    size: z.number().int().min(0).optional(),
+    createdAt: z.union([z.string(), z.date()]).optional(),
+    mimeType: z.string().max(120).optional(),
+    alt: z.string().max(500).optional(),
+  })
+  .passthrough();
 
 const widgetGenerationRunSchema = z.object({
   provider: providerSchema.optional(),
@@ -35,7 +64,6 @@ const widgetGenerationRunSchema = z.object({
   promptType: promptTypeSchema.default("widget"),
   operation: z.enum(["create", "improve"]).default("create"),
   userPrompt: z.string().min(1).max(20_000),
-  deepComposition: z.boolean().optional(),
   existingHtml: z.string().max(200_000).optional(),
   existingCss: z.string().max(200_000).optional(),
   targetSection: z.number().int().min(0).optional(),
@@ -61,23 +89,14 @@ const widgetGenerationRunSchema = z.object({
     .max(30)
     .optional(),
   selectedImages: z
-    .array(
-      z
-        .object({
-          url: z.string(),
-          mimeType: z.string().optional(),
-          alt: z.string().optional(),
-        })
-        .passthrough(),
-    )
+    .array(selectedImageSchema)
+    .max(GENERATION_CONFIG.context.maxImages)
     .optional(),
-  productIds: z.array(z.string()).optional(),
-  categoryIds: z.array(z.string()).optional(),
-  collectionIds: z.array(z.string()).optional(),
-  anchorCollectionIds: z.array(z.string()).optional(),
+  productIds: z.array(z.string().max(200)).max(GENERATION_CONFIG.context.maxProducts).optional(),
+  categoryIds: z.array(z.string().max(200)).max(GENERATION_CONFIG.context.maxCategories).optional(),
+  collectionIds: z.array(z.string().max(200)).max(GENERATION_CONFIG.context.maxCollections).optional(),
+  anchorCollectionIds: z.array(z.string().max(200)).max(GENERATION_CONFIG.context.maxCollections).optional(),
   allCategoriesSelected: z.boolean().optional(),
-  supportsVision: z.boolean().optional(),
-  maxImages: z.number().int().positive().optional(),
 });
 
 type WidgetGenerationRunEvent =
@@ -85,6 +104,8 @@ type WidgetGenerationRunEvent =
   | WidgetGenerationToolEvent
   | { type: "step.started"; step: WidgetGenerationToolName }
   | { type: "step.completed"; step: WidgetGenerationToolName; elapsedMs: number; metadata?: Record<string, unknown> }
+  | { type: "draft.delta"; delta: string }
+  | { type: "preview.patch"; html: string; css: string; metadata?: Record<string, unknown> }
   | { type: "warning"; warnings: unknown }
   | { type: "artifact"; raw: string; metadata?: Record<string, unknown> }
   | { type: "run.completed"; runId: string; usage?: unknown }
@@ -102,6 +123,19 @@ function encodeSse(event: WidgetGenerationRunEvent): Uint8Array {
 
 function messageFromError(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? "Widget generation failed");
+}
+
+function isExpectedAbort(error: unknown, signal: AbortSignal): boolean {
+  return signal.aborted || (error instanceof Error && error.name === "AbortError");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function toPromptImages(images: z.infer<typeof widgetGenerationRunSchema>["selectedImages"]) {
@@ -163,14 +197,67 @@ function buildImprovementInstruction(payload: WidgetGenerationRunPayload): strin
   return parts.join("\n\n");
 }
 
+function buildPreviewScaffold(
+  promptType: WidgetGenerationRunPayload["promptType"],
+  contextData: Awaited<ReturnType<typeof resolveAiContextBatchDetails>>,
+): { html: string; css: string } {
+  const title =
+    promptType === "landing-page"
+      ? "Building campaign section"
+      : promptType === "collection"
+        ? "Building collection section"
+        : "Building homepage section";
+  const productNames = contextData.products
+    .slice(0, 4)
+    .map((product) => product.name)
+    .filter(Boolean);
+  const items = productNames.length > 0 ? productNames : ["Layout", "Products", "Actions"];
+
+  return {
+    html: `<section class="sc-widget-draft" aria-label="${escapeHtml(title)}">
+  <div class="sc-widget-draft__copy">
+    <p class="sc-widget-draft__eyebrow">Scalius AI</p>
+    <h2>${escapeHtml(title)}</h2>
+    <p>Hydrating store context, shaping the layout, and validating storefront-safe HTML/CSS.</p>
+  </div>
+  <div class="sc-widget-draft__items">
+    ${items.map((item) => `<span>${escapeHtml(item)}</span>`).join("\n    ")}
+  </div>
+</section>`,
+    css: `.sc-widget-draft{margin:0;padding:28px 18px;background:linear-gradient(135deg,#f8fafc,#ffffff 48%,#eef7f1);color:#111827;border-radius:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px;align-items:center}.sc-widget-draft__eyebrow{margin:0 0 8px;font-size:12px;font-weight:800;text-transform:uppercase;color:#3f6f52}.sc-widget-draft h2{margin:0;font-size:clamp(28px,4vw,44px);line-height:1.02}.sc-widget-draft p{margin:10px 0 0;max-width:58ch;color:#4b5563;font-size:15px;line-height:1.5}.sc-widget-draft__items{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}.sc-widget-draft__items span{padding:10px 12px;border:1px solid #d7dde4;border-radius:10px;background:#fff;font-weight:700;font-size:13px}@media(max-width:760px){.sc-widget-draft{grid-template-columns:1fr}.sc-widget-draft__items{justify-content:flex-start}}`,
+  };
+}
+
+function buildPreviewPatchFromRaw(rawText: string, commerceFactsProvided: boolean): { html: string; css: string } | null {
+  try {
+    const normalized = normalizeWidgetGenerationText(rawText, { commerceFactsProvided });
+    const tagResult = parseTagBasedResponse(normalized);
+    if (!tagResult.success || !tagResult.data) return null;
+    return {
+      html: tagResult.data.html,
+      css: tagResult.data.css || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 app.post("/", async (c) => {
   const payload = widgetGenerationRunSchema.parse(await c.req.json());
   const db = c.get("db");
   const runId = crypto.randomUUID();
+  let streamClosed = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const emit = (event: WidgetGenerationRunEvent) => controller.enqueue(encodeSse(event));
+      const emit = (event: WidgetGenerationRunEvent): void => {
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encodeSse(event));
+        } catch {
+          streamClosed = true;
+        }
+      };
       const tools = createWidgetGenerationToolRunner(emit, emit);
 
       try {
@@ -208,6 +295,11 @@ app.post("/", async (c) => {
           }),
         );
         emit({ type: "warning", warnings: contextData.warnings });
+        emit({
+          type: "preview.patch",
+          ...buildPreviewScaffold(payload.promptType, contextData),
+          metadata: { stage: "context-loaded", draft: true },
+        });
 
         const promptResult = await tools.run(
           "build_prompt",
@@ -226,8 +318,8 @@ app.post("/", async (c) => {
               selectedCollections: contextData.collections,
               allCategoriesSelected: payload.allCategoriesSelected === true,
               modelId,
-              supportsVision: payload.supportsVision === true,
-              maxImagesOverride: payload.maxImages,
+              supportsVision: capabilities.supportsVisionInput,
+              maxImagesOverride: capabilities.maxImages,
               promptType: payload.promptType,
               sectionIndex: payload.targetSection,
               totalSections: payload.sections?.length,
@@ -243,9 +335,9 @@ app.post("/", async (c) => {
           const messages = withDestinationRuntimeContract(
             normalizeMessages(promptResult.messages),
             payload.promptType,
-            { compositionMode: payload.deepComposition === true },
+            { compositionMode: true },
           );
-          return generateWidgetContent(
+          const generation = streamWidgetContent(
             {
               model,
               messages,
@@ -264,6 +356,31 @@ app.post("/", async (c) => {
             capabilities,
             payload.promptType,
           );
+          let rawText = "";
+          let lastPreviewPatchLength = 0;
+          const commerceFactsProvided = Boolean(
+            contextData.products.length ||
+              contextData.categories.length ||
+              contextData.collections.length ||
+              payload.selectedImages?.length,
+          );
+          for await (const delta of generation.textStream) {
+            if (!delta) continue;
+            rawText += delta;
+            emit({ type: "draft.delta", delta });
+            if (rawText.length - lastPreviewPatchLength >= 800) {
+              const patch = buildPreviewPatchFromRaw(rawText, commerceFactsProvided);
+              if (patch) {
+                lastPreviewPatchLength = rawText.length;
+                emit({
+                  type: "preview.patch",
+                  ...patch,
+                  metadata: { stage: "streaming", draft: true },
+                });
+              }
+            }
+          }
+          return generation.finalize(rawText);
         });
         tools.artifactValidated({
           provider,
@@ -281,10 +398,22 @@ app.post("/", async (c) => {
         });
         emit({ type: "run.completed", runId, usage: result.usage });
       } catch (error) {
-        emit({ type: "run.failed", runId, error: { message: messageFromError(error) } });
+        if (!isExpectedAbort(error, c.req.raw.signal)) {
+          emit({ type: "run.failed", runId, error: { message: messageFromError(error) } });
+        }
       } finally {
-        controller.close();
+        if (!streamClosed) {
+          streamClosed = true;
+          try {
+            controller.close();
+          } catch {
+            // The browser may have already closed the SSE connection.
+          }
+        }
       }
+    },
+    cancel() {
+      streamClosed = true;
     },
   });
 

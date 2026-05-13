@@ -711,6 +711,38 @@ async function finalizeStreamedWidgetContent(
   }
 }
 
+export function streamWidgetContent(
+  options: GenerateTextOptions,
+  capabilities: { supportsStructuredOutput: boolean },
+  promptType: WidgetPromptType = 'widget',
+): {
+  textStream: AsyncIterable<string>;
+  finalize: (rawText: string) => Promise<WidgetGenerationResult>;
+} {
+  const result = streamText(options);
+
+  return {
+    textStream: result.textStream,
+    async finalize(rawText: string) {
+      const text = await finalizeStreamedWidgetContent(rawText, options, capabilities, promptType);
+      let usage: GenerationUsage = {};
+      try {
+        const usageResult = (result as unknown as { totalUsage?: PromiseLike<GenerationUsage> }).totalUsage;
+        const totalUsage = usageResult ? await usageResult : undefined;
+        usage = {
+          inputTokens: totalUsage?.inputTokens,
+          outputTokens: totalUsage?.outputTokens,
+          totalTokens: totalUsage?.totalTokens,
+        };
+      } catch {
+        usage = {};
+      }
+
+      return { text, usage };
+    },
+  };
+}
+
 async function generateStagedPlan(
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },

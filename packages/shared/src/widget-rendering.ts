@@ -37,6 +37,14 @@ export interface PreparedScopedWidgetContent {
   cssReport: CssSanitizeReport;
 }
 
+export interface WidgetRenderabilityReport extends PreparedScopedWidgetContent {
+  hasInputHtml: boolean;
+  hasRenderableHtml: boolean;
+  hasInputCss: boolean;
+  hasRenderableCss: boolean;
+  warnings: string[];
+}
+
 export interface PrepareScopedWidgetContentOptions {
   transformHtml?: (html: string) => string;
   transformCss?: (css: string) => string;
@@ -193,6 +201,38 @@ export function prepareScopedWidgetContent(
   const css = scopeCss(transformedCss, scopeClass);
 
   return { scopeClass, html, css, cssReport };
+}
+
+export function evaluateWidgetRenderability(
+  widget: WidgetContentInput,
+  options: PrepareScopedWidgetContentOptions = {},
+): WidgetRenderabilityReport {
+  const parts = normalizeWidgetParts(widget);
+  const prepared = prepareScopedWidgetContent(widget, options);
+  const hasInputHtml = parts.html.trim().length > 0;
+  const hasRenderableHtml = prepared.html.trim().length > 0;
+  const hasInputCss = parts.css.trim().length > 0;
+  const hasRenderableCss = prepared.css.trim().length > 0;
+  const warnings = [...prepared.cssReport.warnings];
+
+  if (hasInputHtml && !hasRenderableHtml) {
+    warnings.push("Widget HTML was removed during sanitization.");
+  }
+
+  if (hasInputCss && !prepared.cssReport.css.trim()) {
+    warnings.push("Widget CSS was removed during sanitization.");
+  } else if (hasInputCss && !hasRenderableCss) {
+    warnings.push("Widget CSS was removed during scoping.");
+  }
+
+  return {
+    ...prepared,
+    hasInputHtml,
+    hasRenderableHtml,
+    hasInputCss,
+    hasRenderableCss,
+    warnings,
+  };
 }
 
 function isNeutralRuntimeWrapper(

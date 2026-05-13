@@ -53,9 +53,8 @@ Each widget has an `aiContext` text column storing a JSON blob (via `@scalius/co
 
 - `promptType` (widget / landing-page / collection)
 - `preferredAiModel` (OpenRouter model ID)
-- `useStagedMode` (boolean)
 - `savedImages`, `savedProducts`, `savedCategories`, `allCategoriesSelected`
-- `stagedPlan` and `stagedSections` (section breakdown from staged generation)
+- `stagedPlan` and `stagedSections` (accepted section metadata used by the editor)
 - `improvementHistory` (array of `{ section?, prompt, timestamp, modelUsed }`)
 - `createdAt` (timestamp of initial AI context creation)
 

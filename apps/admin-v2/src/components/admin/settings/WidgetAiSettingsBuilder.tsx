@@ -52,7 +52,6 @@ interface WidgetAiValues {
     improvementTemperature: number;
     fastGenerationMaxOutputTokens: number;
     maxOutputTokens: number;
-    stagedGenerationDefault: boolean;
   };
   prompts: Record<PromptId, string>;
   defaultPrompts: Record<PromptId, string>;
@@ -130,7 +129,6 @@ const defaultValues: WidgetAiValues = {
     improvementTemperature: 0.6,
     fastGenerationMaxOutputTokens: 2200,
     maxOutputTokens: 8000,
-    stagedGenerationDefault: false,
   },
   prompts: {
     widget: "",
@@ -240,7 +238,6 @@ async function fetchWidgetAi(): Promise<WidgetAiValues> {
       improvementTemperature: Number(generation.improvementTemperature ?? 0.6),
       fastGenerationMaxOutputTokens: Number(generation.fastGenerationMaxOutputTokens ?? 2200),
       maxOutputTokens: Number(generation.maxOutputTokens ?? 8000),
-      stagedGenerationDefault: generation.stagedGenerationDefault === true,
     },
     prompts: {
       widget: prompts.widget || defaultPrompts.widget || "",
@@ -682,7 +679,7 @@ export default function WidgetAiSettingsBuilder() {
         <div>
           <h3 className="text-sm font-semibold">Generation defaults</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            These defaults apply to widget creation, improvement, and the optional composition blueprint.
+            These defaults apply to widget creation and improvement. The platform always builds one cohesive destination-aware artifact.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-5">
@@ -746,19 +743,6 @@ export default function WidgetAiSettingsBuilder() {
               onChange={(event) => setGenerationValue("maxOutputTokens", Number(event.target.value))}
             />
           </div>
-        </div>
-        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-          <div>
-            <Label htmlFor="staged-generation-default">Use composition blueprint by default</Label>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Adds destination-specific structure while still using one server-owned generation run. Keep off for the shortest output.
-            </p>
-          </div>
-          <Switch
-            id="staged-generation-default"
-            checked={values.generation.stagedGenerationDefault}
-            onCheckedChange={(checked) => setGenerationValue("stagedGenerationDefault", checked)}
-          />
         </div>
       </section>
 

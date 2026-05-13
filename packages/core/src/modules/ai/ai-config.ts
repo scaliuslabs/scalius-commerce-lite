@@ -107,7 +107,7 @@ export const GENERATION_CONFIG = {
 
   // Staged generation thresholds
   stagedGeneration: {
-    autoEnableThreshold: 500,  // Reserved threshold; composition blueprint stays explicit.
+    autoEnableThreshold: 500,
     maxSections: 10,            // Maximum sections per widget
     minSections: 1,             // Minimum sections
     sectionDelayMs: 0,          // No artificial delay; provider/rate-limit handling owns pacing
@@ -458,9 +458,6 @@ export function isPromptTooLarge(prompt: string): boolean {
  * staged generation, but silently overriding an off toggle makes the editor
  * feel unpredictable and can save partial content when a later section fails.
  */
-export function shouldUseStagedGeneration(_promptLength: number, userEnabled: boolean): boolean {
-  return userEnabled;
-}
 
 /**
  * Whether the widget generator may send native image parts to a provider/model.

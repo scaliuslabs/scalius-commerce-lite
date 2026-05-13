@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { generateCompletePrompt } from '@scalius/core/modules/ai/prompt-helper-v2';
-import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
+import { ERROR_MESSAGES } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
 import {
   normalizeGeneratedWidgetContent,
@@ -41,7 +41,6 @@ interface ModelInfo {
 interface WidgetAiSettings {
   activeProvider?: string;
   providers?: Record<string, { hasApiKey?: boolean; hasBinding?: boolean; defaultModel?: string }>;
-  generation?: { stagedGenerationDefault?: boolean };
 }
 
 export type AiPlacementContext = {
@@ -58,6 +57,10 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+function isTimeoutError(error: unknown): error is Error {
+  return error instanceof Error && error.name === 'TimeoutError';
+}
+
 function withGenerationTimeout<T>(promise: Promise<T>, signal: AbortSignal, onTimeout?: (error: DOMException) => void): Promise<T> {
   if (signal.aborted) {
     return Promise.reject(new DOMException('Generation cancelled', 'AbortError'));
@@ -69,8 +72,8 @@ function withGenerationTimeout<T>(promise: Promise<T>, signal: AbortSignal, onTi
         'Widget generation timed out. Please try again with a smaller context or faster model.',
         'TimeoutError',
       );
-      onTimeout?.(error);
       reject(error);
+      onTimeout?.(error);
     }, SERVER_GENERATION_TIMEOUT_MS);
 
     const abort = () => {
@@ -115,6 +118,50 @@ async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
   return payload.data ?? {};
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildImmediateDraftContent(options: {
+  promptType: 'widget' | 'landing-page' | 'collection';
+  products: ProductSearchResult[];
+  categories: Category[];
+  imageCount: number;
+}): { html: string; css: string } {
+  const destination =
+    options.promptType === 'landing-page'
+      ? 'Landing section'
+      : options.promptType === 'collection'
+        ? 'Collection section'
+        : 'Homepage section';
+  const names = [
+    ...options.products.slice(0, 4).map((product) => product.name),
+    ...options.categories.slice(0, 2).map((category) => category.name),
+  ].filter(Boolean);
+  const items = names.length > 0 ? names : ['Layout', 'Products', 'Story'];
+  const imageNote = options.imageCount > 0 ? `${options.imageCount} image${options.imageCount === 1 ? '' : 's'} queued` : 'Context loading';
+
+  return {
+    html: `<section class="sc-ai-live-draft" aria-label="${escapeHtml(destination)} preview">
+  <div class="sc-ai-live-draft__copy">
+    <p class="sc-ai-live-draft__eyebrow">Scalius AI</p>
+    <h2>${escapeHtml(destination)} is taking shape</h2>
+    <p>Preparing selected store context, product imagery, and storefront-safe styling.</p>
+  </div>
+  <div class="sc-ai-live-draft__rail">
+    ${items.map((item) => `<span>${escapeHtml(item)}</span>`).join('\n    ')}
+    <small>${escapeHtml(imageNote)}</small>
+  </div>
+</section>`,
+    css: `.sc-ai-live-draft{margin:0;padding:28px 20px;border:1px solid #dde4dc;border-radius:14px;background:linear-gradient(135deg,#f7fbf8,#ffffff 54%,#edf7f0);color:#101418;display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,auto);gap:20px;align-items:center}.sc-ai-live-draft__eyebrow{margin:0 0 8px;color:#3d6b4f;font-size:12px;font-weight:800;letter-spacing:0;text-transform:uppercase}.sc-ai-live-draft h2{margin:0;font-size:clamp(28px,4vw,42px);line-height:1.05}.sc-ai-live-draft p{margin:10px 0 0;color:#4c5560;font-size:15px;line-height:1.5}.sc-ai-live-draft__rail{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}.sc-ai-live-draft__rail span,.sc-ai-live-draft__rail small{display:inline-flex;align-items:center;min-height:36px;padding:8px 11px;border:1px solid #d5ded6;border-radius:9px;background:#fff;font-size:13px;font-weight:700}.sc-ai-live-draft__rail small{color:#52605a;background:#f6f8f6;font-weight:600}@media(max-width:720px){.sc-ai-live-draft{grid-template-columns:1fr}.sc-ai-live-draft__rail{justify-content:flex-start}}`,
+  };
+}
+
 export const useAiGenerator = (
   aiContext: ReturnType<typeof useAiContext>,
   widget: Widget | undefined | null,
@@ -139,8 +186,11 @@ export const useAiGenerator = (
   } | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
+  const [draftContent, setDraftContent] = useState<{
+    html: string;
+    css: string;
+  } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [useStagedMode, setUseStagedMode] = useState(false);
   const generationRunIdRef = useRef(0);
   const generationAbortRef = useRef<AbortController | null>(null);
 
@@ -174,6 +224,7 @@ export const useAiGenerator = (
       setGeneratedContent(null);
       setGenerationError(null);
       setRawOutput(null);
+      setDraftContent(null);
       setIsPreviewOpen(false);
       if (!options?.silent) {
         toast.info('Generation cancelled.');
@@ -257,7 +308,6 @@ export const useAiGenerator = (
 
       setActiveProvider(provider);
       setIsApiKeySet(configured);
-      setUseStagedMode(settings.generation?.stagedGenerationDefault === true);
 
       const response = await fetch(`/api/v1/admin/ai/models?provider=${encodeURIComponent(provider)}`);
       const modelData = (await response.json()) as {
@@ -265,7 +315,11 @@ export const useAiGenerator = (
         data?: { models?: ModelInfo[]; defaultModel?: string };
         models?: ModelInfo[];
         defaultModel?: string;
+        error?: { message?: string };
       };
+      if (!response.ok || modelData.success === false) {
+        throw new Error(modelData.error?.message || 'Failed to load widget AI models.');
+      }
       if (cancelled) return;
 
       const models = modelData.data?.models || modelData.models || [];
@@ -288,6 +342,10 @@ export const useAiGenerator = (
         setSelectedModel(defaultModel);
       } else {
         setSelectedModel('');
+      }
+
+      if (configured && models.length === 0) {
+        throw new Error('The active AI provider returned no available models.');
       }
     }
 
@@ -325,32 +383,29 @@ export const useAiGenerator = (
     setIsLoadingPrompt(true);
     setGenerationError(null);
     setRawOutput(null);
+    setDraftContent(buildImmediateDraftContent({
+      promptType: effectivePromptType,
+      products: aiContext.selectedProducts,
+      categories: aiContext.selectedCategories,
+      imageCount: aiContext.selectedImages.length,
+    }));
     setGeneratedContent(null);
     setIsPreviewOpen(true);
 
     try {
-      const currentModel = aiModels.find((m) => m.id === selectedModel);
-      const isVisionModel = currentModel?.supportsVision || false;
       const selectedImages = getModelLimitedImages({ warn: true });
-      const useStaged = shouldUseStagedGeneration(0, useStagedMode);
-      if (useStaged) {
-        toast.info('Generating a cohesive composition from server-owned context...');
-      }
       const result = await withGenerationTimeout(runWidgetGeneration({
         provider: activeProvider,
         model: selectedModel,
         promptType: effectivePromptType,
         operation: 'create',
         userPrompt: getPlacementAwarePrompt(),
-        deepComposition: useStagedMode,
         selectedImages,
         productIds: getMergedProductIds(),
         categoryIds: getMergedCategoryIds(),
         collectionIds: getMergedCollectionIds(),
         anchorCollectionIds: getMergedAnchorCollectionIds(),
         allCategoriesSelected: aiContext.allCategoriesSelected,
-        supportsVision: isVisionModel,
-        maxImages: currentModel?.maxImages,
       }, {
         signal: run.signal,
         onEvent: (event) => {
@@ -358,12 +413,34 @@ export const useAiGenerator = (
           if (event.type === 'warning') {
             notifyAiContextWarnings({ warnings: event.warnings as AiContextBatchDetails['warnings'] } as AiContextBatchDetails);
           }
+          if (event.type === 'preview.patch') {
+            if (!isActiveGenerationRun(run)) return;
+            setDraftContent(normalizeGeneratedWidgetContent(event));
+          }
+        },
+        onDraft: (raw) => {
+          if (!isActiveGenerationRun(run)) return;
+          setRawOutput(raw);
+          try {
+            setDraftContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(raw)));
+          } catch {
+            // Partial streams are expected to be unparsable until closing tags arrive.
+          }
         },
       }), run.signal, (error) => run.controller.abort(error));
       if (!isActiveGenerationRun(run)) return;
       setRawOutput(result.raw);
       setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(result.raw)));
+      setDraftContent(null);
     } catch (error: unknown) {
+      if (isTimeoutError(error)) {
+        const message = error.message || 'Widget generation timed out.';
+        toast.error(ERROR_MESSAGES.generationFailed(message));
+        setGenerationError(message);
+        setGeneratedContent(null);
+        setDraftContent(null);
+        return;
+      }
       if (isAbortError(error) || run.signal.aborted) {
         return;
       }
@@ -371,6 +448,7 @@ export const useAiGenerator = (
       toast.error(ERROR_MESSAGES.generationFailed(error instanceof Error ? error.message : String(error)));
       setGenerationError(error instanceof Error ? error.message : String(error));
       setGeneratedContent(null);
+      setDraftContent(null);
       setIsPreviewOpen(false);
     } finally {
       if (generationRunIdRef.current === run.id) {
@@ -482,18 +560,17 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
     isPreviewOpen,
     setIsPreviewOpen,
     cancelGeneration,
-    useStagedMode,
-    setUseStagedMode,
     stagedGeneration,
     generationProgress: isLoadingPrompt
       ? {
-          currentStage: useStagedMode
-            ? 'Running server generation with composition blueprint...'
-            : 'Running fast server generation...',
+          currentStage: draftContent
+            ? 'Building and validating the design...'
+            : 'Preparing storefront context...',
           totalSections: 1,
-          percentage: 65,
+          percentage: draftContent ? 78 : 35,
         }
       : undefined,
+    draftContent,
     getMergedProductIds,
     getMergedCategoryIds,
     getMergedCollectionIds,

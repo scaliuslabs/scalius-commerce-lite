@@ -28,7 +28,10 @@ import {
 } from "./widgets.validation";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
-import { normalizeWidgetParts } from "@scalius/shared/widget-rendering";
+import {
+    evaluateWidgetRenderability,
+    normalizeWidgetParts,
+} from "@scalius/shared/widget-rendering";
 import { findDuplicateWidgetPlacementIndexes } from "@scalius/shared/widget-placement";
 
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
@@ -120,6 +123,22 @@ function normalizePersistentWidgetContent(input: {
     cssContent?: string | null;
 }): { htmlContent: string; cssContent?: string | null } {
     const normalized = normalizeWidgetParts(input);
+    const renderability = evaluateWidgetRenderability({
+        id: "persistence-validation",
+        htmlContent: normalized.html,
+        cssContent: normalized.css,
+    });
+    if (renderability.hasInputHtml && !renderability.hasRenderableHtml) {
+        throw new ValidationError(
+            renderability.warnings[0] || "Widget HTML could not be rendered safely.",
+        );
+    }
+    if (renderability.hasInputCss && !renderability.hasRenderableCss) {
+        throw new ValidationError(
+            renderability.warnings[0] || "Widget CSS could not be rendered safely.",
+        );
+    }
+
     return {
         htmlContent: sanitizeWidgetHtml(normalized.html),
         cssContent: normalized.css ? sanitizeWidgetCss(normalized.css) : normalized.css || input.cssContent,
@@ -229,7 +248,8 @@ function normalizePlacementInserts(
 }
 
 function assertUniquePlacements(placements: WidgetPlacementInput[]): void {
-    const [duplicate] = findDuplicateWidgetPlacementIndexes(placements);
+    const activePlacements = placements.filter((placement) => placement.isActive !== false);
+    const [duplicate] = findDuplicateWidgetPlacementIndexes(activePlacements);
     if (duplicate) {
         throw new ValidationError(
             `Duplicate widget placement target at positions ${duplicate.firstIndex + 1} and ${duplicate.duplicateIndex + 1}.`,
@@ -262,6 +282,8 @@ async function validatePlacementReferences(
     const collectionIds = new Set<string>();
 
     for (const placement of placements) {
+        if (placement.isActive === false) continue;
+
         if (placement.scope === WidgetPlacementScope.HOMEPAGE && placement.scopeId) {
             throw new ValidationError("Homepage widget placements must not include a page scope.");
         }

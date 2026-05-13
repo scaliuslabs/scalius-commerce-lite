@@ -20796,7 +20796,6 @@ export type PostApiV1AdminSettingsWidgetAiData = {
             improvementTemperature?: number;
             fastGenerationMaxOutputTokens?: number;
             maxOutputTokens?: number;
-            stagedGenerationDefault?: boolean;
         };
         prompts?: {
             widget?: string;
