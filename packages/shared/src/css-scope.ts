@@ -247,6 +247,9 @@ function prefixSelector(selector: string, scope: string): string {
     return scope;
   }
 
+  const widgetRootSelector = prefixWidgetRootSelector(selector, scope);
+  if (widgetRootSelector) return widgetRootSelector;
+
   const rootMatch = selector.match(/^(body|html|:root)([^\s>+~]*)?(?:\s+|[>+~]\s*)?(.*)$/i);
   if (rootMatch) {
     const root = rootMatch[1]!;
@@ -259,6 +262,25 @@ function prefixSelector(selector: string, scope: string): string {
   }
 
   return `${scope} ${selector}`;
+}
+
+function prefixWidgetRootSelector(selector: string, scope: string): string | null {
+  const rootMatch = selector.match(/^(\.widget-container|\[data-scalius-widget-root(?:=(?:"true"|'true'|true))?\])(?=$|[\s>+~.#:[\]])([\s\S]*)$/i);
+  if (!rootMatch) return null;
+
+  const rawTail = rootMatch[2] ?? "";
+  const tail = rawTail.trimStart();
+  if (!tail) return scope;
+
+  if (rawTail.length !== tail.length) {
+    return `${scope} ${tail}`;
+  }
+
+  if (/^[.#:[\]]/.test(tail)) {
+    return `${scope}${tail}`;
+  }
+
+  return `${scope} ${tail}`;
 }
 
 function sanitizeCssIdentifier(value: string): string {

@@ -18,6 +18,15 @@ describe('AI response validation', () => {
     ).toBe(`<htmljs>\n<section class="hero">Hello</section>\n</htmljs>\n\n<css>\n.hero{color:red}\n</css>`);
   });
 
+  it('retains CSS from attributed model response tags', () => {
+    expect(
+      normalizeWidgetGenerationText(`
+        <htmljs format="fragment"><section class="hero">Hello</section></htmljs>
+        <css scoped="true">.hero { color: red; }</css>
+      `),
+    ).toBe(`<htmljs>\n<section class="hero">Hello</section>\n</htmljs>\n\n<css>\n.hero{color:red}\n</css>`);
+  });
+
   it('sanitizes generated HTML attributes and stylesheet URLs before returning', () => {
     const output = normalizeWidgetGenerationText(`
       <htmljs><section onclick="alert(1)"><a href="javascript:alert(1)">Deal</a></section></htmljs>

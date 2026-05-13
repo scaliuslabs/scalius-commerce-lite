@@ -36,8 +36,8 @@ export interface ParseResult {
 function extractTag(content: string, tagName: string): string | null {
   // Try with self-closing or full tags
   const patterns = [
-    new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`, 'i'),
-    new RegExp(`<${tagName}/>`, 'i'),
+    new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)</${tagName}>`, 'i'),
+    new RegExp(`<${tagName}\\b[^>]*/>`, 'i'),
   ];
 
   for (const pattern of patterns) {
@@ -47,7 +47,7 @@ function extractTag(content: string, tagName: string): string | null {
     }
   }
 
-  const openMatch = content.match(new RegExp(`<${tagName}>`, "i"));
+  const openMatch = content.match(new RegExp(`<${tagName}\\b[^>]*>`, "i"));
   if (!openMatch || openMatch.index === undefined) return null;
 
   const start = openMatch.index + openMatch[0].length;
@@ -61,7 +61,7 @@ function extractTag(content: string, tagName: string): string | null {
  */
 function extractSections(content: string): ParsedSection[] {
   const sections: ParsedSection[] = [];
-  const partPattern = /<part(\d+)>([\s\S]*?)<\/part\1>/gi;
+  const partPattern = /<part(\d+)\b[^>]*>([\s\S]*?)<\/part\1>/gi;
 
   let match;
   while ((match = partPattern.exec(content)) !== null) {

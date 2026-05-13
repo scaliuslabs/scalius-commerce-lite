@@ -69,6 +69,29 @@ describe("sanitizeCssForStyleElement", () => {
     expect(scoped).toContain(".sw-safe .card");
   });
 
+  it("maps generated widget root selectors to the actual scoped wrapper", () => {
+    const scoped = scopeCss(
+      sanitizeCssForStyleElement(`
+        .widget-container,
+        [data-scalius-widget-root="true"] {
+          margin: 0;
+          overflow: clip;
+        }
+        .widget-container > .hero,
+        [data-scalius-widget-root] .grid {
+          padding: 24px;
+        }
+      `),
+      "sw-safe",
+    );
+
+    expect(scoped).toContain(".sw-safe{margin:0;overflow:clip}");
+    expect(scoped).toContain(".sw-safe>.hero");
+    expect(scoped).toContain(".sw-safe .grid");
+    expect(scoped).not.toContain(".sw-safe .widget-container");
+    expect(scoped).not.toContain(".sw-safe [data-scalius-widget-root");
+  });
+
   it("scopes root-conditioned selectors without targeting the global page", () => {
     const scoped = scopeCss(
       sanitizeCssForStyleElement(`
