@@ -4,6 +4,44 @@
  */
 import { getCheckoutErrorMessage } from "./error-messages";
 
+export function parseDiscountInput(checkoutData: Record<string, unknown>): {
+  code?: string;
+  amount: number | null;
+} {
+  const rawHidden = checkoutData.discountCodeHidden;
+  const fallbackAmount =
+    parseFloat(String(checkoutData.discountAmount ?? "0")) || null;
+
+  if (typeof rawHidden !== "string" || rawHidden.trim() === "") {
+    return {
+      code:
+        typeof checkoutData.discountCode === "string"
+          ? checkoutData.discountCode
+          : undefined,
+      amount: fallbackAmount,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawHidden) as { code?: unknown; amount?: unknown };
+    const code = typeof parsed.code === "string" ? parsed.code : undefined;
+    const amount =
+      typeof parsed.amount === "number"
+        ? parsed.amount
+        : parseFloat(String(parsed.amount ?? ""));
+
+    return {
+      code,
+      amount: Number.isFinite(amount) && amount > 0 ? amount : fallbackAmount,
+    };
+  } catch {
+    return {
+      code: rawHidden,
+      amount: fallbackAmount,
+    };
+  }
+}
+
 export async function createOrder(
   checkoutData: Record<string, unknown>,
   paymentMethod: string,
@@ -21,6 +59,7 @@ export async function createOrder(
     quantity: item.quantity,
     price: item.price,
   }));
+  const discount = parseDiscountInput(checkoutData);
 
   const payload = {
     customerName: checkoutData.customerName,
@@ -37,8 +76,8 @@ export async function createOrder(
     items,
     shippingCharge: parseFloat((checkoutData.shippingCharge as string) || "0"),
     shippingMethodId: checkoutData.shippingMethodId,
-    discountAmount: parseFloat((checkoutData.discountAmount as string) || "0") || null,
-    discountCode: checkoutData.discountCodeHidden || undefined,
+    discountAmount: discount.amount,
+    discountCode: discount.code,
     paymentMethod,
   };
 

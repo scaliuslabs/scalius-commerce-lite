@@ -49,6 +49,7 @@ export async function createStorefrontOrder(
         .filter((id): id is string => id !== null);
 
     const locationIds = [data.city, data.zone, data.area].filter(Boolean);
+    const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
 
     // Drizzle D1 batch() requires specific tuple types
     const readBatch: unknown[] = [];
@@ -108,12 +109,12 @@ export async function createStorefrontOrder(
     );
 
     // 4. Discount
-    if (data.discountCode) {
+    if (normalizedDiscountCode) {
         readBatch.push(
             storefrontDb
                 .select({ id: discounts.id })
                 .from(discounts)
-                .where(eq(discounts.code, data.discountCode)),
+                .where(eq(discounts.code, normalizedDiscountCode)),
         );
     } else {
         readBatch.push(storefrontDb.select().from(discounts).limit(0));
@@ -271,10 +272,11 @@ export async function createStorefrontOrder(
     // DISCOUNTS VERIFICATION
     // ------------------------------------------------------------------
     let verifiedDiscountAmount = 0;
-    if (data.discountCode) {
+    let appliedDiscountId = appliedDiscount?.id ?? null;
+    if (normalizedDiscountCode) {
         const validationResponse = await isDiscountValid(
             storefrontDb,
-            data.discountCode,
+            normalizedDiscountCode,
             serverItemTotal + verifiedShippingCharge,
             data.items,
             data.customerPhone,
@@ -282,6 +284,8 @@ export async function createStorefrontOrder(
 
         const validResult = validationResponse as Record<string, unknown> | null;
         if (validResult && validResult.valid && validResult.discount) {
+            const validatedDiscount = validResult.discount as { id?: string };
+            appliedDiscountId = validatedDiscount.id ?? appliedDiscountId;
             verifiedDiscountAmount = await calculateDiscountAmount(
                 storefrontDb,
                 validResult.discount,
@@ -290,7 +294,7 @@ export async function createStorefrontOrder(
                 verifiedShippingCharge,
             );
         } else {
-            throw new ValidationError(`Discount code ${data.discountCode} is invalid or expired.`);
+            throw new ValidationError(`Discount code ${normalizedDiscountCode} is invalid or expired.`);
         }
     }
 
@@ -353,8 +357,8 @@ export async function createStorefrontOrder(
             productName: item.productName ?? null,
             variantLabel: item.variantLabel ?? null,
         })),
-        discountUsage: appliedDiscount && verifiedDiscountAmount > 0 ? {
-            discountId: appliedDiscount.id,
+        discountUsage: appliedDiscountId && verifiedDiscountAmount > 0 ? {
+            discountId: appliedDiscountId,
             amountDiscounted: verifiedDiscountAmount,
         } : null,
         requestUrl,

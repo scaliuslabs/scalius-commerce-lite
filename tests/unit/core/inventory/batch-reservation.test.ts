@@ -5,6 +5,7 @@
 // - Rollback mechanics
 
 import { describe, it, expect } from "vitest";
+import { groupReservationMovementsForAudit } from "../../../../packages/core/src/modules/inventory/reserve";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -250,5 +251,20 @@ describe("duplicate variant merging", () => {
   it("handles empty array", () => {
     const merged = mergeDuplicateEntries([]);
     expect(merged).toHaveLength(0);
+  });
+});
+
+describe("batch reservation audit grouping", () => {
+  it("keeps separate movement entries for different orders sharing the same variant", () => {
+    const grouped = groupReservationMovementsForAudit([
+      { variantId: "var_a", quantity: 2, orderId: "ord_1" },
+      { variantId: "var_a", quantity: 3, orderId: "ord_2" },
+      { variantId: "var_a", quantity: 1, orderId: "ord_1" },
+    ]);
+
+    expect(grouped).toEqual([
+      { variantId: "var_a", quantity: 3, orderId: "ord_1" },
+      { variantId: "var_a", quantity: 3, orderId: "ord_2" },
+    ]);
   });
 });

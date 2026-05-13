@@ -21,6 +21,12 @@ import type { OrderIngestQueuePayload } from "./orders.types";
 export type OrderIngestQueueMessage = OrderIngestQueuePayload;
 
 type OrderIngestItem = OrderIngestQueuePayload["items"][number];
+export type QueuedReservationEntry = {
+    variantId: string;
+    quantity: number;
+    pool: "regular" | "preorder" | "backorder";
+    orderId: string;
+};
 
 // ── KV checkout status helper ───────────────────────────────────────────────
 
@@ -57,6 +63,31 @@ export async function setCheckoutStatus(
     }
 }
 
+async function releaseReservationsByOrder(
+    db: ReturnType<typeof getDb>,
+    entries: QueuedReservationEntry[],
+): Promise<void> {
+    const byOrder = groupReservationEntriesByOrder(entries);
+
+    for (const [orderId, orderEntries] of byOrder) {
+        await releaseMultiple(db, orderEntries, orderId);
+    }
+}
+
+export function groupReservationEntriesByOrder(
+    entries: QueuedReservationEntry[],
+): Map<string, QueuedReservationEntry[]> {
+    const byOrder = new Map<string, QueuedReservationEntry[]>();
+
+    for (const entry of entries) {
+        const orderEntries = byOrder.get(entry.orderId) ?? [];
+        orderEntries.push(entry);
+        byOrder.set(entry.orderId, orderEntries);
+    }
+
+    return byOrder;
+}
+
 // ── Batch order ingest handler ──────────────────────────────────────────────
 
 /**
@@ -79,7 +110,7 @@ export async function handleOrderIngestBatch(
 
     // Drizzle D1 batch() requires specific tuple types
     const writeBatch: unknown[] = [];
-    const reservationEntries: { variantId: string; quantity: number; pool: "regular" | "preorder" | "backorder"; orderId: string }[] = [];
+    const reservationEntries: QueuedReservationEntry[] = [];
     // Track which writeBatch indices belong to each order (for Phase 1b removal)
     const orderWriteRanges = new Map<string, { start: number; end: number }>();
 
@@ -243,13 +274,46 @@ export async function handleOrderIngestBatch(
 
     console.log(`[Queue] Prepped ${writeBatch.length} statements for ${successMessages.length} successful orders`);
 
-    // ── Phase 1b: Final discount usage check ──────────────────────────────
+    const rejectedWriteIndices = new Set<number>();
+
+    // ── Phase 1b: Idempotency guard for redelivered queue messages ─────────────
+    // If D1 writes succeeded but the Worker died before ack(), Queues can
+    // redeliver the same message. Do not re-check discounts, reserve stock, or
+    // reinsert the order.
+    for (let i = successMessages.length - 1; i >= 0; i--) {
+        const msg = successMessages[i];
+        if (!msg) continue;
+
+        const orderId = msg.body.orderData.id;
+        const existingOrder = await db
+            .select({
+                id: orders.id,
+                inventoryAction: orders.inventoryAction,
+            })
+            .from(orders)
+            .where(eq(orders.id, orderId))
+            .get();
+
+        if (existingOrder) {
+            const range = orderWriteRanges.get(orderId);
+            if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
+
+            successMessages.splice(i, 1);
+            await setCheckoutStatus(env, msg.body.checkoutToken, "completed");
+            msg.ack();
+            console.log(`[Queue] Acked redelivered existing order ${orderId}`);
+        }
+    }
+
+    // ── Phase 1c: Final discount usage check ──────────────────────────────
     // Re-check discount usage limits to narrow the race window between
     // validation time (HTTP handler) and queue processing time (here).
     // Uses customerPhone (consistent with eligibility check) rather than
     // customerId, which may not exist yet for new customers.
     // Collect indices of writeBatch entries to remove for rejected orders.
-    const rejectedWriteIndices = new Set<number>();
+    const acceptedDiscountUsageByDiscount = new Map<string, number>();
+    const acceptedDiscountUsageByCustomer = new Set<string>();
+
     for (let i = successMessages.length - 1; i >= 0; i--) {
         const msg = successMessages[i];
         if (!msg) continue;
@@ -260,8 +324,28 @@ export async function handleOrderIngestBatch(
         const customerPhone = payload.orderData.customerPhone;
         const orderId = payload.orderData.id;
 
-        // Re-check per-customer limit using phone (matches eligibility check)
-        if (customerPhone) {
+        const discount = await db
+            .select({
+                maxUses: discounts.maxUses,
+                limitOnePerCustomer: discounts.limitOnePerCustomer,
+            })
+            .from(discounts)
+            .where(eq(discounts.id, discountId))
+            .get();
+
+        // Re-check per-customer limit using phone (matches eligibility check),
+        // including usage accepted earlier in this same queue batch.
+        if (discount?.limitOnePerCustomer && customerPhone) {
+            const customerUsageKey = `${discountId}\0${customerPhone}`;
+            if (acceptedDiscountUsageByCustomer.has(customerUsageKey)) {
+                await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount already used by this customer");
+                successMessages.splice(i, 1);
+                msg.ack();
+                const range = orderWriteRanges.get(orderId);
+                if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
+                continue;
+            }
+
             const customerUsage = await db
                 .select({ id: discountUsage.id })
                 .from(discountUsage)
@@ -278,20 +362,15 @@ export async function handleOrderIngestBatch(
             if (customerUsage) {
                 await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount already used by this customer");
                 successMessages.splice(i, 1);
-                failedMessages.push({ msg, reason: "Discount already used" });
+                msg.ack();
                 const range = orderWriteRanges.get(orderId);
                 if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
                 continue;
             }
         }
 
-        // Re-check global maxUses limit
-        const discount = await db
-            .select({ maxUses: discounts.maxUses })
-            .from(discounts)
-            .where(eq(discounts.id, discountId))
-            .get();
-
+        // Re-check global maxUses limit, including usage accepted earlier in
+        // this same queue batch.
         if (discount?.maxUses) {
             const totalUsage = await db
                 .select({ count: sql<number>`COUNT(*)` })
@@ -299,18 +378,27 @@ export async function handleOrderIngestBatch(
                 .where(eq(discountUsage.discountId, discountId))
                 .get();
 
-            if ((totalUsage?.count ?? 0) >= discount.maxUses) {
+            const acceptedInBatch = acceptedDiscountUsageByDiscount.get(discountId) ?? 0;
+            if ((totalUsage?.count ?? 0) + acceptedInBatch >= discount.maxUses) {
                 await setCheckoutStatus(env, payload.checkoutToken, "failed", "Discount code has reached its usage limit");
                 successMessages.splice(i, 1);
-                failedMessages.push({ msg, reason: "Discount maxUses exceeded" });
+                msg.ack();
                 const range = orderWriteRanges.get(orderId);
                 if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
                 continue;
             }
         }
+
+        acceptedDiscountUsageByDiscount.set(
+            discountId,
+            (acceptedDiscountUsageByDiscount.get(discountId) ?? 0) + 1,
+        );
+        if (discount?.limitOnePerCustomer && customerPhone) {
+            acceptedDiscountUsageByCustomer.add(`${discountId}\0${customerPhone}`);
+        }
     }
 
-    // Remove rejected orders' write statements from the batch
+    // Remove rejected or already-ingested orders' write statements from the batch.
     if (rejectedWriteIndices.size > 0) {
         for (let i = writeBatch.length - 1; i >= 0; i--) {
             if (rejectedWriteIndices.has(i)) writeBatch.splice(i, 1);
@@ -337,6 +425,7 @@ export async function handleOrderIngestBatch(
             byPool.get(pool)!.push(entry);
         }
 
+        const reservedEntries: QueuedReservationEntry[] = [];
         for (const [pool, entries] of byPool) {
             const batchItems = entries.map((e) => ({
                 variantId: e.variantId,
@@ -346,6 +435,12 @@ export async function handleOrderIngestBatch(
             const reserveResult = await reserveStockBatch(db, batchItems, pool);
             if (!reserveResult.success) {
                 console.error(`[Queue] reserveStockBatch failed for pool ${pool}:`, reserveResult.results);
+                if (reservedEntries.length > 0) {
+                    console.log(`[Queue] Rolling back ${reservedEntries.length} reservations from earlier pools...`);
+                    await releaseReservationsByOrder(db, reservedEntries).catch((releaseErr) =>
+                        console.error("[Queue] Multi-pool rollback release failed:", releaseErr),
+                    );
+                }
                 // Hard fail the entire batch — Cloudflare will retry
                 for (const msg of batch.messages) {
                     await setCheckoutStatus(env, msg.body.checkoutToken, "failed", "Insufficient stock preventing batch ingestion.");
@@ -353,6 +448,7 @@ export async function handleOrderIngestBatch(
                 }
                 return;
             }
+            reservedEntries.push(...entries);
         }
         console.log(`[Queue] reserveStockBatch completed successfully`);
     }
@@ -409,12 +505,26 @@ export async function handleOrderIngestBatch(
     } catch (batchError: unknown) {
         // ── Phase 4: Rollback on DB failure ───────────────────────────────────
         console.error("[Queue] Order ingest DB batch failed WITH EXCEPTION:", batchError);
+        const batchErrorMessage = batchError instanceof Error ? batchError.message : String(batchError);
 
         if (activeReservationEntries.length > 0) {
             console.log(`[Queue] Rolling back inventory...`);
-            await releaseMultiple(db, activeReservationEntries, "batch-rollback").catch((releaseErr) =>
+            await releaseReservationsByOrder(db, activeReservationEntries).catch((releaseErr) =>
                 console.error("[Queue] Rollback release failed:", releaseErr),
             );
+        }
+
+        if (batchErrorMessage.includes("DISCOUNT_MAX_USES_EXCEEDED") ||
+            batchErrorMessage.includes("DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED")) {
+            const error = batchErrorMessage.includes("DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED")
+                ? "Discount already used by this customer"
+                : "Discount code has reached its usage limit";
+
+            for (const msg of successMessages) {
+                await setCheckoutStatus(env, msg.body.checkoutToken, "failed", error);
+                msg.ack();
+            }
+            return;
         }
 
         // Retry every message in the batch

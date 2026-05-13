@@ -86,13 +86,13 @@ export async function releaseExpiredReservations(
             AND im2.variant_id = ${inventoryMovements}.variant_id
             AND im2.type IN ('deducted', 'preorder_deducted')
         )`,
-        // No corresponding release for this order (prevents double-release)
+        // No corresponding release for this order (prevents double-release after
+        // cancellations, payment failures, queue rollbacks, or previous sweeps)
         sql`NOT EXISTS (
           SELECT 1 FROM inventory_movements AS im3
           WHERE im3.order_id = ${inventoryMovements}.order_id
             AND im3.variant_id = ${inventoryMovements}.variant_id
             AND im3.type = 'released'
-            AND im3.notes LIKE '%expired reservation%'
         )`
       )
     )
