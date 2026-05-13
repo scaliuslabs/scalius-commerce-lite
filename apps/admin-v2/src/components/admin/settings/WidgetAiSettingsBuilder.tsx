@@ -127,7 +127,7 @@ const defaultValues: WidgetAiValues = {
     planningTemperature: 0.3,
     generationTemperature: 0.7,
     improvementTemperature: 0.6,
-    maxOutputTokens: 12000,
+    maxOutputTokens: 8000,
     stagedGenerationDefault: false,
   },
   prompts: {
@@ -236,7 +236,7 @@ async function fetchWidgetAi(): Promise<WidgetAiValues> {
       planningTemperature: Number(generation.planningTemperature ?? 0.3),
       generationTemperature: Number(generation.generationTemperature ?? 0.7),
       improvementTemperature: Number(generation.improvementTemperature ?? 0.6),
-      maxOutputTokens: Number(generation.maxOutputTokens ?? 12000),
+      maxOutputTokens: Number(generation.maxOutputTokens ?? 8000),
       stagedGenerationDefault: generation.stagedGenerationDefault === true,
     },
     prompts: {
