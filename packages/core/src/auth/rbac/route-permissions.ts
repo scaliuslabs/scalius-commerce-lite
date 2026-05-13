@@ -28,6 +28,56 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Products API
   // =============================================
+  "/api/v1/admin/products": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    POST: { permission: PERMISSIONS.PRODUCTS_CREATE },
+  },
+  "/api/v1/admin/products/bulk-delete": {
+    POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
+    DELETE: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
+  },
+  "/api/v1/admin/products/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    DELETE: { permission: PERMISSIONS.PRODUCTS_DELETE },
+  },
+  "/api/v1/admin/products/*/restore": {
+    POST: { permission: PERMISSIONS.PRODUCTS_RESTORE },
+  },
+  "/api/v1/admin/products/*/permanent": {
+    DELETE: { permission: PERMISSIONS.PRODUCTS_PERMANENT_DELETE },
+  },
+  "/api/v1/admin/products/*/variants": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/products/*/variants/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/products/*/variants/bulk-create": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/products/*/variants/bulk-delete": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/products/*/variants/bulk-update": {
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/products/*/variants/sort-order": {
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/products/*/variants/*/duplicate": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
   "/api/products": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     POST: { permission: PERMISSIONS.PRODUCTS_CREATE },
@@ -120,6 +170,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/collections/bulk-restore": {
     POST: { permission: PERMISSIONS.COLLECTIONS_RESTORE },
   },
+  "/api/v1/admin/collections/reorder": {
+    POST: { permission: PERMISSIONS.COLLECTIONS_EDIT },
+  },
   "/api/v1/admin/collections/*": {
     GET: { permission: PERMISSIONS.COLLECTIONS_VIEW },
     PUT: { permission: PERMISSIONS.COLLECTIONS_EDIT },
@@ -153,6 +206,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PATCH: { permission: PERMISSIONS.ORDERS_EDIT },
     DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
+  "/api/v1/admin/orders/*/permanent": {
+    DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
+  },
   "/api/v1/admin/orders/*/status": {
     PUT: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
     PATCH: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
@@ -173,6 +229,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/*/shipments/*/status": {
     PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
     PATCH: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
   "/api/v1/admin/orders/*/shipments/*/refresh": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
@@ -184,12 +241,28 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/*/items": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
+  "/api/v1/admin/orders/*/form-data": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
   "/api/v1/admin/orders/*/payments": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
+  "/api/v1/admin/orders/*/invoice": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
   "/api/v1/admin/orders/*/cod": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
+  "/api/v1/admin/orders/*/return": {
+    POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
+  },
+  "/api/v1/admin/orders/*/refund": {
+    POST: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
+  "/api/v1/admin/orders/*/fulfillment-status": {
+    PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+    PATCH: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
 
   // =============================================
@@ -225,6 +298,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PATCH: { permission: PERMISSIONS.CUSTOMERS_EDIT },
     DELETE: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
+  "/api/v1/admin/customers/*/history": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
   "/api/v1/admin/customers/*/restore": {
     POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
   },
@@ -239,6 +315,13 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
     POST: { permission: PERMISSIONS.DISCOUNTS_CREATE },
   },
+  "/api/v1/admin/discounts/bulk-delete": {
+    POST: { permission: PERMISSIONS.DISCOUNTS_DELETE },
+    DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
+  },
+  "/api/v1/admin/discounts/bulk-restore": {
+    POST: { permission: PERMISSIONS.DISCOUNTS_EDIT },
+  },
   "/api/v1/admin/discounts/*": {
     GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
     PUT: { permission: PERMISSIONS.DISCOUNTS_EDIT },
@@ -247,6 +330,15 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/discounts/*/toggle": {
     POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
+  },
+  "/api/v1/admin/discounts/*/toggle-status": {
+    POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
+  },
+  "/api/v1/admin/discounts/*/restore": {
+    POST: { permission: PERMISSIONS.DISCOUNTS_EDIT },
+  },
+  "/api/v1/admin/discounts/*/permanent": {
+    DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
   },
 
   // =============================================
@@ -338,8 +430,16 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
+  "/api/v1/admin/media/upload": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/move": {
+    POST: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
+  },
   "/api/v1/admin/media/*": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
+    PUT: { permission: PERMISSIONS.MEDIA_UPLOAD },
+    PATCH: { permission: PERMISSIONS.MEDIA_UPLOAD },
     DELETE: { permission: PERMISSIONS.MEDIA_DELETE },
   },
   "/api/v1/admin/media/folders": {
@@ -411,6 +511,93 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Settings API (SENSITIVE)
   // =============================================
+  "/api/v1/cache/stats": {
+    GET: { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
+  },
+  "/api/v1/cache/groups": {
+    GET: { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
+  },
+  "/api/v1/cache/last-cleared": {
+    GET: { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
+  },
+  "/api/v1/cache/clear": {
+    POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
+    DELETE: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
+  },
+  "/api/v1/cache/clear-group": {
+    POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
+  },
+  "/api/v1/admin/settings/stripe": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/sslcommerz": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/header": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
+  "/api/v1/admin/settings/footer": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_FOOTER_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_FOOTER_EDIT },
+  },
+  "/api/v1/admin/settings/seo": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
+  },
+  "/api/v1/admin/settings/firebase": {
+    GET: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+  },
+  "/api/v1/admin/settings/storefront-url": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/hero-sliders": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
+  "/api/v1/admin/settings/hero-sliders/*": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
+  "/api/v1/admin/settings/delivery-locations": {
+    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+  },
+  "/api/v1/admin/settings/delivery-locations/all": {
+    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
+  },
+  "/api/v1/admin/settings/delivery-locations/import-pathao": {
+    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+  },
+  "/api/v1/admin/settings/delivery-locations/*": {
+    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+  },
+  "/api/v1/admin/settings/delivery-providers": {
+    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
+  },
+  "/api/v1/admin/settings/delivery-providers/create-test": {
+    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
+  },
+  "/api/v1/admin/settings/delivery-providers/*": {
+    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
+  },
   "/api/settings/stripe": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
@@ -483,6 +670,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/fraud-checker": {
     GET: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT },
+  },
+  "/api/v1/admin/fraud-checker/lookup": {
+    POST: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
   },
   "/api/v1/admin/fraud-checker/*": {
     GET: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
@@ -531,6 +722,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/checkout-languages/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/checkout-languages/*/restore": {
@@ -543,6 +735,32 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/settings/meta-conversions/logs": {
     GET: { permission: PERMISSIONS.ANALYTICS_VIEW },
+    POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
+    DELETE: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
+  "/api/v1/admin/settings/notification-channels": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+  },
+  "/api/v1/admin/settings/notification-channels/*": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+  },
+  "/api/v1/admin/settings": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/*": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
 
   // =============================================
@@ -571,8 +789,17 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.ORDERS_DELETE },
     DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
+  "/api/v1/admin/abandoned-checkouts/bulk-delete": {
+    POST: { permission: PERMISSIONS.ORDERS_DELETE },
+  },
   "/api/v1/admin/abandoned-checkouts/*": {
     DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
+  },
+  "/api/v1/admin/settings/abandoned-checkouts": {
+    POST: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
+  "/api/v1/admin/settings/abandoned-checkouts/cleanup": {
+    POST: { permission: PERMISSIONS.ORDERS_DELETE },
   },
 
   // =============================================
@@ -598,6 +825,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Dashboard API
   // =============================================
+  "/api/v1/admin/dashboard": {
+    GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
+  },
+  "/api/v1/admin/dashboard/*": {
+    GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
+  },
   "/api/dashboard": {
     GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
   },
@@ -644,6 +877,25 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Inventory API
   // =============================================
+  "/api/v1/admin/inventory": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
+  "/api/v1/admin/inventory/alerts": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/scanner/lookup": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
+  "/api/v1/admin/inventory/stock-adjust": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/stock-set": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/*/adjust": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
   "/api/inventory/alerts": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
@@ -725,8 +977,10 @@ export function getRoutePermission(
   pathname: string,
   method: HttpMethod
 ): RoutePermission | null {
+  const normalizedPathname = normalizePathname(pathname);
+
   // Try exact match first
-  const exactMatch = ROUTE_PERMISSIONS[pathname];
+  const exactMatch = ROUTE_PERMISSIONS[normalizedPathname];
   if (exactMatch && exactMatch[method]) {
     return exactMatch[method] || null;
   }
@@ -746,7 +1000,7 @@ export function getRoutePermission(
   });
 
   for (const pattern of sortedPatterns) {
-    if (matchPattern(pattern, pathname)) {
+    if (matchPattern(pattern, normalizedPathname)) {
       const config = ROUTE_PERMISSIONS[pattern];
       if (config && config[method]) {
         return config[method] ?? null;
@@ -755,6 +1009,11 @@ export function getRoutePermission(
   }
 
   return null;
+}
+
+function normalizePathname(pathname: string): string {
+  const normalized = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;
 }
 
 /**
