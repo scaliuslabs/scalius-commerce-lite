@@ -75,6 +75,30 @@ function shouldReleaseInventoryForFullRefund(currentStatus: string, nextStatus: 
     return nextStatus === OrderStatus.CANCELLED && PRE_FULFILLMENT_REFUND_STATUSES.has(currentStatus);
 }
 
+async function updateOrderStatusIfVersionMatches(
+    db: Database,
+    params: {
+        orderId: string;
+        nextStatus: string;
+        expectedVersion: number;
+    },
+): Promise<boolean> {
+    const result = await db
+        .update(orders)
+        .set({
+            status: params.nextStatus,
+            version: sql`${orders.version} + 1`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(orders.id, params.orderId),
+            eq(orders.version, params.expectedVersion),
+        ))
+        .returning({ id: orders.id });
+
+    return result.length > 0;
+}
+
 async function assertNoPendingRefund(db: Database, orderId: string): Promise<void> {
     const pendingRefund = await db
         .select({ id: orderPayments.id })
@@ -442,26 +466,27 @@ export async function processRefund(
     // Fulfilled/returned full refunds mark payment/order as refunded without
     // restocking physical inventory; returns own that inventory transition.
     const nextOrderStatus = getOrderStatusAfterRefund(order.status, isFullRefund);
-    const orderStatusUpdate: Record<string, unknown> = nextOrderStatus
-        ? { status: nextOrderStatus }
-        : {};
+    let orderStatusChanged = false;
 
-    if (Object.keys(orderStatusUpdate).length > 0) {
-        await db.update(orders).set({
-            ...orderStatusUpdate,
-            version: sql`${orders.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(orders.id, params.orderId),
-            eq(orders.version, claimedOrder.version),
-        ));
+    if (nextOrderStatus) {
+        orderStatusChanged = await updateOrderStatusIfVersionMatches(db, {
+            orderId: params.orderId,
+            nextStatus: nextOrderStatus,
+            expectedVersion: claimedOrder.version,
+        });
+
+        if (!orderStatusChanged) {
+            console.warn(
+                `Skipping inventory transition for refunded order ${params.orderId}: order status changed concurrently.`,
+            );
+        }
     }
 
     // 5. Handle inventory on full refund:
     //    - Pre-fulfillment cancellation releases reserved stock.
     //    - Shipped/delivered/completed refunds do NOT auto-restore stock.
     //      Use the explicit return flow when merchandise comes back.
-    if (isFullRefund && shouldReleaseInventoryForFullRefund(order.status, nextOrderStatus)) {
+    if (isFullRefund && orderStatusChanged && shouldReleaseInventoryForFullRefund(order.status, nextOrderStatus)) {
         await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
     }
 
@@ -512,26 +537,20 @@ export async function processReturn(
         );
     }
 
-    // NOTE: Inventory is applied before the CAS batch update. If the CAS check fails
-    // (concurrent modification), inventory changes will have already been applied.
-    // This is a known limitation — fully fixing it requires refactoring inventory
-    // operations into the batch. The CAS check below mitigates the most common race.
-    const newInventoryAction = await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
+    // CAS update first: only apply inventory if this request actually owns the
+    // RETURNED transition. This prevents orphan stock restoration when a
+    // concurrent status change wins the order version race.
+    const orderStatusChanged = await updateOrderStatusIfVersionMatches(db, {
+        orderId: params.orderId,
+        nextStatus: OrderStatus.RETURNED,
+        expectedVersion: order.version,
+    });
 
-    // CAS update: only proceed if the order version hasn't changed since we read it.
-    // Prevents concurrent modifications from overwriting each other.
-    await db.batch([
-        db.update(orders).set({
-            status: OrderStatus.RETURNED,
-            version: order.version + 1,
-            inventoryAction: newInventoryAction,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(orders.id, params.orderId),
-            eq(orders.version, order.version),
-        )),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    ] as any);
+    if (!orderStatusChanged) {
+        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+    }
+
+    await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
 
     // Auto-refund if requested and order has payments
     let refundResult: RefundResult | undefined;

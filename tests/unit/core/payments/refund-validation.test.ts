@@ -2,7 +2,7 @@
 // Tests refund validation logic from refund-service.ts.
 // Covers amount validation, cumulative refunds, and inventory effects.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Enums (from src/db/schema/enums.ts)
@@ -66,6 +66,29 @@ interface RefundClaimResult {
   error?: "pending_refund" | "cas_conflict" | "amount_exceeds_paid";
   nextState: RefundClaimState;
 }
+
+interface StatusInventoryState {
+  orderVersion: number;
+  status: string;
+  inventoryRestored: boolean;
+}
+
+interface StatusInventoryResult {
+  statusChanged: boolean;
+  inventoryRestored: boolean;
+  nextState: StatusInventoryState;
+}
+
+type MockChain = {
+  from: ReturnType<typeof vi.fn>;
+  where: ReturnType<typeof vi.fn>;
+  set: ReturnType<typeof vi.fn>;
+  values: ReturnType<typeof vi.fn>;
+  orderBy: ReturnType<typeof vi.fn>;
+  returning: ReturnType<typeof vi.fn>;
+  get: ReturnType<typeof vi.fn>;
+  then: (resolve: (value: unknown) => void, reject?: (reason: unknown) => void) => Promise<void>;
+};
 
 const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
   OrderStatus.PENDING,
@@ -224,6 +247,122 @@ function finalizeSuccessfulProviderClaim(state: RefundClaimState): RefundClaimSt
   return {
     ...state,
     pendingRefund: false,
+  };
+}
+
+function applyStatusCasBeforeInventory(
+  state: StatusInventoryState,
+  observedVersion: number,
+  nextStatus: string,
+  shouldRestoreInventory: boolean,
+): StatusInventoryResult {
+  if (state.orderVersion !== observedVersion) {
+    return {
+      statusChanged: false,
+      inventoryRestored: false,
+      nextState: state,
+    };
+  }
+
+  return {
+    statusChanged: true,
+    inventoryRestored: shouldRestoreInventory,
+    nextState: {
+      orderVersion: state.orderVersion + 1,
+      status: nextStatus,
+      inventoryRestored: state.inventoryRestored || shouldRestoreInventory,
+    },
+  };
+}
+
+function createChain(result: unknown): MockChain {
+  const chain = {} as MockChain;
+  chain.from = vi.fn(() => chain);
+  chain.where = vi.fn(() => chain);
+  chain.set = vi.fn(() => chain);
+  chain.values = vi.fn(() => chain);
+  chain.orderBy = vi.fn(() => chain);
+  chain.returning = vi.fn(() => result);
+  chain.get = vi.fn(async () => result ?? null);
+  chain.then = (resolve, reject) => {
+    const value = Array.isArray(result) ? result : result ? [result] : [];
+    return Promise.resolve(value).then(resolve, reject);
+  };
+  return chain;
+}
+
+async function importRefundServiceWithMocks(options: {
+  applyInventoryForStatusChange: ReturnType<typeof vi.fn>;
+  createRefund?: ReturnType<typeof vi.fn>;
+}) {
+  vi.resetModules();
+  vi.doMock("../../../../packages/core/src/modules/inventory/inventory-transitions", () => ({
+    applyInventoryForStatusChange: options.applyInventoryForStatusChange,
+  }));
+  vi.doMock("../../../../packages/core/src/modules/payments/factory", () => ({
+    createPaymentProvider: vi.fn(() => ({
+      createRefund: options.createRefund ?? vi.fn(),
+    })),
+  }));
+  vi.doMock("../../../../packages/core/src/modules/settings/settings.service", () => ({
+    getCurrencyConfig: vi.fn(async () => ({ code: "BDT" })),
+  }));
+
+  return import("../../../../packages/core/src/modules/payments/refund-service");
+}
+
+function createReturnDbWithLostStatusCas() {
+  const order = {
+    id: "ord_return_cas",
+    status: OrderStatus.DELIVERED,
+    paymentStatus: PaymentStatus.PAID,
+    version: 4,
+  };
+
+  return {
+    select: vi.fn(() => createChain(order)),
+    update: vi.fn(() => createChain([])),
+  };
+}
+
+function createRefundDbWithLostStatusCas() {
+  const order = {
+    id: "ord_refund_cas",
+    totalAmount: 100,
+    paidAmount: 100,
+    paymentStatus: PaymentStatus.PAID,
+    paymentMethod: "cod",
+    status: OrderStatus.CONFIRMED,
+    version: 7,
+  };
+  const payment = {
+    id: "pay_1",
+    orderId: order.id,
+    amount: 100,
+    paymentMethod: "cod",
+    paymentType: "payment",
+    status: "succeeded",
+    metadata: null,
+    stripeChargeId: null,
+    sslcommerzBankTranId: null,
+    polarCheckoutId: null,
+  };
+  const selectResults = [order, null, payment];
+  let selectIndex = 0;
+  let updateIndex = 0;
+
+  return {
+    select: vi.fn(() => createChain(selectResults[selectIndex++])),
+    insert: vi.fn(() => createChain([{ id: "refund_ord_refund_cas_7" }])),
+    update: vi.fn(() => {
+      updateIndex += 1;
+      return createChain(updateIndex === 3 ? [] : [{ id: order.id }]);
+    }),
+    delete: vi.fn(() => createChain(undefined)),
+    batch: vi.fn(async () => [
+      [{ id: "refund_ord_refund_cas_7" }],
+      [{ id: order.id, version: 8 }],
+    ]),
   };
 }
 
@@ -555,6 +694,113 @@ describe("refund validation", () => {
         paymentStatus: PaymentStatus.REFUNDED,
         pendingRefund: false,
       });
+    });
+  });
+
+  describe("status CAS before inventory restoration", () => {
+    it("does not restore inventory for a pre-fulfillment full refund when status CAS loses", () => {
+      const state: StatusInventoryState = {
+        orderVersion: 11,
+        status: OrderStatus.CONFIRMED,
+        inventoryRestored: false,
+      };
+
+      const nextStatus = getOrderStatusAfterRefund(state.status, true);
+      const result = applyStatusCasBeforeInventory(
+        state,
+        10,
+        nextStatus ?? state.status,
+        shouldReleaseInventoryForFullRefund(state.status, nextStatus),
+      );
+
+      expect(nextStatus).toBe(OrderStatus.CANCELLED);
+      expect(result.statusChanged).toBe(false);
+      expect(result.inventoryRestored).toBe(false);
+      expect(result.nextState).toEqual(state);
+    });
+
+    it("restores inventory for a pre-fulfillment full refund only after status CAS wins", () => {
+      const state: StatusInventoryState = {
+        orderVersion: 10,
+        status: OrderStatus.CONFIRMED,
+        inventoryRestored: false,
+      };
+
+      const nextStatus = getOrderStatusAfterRefund(state.status, true);
+      const result = applyStatusCasBeforeInventory(
+        state,
+        10,
+        nextStatus ?? state.status,
+        shouldReleaseInventoryForFullRefund(state.status, nextStatus),
+      );
+
+      expect(result.statusChanged).toBe(true);
+      expect(result.inventoryRestored).toBe(true);
+      expect(result.nextState).toMatchObject({
+        orderVersion: 11,
+        status: OrderStatus.CANCELLED,
+        inventoryRestored: true,
+      });
+    });
+
+    it("does not restore inventory for a return when status CAS loses", () => {
+      const state: StatusInventoryState = {
+        orderVersion: 6,
+        status: OrderStatus.DELIVERED,
+        inventoryRestored: false,
+      };
+
+      const result = applyStatusCasBeforeInventory(
+        state,
+        5,
+        OrderStatus.RETURNED,
+        true,
+      );
+
+      expect(result.statusChanged).toBe(false);
+      expect(result.inventoryRestored).toBe(false);
+      expect(result.nextState).toEqual(state);
+    });
+  });
+
+  describe("processRefund/processReturn inventory atomicity", () => {
+    it("does not call return inventory restoration when the RETURNED status CAS loses", async () => {
+      const applyInventoryForStatusChange = vi.fn();
+      const { processReturn } = await importRefundServiceWithMocks({
+        applyInventoryForStatusChange,
+      });
+      const db = createReturnDbWithLostStatusCas();
+
+      await expect(processReturn(db as never, undefined, {
+        orderId: "ord_return_cas",
+        reason: "Customer returned package",
+        autoRefund: false,
+      })).rejects.toThrow("Order was modified by another request");
+
+      expect(applyInventoryForStatusChange).not.toHaveBeenCalled();
+    });
+
+    it("does not call refund inventory release when the cancellation status CAS loses", async () => {
+      const applyInventoryForStatusChange = vi.fn();
+      const createRefund = vi.fn(async () => ({ refundId: "refund_gateway_1" }));
+      const { processRefund } = await importRefundServiceWithMocks({
+        applyInventoryForStatusChange,
+        createRefund,
+      });
+      const db = createRefundDbWithLostStatusCas();
+
+      await expect(processRefund(db as never, undefined, {
+        orderId: "ord_refund_cas",
+        reason: "Customer cancelled before fulfillment",
+        gateway: "cod",
+      })).resolves.toMatchObject({
+        success: true,
+        amount: 100,
+        isFullRefund: true,
+      });
+
+      expect(createRefund).toHaveBeenCalledOnce();
+      expect(applyInventoryForStatusChange).not.toHaveBeenCalled();
     });
   });
 });
