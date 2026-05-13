@@ -162,7 +162,9 @@ SERVER PERFORMANCE CONTRACT:
 - Produce one complete artifact in this call. Do not wait for a later stage to make it coherent.
 - Use no JavaScript, no script tags, and no markdown.
 - The platform owns runtime wrappers. Do not emit widget-container, cms-widget-frame, widget-placement-zone, data-scalius-widget-root, or data-widget-id in generated HTML.
-- Use one content wrapper or section with destination-specific classes and margin: 0. Avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.${compositionContract}`,
+- Use one content wrapper or section with destination-specific classes and margin: 0. Avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.
+- Bound every product image in a stable card/media container with aspect-ratio, max-height, and object-fit. Do not generate blank white media panels, off-canvas crops, absolutely positioned product cutouts, or oversized empty columns.
+- The rendered first viewport must look intentionally filled on desktop and mobile: no dead rows, no decorative whitespace blocks, and no product image region larger than its useful content.${compositionContract}`,
     } as ModelMessage,
   ];
 }
