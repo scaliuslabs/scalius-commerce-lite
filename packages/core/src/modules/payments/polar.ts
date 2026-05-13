@@ -173,6 +173,7 @@ export function verifyPolarWebhook(
 // ---------------------------------------------------------------------------
 
 export interface PolarWebhookPayload {
+    id?: string;
     type: string;
     data: {
         id: string;
