@@ -30,6 +30,10 @@
 		{
 			"binding": "CACHE_CONTROL",
 			"id": "b69ad8d7d9b342bb83849caef7142842"
+		},
+		{
+			"binding": "SESSION",
+			"id": "7e26aa6f7fb344429379d845e5492cb4"
 		}
 	],
 	// Service binding to the standalone API worker (was "testdash" monolith)

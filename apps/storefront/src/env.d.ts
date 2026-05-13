@@ -79,6 +79,9 @@ interface Env {
   // Cloudflare KV namespace for cache-busting control
   CACHE_CONTROL: KVNamespace;
 
+  // Astro session storage for storefront SSR
+  SESSION: KVNamespace;
+
   // Service binding to the standalone API worker
   BACKEND_API: Fetcher;
 
