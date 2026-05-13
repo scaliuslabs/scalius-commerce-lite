@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '../../utils/api-error';
-import { normalizeStagedPlanText, normalizeWidgetGenerationText } from './ai-response-validation';
+import {
+  normalizeStagedPlanOutput,
+  normalizeStagedPlanText,
+  normalizeWidgetGenerationText,
+} from './ai-response-validation';
 
 describe('AI response validation', () => {
   it('canonicalizes tag-based widget output', () => {
@@ -124,6 +128,27 @@ describe('AI response validation', () => {
         'Continue the shared visual system from the previous section without external spacing.',
       ],
       estimatedTokens: 900,
+    });
+  });
+
+  it('normalizes structured staged plans when estimatedTokens is omitted', () => {
+    const text = normalizeStagedPlanOutput({
+      totalSections: 2,
+      compositionBrief: 'One widget',
+      sharedDesignSystem: 'Shared cards',
+      spacingStrategy: 'Gap zero',
+      sectionDescriptions: ['Hero', 'Products'],
+      sectionContinuity: ['Open tightly', 'Continue tightly'],
+    });
+
+    expect(JSON.parse(text)).toEqual({
+      totalSections: 2,
+      compositionBrief: 'One widget',
+      sharedDesignSystem: 'Shared cards',
+      spacingStrategy: 'Gap zero',
+      sectionDescriptions: ['Hero', 'Products'],
+      sectionContinuity: ['Open tightly', 'Continue tightly'],
+      estimatedTokens: 1400,
     });
   });
 

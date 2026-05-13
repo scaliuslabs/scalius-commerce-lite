@@ -20,28 +20,50 @@ interface ParsedSection {
   timestamp: number;
 }
 
+const WIDGET_CONTAINER_CSS = `
+/* Widget Container Composition */
+.widget-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  margin: 0;
+}
+
+.widget-section {
+  width: 100%;
+  margin: 0;
+}
+
+.widget-section > :first-child {
+  margin-top: 0;
+}
+
+.widget-section > :last-child {
+  margin-bottom: 0;
+}`;
+
 /**
  * Extract sections from non-staged widget HTML
  *
  * Note: This function requires a DOM environment (browser or DOM polyfill).
  * It should only be called client-side in React components.
  */
-export function parseHtmlIntoSections(
-  html: string,
-  css: string
-): ParsedSection[] {
+export function parseHtmlIntoSections(html: string, css: string): ParsedSection[] {
   // Check if DOMParser is available (browser environment)
   if (typeof DOMParser === 'undefined') {
     console.warn('DOMParser is not available (server-side rendering). Returning HTML as single section.');
     // Fallback: Return entire HTML as a single section
-    return [{
-      index: 0,
-      html,
-      css,
-      description: 'Complete Widget',
-      id: `parsed-section-0-${Date.now()}`,
-      timestamp: Date.now(),
-    }];
+    return [
+      {
+        index: 0,
+        html,
+        css,
+        description: 'Complete Widget',
+        id: `parsed-section-0-${Date.now()}`,
+        timestamp: Date.now(),
+      },
+    ];
   }
 
   // Create a temporary DOM element to parse HTML
@@ -71,7 +93,7 @@ export function parseHtmlIntoSections(
   const semanticTags = ['header', 'nav', 'section', 'article', 'aside', 'footer'];
   const semanticElements: Element[] = [];
 
-  semanticTags.forEach(tag => {
+  semanticTags.forEach((tag) => {
     const elements = doc.body.querySelectorAll(tag);
     elements.forEach((el: Element) => {
       if (!isNested(el, semanticElements)) {
@@ -106,7 +128,7 @@ export function parseHtmlIntoSections(
   ];
 
   const topLevelDivs = Array.from(doc.body.children).filter(
-    (el): el is HTMLElement => el.tagName.toLowerCase() === 'div'
+    (el): el is HTMLElement => el.tagName.toLowerCase() === 'div',
   );
 
   topLevelDivs.forEach((el, idx) => {
@@ -166,7 +188,7 @@ export function parseHtmlIntoSections(
  * Check if element is nested within any of the given elements
  */
 function isNested(element: Element, containers: Element[]): boolean {
-  return containers.some(container => (container as HTMLElement).contains(element) && container !== element);
+  return containers.some((container) => (container as HTMLElement).contains(element) && container !== element);
 }
 
 /**
@@ -188,12 +210,12 @@ function generateDescription(element: Element): string {
 
   // Fallback to tag name
   const tagDescriptions: Record<string, string> = {
-    'header': 'Header',
-    'nav': 'Navigation',
-    'section': 'Section',
-    'article': 'Article',
-    'aside': 'Sidebar',
-    'footer': 'Footer',
+    header: 'Header',
+    nav: 'Navigation',
+    section: 'Section',
+    article: 'Article',
+    aside: 'Sidebar',
+    footer: 'Footer',
   };
 
   return tagDescriptions[tag] || tag;
@@ -295,34 +317,21 @@ function extractCssForSection(css: string, sectionNumber: number): string {
 export function reconstructWidgetFromSections(sections: ParsedSection[]): { html: string; css: string } {
   const combinedHtml = `<div class="widget-container">\n${sections
     .map((s, idx) => {
-      const sectionHtml = s.html.split('\n').map(line => '    ' + line).join('\n');
+      const sectionHtml = s.html
+        .split('\n')
+        .map((line) => '    ' + line)
+        .join('\n');
       return `  <div class="widget-section widget-section-${idx + 1}" data-section="${idx + 1}">\n${sectionHtml}\n  </div>`;
-    }).join('\n')}\n</div>`;
+    })
+    .join('\n')}\n</div>`;
 
   const combinedCss = `
-/* Widget Container Spacing */
-.widget-container {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  width: 100%;
-}
-
-.widget-section {
-  width: 100%;
-}
-
-/* Mobile Responsive Spacing */
-@media (max-width: 768px) {
-  .widget-container { gap: 1.5rem; }
-}
-
-@media (max-width: 480px) {
-  .widget-container { gap: 1rem; }
-}
-
+${WIDGET_CONTAINER_CSS}
 /* Section-specific styles */
-${sections.map((s, idx) => s.css ? `/* Section ${idx + 1} styles */\n${s.css}` : '').filter(Boolean).join('\n\n')}
+${sections
+  .map((s, idx) => (s.css ? `/* Section ${idx + 1} styles */\n${s.css}` : ''))
+  .filter(Boolean)
+  .join('\n\n')}
 `;
 
   return {

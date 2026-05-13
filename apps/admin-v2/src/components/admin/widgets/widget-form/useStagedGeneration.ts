@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { parseHtmlIntoSections } from '@scalius/shared/html-section-parser';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag-parser';
 import type { StructuredPromptResult } from '@scalius/core/modules/ai/prompt-helper-v2';
@@ -42,6 +43,21 @@ const RETRY_DELAY_MS = 1000;
 const PREVIOUS_SECTION_CONTEXT_LIMIT = 6000;
 const FINALIZATION_DRAFT_LIMIT = 36_000;
 const SECTION_GAP_CSS = '0';
+const COMPOSITION_BOUNDARY_GUARD_CSS = `
+
+/* Scalius composition boundary guard */
+.widget-container {
+  gap: 0;
+  margin: 0;
+}
+
+.widget-container > .widget-section:first-child > *:first-child {
+  margin-top: 0;
+}
+
+.widget-container > .widget-section:last-child > *:last-child {
+  margin-bottom: 0;
+}`;
 
 type WidgetData = { html: string; css: string };
 
@@ -299,6 +315,34 @@ function parseWidgetData(content: string): WidgetData {
     html: widgetData.html,
     css: widgetData.css || '',
   };
+}
+
+function applyCompositionBoundaryGuard(widget: WidgetData): WidgetData {
+  const css = `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}`;
+  return { html: widget.html, css };
+}
+
+function sectionsFromWidgetData(
+  content: WidgetData,
+  plan: GenerationPlan,
+  fallbackSections: SectionContent[],
+): SectionContent[] {
+  try {
+    const parsedSections = parseHtmlIntoSections(content.html, content.css || '');
+    if (parsedSections.length === 0) return fallbackSections;
+
+    return parsedSections.map((section, index) => ({
+      html: section.html,
+      css: section.css,
+      sectionIndex: index,
+      description: plan.sectionDescriptions[index] || section.description || `Section ${index + 1}`,
+      id: section.id,
+      timestamp: section.timestamp,
+    }));
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) console.warn('Failed to parse finalized widget sections; keeping draft sections.', error);
+    return fallbackSections;
+  }
 }
 
 function indentHtml(html: string): string {
@@ -617,7 +661,7 @@ Finalization rules:
       }
 
       const content = extractChatCompletionContent(await response.json());
-      return parseWidgetData(content);
+      return applyCompositionBoundaryGuard(parseWidgetData(content));
     },
     [],
   );
@@ -696,6 +740,7 @@ Finalization rules:
 
         const fallbackWidget = buildCombinedWidget(generatedSections);
         let finalWidget = fallbackWidget;
+        let finalSections = generatedSections;
 
         try {
           throwIfAborted(signal);
@@ -711,6 +756,7 @@ Finalization rules:
           );
           if (polishedWidget) {
             finalWidget = polishedWidget;
+            finalSections = sectionsFromWidgetData(polishedWidget, plan, generatedSections);
           }
         } catch (error: unknown) {
           if (isAbortError(error)) throw error;
@@ -722,6 +768,7 @@ Finalization rules:
           ...prev,
           currentStage: 'complete',
           isGenerating: false,
+          sections: [...finalSections],
         }));
         toast.success('Widget generation complete!');
 

@@ -47,7 +47,12 @@ export const stagedPlanOutputSchema = z
       .min(GENERATION_CONFIG.stagedGeneration.minSections)
       .max(GENERATION_CONFIG.stagedGeneration.maxSections)
       .describe('Per-section instruction for how it connects to surrounding sections.'),
-    estimatedTokens: z.number().int().positive().describe('Estimated output tokens for the complete widget.'),
+    estimatedTokens: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Optional estimated output tokens for the complete widget. The API normalizes a default when absent.'),
   })
   .strict()
   .describe('Section plan for staged storefront widget generation.')
@@ -253,5 +258,5 @@ export function normalizeStagedPlanOutput(output: StagedPlanOutput): string {
     });
   }
 
-  return JSON.stringify(plan.data);
+  return normalizeStagedPlanText(JSON.stringify(plan.data));
 }

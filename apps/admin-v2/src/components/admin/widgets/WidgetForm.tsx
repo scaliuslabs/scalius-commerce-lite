@@ -22,7 +22,15 @@ import {
   createWidgetHistorySnapshot,
   deleteWidgetHistory,
 } from '~/lib/api.functions';
-import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { parseAiContext, AiContextSchema, type AiContext } from '@scalius/core/modules/ai/ai-context-schema';
@@ -54,8 +62,8 @@ interface WidgetFormProps {
   submitButtonText: string;
 }
 
-type WidgetPlacementFormValue = NonNullable<WidgetFormValues["placements"]>[number];
-type SupportedWidgetPlacement = NonNullable<Widget["placements"]>[number] & {
+type WidgetPlacementFormValue = NonNullable<WidgetFormValues['placements']>[number];
+type SupportedWidgetPlacement = NonNullable<Widget['placements']>[number] & {
   scope: SupportedWidgetPlacementScopeValue;
 };
 type WidgetContentDraft = { html: string; css: string };
@@ -71,8 +79,7 @@ function homepagePlacement(
     scopeId: null,
     slot,
     anchorType:
-      slot === WidgetPlacementSlot.BEFORE_COLLECTION ||
-      slot === WidgetPlacementSlot.AFTER_COLLECTION
+      slot === WidgetPlacementSlot.BEFORE_COLLECTION || slot === WidgetPlacementSlot.AFTER_COLLECTION
         ? WidgetPlacementAnchorType.COLLECTION
         : null,
     anchorId: anchorId ?? null,
@@ -97,23 +104,16 @@ function placementsFromLegacyWidget(widget: Widget): WidgetPlacementFormValue[] 
   }
 }
 
-function normalizePlacementForForm(
-  placement: SupportedWidgetPlacement,
-): WidgetPlacementFormValue {
-  const slot = normalizeWidgetPlacementSlotForScope(
-    placement.scope,
-    placement.slot,
-  ) as WidgetPlacementSlot;
-  const anchorType = isWidgetCollectionSlot(slot)
-    ? WidgetPlacementAnchorType.COLLECTION
-    : null;
+function normalizePlacementForForm(placement: SupportedWidgetPlacement): WidgetPlacementFormValue {
+  const slot = normalizeWidgetPlacementSlotForScope(placement.scope, placement.slot) as WidgetPlacementSlot;
+  const anchorType = isWidgetCollectionSlot(slot) ? WidgetPlacementAnchorType.COLLECTION : null;
   return {
     id: placement.id,
     scope: placement.scope,
     scopeId: placement.scopeId ?? null,
     slot,
     anchorType,
-    anchorId: isWidgetCollectionSlot(slot) ? placement.anchorId ?? null : null,
+    anchorId: isWidgetCollectionSlot(slot) ? (placement.anchorId ?? null) : null,
     sortOrder: placement.sortOrder,
     isActive: placement.isActive,
   };
@@ -128,8 +128,7 @@ function placementsForForm(widget: Widget | null | undefined): WidgetPlacementFo
     return widget.placements
       .filter(
         (placement): placement is SupportedWidgetPlacement =>
-          placement.deletedAt == null &&
-          isSupportedWidgetPlacementScope(placement.scope),
+          placement.deletedAt == null && isSupportedWidgetPlacementScope(placement.scope),
       )
       .map(normalizePlacementForForm);
   }
@@ -141,7 +140,7 @@ function legacyProjectionFromPlacements(placements: WidgetPlacementFormValue[] |
   const placement = placements?.find((item) => item.isActive) ?? placements?.[0];
   if (!placement || placement.scope !== WidgetPlacementScope.HOMEPAGE) {
     return {
-      displayTarget: "homepage" as const,
+      displayTarget: 'homepage' as const,
       placementRule: WidgetPlacementRule.STANDALONE,
       referenceCollectionId: null,
       sortOrder: 0,
@@ -150,7 +149,7 @@ function legacyProjectionFromPlacements(placements: WidgetPlacementFormValue[] |
 
   if (placement.slot === WidgetPlacementSlot.BEFORE_COLLECTION) {
     return {
-      displayTarget: "homepage" as const,
+      displayTarget: 'homepage' as const,
       placementRule: WidgetPlacementRule.BEFORE_COLLECTION,
       referenceCollectionId: placement.anchorId ?? null,
       sortOrder: placement.sortOrder,
@@ -159,7 +158,7 @@ function legacyProjectionFromPlacements(placements: WidgetPlacementFormValue[] |
 
   if (placement.slot === WidgetPlacementSlot.AFTER_COLLECTION) {
     return {
-      displayTarget: "homepage" as const,
+      displayTarget: 'homepage' as const,
       placementRule: WidgetPlacementRule.AFTER_COLLECTION,
       referenceCollectionId: placement.anchorId ?? null,
       sortOrder: placement.sortOrder,
@@ -167,7 +166,7 @@ function legacyProjectionFromPlacements(placements: WidgetPlacementFormValue[] |
   }
 
   return {
-    displayTarget: "homepage" as const,
+    displayTarget: 'homepage' as const,
     placementRule:
       placement.slot === WidgetPlacementSlot.BOTTOM
         ? WidgetPlacementRule.FIXED_BOTTOM_HOMEPAGE
@@ -203,20 +202,17 @@ function getPlacementAiContext(placements: WidgetPlacementFormValue[] | undefine
       placement.scope === WidgetPlacementScope.PRODUCT ||
       placement.scope === WidgetPlacementScope.CATEGORY,
   );
-  const suggestedPromptType = hasCollectionIntent
-    ? 'collection'
-    : hasScopedLandingIntent
-      ? 'landing-page'
-      : 'widget';
-  const summary = activePlacements.length === 0
-    ? 'Shortcode-only widget with no automatic storefront placement'
-    : activePlacements
-        .map((placement) => {
-          const target = placement.scopeId ? ` target ${placement.scopeId}` : '';
-          const anchor = placement.anchorId ? ` anchored to collection ${placement.anchorId}` : '';
-          return `${placement.scope} ${placement.slot}${target}${anchor}`;
-        })
-        .join('; ');
+  const suggestedPromptType = hasCollectionIntent ? 'collection' : hasScopedLandingIntent ? 'landing-page' : 'widget';
+  const summary =
+    activePlacements.length === 0
+      ? 'Shortcode-only widget with no automatic storefront placement'
+      : activePlacements
+          .map((placement) => {
+            const target = placement.scopeId ? ` target ${placement.scopeId}` : '';
+            const anchor = placement.anchorId ? ` anchored to collection ${placement.anchorId}` : '';
+            return `${placement.scope} ${placement.slot}${target}${anchor}`;
+          })
+          .join('; ');
 
   return {
     productIds: Array.from(new Set(productIds)),
@@ -229,10 +225,7 @@ function getPlacementAiContext(placements: WidgetPlacementFormValue[] | undefine
   };
 }
 
-function getWidgetFormDefaultValues(
-  widget: Widget | null | undefined,
-  isCreateMode: boolean,
-): WidgetFormValues {
+function getWidgetFormDefaultValues(widget: Widget | null | undefined, isCreateMode: boolean): WidgetFormValues {
   if (widget && !isCreateMode) {
     return {
       name: widget.name,
@@ -264,16 +257,14 @@ function getSavedAiContextCreatedAt(aiContext: string | null | undefined): numbe
   if (!aiContext) return Date.now();
   try {
     const savedContext = parseAiContext(aiContext);
-    return typeof savedContext.createdAt === 'number'
-      ? savedContext.createdAt
-      : Date.now();
+    return typeof savedContext.createdAt === 'number' ? savedContext.createdAt : Date.now();
   } catch {
     return Date.now();
   }
 }
 
 function stagedSectionsFromContent(content: WidgetContentDraft) {
-  return parseHtmlIntoSections(content.html, content.css || '').map(section => ({
+  return parseHtmlIntoSections(content.html, content.css || '').map((section) => ({
     html: section.html,
     css: section.css,
     sectionIndex: section.index,
@@ -283,25 +274,12 @@ function stagedSectionsFromContent(content: WidgetContentDraft) {
   }));
 }
 
-export const WidgetForm: React.FC<WidgetFormProps> = ({
-  widget,
-  isCreateMode,
-  submitButtonText,
-}) => {
+export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, submitButtonText }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const widgetVersionKey = isCreateMode
-    ? 'create'
-    : widget
-      ? `${widget.id}:${String(widget.updatedAt)}`
-      : 'empty';
-  const widgetIdentityKey = isCreateMode
-    ? 'create'
-    : widget?.id ?? 'empty';
-  const formDefaultValues = useMemo(
-    () => getWidgetFormDefaultValues(widget, isCreateMode),
-    [widget, isCreateMode],
-  );
+  const widgetVersionKey = isCreateMode ? 'create' : widget ? `${widget.id}:${String(widget.updatedAt)}` : 'empty';
+  const widgetIdentityKey = isCreateMode ? 'create' : (widget?.id ?? 'empty');
+  const formDefaultValues = useMemo(() => getWidgetFormDefaultValues(widget, isCreateMode), [widget, isCreateMode]);
   const resetIdentityRef = useRef<string | null>(null);
   const appliedWidgetVersionRef = useRef<string | null>(null);
   const aiContextVersionRef = useRef<string | null>(null);
@@ -330,7 +308,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   // Save version state
   const [isSaveVersionOpen, setIsSaveVersionOpen] = useState(false);
-  const [versionReason, setVersionReason] = useState("");
+  const [versionReason, setVersionReason] = useState('');
   const [isSavingVersion, setIsSavingVersion] = useState(false);
 
   // Editor state
@@ -343,19 +321,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   const aiContext = useAiContext();
   const watchedPlacements = watch('placements') ?? [];
-  const aiPlacementContext = useMemo(
-    () => getPlacementAiContext(watchedPlacements),
-    [watchedPlacements],
-  );
+  const aiPlacementContext = useMemo(() => getPlacementAiContext(watchedPlacements), [watchedPlacements]);
   const aiGenerator = useAiGenerator(aiContext, widget, true, aiPlacementContext);
   const aiImprover = useAiImprover({ aiContext, aiGenerator });
 
   const watchedHtmlContent = watch('htmlContent') || '';
   const watchedCssContent = watch('cssContent') || '';
-  const pendingPreviewContent = getPendingPreviewContent(
-    watchedHtmlContent,
-    watchedCssContent,
-  );
+  const pendingPreviewContent = getPendingPreviewContent(watchedHtmlContent, watchedCssContent);
   const hasPendingPreviewContent = Boolean(pendingPreviewContent);
 
   function resetHistoryState() {
@@ -392,14 +364,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     }
 
     setServerVersionAvailable(true);
-  }, [
-    formDefaultValues,
-    hasPendingPreviewContent,
-    isDirty,
-    reset,
-    widgetIdentityKey,
-    widgetVersionKey,
-  ]);
+  }, [formDefaultValues, hasPendingPreviewContent, isDirty, reset, widgetIdentityKey, widgetVersionKey]);
 
   // Load saved AI context from widget
   useEffect(() => {
@@ -637,10 +602,13 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       return;
     }
 
-    replaceWidgetContent({
-      html: restoredEntry.htmlContent,
-      css: restoredEntry.cssContent || '',
-    }, 'manual');
+    replaceWidgetContent(
+      {
+        html: restoredEntry.htmlContent,
+        css: restoredEntry.cssContent || '',
+      },
+      'manual',
+    );
     setSelectedHistoryItem(restoredEntry);
     setIsHistoryOpen(false);
     toast.success('Version content applied. Save the widget to keep it.');
@@ -652,7 +620,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     try {
       await deleteWidgetHistory({ data: { widgetId: widget.id, historyId } });
       toast.success('Version deleted successfully!');
-      setHistory(prev => prev.filter(h => h.id !== historyId));
+      setHistory((prev) => prev.filter((h) => h.id !== historyId));
       if (selectedHistoryItem?.id === historyId) {
         setSelectedHistoryItem(null);
       }
@@ -667,10 +635,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     }
   };
 
-  function requireSettledPendingPreview(
-    message: string,
-    content = pendingPreviewContent,
-  ) {
+  function requireSettledPendingPreview(message: string, content = pendingPreviewContent) {
     if (!content) return false;
 
     toast.error(message);
@@ -680,11 +645,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
   }
 
   const openSaveVersionDialog = () => {
-    if (
-      requireSettledPendingPreview(
-        'Apply or discard the preview content before saving a version.',
-      )
-    ) {
+    if (requireSettledPendingPreview('Apply or discard the preview content before saving a version.')) {
       return;
     }
 
@@ -693,11 +654,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   const handleSaveVersion = async () => {
     if (!widget?.id) return;
-    if (
-      requireSettledPendingPreview(
-        'Apply or discard the preview content before saving a version.',
-      )
-    ) {
+    if (requireSettledPendingPreview('Apply or discard the preview content before saving a version.')) {
       return;
     }
 
@@ -710,7 +667,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
     setIsSavingVersion(true);
     try {
-      const entry = await createWidgetHistorySnapshot({
+      const entry = (await createWidgetHistorySnapshot({
         data: {
           widgetId: widget.id,
           snapshot: {
@@ -719,9 +676,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
             cssContent: cssContent ?? null,
           },
         },
-      }) as WidgetHistoryEntry;
+      })) as WidgetHistoryEntry;
       toast.success('Version saved!');
-      setHistory(prev => [entry, ...prev.filter(item => item.id !== entry.id)]);
+      setHistory((prev) => [entry, ...prev.filter((item) => item.id !== entry.id)]);
       setSelectedHistoryItem(entry);
       setIsSaveVersionOpen(false);
       setVersionReason('');
@@ -739,10 +696,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     try {
       const pendingContent = getPendingPreviewContent(data.htmlContent, data.cssContent ?? '');
       if (
-        requireSettledPendingPreview(
-          'Apply or discard the preview content before saving this widget.',
-          pendingContent,
-        )
+        requireSettledPendingPreview('Apply or discard the preview content before saving this widget.', pendingContent)
       ) {
         return;
       }
@@ -802,9 +756,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       toast.success(`Widget ${action} successfully!`);
       void navigate({ to: '/admin/widgets' });
     } catch (error: unknown) {
-      toast.error(
-        getServerFnError(error, `Failed to ${isCreateMode ? 'create' : 'update'} widget`),
-      );
+      toast.error(getServerFnError(error, `Failed to ${isCreateMode ? 'create' : 'update'} widget`));
     }
   };
 
@@ -869,17 +821,14 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     aiGenerator.setGeneratedContent(null);
     aiImprover.clearCurrentImprovement();
 
-    if (source === 'improvement' || aiGenerator.stagedGeneration.sections.length === 0) {
+    if (source === 'generation' || source === 'improvement' || aiGenerator.stagedGeneration.sections.length === 0) {
       aiGenerator.stagedGeneration.updateSections(stagedSectionsFromContent(content));
     }
   }
 
   function getPendingPreviewContent(html: string, css: string) {
     const generated = aiGenerator.generatedContent;
-    if (
-      generated &&
-      (generated.html !== html || generated.css !== css)
-    ) {
+    if (generated && (generated.html !== html || generated.css !== css)) {
       return {
         source: 'generation' as const,
         content: generated,
@@ -887,10 +836,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
     }
 
     const improved = aiImprover.contentToImprove;
-    if (
-      improved &&
-      (improved.html !== html || improved.css !== css)
-    ) {
+    if (improved && (improved.html !== html || improved.css !== css)) {
       return {
         source: 'improvement' as const,
         content: improved,
@@ -915,15 +861,10 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
 
   return (
     <div className="space-y-8">
-      <UnsavedChangesGuard
-        isDirty={shouldGuardNavigation}
-        isSubmitting={isSubmitting}
-      />
+      <UnsavedChangesGuard isDirty={shouldGuardNavigation} isSubmitting={isSubmitting} />
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {isCreateMode ? 'Create New Widget' : 'Edit Widget'}
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">{isCreateMode ? 'Create New Widget' : 'Edit Widget'}</h1>
           <p className="text-muted-foreground mt-1">
             {isCreateMode ? 'Add a new dynamic content block to your site.' : `Editing "${widget?.name}"`}
           </p>
@@ -941,24 +882,15 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           <div className="flex min-w-0 items-center gap-2 text-blue-700 dark:text-blue-300">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>
-              A newer saved version is available. Keep editing your draft, or reload the saved version when you are ready.
+              A newer saved version is available. Keep editing your draft, or reload the saved version when you are
+              ready.
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={applyServerWidgetVersion}
-            >
+            <Button type="button" size="sm" variant="outline" onClick={applyServerWidgetVersion}>
               Reload Saved Version
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setServerVersionAvailable(false)}
-            >
+            <Button type="button" size="sm" variant="ghost" onClick={() => setServerVersionAvailable(false)}>
               Keep Editing
             </Button>
           </div>
@@ -983,13 +915,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           onImproveExisting={handleImproveExisting}
         />
 
-        <WidgetPlacement
-          control={control}
-          errors={errors}
-          watch={watch}
-          register={register}
-          setValue={setValue}
-        />
+        <WidgetPlacement control={control} errors={errors} watch={watch} register={register} setValue={setValue} />
 
         {pendingPreviewContent && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
@@ -1006,22 +932,14 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
                 type="button"
                 size="sm"
                 onClick={() => {
-                  replaceWidgetContent(
-                    pendingPreviewContent.content,
-                    pendingPreviewContent.source,
-                  );
+                  replaceWidgetContent(pendingPreviewContent.content, pendingPreviewContent.source);
                   toast.success('Preview content applied.');
                 }}
               >
                 <Check className="mr-2 h-4 w-4" />
                 Apply Preview
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={discardPendingPreviewContent}
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={discardPendingPreviewContent}>
                 <X className="mr-2 h-4 w-4" />
                 Discard
               </Button>
@@ -1040,10 +958,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
               </Button>
             </>
           )}
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-          >
+          <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Saving...' : primarySubmitLabel}
           </Button>
         </div>
@@ -1058,11 +973,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
             setLivePreviewContent(null);
           }
         }}
-        onCancelProcessing={
-          editorMode === 'improvement'
-            ? aiImprover.cancel
-            : aiGenerator.cancelGeneration
-        }
+        onCancelProcessing={editorMode === 'improvement' ? aiImprover.cancel : aiGenerator.cancelGeneration}
         content={
           editorMode === 'improvement'
             ? aiImprover.contentToImprove
@@ -1083,12 +994,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
           editorMode === 'improvement'
             ? handleAcceptImprovement
             : editorMode === 'live-preview'
-            ? () => {
-                toast.info('Already in the form.');
-                setIsEditorOpen(false);
-                setLivePreviewContent(null);
-              }
-            : handleAcceptPreview
+              ? () => {
+                  toast.info('Already in the form.');
+                  setIsEditorOpen(false);
+                  setLivePreviewContent(null);
+                }
+              : handleAcceptPreview
         }
         onImprove={editorMode === 'improvement' ? aiImprover.improve : undefined}
         onRequestImprovement={editorMode === 'generation-preview' ? handleRequestImprovement : undefined}
@@ -1147,11 +1058,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({
       />
 
       {/* Paste Modal */}
-      <WidgetPasteModal
-        isOpen={isPasteModalOpen}
-        onOpenChange={setIsPasteModalOpen}
-        onApply={handlePaste}
-      />
+      <WidgetPasteModal isOpen={isPasteModalOpen} onOpenChange={setIsPasteModalOpen} onApply={handlePaste} />
     </div>
   );
 };
