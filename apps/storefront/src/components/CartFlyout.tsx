@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   cartStore,
+  hydrateCartFromStorage,
   updateQuantity,
   removeFromCart,
   clearCart,
@@ -115,6 +116,8 @@ export default function CartFlyout() {
   }, [isOpen, cart.items]);
 
   useEffect(() => {
+    hydrateCartFromStorage();
+
     const handleAddToCartEvent = (event: CustomEvent) => {
       if (!event.detail) return;
       addToCart(event.detail);

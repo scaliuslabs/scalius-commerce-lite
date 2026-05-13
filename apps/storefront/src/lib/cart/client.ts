@@ -1,6 +1,7 @@
 // src/lib/cart/client.ts
 import {
   cartStore,
+  hydrateCartFromStorage,
   addToCart,
   updateQuantity,
   removeFromCart,
@@ -508,6 +509,8 @@ function handleRemoveDiscount() {
 
 // --- Initialization ---
 export async function initCartFunctionality() {
+  hydrateCartFromStorage();
+
   // ── Read server-rendered shipping defaults ────────────────────────────────
   // Eliminates the race condition: this runs before React hydration, ensuring
   // window.lastShippingEventDetail is always set for the first updateTotals().
