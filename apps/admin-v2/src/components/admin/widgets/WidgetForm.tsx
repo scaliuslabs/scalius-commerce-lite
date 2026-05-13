@@ -719,7 +719,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
         savedProducts: aiContext.selectedProducts,
         savedCategories: aiContext.selectedCategories,
         allCategoriesSelected: aiContext.allCategoriesSelected,
-        stagedPlan: aiGenerator.stagedGeneration.plan || undefined,
         stagedSections: aiGenerator.stagedGeneration.sections,
         improvementHistory: aiImprover.improvementHistory,
         createdAt: getSavedAiContextCreatedAt(widget?.aiContext),
@@ -760,23 +759,21 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     }
   };
 
-  // Compute sections for editor - updates whenever sections or plan changes
+  // Compute sections for editor from the accepted widget artifact.
   const sections = useMemo(() => {
     const stagedSections = aiGenerator.stagedGeneration.sections;
-    const plan = aiGenerator.stagedGeneration.plan;
 
     if (stagedSections.length > 0) {
       return stagedSections.map((s, idx) => ({
         index: idx,
         html: s.html,
         css: s.css,
-        description: plan?.sectionDescriptions?.[idx] || `Section ${idx + 1}`,
+        description: s.description || `Section ${idx + 1}`,
       }));
     }
     return [];
   }, [
     aiGenerator.stagedGeneration.sections,
-    aiGenerator.stagedGeneration.plan,
     aiGenerator.stagedGeneration.sections.length, // Force update when length changes
   ]);
 

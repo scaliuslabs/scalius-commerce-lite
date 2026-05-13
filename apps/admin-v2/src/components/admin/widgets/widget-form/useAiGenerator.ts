@@ -95,8 +95,8 @@ function withGenerationTimeout<T>(promise: Promise<T>, signal: AbortSignal, onTi
 }
 
 function toastForGenerationEvent(event: WidgetGenerationRunEvent): void {
-  if (event.type !== 'step.started') return;
-  const label = GENERATION_STEP_LABELS[event.step];
+  if (event.type !== 'step.started' && event.type !== 'tool.started') return;
+  const label = GENERATION_STEP_LABELS[event.type === 'tool.started' ? event.tool : event.step];
   if (label) toast.info(label);
 }
 
@@ -144,7 +144,7 @@ export const useAiGenerator = (
   const generationRunIdRef = useRef(0);
   const generationAbortRef = useRef<AbortController | null>(null);
 
-  // Deep composition hook (keeps the existing state shape used by section editing).
+  // Section metadata is kept for targeted improvements; generation itself is server-owned.
   const stagedGeneration = useStagedGeneration();
 
   const reloadAiSettings = useCallback(() => {
@@ -452,45 +452,6 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
     }
   };
 
-  // Compute generation progress for preview
-  const generationProgress =
-    stagedGeneration.isGenerating || stagedGeneration.plan
-      ? (() => {
-          const totalSections = stagedGeneration.plan?.totalSections ?? 1;
-
-          if (stagedGeneration.currentStage === 'planning') {
-            return {
-              currentStage: 'Preparing composition blueprint...',
-              totalSections,
-              percentage: 10,
-            };
-          }
-
-          if (stagedGeneration.currentStage === 'generating') {
-            return {
-              currentStage: 'Generating one cohesive widget...',
-              totalSections,
-              percentage: 70,
-            };
-          }
-
-          if (stagedGeneration.currentStage === 'complete') {
-            return {
-              currentStage: 'Widget generation complete',
-              totalSections,
-              percentage: 100,
-            };
-          }
-
-          return {
-            currentStage: 'Finalizing composition...',
-            currentSection: stagedGeneration.currentSectionIndex,
-            totalSections,
-            percentage: 90,
-          };
-        })()
-      : undefined;
-
   return {
     promptType,
     effectivePromptType,
@@ -524,7 +485,15 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
     useStagedMode,
     setUseStagedMode,
     stagedGeneration,
-    generationProgress,
+    generationProgress: isLoadingPrompt
+      ? {
+          currentStage: useStagedMode
+            ? 'Running server generation with composition blueprint...'
+            : 'Running fast server generation...',
+          totalSections: 1,
+          percentage: 65,
+        }
+      : undefined,
     getMergedProductIds,
     getMergedCategoryIds,
     getMergedCollectionIds,

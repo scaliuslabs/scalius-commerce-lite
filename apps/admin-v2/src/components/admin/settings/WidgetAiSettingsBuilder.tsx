@@ -682,7 +682,7 @@ export default function WidgetAiSettingsBuilder() {
         <div>
           <h3 className="text-sm font-semibold">Generation defaults</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            These defaults apply to widget creation, improvement, and deep composition mode.
+            These defaults apply to widget creation, improvement, and the optional composition blueprint.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-5">
@@ -749,9 +749,9 @@ export default function WidgetAiSettingsBuilder() {
         </div>
         <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
           <div>
-            <Label htmlFor="staged-generation-default">Use deep composition by default</Label>
+            <Label htmlFor="staged-generation-default">Use composition blueprint by default</Label>
             <p className="mt-1 text-xs text-muted-foreground">
-              Adds a destination blueprint while still using one fast model call. Keep off for the shortest output.
+              Adds destination-specific structure while still using one server-owned generation run. Keep off for the shortest output.
             </p>
           </div>
           <Switch

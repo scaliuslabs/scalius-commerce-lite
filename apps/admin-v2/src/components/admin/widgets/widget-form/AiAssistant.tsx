@@ -237,10 +237,10 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                   <Layers className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-0.5">
                     <Label htmlFor="staged-mode" className="text-sm font-medium cursor-pointer">
-                      Deep composition
+                      Composition blueprint
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Adds a destination blueprint while still generating in one fast model call.
+                      Adds page-specific structure for complex widgets while keeping one server-owned generation run.
                     </p>
                   </div>
                 </div>
@@ -251,66 +251,6 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
                   disabled={!isApiKeySet}
                 />
               </div>
-
-              {stagedGeneration.isGenerating && stagedGeneration.plan && (
-                <div className="rounded-md bg-muted p-3 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">
-                      {stagedGeneration.currentStage === 'planning'
-                        ? 'Preparing blueprint...'
-                        : stagedGeneration.currentStage === 'complete'
-                          ? 'Widget generation complete'
-                          : 'Generating one cohesive widget...'}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {stagedGeneration.currentStage === 'planning'
-                        ? '10%'
-                        : stagedGeneration.currentStage === 'complete'
-                          ? '100%'
-                          : '70%'}
-                    </span>
-                  </div>
-                  <div className="w-full bg-background rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-primary h-full transition-all duration-300"
-                      style={{
-                        width:
-                          stagedGeneration.currentStage === 'planning'
-                            ? '10%'
-                            : stagedGeneration.currentStage === 'complete'
-                              ? '100%'
-                              : '70%',
-                      }}
-                    />
-                  </div>
-                  {stagedGeneration.plan.sectionDescriptions && (
-                    <div className="text-xs text-muted-foreground space-y-1 pt-1">
-                      {stagedGeneration.plan.sectionDescriptions.map((desc, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            'flex items-center gap-2',
-                            stagedGeneration.currentStage === 'complete' && 'text-primary',
-                            stagedGeneration.currentStage !== 'complete' && i === 0 && 'font-medium',
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'w-4 h-4 rounded-full border flex items-center justify-center text-[10px]',
-                              stagedGeneration.currentStage === 'complete' &&
-                                'bg-primary text-primary-foreground border-primary',
-                              stagedGeneration.currentStage !== 'complete' && i === 0 && 'border-primary',
-                            )}
-                          >
-                            {stagedGeneration.currentStage === 'complete' ? '✓' : i + 1}
-                          </span>
-                          <span>{desc}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
               <div className="space-y-4">
                 <h4 className="text-sm font-medium">Store context</h4>
@@ -361,7 +301,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
               <div className="mt-2 space-y-1">
                 <p>Uses only HTML/CSS. Scripts are rejected before storefront rendering.</p>
                 <p>Selected products provide real buy-now URLs, pricing, images, and category context.</p>
-                <p>Deep composition adds a destination blueprint without serial section calls.</p>
+                <p>Generation, improvement, context hydration, and validation run through one API pipeline.</p>
               </div>
             </div>
           </div>
