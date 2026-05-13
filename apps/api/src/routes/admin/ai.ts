@@ -103,6 +103,7 @@ const generateStagedSchema = z.object({
 });
 
 type GenerateTextOptions = Parameters<typeof generateText>[0];
+type GenerateTextResult = Awaited<ReturnType<typeof generateText>>;
 type GenerationUsage = {
   inputTokens?: number;
   outputTokens?: number;
@@ -400,6 +401,51 @@ function structuredGenerationFailureDetails(error: unknown): Record<string, unkn
   };
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? '');
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('aborted'));
+}
+
+function isTransientProviderError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes('8005') ||
+    message.includes('internal server error') ||
+    message.includes('service unavailable') ||
+    message.includes('temporarily unavailable') ||
+    message.includes('gateway timeout') ||
+    message.includes('network error') ||
+    message.includes('timeout')
+  );
+}
+
+async function generateTextWithTransientRetry(
+  options: GenerateTextOptions,
+  operation: string,
+): Promise<GenerateTextResult> {
+  try {
+    return await generateText(options);
+  } catch (error) {
+    if (isAbortError(error) || !isTransientProviderError(error)) {
+      throw error;
+    }
+
+    console.warn(`${operation} failed with a transient AI provider error; retrying once.`, {
+      message: getErrorMessage(error),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return await generateText({
+      ...options,
+      temperature: typeof options.temperature === 'number' ? Math.min(options.temperature, 0.5) : options.temperature,
+      maxRetries: 1,
+    });
+  }
+}
+
 function warnStructuredGenerationFallback(scope: string, error: unknown): void {
   console.warn(
     `${scope} structured generation failed; falling back to text.`,
@@ -477,7 +523,7 @@ async function generateWidgetContent(
     }
   }
 
-  const result = await generateText(options);
+  const result = await generateTextWithTransientRetry(options, 'Widget generation');
   try {
     return {
       text: normalizeWidgetGenerationText(result.text),
@@ -485,7 +531,10 @@ async function generateWidgetContent(
     };
   } catch (error) {
     console.warn('Widget response failed validation; retrying once:', error);
-    const retry = await generateText(addWidgetFormatRetryInstruction(options));
+    const retry = await generateTextWithTransientRetry(
+      addWidgetFormatRetryInstruction(options),
+      'Widget format repair',
+    );
     return {
       text: normalizeWidgetGenerationText(retry.text),
       usage: usageFromResult(retry),
@@ -535,7 +584,7 @@ async function generateStagedPlan(
     }
   }
 
-  const result = await generateText(options);
+  const result = await generateTextWithTransientRetry(options, 'Staged plan generation');
   try {
     return {
       text: normalizeStagedPlanText(result.text),
@@ -543,7 +592,10 @@ async function generateStagedPlan(
     };
   } catch (error) {
     console.warn('Text staged plan failed validation; retrying once:', error);
-    const retry = await generateText(addStagedPlanRetryInstruction(options));
+    const retry = await generateTextWithTransientRetry(
+      addStagedPlanRetryInstruction(options),
+      'Staged plan repair',
+    );
     return {
       text: normalizeStagedPlanText(retry.text),
       usage: usageFromResult(retry),
