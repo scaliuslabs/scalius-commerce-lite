@@ -2,7 +2,7 @@
 // Shared business logic for processing confirmed payments.
 // Called by both Stripe and SSLCommerz webhook handlers after signature verification.
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   orders,
   orderItems,
@@ -17,9 +17,19 @@ import type { Database } from "@scalius/database/client";
 import { releaseMultiple } from "../inventory/release";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "../settings/settings.service";
-import { buildInventoryStatements } from "../inventory/inventory-transitions";
 import { validateTransition } from "../orders/order-state-machine";
 import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
+
+const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
+
+function isConstraintError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /constraint|unique|primary key/i.test(message);
+}
+
+function paymentRecordMatchesAmount(recordedAmount: number, incomingAmount: number): boolean {
+  return pricesEqual(roundPrice(recordedAmount), roundPrice(incomingAmount));
+}
 
 /**
  * Process a confirmed payment event.
@@ -28,8 +38,6 @@ import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
  * 1. Records the payment in orderPayments
  * 2. Updates order.paidAmount, order.paymentStatus, order.balanceDue
  * 3. Updates paymentPlans if applicable
- * 4. Permanently deducts inventory (converts reservation → deduction)
- * 5. Triggers low-stock alert checks
  *
  * Idempotent: checking for existing orderPayments prevents double-processing.
  */
@@ -38,122 +46,146 @@ export async function processPaymentConfirmed(
   params: ProcessPaymentParams
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // ── 0. Duplicate payment check FIRST (before any mutations) ──
-    // SAFETY: Unique partial indexes on orderPayments(orderId, stripePaymentIntentId),
-    // (orderId, sslcommerzTranId), and (orderId, polarCheckoutId) prevent duplicates
-    // at the DB level. This SELECT is an optimization to avoid unnecessary batch
-    // operations, not the primary idempotency guarantee.
+    // ── 0. Claim or resume the gateway payment record ──
+    // Unique partial indexes on the gateway IDs are the primary idempotency
+    // guarantee. We store a pending local claim first, then mark it succeeded
+    // only after the order amount update wins its optimistic-lock check.
+    let paymentId: string | undefined;
     if (params.stripePaymentIntentId) {
       const existing = await db
-        .select({ id: orderPayments.id })
+        .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
         .from(orderPayments)
         .where(eq(orderPayments.stripePaymentIntentId, params.stripePaymentIntentId))
         .get();
-      if (existing) return { success: true }; // Already processed
+      if (existing) {
+        if (!paymentRecordMatchesAmount(existing.amount, params.amount)) {
+          return { success: false, error: "Existing Stripe payment amount does not match webhook amount" };
+        }
+        if (existing.status === "succeeded") return { success: true };
+        paymentId = existing.id;
+      }
     }
-    if (params.sslcommerzTranId) {
+    if (!paymentId && params.sslcommerzTranId) {
       const existing = await db
-        .select({ id: orderPayments.id })
+        .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
         .from(orderPayments)
         .where(eq(orderPayments.sslcommerzTranId, params.sslcommerzTranId))
         .get();
-      if (existing) return { success: true };
+      if (existing) {
+        if (!paymentRecordMatchesAmount(existing.amount, params.amount)) {
+          return { success: false, error: "Existing SSLCommerz payment amount does not match webhook amount" };
+        }
+        if (existing.status === "succeeded") return { success: true };
+        paymentId = existing.id;
+      }
     }
-    if (params.polarCheckoutId) {
+    if (!paymentId && params.polarCheckoutId) {
       const existing = await db
-        .select({ id: orderPayments.id })
+        .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
         .from(orderPayments)
         .where(eq(orderPayments.polarCheckoutId, params.polarCheckoutId))
         .get();
-      if (existing) return { success: true };
+      if (existing) {
+        if (!paymentRecordMatchesAmount(existing.amount, params.amount)) {
+          return { success: false, error: "Existing Polar payment amount does not match webhook amount" };
+        }
+        if (existing.status === "succeeded") return { success: true };
+        paymentId = existing.id;
+      }
     }
 
-    // ── 1. Fetch the order ──
-    const order = await db
-      .select({
-        id: orders.id,
-        totalAmount: orders.totalAmount,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
-        paymentStatus: orders.paymentStatus,
-        status: orders.status,
-        inventoryPool: orders.inventoryPool,
-      })
-      .from(orders)
-      .where(eq(orders.id, params.orderId))
-      .get();
-
-    if (!order) {
-      return { success: false, error: `Order ${params.orderId} not found` };
-    }
-
-    // Guard: already fully paid
-    if (order.paymentStatus === PaymentStatus.PAID) {
-      return { success: true }; // Idempotent — already processed
-    }
-
-    const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
-    const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
-    const isFullyPaid = pricesEqual(newBalanceDue, 0); // Allow tiny float drift
-
-    // Determine new statuses
-    const newPaymentStatus = isFullyPaid
-      ? PaymentStatus.PAID
-      : PaymentStatus.PARTIAL;
-    const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
-
-    // ── 2. Validate state transitions before any writes ──
-    validateTransition("order", order.status, newStatus);
-    validateTransition("payment", order.paymentStatus, newPaymentStatus);
-
-    // Fetch currency config
     const currencyConfig = await getCurrencyConfig(db);
+    if (!paymentId) {
+      paymentId = crypto.randomUUID();
+      try {
+        await db.insert(orderPayments).values({
+          id: paymentId,
+          orderId: params.orderId,
+          amount: params.amount,
+          currency: currencyConfig.code,
+          paymentMethod: params.paymentGateway,
+          paymentType: params.paymentType,
+          status: "pending",
+          stripePaymentIntentId: params.stripePaymentIntentId ?? null,
+          stripeChargeId: params.stripeChargeId ?? null,
+          sslcommerzTranId: params.sslcommerzTranId ?? null,
+          sslcommerzValId: params.sslcommerzValId ?? null,
+          sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
+          polarCheckoutId: params.polarCheckoutId ?? null,
+          metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+          createdAt: sql`unixepoch()`,
+          updatedAt: sql`unixepoch()`,
+        });
+      } catch (error: unknown) {
+        if (!isConstraintError(error)) throw error;
+        return { success: false, error: "Payment is already being processed. Please retry shortly." };
+      }
+    }
 
-    // ── 3. Record payment + update order + apply inventory atomically ──
-    // All writes are batched in a single D1 transaction — all succeed or all
-    // roll back. This prevents the prior split-write bug where payment could
-    // be recorded but inventory left un-deducted on a partial failure.
+    let isFullyPaid = false;
+    let paymentApplied = false;
+    for (let attempt = 0; attempt < PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS; attempt += 1) {
+      // ── 1. Fetch the latest order version for a CAS-safe amount update ──
+      const order = await db
+        .select({
+          id: orders.id,
+          totalAmount: orders.totalAmount,
+          paidAmount: orders.paidAmount,
+          balanceDue: orders.balanceDue,
+          paymentStatus: orders.paymentStatus,
+          status: orders.status,
+          inventoryPool: orders.inventoryPool,
+          version: orders.version,
+        })
+        .from(orders)
+        .where(eq(orders.id, params.orderId))
+        .get();
 
-    const paymentId = crypto.randomUUID();
+      if (!order) {
+        return { success: false, error: `Order ${params.orderId} not found` };
+      }
 
-    // Build inventory statements (CAS-based stock ops execute internally;
-    // only the inventoryAction flag update is returned for batching).
-    const { statements: inventoryStmts } = await buildInventoryStatements(
-      db,
-      params.orderId,
-      newStatus,
-    );
+      if (order.paymentStatus === PaymentStatus.PAID) {
+        return { success: false, error: "Order is already fully paid; payment requires manual reconciliation" };
+      }
 
-    // Atomic batch: payment insert + order update + inventory action update
-    await db.batch([
-      db.insert(orderPayments).values({
-        id: paymentId,
-        orderId: params.orderId,
-        amount: params.amount,
-        currency: currencyConfig.code,
-        paymentMethod: params.paymentGateway,
-        paymentType: params.paymentType,
-        status: "succeeded",
-        stripePaymentIntentId: params.stripePaymentIntentId ?? null,
-        stripeChargeId: params.stripeChargeId ?? null,
-        sslcommerzTranId: params.sslcommerzTranId ?? null,
-        sslcommerzValId: params.sslcommerzValId ?? null,
-        sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
-        polarCheckoutId: params.polarCheckoutId ?? null,
-        metadata: params.metadata ? JSON.stringify(params.metadata) : null,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      }),
-      db.update(orders).set({
+      const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
+      const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
+      isFullyPaid = pricesEqual(newBalanceDue, 0);
+      const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
+      const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
+
+      validateTransition("order", order.status, newStatus);
+      validateTransition("payment", order.paymentStatus, newPaymentStatus);
+
+      const orderUpdate = await db.update(orders).set({
         status: newStatus,
         paidAmount: newPaidAmount,
         balanceDue: newBalanceDue,
         paymentStatus: newPaymentStatus,
+        version: order.version + 1,
         updatedAt: sql`unixepoch()`,
-      }).where(eq(orders.id, params.orderId)),
-      ...inventoryStmts,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    ] as any);
+      }).where(and(
+        eq(orders.id, params.orderId),
+        eq(orders.version, order.version),
+      )).returning({ id: orders.id });
+
+      if (orderUpdate.length === 0) {
+        continue;
+      }
+
+      await db.update(orderPayments).set({
+        status: "succeeded",
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(orderPayments.id, paymentId));
+
+      paymentApplied = true;
+      break;
+    }
+
+    if (!paymentApplied) {
+      return { success: false, error: "Order was modified concurrently while applying payment; retry required" };
+    }
 
     // ── 4. Update payment plan if applicable ──
     if (params.paymentType === "deposit") {
