@@ -16,6 +16,12 @@ export interface WidgetGenerationRunRequest {
   promptType: "widget" | "landing-page" | "collection";
   operation: "create" | "improve";
   userPrompt: string;
+  deepComposition?: boolean;
+  existingHtml?: string;
+  existingCss?: string;
+  targetSection?: number;
+  sections?: Array<{ html: string; css: string; description?: string }>;
+  improvementHistory?: Array<{ section?: number; prompt: string; timestamp: number; modelUsed?: string }>;
   selectedImages?: Array<{ url: string; mimeType?: string; alt?: string }>;
   productIds?: string[];
   categoryIds?: string[];

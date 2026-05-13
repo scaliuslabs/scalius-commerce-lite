@@ -19,7 +19,7 @@ type StructuredPromptParams = Parameters<typeof generateCompletePrompt>[0];
 type AiProductData = StructuredPromptParams['selectedProducts'][number];
 type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
-type GenerationRun = { id: number; signal: AbortSignal };
+type GenerationRun = { id: number; controller: AbortController; signal: AbortSignal };
 const SERVER_GENERATION_TIMEOUT_MS = 95_000;
 const GENERATION_STEP_LABELS: Record<string, string> = {
   load_settings: 'Checking AI provider settings...',
@@ -58,14 +58,19 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
-function withGenerationTimeout<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+function withGenerationTimeout<T>(promise: Promise<T>, signal: AbortSignal, onTimeout?: (error: DOMException) => void): Promise<T> {
   if (signal.aborted) {
     return Promise.reject(new DOMException('Generation cancelled', 'AbortError'));
   }
 
   return new Promise<T>((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
-      reject(new Error('Widget generation timed out. Please try again with a smaller context or faster model.'));
+      const error = new DOMException(
+        'Widget generation timed out. Please try again with a smaller context or faster model.',
+        'TimeoutError',
+      );
+      onTimeout?.(error);
+      reject(error);
     }, SERVER_GENERATION_TIMEOUT_MS);
 
     const abort = () => {
@@ -151,7 +156,7 @@ export const useAiGenerator = (
     const controller = new AbortController();
     generationAbortRef.current = controller;
     generationRunIdRef.current += 1;
-    return { id: generationRunIdRef.current, signal: controller.signal };
+    return { id: generationRunIdRef.current, controller, signal: controller.signal };
   };
 
   const isActiveGenerationRun = (run: GenerationRun): boolean =>
@@ -337,6 +342,7 @@ export const useAiGenerator = (
         promptType: effectivePromptType,
         operation: 'create',
         userPrompt: getPlacementAwarePrompt(),
+        deepComposition: useStagedMode,
         selectedImages,
         productIds: getMergedProductIds(),
         categoryIds: getMergedCategoryIds(),
@@ -353,7 +359,7 @@ export const useAiGenerator = (
             notifyAiContextWarnings({ warnings: event.warnings as AiContextBatchDetails['warnings'] } as AiContextBatchDetails);
           }
         },
-      }), run.signal);
+      }), run.signal, (error) => run.controller.abort(error));
       if (!isActiveGenerationRun(run)) return;
       setRawOutput(result.raw);
       setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(result.raw)));

@@ -23,14 +23,15 @@ export async function fetchWidgetAi(
     controller.abort(createTimeoutError());
   }, timeoutMs);
 
-  try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-    });
-  } finally {
+  const response = await fetch(input, {
+    ...init,
+    signal: controller.signal,
+  });
+
+  if (!response.body) {
     if (timeoutId) clearTimeout(timeoutId);
     init.signal?.removeEventListener('abort', abortFromParent);
   }
-}
 
+  return response;
+}

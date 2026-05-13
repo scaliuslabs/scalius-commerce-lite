@@ -53,11 +53,19 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
     throw new Error(validation.error || 'Invalid widget structure');
   }
 
-  const widgetData = parsed.data as { html: string; css?: string };
-  assertUsableCss(widgetData.css || '');
+  const widgetData = parsed.data as {
+    html?: string;
+    htmljs?: string;
+    htmlContent?: string;
+    css?: string;
+    cssContent?: string;
+  };
+  const html = widgetData.html || widgetData.htmljs || widgetData.htmlContent || '';
+  const css = widgetData.css || widgetData.cssContent || '';
+  assertUsableCss(css);
   return {
-    html: widgetData.html,
-    css: widgetData.css || '',
+    html,
+    css,
   };
 }
 
@@ -65,4 +73,3 @@ export function normalizeGeneratedWidgetContent(widget: GeneratedWidgetContent):
   const html = stripWidgetRuntimeMarkup(widget.html);
   return { html, css: `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}` };
 }
-

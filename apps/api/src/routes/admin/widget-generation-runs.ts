@@ -30,6 +30,31 @@ const widgetGenerationRunSchema = z.object({
   promptType: promptTypeSchema.default("widget"),
   operation: z.enum(["create", "improve"]).default("create"),
   userPrompt: z.string().min(1).max(20_000),
+  deepComposition: z.boolean().optional(),
+  existingHtml: z.string().max(200_000).optional(),
+  existingCss: z.string().max(200_000).optional(),
+  targetSection: z.number().int().min(0).optional(),
+  sections: z
+    .array(
+      z.object({
+        html: z.string().max(100_000),
+        css: z.string().max(100_000).optional().default(""),
+        description: z.string().max(240).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
+  improvementHistory: z
+    .array(
+      z.object({
+        section: z.number().int().min(0).optional(),
+        prompt: z.string().max(2_000),
+        timestamp: z.number().optional(),
+        modelUsed: z.string().max(200).optional(),
+      }),
+    )
+    .max(30)
+    .optional(),
   selectedImages: z
     .array(
       z
@@ -84,6 +109,52 @@ function toPromptImages(images: z.infer<typeof widgetGenerationRunSchema>["selec
     size: typeof image.size === "number" ? image.size : 0,
     createdAt: image.createdAt instanceof Date ? image.createdAt : new Date(0),
   }));
+}
+
+type WidgetGenerationRunPayload = z.infer<typeof widgetGenerationRunSchema>;
+
+function getImprovementCode(payload: WidgetGenerationRunPayload): { html: string; css: string } {
+  if (payload.targetSection !== undefined && payload.sections?.[payload.targetSection]) {
+    const section = payload.sections[payload.targetSection]!;
+    return { html: section.html, css: section.css || "" };
+  }
+
+  return {
+    html: payload.existingHtml || "",
+    css: payload.existingCss || "",
+  };
+}
+
+function buildImprovementInstruction(payload: WidgetGenerationRunPayload): string {
+  const parts = [payload.userPrompt.trim()];
+
+  if (payload.improvementHistory?.length) {
+    parts.push(
+      `PREVIOUS IMPROVEMENTS:\n${payload.improvementHistory
+        .map(
+          (entry, index) =>
+            `${index + 1}. ${entry.section !== undefined ? `Section ${entry.section + 1}` : "Whole widget"}: "${entry.prompt}"`,
+        )
+        .join("\n")}\nBuild on these previous improvements. Do not revert earlier accepted changes.`,
+    );
+  }
+
+  if (payload.targetSection !== undefined && payload.sections && payload.sections.length > 1) {
+    const otherSections = payload.sections
+      .map((section, index) => {
+        if (index === payload.targetSection) return null;
+        return `Section ${index + 1}${section.description ? ` (${section.description})` : ""}:\n<htmljs>\n${section.html}\n</htmljs>\n<css>\n${section.css || "/* No CSS */"}\n</css>`;
+      })
+      .filter(Boolean);
+
+    if (otherSections.length > 0) {
+      parts.push(
+        `OTHER SECTIONS CONTEXT:\nYou are improving Section ${payload.targetSection + 1} of ${payload.sections.length}. Keep visual continuity with these sections, but return only the improved target section code.\n\n${otherSections.join("\n\n")}`,
+      );
+    }
+  }
+
+  return parts.join("\n\n");
 }
 
 app.post("/", async (c) => {
@@ -151,9 +222,13 @@ app.post("/", async (c) => {
           "build_prompt",
           async () => {
             const systemPrompt = await getWidgetAiPrompt(db, payload.promptType);
+            const improvementCode = payload.operation === "improve" ? getImprovementCode(payload) : null;
             return generateStructuredPrompt({
               systemPrompt,
-              userPrompt: payload.userPrompt,
+              userPrompt: payload.operation === "create" ? payload.userPrompt : undefined,
+              improvementPrompt: payload.operation === "improve" ? buildImprovementInstruction(payload) : undefined,
+              existingHtml: improvementCode?.html,
+              existingCss: improvementCode?.css,
               selectedImages: toPromptImages(payload.selectedImages),
               selectedProducts: contextData.products,
               selectedCategories: contextData.categories,
@@ -163,6 +238,8 @@ app.post("/", async (c) => {
               supportsVision: payload.supportsVision === true,
               maxImagesOverride: payload.maxImages,
               promptType: payload.promptType,
+              sectionIndex: payload.targetSection,
+              totalSections: payload.sections?.length,
             });
           },
           (value) => ({
@@ -175,7 +252,7 @@ app.post("/", async (c) => {
           const messages = withDestinationRuntimeContract(
             normalizeMessages(promptResult.messages),
             payload.promptType,
-            { compositionMode: true },
+            { compositionMode: payload.deepComposition === true },
           );
           return generateWidgetContent(
             {

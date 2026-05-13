@@ -1,5 +1,6 @@
 // src/lib/shortcodes.ts
 import { getProductBySlug, getWidgetById } from "@/lib/api";
+import { escapeHtml } from "@scalius/shared/html-escape";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
 import { withOptimizedProductPageImages } from "./serialized-media";
 import { prepareWidgetContent } from "./widget-content";
@@ -47,9 +48,10 @@ export function parseShortcodes(content: string): ShortcodeMatch[] {
 export async function renderWidgetShortcode(widgetId: string): Promise<string> {
   try {
     const widgetData = await getWidgetById(widgetId);
+    const safeWidgetId = escapeHtml(widgetId);
 
     if (!widgetData || !widgetData.isActive) {
-      return `<div class="shortcode-error">Widget not found or inactive: ${widgetId}</div>`;
+      return `<div class="shortcode-error">Widget not found or inactive: ${safeWidgetId}</div>`;
     }
 
     const { scopeClass, css, html: preparedHtml } =
@@ -59,10 +61,10 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
       html = `<style>${css}</style>${html}`;
     }
 
-    return `<div class="widget-shortcode not-prose cms-widget-frame ${scopeClass}" data-widget-id="${widgetId}" data-scalius-widget-root="true">${html}</div>`;
+    return `<div class="widget-shortcode not-prose cms-widget-frame ${scopeClass}" data-widget-id="${safeWidgetId}" data-scalius-widget-root="true">${html}</div>`;
   } catch (error: unknown) {
     console.error("Error rendering widget shortcode:", error);
-    return `<div class="shortcode-error">Error loading widget: ${widgetId}</div>`;
+    return `<div class="shortcode-error">Error loading widget: ${escapeHtml(widgetId)}</div>`;
   }
 }
 
@@ -72,9 +74,10 @@ export async function renderProductShortcode(
 ): Promise<string> {
   try {
     const productData = await getProductBySlug(productSlug);
+    const safeProductSlug = escapeHtml(productSlug);
 
     if (!productData) {
-      return `<div class="shortcode-error">Product not found: ${productSlug}</div>`;
+      return `<div class="shortcode-error">Product not found: ${safeProductSlug}</div>`;
     }
 
     // Encode as URI component for safe embedding in data attribute
@@ -86,7 +89,7 @@ export async function renderProductShortcode(
     return `<div class="product-shortcode-container" data-props="${props}"></div>`;
   } catch (error: unknown) {
     console.error("Error rendering product shortcode:", error);
-    return `<div class="shortcode-error">Error loading product: ${productSlug}</div>`;
+    return `<div class="shortcode-error">Error loading product: ${escapeHtml(productSlug)}</div>`;
   }
 }
 
