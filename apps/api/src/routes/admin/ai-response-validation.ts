@@ -198,6 +198,85 @@ export function normalizeWidgetOutput(output: WidgetOutput, options?: WidgetNorm
   return normalizeWidgetGenerationText(widgetOutputToTaggedText(output), options);
 }
 
+export function createNoContextFallbackWidget(): string {
+  return normalizeWidgetGenerationText(
+    `<htmljs>
+      <section class="sc-ai-safe-widget" aria-label="Store discovery">
+        <div class="sc-ai-safe-widget__inner">
+          <div class="sc-ai-safe-widget__copy">
+            <p class="sc-ai-safe-widget__eyebrow">Store discovery</p>
+            <h2>Explore the range</h2>
+            <p>Find a fresh pick for your everyday routine, then continue browsing the store.</p>
+          </div>
+          <div class="sc-ai-safe-widget__actions" aria-label="Suggested browsing paths">
+            <span>Browse options</span>
+            <span>Compare picks</span>
+            <span>Choose your fit</span>
+          </div>
+        </div>
+      </section>
+    </htmljs>
+    <css>
+      .sc-ai-safe-widget {
+        margin: 0;
+        padding: 28px 16px;
+        color: #121417;
+        background: linear-gradient(135deg, #f6f7f9 0%, #ffffff 48%, #eef7f1 100%);
+      }
+      .sc-ai-safe-widget__inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 20px;
+        align-items: center;
+      }
+      .sc-ai-safe-widget__eyebrow {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #3a6b4d;
+      }
+      .sc-ai-safe-widget h2 {
+        margin: 0;
+        font-size: clamp(28px, 5vw, 48px);
+        line-height: 1;
+      }
+      .sc-ai-safe-widget p {
+        margin: 12px 0 0;
+        max-width: 56ch;
+        color: #4f5963;
+        font-size: 16px;
+        line-height: 1.55;
+      }
+      .sc-ai-safe-widget__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      .sc-ai-safe-widget__actions span {
+        border: 1px solid #d5dce3;
+        border-radius: 999px;
+        padding: 9px 13px;
+        background: rgba(255,255,255,0.72);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      @media (max-width: 720px) {
+        .sc-ai-safe-widget__inner {
+          grid-template-columns: 1fr;
+        }
+        .sc-ai-safe-widget__actions {
+          justify-content: flex-start;
+        }
+      }
+    </css>`,
+    { commerceFactsProvided: false },
+  );
+}
+
 export function normalizeStagedPlanText(text: string): string {
   const parsed = parseJSONSafely(text);
   if (!parsed.success) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '../../utils/api-error';
 import {
+  createNoContextFallbackWidget,
   normalizeStagedPlanOutput,
   normalizeStagedPlanText,
   normalizeWidgetGenerationText,
@@ -82,6 +83,15 @@ describe('AI response validation', () => {
         { commerceFactsProvided: false },
       ),
     ).toContain('Explore the range');
+  });
+
+  it('provides a deterministic safe fallback for no-context generations', () => {
+    const output = createNoContextFallbackWidget();
+
+    expect(output).toContain('<htmljs>');
+    expect(output).toContain('Explore the range');
+    expect(output).not.toMatch(/https?:\/\//i);
+    expect(output).not.toMatch(/\b(?:shipping|delivery|guarantee|review|limited)\b/i);
   });
 
   it('canonicalizes valid staged plans', () => {
