@@ -109,6 +109,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
   const [improvementPrompt, setImprovementPrompt] = useState('');
   const [targetSection, setTargetSection] = useState<'all' | number>('all');
   const [showHistory, setShowHistory] = useState(false);
+  const [previewFrameHeight, setPreviewFrameHeight] = useState(360);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -124,7 +125,37 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
     }
   }, [isOpen, mode, content, rawOutput]);
 
+  useEffect(() => {
+    setPreviewFrameHeight(360);
+  }, [content?.html, content?.css, previewWidth]);
+
   if (!isOpen) return null;
+
+  const handlePreviewFrameLoad = (event: React.SyntheticEvent<HTMLIFrameElement>) => {
+    const iframe = event.currentTarget;
+    const measure = () => {
+      try {
+        const documentElement = iframe.contentDocument?.documentElement;
+        const body = iframe.contentDocument?.body;
+        const measuredHeight = Math.max(
+          documentElement?.scrollHeight ?? 0,
+          documentElement?.offsetHeight ?? 0,
+          body?.scrollHeight ?? 0,
+          body?.offsetHeight ?? 0,
+        );
+
+        if (measuredHeight > 0) {
+          setPreviewFrameHeight(Math.min(4800, Math.max(160, Math.ceil(measuredHeight))));
+        }
+      } catch {
+        setPreviewFrameHeight(360);
+      }
+    };
+
+    measure();
+    window.setTimeout(measure, 100);
+    window.setTimeout(measure, 500);
+  };
 
   const handleImprove = async () => {
     if (!improvementPrompt.trim()) {
@@ -360,14 +391,15 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
               </div>
             </div>
           ) : content ? (
-            <div className="flex h-full items-center justify-center p-3 sm:p-8">
+            <div className="flex min-h-full items-start justify-center p-3 sm:p-8">
               <div
                 className={cn(
                   'bg-white shadow-2xl rounded-lg overflow-hidden transition-all duration-300',
-                  previewWidth === '100%' && 'w-full h-full',
-                  previewWidth === '768px' && 'w-[min(768px,100%)] h-full',
-                  previewWidth === '375px' && 'w-[min(375px,100%)] h-full'
+                  previewWidth === '100%' && 'w-full',
+                  previewWidth === '768px' && 'w-[min(768px,100%)]',
+                  previewWidth === '375px' && 'w-[min(375px,100%)]'
                 )}
+                style={{ height: `${previewFrameHeight}px` }}
               >
                 <iframe
                   srcDoc={content ? `
@@ -392,8 +424,9 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                     </html>
                   ` : ''}
                   className="w-full h-full border-0"
-                  sandbox=""
+                  sandbox="allow-same-origin"
                   title="Widget Preview"
+                  onLoad={handlePreviewFrameLoad}
                 />
               </div>
             </div>
