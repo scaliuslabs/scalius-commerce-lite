@@ -23,6 +23,7 @@ import {
   apiBaseGet,
   apiBasePost,
 } from "./api.server";
+import { generateStructuredPrompt } from "@scalius/core/modules/ai/prompt-helper-v2";
 
 // TanStack Start's .handler() has overly strict generics with async functions.
 // This cast helper satisfies the type checker without changing runtime behavior.
@@ -2112,6 +2113,67 @@ export const getAiContextBatchDetails = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
   .handler(async ({ data }) => {
     return apiPost("/ai-context/batch-details", data);
+  });
+
+function extractGeneratedContentFromCompletion(payload: unknown): string {
+  const completion = payload as {
+    choices?: Array<{ message?: { content?: string | null } }>;
+    error?: { message?: string };
+  };
+  const content = completion?.choices?.[0]?.message?.content;
+  if (typeof content === "string" && content.trim()) return content;
+  const errorMessage = completion?.error?.message;
+  if (typeof errorMessage === "string" && errorMessage.trim()) {
+    throw new Error(errorMessage);
+  }
+  throw new Error("No content in AI response");
+}
+
+export const generateWidgetFromIntent = createServerFn({ method: "POST" })
+  .inputValidator((data: Record<string, unknown>) => data)
+  .handler(async ({ data }) => {
+    const promptType = typeof data.promptType === "string" ? data.promptType : "widget";
+    const [systemPrompt, contextData] = await Promise.all([
+      apiGetText("/ai-prompts", { type: promptType }),
+      apiPost("/ai-context/batch-details", {
+        productIds: data.productIds,
+        categoryIds: data.allCategoriesSelected ? undefined : data.categoryIds,
+        collectionIds: data.collectionIds,
+        anchorCollectionIds: data.anchorCollectionIds,
+        allCategories: data.allCategoriesSelected,
+      }),
+    ]);
+
+    const promptResult = await generateStructuredPrompt({
+      systemPrompt,
+      userPrompt: String(data.userPrompt || ""),
+      selectedImages: Array.isArray(data.selectedImages) ? data.selectedImages : [],
+      selectedProducts: Array.isArray(contextData?.products) ? contextData.products : [],
+      selectedCategories: Array.isArray(contextData?.categories) ? contextData.categories : [],
+      selectedCollections: Array.isArray(contextData?.collections) ? contextData.collections : [],
+      allCategoriesSelected: data.allCategoriesSelected === true,
+      modelId: String(data.model || ""),
+      supportsVision: data.supportsVision === true,
+      maxImagesOverride: typeof data.maxImages === "number" ? data.maxImages : undefined,
+      promptType,
+    });
+
+    const completion = await apiPost("/ai/generate", {
+      provider: data.provider,
+      model: data.model,
+      promptType,
+      messages: promptResult.messages,
+      compositionMode: true,
+      stream: false,
+      operation: "create",
+    });
+
+    return {
+      content: extractGeneratedContentFromCompletion(completion),
+      completion,
+      warnings: contextData?.warnings,
+      metadata: promptResult.metadata,
+    };
   });
 
 // ═══════════════════════════════════════════════════════════════════

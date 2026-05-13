@@ -1,31 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  generateCompletePrompt,
-  generateStructuredPrompt,
-  type StructuredPromptResult,
-} from '@scalius/core/modules/ai/prompt-helper-v2';
+import { generateCompletePrompt } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { ERROR_MESSAGES, shouldUseStagedGeneration } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
-import { extractChatCompletionContent } from './ai-stream';
 import {
   normalizeGeneratedWidgetContent,
   parseGeneratedWidgetContent,
 } from './widget-generation-content';
-import { fetchWidgetAi } from './ai-request';
 import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
 import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
-import { getAiPrompts, getAiContextBatchDetails } from '@/lib/api.functions';
+import { getAiPrompts, getAiContextBatchDetails, generateWidgetFromIntent } from '@/lib/api.functions';
 
-type PromptMessage = StructuredPromptResult['messages'][number];
-type StructuredPromptParams = Parameters<typeof generateStructuredPrompt>[0];
+type StructuredPromptParams = Parameters<typeof generateCompletePrompt>[0];
 type AiProductData = StructuredPromptParams['selectedProducts'][number];
 type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
 type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
 type GenerationRun = { id: number; signal: AbortSignal };
+const SERVER_GENERATION_TIMEOUT_MS = 95_000;
 
 interface ModelInfo {
   id: string;
@@ -55,6 +49,37 @@ export type AiPlacementContext = {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+function withGenerationTimeout<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(new DOMException('Generation cancelled', 'AbortError'));
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('Widget generation timed out. Please try again with a smaller context or faster model.'));
+    }, SERVER_GENERATION_TIMEOUT_MS);
+
+    const abort = () => {
+      window.clearTimeout(timeoutId);
+      reject(new DOMException('Generation cancelled', 'AbortError'));
+    };
+
+    signal.addEventListener('abort', abort, { once: true });
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        signal.removeEventListener('abort', abort);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeoutId);
+        signal.removeEventListener('abort', abort);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
@@ -286,69 +311,36 @@ export const useAiGenerator = (
     setIsPreviewOpen(true);
 
     try {
-      const promptPromise = getAiPrompts({
-        data: { type: effectivePromptType },
-      }) as Promise<string>;
-      const contextPromise = getAiContextBatchDetails({
-        data: {
-          productIds: getMergedProductIds(),
-          categoryIds: aiContext.allCategoriesSelected ? undefined : getMergedCategoryIds(),
-          collectionIds: getMergedCollectionIds(),
-          anchorCollectionIds: getMergedAnchorCollectionIds(),
-          allCategories: aiContext.allCategoriesSelected,
-        },
-      }) as Promise<AiContextBatchDetails>;
-
-      const [systemPrompt, contextData] = await Promise.all([promptPromise, contextPromise]);
-      if (!isActiveGenerationRun(run)) return;
-      if (!systemPrompt) throw new Error(ERROR_MESSAGES.systemPromptFailed);
-      notifyAiContextWarnings(contextData);
-
       const currentModel = aiModels.find((m) => m.id === selectedModel);
       const isVisionModel = currentModel?.supportsVision || false;
       const selectedImages = getModelLimitedImages({ warn: true });
-
-      const promptResult = await generateStructuredPrompt({
-        systemPrompt,
-        userPrompt: getPlacementAwarePrompt(),
-        selectedImages,
-        selectedProducts: (contextData.products || []) as AiProductData[],
-        selectedCategories: (contextData.categories || []) as AiCategoryData[],
-        selectedCollections: (contextData.collections || []) as AiCollectionData[],
-        allCategoriesSelected: aiContext.allCategoriesSelected,
-        modelId: selectedModel,
-        supportsVision: isVisionModel,
-        maxImagesOverride: currentModel?.maxImages,
-        promptType: effectivePromptType,
-      });
-      if (!isActiveGenerationRun(run)) return;
-
-      const useStaged = shouldUseStagedGeneration(promptResult.metadata.estimatedTokens * 4, useStagedMode);
-
+      const useStaged = shouldUseStagedGeneration(0, useStagedMode);
       if (useStaged) {
-        // STAGED GENERATION
-        const result = await stagedGeneration.startStagedGeneration(
-          activeProvider,
-          selectedModel,
-          promptResult.messages,
-          effectivePromptType,
-          (_section, _index, _total, preview) => {
-            if (!isActiveGenerationRun(run)) return;
-            setGeneratedContent(preview);
-          },
-          run.signal,
-        );
-        if (!isActiveGenerationRun(run)) return;
-
-        if (result) {
-          setGeneratedContent(result);
-        } else {
-          throw new Error('Composition generation could not finish. Please try again.');
-        }
-      } else {
-        // SIMPLE GENERATION
-        await handleSimpleGeneration(promptResult.messages, run);
+        toast.info('Generating a cohesive composition from server-owned context...');
       }
+      const result = await withGenerationTimeout(generateWidgetFromIntent({
+        data: {
+          provider: activeProvider,
+          model: selectedModel,
+          promptType: effectivePromptType,
+          userPrompt: getPlacementAwarePrompt(),
+          selectedImages,
+          productIds: getMergedProductIds(),
+          categoryIds: getMergedCategoryIds(),
+          collectionIds: getMergedCollectionIds(),
+          anchorCollectionIds: getMergedAnchorCollectionIds(),
+          allCategoriesSelected: aiContext.allCategoriesSelected,
+          supportsVision: isVisionModel,
+          maxImages: currentModel?.maxImages,
+        },
+      }) as Promise<{
+        content: string;
+        warnings?: AiContextBatchDetails['warnings'];
+      }>, run.signal);
+      if (!isActiveGenerationRun(run)) return;
+      notifyAiContextWarnings({ warnings: result.warnings } as AiContextBatchDetails);
+      setRawOutput(result.content);
+      setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(result.content)));
     } catch (error: unknown) {
       if (isAbortError(error) || run.signal.aborted) {
         return;
@@ -366,36 +358,6 @@ export const useAiGenerator = (
         }
       }
     }
-  };
-
-  const handleSimpleGeneration = async (messages: PromptMessage[], run: GenerationRun) => {
-    const response = await fetchWidgetAi('/api/v1/admin/ai/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: run.signal,
-      body: JSON.stringify({
-        provider: activeProvider,
-        messages: messages,
-        model: selectedModel,
-        stream: false,
-        operation: 'create',
-        promptType: effectivePromptType,
-        compositionMode: true,
-      }),
-    });
-
-    if (!isActiveGenerationRun(run)) return;
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || errorData.error?.message || 'Failed to generate content.');
-    }
-
-    const content = extractChatCompletionContent(await response.json());
-    if (!isActiveGenerationRun(run)) return;
-    setRawOutput(content);
-
-    setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(content)));
   };
 
   const handleCopyPrompt = async () => {
