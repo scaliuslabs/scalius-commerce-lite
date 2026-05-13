@@ -5,14 +5,16 @@
 // order status transitions. Every endpoint that changes order status must
 // call applyInventoryForStatusChange() instead of manually adjusting stock.
 
-import { eq, sql } from "drizzle-orm";
-import { orders, orderItems, InventoryPool } from "@scalius/database/schema";
+import { eq, inArray, sql } from "drizzle-orm";
+import { orders, orderItems, InventoryPool, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { ValidationError } from "@scalius/core/errors";
 import { releaseMultiple } from "./release";
 import { deductMultiple } from "./deduct";
 import { reserveMultiple } from "./reserve";
 import { restoreDeductedMultiple } from "./restore";
 import { checkAndAlertLowStock } from "./alerts";
+import type { ReservationEntry, StockOperationResult } from "./types";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
@@ -30,6 +32,14 @@ const STOCK_DEDUCT_STATUSES = new Set(["shipped"]);
  *   "restored" — stock was added back (order cancelled or returned after deduction)
  */
 export type InventoryAction = "none" | "reserved" | "deducted" | "restored";
+type InventoryPoolName = "regular" | "preorder" | "backorder";
+type InventoryTransitionOperation = "deduct" | "release" | "reserve" | "restore";
+
+interface InventoryTransitionResult {
+    success: boolean;
+    results: StockOperationResult[];
+    error?: string;
+}
 
 /**
  * Build inventory SQL statements for a status change WITHOUT executing them.
@@ -38,6 +48,8 @@ export type InventoryAction = "none" | "reserved" | "deducted" | "restored";
  * The CAS-based stock operations (deductOrderStock / releaseOrderReservations)
  * still execute internally — they have their own multi-row update logic.
  * What we batch with callers is only the inventoryAction flag update on the order.
+ * If any stock operation fails, this throws before returning statements so the
+ * order cannot be marked as if the inventory transition succeeded.
  *
  * Returns empty statements array if no inventory action is needed.
  */
@@ -154,36 +166,15 @@ async function deductOrderStock(
     orderId: string,
     inventoryPool: string,
 ): Promise<void> {
-    const items = await db
-        .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId))
-        .all();
-
-    const pool = (inventoryPool ?? InventoryPool.REGULAR) as
-        | "regular"
-        | "preorder"
-        | "backorder";
-
-    const entries = items
-        .filter((i) => i.variantId !== null)
-        .map((i) => ({
-            variantId: i.variantId as string,
-            quantity: i.quantity,
-            pool,
-        }));
+    const entries = await getOrderInventoryEntries(db, orderId, inventoryPool);
 
     if (entries.length > 0) {
         const deductResult = await deductMultiple(db, entries, orderId);
-        if (!deductResult.success) {
-            console.error(
-                `[inventory-transitions] Failed to deduct stock for order ${orderId}: ${deductResult.error}`
-            );
-        } else {
-            // Check low-stock alerts for each deducted variant
-            for (const entry of entries) {
-                await checkAndAlertLowStock(db, entry.variantId);
-            }
+        assertInventoryTransitionSucceeded(orderId, "deduct", deductResult);
+
+        // Check low-stock alerts for each deducted variant
+        for (const entry of entries) {
+            await checkAndAlertLowStock(db, entry.variantId);
         }
     }
 }
@@ -197,27 +188,12 @@ async function releaseOrderReservations(
     orderId: string,
     inventoryPool: string,
 ): Promise<void> {
-    const items = await db
-        .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId))
-        .all();
-
-    const pool = (inventoryPool ?? InventoryPool.REGULAR) as
-        | "regular"
-        | "preorder"
-        | "backorder";
-
-    const entries = items
-        .filter((i) => i.variantId !== null)
-        .map((i) => ({
-            variantId: i.variantId as string,
-            quantity: i.quantity,
-            pool,
-        }));
+    const entries = await getOrderInventoryEntries(db, orderId, inventoryPool);
 
     if (entries.length > 0) {
-        await releaseMultiple(db, entries, orderId);
+        await assertVariantsExistBeforeBestEffortOperation(db, orderId, "release", entries);
+        const result = await releaseMultiple(db, entries, orderId);
+        assertInventoryTransitionSucceeded(orderId, "release", result);
     }
 }
 
@@ -231,32 +207,11 @@ async function reserveOrderItems(
     orderId: string,
     inventoryPool: string,
 ): Promise<void> {
-    const items = await db
-        .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId))
-        .all();
-
-    const pool = (inventoryPool ?? InventoryPool.REGULAR) as
-        | "regular"
-        | "preorder"
-        | "backorder";
-
-    const entries = items
-        .filter((i) => i.variantId !== null)
-        .map((i) => ({
-            variantId: i.variantId as string,
-            quantity: i.quantity,
-            pool,
-        }));
+    const entries = await getOrderInventoryEntries(db, orderId, inventoryPool);
 
     if (entries.length > 0) {
         const result = await reserveMultiple(db, entries, orderId);
-        if (!result.success) {
-            console.error(
-                `[inventory-transitions] Failed to re-reserve stock for order ${orderId}: ${result.error}`
-            );
-        }
+        assertInventoryTransitionSucceeded(orderId, "reserve", result);
     }
 }
 
@@ -270,31 +225,100 @@ async function restoreDeductedOrderStock(
     orderId: string,
     inventoryPool: string,
 ): Promise<void> {
+    const entries = await getOrderInventoryEntries(db, orderId, inventoryPool);
+
+    if (entries.length > 0) {
+        await assertVariantsExistBeforeBestEffortOperation(db, orderId, "restore", entries);
+        const result = await restoreDeductedMultiple(db, entries, orderId);
+        assertInventoryTransitionSucceeded(orderId, "restore", result);
+    }
+}
+
+async function getOrderInventoryEntries(
+    db: Database,
+    orderId: string,
+    inventoryPool: string,
+): Promise<ReservationEntry[]> {
     const items = await db
         .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId))
         .all();
 
-    const pool = (inventoryPool ?? InventoryPool.REGULAR) as
-        | "regular"
-        | "preorder"
-        | "backorder";
+    const pool = normalizeInventoryPool(inventoryPool);
 
-    const entries = items
+    return items
         .filter((i) => i.variantId !== null)
         .map((i) => ({
             variantId: i.variantId as string,
             quantity: i.quantity,
             pool,
         }));
+}
 
-    if (entries.length > 0) {
-        const result = await restoreDeductedMultiple(db, entries, orderId);
-        if (!result.success) {
-            console.error(
-                `[inventory-transitions] Failed to restore deducted stock for order ${orderId}: ${result.error}`
-            );
-        }
+function normalizeInventoryPool(inventoryPool: string): InventoryPoolName {
+    return (inventoryPool ?? InventoryPool.REGULAR) as InventoryPoolName;
+}
+
+async function assertVariantsExistBeforeBestEffortOperation(
+    db: Database,
+    orderId: string,
+    operation: InventoryTransitionOperation,
+    entries: ReservationEntry[],
+): Promise<void> {
+    const variantIds = Array.from(new Set(entries.map((entry) => entry.variantId)));
+    if (variantIds.length === 0) return;
+
+    const existingVariants = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds))
+        .all();
+
+    const existingVariantIds = new Set(existingVariants.map((variant) => variant.id));
+    const missingVariantIds = variantIds.filter((variantId) => !existingVariantIds.has(variantId));
+    if (missingVariantIds.length > 0) {
+        throwInventoryTransitionError(orderId, operation, {
+            success: false,
+            results: missingVariantIds.map((variantId) => ({
+                success: false,
+                variantId,
+                previousStock: 0,
+                newStock: 0,
+                error: `Variant ${variantId} not found`,
+            })),
+            error: `Missing variant${missingVariantIds.length === 1 ? "" : "s"}: ${missingVariantIds.join(", ")}`,
+        });
     }
+}
+
+function assertInventoryTransitionSucceeded(
+    orderId: string,
+    operation: InventoryTransitionOperation,
+    result: InventoryTransitionResult,
+): void {
+    if (result.success) return;
+    throwInventoryTransitionError(orderId, operation, result);
+}
+
+function throwInventoryTransitionError(
+    orderId: string,
+    operation: InventoryTransitionOperation,
+    result: InventoryTransitionResult,
+): never {
+    const failedResults = result.results.filter((entry) => !entry.success);
+    const failedVariants = failedResults.map((entry) => ({
+        variantId: entry.variantId,
+        error: entry.error ?? "Inventory operation failed",
+    }));
+    const reason = result.error ?? failedVariants[0]?.error ?? "Inventory operation failed";
+
+    throw new ValidationError(
+        `Inventory ${operation} failed for order ${orderId}: ${reason}`,
+        {
+            orderId,
+            operation,
+            failedVariants,
+        },
+    );
 }
