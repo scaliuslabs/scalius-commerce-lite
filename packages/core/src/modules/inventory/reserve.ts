@@ -229,78 +229,17 @@ export async function reserveStockBatch(
 
   // Deduplicate stock counter updates by variant. Audit movements are grouped
   // separately by variant + order so every order keeps its own reservation trail.
-  const merged = new Map<string, { variantId: string; quantity: number; orderId?: string }>();
-  for (const item of items) {
-    const existing = merged.get(item.variantId);
-    if (existing) {
-      existing.quantity += item.quantity;
-    } else {
-      merged.set(item.variantId, { ...item });
-    }
-  }
-  const entries = Array.from(merged.values());
+  const entries = mergeReservationItemsByVariant(items);
   const movementEntries = groupReservationMovementsForAudit(items);
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     // Phase 1: Read all variant states
-    const variants = new Map<string, {
-      id: string;
-      stock: number;
-      reservedStock: number;
-      preorderStock: number;
-      allowPreorder: boolean;
-      allowBackorder: boolean;
-      backorderLimit: number;
-      stockVersion: number;
-    }>();
-
-    for (const entry of entries) {
-      const variant = await db
-        .select({
-          id: productVariants.id,
-          stock: productVariants.stock,
-          reservedStock: productVariants.reservedStock,
-          preorderStock: productVariants.preorderStock,
-          allowPreorder: productVariants.allowPreorder,
-          allowBackorder: productVariants.allowBackorder,
-          backorderLimit: productVariants.backorderLimit,
-          stockVersion: productVariants.stockVersion,
-        })
-        .from(productVariants)
-        .where(eq(productVariants.id, entry.variantId))
-        .get();
-
-      if (!variant) {
-        return {
-          success: false,
-          results: [{
-            success: false,
-            variantId: entry.variantId,
-            previousStock: 0,
-            newStock: 0,
-            error: `Variant ${entry.variantId} not found`,
-          }],
-          error: `Variant ${entry.variantId} not found`,
-        };
-      }
-      variants.set(entry.variantId, variant);
-    }
+    const variantLoad = await loadReservationVariantStates(db, entries);
+    if (!variantLoad.success) return variantLoad;
+    const variants = variantLoad.variants;
 
     // Phase 2: Validate ALL stock availability before writing anything
-    const validationErrors: StockOperationResult[] = [];
-    for (const entry of entries) {
-      const variant = variants.get(entry.variantId)!;
-      const error = validateStockAvailability(variant, entry.quantity, pool);
-      if (error) {
-        validationErrors.push({
-          success: false,
-          variantId: entry.variantId,
-          previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
-          newStock: pool === "preorder" ? variant.preorderStock : variant.stock,
-          error,
-        });
-      }
-    }
+    const validationErrors = getStockAvailabilityErrors(entries, variants, pool);
 
     if (validationErrors.length > 0) {
       return {
@@ -461,6 +400,137 @@ export async function reserveStockBatch(
     results: [],
     error: `Failed to reserve stock batch after ${MAX_RETRIES} retries`,
   };
+}
+
+type ReservationBatchItem = { variantId: string; quantity: number; orderId?: string };
+
+type ReservationVariantState = {
+  id: string;
+  stock: number;
+  reservedStock: number;
+  preorderStock: number;
+  allowPreorder: boolean;
+  allowBackorder: boolean;
+  backorderLimit: number;
+  stockVersion: number;
+};
+
+export async function validateStockBatchAvailability(
+  db: Database,
+  items: ReservationBatchItem[],
+  pool: "regular" | "preorder" | "backorder" = "regular",
+): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
+  if (items.length === 0) {
+    return { success: true, results: [] };
+  }
+
+  const entries = mergeReservationItemsByVariant(items);
+  const variantLoad = await loadReservationVariantStates(db, entries);
+  if (!variantLoad.success) return variantLoad;
+
+  const validationErrors = getStockAvailabilityErrors(entries, variantLoad.variants, pool);
+  if (validationErrors.length > 0) {
+    return {
+      success: false,
+      results: validationErrors,
+      error: validationErrors[0]?.error,
+    };
+  }
+
+  return {
+    success: true,
+    results: entries.map((entry) => {
+      const variant = variantLoad.variants.get(entry.variantId)!;
+      return {
+        success: true,
+        variantId: entry.variantId,
+        previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
+        newStock:
+          pool === "preorder"
+            ? variant.preorderStock - entry.quantity
+            : variant.stock,
+      };
+    }),
+  };
+}
+
+function mergeReservationItemsByVariant(items: ReservationBatchItem[]): ReservationBatchItem[] {
+  const merged = new Map<string, ReservationBatchItem>();
+  for (const item of items) {
+    const existing = merged.get(item.variantId);
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      merged.set(item.variantId, { ...item });
+    }
+  }
+  return Array.from(merged.values());
+}
+
+async function loadReservationVariantStates(
+  db: Database,
+  entries: ReservationBatchItem[],
+): Promise<
+  | { success: true; variants: Map<string, ReservationVariantState> }
+  | { success: false; results: StockOperationResult[]; error: string }
+> {
+  const variants = new Map<string, ReservationVariantState>();
+
+  for (const entry of entries) {
+    const variant = await db
+      .select({
+        id: productVariants.id,
+        stock: productVariants.stock,
+        reservedStock: productVariants.reservedStock,
+        preorderStock: productVariants.preorderStock,
+        allowPreorder: productVariants.allowPreorder,
+        allowBackorder: productVariants.allowBackorder,
+        backorderLimit: productVariants.backorderLimit,
+        stockVersion: productVariants.stockVersion,
+      })
+      .from(productVariants)
+      .where(eq(productVariants.id, entry.variantId))
+      .get();
+
+    if (!variant) {
+      return {
+        success: false,
+        results: [{
+          success: false,
+          variantId: entry.variantId,
+          previousStock: 0,
+          newStock: 0,
+          error: `Variant ${entry.variantId} not found`,
+        }],
+        error: `Variant ${entry.variantId} not found`,
+      };
+    }
+    variants.set(entry.variantId, variant);
+  }
+
+  return { success: true, variants };
+}
+
+function getStockAvailabilityErrors(
+  entries: ReservationBatchItem[],
+  variants: Map<string, ReservationVariantState>,
+  pool: "regular" | "preorder" | "backorder",
+): StockOperationResult[] {
+  const validationErrors: StockOperationResult[] = [];
+  for (const entry of entries) {
+    const variant = variants.get(entry.variantId)!;
+    const error = validateStockAvailability(variant, entry.quantity, pool);
+    if (error) {
+      validationErrors.push({
+        success: false,
+        variantId: entry.variantId,
+        previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
+        newStock: pool === "preorder" ? variant.preorderStock : variant.stock,
+        error,
+      });
+    }
+  }
+  return validationErrors;
 }
 
 export function groupReservationMovementsForAudit(

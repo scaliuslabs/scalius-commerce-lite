@@ -16,7 +16,13 @@ import {
     deliveryLocations,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
-import { reserveStockBatch, deductMultiple, releaseMultiple } from "../inventory";
+import {
+    reserveStockBatch,
+    deductMultiple,
+    releaseMultiple,
+    restoreDeductedMultiple,
+    validateStockBatchAvailability,
+} from "../inventory";
 import type { ReservationEntry } from "../inventory";
 
 import { sql, desc, eq, inArray, isNull, and, type SQL } from "drizzle-orm";
@@ -651,6 +657,75 @@ interface UpdateOrderData {
     status: string;
 }
 
+const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
+const STOCK_DEDUCT_STATUSES = new Set(["shipped"]);
+
+function buildInventoryEntries(
+    items: { variantId: string | null; quantity: number }[],
+    pool: NonNullable<ReservationEntry["pool"]>,
+): ReservationEntry[] {
+    const merged = new Map<string, number>();
+    for (const item of items) {
+        if (!item.variantId) continue;
+        merged.set(item.variantId, (merged.get(item.variantId) ?? 0) + item.quantity);
+    }
+    return Array.from(merged.entries()).map(([variantId, quantity]) => ({ variantId, quantity, pool }));
+}
+
+function computeInventoryDeltas(
+    oldEntries: ReservationEntry[],
+    newEntries: ReservationEntry[],
+    pool: NonNullable<ReservationEntry["pool"]>,
+): { positiveEntries: ReservationEntry[]; negativeEntries: ReservationEntry[] } {
+    const deltaMap = new Map<string, number>();
+    for (const entry of oldEntries) {
+        deltaMap.set(entry.variantId, (deltaMap.get(entry.variantId) ?? 0) - entry.quantity);
+    }
+    for (const entry of newEntries) {
+        deltaMap.set(entry.variantId, (deltaMap.get(entry.variantId) ?? 0) + entry.quantity);
+    }
+
+    const positiveEntries: ReservationEntry[] = [];
+    const negativeEntries: ReservationEntry[] = [];
+    for (const [variantId, delta] of deltaMap) {
+        if (delta > 0) {
+            positiveEntries.push({ variantId, quantity: delta, pool });
+        } else if (delta < 0) {
+            negativeEntries.push({ variantId, quantity: Math.abs(delta), pool });
+        }
+    }
+
+    return { positiveEntries, negativeEntries };
+}
+
+function toReservationBatchItems(entries: ReservationEntry[], orderId: string) {
+    return entries.map((entry) => ({
+        variantId: entry.variantId,
+        quantity: entry.quantity,
+        orderId,
+    }));
+}
+
+async function compensatePreWriteInventory(
+    db: Database,
+    orderId: string,
+    acquiredReservations: ReservationEntry[],
+    deductedEntries: ReservationEntry[],
+) {
+    if (deductedEntries.length > 0) {
+        const restoreResult = await restoreDeductedMultiple(db, deductedEntries, orderId);
+        if (!restoreResult.success) {
+            console.error(`[orders.admin] Failed to compensate deducted stock for order ${orderId}: ${restoreResult.error}`);
+        }
+    }
+    if (acquiredReservations.length > 0) {
+        const releaseResult = await releaseMultiple(db, acquiredReservations, orderId);
+        if (!releaseResult.success) {
+            console.error(`[orders.admin] Failed to compensate reserved stock for order ${orderId}: ${releaseResult.error}`);
+        }
+    }
+}
+
 export async function updateOrder(db: Database, id: string, data: UpdateOrderData): Promise<{ id: string }> {
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     const locationMap = new Map<string, string>();
@@ -692,197 +767,199 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
+    const existingInventoryAction = existingOrder.inventoryAction as string;
+    const targetRestoresStock = STOCK_RESTORE_STATUSES.has(data.status);
+    const targetDeductsStock = STOCK_DEDUCT_STATUSES.has(data.status);
+    const oldEntries = buildInventoryEntries(existingItems, pool);
+    const newEntries = buildInventoryEntries(data.items, pool);
+    const { positiveEntries, negativeEntries } = computeInventoryDeltas(oldEntries, newEntries, pool);
 
     const totalAmount = subtractPrice(
         addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
         data.discountAmount || 0,
     );
     let customerId = existingOrder.customerId;
+    let acquiredReservations: ReservationEntry[] = [];
+    let deductedEntries: ReservationEntry[] = [];
+    let writesCommitted = false;
 
-    if (data.customerPhone !== existingOrder.customerPhone) {
-        const customer = await db.select().from(customers).where(eq(customers.phone, data.customerPhone)).get();
-        if (customer) {
-            customerId = customer.id;
-        } else {
-            const [newCustomer] = await db.insert(customers).values({
-                id: "cust_" + nanoid(),
-                name: data.customerName,
-                phone: data.customerPhone,
-                email: data.customerEmail,
-                address: data.shippingAddress,
-                city: data.city,
-                zone: data.zone,
-                area: data.area,
-                totalOrders: 1,
-                totalSpent: totalAmount,
-                lastOrderAt: sql`unixepoch()`,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }).returning();
-            if (newCustomer) customerId = newCustomer.id;
-        }
-    }
+    try {
+        if (existingInventoryAction === "reserved" && !targetRestoresStock && positiveEntries.length > 0) {
+            const availability = await validateStockBatchAvailability(db, toReservationBatchItems(positiveEntries, id), pool);
+            if (!availability.success) {
+                throw new ValidationError(availability.error ?? "Insufficient stock for updated items");
+            }
 
-    // ── CAS check FIRST — before any inventory mutations ────────────────
-    // Optimistic locking: only update if the version hasn't changed since we read it.
-    // We write the order row before touching inventory so that a concurrent edit
-    // is detected before any irreversible stock changes are made.
-    // inventoryAction is updated after inventory ops below via a second UPDATE.
-    const updateResult = await db.update(orders).set({
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        customerEmail: data.customerEmail,
-        shippingAddress: data.shippingAddress,
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
-        cityName,
-        zoneName,
-        areaName,
-        notes: data.notes,
-        totalAmount,
-        shippingCharge: data.shippingCharge,
-        discountAmount: data.discountAmount,
-        status: data.status,
-        customerId,
-        version: existingOrder.version + 1,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning();
-
-    if (updateResult.length === 0) {
-        throw new ConflictError("Order was modified by another request. Please reload and try again.");
-    }
-    const order = updateResult[0];
-    if (!order) {
-        throw new ConflictError("Order update failed unexpectedly.");
-    }
-
-    // ── Replace order items ─────────────────────────────────────────────
-    await db.delete(orderItems).where(eq(orderItems.orderId, id));
-
-    if (data.items.length > 0) {
-        await db.insert(orderItems).values(data.items.map((item) => ({
-            id: "item_" + nanoid(),
-            orderId: order.id,
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            price: item.price,
-            createdAt: sql`unixepoch()`,
-        })));
-    }
-
-    // ── Inventory adjustments AFTER CAS success ─────────────────────────
-    // Now safe to mutate stock — we own this version of the order.
-    if (existingOrder.inventoryAction === "reserved") {
-        const oldEntries: ReservationEntry[] = existingItems
-            .filter((i) => i.variantId)
-            .map((i) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
-        const newEntries: ReservationEntry[] = data.items
-            .filter((i) => i.variantId)
-            .map((i) => ({ variantId: i.variantId!, quantity: i.quantity, pool }));
-
-        if (oldEntries.length > 0) await releaseMultiple(db, oldEntries, id);
-
-        if (newEntries.length > 0) {
-            const batchItems = newEntries.map(e => ({
-                variantId: e.variantId,
-                quantity: e.quantity,
-                orderId: id,
-            }));
-            const reserveResult = await reserveStockBatch(db, batchItems, pool);
+            const reserveResult = await reserveStockBatch(db, toReservationBatchItems(positiveEntries, id), pool);
             if (!reserveResult.success) {
-                // Re-reserve old entries on failure (rollback)
-                if (oldEntries.length > 0) {
-                    const rollbackItems = oldEntries.map(e => ({
-                        variantId: e.variantId,
-                        quantity: e.quantity,
-                        orderId: id,
-                    }));
-                    await reserveStockBatch(db, rollbackItems, pool);
-                }
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
             }
-        }
-    } else if (existingOrder.inventoryAction === "deducted") {
-        // Compute net delta per variant: positive = need more stock deducted,
-        // negative = need stock restored. Match by variantId only.
-        const deltaMap = new Map<string, number>();
-        for (const item of existingItems) {
-            if (item.variantId) {
-                deltaMap.set(item.variantId, (deltaMap.get(item.variantId) ?? 0) - item.quantity);
-            }
-        }
-        for (const item of data.items) {
-            if (item.variantId) {
-                deltaMap.set(item.variantId, (deltaMap.get(item.variantId) ?? 0) + item.quantity);
-            }
+            acquiredReservations = positiveEntries;
         }
 
-        // Pre-fetch ALL needed variants in one query (Fix N+1)
-        const positiveDeltas = [...deltaMap.entries()].filter(([, d]) => d > 0);
-        const positiveVariantIds = positiveDeltas.map(([vid]) => vid);
-        const variantMap = new Map<string, { id: string; stock: number }>();
-        if (positiveVariantIds.length > 0) {
-            const variants = await db
-                .select({ id: productVariants.id, stock: productVariants.stock })
-                .from(productVariants)
-                .where(and(
-                    inArray(productVariants.id, positiveVariantIds),
-                    isNull(productVariants.deletedAt),
-                ));
-            for (const v of variants) variantMap.set(v.id, v);
-        }
-
-        // Validate all positive deltas have sufficient stock before writing
-        for (const [variantId, delta] of positiveDeltas) {
-            const variant = variantMap.get(variantId);
-            if (!variant) throw new NotFoundError(`Variant ${variantId} not found`);
-            if (variant.stock < delta) {
-                throw new ValidationError(`Insufficient stock for variant ${variantId}. Available: ${variant.stock}, Additional Requested: ${delta}`);
+        if (existingInventoryAction === "deducted" && !targetRestoresStock && positiveEntries.length > 0) {
+            const reserveResult = await reserveStockBatch(db, toReservationBatchItems(positiveEntries, id), pool);
+            if (!reserveResult.success) {
+                throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
             }
+            acquiredReservations = positiveEntries;
+
+            const deductResult = await deductMultiple(db, positiveEntries, id);
+            if (!deductResult.success) {
+                await compensatePreWriteInventory(db, id, acquiredReservations, []);
+                acquiredReservations = [];
+                throw new ValidationError(deductResult.error ?? "Failed to deduct additional stock for updated items");
+            }
+            acquiredReservations = [];
+            deductedEntries = positiveEntries;
         }
 
-        // Batch all stock updates into a single db.batch() call
-        const stockUpdateStmts: unknown[] = [];
-        for (const [variantId, delta] of deltaMap) {
-            if (delta === 0) continue;
-            if (delta > 0) {
-                stockUpdateStmts.push(
-                    db.update(productVariants)
-                        .set({ stock: sql`${productVariants.stock} - ${delta}`, updatedAt: sql`unixepoch()` })
-                        .where(eq(productVariants.id, variantId)),
-                );
+        if (existingInventoryAction === "restored" && !targetRestoresStock && !targetDeductsStock && newEntries.length > 0) {
+            const reserveResult = await reserveStockBatch(db, toReservationBatchItems(newEntries, id), pool);
+            if (!reserveResult.success) {
+                throw new ValidationError(reserveResult.error ?? "Insufficient stock to reactivate order");
+            }
+            acquiredReservations = newEntries;
+        }
+
+        if (data.customerPhone !== existingOrder.customerPhone) {
+            const customer = await db.select().from(customers).where(eq(customers.phone, data.customerPhone)).get();
+            if (customer) {
+                customerId = customer.id;
             } else {
-                // Restore stock (delta is negative, so negate it)
-                stockUpdateStmts.push(
-                    db.update(productVariants)
-                        .set({ stock: sql`${productVariants.stock} + ${-delta}`, updatedAt: sql`unixepoch()` })
-                        .where(eq(productVariants.id, variantId)),
-                );
+                const [newCustomer] = await db.insert(customers).values({
+                    id: "cust_" + nanoid(),
+                    name: data.customerName,
+                    phone: data.customerPhone,
+                    email: data.customerEmail,
+                    address: data.shippingAddress,
+                    city: data.city,
+                    zone: data.zone,
+                    area: data.area,
+                    totalOrders: 1,
+                    totalSpent: totalAmount,
+                    lastOrderAt: sql`unixepoch()`,
+                    createdAt: sql`unixepoch()`,
+                    updatedAt: sql`unixepoch()`,
+                }).returning();
+                if (newCustomer) customerId = newCustomer.id;
             }
         }
-        if (stockUpdateStmts.length > 0) {
-            await db.batch(stockUpdateStmts as any);
+
+        const updateResult = await db.update(orders).set({
+            customerName: data.customerName,
+            customerPhone: data.customerPhone,
+            customerEmail: data.customerEmail,
+            shippingAddress: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName,
+            zoneName,
+            areaName,
+            notes: data.notes,
+            totalAmount,
+            shippingCharge: data.shippingCharge,
+            discountAmount: data.discountAmount,
+            status: data.status,
+            customerId,
+            version: existingOrder.version + 1,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning();
+
+        if (updateResult.length === 0) {
+            throw new ConflictError("Order was modified by another request. Please reload and try again.");
         }
-    }
+        const order = updateResult[0];
+        if (!order) {
+            throw new ConflictError("Order update failed unexpectedly.");
+        }
 
-    // ── Status-driven inventory transitions ─────────────────────────────
-    if (data.status !== existingOrder.status) {
-        const newInventoryAction = await applyInventoryForStatusChange(db, id, data.status);
-        await db.update(orders)
-            .set({ inventoryAction: newInventoryAction })
-            .where(eq(orders.id, id));
-    }
+        await db.delete(orderItems).where(eq(orderItems.orderId, id));
 
-    if (existingOrder.customerId) {
-        await updateCustomerStatsService(db, existingOrder.customerId);
-    }
-    if (customerId && customerId !== existingOrder.customerId) {
-        await updateCustomerStatsService(db, customerId);
-    }
+        if (data.items.length > 0) {
+            await db.insert(orderItems).values(data.items.map((item) => ({
+                id: "item_" + nanoid(),
+                orderId: order.id,
+                productId: item.productId,
+                variantId: item.variantId,
+                quantity: item.quantity,
+                price: item.price,
+                createdAt: sql`unixepoch()`,
+            })));
+        }
+        writesCommitted = true;
 
-    return { id: order.id };
+        let inventoryActionOverride: string | null = null;
+        let statusTransitionHandled = false;
+
+        if (existingInventoryAction === "reserved") {
+            if (targetRestoresStock) {
+                if (oldEntries.length > 0) {
+                    const releaseResult = await releaseMultiple(db, oldEntries, id);
+                    if (!releaseResult.success) {
+                        throw new ValidationError(releaseResult.error ?? "Failed to release order reservations");
+                    }
+                }
+                inventoryActionOverride = "restored";
+                statusTransitionHandled = true;
+            } else {
+                if (negativeEntries.length > 0) {
+                    const releaseResult = await releaseMultiple(db, negativeEntries, id);
+                    if (!releaseResult.success) {
+                        console.error(`[orders.admin] Failed to release removed reservations for order ${id}: ${releaseResult.error}`);
+                    }
+                }
+            }
+        } else if (existingInventoryAction === "deducted") {
+            if (targetRestoresStock) {
+                if (oldEntries.length > 0) {
+                    const restoreResult = await restoreDeductedMultiple(db, oldEntries, id);
+                    if (!restoreResult.success) {
+                        throw new ValidationError(restoreResult.error ?? "Failed to restore deducted stock");
+                    }
+                }
+                inventoryActionOverride = "restored";
+                statusTransitionHandled = true;
+            } else if (negativeEntries.length > 0) {
+                const restoreResult = await restoreDeductedMultiple(db, negativeEntries, id);
+                if (!restoreResult.success) {
+                    console.error(`[orders.admin] Failed to restore removed deducted stock for order ${id}: ${restoreResult.error}`);
+                }
+            }
+        } else if (existingInventoryAction === "restored" && !targetRestoresStock && !targetDeductsStock && newEntries.length > 0) {
+            inventoryActionOverride = "reserved";
+            statusTransitionHandled = true;
+        }
+
+        if (data.status !== existingOrder.status && !statusTransitionHandled) {
+            inventoryActionOverride = await applyInventoryForStatusChange(db, id, data.status);
+        }
+
+        if (inventoryActionOverride) {
+            await db.update(orders)
+                .set({ inventoryAction: inventoryActionOverride })
+                .where(eq(orders.id, id));
+        }
+
+        if (existingOrder.customerId) {
+            await updateCustomerStatsService(db, existingOrder.customerId);
+        }
+        if (customerId && customerId !== existingOrder.customerId) {
+            await updateCustomerStatsService(db, customerId);
+        }
+
+        return { id: order.id };
+    } catch (error) {
+        if (!writesCommitted) {
+            try {
+                await compensatePreWriteInventory(db, id, acquiredReservations, deductedEntries);
+            } catch (compensationError) {
+                console.error(`[orders.admin] Inventory compensation failed after order update error for ${id}:`, compensationError);
+            }
+        }
+        throw error;
+    }
 }
 
 async function updateCustomerStatsService(db: Database, customerId: string) {
