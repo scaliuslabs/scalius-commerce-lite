@@ -41,6 +41,7 @@ import {
   stagedPlanOutputSchema,
   widgetOutputObjectSpec,
   widgetOutputSchema,
+  type WidgetPromptType,
 } from './ai-response-validation';
 import { normalizeMessages } from './ai-message-normalization';
 
@@ -54,6 +55,7 @@ const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const NO_COMMERCE_FACTS_PROMPT_MARKER = 'FACTUALITY GATE - NO COMMERCE FACTS PROVIDED';
 
 const providerEnum = z.enum(AI_PROVIDER_IDS);
+const promptTypeEnum = z.enum(['widget', 'landing-page', 'collection']);
 
 const messagePartSchema = z
   .object({
@@ -80,6 +82,7 @@ const generateSchema = z
     stream: z.boolean().optional(),
     images: z.array(z.object({ url: z.string(), mimeType: z.string().optional() }).passthrough()).optional(),
     operation: z.enum(['create', 'improve']).optional(),
+    promptType: promptTypeEnum.optional(),
   })
   .refine((data) => data.messages || data.prompt, {
     message: 'Messages or prompt is required.',
@@ -88,6 +91,7 @@ const generateSchema = z
 const generateStagedSchema = z.object({
   provider: providerEnum.optional(),
   model: z.string().max(MAX_MODEL_ID_CHARS).optional(),
+  promptType: promptTypeEnum.optional(),
   messages: z.array(messageSchema).min(1),
   stage: z.enum(['plan', 'generate', 'finalize']).optional(),
   sectionIndex: z
@@ -115,6 +119,84 @@ type GenerationUsage = {
 interface WidgetGenerationResult {
   text: string;
   usage: GenerationUsage;
+}
+
+const DESTINATION_RUNTIME_CONTRACTS: Record<WidgetPromptType, string> = {
+  widget: `SERVER DESTINATION CONTRACT: Homepage Widget
+- Generate a compact insertable homepage module, usually 1-2 connected bands.
+- Prioritize discovery, featured picks/categories, and a light action close.
+- Avoid full campaign funnels, long proof stacks, FAQ blocks, and large external gaps.`,
+  'landing-page': `SERVER DESTINATION CONTRACT: Landing Section
+- Generate one connected campaign section set inside the existing storefront shell.
+- Use a deliberate conversion flow: promise/offer, supporting proof or benefits, product/collection support, and final CTA.
+- It should feel more narrative than a homepage widget, but still share one visual system and tight section rhythm.`,
+  collection: `SERVER DESTINATION CONTRACT: Collection Section
+- Generate practical collection merchandising, not a generic homepage banner.
+- Product comparison, product cards, buying-guide cues, prices/links supplied in context, and scan-first density are the priority.
+- At least half of the meaningful content should help shoppers compare or choose products.`,
+};
+
+function modelMessageContentText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      if (!part || typeof part !== 'object') return '';
+      const text = (part as { text?: unknown }).text;
+      return typeof text === 'string' ? text : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function inferPromptTypeFromMessages(messages: ModelMessage[]): WidgetPromptType {
+  const text = messages.map((message) => modelMessageContentText(message.content)).join('\n').toLowerCase();
+  if (text.includes('homepage widget contract:')) return 'widget';
+  if (text.includes('collection section contract:')) return 'collection';
+  if (text.includes('landing section contract:')) return 'landing-page';
+  return 'widget';
+}
+
+function withDestinationRuntimeContract(messages: ModelMessage[], promptType: WidgetPromptType): ModelMessage[] {
+  return [
+    ...messages,
+    {
+      role: 'system',
+      content: `${DESTINATION_RUNTIME_CONTRACTS[promptType]}
+
+SERVER PERFORMANCE CONTRACT:
+- Produce one complete artifact in this call. Do not wait for a later stage to make it coherent.
+- Use no JavaScript, no script tags, and no markdown.
+- Root wrappers should use margin: 0 and avoid min-height: 100vh, large spacer elements, or disconnected full-page bands.`,
+    } as ModelMessage,
+  ];
+}
+
+function getCreateOutputBudget(settings: WidgetAiRuntimeSettings, promptType: WidgetPromptType, operation?: 'create' | 'improve'): number {
+  if (operation === 'improve') return settings.generation.maxOutputTokens;
+
+  const fastBudget = settings.generation.fastGenerationMaxOutputTokens;
+  const maxBudget = settings.generation.maxOutputTokens;
+  const targetBudget =
+    promptType === 'landing-page'
+      ? Math.max(fastBudget, 4200)
+      : promptType === 'collection'
+        ? Math.max(fastBudget, 3400)
+        : fastBudget;
+
+  return Math.min(maxBudget, targetBudget);
+}
+
+function getStagedOutputBudget(
+  settings: WidgetAiRuntimeSettings,
+  stage: 'plan' | 'generate' | 'finalize' | undefined,
+  promptType: WidgetPromptType,
+): number {
+  if (stage === 'plan') return Math.min(settings.generation.maxOutputTokens, 1200);
+  if (stage === 'finalize') return Math.min(settings.generation.maxOutputTokens, promptType === 'landing-page' ? 3600 : 2800);
+  if (promptType === 'landing-page') return Math.min(settings.generation.maxOutputTokens, 3200);
+  if (promptType === 'collection') return Math.min(settings.generation.maxOutputTokens, 2800);
+  return Math.min(settings.generation.maxOutputTokens, 2400);
 }
 
 function isAllowedImageUrl(value: string): boolean {
@@ -531,11 +613,14 @@ function addStagedPlanRetryInstruction(options: GenerateTextOptions): GenerateTe
   } as GenerateTextOptions;
 }
 
-function fallbackNoContextWidgetIfAllowed(options: GenerateTextOptions): WidgetGenerationResult | null {
+function fallbackNoContextWidgetIfAllowed(
+  options: GenerateTextOptions,
+  promptType: WidgetPromptType,
+): WidgetGenerationResult | null {
   if (!shouldEnforceNoContextCommercePolicy(options)) return null;
   console.warn('No-context widget generation could not produce a policy-safe artifact; returning deterministic safe fallback.');
   return {
-    text: createNoContextFallbackWidget(),
+    text: createNoContextFallbackWidget(promptType),
     usage: {},
   };
 }
@@ -543,6 +628,7 @@ function fallbackNoContextWidgetIfAllowed(options: GenerateTextOptions): WidgetG
 async function generateWidgetContent(
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },
+  promptType: WidgetPromptType = 'widget',
 ): Promise<WidgetGenerationResult> {
   const normalizationOptions = {
     commerceFactsProvided: !shouldEnforceNoContextCommercePolicy(options),
@@ -581,7 +667,7 @@ async function generateWidgetContent(
     };
   } catch (error) {
     console.warn('Widget response failed validation; using fallback or retrying once:', error);
-    const fallback = fallbackNoContextWidgetIfAllowed(options);
+    const fallback = fallbackNoContextWidgetIfAllowed(options, promptType);
     if (fallback) return fallback;
 
     const retry = await generateTextWithTransientRetry(
@@ -594,7 +680,7 @@ async function generateWidgetContent(
         usage: usageFromResult(retry),
       };
     } catch (retryError) {
-      const fallback = fallbackNoContextWidgetIfAllowed(options);
+      const fallback = fallbackNoContextWidgetIfAllowed(options, promptType);
       if (fallback) return fallback;
       throw retryError;
     }
@@ -605,6 +691,7 @@ async function finalizeStreamedWidgetContent(
   rawText: string,
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },
+  promptType: WidgetPromptType = 'widget',
 ): Promise<string> {
   const normalizationOptions = {
     commerceFactsProvided: !shouldEnforceNoContextCommercePolicy(options),
@@ -614,15 +701,15 @@ async function finalizeStreamedWidgetContent(
     return normalizeWidgetGenerationText(rawText, normalizationOptions);
   } catch (error) {
     console.warn('Streamed widget response failed validation; using fallback or retrying once:', error);
-    const fallback = fallbackNoContextWidgetIfAllowed(options);
+    const fallback = fallbackNoContextWidgetIfAllowed(options, promptType);
     if (fallback) return fallback.text;
 
     const retryOptions = addWidgetFormatRetryInstruction(options);
     try {
-      const retry = await generateWidgetContent(retryOptions, capabilities);
+      const retry = await generateWidgetContent(retryOptions, capabilities, promptType);
       return retry.text;
     } catch (retryError) {
-      const fallback = fallbackNoContextWidgetIfAllowed(options);
+      const fallback = fallbackNoContextWidgetIfAllowed(options, promptType);
       if (fallback) return fallback.text;
       throw retryError;
     }
@@ -755,9 +842,11 @@ app.openapi(generateRoute, async (c) => {
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
   const capabilities = resolveWidgetAiModelCapabilities(provider, modelId, settings.providers[provider].capabilities);
-  const messages = payload.messages
+  const normalizedMessages = payload.messages
     ? normalizeMessages(payload.messages)
     : promptToMessages(payload.prompt ?? '', payload.images);
+  const promptType = payload.promptType ?? inferPromptTypeFromMessages(normalizedMessages);
+  const messages = withDestinationRuntimeContract(normalizedMessages, promptType);
 
   const generationOptions = {
     model,
@@ -768,9 +857,7 @@ app.openapi(generateRoute, async (c) => {
         ? settings.generation.improvementTemperature
         : settings.generation.generationTemperature,
     maxOutputTokens:
-      payload.operation === 'improve'
-        ? settings.generation.maxOutputTokens
-        : settings.generation.fastGenerationMaxOutputTokens,
+      getCreateOutputBudget(settings, promptType, payload.operation),
     timeout: {
       totalMs: getTimeout(payload.operation === 'improve' ? 'improvement' : 'generation'),
     },
@@ -781,11 +868,11 @@ app.openapi(generateRoute, async (c) => {
   if (payload.stream) {
     const result = streamText(generationOptions);
     return openAiCompatibleStream(result.textStream, {
-      finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, capabilities),
+      finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, capabilities, promptType),
     });
   }
 
-  const result = await generateWidgetContent(generationOptions, capabilities);
+  const result = await generateWidgetContent(generationOptions, capabilities, promptType);
   return ok(c, openAiCompatibleJson(result.text, provider, modelId, result.usage));
 });
 
@@ -819,9 +906,11 @@ app.openapi(generateStagedRoute, async (c) => {
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
   const model = getLanguageModel(provider, modelId, settings, c.env);
   const capabilities = resolveWidgetAiModelCapabilities(provider, modelId, settings.providers[provider].capabilities);
+  const normalizedMessages = normalizeMessages(payload.messages);
+  const promptType = payload.promptType ?? inferPromptTypeFromMessages(normalizedMessages);
   const generationOptions = {
     model,
-    messages: normalizeMessages(payload.messages),
+    messages: withDestinationRuntimeContract(normalizedMessages, promptType),
     allowSystemInMessages: true,
     temperature:
       payload.stage === 'plan'
@@ -829,7 +918,7 @@ app.openapi(generateStagedRoute, async (c) => {
         : payload.stage === 'finalize'
           ? Math.min(settings.generation.improvementTemperature, 0.45)
           : settings.generation.generationTemperature,
-    maxOutputTokens: settings.generation.maxOutputTokens,
+    maxOutputTokens: getStagedOutputBudget(settings, payload.stage, promptType),
     timeout: {
       totalMs:
         payload.stage === 'plan'
@@ -845,13 +934,14 @@ app.openapi(generateStagedRoute, async (c) => {
   const result =
     payload.stage === 'plan'
       ? await generateStagedPlan(generationOptions, capabilities)
-      : await generateWidgetContent(generationOptions, capabilities);
+      : await generateWidgetContent(generationOptions, capabilities, promptType);
 
   const response = {
     ...openAiCompatibleJson(result.text, provider, modelId, result.usage),
   } as Record<string, unknown>;
 
   if (payload.stage !== undefined) response.stage = payload.stage;
+  response.promptType = promptType;
   if (payload.sectionIndex !== undefined) response.sectionIndex = payload.sectionIndex;
   if (payload.totalSections !== undefined) response.totalSections = payload.totalSections;
 

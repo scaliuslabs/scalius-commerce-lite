@@ -328,6 +328,7 @@ export const useAiGenerator = (
           activeProvider,
           selectedModel,
           promptResult.messages,
+          effectivePromptType,
           (_section, _index, _total, preview) => {
             if (!isActiveGenerationRun(run)) return;
             setGeneratedContent(preview);
@@ -377,6 +378,8 @@ export const useAiGenerator = (
         messages: messages,
         model: selectedModel,
         stream: true,
+        operation: 'create',
+        promptType: effectivePromptType,
       }),
     });
 

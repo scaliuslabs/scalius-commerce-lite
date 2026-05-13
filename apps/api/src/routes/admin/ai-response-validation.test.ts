@@ -94,6 +94,16 @@ describe('AI response validation', () => {
     expect(output).not.toMatch(/\b(?:shipping|delivery|guarantee|review|limited)\b/i);
   });
 
+  it('uses destination-aware deterministic safe fallbacks', () => {
+    const collectionOutput = createNoContextFallbackWidget('collection');
+    const landingOutput = createNoContextFallbackWidget('landing-page');
+
+    expect(collectionOutput).toContain('Compare the lineup');
+    expect(landingOutput).toContain('Start with the right pick');
+    expect(collectionOutput).not.toMatch(/https?:\/\//i);
+    expect(landingOutput).not.toMatch(/https?:\/\//i);
+  });
+
   it('canonicalizes valid staged plans', () => {
     const text = normalizeStagedPlanText(
       JSON.stringify({
