@@ -125,5 +125,7 @@ SINGLE-PASS COMPOSITION RULES:
 - Use one destination-specific top-level composition element or section with your own classes.
 - If the output has multiple visual bands, they must be children of the same root and must look like one connected composition, not separate widgets.
 - Keep generated CSS compact, scoped, and purposeful. Avoid repeated card systems, giant min-heights, viewport-height filler, spacer divs, oversized margins, and dead vertical gaps.
+- Product/media imagery must live inside bounded cards or bounded media columns with explicit aspect-ratio/max-height and object-fit: contain or cover. Never create a large empty white media panel, never crop a product off-canvas, and never rely on absolute-positioned product images for core layout.
+- Every generated visual band must contain meaningful visible content above the fold at desktop and mobile widths; no blank columns, blank rows, decorative whitespace blocks, or image-only voids.
 - Homepage widgets should remain compact; landing sections should be campaign-like; collection sections should be product-comparison led.`;
 }
