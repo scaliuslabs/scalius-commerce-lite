@@ -119,7 +119,7 @@ type GenerationUsage = {
   totalTokens?: number;
 };
 
-interface WidgetGenerationResult {
+export interface WidgetGenerationResult {
   text: string;
   usage: GenerationUsage;
 }
@@ -137,7 +137,7 @@ function modelMessageContentText(content: unknown): string {
     .join('\n');
 }
 
-function inferPromptTypeFromMessages(messages: ModelMessage[]): WidgetPromptType {
+export function inferPromptTypeFromMessages(messages: ModelMessage[]): WidgetPromptType {
   const text = messages.map((message) => modelMessageContentText(message.content)).join('\n').toLowerCase();
   if (text.includes('homepage widget contract:')) return 'widget';
   if (text.includes('collection section contract:')) return 'collection';
@@ -145,7 +145,7 @@ function inferPromptTypeFromMessages(messages: ModelMessage[]): WidgetPromptType
   return 'widget';
 }
 
-function withDestinationRuntimeContract(
+export function withDestinationRuntimeContract(
   messages: ModelMessage[],
   promptType: WidgetPromptType,
   options: { compositionMode?: boolean } = {},
@@ -167,7 +167,7 @@ SERVER PERFORMANCE CONTRACT:
   ];
 }
 
-function getCreateOutputBudget(settings: WidgetAiRuntimeSettings, promptType: WidgetPromptType, operation?: 'create' | 'improve'): number {
+export function getCreateOutputBudget(settings: WidgetAiRuntimeSettings, promptType: WidgetPromptType, operation?: 'create' | 'improve'): number {
   if (operation === 'improve') return settings.generation.maxOutputTokens;
 
   const fastBudget = settings.generation.fastGenerationMaxOutputTokens;
@@ -259,7 +259,7 @@ function validatePromptPayload(prompt: string, images: Array<{ url: string; mime
   }
 }
 
-async function enforceAiRateLimit(c: any): Promise<void> {
+export async function enforceAiRateLimit(c: any): Promise<void> {
   const kv = c.env.CACHE as KVNamespace | undefined;
   if (!kv) return;
 
@@ -277,7 +277,7 @@ async function enforceAiRateLimit(c: any): Promise<void> {
   }
 }
 
-function getLanguageModel(
+export function getLanguageModel(
   provider: WidgetAiProvider,
   modelId: string,
   settings: WidgetAiRuntimeSettings,
@@ -357,7 +357,7 @@ function promptToMessages(
   ];
 }
 
-function openAiCompatibleJson(
+export function openAiCompatibleJson(
   text: string,
   provider: WidgetAiProvider,
   model: string,
@@ -620,7 +620,7 @@ function fallbackNoContextWidgetIfAllowed(
   };
 }
 
-async function generateWidgetContent(
+export async function generateWidgetContent(
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },
   promptType: WidgetPromptType = 'widget',
@@ -757,7 +757,7 @@ async function generateStagedPlan(
   }
 }
 
-async function runtimeSettings(c: any) {
+export async function runtimeSettings(c: any) {
   const db = c.get('db');
   return getWidgetAiRuntimeSettings(db, c.env, getCredentialEncryptionKey(c.env));
 }

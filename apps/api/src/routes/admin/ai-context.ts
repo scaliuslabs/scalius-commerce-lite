@@ -21,6 +21,7 @@ import * as SettingsService from "@scalius/core/modules/settings/settings.servic
 import { GENERATION_CONFIG } from "@scalius/core/modules/ai";
 import { resolveCollectionProductsBatch } from "@scalius/core/modules/collections/collections.service";
 import type { ResolvedProduct } from "@scalius/core/modules/collections/collections.service";
+import type { Database } from "@scalius/database/client";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
@@ -306,11 +307,17 @@ const batchDetailsRoute = createRoute({
     }
 });
 
-app.openapi(batchDetailsRoute, async (c) => {
+export async function resolveAiContextBatchDetails({
+    db,
+    env,
+    payload,
+}: {
+    db: Database;
+    env: Env;
+    payload: z.infer<typeof batchDetailsSchema>;
+}) {
     try {
-        const db = c.get("db");
-        const kv = (c.env as Record<string, unknown>)?.CACHE as KVNamespace | undefined;
-        const payload = c.req.valid("json");
+        const kv = (env as Record<string, unknown>)?.CACHE as KVNamespace | undefined;
         const productIds = uniqueLimited(payload.productIds, GENERATION_CONFIG.context.maxProducts);
         const categoryIds = uniqueLimited(payload.categoryIds, GENERATION_CONFIG.context.maxCategories);
         const requestedCollectionIds = uniqueLimited(payload.collectionIds, GENERATION_CONFIG.context.maxCollections);
@@ -650,7 +657,7 @@ app.openapi(batchDetailsRoute, async (c) => {
             });
         }
 
-        return ok(c, {
+        return {
             products: productsData,
             categories: categoriesData,
             collections: collectionsData,
@@ -671,11 +678,17 @@ app.openapi(batchDetailsRoute, async (c) => {
                 maxCategories: GENERATION_CONFIG.context.maxCategories,
                 maxCollections: GENERATION_CONFIG.context.maxCollections,
             },
-        });
+        };
     } catch (error: unknown) {
         console.error("Batch fetch error:", error);
         throw error;
     }
+}
+
+app.openapi(batchDetailsRoute, async (c) => {
+    const db = c.get("db");
+    const payload = c.req.valid("json");
+    return ok(c, await resolveAiContextBatchDetails({ db, env: c.env, payload }));
 });
 
 export { app as adminAiContextRoutes };
