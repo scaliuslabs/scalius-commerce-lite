@@ -21071,6 +21071,7 @@ export type PostApiV1AdminSettingsWidgetAiData = {
             planningTemperature?: number;
             generationTemperature?: number;
             improvementTemperature?: number;
+            fastGenerationMaxOutputTokens?: number;
             maxOutputTokens?: number;
             stagedGenerationDefault?: boolean;
         };

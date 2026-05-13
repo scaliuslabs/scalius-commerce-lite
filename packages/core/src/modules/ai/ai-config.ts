@@ -170,6 +170,12 @@ IMPORTANT RULES:
 - Make sure to close all tags properly
 - For multi-section widgets, use <part1>, <part2>, etc. with nested tags`,
 
+  speed: `FAST GENERATION BUDGET:
+- Return a complete, polished widget without overproducing.
+- Keep HTML/CSS compact and purposeful. Avoid duplicate card systems, unused states, ornamental layers, long copy blocks, and filler comments.
+- Homepage widgets should usually be 1-2 connected bands. Landing sections may use more narrative only when the request asks for it. Collection sections should stay commerce-dense and concise.
+- Prefer fewer stronger elements over many weak sections. Do not spend output on explanations, markdown, or decorative filler.`,
+
   buyNow: `IMPORTANT: "BUY NOW" (DIRECT CHECKOUT) LINKS
 When creating purchase links, use the pre-generated "buyNowUrl" fields provided in the product context:
 - Each product has a "buyNowUrl" for general purchase

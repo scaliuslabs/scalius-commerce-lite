@@ -66237,6 +66237,11 @@
                         "minimum": 0,
                         "maximum": 2
                       },
+                      "fastGenerationMaxOutputTokens": {
+                        "type": "integer",
+                        "minimum": 512,
+                        "maximum": 64000
+                      },
                       "maxOutputTokens": {
                         "type": "integer",
                         "minimum": 512,
@@ -79973,28 +79978,28 @@
                     "items": {
                       "type": "string"
                     },
-                    "maxItems": 20
+                    "maxItems": 12
                   },
                   "categoryIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "maxItems": 50
+                    "maxItems": 24
                   },
                   "collectionIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "maxItems": 12
+                    "maxItems": 6
                   },
                   "anchorCollectionIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "maxItems": 12
+                    "maxItems": 6
                   },
                   "allCategories": {
                     "type": "boolean"

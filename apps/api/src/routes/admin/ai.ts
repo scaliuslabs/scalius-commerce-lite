@@ -695,7 +695,10 @@ app.openapi(generateRoute, async (c) => {
       payload.operation === 'improve'
         ? settings.generation.improvementTemperature
         : settings.generation.generationTemperature,
-    maxOutputTokens: settings.generation.maxOutputTokens,
+    maxOutputTokens:
+      payload.operation === 'improve'
+        ? settings.generation.maxOutputTokens
+        : settings.generation.fastGenerationMaxOutputTokens,
     timeout: {
       totalMs: getTimeout(payload.operation === 'improve' ? 'improvement' : 'generation'),
     },

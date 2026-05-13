@@ -24,6 +24,7 @@ Widget generation is provider-neutral and dashboard-configurable.
 - Saving provider keys requires `CREDENTIAL_ENCRYPTION_KEY`; there is no JWT-secret fallback for AI secrets.
 - Non-secret provider configuration is stored in key `widget_generation_config`.
 - Runtime generation uses Vercel AI SDK providers for OpenRouter, OpenAI, Gemini, and Cloudflare Workers AI.
+- The dashboard has separate token budgets for the fast single-pass create path and the larger staged/improvement path. Fast generation defaults to a lower output budget so ordinary widget drafts do not spend time producing unnecessarily large artifacts.
 - Widget and staged-section generation prefers AI SDK structured object output for providers where that path is reliable, then converts successful `{ html, css }` objects back to the editor's tag format. Cloudflare/Kimi currently uses text/tag output by default because Cloudflare JSON Mode is non-streaming and the current Workers AI provider adapter must be verified with Kimi before strict schema mode becomes the default.
 - The fresh-install default provider is Cloudflare Workers AI with `@cf/moonshotai/kimi-k2.6`.
 - The generation API preserves the OpenAI-style `choices[].message.content` shape because the widget editor parser consumes that shape. The default editor create path now calls the API in streaming mode for better perceived latency; the client still accepts only the final normalized widget artifact.

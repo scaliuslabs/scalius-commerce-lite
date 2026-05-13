@@ -43,6 +43,7 @@ const updateSchema = z.object({
       planningTemperature: z.number().min(0).max(2).optional(),
       generationTemperature: z.number().min(0).max(2).optional(),
       improvementTemperature: z.number().min(0).max(2).optional(),
+      fastGenerationMaxOutputTokens: z.number().int().min(512).max(64000).optional(),
       maxOutputTokens: z.number().int().min(512).max(64000).optional(),
       stagedGenerationDefault: z.boolean().optional(),
     })
