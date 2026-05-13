@@ -440,7 +440,7 @@ function addStagedPlanRetryInstruction(options: GenerateTextOptions): GenerateTe
       {
         role: 'user',
         content:
-          'Return ONLY a valid JSON generation plan. No markdown, HTML, CSS, comments, or explanation. Shape: {"totalSections":3,"compositionBrief":"One continuous homepage merchandising widget","sharedDesignSystem":"Dark campaign palette, consistent cards and CTAs","spacingStrategy":"Final wrapper has gap 0; sections connect with shared background and internal padding","sectionDescriptions":["Hero","Product showcase","CTA"],"sectionContinuity":["Establish design tokens","Continue with same background and product cards","Close without external spacing"],"estimatedTokens":1200}.',
+          'Return ONLY a valid JSON generation plan. No markdown, HTML, CSS, comments, or explanation. Shape: {"totalSections":3,"compositionBrief":"One continuous destination-appropriate storefront composition","sharedDesignSystem":"Consistent palette, cards, media treatment, and CTAs","spacingStrategy":"Final wrapper has gap 0; sections connect with shared background and internal padding","sectionDescriptions":["Opening section","Core merchandising section","Closing action section"],"sectionContinuity":["Establish design tokens","Continue with the same rhythm and components","Close without external spacing"],"estimatedTokens":1200}.',
       },
     ],
     temperature: 0.1,

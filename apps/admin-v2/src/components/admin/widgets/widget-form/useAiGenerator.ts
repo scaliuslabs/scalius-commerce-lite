@@ -94,7 +94,7 @@ export const useAiGenerator = (
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [useStagedMode, setUseStagedMode] = useState(true); // Toggle for staged generation (default: true)
+  const [useStagedMode, setUseStagedMode] = useState(false);
   const generationRunIdRef = useRef(0);
   const generationAbortRef = useRef<AbortController | null>(null);
 
@@ -211,7 +211,7 @@ export const useAiGenerator = (
 
       setActiveProvider(provider);
       setIsApiKeySet(configured);
-      setUseStagedMode(settings.generation?.stagedGenerationDefault !== false);
+      setUseStagedMode(settings.generation?.stagedGenerationDefault === true);
 
       const response = await fetch(`/api/v1/admin/ai/models?provider=${encodeURIComponent(provider)}`);
       const modelData = (await response.json()) as {
@@ -319,6 +319,7 @@ export const useAiGenerator = (
         modelId: selectedModel,
         supportsVision: isVisionModel,
         maxImagesOverride: currentModel?.maxImages,
+        promptType: effectivePromptType,
       });
       if (!isActiveGenerationRun(run)) return;
 
@@ -456,6 +457,7 @@ export const useAiGenerator = (
         selectedCategories: (contextData.categories || []) as AiCategoryData[],
         selectedCollections: (contextData.collections || []) as AiCollectionData[],
         allCategoriesSelected: aiContext.allCategoriesSelected,
+        promptType: effectivePromptType,
       });
 
       // Add header and footer for standalone use

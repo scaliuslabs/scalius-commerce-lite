@@ -128,7 +128,7 @@ const defaultValues: WidgetAiValues = {
     generationTemperature: 0.7,
     improvementTemperature: 0.6,
     maxOutputTokens: 12000,
-    stagedGenerationDefault: true,
+    stagedGenerationDefault: false,
   },
   prompts: {
     widget: "",
@@ -237,7 +237,7 @@ async function fetchWidgetAi(): Promise<WidgetAiValues> {
       generationTemperature: Number(generation.generationTemperature ?? 0.7),
       improvementTemperature: Number(generation.improvementTemperature ?? 0.6),
       maxOutputTokens: Number(generation.maxOutputTokens ?? 12000),
-      stagedGenerationDefault: generation.stagedGenerationDefault !== false,
+      stagedGenerationDefault: generation.stagedGenerationDefault === true,
     },
     prompts: {
       widget: prompts.widget || defaultPrompts.widget || "",
@@ -734,9 +734,9 @@ export default function WidgetAiSettingsBuilder() {
         </div>
         <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
           <div>
-            <Label htmlFor="staged-generation-default">Staged generation by default</Label>
+            <Label htmlFor="staged-generation-default">Use staged generation by default</Label>
             <p className="mt-1 text-xs text-muted-foreground">
-              New widget prompts start in staged mode for more stable large outputs.
+              Slower but useful for unusually large page-section sets. Keep off for fast single-pass widgets.
             </p>
           </div>
           <Switch
