@@ -13,7 +13,7 @@ import {
     PaymentStatus,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
-import { markCODReturned, recordCODCollection, recordCODFailure } from "../payments/cod";
+import { markCODReturned, recordCODCollection, recordCODFailure, validateCODCollectionDetails } from "../payments/cod";
 import { createShipment } from "../delivery/delivery.service";
 
 import { sql, eq, and } from "drizzle-orm";
@@ -56,11 +56,22 @@ export async function bulkShipOrders(db: Database, orderIds: string[], providerI
 }
 
 export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
-    const order = await db.select({ status: orders.status, version: orders.version }).from(orders).where(eq(orders.id, orderId)).get();
+    const order = await db.select({
+        status: orders.status,
+        version: orders.version,
+        totalAmount: orders.totalAmount,
+        paidAmount: orders.paidAmount,
+        balanceDue: orders.balanceDue,
+    }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
 
     switch (body.action) {
         case "collected": {
+            const collection = validateCODCollectionDetails(order, {
+                collectedBy: body.collectedBy as string,
+                collectedAmount: body.collectedAmount as number,
+            });
+
             // Validate transition to DELIVERED. If current status is CONFIRMED,
             // transition through SHIPPED first (COD collection implies delivery).
             let currentVersion = order.version;
@@ -75,7 +86,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             const currentStatus = order.status === OrderStatus.CONFIRMED ? OrderStatus.SHIPPED : order.status;
             validateTransition("order", currentStatus, OrderStatus.DELIVERED);
 
-            const colResult = await recordCODCollection(db, { orderId, collectedBy: body.collectedBy as string, collectedAmount: body.collectedAmount as number, receiptUrl: body.receiptUrl as string | undefined });
+            const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
             if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
             const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
             if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
