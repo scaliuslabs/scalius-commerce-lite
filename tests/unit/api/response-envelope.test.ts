@@ -81,8 +81,8 @@ function conflictError(message: string) {
 /**
  * Internal server error (500).
  */
-function internalError(message: string) {
-  return errorResponse("INTERNAL_ERROR", message, 500);
+function internalError() {
+  return errorResponse("INTERNAL_ERROR", "Internal Server Error", 500);
 }
 
 // ---------------------------------------------------------------------------
@@ -170,12 +170,12 @@ describe("API Response Envelope", () => {
     });
 
     it("internalError returns 500 with structured error", () => {
-      const response = internalError("Unexpected error");
+      const response = internalError();
 
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe("INTERNAL_ERROR");
-      expect(response.body.error.message).toBe("Unexpected error");
+      expect(response.body.error.message).toBe("Internal Server Error");
     });
 
     it("error field is always a structured object", () => {
@@ -183,7 +183,7 @@ describe("API Response Envelope", () => {
         validationError("Bad request"),
         notFoundError("Not found"),
         conflictError("Conflict"),
-        internalError("Internal error"),
+        internalError(),
       ];
 
       for (const response of responses) {
@@ -198,7 +198,7 @@ describe("API Response Envelope", () => {
         validationError("test"),
         notFoundError("test"),
         conflictError("test"),
-        internalError("test"),
+        internalError(),
       ];
 
       for (const response of responses) {

@@ -41,7 +41,7 @@ import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
-import { ApiError } from "./utils/api-error";
+import { errorResponseFromError } from "./utils/api-response";
 import { serveMediaRoute } from "./routes/media-server";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 
@@ -106,30 +106,8 @@ function getR2PublicUrl(env: Env, requestUrl: string): string {
 app.onError((err, c) => {
   console.error("API Error (onError):", err);
 
-  if (err instanceof ApiError) {
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: err.code,
-          message: err.message,
-          details: err.details,
-        },
-      },
-      err.status as 400 | 401 | 403 | 404 | 409 | 422 | 500,
-    );
-  }
-
-  return c.json(
-    {
-      success: false,
-      error: {
-        code: "INTERNAL_ERROR",
-        message: err.message || "Internal Server Error",
-      },
-    },
-    500,
-  );
+  const { body, status } = errorResponseFromError(err);
+  return c.json(body, status);
 });
 
 // NOTE: Do NOT add compress() middleware here. Cloudflare Workers handles

@@ -91,7 +91,7 @@ export async function createOrder(
     console.error("Error creating order:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Network error occurred",
+      error: "Order creation failed",
     };
   }
 }
