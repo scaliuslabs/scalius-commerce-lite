@@ -690,6 +690,7 @@ export async function generateStructuredPrompt({
   staticContext += `\n\n${GOAL_CONTRACTS[promptType]}`;
   staticContext += `\n\n${LAYOUT_BLUEPRINTS[promptType]}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.composition}`;
+  staticContext += `\n\n${PROMPT_INSTRUCTIONS.speed}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.json}`;
   staticContext += `\n${PROMPT_INSTRUCTIONS.buyNow}`;
 

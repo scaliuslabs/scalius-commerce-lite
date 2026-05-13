@@ -50,6 +50,7 @@ interface WidgetAiValues {
     planningTemperature: number;
     generationTemperature: number;
     improvementTemperature: number;
+    fastGenerationMaxOutputTokens: number;
     maxOutputTokens: number;
     stagedGenerationDefault: boolean;
   };
@@ -127,6 +128,7 @@ const defaultValues: WidgetAiValues = {
     planningTemperature: 0.3,
     generationTemperature: 0.7,
     improvementTemperature: 0.6,
+    fastGenerationMaxOutputTokens: 4500,
     maxOutputTokens: 8000,
     stagedGenerationDefault: false,
   },
@@ -236,6 +238,7 @@ async function fetchWidgetAi(): Promise<WidgetAiValues> {
       planningTemperature: Number(generation.planningTemperature ?? 0.3),
       generationTemperature: Number(generation.generationTemperature ?? 0.7),
       improvementTemperature: Number(generation.improvementTemperature ?? 0.6),
+      fastGenerationMaxOutputTokens: Number(generation.fastGenerationMaxOutputTokens ?? 4500),
       maxOutputTokens: Number(generation.maxOutputTokens ?? 8000),
       stagedGenerationDefault: generation.stagedGenerationDefault === true,
     },
@@ -682,7 +685,7 @@ export default function WidgetAiSettingsBuilder() {
             These defaults apply to widget creation, improvement, and staged generation.
           </p>
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <div className="space-y-2">
             <Label htmlFor="planning-temperature">Planning temperature</Label>
             <Input
@@ -717,6 +720,18 @@ export default function WidgetAiSettingsBuilder() {
               step={0.1}
               value={values.generation.improvementTemperature}
               onChange={(event) => setGenerationValue("improvementTemperature", Number(event.target.value))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="fast-max-output-tokens">Fast output tokens</Label>
+            <Input
+              id="fast-max-output-tokens"
+              type="number"
+              min={512}
+              max={64000}
+              step={256}
+              value={values.generation.fastGenerationMaxOutputTokens}
+              onChange={(event) => setGenerationValue("fastGenerationMaxOutputTokens", Number(event.target.value))}
             />
           </div>
           <div className="space-y-2">

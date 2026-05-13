@@ -68,6 +68,7 @@ export interface WidgetAiGenerationConfig {
     planningTemperature: number;
     generationTemperature: number;
     improvementTemperature: number;
+    fastGenerationMaxOutputTokens: number;
     maxOutputTokens: number;
     stagedGenerationDefault: boolean;
   };
@@ -137,6 +138,7 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
     planningTemperature: GENERATION_CONFIG.temperature.planning,
     generationTemperature: GENERATION_CONFIG.temperature.generation,
     improvementTemperature: GENERATION_CONFIG.temperature.improvement,
+    fastGenerationMaxOutputTokens: 4500,
     maxOutputTokens: 8000,
     stagedGenerationDefault: false,
   },
@@ -360,6 +362,14 @@ export function normalizeWidgetAiConfig(
         DEFAULT_WIDGET_AI_CONFIG.generation.improvementTemperature,
         0,
         2,
+      ),
+      fastGenerationMaxOutputTokens: Math.round(
+        clampNumber(
+          rawGeneration.fastGenerationMaxOutputTokens,
+          DEFAULT_WIDGET_AI_CONFIG.generation.fastGenerationMaxOutputTokens,
+          512,
+          64000,
+        ),
       ),
       maxOutputTokens: Math.round(
         clampNumber(
