@@ -19,7 +19,68 @@ import type {
   RefundResult,
 } from "./provider";
 import { getCurrencyConfig } from "../settings/settings.service";
-import { NotFoundError } from "@scalius/core/errors";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
+
+interface CodCollectionOrderSnapshot {
+  totalAmount: number;
+  paidAmount: number | null;
+  balanceDue: number | null;
+}
+
+interface NormalizedCodCollection {
+  collectedBy: string;
+  collectedAmount: number;
+  expectedAmount: number;
+  newPaidAmount: number;
+  newBalanceDue: number;
+}
+
+export function validateCODCollectionDetails(
+  order: CodCollectionOrderSnapshot,
+  params: Pick<RecordCODCollectionParams, "collectedBy" | "collectedAmount">,
+): NormalizedCodCollection {
+  if (typeof params.collectedBy !== "string") {
+    throw new ValidationError("Collector name is required for COD collection.");
+  }
+
+  const collectedBy = params.collectedBy.trim();
+  if (!collectedBy) {
+    throw new ValidationError("Collector name is required for COD collection.");
+  }
+
+  if (!Number.isFinite(params.collectedAmount) || params.collectedAmount <= 0) {
+    throw new ValidationError("COD collected amount must be a positive finite number.");
+  }
+
+  const currentPaidAmount = roundPrice(order.paidAmount ?? 0);
+  const storedBalanceDue = Number.isFinite(order.balanceDue) ? Number(order.balanceDue) : null;
+  const computedBalanceDue = roundPrice(Math.max(0, order.totalAmount - currentPaidAmount));
+  const expectedAmount = roundPrice(Math.max(0, storedBalanceDue ?? computedBalanceDue));
+  const collectedAmount = roundPrice(params.collectedAmount);
+
+  if (expectedAmount <= 0) {
+    throw new ValidationError("This order has no outstanding COD balance to collect.");
+  }
+
+  if (!pricesEqual(collectedAmount, expectedAmount)) {
+    throw new ValidationError(
+      `COD collected amount must match the outstanding balance (${expectedAmount}).`,
+      { expectedAmount, collectedAmount },
+    );
+  }
+
+  const newPaidAmount = roundPrice(currentPaidAmount + collectedAmount);
+  const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
+
+  return {
+    collectedBy,
+    collectedAmount,
+    expectedAmount,
+    newPaidAmount,
+    newBalanceDue,
+  };
+}
 
 /**
  * Create a COD tracking record when a COD order is placed.
@@ -49,7 +110,12 @@ export async function recordCODCollection(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const order = await db
-      .select({ id: orders.id, totalAmount: orders.totalAmount })
+      .select({
+        id: orders.id,
+        totalAmount: orders.totalAmount,
+        paidAmount: orders.paidAmount,
+        balanceDue: orders.balanceDue,
+      })
       .from(orders)
       .where(eq(orders.id, params.orderId))
       .get();
@@ -60,7 +126,7 @@ export async function recordCODCollection(
 
     // Idempotency: check for existing successful COD payment
     const existingPayment = await db
-      .select({ id: orderPayments.id })
+      .select({ id: orderPayments.id, amount: orderPayments.amount })
       .from(orderPayments)
       .where(
         and(
@@ -71,8 +137,20 @@ export async function recordCODCollection(
       )
       .get();
     if (existingPayment) {
+      const collectedAmount = roundPrice(params.collectedAmount);
+      if (!Number.isFinite(params.collectedAmount) || params.collectedAmount <= 0) {
+        throw new ValidationError("COD collected amount must be a positive finite number.");
+      }
+      if (!pricesEqual(existingPayment.amount, collectedAmount)) {
+        throw new ValidationError("COD collection was already recorded with a different amount.", {
+          recordedAmount: existingPayment.amount,
+          collectedAmount,
+        });
+      }
       return { success: true }; // Already recorded — idempotent
     }
+
+    const collection = validateCODCollectionDetails(order, params);
 
     // Fetch currency config before batch
     const currencyConfig = await getCurrencyConfig(db);
@@ -83,8 +161,8 @@ export async function recordCODCollection(
         .update(codTracking)
         .set({
           codStatus: "collected",
-          collectedBy: params.collectedBy,
-          collectedAmount: params.collectedAmount,
+          collectedBy: collection.collectedBy,
+          collectedAmount: collection.collectedAmount,
           collectedAt: sql`unixepoch()`,
           receiptUrl: params.receiptUrl ?? null,
           deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
@@ -96,12 +174,12 @@ export async function recordCODCollection(
       db.insert(orderPayments).values({
         id: crypto.randomUUID(),
         orderId: params.orderId,
-        amount: params.collectedAmount,
+        amount: collection.collectedAmount,
         currency: currencyConfig.code,
         paymentMethod: "cod",
         paymentType: "full",
         status: "succeeded",
-        codCollectedBy: params.collectedBy,
+        codCollectedBy: collection.collectedBy,
         codCollectedAt: sql`unixepoch()`,
         codReceiptUrl: params.receiptUrl ?? null,
         createdAt: sql`unixepoch()`,
@@ -112,8 +190,8 @@ export async function recordCODCollection(
         .update(orders)
         .set({
           paymentStatus: PaymentStatus.PAID,
-          paidAmount: params.collectedAmount,
-          balanceDue: 0,
+          paidAmount: collection.newPaidAmount,
+          balanceDue: collection.newBalanceDue,
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(orders.id, params.orderId)),
@@ -122,7 +200,7 @@ export async function recordCODCollection(
     return { success: true };
   } catch (err: unknown) {
     // Re-throw typed errors so the API layer can handle them
-    if (err instanceof NotFoundError) throw err;
+    if (err instanceof NotFoundError || err instanceof ValidationError) throw err;
     const message = err instanceof Error ? err.message : "Failed to record COD collection";
     return { success: false, error: message };
   }

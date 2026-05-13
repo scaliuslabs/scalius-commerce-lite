@@ -123,14 +123,22 @@ app.openapi(getCodRoute, (async (c: any) => {
 
 // ─── POST /:id/cod ───────────────────────────────────────────────────────────
 
-const codActionSchema = z.object({
-    action: z.enum(["collected", "failed", "returned"]),
-    collectedBy: z.string().optional(),
-    collectedAmount: z.number().optional(),
-    receiptUrl: z.string().optional(),
-    reason: z.enum(["not_home", "refused", "no_cash", "wrong_address", "other"]).optional(),
-    notes: z.string().optional()
-});
+const codActionSchema = z.discriminatedUnion("action", [
+    z.object({
+        action: z.literal("collected"),
+        collectedBy: z.string().trim().min(1, "Collector name is required"),
+        collectedAmount: z.number().finite().positive("Collected amount must be greater than zero"),
+        receiptUrl: z.string().trim().optional(),
+    }),
+    z.object({
+        action: z.literal("failed"),
+        reason: z.enum(["not_home", "refused", "no_cash", "wrong_address", "other"]),
+        notes: z.string().trim().optional(),
+    }),
+    z.object({
+        action: z.literal("returned"),
+    }),
+]);
 
 const postCodRoute = createRoute({
     method: "post",
