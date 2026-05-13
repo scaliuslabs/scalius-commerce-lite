@@ -5,6 +5,7 @@ import {
   INVALIDATION_GROUPS,
   ADMIN_PATH_TO_GROUPS,
   invalidateGroups,
+  normalizeStorefrontPurgeUrl,
   shouldBumpStorefrontVersion,
   triggerStorefrontPurgeForGroups
 } from "../utils/cache-invalidation";
@@ -131,10 +132,15 @@ app.openapi(clearAllRoute, async (c) => {
   const purgeUrl = env?.PURGE_URL;
   const purgeToken = env?.PURGE_TOKEN;
   if (purgeUrl && purgeToken) {
-    const urlWithToken = new URL(purgeUrl);
-    urlWithToken.searchParams.set("token", purgeToken);
     c.executionCtx.waitUntil(
-      fetch(urlWithToken.toString(), { method: "GET" }).catch((err) =>
+      fetch(normalizeStorefrontPurgeUrl(purgeUrl), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${purgeToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bumpVersion: true }),
+      }).catch((err) =>
         console.error("[Cache] Storefront purge failed:", err),
       ),
     );

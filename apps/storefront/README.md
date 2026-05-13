@@ -118,7 +118,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 
 ### Cache Invalidation
 
-When the API triggers `/api/purge-cache?token=PURGE_TOKEN`:
+When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN`:
 - KV version is bumped -- all cache keys change, effectively invalidating everything
 - L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
 - L2 entries with old version keys are never matched

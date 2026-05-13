@@ -252,6 +252,23 @@ export interface StorefrontPurgeResult {
   skippedReason?: "no-valid-groups" | "missing-config";
 }
 
+function storefrontPurgeHeaders(purgeToken: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${purgeToken}`,
+    "Content-Type": "application/json",
+  };
+}
+
+export function normalizeStorefrontPurgeUrl(purgeUrl: string): string {
+  const url = new URL(purgeUrl);
+  // Legacy deployments sometimes carried the purge token in PURGE_URL. Strip
+  // known credential params so callers never send purge secrets in URLs.
+  for (const key of ["token", "purgeToken", "purge_token", "access_token"]) {
+    url.searchParams.delete(key);
+  }
+  return url.toString();
+}
+
 /**
  * Execute the storefront purge request and report whether it succeeded.
  * Content writes that immediately affect rendered pages can await this helper
@@ -272,12 +289,9 @@ export async function purgeStorefrontForGroups(
     return { attempted: false, ok: false, skippedReason: "missing-config" };
   }
 
-  const urlWithToken = new URL(purgeUrl);
-  urlWithToken.searchParams.set("token", purgeToken);
-
-  const response = await fetch(urlWithToken.toString(), {
+  const response = await fetch(normalizeStorefrontPurgeUrl(purgeUrl), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: storefrontPurgeHeaders(purgeToken),
     body: JSON.stringify({
       groups: validGroups,
       prefixes: getStorefrontPrefixesForGroups(validGroups),

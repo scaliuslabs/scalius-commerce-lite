@@ -5,6 +5,7 @@ import {
   getGroupsForPath,
   getStorefrontPrefixesForGroups,
   invalidateCatalogCaches,
+  normalizeStorefrontPurgeUrl,
   purgeStorefrontForGroups,
   triggerStorefrontPurgeForGroups,
 } from "./cache-invalidation";
@@ -94,12 +95,13 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0]!;
 
-    expect(String(url)).toBe(
-      "https://storefront.example.com/api/purge-cache?token=secret-token",
-    );
+    expect(String(url)).toBe("https://storefront.example.com/api/purge-cache");
     expect(init).toMatchObject({
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: "Bearer secret-token",
+        "Content-Type": "application/json",
+      },
     });
     expect(JSON.parse(String(init?.body))).toEqual({
       groups: ["pages"],
@@ -119,7 +121,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
 
     expect(result).toEqual({ attempted: true, ok: true, status: 200 });
     const [, init] = fetchMock.mock.calls[0]!;
+    expect(init?.headers).toMatchObject({
+      Authorization: "Bearer secret-token",
+      "Content-Type": "application/json",
+    });
     const body = JSON.parse(String(init?.body));
+    expect(body).not.toHaveProperty("token");
     expect(body).toMatchObject({
       groups: ["homepage", "pages", "products", "categories", "collections"],
       bumpVersion: true,
@@ -182,5 +189,15 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "widgets_scope_",
       ]),
     );
+  });
+});
+
+describe("normalizeStorefrontPurgeUrl", () => {
+  it("removes legacy URL credential params while preserving ordinary params", () => {
+    expect(
+      normalizeStorefrontPurgeUrl(
+        "https://storefront.example.com/api/purge-cache?token=secret&mode=fast&access_token=other-secret",
+      ),
+    ).toBe("https://storefront.example.com/api/purge-cache?mode=fast");
   });
 });
