@@ -186,6 +186,25 @@ const LAYOUT_BLUEPRINTS: Record<AiPromptType, string> = {
 - Keep the layout dense enough for collection browsing and avoid landing-page-style proof blocks unless they directly help product choice.`,
 };
 
+const EMPTY_COMMERCE_CONTEXT_NOTICE = `FACTUALITY GATE - NO COMMERCE FACTS PROVIDED:
+- No product, category, or collection facts were selected for this generation.
+- You may use the merchant's requested theme/audience as creative direction, but not as proof of real inventory, offers, policies, or service promises.
+- Do not mention prices, discounts, limited releases, latest products, delivery speed, shipping thresholds, guarantees, reviews, ratings, stock status, deadlines, or absolute storefront/media URLs.
+- Use generic non-factual labels such as "Featured picks", "Explore the range", "Shop the collection", or "Built for everyday energy" and CSS-only visual treatment.`;
+
+function generateCommerceContextNotice({
+  productCount,
+  categoryCount,
+  collectionCount,
+}: {
+  productCount: number;
+  categoryCount: number;
+  collectionCount: number;
+}): string {
+  if (productCount > 0 || categoryCount > 0 || collectionCount > 0) return "";
+  return EMPTY_COMMERCE_CONTEXT_NOTICE;
+}
+
 // ============================================================================
 // CACHING HELPERS
 // ============================================================================
@@ -684,15 +703,21 @@ export async function generateStructuredPrompt({
   const productContext = generateProductContext(selectedProducts);
   const categoryContext = generateCategoryContext(selectedCategories, allCategoriesSelected);
   const collectionContext = generateCollectionContext(selectedCollections);
+  const commerceContextNotice = generateCommerceContextNotice({
+    productCount: selectedProducts.length,
+    categoryCount: selectedCategories.length,
+    collectionCount: selectedCollections.length,
+  });
 
   // Build static context (cacheable)
   let staticContext = systemPrompt;
   staticContext += `\n\n${GOAL_CONTRACTS[promptType]}`;
   staticContext += `\n\n${LAYOUT_BLUEPRINTS[promptType]}`;
+  if (commerceContextNotice) staticContext += `\n\n${commerceContextNotice}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.composition}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.speed}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.json}`;
-  staticContext += `\n${PROMPT_INSTRUCTIONS.buyNow}`;
+  if (productContext) staticContext += `\n${PROMPT_INSTRUCTIONS.buyNow}`;
 
   if (improvementPrompt) {
     staticContext += `\n${PROMPT_INSTRUCTIONS.improvement}`;

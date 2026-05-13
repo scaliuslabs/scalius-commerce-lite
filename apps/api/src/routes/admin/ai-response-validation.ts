@@ -68,6 +68,10 @@ export const stagedPlanOutputSchema = z
 export type WidgetOutput = z.infer<typeof widgetOutputSchema>;
 export type StagedPlanOutput = z.infer<typeof stagedPlanOutputSchema>;
 
+export interface WidgetNormalizationOptions {
+  commerceFactsProvided?: boolean;
+}
+
 export const widgetOutputObjectSpec = {
   name: 'WidgetGeneration',
   description:
@@ -108,7 +112,42 @@ function assertGeneratedWidgetIsSafe(widget: ParsedWidget): void {
   }
 }
 
-function sanitizeGeneratedWidget(widget: ParsedWidget): ParsedWidget {
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const NO_CONTEXT_COMMERCE_TEXT_CLAIM_RULES: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'price or discount', pattern: /[$৳€£₹]\s*\d|\b\d+\s*(?:%|percent)\s*off\b|\b(?:save|discount|sale|deal)\b/i },
+  { label: 'delivery or shipping claim', pattern: /\b(?:shipping|delivery|dispatch|same-day|next-day|express)\b/i },
+  { label: 'guarantee or trust claim', pattern: /\b(?:guarantee|guaranteed|warranty|secure checkout|trusted by|authentic|genuine)\b/i },
+  { label: 'rating or review claim', pattern: /\b(?:reviews?|ratings?|stars?|testimonials?|customers love)\b/i },
+  { label: 'scarcity or freshness claim', pattern: /\b(?:limited|exclusive|new|latest|deadline|today only|while supplies last)\b/i },
+  { label: 'unsupported product-performance claim', pattern: /\b(?:zero crash|no crash|clean energy|clinically|certified|proven)\b/i },
+];
+
+function assertNoUnsupportedCommerceClaims(widget: ParsedWidget): void {
+  const visibleText = stripHtmlToText(widget.html);
+  if (/https?:\/\//i.test(`${widget.html}\n${widget.css}`)) {
+    throw new ValidationError(
+      'AI response included unsupported commerce claims (absolute URL) without product, category, or collection context.',
+    );
+  }
+
+  const matchedRule = NO_CONTEXT_COMMERCE_TEXT_CLAIM_RULES.find((rule) => rule.pattern.test(visibleText));
+
+  if (!matchedRule) return;
+
+  throw new ValidationError(
+    `AI response included unsupported commerce claims (${matchedRule.label}) without product, category, or collection context.`,
+  );
+}
+
+function sanitizeGeneratedWidget(widget: ParsedWidget, options?: WidgetNormalizationOptions): ParsedWidget {
   const sanitized = {
     html: sanitizeHtml(widget.html),
     css: sanitizeCssForStyleElement(widget.css),
@@ -116,6 +155,9 @@ function sanitizeGeneratedWidget(widget: ParsedWidget): ParsedWidget {
   };
 
   assertGeneratedWidgetIsSafe(sanitized);
+  if (options?.commerceFactsProvided === false) {
+    assertNoUnsupportedCommerceClaims(sanitized);
+  }
   return sanitized;
 }
 
@@ -138,7 +180,7 @@ function parseWidgetJson(text: string): ParsedWidget | null {
   };
 }
 
-export function normalizeWidgetGenerationText(text: string): string {
+export function normalizeWidgetGenerationText(text: string, options?: WidgetNormalizationOptions): string {
   const tagResult = parseTagBasedResponse(text);
   const widget = tagResult.success && tagResult.data ? tagResult.data : parseWidgetJson(text);
 
@@ -149,11 +191,11 @@ export function normalizeWidgetGenerationText(text: string): string {
   }
 
   assertGeneratedWidgetIsSafe(widget);
-  return widgetOutputToTaggedText(sanitizeGeneratedWidget(widget));
+  return widgetOutputToTaggedText(sanitizeGeneratedWidget(widget, options));
 }
 
-export function normalizeWidgetOutput(output: WidgetOutput): string {
-  return normalizeWidgetGenerationText(widgetOutputToTaggedText(output));
+export function normalizeWidgetOutput(output: WidgetOutput, options?: WidgetNormalizationOptions): string {
+  return normalizeWidgetGenerationText(widgetOutputToTaggedText(output), options);
 }
 
 export function normalizeStagedPlanText(text: string): string {
