@@ -527,6 +527,33 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/cache/clear-group": {
     POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
   },
+  "/api/v1/admin/settings/currency": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/general": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/theme": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/media": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/allowed-countries": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/business": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/payment-methods": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/settings/stripe": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
@@ -534,6 +561,26 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/sslcommerz": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/polar": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/auth": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/security": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/email": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/sms": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
   "/api/v1/admin/settings/header": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
@@ -572,9 +619,11 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/delivery-locations": {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
   },
   "/api/v1/admin/settings/delivery-locations/all": {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
+    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
   },
   "/api/v1/admin/settings/delivery-locations/import-pathao": {
     POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
@@ -743,19 +792,16 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
+  "/api/v1/admin/settings/notification-channels/admin-channels": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+  },
   "/api/v1/admin/settings/notification-channels/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
   "/api/v1/admin/settings": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-    PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/v1/admin/settings/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
