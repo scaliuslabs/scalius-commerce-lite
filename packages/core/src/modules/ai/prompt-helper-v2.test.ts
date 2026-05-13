@@ -165,4 +165,53 @@ describe("prompt helper v2", () => {
     expect(collectionPrompt).toContain("COLLECTION SECTION CONTRACT:");
     expect(collectionPrompt).toContain("Product information is the center");
   });
+
+  it("does not load image dimensions before creating the generation prompt", async () => {
+    const originalImage = (globalThis as { Image?: unknown }).Image;
+    Object.defineProperty(globalThis, "Image", {
+      configurable: true,
+      value: class {
+        constructor() {
+          throw new Error("Image dimensions should not be loaded during prompt assembly");
+        }
+      },
+    });
+
+    try {
+      const result = await generateStructuredPrompt({
+        systemPrompt: "Create storefront widgets.",
+        userPrompt: "Create a fast collection section.",
+        selectedImages: [
+          {
+            id: "media_1",
+            filename: "promo.webp",
+            url: "https://cloud.scalius.com/media/promo.webp?version=1",
+            size: 0,
+            createdAt: new Date(),
+          },
+        ],
+        selectedProducts: [maliciousProduct],
+        selectedCategories: [],
+        selectedCollections: [],
+        allCategoriesSelected: false,
+        modelId: "@cf/moonshotai/kimi-k2.6",
+        supportsVision: false,
+        promptType: "collection",
+      });
+
+      const promptText = textFromMessages(result.messages);
+      expect(promptText).toContain("IMAGES CONTEXT (UNTRUSTED CATALOG DATA)");
+      expect(promptText).toContain('"aspectRatio": "Unknown"');
+      expect(promptText).toContain("COLLECTION OUTPUT BLUEPRINT:");
+    } finally {
+      if (originalImage === undefined) {
+        delete (globalThis as { Image?: unknown }).Image;
+      } else {
+        Object.defineProperty(globalThis, "Image", {
+          configurable: true,
+          value: originalImage,
+        });
+      }
+    }
+  });
 });

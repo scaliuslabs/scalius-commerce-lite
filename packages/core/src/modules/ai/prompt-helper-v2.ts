@@ -141,24 +141,49 @@ export interface StructuredPromptResult {
 const GOAL_CONTRACTS: Record<AiPromptType, string> = {
   widget: `HOMEPAGE WIDGET CONTRACT:
 - Generate a compact homepage module or short connected section set, not a full campaign page.
-- Usual structure: opening store/category signal, featured products or categories, lightweight trust/urgency, and one broad CTA.
-- The visual rhythm should be reusable inside an existing homepage: compact to medium density, strong scanning, restrained vertical space.
-- Avoid FAQ-heavy layouts, long objection handling, deep campaign storytelling, and dense comparison tables unless the merchant explicitly asks.
+- Required output shape: a store/category signal, a discovery or featured-products band, and a light trust/urgency/action close when multiple bands are needed.
+- The visual rhythm should be reusable inside an existing homepage: compact to medium density, strong scanning, restrained vertical space, and no funnel-length storytelling.
+- Product cards may support the section, but the primary job is homepage discovery and merchandising, not deep product comparison.
+- Avoid FAQ-heavy layouts, long objection handling, dense comparison tables, and oversized landing-page heroes unless the merchant explicitly asks.
 - Default to 1-3 connected visual bands that feel like one insertable homepage composition.`,
 
   "landing-page": `LANDING SECTION CONTRACT:
 - Generate a campaign-style landing section set inside the existing storefront shell.
-- Usual structure: specific offer/promise hero, product or collection showcase, value proof, objection handling, trust/urgency, and final CTA.
-- The visual rhythm should feel more campaign-led than a homepage widget: clearer narrative, stronger proof, repeated but restrained conversion actions.
+- Required output shape: a specific offer/promise hero, product or collection showcase, value proof, objection handling or benefits, trust/urgency, and final CTA.
+- The visual rhythm should feel more campaign-led than a homepage widget: clearer narrative, stronger proof, repeated but restrained conversion actions, and a full conversion path.
 - Avoid broad store discovery, generic category browsing, and plain product-grid-only output unless the merchant explicitly asks.
+- Product cards should support a campaign argument; they should not be the whole output unless the request asks for a product grid landing section.
 - Default to a connected conversion flow that sells one offer, audience promise, product line, or collection.`,
 
   collection: `COLLECTION SECTION CONTRACT:
 - Generate practical collection merchandising, not a homepage banner or generic landing campaign.
+- Required output shape: compact collection intro, product grid/comparison/buying-guide content, and a tight trust/action strip.
 - Product information is the center: product names, prices, discounts, availability or variant cues, product links, and buy-now links when supplied.
-- Usual structure: compact collection intro, product grid/comparison or buying guide, and a tight trust/action strip.
-- The visual rhythm should be scan-first and commerce-dense with restrained hero treatment.
-- Avoid unrelated storytelling, oversized hero-only designs, and invented reviews, claims, products, prices, or shipping promises.`,
+- The visual weight should be scan-first and commerce-dense with restrained hero treatment. At least half the meaningful content should help compare or choose products.
+- Avoid unrelated campaign storytelling, homepage discovery banners, oversized hero-only designs, and invented reviews, claims, products, prices, or shipping promises.`,
+};
+
+const PROMPT_CONTEXT_LIMITS = {
+  imagesPerProduct: 2,
+  variantsPerProduct: 4,
+  attributesPerProduct: 6,
+  productsPerCollection: 8,
+  categoriesPerCollection: 8,
+} as const;
+
+const LAYOUT_BLUEPRINTS: Record<AiPromptType, string> = {
+  widget: `HOMEPAGE OUTPUT BLUEPRINT:
+- Choose a homepage pattern first: editorial feature strip, category discovery row, offer marquee with products, or compact trust + CTA band.
+- Keep total output tight. A good homepage widget should usually fit between existing storefront sections without making the page feel like a separate microsite.
+- Use one broad primary CTA plus product/category links when useful.`,
+  "landing-page": `LANDING OUTPUT BLUEPRINT:
+- Choose a conversion-funnel pattern first: hero/offer, supporting evidence, product/collection proof, objection handling, urgency/trust, final CTA.
+- The generated sections must feel like a campaign story with deliberate progression, not just a product grid with a bigger header.
+- Repeat CTAs only where they advance conversion, and make the closing CTA stronger than the opening one.`,
+  collection: `COLLECTION OUTPUT BLUEPRINT:
+- Choose a merchandising pattern first: collection intro plus product grid, comparison strip, buying guide, or shop-by-need layout.
+- Prioritize product facts over decorative copy. Product cards, price hierarchy, discount state, availability cues, and direct links should be prominent.
+- Keep the layout dense enough for collection browsing and avoid landing-page-style proof blocks unless they directly help product choice.`,
 };
 
 // ============================================================================
@@ -363,6 +388,30 @@ function generateImageContext(imagesWithDimensions: ImageWithDimensions[]): stri
   );
 }
 
+function filenameFromImageUrl(url: string, index: number): string {
+  try {
+    const parsed = new URL(url);
+    const name = parsed.pathname.split("/").filter(Boolean).at(-1);
+    return name ? decodeURIComponent(name).slice(0, TEXT_LIMITS.short) : `image-${index + 1}`;
+  } catch {
+    const name = url.split(/[/?#]/).filter(Boolean).at(-1);
+    return name ? name.slice(0, TEXT_LIMITS.short) : `image-${index + 1}`;
+  }
+}
+
+function generateImageContextFromUrls(imageUrls: string[]): string {
+  if (imageUrls.length === 0) return "";
+  return generateImageContext(
+    imageUrls.map((url, index) => ({
+      filename: filenameFromImageUrl(url, index),
+      url,
+      width: 0,
+      height: 0,
+      aspectRatio: "Unknown",
+    })),
+  );
+}
+
 function generateProductContext(products: ProductContextData[]): string {
   if (products.length === 0) return "";
 
@@ -392,12 +441,12 @@ function generateProductContext(products: ProductContextData[]): string {
         url: normalizePromptUrl(product.category.url),
       }
       : null,
-    images: product.images.map((image) => ({
+    images: product.images.slice(0, PROMPT_CONTEXT_LIMITS.imagesPerProduct).map((image) => ({
       url: normalizePromptUrl(image.url),
       isPrimary: image.isPrimary,
       alt: normalizePromptText(image.alt, TEXT_LIMITS.short),
     })),
-    variants: product.variants.map((variant) => ({
+    variants: product.variants.slice(0, PROMPT_CONTEXT_LIMITS.variantsPerProduct).map((variant) => ({
       id: variant.id,
       sku: requiredPromptText(variant.sku, TEXT_LIMITS.short, "N/A"),
       size: normalizePromptText(variant.size, TEXT_LIMITS.short),
@@ -414,7 +463,7 @@ function generateProductContext(products: ProductContextData[]): string {
         : null,
       buyNowUrl: normalizePromptUrl(variant.buyNowUrl),
     })),
-    attributes: product.attributes.map((attribute) => ({
+    attributes: product.attributes.slice(0, PROMPT_CONTEXT_LIMITS.attributesPerProduct).map((attribute) => ({
       name: requiredPromptText(attribute.name, TEXT_LIMITS.short, "Attribute"),
       value: requiredPromptText(attribute.value, TEXT_LIMITS.short, "N/A"),
     })),
@@ -476,13 +525,13 @@ function generateCollectionContext(collections: CollectionContextData[]): string
         imageAlt: normalizePromptText(collection.featuredProduct.imageAlt, TEXT_LIMITS.short),
       }
       : null,
-    categories: collection.categories.map((category) => ({
+    categories: collection.categories.slice(0, PROMPT_CONTEXT_LIMITS.categoriesPerCollection).map((category) => ({
       id: category.id,
       name: requiredPromptText(category.name, TEXT_LIMITS.title, "Untitled category"),
       slug: category.slug,
       url: normalizePromptUrl(category.url),
     })),
-    products: collection.products.map((product) => ({
+    products: collection.products.slice(0, PROMPT_CONTEXT_LIMITS.productsPerCollection).map((product) => ({
       id: product.id,
       name: requiredPromptText(product.name, TEXT_LIMITS.title, "Untitled product"),
       slug: product.slug,
@@ -612,17 +661,7 @@ export async function generateStructuredPrompt({
   const cappedImageUrls = Array.from(new Set(allImageUrls)).slice(0, maxImages);
 
   if (cappedImageUrls.length > 0) {
-    // Convert URLs to MediaFile format for dimension processing
-    const allImageFiles: MediaFile[] = cappedImageUrls.map((url, index) => ({
-      id: `img-${index}`,
-      filename: `image-${index + 1}.jpg`,
-      url: url,
-      size: 0, // Size not needed for dimension fetching
-      createdAt: new Date()
-    }));
-
-    const imagesWithDimensions = await processImagesWithDimensions(allImageFiles);
-    imageContext = generateImageContext(imagesWithDimensions);
+    imageContext = generateImageContextFromUrls(cappedImageUrls);
   }
 
   // If model supports vision, send ALL images as native multimodal
@@ -649,6 +688,7 @@ export async function generateStructuredPrompt({
   // Build static context (cacheable)
   let staticContext = systemPrompt;
   staticContext += `\n\n${GOAL_CONTRACTS[promptType]}`;
+  staticContext += `\n\n${LAYOUT_BLUEPRINTS[promptType]}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.composition}`;
   staticContext += `\n\n${PROMPT_INSTRUCTIONS.json}`;
   staticContext += `\n${PROMPT_INSTRUCTIONS.buyNow}`;
