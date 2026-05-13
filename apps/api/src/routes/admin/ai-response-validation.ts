@@ -130,6 +130,7 @@ const NO_CONTEXT_COMMERCE_TEXT_CLAIM_RULES: Array<{ label: string; pattern: RegE
   { label: 'rating or review claim', pattern: /\b(?:reviews?|ratings?|stars?|testimonials?|customers love)\b/i },
   { label: 'scarcity or freshness claim', pattern: /\b(?:limited|exclusive|new|latest|deadline|today only|while supplies last)\b/i },
   { label: 'unsupported product-performance claim', pattern: /\b(?:zero crash|no crash|clean energy|clinically|certified|proven)\b/i },
+  { label: 'invented catalog detail', pattern: /\b(?:view .{1,80} details|product image|available in|variants?|finishes?|flavo[u]?rs?|sizes?|sku|add to cart|buy now)\b/i },
 ];
 
 function assertNoUnsupportedCommerceClaims(widget: ParsedWidget): void {
@@ -137,6 +138,12 @@ function assertNoUnsupportedCommerceClaims(widget: ParsedWidget): void {
   if (/https?:\/\//i.test(`${widget.html}\n${widget.css}`)) {
     throw new ValidationError(
       'AI response included unsupported commerce claims (absolute URL) without product, category, or collection context.',
+    );
+  }
+
+  if (/<a\b[^>]*\bhref\s*=/i.test(widget.html)) {
+    throw new ValidationError(
+      'AI response included unsupported commerce claims (catalog link) without product, category, or collection context.',
     );
   }
 
