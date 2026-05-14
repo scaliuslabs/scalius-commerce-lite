@@ -978,7 +978,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
             ? aiImprover.contentToImprove
             : editorMode === 'live-preview'
               ? livePreviewContent
-              : aiGenerator.generatedContent ?? aiGenerator.draftContent
+              : aiGenerator.generatedContent ?? (aiGenerator.isLoadingPrompt ? aiGenerator.draftContent : null)
         }
         rawOutput={
           editorMode === 'improvement'

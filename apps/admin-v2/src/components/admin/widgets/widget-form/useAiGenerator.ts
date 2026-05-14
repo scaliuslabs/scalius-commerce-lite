@@ -570,7 +570,7 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
           percentage: draftContent ? 78 : 35,
         }
       : undefined,
-    draftContent,
+    draftContent: isLoadingPrompt ? draftContent : null,
     getMergedProductIds,
     getMergedCategoryIds,
     getMergedCollectionIds,
