@@ -160,6 +160,10 @@ export function withDestinationRuntimeContract(
 
 SERVER PERFORMANCE CONTRACT:
 - Produce one complete artifact in this call. Do not wait for a later stage to make it coherent.
+- Keep the artifact compact: one root section, concise HTML, and CSS that can finish comfortably inside the output budget.
+- Homepage and collection widgets should usually be one connected commerce section with 2-4 product cards, not a mini-page.
+- Finish the core CSS before optional hover states, decorative effects, or extra responsive refinements. Never leave a CSS rule or property unfinished.
+- Do not emit inline SVG icons, icon sprites, long comments, duplicate selectors, or decorative code that does not materially improve the merchant-facing section.
 - Use no JavaScript, no script tags, and no markdown.
 - The platform owns runtime wrappers. Do not emit widget-container, cms-widget-frame, widget-placement-zone, data-scalius-widget-root, or data-widget-id in generated HTML.
 - Use one content wrapper or section with destination-specific classes and margin: 0. Avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.
