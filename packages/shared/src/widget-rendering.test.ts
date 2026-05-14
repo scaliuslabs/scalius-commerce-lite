@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateWidgetRenderability,
+  hasLikelyTruncatedCss,
   normalizeWidgetParts,
   prepareScopedWidgetContent,
   stripWidgetRuntimeMarkup,
@@ -100,5 +101,11 @@ describe("widget rendering helpers", () => {
     expect(report.hasInputHtml).toBe(true);
     expect(report.hasRenderableHtml).toBe(false);
     expect(report.warnings.join(" ")).toMatch(/html was removed/i);
+  });
+
+  it("detects dangling declarations and unbalanced generated CSS", () => {
+    expect(hasLikelyTruncatedCss(".badge { top:")).toBe(true);
+    expect(hasLikelyTruncatedCss(".badge { top: 12px;")).toBe(true);
+    expect(hasLikelyTruncatedCss(".badge { top: 12px; }")).toBe(false);
   });
 });
