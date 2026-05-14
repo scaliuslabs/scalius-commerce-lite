@@ -106,6 +106,7 @@ describe("widget rendering helpers", () => {
   it("detects dangling declarations and unbalanced generated CSS", () => {
     expect(hasLikelyTruncatedCss(".badge { top:")).toBe(true);
     expect(hasLikelyTruncatedCss(".badge { top: 12px;")).toBe(true);
+    expect(hasLikelyTruncatedCss(".button { display:flex; text-decoration")).toBe(true);
     expect(hasLikelyTruncatedCss(".badge { top: 12px; }")).toBe(false);
   });
 });

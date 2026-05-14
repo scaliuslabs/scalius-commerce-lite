@@ -203,6 +203,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
       })
     : null;
   const previewCss = previewContent?.css ?? '';
+  const shouldShowError = Boolean(error) && !isProcessing;
 
   return (
     <div className="fixed inset-0 bg-background z-[100] flex flex-col">
@@ -365,6 +366,28 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                 <p className="text-sm text-muted-foreground">
                   {processingProgress?.currentStage || 'Please wait'}
                 </p>
+              </div>
+            </div>
+          ) : shouldShowError ? (
+            <div className="h-full flex items-center justify-center p-8">
+              <div className="max-w-md rounded-lg border bg-card p-6 text-center shadow-sm">
+                <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
+                <h3 className="mt-4 text-lg font-semibold">Generation needs review</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {error || 'The AI provider did not return valid widget HTML/CSS.'}
+                </p>
+                {rawOutput && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => setActiveView('raw')}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    View raw output
+                  </Button>
+                )}
               </div>
             </div>
           ) : activeView === 'raw' && rawOutput ? (

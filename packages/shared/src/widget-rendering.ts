@@ -54,7 +54,12 @@ export function hasLikelyTruncatedCss(css: string): boolean {
   const trimmed = css.trim();
   const openingBraces = (trimmed.match(/{/g) ?? []).length;
   const closingBraces = (trimmed.match(/}/g) ?? []).length;
-  return /:\s*}/.test(trimmed) || /[:{,]\s*$/.test(trimmed) || openingBraces !== closingBraces;
+  return (
+    /:\s*}/.test(trimmed) ||
+    /[:{,]\s*$/.test(trimmed) ||
+    /[;{]\s*[-a-zA-Z]+\s*$/.test(trimmed) ||
+    openingBraces !== closingBraces
+  );
 }
 
 function stripCodeFence(content: string): string {

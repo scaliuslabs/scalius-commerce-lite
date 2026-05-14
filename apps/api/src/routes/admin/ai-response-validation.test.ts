@@ -108,6 +108,15 @@ describe('AI response validation', () => {
     ).toThrow(ValidationError);
   });
 
+  it('rejects generated CSS that ends in an unfinished property name', () => {
+    expect(() =>
+      normalizeWidgetGenerationText(`
+        <htmljs><section class="promo"><a class="btn">Deal</a></section></htmljs>
+        <css>.promo { padding: 24px; }.btn { display: inline-flex; text-decoration</css>
+      `),
+    ).toThrow(ValidationError);
+  });
+
   it('rejects unsupported commerce claims when no catalog facts were provided', () => {
     expect(() =>
       normalizeWidgetGenerationText(
