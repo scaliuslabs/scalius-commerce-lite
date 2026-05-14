@@ -41,6 +41,15 @@ describe('widget generation content parsing', () => {
     ).toThrow(/truncated|incomplete/i);
   });
 
+  it('rejects generated CSS that ends in an unfinished property name', () => {
+    expect(() =>
+      parseGeneratedWidgetContent(`
+        <htmljs><section class="promo"><a class="btn">Deal</a></section></htmljs>
+        <css>.promo { padding: 24px; }.btn { display: inline-flex; text-decoration</css>
+      `),
+    ).toThrow(/malformed|incomplete/i);
+  });
+
   it('rejects generated HTML that sanitizes away before preview', () => {
     expect(() =>
       parseGeneratedWidgetContent(`
