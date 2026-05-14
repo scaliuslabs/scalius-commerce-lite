@@ -228,6 +228,97 @@ function buildPreviewScaffold(
   };
 }
 
+function formatPrice(value: number): string {
+  return `$${Number.isFinite(value) ? value.toFixed(2) : "0.00"}`;
+}
+
+function buildCatalogFallbackWidget(
+  promptType: WidgetGenerationRunPayload["promptType"],
+  contextData: Awaited<ReturnType<typeof resolveAiContextBatchDetails>>,
+): string | null {
+  const products = contextData.products.slice(0, 4);
+  if (products.length === 0) return null;
+
+  const categoryName = contextData.categories[0]?.name ?? products[0]?.category?.name ?? "Featured picks";
+  const title =
+    promptType === "landing-page"
+      ? `${categoryName} worth choosing now`
+      : promptType === "collection"
+        ? `Compare ${categoryName}`
+        : `Shop ${categoryName}`;
+  const eyebrow =
+    promptType === "landing-page"
+      ? "Campaign-ready picks"
+      : promptType === "collection"
+        ? "Collection guide"
+        : "Featured products";
+  const body =
+    promptType === "landing-page"
+      ? "A focused product section with real catalog links, prices, and images."
+      : "A compact storefront section built from selected catalog products.";
+
+  const cards = products
+    .map((product) => {
+      const image = product.images.find((item) => item.isPrimary) ?? product.images[0];
+      const discount =
+        product.finalPrice < product.price
+          ? `<span class="sc-ai-fallback__was">${formatPrice(product.price)}</span>`
+          : "";
+      const delivery = product.freeDelivery ? `<span class="sc-ai-fallback__meta">Free delivery</span>` : "";
+      return `<article class="sc-ai-fallback__card">
+        <a class="sc-ai-fallback__media" href="${escapeHtml(product.url)}">
+          ${
+            image?.url
+              ? `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt || product.name)}" loading="lazy" />`
+              : `<span>${escapeHtml(product.name)}</span>`
+          }
+        </a>
+        <div class="sc-ai-fallback__body">
+          <a class="sc-ai-fallback__name" href="${escapeHtml(product.url)}">${escapeHtml(product.name)}</a>
+          <div class="sc-ai-fallback__price">
+            <strong>${formatPrice(product.finalPrice)}</strong>
+            ${discount}
+          </div>
+          ${delivery}
+          <a class="sc-ai-fallback__button" href="${escapeHtml(product.buyNowUrl)}">Buy now</a>
+        </div>
+      </article>`;
+    })
+    .join("\n");
+
+  return `<htmljs>
+<section class="sc-ai-fallback" aria-label="${escapeHtml(title)}">
+  <div class="sc-ai-fallback__header">
+    <p>${escapeHtml(eyebrow)}</p>
+    <h2>${escapeHtml(title)}</h2>
+    <span>${escapeHtml(body)}</span>
+  </div>
+  <div class="sc-ai-fallback__grid">
+    ${cards}
+  </div>
+</section>
+</htmljs>
+<css>
+.sc-ai-fallback{margin:0;padding:clamp(24px,5vw,54px) 16px;background:#f7f8f5;color:#141512}
+.sc-ai-fallback__header{max-width:1120px;margin:0 auto 18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,360px);gap:14px;align-items:end}
+.sc-ai-fallback__header p{margin:0 0 8px;color:#52734d;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+.sc-ai-fallback__header h2{margin:0;font-size:clamp(26px,4vw,44px);line-height:1.05}
+.sc-ai-fallback__header span{color:#56605a;font-size:15px;line-height:1.5}
+.sc-ai-fallback__grid{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px}
+.sc-ai-fallback__card{background:#fff;border:1px solid #e0e4dc;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(20,21,18,.08)}
+.sc-ai-fallback__media{aspect-ratio:4/3;background:#eef1eb;display:flex;align-items:center;justify-content:center;overflow:hidden;text-decoration:none;color:#141512;font-weight:800;text-align:center}
+.sc-ai-fallback__media img{width:100%;height:100%;object-fit:contain;padding:14px;display:block}
+.sc-ai-fallback__body{padding:14px;display:flex;flex-direction:column;gap:9px;flex:1}
+.sc-ai-fallback__name{min-height:2.6em;color:#141512;text-decoration:none;font-size:15px;font-weight:800;line-height:1.3}
+.sc-ai-fallback__price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.sc-ai-fallback__price strong{font-size:18px}
+.sc-ai-fallback__was{color:#7a8179;text-decoration:line-through;font-size:13px}
+.sc-ai-fallback__meta{color:#52734d;font-size:12px;font-weight:800}
+.sc-ai-fallback__button{margin-top:auto;display:inline-flex;justify-content:center;border-radius:10px;background:#141512;color:#fff;text-decoration:none;font-weight:800;padding:10px 12px}
+@media(max-width:700px){.sc-ai-fallback__header{grid-template-columns:1fr}.sc-ai-fallback{padding-inline:12px}}
+</css>`;
+}
+
 function buildPreviewPatchFromRaw(rawText: string, commerceFactsProvided: boolean): { html: string; css: string } | null {
   try {
     const normalized = normalizeWidgetGenerationText(rawText, { commerceFactsProvided });
@@ -247,6 +338,7 @@ app.post("/", async (c) => {
   const db = c.get("db");
   const runId = crypto.randomUUID();
   let streamClosed = false;
+  let fallbackContextData: Awaited<ReturnType<typeof resolveAiContextBatchDetails>> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -294,6 +386,7 @@ app.post("/", async (c) => {
             collections: value.collections.length,
           }),
         );
+        fallbackContextData = contextData;
         emit({ type: "warning", warnings: contextData.warnings });
         emit({
           type: "preview.patch",
@@ -399,6 +492,29 @@ app.post("/", async (c) => {
         emit({ type: "run.completed", runId, usage: result.usage });
       } catch (error) {
         if (!isExpectedAbort(error, c.req.raw.signal)) {
+          const fallbackRaw =
+            payload.operation === "create" && fallbackContextData
+              ? buildCatalogFallbackWidget(payload.promptType, fallbackContextData)
+              : null;
+          if (fallbackRaw) {
+            emit({
+              type: "warning",
+              warnings: {
+                generationFallback: messageFromError(error),
+              },
+            });
+            emit({
+              type: "artifact",
+              raw: normalizeWidgetGenerationText(fallbackRaw, { commerceFactsProvided: true }),
+              metadata: {
+                provider: "scalius",
+                model: "catalog-fallback",
+                fallback: true,
+              },
+            });
+            emit({ type: "run.completed", runId });
+            return;
+          }
           emit({ type: "run.failed", runId, error: { message: messageFromError(error) } });
         }
       } finally {
