@@ -176,10 +176,10 @@ export function getCreateOutputBudget(settings: WidgetAiRuntimeSettings, promptT
   const maxBudget = settings.generation.maxOutputTokens;
   const targetBudget =
     promptType === 'landing-page'
-      ? Math.max(fastBudget, 3600)
+      ? Math.max(fastBudget, 4400)
       : promptType === 'collection'
-        ? Math.max(fastBudget, 3000)
-        : fastBudget;
+        ? Math.max(fastBudget, 3600)
+        : Math.max(fastBudget, 3200);
 
   return Math.min(maxBudget, targetBudget);
 }
