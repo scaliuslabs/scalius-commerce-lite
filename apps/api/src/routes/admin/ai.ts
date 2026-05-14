@@ -590,6 +590,81 @@ function addWidgetFormatRetryInstruction(options: GenerateTextOptions): Generate
   return retryOptions as GenerateTextOptions;
 }
 
+function truncateFailedWidgetResponse(rawText: string): string {
+  const trimmed = rawText.trim();
+  if (trimmed.length <= 12_000) return trimmed;
+  return `${trimmed.slice(0, 6_000)}\n\n<!-- middle omitted for repair prompt -->\n\n${trimmed.slice(-6_000)}`;
+}
+
+function widgetRepairBudget(options: GenerateTextOptions, promptType: WidgetPromptType): number {
+  const requested = typeof options.maxOutputTokens === 'number' ? options.maxOutputTokens : 0;
+  const minimum =
+    promptType === 'landing-page'
+      ? 4600
+      : promptType === 'collection'
+        ? 3800
+        : 3600;
+  return Math.max(requested, minimum);
+}
+
+function addWidgetArtifactRepairInstruction(
+  options: GenerateTextOptions,
+  rawText: string,
+  reason: unknown,
+  promptType: WidgetPromptType,
+): GenerateTextOptions {
+  const messages = Array.isArray((options as { messages?: ModelMessage[] }).messages)
+    ? (options as { messages: ModelMessage[] }).messages
+    : [];
+  const noContextCommercePolicy = shouldEnforceNoContextCommercePolicy(options);
+
+  return {
+    ...options,
+    prompt: undefined,
+    messages: [
+      ...messages,
+      {
+        role: 'user',
+        content: [
+          'Repair the failed widget artifact below. Keep the merchant intent and any valid catalog facts, but return ONE complete, compact, production-ready artifact only.',
+          `Validation failure: ${getErrorMessage(reason)}`,
+          'The repaired response must include BOTH tags, with non-empty valid CSS. Do not explain. Do not use markdown. Do not include JavaScript or script tags.',
+          'Required response shape:\n<htmljs>\n<section class="destination-specific-root">...</section>\n</htmljs>\n<css>\n.destination-specific-root{margin:0;...}\n</css>',
+          'CSS requirements: complete selectors, complete declarations, balanced braces, no dangling properties, no empty stylesheet, no oversized blank image panels, and bounded product image containers.',
+          noContextCommercePolicy
+            ? 'No product, category, collection, policy, pricing, delivery, review, or media facts were provided. Use generic non-factual commerce copy only.'
+            : '',
+          `Failed artifact to repair:\n${truncateFailedWidgetResponse(rawText)}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+    ],
+    temperature: typeof options.temperature === 'number' ? Math.min(options.temperature, 0.25) : 0.25,
+    maxOutputTokens: widgetRepairBudget(options, promptType),
+    maxRetries: 1,
+  } as GenerateTextOptions;
+}
+
+async function repairInvalidWidgetArtifact(
+  rawText: string,
+  error: unknown,
+  options: GenerateTextOptions,
+  promptType: WidgetPromptType,
+  normalizationOptions: { commerceFactsProvided: boolean },
+): Promise<WidgetGenerationResult> {
+  if (!rawText.trim()) {
+    throw error;
+  }
+
+  const repairOptions = addWidgetArtifactRepairInstruction(options, rawText, error, promptType);
+  const repair = await generateTextWithTransientRetry(repairOptions, 'Widget artifact repair');
+  return {
+    text: normalizeWidgetGenerationText(repair.text, normalizationOptions),
+    usage: usageFromResult(repair),
+  };
+}
+
 function addStagedPlanRetryInstruction(options: GenerateTextOptions): GenerateTextOptions {
   const messages = Array.isArray((options as { messages?: ModelMessage[] }).messages)
     ? (options as { messages: ModelMessage[] }).messages
@@ -667,6 +742,12 @@ export async function generateWidgetContent(
     const fallback = fallbackNoContextWidgetIfAllowed(options, promptType);
     if (fallback) return fallback;
 
+    try {
+      return await repairInvalidWidgetArtifact(result.text, error, options, promptType, normalizationOptions);
+    } catch (repairError) {
+      console.warn('Widget artifact repair failed; regenerating from the original brief:', repairError);
+    }
+
     const retry = await generateTextWithTransientRetry(
       addWidgetFormatRetryInstruction(options),
       'Widget format repair',
@@ -700,6 +781,13 @@ async function finalizeStreamedWidgetContent(
     console.warn('Streamed widget response failed validation; using fallback or retrying once:', error);
     const fallback = fallbackNoContextWidgetIfAllowed(options, promptType);
     if (fallback) return fallback.text;
+
+    try {
+      const repaired = await repairInvalidWidgetArtifact(rawText, error, options, promptType, normalizationOptions);
+      return repaired.text;
+    } catch (repairError) {
+      console.warn('Streamed widget artifact repair failed; regenerating from the original brief:', repairError);
+    }
 
     const retryOptions = addWidgetFormatRetryInstruction(options);
     try {
