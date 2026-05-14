@@ -99,6 +99,15 @@ describe('AI response validation', () => {
     ).toThrow(ValidationError);
   });
 
+  it('rejects generated CSS that ends in a dangling declaration', () => {
+    expect(() =>
+      normalizeWidgetGenerationText(`
+        <htmljs><section class="promo"><span class="badge">Deal</span></section></htmljs>
+        <css>.promo { padding: 24px; }.badge { position: absolute; top:</css>
+      `),
+    ).toThrow(ValidationError);
+  });
+
   it('rejects unsupported commerce claims when no catalog facts were provided', () => {
     expect(() =>
       normalizeWidgetGenerationText(

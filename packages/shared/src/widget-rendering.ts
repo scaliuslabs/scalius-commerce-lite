@@ -51,7 +51,10 @@ export interface PrepareScopedWidgetContentOptions {
 }
 
 export function hasLikelyTruncatedCss(css: string): boolean {
-  return /:\s*}/.test(css) || /[,{]\s*$/.test(css.trim());
+  const trimmed = css.trim();
+  const openingBraces = (trimmed.match(/{/g) ?? []).length;
+  const closingBraces = (trimmed.match(/}/g) ?? []).length;
+  return /:\s*}/.test(trimmed) || /[:{,]\s*$/.test(trimmed) || openingBraces !== closingBraces;
 }
 
 function stripCodeFence(content: string): string {

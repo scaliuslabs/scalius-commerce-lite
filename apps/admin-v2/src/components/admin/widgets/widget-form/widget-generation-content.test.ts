@@ -32,6 +32,15 @@ describe('widget generation content parsing', () => {
     ).toThrow(/malformed|incomplete/i);
   });
 
+  it('rejects generated CSS that ends in a dangling declaration', () => {
+    expect(() =>
+      parseGeneratedWidgetContent(`
+        <htmljs><section class="promo"><span class="badge">Deal</span></section></htmljs>
+        <css>.promo { padding: 24px; }.badge { position: absolute; top:</css>
+      `),
+    ).toThrow(/truncated|incomplete/i);
+  });
+
   it('rejects generated HTML that sanitizes away before preview', () => {
     expect(() =>
       parseGeneratedWidgetContent(`

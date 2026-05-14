@@ -978,6 +978,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
             ? aiImprover.contentToImprove
             : editorMode === 'live-preview'
               ? livePreviewContent
+              : aiGenerator.generationError
+                ? null
               : aiGenerator.generatedContent ?? (aiGenerator.isLoadingPrompt ? aiGenerator.draftContent : null)
         }
         rawOutput={
