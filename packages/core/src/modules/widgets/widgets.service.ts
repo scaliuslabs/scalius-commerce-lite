@@ -32,6 +32,7 @@ import {
     evaluateWidgetRenderability,
     hasLikelyTruncatedCss,
     normalizeWidgetParts,
+    sanitizeWidgetJsForInlineScript,
 } from "@scalius/shared/widget-rendering";
 import { findDuplicateWidgetPlacementIndexes } from "@scalius/shared/widget-placement";
 
@@ -72,6 +73,7 @@ type PublicWidgetBase = Pick<
     | "name"
     | "htmlContent"
     | "cssContent"
+    | "jsContent"
     | "isActive"
     | "displayTarget"
     | "placementRule"
@@ -122,7 +124,8 @@ export function sanitizeWidgetCss(css: string): string {
 function normalizePersistentWidgetContent(input: {
     htmlContent: string;
     cssContent?: string | null;
-}): { htmlContent: string; cssContent?: string | null } {
+    jsContent?: string | null;
+}): { htmlContent: string; cssContent?: string | null; jsContent?: string | null } {
     const normalized = normalizeWidgetParts(input);
     if (hasLikelyTruncatedCss(normalized.css)) {
         throw new ValidationError("Widget CSS is malformed or incomplete.");
@@ -149,6 +152,7 @@ function normalizePersistentWidgetContent(input: {
     return {
         htmlContent: sanitizeWidgetHtml(normalized.html),
         cssContent: normalized.css ? sanitizeWidgetCss(normalized.css) : normalized.css || input.cssContent,
+        jsContent: normalized.js ? sanitizeWidgetJsForInlineScript(normalized.js) : normalized.js || input.jsContent,
     };
 }
 
@@ -527,6 +531,7 @@ function toPublicWidget(
         name: widget.name,
         htmlContent: widget.htmlContent ? sanitizeWidgetHtml(widget.htmlContent) : widget.htmlContent,
         cssContent: widget.cssContent ? sanitizeWidgetCss(widget.cssContent) : widget.cssContent,
+        jsContent: widget.jsContent ? sanitizeWidgetJsForInlineScript(widget.jsContent) : widget.jsContent,
         isActive: widget.isActive,
         displayTarget: legacyFields.displayTarget,
         placementRule: legacyFields.placementRule,
@@ -703,6 +708,7 @@ export async function listWidgets(db: Database, options?: { showTrashed?: boolea
             name: widgets.name,
             htmlContent: widgets.htmlContent,
             cssContent: widgets.cssContent,
+            jsContent: widgets.jsContent,
             aiContext: widgets.aiContext,
             isActive: widgets.isActive,
             displayTarget: widgets.displayTarget,
@@ -918,6 +924,7 @@ export async function getActiveWidgetById(db: Database, id: string) {
             name: widgets.name,
             htmlContent: widgets.htmlContent,
             cssContent: widgets.cssContent,
+            jsContent: widgets.jsContent,
             isActive: widgets.isActive,
             displayTarget: widgets.displayTarget,
             placementRule: widgets.placementRule,
@@ -998,6 +1005,7 @@ export async function getActiveWidgetPlacements(
             name: widgets.name,
             htmlContent: widgets.htmlContent,
             cssContent: widgets.cssContent,
+            jsContent: widgets.jsContent,
             isActive: widgets.isActive,
             displayTarget: widgets.displayTarget,
             placementRule: widgets.placementRule,
@@ -1027,6 +1035,7 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
     const content = normalizePersistentWidgetContent({
         htmlContent: data.htmlContent,
         cssContent: data.cssContent,
+        jsContent: data.jsContent,
     });
     await validatePlacementReferences(db, requestedPlacements);
     if (data.isActive) {
@@ -1042,6 +1051,7 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
             name: data.name,
             htmlContent: content.htmlContent,
             cssContent: content.cssContent,
+            jsContent: content.jsContent,
             isActive: data.isActive,
             displayTarget: legacyFields.displayTarget,
             placementRule: legacyFields.placementRule,
@@ -1072,16 +1082,20 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
     const updateData: Record<string, unknown> = { updatedAt: sql`unixepoch()` };
     if (data.name !== undefined) updateData.name = data.name;
     const content =
-        data.htmlContent !== undefined || data.cssContent !== undefined
+        data.htmlContent !== undefined || data.cssContent !== undefined || data.jsContent !== undefined
             ? normalizePersistentWidgetContent({
                 htmlContent: data.htmlContent ?? existing.htmlContent,
                 cssContent: data.cssContent !== undefined ? data.cssContent : existing.cssContent,
+                jsContent: data.jsContent !== undefined ? data.jsContent : existing.jsContent,
             })
             : null;
     if (content) {
         updateData.htmlContent = content.htmlContent;
         if (data.cssContent !== undefined || data.htmlContent !== undefined) {
             updateData.cssContent = content.cssContent;
+        }
+        if (data.jsContent !== undefined || data.htmlContent !== undefined) {
+            updateData.jsContent = content.jsContent;
         }
     }
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
@@ -1202,7 +1216,7 @@ export async function createHistoryEntry(
     db: Database,
     widgetId: string,
     reason: string = "Manual save",
-    snapshot?: { htmlContent?: string; cssContent?: string | null },
+    snapshot?: { htmlContent?: string; cssContent?: string | null; jsContent?: string | null },
 ): Promise<WidgetHistory> {
     const widget = await getWidgetById(db, widgetId);
     if (!widget) throw new NotFoundError("Widget not found");
@@ -1212,6 +1226,7 @@ export async function createHistoryEntry(
             ? normalizePersistentWidgetContent({
                 htmlContent: snapshot.htmlContent,
                 cssContent: snapshot.cssContent,
+                jsContent: snapshot.jsContent,
             }).htmlContent
             : widget.htmlContent;
     const cssContent =
@@ -1219,8 +1234,17 @@ export async function createHistoryEntry(
             ? normalizePersistentWidgetContent({
                 htmlContent: snapshot?.htmlContent ?? widget.htmlContent,
                 cssContent: snapshot?.cssContent !== undefined ? snapshot.cssContent : widget.cssContent,
+                jsContent: snapshot?.jsContent !== undefined ? snapshot.jsContent : widget.jsContent,
             }).cssContent
             : widget.cssContent;
+    const jsContent =
+        snapshot?.htmlContent !== undefined || snapshot?.jsContent !== undefined
+            ? normalizePersistentWidgetContent({
+                htmlContent: snapshot?.htmlContent ?? widget.htmlContent,
+                cssContent: snapshot?.cssContent !== undefined ? snapshot.cssContent : widget.cssContent,
+                jsContent: snapshot?.jsContent !== undefined ? snapshot.jsContent : widget.jsContent,
+            }).jsContent
+            : widget.jsContent;
 
     return db
         .insert(widgetHistory)
@@ -1229,6 +1253,7 @@ export async function createHistoryEntry(
             widgetId,
             htmlContent,
             cssContent,
+            jsContent,
             reason,
         })
         .returning()
@@ -1262,6 +1287,7 @@ export async function restoreFromHistory(
     const restoredContent = normalizePersistentWidgetContent({
         htmlContent: entry.htmlContent,
         cssContent: entry.cssContent,
+        jsContent: entry.jsContent,
     });
 
     // Atomic: snapshot current state + restore from history in a single batch
@@ -1271,12 +1297,14 @@ export async function restoreFromHistory(
             widgetId,
             htmlContent: widget.htmlContent,
             cssContent: widget.cssContent,
+            jsContent: widget.jsContent,
             reason: "Auto-saved before restore",
         }),
         db.update(widgets)
             .set({
                 htmlContent: restoredContent.htmlContent,
                 cssContent: restoredContent.cssContent,
+                jsContent: restoredContent.jsContent,
                 updatedAt: sql`unixepoch()`,
             })
             .where(eq(widgets.id, widgetId)),

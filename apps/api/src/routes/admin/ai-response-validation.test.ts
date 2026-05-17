@@ -67,6 +67,19 @@ describe('AI response validation', () => {
     ).toContain('<div class="promo">Deal</div>');
   });
 
+  it('canonicalizes raw HTML document output when the provider ignores artifact tags', () => {
+    const output = normalizeWidgetGenerationText(`
+      <!doctype html>
+      <html>
+        <head><style>.promo { display: grid; }</style></head>
+        <body><section class="promo"><h2>Deal</h2></section></body>
+      </html>
+    `);
+
+    expect(output).toContain('<section class="promo"><h2>Deal</h2></section>');
+    expect(output).toContain('.promo{display:grid}');
+  });
+
   it('rejects prose without usable widget markup', () => {
     expect(() => normalizeWidgetGenerationText('I can help you build that.')).toThrow(ValidationError);
   });
@@ -75,10 +88,15 @@ describe('AI response validation', () => {
     expect(() => normalizeWidgetGenerationText('<htmljs>plain text</htmljs>')).toThrow(ValidationError);
   });
 
-  it('rejects script tags', () => {
-    expect(() => normalizeWidgetGenerationText('<htmljs><div>Deal</div><script>alert("x")</script></htmljs>')).toThrow(
-      ValidationError,
-    );
+  it('extracts script tags into scoped JS when the script is local-safe', () => {
+    const output = normalizeWidgetGenerationText(`
+      <htmljs><section class="promo"><button>Deal</button><script>widget.query("button")?.classList.add("ready")</script></section></htmljs>
+      <css>.promo { color: red; }</css>
+    `);
+
+    expect(output).toContain('<section class="promo"><button>Deal</button></section>');
+    expect(output).toContain('<js>');
+    expect(output).toContain('widget.query("button")');
   });
 
   it('rejects widgets without usable CSS', () => {

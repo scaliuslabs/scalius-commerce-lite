@@ -32,7 +32,7 @@ describe("widget rendering helpers", () => {
       htmlContent: `
         <section class="hero" onclick="alert(1)">
           <style>.hero { color: red; }</style>
-          <script>alert(1)</script>
+          <script>widget.query("h2")?.classList.add("ready")</script>
           <h2>Launch</h2>
         </section>
       `,
@@ -44,6 +44,7 @@ describe("widget rendering helpers", () => {
     expect(prepared.html).not.toMatch(/onclick|script|style/i);
     expect(prepared.css).toContain(".sw-wid_test-123 .hero");
     expect(prepared.css).toContain(".sw-wid_test-123 .card");
+    expect(prepared.js).toContain('widget.query("h2")');
   });
 
   it("removes model-authored runtime widget wrappers before rendering", () => {
@@ -91,16 +92,17 @@ describe("widget rendering helpers", () => {
     expect(report.warnings.join(" ")).toMatch(/removed|discarded/i);
   });
 
-  it("reports HTML that cannot survive sanitization", () => {
+  it("extracts script-only HTML into JS instead of renderable HTML", () => {
     const report = evaluateWidgetRenderability({
       id: "wid_bad_html",
-      htmlContent: "<script>alert(1)</script>",
+      htmlContent: '<script>widget.root.classList.add("ready")</script>',
       cssContent: ".hero { color: red; }",
     });
 
-    expect(report.hasInputHtml).toBe(true);
+    expect(report.hasInputHtml).toBe(false);
     expect(report.hasRenderableHtml).toBe(false);
-    expect(report.warnings.join(" ")).toMatch(/html was removed/i);
+    expect(report.hasInputJs).toBe(true);
+    expect(report.hasRenderableJs).toBe(true);
   });
 
   it("detects dangling declarations and unbalanced generated CSS", () => {

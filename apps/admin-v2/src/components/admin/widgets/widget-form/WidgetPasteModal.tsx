@@ -9,7 +9,7 @@ import { normalizeGeneratedWidgetContent, parseGeneratedWidgetContent } from './
 interface WidgetPasteModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onApply: (content: { html: string; css: string; }) => void;
+  onApply: (content: { html: string; css: string; js?: string }) => void;
 }
 
 export const WidgetPasteModal: React.FC<WidgetPasteModalProps> = ({ isOpen, onOpenChange, onApply }) => {
@@ -37,7 +37,7 @@ export const WidgetPasteModal: React.FC<WidgetPasteModalProps> = ({ isOpen, onOp
         <DialogHeader>
           <DialogTitle>Paste AI Response</DialogTitle>
           <DialogDescription>
-            Paste the response from an external AI chatbot below. Accepts both tag-based format (&lt;htmljs&gt;/&lt;css&gt;) and JSON format.
+            Paste the response from an external AI chatbot below. Accepts tag-based format (&lt;htmljs&gt;/&lt;css&gt;/&lt;js&gt;) and JSON format.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -53,10 +53,15 @@ export const WidgetPasteModal: React.FC<WidgetPasteModalProps> = ({ isOpen, onOp
   .my-class { ... }
 </css>
 
+<js>
+  widget.query("button")?.addEventListener("click", () => { ... })
+</js>
+
 Or JSON format:
 {
   "html": "<div>...</div>",
-  "css": ".my-class { ... }"
+  "css": ".my-class { ... }",
+  "js": "..."
 }'
             rows={15}
           />

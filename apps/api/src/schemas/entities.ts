@@ -434,6 +434,7 @@ export const widgetSchema = z
     name: z.string(),
     htmlContent: z.string(),
     cssContent: z.string().nullable(),
+    jsContent: z.string().nullable(),
     aiContext: z.string().nullable(),
     isActive: z.boolean(),
     displayTarget: z.string(),

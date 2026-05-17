@@ -221,6 +221,7 @@ export const widgetFormSchema = z.object({
   name: z.string().min(3, 'Widget name must be at least 3 characters long.'),
   htmlContent: z.string(),
   cssContent: z.string().optional(),
+  jsContent: z.string().optional(),
   isActive: z.boolean().default(true),
   displayTarget: z.enum(['homepage']).default('homepage'),
   placementRule: z.enum([

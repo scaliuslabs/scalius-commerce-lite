@@ -141,7 +141,8 @@ export function parseJSONSafely(text: string): {
 
 /**
  * Validates if a JSON object has the required structure for widget content - ENHANCED
- * Supports both "html" and "htmljs" fields for compatibility with tag-based format
+ * Supports both "html" and "htmljs" fields for compatibility with tag-based format.
+ * Optional JavaScript is accepted as "js", "javascript", or "jsContent".
  */
 export function validateWidgetJSON(data: unknown): {
   valid: boolean;

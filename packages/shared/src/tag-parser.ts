@@ -5,7 +5,7 @@
  * LLMs can more reliably generate content within XML-like tags than perfect JSON.
  *
  * Supported formats:
- * 1. Full widget: <htmljs>...</htmljs> <css>...</css>
+ * 1. Full widget: <htmljs>...</htmljs> <css>...</css> optional <js>...</js>
  * 2. Sectioned widget: <part1><htmljs>...</htmljs><css>...</css></part1>
  * 3. Legacy JSON: {"html": "...", "css": "..."}
  */
@@ -13,6 +13,7 @@
 export interface ParsedWidget {
   html: string;
   css: string;
+  js?: string;
   raw?: string; // Original response for debugging
 }
 
@@ -20,6 +21,7 @@ export interface ParsedSection {
   partNumber: number;
   html: string;
   css: string;
+  js?: string;
 }
 
 export interface ParseResult {
@@ -52,7 +54,7 @@ function extractTag(content: string, tagName: string): string | null {
 
   const start = openMatch.index + openMatch[0].length;
   const afterStart = content.slice(start);
-  const nextKnownTag = afterStart.search(/<\/?(?:htmljs|html|css|part\d+)\b/i);
+  const nextKnownTag = afterStart.search(/<\/?(?:htmljs|html|css|js|javascript|part\d+)\b/i);
   return (nextKnownTag === -1 ? afterStart : afterStart.slice(0, nextKnownTag)).trim();
 }
 
@@ -70,17 +72,58 @@ function extractSections(content: string): ParsedSection[] {
 
     const html = extractTag(partContent, 'htmljs') || extractTag(partContent, 'html') || '';
     const css = extractTag(partContent, 'css') || '';
+    const js = extractTag(partContent, 'js') || extractTag(partContent, 'javascript') || '';
 
-    if (html || css) {
+    if (html || css || js) {
       sections.push({
         partNumber,
         html,
         css,
+        js,
       });
     }
   }
 
   return sections;
+}
+
+function extractHtmlDocumentLikeContent(content: string): ParsedWidget | null {
+  const cleaned = content
+    .replace(/^```(?:html)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  const hasHtml = /<(?:section|div|article|aside|main|header|footer|ul|ol|h[1-6]|p|a|button|img|html|body)\b/i.test(cleaned);
+  if (!hasHtml) return null;
+
+  const styleBlocks = Array.from(cleaned.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi))
+    .map((match) => match[1]?.trim() || "")
+    .filter(Boolean);
+  const scriptBlocks = Array.from(cleaned.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))
+    .map((match) => match[1]?.trim() || "")
+    .filter(Boolean);
+
+  if (styleBlocks.length === 0 && !/\bstyle\s*=/i.test(cleaned)) return null;
+
+  return {
+    html: cleaned,
+    css: styleBlocks.join("\n\n"),
+    js: scriptBlocks.join("\n\n"),
+    raw: content.trim(),
+  };
+}
+
+function extractStyleBlocks(content: string): string {
+  return Array.from(content.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi))
+    .map((match) => match[1]?.trim() || "")
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function extractScriptBlocks(content: string): string {
+  return Array.from(content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))
+    .map((match) => match[1]?.trim() || "")
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /**
@@ -95,12 +138,14 @@ export function parseTagBasedResponse(response: string): ParseResult {
     // Combine sections into a single widget
     const combinedHtml = sections.map(s => s.html).join('\n');
     const combinedCss = sections.map(s => s.css).filter(Boolean).join('\n\n');
+    const combinedJs = sections.map(s => s.js).filter(Boolean).join('\n\n');
 
     return {
       success: true,
       data: {
         html: combinedHtml,
         css: combinedCss,
+        js: combinedJs,
         raw: trimmed,
       },
       sections,
@@ -111,15 +156,19 @@ export function parseTagBasedResponse(response: string): ParseResult {
   const htmljs = extractTag(trimmed, 'htmljs');
   const html = extractTag(trimmed, 'html');
   const css = extractTag(trimmed, 'css');
+  const js = extractTag(trimmed, 'js') || extractTag(trimmed, 'javascript');
 
   const extractedHtml = htmljs || html;
 
-  if (extractedHtml !== null || css !== null) {
+  if (extractedHtml !== null || css !== null || js !== null) {
+    const recoveredCss = css || (extractedHtml ? extractStyleBlocks(extractedHtml) || extractStyleBlocks(trimmed) : "");
+    const recoveredJs = js || (extractedHtml ? extractScriptBlocks(extractedHtml) || extractScriptBlocks(trimmed) : "");
     return {
       success: true,
       data: {
         html: extractedHtml || '',
-        css: css || '',
+        css: recoveredCss,
+        js: recoveredJs,
         raw: trimmed,
       },
     };
@@ -143,6 +192,7 @@ export function parseTagBasedResponse(response: string): ParseResult {
         data: {
           html: parsed.html || parsed.htmlContent || '',
           css: parsed.css || parsed.cssContent || '',
+          js: parsed.js || parsed.javascript || parsed.jsContent || '',
           raw: trimmed,
         },
       };
@@ -154,15 +204,25 @@ export function parseTagBasedResponse(response: string): ParseResult {
   // Strategy 4: Try to extract code blocks
   const htmlCodeBlock = trimmed.match(/```html\s*([\s\S]*?)```/i);
   const cssCodeBlock = trimmed.match(/```css\s*([\s\S]*?)```/i);
+  const jsCodeBlock = trimmed.match(/```(?:js|javascript)\s*([\s\S]*?)```/i);
 
-  if (htmlCodeBlock || cssCodeBlock) {
+  if (htmlCodeBlock || cssCodeBlock || jsCodeBlock) {
     return {
       success: true,
       data: {
         html: htmlCodeBlock?.[1]?.trim() || '',
         css: cssCodeBlock?.[1]?.trim() || '',
+        js: jsCodeBlock?.[1]?.trim() || '',
         raw: trimmed,
       },
+    };
+  }
+
+  const htmlDocumentLike = extractHtmlDocumentLikeContent(trimmed);
+  if (htmlDocumentLike) {
+    return {
+      success: true,
+      data: htmlDocumentLike,
     };
   }
 
@@ -243,12 +303,16 @@ RESPONSE FORMAT:
 Please respond with your code wrapped in the following tags:
 
 <htmljs>
-<!-- Your HTML code here. Do not include script tags. -->
+<!-- Your HTML code here. Keep scripts out of HTML; optional JavaScript goes in <js>. -->
 </htmljs>
 
 <css>
 /* Your CSS code here */
 </css>
+
+<js>
+/* Optional root-scoped JavaScript. Use widget.root or root-scoped selectors only. */
+</js>
 
 For multi-section widgets, use:
 <part1>
@@ -258,6 +322,9 @@ For multi-section widgets, use:
 <css>
 /* Section 1 CSS */
 </css>
+<js>
+/* Optional section JS */
+</js>
 </part1>
 
 <part2>

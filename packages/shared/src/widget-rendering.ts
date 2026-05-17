@@ -8,6 +8,7 @@ import { DomUtils, parseDocument } from "htmlparser2";
 import { isTag, type ChildNode, type Element } from "domhandler";
 
 const STYLE_BLOCK_RE = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+const SCRIPT_BLOCK_RE = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 const RESERVED_WIDGET_RUNTIME_CLASSES = new Set([
   "widget-container",
   "cms-widget-frame",
@@ -22,18 +23,22 @@ export interface WidgetContentInput {
   id: string;
   htmlContent?: string | null;
   cssContent?: string | null;
+  jsContent?: string | null;
 }
 
 export interface NormalizedWidgetParts {
   html: string;
   css: string;
+  js: string;
   extractedCss: string;
+  extractedJs: string;
 }
 
 export interface PreparedScopedWidgetContent {
   scopeClass: string;
   html: string;
   css: string;
+  js: string;
   cssReport: CssSanitizeReport;
 }
 
@@ -42,6 +47,8 @@ export interface WidgetRenderabilityReport extends PreparedScopedWidgetContent {
   hasRenderableHtml: boolean;
   hasInputCss: boolean;
   hasRenderableCss: boolean;
+  hasInputJs: boolean;
+  hasRenderableJs: boolean;
   warnings: string[];
 }
 
@@ -103,6 +110,47 @@ export function normalizeWidgetCss(css: string | null | undefined): string {
   let normalized = stripCodeFence(css);
   normalized = stripTagWrapper(normalized, "css");
   return repairGeneratedCssComments(normalized);
+}
+
+export function normalizeWidgetJs(js: string | null | undefined): string {
+  if (!js) return "";
+
+  let normalized = stripCodeFence(js);
+  normalized = stripTagWrapper(normalized, "js");
+  normalized = stripTagWrapper(normalized, "javascript");
+  return normalized.trim();
+}
+
+export function sanitizeWidgetJsForInlineScript(js: string | null | undefined): string {
+  const normalized = normalizeWidgetJs(js);
+  if (!normalized) return "";
+
+  const blockedPatterns: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /<\/script\b/i, label: "closing script tags" },
+    { pattern: /\b(?:eval|Function)\s*\(/i, label: "dynamic code execution" },
+    { pattern: /\bimport\s*(?:\(|[^("'])/i, label: "runtime imports" },
+    { pattern: /\bexport\s+(?:default|const|let|var|function|class|\{)/i, label: "module exports" },
+    { pattern: /\bdocument\s*\.\s*(?:write|writeln|body|head|documentElement|cookie)\b/i, label: "global document access" },
+    { pattern: /\bwindow\s*\.\s*(?:location|open|parent|top)\b/i, label: "global window navigation" },
+    { pattern: /\b(?:localStorage|sessionStorage|indexedDB)\b/i, label: "browser storage access" },
+    { pattern: /\bfetch\s*\(/i, label: "network requests" },
+    { pattern: /\bXMLHttpRequest\b/i, label: "network requests" },
+  ];
+
+  const blocked = blockedPatterns.find(({ pattern }) => pattern.test(normalized));
+  if (blocked) {
+    throw new Error(`Widget JS uses unsupported ${blocked.label}. Use root-scoped DOM behavior only.`);
+  }
+
+  return normalized;
+}
+
+export function createScopedWidgetScript(widgetId: string, js: string | null | undefined): string {
+  const sanitizedJs = sanitizeWidgetJsForInlineScript(js);
+  if (!sanitizedJs) return "";
+
+  const safeWidgetId = JSON.stringify(widgetId);
+  return `(function(){\n  var script=document.currentScript;\n  var root=script&&script.previousElementSibling;\n  if(!root||root.getAttribute("data-widget-id")!==${safeWidgetId}||root.getAttribute("data-scalius-widget-root")!=="true")return;\n  var widget={id:${safeWidgetId},root:root,query:function(selector){return root.querySelector(selector);},queryAll:function(selector){return Array.prototype.slice.call(root.querySelectorAll(selector));}};\n  try{\n${sanitizedJs}\n  }catch(error){console.error("Scalius widget script failed",${safeWidgetId},error);}\n})();`;
 }
 
 /**
@@ -184,18 +232,28 @@ export function getWidgetScopeClass(widgetId: string): string {
 export function normalizeWidgetParts(input: {
   htmlContent?: string | null;
   cssContent?: string | null;
+  jsContent?: string | null;
 }): NormalizedWidgetParts {
   const normalizedHtml = stripWidgetRuntimeMarkup(normalizeWidgetHtml(input.htmlContent ?? ""));
   const extractedCssBlocks: string[] = [];
-  const html = normalizedHtml.replace(STYLE_BLOCK_RE, (_match, css: string) => {
-    if (css.trim()) extractedCssBlocks.push(css.trim());
-    return "";
-  });
+  const extractedJsBlocks: string[] = [];
+  const html = normalizedHtml
+    .replace(STYLE_BLOCK_RE, (_match, css: string) => {
+      if (css.trim()) extractedCssBlocks.push(css.trim());
+      return "";
+    })
+    .replace(SCRIPT_BLOCK_RE, (_match, js: string) => {
+      if (js.trim()) extractedJsBlocks.push(js.trim());
+      return "";
+    });
   const explicitCss = normalizeWidgetCss(input.cssContent);
+  const explicitJs = normalizeWidgetJs(input.jsContent);
   const extractedCss = extractedCssBlocks.join("\n\n");
+  const extractedJs = extractedJsBlocks.join("\n\n");
   const css = [explicitCss, extractedCss].filter(Boolean).join("\n\n");
+  const js = [explicitJs, extractedJs].filter(Boolean).join("\n\n");
 
-  return { html, css, extractedCss };
+  return { html, css, js, extractedCss, extractedJs };
 }
 
 export function prepareScopedWidgetContent(
@@ -211,8 +269,9 @@ export function prepareScopedWidgetContent(
     ? options.transformCss(cssReport.css)
     : cssReport.css;
   const css = scopeCss(transformedCss, scopeClass);
+  const js = sanitizeWidgetJsForInlineScript(parts.js);
 
-  return { scopeClass, html, css, cssReport };
+  return { scopeClass, html, css, js, cssReport };
 }
 
 export function evaluateWidgetRenderability(
@@ -225,6 +284,8 @@ export function evaluateWidgetRenderability(
   const hasRenderableHtml = prepared.html.trim().length > 0;
   const hasInputCss = parts.css.trim().length > 0;
   const hasRenderableCss = prepared.css.trim().length > 0;
+  const hasInputJs = parts.js.trim().length > 0;
+  const hasRenderableJs = prepared.js.trim().length > 0;
   const warnings = [...prepared.cssReport.warnings];
 
   if (hasInputHtml && !hasRenderableHtml) {
@@ -243,6 +304,8 @@ export function evaluateWidgetRenderability(
     hasRenderableHtml,
     hasInputCss,
     hasRenderableCss,
+    hasInputJs,
+    hasRenderableJs,
     warnings,
   };
 }

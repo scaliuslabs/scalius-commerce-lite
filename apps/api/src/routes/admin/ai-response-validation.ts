@@ -2,15 +2,16 @@ import { z } from 'zod';
 import { GENERATION_CONFIG, ERROR_MESSAGES } from '@scalius/core/modules/ai';
 import { sanitizeCssForStyleElementWithReport } from '@scalius/shared/css-sanitize';
 import { sanitizeHtml } from '@scalius/shared/html-sanitize';
-import { hasLikelyTruncatedCss, normalizeWidgetParts } from '@scalius/shared/widget-rendering';
+import { hasLikelyTruncatedCss, normalizeWidgetParts, sanitizeWidgetJsForInlineScript } from '@scalius/shared/widget-rendering';
 import { parseJSONSafely, validateWidgetJSON } from '@scalius/shared/json-repair';
 import { parseTagBasedResponse, validateParsedWidget, type ParsedWidget } from '@scalius/shared/tag-parser';
 import { ValidationError } from '../../utils/api-error';
 
 export const widgetOutputSchema = z
   .object({
-    html: z.string().min(1).describe('Complete widget HTML fragment. Do not include script tags or markdown fences.'),
+    html: z.string().min(1).describe('Complete widget HTML fragment. Do not include markdown fences. If script tags are present they will be extracted into js.'),
     css: z.string().min(1).describe('Complete widget stylesheet. Widgets must include usable CSS.'),
+    js: z.string().optional().describe('Optional root-scoped JavaScript for local widget interactions. Use widget.root or root-scoped selectors only.'),
   })
   .strict()
   .describe('Validated storefront widget code returned by the AI generator.');
@@ -78,7 +79,7 @@ export type WidgetPromptType = 'widget' | 'landing-page' | 'collection';
 export const widgetOutputObjectSpec = {
   name: 'WidgetGeneration',
   description:
-    'Return production-ready ecommerce widget HTML and CSS only. The HTML must be a fragment without scripts; the CSS must be safe for a style element.',
+    'Return production-ready ecommerce widget HTML, CSS, and optional root-scoped JavaScript. HTML must be a fragment; JavaScript belongs in js.',
   schema: widgetOutputSchema,
 } as const;
 
@@ -89,7 +90,8 @@ export const stagedPlanOutputObjectSpec = {
 } as const;
 
 function widgetOutputToTaggedText(output: WidgetOutput): string {
-  return `<htmljs>\n${output.html.trim()}\n</htmljs>\n\n<css>\n${(output.css ?? '').trim()}\n</css>`;
+  const js = output.js?.trim();
+  return `<htmljs>\n${output.html.trim()}\n</htmljs>\n\n<css>\n${(output.css ?? '').trim()}\n</css>${js ? `\n\n<js>\n${js}\n</js>` : ''}`;
 }
 
 function assertGeneratedWidgetIsSafe(widget: ParsedWidget): void {
@@ -108,10 +110,6 @@ function assertGeneratedWidgetIsSafe(widget: ParsedWidget): void {
     throw new ValidationError(ERROR_MESSAGES.jsonParseFailed, {
       reason: jsonValidation.error,
     });
-  }
-
-  if (/<\/?script\b/i.test(widget.html)) {
-    throw new ValidationError('AI response included script tags. Widgets must use HTML and CSS only.');
   }
 
   const css = widget.css.trim();
@@ -169,6 +167,7 @@ function sanitizeGeneratedWidget(widget: ParsedWidget, options?: WidgetNormaliza
   const normalized = normalizeWidgetParts({
     htmlContent: widget.html,
     cssContent: widget.css,
+    jsContent: widget.js,
   });
   const cssReport = sanitizeCssForStyleElementWithReport(normalized.css);
   if (normalized.css.trim() && !cssReport.css.trim()) {
@@ -181,6 +180,7 @@ function sanitizeGeneratedWidget(widget: ParsedWidget, options?: WidgetNormaliza
   const sanitized = {
     html: sanitizeHtml(normalized.html),
     css: cssReport.css,
+    js: sanitizeWidgetJsForInlineScript(normalized.js),
     raw: widget.raw,
   };
 
@@ -206,6 +206,7 @@ function parseWidgetJson(text: string): ParsedWidget | null {
   return {
     html: String(data.html || data.htmljs || ''),
     css: String(data.css || data.cssContent || ''),
+    js: String(data.js || data.javascript || data.jsContent || ''),
     raw: text,
   };
 }

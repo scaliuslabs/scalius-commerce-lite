@@ -985,6 +985,7 @@ export const createWidgetHistorySnapshot = createServerFn({ method: "POST" })
         reason?: string;
         htmlContent?: string;
         cssContent?: string | null;
+        jsContent?: string | null;
       };
     }) => data,
   )

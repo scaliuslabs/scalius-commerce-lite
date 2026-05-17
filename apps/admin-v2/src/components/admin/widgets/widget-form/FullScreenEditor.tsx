@@ -38,7 +38,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { cn } from '@scalius/shared/utils';
-import { prepareScopedWidgetContent } from '@scalius/shared/widget-rendering';
+import { createScopedWidgetScript, prepareScopedWidgetContent } from '@scalius/shared/widget-rendering';
 import { toast } from 'sonner';
 import { AiContextManager } from './AiContextManager';
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
@@ -50,13 +50,14 @@ interface Section {
   index: number;
   html: string;
   css: string;
+  js?: string;
   description?: string;
 }
 
 interface FullScreenEditorProps {
   isOpen: boolean;
   onClose: () => void;
-  content: { html: string; css: string } | null;
+  content: { html: string; css: string; js?: string } | null;
   rawOutput?: string; // For error recovery
   error?: string | null;
   onAccept: () => void;
@@ -178,7 +179,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
 
   const handleCopyCode = () => {
     if (!content) return;
-    const code = `<!-- HTML -->\n${content.html}\n\n/* CSS */\n${content.css}`;
+    const code = `<!-- HTML -->\n${content.html}\n\n/* CSS */\n${content.css}${content.js ? `\n\n/* JS */\n${content.js}` : ''}`;
     navigator.clipboard.writeText(code);
     toast.success('Code copied to clipboard!');
   };
@@ -200,9 +201,11 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
         id: 'preview',
         htmlContent: content.html,
         cssContent: content.css,
+        jsContent: content.js,
       })
     : null;
   const previewCss = previewContent?.css ?? '';
+  const previewScript = content ? createScopedWidgetScript('preview', previewContent?.js ?? '') : '';
   const shouldShowError = Boolean(error) && !isProcessing;
 
   return (
@@ -221,7 +224,7 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                     Section {processingProgress.currentSection + 1}/{processingProgress.totalSections}
                   </span>
                 )}
-                <span className="font-mono">{processingProgress.percentage}%</span>
+                {processingProgress.percentage >= 100 && <span className="font-mono">Ready</span>}
               </div>
             )}
           </div>
@@ -343,8 +346,10 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
           <div className="px-6 pb-4">
             <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
               <div
-                className="bg-primary h-full transition-all duration-300 ease-out"
-                style={{ width: `${processingProgress.percentage}%` }}
+                className={cn(
+                  'bg-primary h-full transition-all duration-300 ease-out',
+                  processingProgress.percentage >= 100 ? 'w-full' : 'w-1/3 animate-pulse',
+                )}
               />
             </div>
           </div>
@@ -362,7 +367,9 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                 <Loader2 className="h-16 w-16 text-primary animate-spin relative" />
               </div>
               <div className="text-center space-y-2">
-                <p className="text-xl font-medium">Creating your widget...</p>
+                <p className="text-xl font-medium">
+                  {mode === 'improvement' ? 'Improving your widget...' : 'Creating your widget...'}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   {processingProgress?.currentStage || 'Please wait'}
                 </p>
@@ -372,9 +379,9 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
             <div className="h-full flex items-center justify-center p-8">
               <div className="max-w-md rounded-lg border bg-card p-6 text-center shadow-sm">
                 <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
-                <h3 className="mt-4 text-lg font-semibold">Generation needs review</h3>
+                <h3 className="mt-4 text-lg font-semibold">Artifact needs attention</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {error || 'The AI provider did not return valid widget HTML/CSS.'}
+                  {error || 'The AI provider did not return a valid widget artifact.'}
                 </p>
                 {rawOutput && (
                   <Button
@@ -421,6 +428,14 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                     <code>{content.css}</code>
                   </pre>
                 </div>
+                {content.js && (
+                  <div className="bg-card rounded-lg border p-4">
+                    <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">JS</h3>
+                    <pre className="text-sm overflow-auto bg-muted p-4 rounded">
+                      <code>{content.js}</code>
+                    </pre>
+                  </div>
+                )}
               </div>
             </div>
           ) : content ? (
@@ -455,11 +470,12 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
                         <div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ''}" data-widget-id="preview" data-scalius-widget-root="true">
                           ${previewContent?.html ?? ''}
                         </div>
+                        ${previewScript ? `<script>${previewScript}</script>` : ''}
                       </body>
                     </html>
                   ` : ''}
                   className="w-full h-full border-0"
-                  sandbox="allow-same-origin"
+                  sandbox="allow-scripts allow-same-origin"
                   title="Widget Preview"
                   onLoad={handlePreviewFrameLoad}
                 />
@@ -469,9 +485,9 @@ export const FullScreenEditor: React.FC<FullScreenEditorProps> = ({
             <div className="h-full flex items-center justify-center p-8">
               <div className="max-w-md rounded-lg border bg-card p-6 text-center shadow-sm">
                 <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
-                <h3 className="mt-4 text-lg font-semibold">Generation needs review</h3>
+                <h3 className="mt-4 text-lg font-semibold">Artifact needs attention</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {error || 'The AI provider did not return valid widget HTML/CSS.'}
+                  {error || 'The AI provider did not return a valid widget artifact.'}
                 </p>
                 {rawOutput && (
                   <Button

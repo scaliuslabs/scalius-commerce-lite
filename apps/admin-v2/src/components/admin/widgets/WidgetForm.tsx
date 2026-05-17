@@ -66,7 +66,7 @@ type WidgetPlacementFormValue = NonNullable<WidgetFormValues['placements']>[numb
 type SupportedWidgetPlacement = NonNullable<Widget['placements']>[number] & {
   scope: SupportedWidgetPlacementScopeValue;
 };
-type WidgetContentDraft = { html: string; css: string };
+type WidgetContentDraft = { html: string; css: string; js?: string };
 type WidgetContentSource = 'generation' | 'improvement' | 'manual';
 
 function homepagePlacement(
@@ -231,6 +231,7 @@ function getWidgetFormDefaultValues(widget: Widget | null | undefined, isCreateM
       name: widget.name,
       htmlContent: widget.htmlContent,
       cssContent: widget.cssContent || undefined,
+      jsContent: widget.jsContent || undefined,
       isActive: widget.isActive,
       displayTarget: widget.displayTarget as 'homepage',
       placementRule: widget.placementRule as WidgetPlacementRule,
@@ -244,6 +245,7 @@ function getWidgetFormDefaultValues(widget: Widget | null | undefined, isCreateM
     name: '',
     htmlContent: '',
     cssContent: undefined,
+    jsContent: undefined,
     isActive: false,
     displayTarget: 'homepage',
     placementRule: WidgetPlacementRule.STANDALONE,
@@ -267,6 +269,7 @@ function stagedSectionsFromContent(content: WidgetContentDraft) {
   return parseHtmlIntoSections(content.html, content.css || '').map((section) => ({
     html: section.html,
     css: section.css,
+    js: content.js || '',
     sectionIndex: section.index,
     description: section.description,
     id: section.id,
@@ -327,7 +330,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
 
   const watchedHtmlContent = watch('htmlContent') || '';
   const watchedCssContent = watch('cssContent') || '';
-  const pendingPreviewContent = getPendingPreviewContent(watchedHtmlContent, watchedCssContent);
+  const watchedJsContent = watch('jsContent') || '';
+  const pendingPreviewContent = getPendingPreviewContent(watchedHtmlContent, watchedCssContent, watchedJsContent);
   const hasPendingPreviewContent = Boolean(pendingPreviewContent);
 
   function resetHistoryState() {
@@ -492,6 +496,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
   const handleShowPreview = () => {
     const html = watch('htmlContent');
     const css = watch('cssContent');
+    const js = watch('jsContent');
 
     if (!html || html.trim().length === 0) {
       toast.error('No content to preview. Add HTML content first.');
@@ -500,7 +505,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
 
     // Live preview is only a read-only view of the current form fields.
     aiGenerator.setGeneratedContent(null);
-    setLivePreviewContent({ html, css: css || '' });
+    setLivePreviewContent({ html, css: css || '', js: js || '' });
 
     setEditorMode('live-preview');
     setIsEditorOpen(true);
@@ -512,6 +517,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
   const handleImproveExisting = () => {
     const html = watch('htmlContent');
     const css = watch('cssContent');
+    const js = watch('jsContent');
 
     if (!html || html.trim().length === 0) {
       toast.error('No content to improve. Add HTML content first.');
@@ -543,7 +549,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     }
 
     // Initialize improver with current form content
-    const existingContent = { html, css: css || '' };
+    const existingContent = { html, css: css || '', js: js || '' };
     aiImprover.startImprovement(existingContent);
 
     // Parse HTML into sections if not already staged
@@ -562,7 +568,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
   /**
    * Handle paste from modal
    */
-  const handlePaste = (content: { html: string; css: string }) => {
+  const handlePaste = (content: WidgetContentDraft) => {
     replaceWidgetContent(content, 'manual');
   };
 
@@ -604,6 +610,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
       {
         html: restoredEntry.htmlContent,
         css: restoredEntry.cssContent || '',
+        js: restoredEntry.jsContent || '',
       },
       'manual',
     );
@@ -658,6 +665,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
 
     const htmlContent = watch('htmlContent');
     const cssContent = watch('cssContent');
+    const jsContent = watch('jsContent');
     if (!htmlContent || htmlContent.trim().length === 0) {
       toast.error('Add HTML content before saving a version.');
       return;
@@ -672,6 +680,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
             reason: versionReason.trim() || 'Manual save',
             htmlContent,
             cssContent: cssContent ?? null,
+            jsContent: jsContent ?? null,
           },
         },
       })) as WidgetHistoryEntry;
@@ -692,7 +701,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
    */
   const onSubmit = async (data: WidgetFormValues) => {
     try {
-      const pendingContent = getPendingPreviewContent(data.htmlContent, data.cssContent ?? '');
+      const pendingContent = getPendingPreviewContent(data.htmlContent, data.cssContent ?? '', data.jsContent ?? '');
       if (
         requireSettledPendingPreview('Apply or discard the preview content before saving this widget.', pendingContent)
       ) {
@@ -711,6 +720,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
       const currentSections = stagedSectionsFromContent({
         html: data.htmlContent,
         css: data.cssContent ?? '',
+        js: data.jsContent ?? '',
       });
 
       // Build AI context with all state.
@@ -806,6 +816,11 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
       shouldTouch: true,
       shouldValidate: true,
     });
+    setValue('jsContent', content.js || '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
   }
 
   function replaceWidgetContent(content: WidgetContentDraft, source: WidgetContentSource) {
@@ -825,9 +840,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     }
   }
 
-  function getPendingPreviewContent(html: string, css: string) {
+  function getPendingPreviewContent(html: string, css: string, js: string) {
     const generated = aiGenerator.generatedContent;
-    if (generated && (generated.html !== html || generated.css !== css)) {
+    if (generated && (generated.html !== html || generated.css !== css || (generated.js || '') !== js)) {
       return {
         source: 'generation' as const,
         content: generated,
@@ -835,7 +850,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     }
 
     const improved = aiImprover.contentToImprove;
-    if (improved && (improved.html !== html || improved.css !== css)) {
+    if (improved && (improved.html !== html || improved.css !== css || (improved.js || '') !== js)) {
       return {
         source: 'improvement' as const,
         content: improved,
@@ -1006,7 +1021,9 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
         onRequestImprovement={editorMode === 'generation-preview' ? handleRequestImprovement : undefined}
         isProcessing={editorMode === 'improvement' ? aiImprover.isImproving : aiGenerator.isLoadingPrompt}
         canAccept={editorMode === 'generation-preview' ? aiGenerator.canAcceptGenerated : true}
-        processingProgress={aiGenerator.generationProgress}
+        processingProgress={
+          (editorMode === 'improvement' ? aiImprover.improvementProgress : aiGenerator.generationProgress) ?? undefined
+        }
         aiContext={aiContext}
         promptType={aiGenerator.promptType}
         setPromptType={aiGenerator.setPromptType}

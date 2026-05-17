@@ -3,7 +3,7 @@ import { getProductBySlug, getWidgetById } from "@/lib/api";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
 import { withOptimizedProductPageImages } from "./serialized-media";
-import { prepareWidgetContent } from "./widget-content";
+import { createScopedWidgetScript, prepareWidgetContent } from "./widget-content";
 
 export interface ShortcodeMatch {
   fullMatch: string;
@@ -54,14 +54,15 @@ export async function renderWidgetShortcode(widgetId: string): Promise<string> {
       return `<div class="shortcode-error">Widget not found or inactive: ${safeWidgetId}</div>`;
     }
 
-    const { scopeClass, css, html: preparedHtml } =
+    const { scopeClass, css, html: preparedHtml, js } =
       prepareWidgetContent(widgetData);
     let html = preparedHtml;
     if (css) {
       html = `<style>${css}</style>${html}`;
     }
 
-    return `<div class="widget-shortcode not-prose cms-widget-frame ${scopeClass}" data-widget-id="${safeWidgetId}" data-scalius-widget-root="true">${html}</div>`;
+    const scopedScript = createScopedWidgetScript(widgetData.id, js);
+    return `<div class="widget-shortcode not-prose cms-widget-frame ${scopeClass}" data-widget-id="${safeWidgetId}" data-scalius-widget-root="true">${html}</div>${scopedScript ? `<script>${scopedScript}</script>` : ""}`;
   } catch (error: unknown) {
     console.error("Error rendering widget shortcode:", error);
     return `<div class="shortcode-error">Error loading widget: ${escapeHtml(widgetId)}</div>`;

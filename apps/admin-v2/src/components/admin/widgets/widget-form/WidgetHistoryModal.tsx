@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { formatDate } from '@scalius/shared/timestamps';
-import { prepareScopedWidgetContent } from '@scalius/shared/widget-rendering';
+import { createScopedWidgetScript, prepareScopedWidgetContent } from '@scalius/shared/widget-rendering';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { GitCommitHorizontal, Trash2 } from 'lucide-react';
@@ -40,8 +40,10 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
         id: selectedHistoryItem.widgetId || selectedHistoryItem.id,
         htmlContent: selectedHistoryItem.htmlContent,
         cssContent: selectedHistoryItem.cssContent,
+        jsContent: selectedHistoryItem.jsContent,
       })
     : null;
+  const previewScript = selectedHistoryItem ? createScopedWidgetScript(selectedHistoryItem.widgetId || selectedHistoryItem.id, previewContent?.js ?? "") : "";
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -104,9 +106,9 @@ export const WidgetHistoryModal: React.FC<WidgetHistoryModalProps> = ({
                       <>
                           <div className="flex-1 overflow-auto border rounded-md">
                               <iframe
-                                  srcDoc={`<style>${previewContent?.css ?? ""}</style><div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ""}" data-widget-id="${selectedHistoryItem.widgetId}" data-scalius-widget-root="true">${previewContent?.html ?? ""}</div>`}
+                                  srcDoc={`<style>${previewContent?.css ?? ""}</style><div class="widget-container cms-widget-frame ${previewContent?.scopeClass ?? ""}" data-widget-id="${selectedHistoryItem.widgetId}" data-scalius-widget-root="true">${previewContent?.html ?? ""}</div>${previewScript ? `<script>${previewScript}</script>` : ""}`}
                                   className="w-full h-full"
-                                  sandbox=""
+                                  sandbox="allow-scripts"
                                   title="History Preview"
                               />
                           </div>

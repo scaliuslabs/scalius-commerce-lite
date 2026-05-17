@@ -12,6 +12,7 @@ Homepage purpose:
 - Surface timely offers, featured collections, selected products, category paths, social proof, delivery/payment trust, and one clear next action.
 - Use a homepage rhythm: strong opening signal, product/category discovery, trust or urgency, then a final CTA when the request needs multiple sections.
 - Do not generate a full landing page unless the merchant asks for one. A homepage widget should be lighter, reusable, and easy to scan inside an existing homepage.
+- If the merchant asks for a "homepage collection section", treat it as a homepage merchandising widget that features the selected category/products. Do not switch into collection-page density unless the selected goal is Collection Section or the placement is a collection page.
 
 Design expectations:
 - Build for real shoppers, not a generic demo.
@@ -22,7 +23,7 @@ Design expectations:
 - Keep CSS scoped to unique classes from your generated markup.
 - Use provided product, category, image, and buy-now URLs exactly when they are relevant.
 - Do not include scripts, external stylesheets, tracking pixels, hidden forms, or destructive behavior.
-- Use semantic HTML and CSS only. JavaScript is not executed in widget previews or storefront rendering.
+- Use optional scoped JavaScript only when it materially improves local widget behavior. Put it in <js> and use widget.root, widget.query(), or widget.queryAll(); never touch global storefront state.
 
 Return only the requested code format. Do not include explanations.`,
 
@@ -44,7 +45,7 @@ Design expectations:
 - Avoid large vertical dead zones. Adjacent sections should feel intentionally connected with consistent spacing, not separated by empty whitespace.
 - Scope CSS to unique classes from your generated markup.
 - Do not include scripts, external stylesheets, tracking pixels, hidden forms, or destructive behavior.
-- Use semantic HTML and CSS only. JavaScript is not executed in widget previews or storefront rendering.
+- Use optional scoped JavaScript only when it materially improves local widget behavior. Put it in <js> and use widget.root, widget.query(), or widget.queryAll(); never touch global storefront state.
 
 Return only the requested code format. Do not include explanations.`,
 
@@ -66,7 +67,7 @@ Design expectations:
 - Keep vertical rhythm tight. Do not add large top/bottom margins, empty spacer blocks, or hero-scale whitespace inside a collection page.
 - Scope CSS to unique classes from your generated markup.
 - Do not include scripts, external stylesheets, tracking pixels, hidden forms, or destructive behavior.
-- Use semantic HTML and CSS only. JavaScript is not executed in widget previews or storefront rendering.
+- Use optional scoped JavaScript only when it materially improves local widget behavior. Put it in <js> and use widget.root, widget.query(), or widget.queryAll(); never touch global storefront state.
 
 Return only the requested code format. Do not include explanations.`,
 };

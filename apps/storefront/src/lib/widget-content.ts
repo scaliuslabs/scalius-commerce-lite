@@ -2,6 +2,7 @@ import {
   getWidgetScopeClass,
   normalizeWidgetCss,
   normalizeWidgetHtml,
+  createScopedWidgetScript,
   prepareScopedWidgetContent,
   type PreparedScopedWidgetContent,
 } from "@scalius/shared/widget-rendering";
@@ -14,6 +15,7 @@ interface WidgetContentInput {
   id: string;
   htmlContent?: string | null;
   cssContent?: string | null;
+  jsContent?: string | null;
 }
 
 interface PrepareWidgetContentOptions {
@@ -23,6 +25,7 @@ interface PrepareWidgetContentOptions {
 export type PreparedWidgetContent = PreparedScopedWidgetContent;
 
 export { getWidgetScopeClass, normalizeWidgetCss, normalizeWidgetHtml };
+export { createScopedWidgetScript };
 
 export function prepareWidgetContent(
   widget: WidgetContentInput,

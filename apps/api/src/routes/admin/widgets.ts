@@ -42,6 +42,7 @@ const widgetListItemSchema = z.object({
     name: z.string(),
     htmlContent: z.string(),
     cssContent: z.string().nullable(),
+    jsContent: z.string().nullable(),
     aiContext: z.string().nullable(),
     isActive: z.boolean(),
     displayTarget: z.string(),
@@ -94,6 +95,7 @@ const widgetHistoryEntrySchema = z.object({
     widgetId: z.string(),
     htmlContent: z.string(),
     cssContent: z.string().nullable(),
+    jsContent: z.string().nullable(),
     reason: z.string(),
     createdAt: z.union([z.string(), z.number()]),
 }).passthrough();
@@ -511,6 +513,7 @@ const createHistoryRoute = createRoute({
                         reason: z.string().optional().default("Manual save"),
                         htmlContent: z.string().optional(),
                         cssContent: z.string().nullable().optional(),
+                        jsContent: z.string().nullable().optional(),
                     })
                 }
             }
@@ -528,8 +531,8 @@ const createHistoryRoute = createRoute({
 app.openapi(createHistoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { reason, htmlContent, cssContent } = c.req.valid("json");
-    const entry = await createHistoryEntry(db, id, reason, { htmlContent, cssContent });
+    const { reason, htmlContent, cssContent, jsContent } = c.req.valid("json");
+    const entry = await createHistoryEntry(db, id, reason, { htmlContent, cssContent, jsContent });
     return created(c, entry);
 });
 

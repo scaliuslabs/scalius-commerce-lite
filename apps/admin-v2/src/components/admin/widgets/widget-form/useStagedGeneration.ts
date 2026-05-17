@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 export interface SectionContent {
   html: string;
   css: string;
+  js?: string;
   sectionIndex: number;
   description?: string;
   id: string;

@@ -10,19 +10,48 @@ The widget system is Scalius Commerce's merchant-facing storefront composition l
 - A generated homepage widget must default to a visible homepage placement unless the merchant explicitly chooses standalone shortcode usage.
 - Landing-page and collection-oriented generation must be clearly represented as storefront sections until there is a full page-builder save flow.
 - Failed, partial, loading, or parse-error output must never be acceptable as widget content.
-- Every generated widget must be HTML/CSS only. No JavaScript, script tags, inline event handlers, remote scripts, forms, or unsafe URL protocols.
+- Generated widgets are canonical artifacts with `html`, `css`, and optional scoped `js`. JavaScript is allowed only for local widget interaction/effects and must run through the platform wrapper with access to `widget.root`, `widget.query()`, and `widget.queryAll()`. No remote scripts, inline event handlers, forms, unsafe URL protocols, storage, navigation, network calls, or global storefront mutation.
 - CSS must be scoped or safe to scope before storefront rendering so one widget cannot break the page around it.
 - Preview must be useful before publishing: desktop/tablet/mobile, code view, raw output for recovery, and clear generation status.
+
+## Non-Negotiable Rewrite Requirements
+
+- Do not preserve old widget behavior for backward compatibility if it damages the new experience.
+- Do not show fake generated content or placeholder widgets when generation starts. The UI may show honest progress/status, but the preview canvas stays empty until the Agent has a real parsed preview or final artifact.
+- Progress must be truthful. Step labels come from actual Agent events: settings, context hydration, prompt assembly, generation stream, validation, artifact persistence. Never imply the model is done before validation succeeds.
+- The artifact protocol is object-first: `{ html, css, js?, sections?, warnings?, metadata? }`. Tagged text is only a model transport/parser fallback, not the product contract.
+- Server validation owns canonicalization. The client should not be the place where broken provider output becomes accepted content.
+- Every tool/context input must be labeled in the prompt so the model knows exactly what it is seeing and why: products, drink category, selected media, product images, collection/placement intent, and merchant instruction.
+- The core production smoke test is real context: select drink products + drink category, prompt `generate a homepage collection section for our drinks products.`, verify a visually polished section, apply/save it, and verify storefront render.
+- Durable Object SQLite is the runtime memory/timeline for generation sessions. Runs should be resumable/inspectable enough to debug bad generations without guessing from a toast.
 
 ## AI Provider Reality
 
 - Default model: Cloudflare Workers AI `@cf/moonshotai/kimi-k2.6`.
 - Cloudflare documents Kimi K2.6 as a long-context model with vision inputs and structured outputs: https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/
 - Cloudflare REST API usage requires Account ID plus API token: https://developers.cloudflare.com/workers-ai/get-started/rest-api/
-- Production generation should prefer the Workers AI binding because it avoids storing a provider token in D1. REST credentials are fallback/model-catalog credentials.
+- Production generation should prefer the Workers AI binding because it avoids storing a provider token in D1. REST credentials are only for direct provider access/model catalog operations.
 - The current `workers-ai-provider` path should treat Cloudflare/Kimi as text-only until selected image URLs are converted server-side into provider-compatible image bytes with strict size and MIME limits.
 - AI SDK v6 supports structured output through `generateText`/`streamText` with the `output` option: https://v6.ai-sdk.dev/docs/ai-sdk-core/generating-structured-data
-- The current API route uses AI SDK structured object output where it is reliable for the provider/model, then falls back to text parsing. Cloudflare/Kimi is intentionally text/tag based for now because local binding tests showed AI SDK structured output can add a 504 + fallback delay.
+- The Agent runtime uses a tagged HTML/CSS/JS artifact stream for Cloudflare/Kimi because local binding tests showed AI SDK structured output can add a 504 + repair delay.
+
+## Agent Runtime Direction
+
+- New generation runs are routed through `WidgetDesignAgent`. There is no stateless generation fallback.
+- The Agent uses the SQLite-backed Durable Object storage backend (`new_sqlite_classes`), which is compatible with Workers Free and Paid plans.
+- Admin still calls `/api/v1/admin/widget-generation-runs`; the endpoint enforces existing admin auth/rate limits, then forwards the run to a named Agent session. Missing Durable Object binding is a deployment error.
+- Agent state tracks the active run, phase, operation, provider/model, artifact status, and error. Non-token events are persisted in the Agent SQLite database so a future UI can resume or inspect a generation timeline.
+- Stream protocol remains SSE and emits progress, accepted-section preview patches, final revision preview patches, validated artifact metadata, final artifact, and failure events.
+- Create-generation is an artifact workspace harness, not one giant completion. The Agent plans the destination, generates bounded section artifacts, validates each artifact before it becomes workspace state, streams accepted previews, passes the exact previous HTML/CSS/JS and preview observations into later steps, and runs a final revision pass that may modify earlier artifact code before canonical assembly.
+- The harness should follow coding-agent discipline: plan, write a bounded artifact, observe/validate, persist to the SQLite event ledger, revise when the observation shows problems, and only then continue. The model should never be asked to guess what it previously wrote from memory.
+
+## Context Labeling Contract
+
+- Every image sent to text or vision context must be labeled before prompt assembly.
+- Image records include `sourceType`, `sourceLabel`, `sourceId`, and optional `role`.
+- Valid source types currently include selected media, product image, category image, collection featured product image, and collection product image.
+- Models must treat selected media as merchant-provided visual/reference media unless a role says otherwise; product and collection images must only be used for their labeled product/collection.
+- Catalog/context blocks remain untrusted data blocks. The model may use facts inside them but must not follow instructions embedded in merchant data.
 
 ## Reliability Requirements
 

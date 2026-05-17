@@ -46,6 +46,7 @@ import {
   type WidgetPromptType,
 } from './ai-response-validation';
 import { normalizeMessages } from './ai-message-normalization';
+import { parseTagBasedResponse } from '@scalius/shared/tag-parser';
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -160,11 +161,12 @@ export function withDestinationRuntimeContract(
 
 SERVER PERFORMANCE CONTRACT:
 - Produce one complete artifact in this call. Do not wait for a later stage to make it coherent.
-- Keep the artifact compact: one root section, concise HTML, and CSS that can finish comfortably inside the output budget.
+- Keep the artifact compact: one root section, concise HTML, and CSS that can finish comfortably inside the output budget. Emit <css> before <htmljs>.
 - Homepage and collection widgets should usually be one connected commerce section with 2-4 product cards, not a mini-page.
 - Finish the core CSS before optional hover states, decorative effects, or extra responsive refinements. Never leave a CSS rule or property unfinished.
 - Do not emit inline SVG icons, icon sprites, long comments, duplicate selectors, or decorative code that does not materially improve the merchant-facing section.
-- Use no JavaScript, no script tags, and no markdown.
+- Put optional JavaScript in <js> only when it improves local widget interaction. JS must use widget.root, widget.query(), or widget.queryAll() and must not touch global storefront state.
+- Use no markdown.
 - The platform owns runtime wrappers. Do not emit widget-container, cms-widget-frame, widget-placement-zone, data-scalius-widget-root, or data-widget-id in generated HTML.
 - Use one content wrapper or section with destination-specific classes and margin: 0. Avoid min-height: 100vh, fixed viewport heights, large spacer elements, or disconnected full-page bands.
 - Bound every product image in a stable card/media container with aspect-ratio, max-height, and object-fit. Do not generate blank white media panels, off-canvas crops, absolutely positioned product cutouts, or oversized empty columns.
@@ -579,7 +581,7 @@ function addWidgetFormatRetryInstruction(options: GenerateTextOptions): Generate
       {
         role: 'user',
         content: [
-          'The previous response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with complete non-truncated CSS, no dangling declarations, no markdown, JSON, explanation, or script tags:\n\n<htmljs>\n<!-- valid HTML only -->\n</htmljs>\n\n<css>\n/* complete valid CSS only */\n</css>',
+          'The previous response was not usable widget code. Regenerate the widget from the full context above and return ONLY this exact format, with complete non-truncated CSS, no dangling declarations, no markdown, JSON, or explanation. Optional JS must be root-scoped and go in <js>, not inside HTML:\n\n<htmljs>\n<!-- valid HTML fragment -->\n</htmljs>\n\n<css>\n/* complete valid CSS */\n</css>\n\n<js>\n/* optional: use widget.root/query/queryAll only */\n</js>',
           noContextCommercePolicy
             ? 'No product, category, collection, policy, pricing, delivery, review, or media facts were provided. Use generic non-factual commerce copy only. Do not mention delivery, shipping, guarantees, reviews, ratings, discounts, limited/new/latest releases, absolute URLs, or buy-now links.'
             : '',
@@ -632,8 +634,8 @@ function addWidgetArtifactRepairInstruction(
         content: [
           'Repair the failed widget artifact below. Keep the merchant intent and any valid catalog facts, but return ONE complete, compact, production-ready artifact only.',
           `Validation failure: ${getErrorMessage(reason)}`,
-          'The repaired response must include BOTH tags, with non-empty valid CSS. Do not explain. Do not use markdown. Do not include JavaScript or script tags.',
-          'Required response shape:\n<htmljs>\n<section class="destination-specific-root">...</section>\n</htmljs>\n<css>\n.destination-specific-root{margin:0;...}\n</css>',
+          'The repaired response must include HTML and CSS tags, with non-empty valid CSS. Do not explain. Do not use markdown. Optional JavaScript belongs in <js> and must use widget.root/query/queryAll only.',
+          'Required response shape:\n<htmljs>\n<section class="destination-specific-root">...</section>\n</htmljs>\n<css>\n.destination-specific-root{margin:0;...}\n</css>\n<js>\n/* optional root-scoped behavior */\n</js>',
           'CSS requirements: complete selectors, complete declarations, balanced braces, no dangling properties, no empty stylesheet, no oversized blank image panels, and bounded product image containers.',
           noContextCommercePolicy
             ? 'No product, category, collection, policy, pricing, delivery, review, or media facts were provided. Use generic non-factual commerce copy only.'
@@ -648,6 +650,60 @@ function addWidgetArtifactRepairInstruction(
     maxOutputTokens: widgetRepairBudget(options, promptType),
     maxRetries: 1,
   } as GenerateTextOptions;
+}
+
+function addMissingCssCompletionInstruction(
+  options: GenerateTextOptions,
+  rawText: string,
+  promptType: WidgetPromptType,
+): GenerateTextOptions {
+  const messages = Array.isArray((options as { messages?: ModelMessage[] }).messages)
+    ? (options as { messages: ModelMessage[] }).messages
+    : [];
+
+  return {
+    ...options,
+    prompt: undefined,
+    messages: [
+      ...messages,
+      {
+        role: 'user',
+        content: [
+          'The generated widget artifact included usable HTML but no usable CSS. Complete it now.',
+          `Destination: ${promptType}`,
+          'Return ONE complete artifact only. Keep the HTML structure and merchant/catalog facts, but add a polished, compact, scoped stylesheet.',
+          'The CSS must make the section visually pleasing on desktop and mobile, bound product images inside stable media containers, define responsive layout, spacing, typography, buttons, cards, focus states, and avoid blank image panels or large empty gaps.',
+          'Required response shape, no markdown and no explanation:\n<htmljs>\n<!-- same or minimally cleaned HTML fragment -->\n</htmljs>\n<css>\n/* complete scoped CSS with balanced braces */\n</css>\n<js>\n/* optional root-scoped behavior only if needed */\n</js>',
+          `HTML-only artifact:\n${truncateFailedWidgetResponse(rawText)}`,
+        ].join('\n\n'),
+      },
+    ],
+    temperature: typeof options.temperature === 'number' ? Math.min(options.temperature, 0.25) : 0.25,
+    maxOutputTokens: widgetRepairBudget(options, promptType),
+    maxRetries: 1,
+  } as GenerateTextOptions;
+}
+
+async function completeMissingCssArtifact(
+  rawText: string,
+  options: GenerateTextOptions,
+  promptType: WidgetPromptType,
+  normalizationOptions: { commerceFactsProvided: boolean },
+): Promise<WidgetGenerationResult | null> {
+  const parsed = parseTagBasedResponse(rawText);
+  const html = parsed.data?.html?.trim() ?? '';
+  const css = parsed.data?.css?.trim() ?? '';
+  if (!parsed.success || !html || css) return null;
+
+  const completion = await generateTextWithTransientRetry(
+    addMissingCssCompletionInstruction(options, rawText, promptType),
+    'Widget missing CSS completion',
+  );
+
+  return {
+    text: normalizeWidgetGenerationText(completion.text, normalizationOptions),
+    usage: usageFromResult(completion),
+  };
 }
 
 async function repairInvalidWidgetArtifact(
@@ -722,16 +778,20 @@ export async function generateWidgetContent(
     });
 
     if (result) {
-      const output = widgetOutputSchema.safeParse(result.output);
-      if (!output.success) {
-        throw new ValidationError(ERROR_MESSAGES.jsonParseFailed, {
-          issues: output.error.issues,
-        });
+      try {
+        const output = widgetOutputSchema.safeParse(result.output);
+        if (!output.success) {
+          throw new ValidationError(ERROR_MESSAGES.jsonParseFailed, {
+            issues: output.error.issues,
+          });
+        }
+        return {
+          text: normalizeWidgetOutput(output.data, normalizationOptions),
+          usage: usageFromResult(result),
+        };
+      } catch (error) {
+        warnStructuredGenerationFallback('Widget structured output validation', error);
       }
-      return {
-        text: normalizeWidgetOutput(output.data, normalizationOptions),
-        usage: usageFromResult(result),
-      };
     }
   }
 
@@ -787,6 +847,13 @@ async function finalizeStreamedWidgetContent(
     if (fallback) return fallback.text;
 
     try {
+      const completed = await completeMissingCssArtifact(rawText, options, promptType, normalizationOptions);
+      if (completed) return completed.text;
+    } catch (completionError) {
+      console.warn('Streamed widget missing CSS completion failed; trying full artifact repair:', completionError);
+    }
+
+    try {
       const repaired = await repairInvalidWidgetArtifact(rawText, error, options, promptType, normalizationOptions);
       return repaired.text;
     } catch (repairError) {
@@ -818,7 +885,17 @@ export function streamWidgetContent(
   return {
     textStream: result.textStream,
     async finalize(rawText: string) {
-      const text = await finalizeStreamedWidgetContent(rawText, options, capabilities, promptType);
+      let completeRawText = rawText;
+      if (!completeRawText.trim()) {
+        try {
+          const finalText = (result as unknown as { text?: PromiseLike<string> }).text;
+          if (finalText) completeRawText = await finalText;
+        } catch {
+          completeRawText = rawText;
+        }
+      }
+
+      const text = await finalizeStreamedWidgetContent(completeRawText, options, capabilities, promptType);
       let usage: GenerationUsage = {};
       try {
         const usageResult = (result as unknown as { totalUsage?: PromiseLike<GenerationUsage> }).totalUsage;
