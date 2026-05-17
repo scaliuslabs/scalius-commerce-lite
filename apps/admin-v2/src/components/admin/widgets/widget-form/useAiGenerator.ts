@@ -6,6 +6,7 @@ import { useStagedGeneration } from './useStagedGeneration';
 import {
   normalizeGeneratedWidgetContent,
   parseGeneratedWidgetContent,
+  type GeneratedWidgetContent,
 } from './widget-generation-content';
 import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
 import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
@@ -25,7 +26,19 @@ const GENERATION_STEP_LABELS: Record<string, string> = {
   load_settings: 'Checking AI provider settings...',
   hydrate_context: 'Loading selected products and collections...',
   build_prompt: 'Building the storefront brief...',
+  plan_artifact: 'Planning the widget sections...',
+  generate_section: 'Building a section artifact...',
+  assemble_artifact: 'Assembling the final widget...',
   generate: 'Generating the widget artifact...',
+};
+const GENERATION_STEP_PROGRESS: Record<string, number> = {
+  load_settings: 18,
+  hydrate_context: 34,
+  build_prompt: 52,
+  plan_artifact: 58,
+  generate_section: 70,
+  assemble_artifact: 88,
+  generate: 68,
 };
 
 interface ModelInfo {
@@ -103,6 +116,32 @@ function toastForGenerationEvent(event: WidgetGenerationRunEvent): void {
   if (label) toast.info(label);
 }
 
+function progressForGenerationEvent(event: WidgetGenerationRunEvent): { currentStage: string; percentage: number } | null {
+  if (event.type === 'run.started') {
+    return { currentStage: 'Starting the design agent...', percentage: 10 };
+  }
+  if (event.type === 'step.started' || event.type === 'tool.started') {
+    const key = event.type === 'tool.started' ? event.tool : event.step;
+    return {
+      currentStage: GENERATION_STEP_LABELS[key] || 'Working on the widget...',
+      percentage: GENERATION_STEP_PROGRESS[key] ?? 45,
+    };
+  }
+  if (event.type === 'preview.patch') {
+    return { currentStage: 'Rendering a live draft...', percentage: 78 };
+  }
+  if (event.type === 'artifact.validated') {
+    return { currentStage: 'Validating the widget artifact...', percentage: 90 };
+  }
+  if (event.type === 'artifact') {
+    return { currentStage: 'Preparing the final preview...', percentage: 95 };
+  }
+  if (event.type === 'run.completed') {
+    return { currentStage: 'Widget ready.', percentage: 100 };
+  }
+  return null;
+}
+
 async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
   const response = await fetch('/api/v1/admin/settings/widget-ai');
   const payload = (await response.json()) as {
@@ -116,50 +155,6 @@ async function fetchWidgetAiSettings(): Promise<WidgetAiSettings> {
   }
 
   return payload.data ?? {};
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function buildImmediateDraftContent(options: {
-  promptType: 'widget' | 'landing-page' | 'collection';
-  products: ProductSearchResult[];
-  categories: Category[];
-  imageCount: number;
-}): { html: string; css: string } {
-  const destination =
-    options.promptType === 'landing-page'
-      ? 'Landing section'
-      : options.promptType === 'collection'
-        ? 'Collection section'
-        : 'Homepage section';
-  const names = [
-    ...options.products.slice(0, 4).map((product) => product.name),
-    ...options.categories.slice(0, 2).map((category) => category.name),
-  ].filter(Boolean);
-  const items = names.length > 0 ? names : ['Layout', 'Products', 'Story'];
-  const imageNote = options.imageCount > 0 ? `${options.imageCount} image${options.imageCount === 1 ? '' : 's'} queued` : 'Context loading';
-
-  return {
-    html: `<section class="sc-ai-live-draft" aria-label="${escapeHtml(destination)} preview">
-  <div class="sc-ai-live-draft__copy">
-    <p class="sc-ai-live-draft__eyebrow">Scalius AI</p>
-    <h2>${escapeHtml(destination)} is taking shape</h2>
-    <p>Preparing selected store context, product imagery, and storefront-safe styling.</p>
-  </div>
-  <div class="sc-ai-live-draft__rail">
-    ${items.map((item) => `<span>${escapeHtml(item)}</span>`).join('\n    ')}
-    <small>${escapeHtml(imageNote)}</small>
-  </div>
-</section>`,
-    css: `.sc-ai-live-draft{margin:0;padding:28px 20px;border:1px solid #dde4dc;border-radius:14px;background:linear-gradient(135deg,#f7fbf8,#ffffff 54%,#edf7f0);color:#101418;display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,auto);gap:20px;align-items:center}.sc-ai-live-draft__eyebrow{margin:0 0 8px;color:#3d6b4f;font-size:12px;font-weight:800;letter-spacing:0;text-transform:uppercase}.sc-ai-live-draft h2{margin:0;font-size:clamp(28px,4vw,42px);line-height:1.05}.sc-ai-live-draft p{margin:10px 0 0;color:#4c5560;font-size:15px;line-height:1.5}.sc-ai-live-draft__rail{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}.sc-ai-live-draft__rail span,.sc-ai-live-draft__rail small{display:inline-flex;align-items:center;min-height:36px;padding:8px 11px;border:1px solid #d5ded6;border-radius:9px;background:#fff;font-size:13px;font-weight:700}.sc-ai-live-draft__rail small{color:#52605a;background:#f6f8f6;font-weight:600}@media(max-width:720px){.sc-ai-live-draft{grid-template-columns:1fr}.sc-ai-live-draft__rail{justify-content:flex-start}}`,
-  };
 }
 
 export const useAiGenerator = (
@@ -183,16 +178,23 @@ export const useAiGenerator = (
   const [generatedContent, setGeneratedContent] = useState<{
     html: string;
     css: string;
+    js?: string;
   } | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState<{
     html: string;
     css: string;
+    js?: string;
+  } | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<{
+    currentStage: string;
+    percentage: number;
   } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const generationRunIdRef = useRef(0);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const lastRenderableDraftRef = useRef<GeneratedWidgetContent | null>(null);
 
   // Section metadata is kept for targeted improvements; generation itself is server-owned.
   const stagedGeneration = useStagedGeneration();
@@ -225,6 +227,7 @@ export const useAiGenerator = (
       setGenerationError(null);
       setRawOutput(null);
       setDraftContent(null);
+      setGenerationProgress(null);
       setIsPreviewOpen(false);
       if (!options?.silent) {
         toast.info('Generation cancelled.');
@@ -383,13 +386,10 @@ export const useAiGenerator = (
     setIsLoadingPrompt(true);
     setGenerationError(null);
     setRawOutput(null);
-    setDraftContent(buildImmediateDraftContent({
-      promptType: effectivePromptType,
-      products: aiContext.selectedProducts,
-      categories: aiContext.selectedCategories,
-      imageCount: aiContext.selectedImages.length,
-    }));
+    setGenerationProgress({ currentStage: 'Starting the design agent...', percentage: 10 });
+    setDraftContent(null);
     setGeneratedContent(null);
+    lastRenderableDraftRef.current = null;
     setIsPreviewOpen(true);
 
     try {
@@ -410,19 +410,27 @@ export const useAiGenerator = (
         signal: run.signal,
         onEvent: (event) => {
           toastForGenerationEvent(event);
+          const eventProgress = progressForGenerationEvent(event);
+          if (eventProgress && isActiveGenerationRun(run)) {
+            setGenerationProgress(eventProgress);
+          }
           if (event.type === 'warning') {
             notifyAiContextWarnings({ warnings: event.warnings as AiContextBatchDetails['warnings'] } as AiContextBatchDetails);
           }
           if (event.type === 'preview.patch') {
             if (!isActiveGenerationRun(run)) return;
-            setDraftContent(normalizeGeneratedWidgetContent(event));
+            const normalizedDraft = normalizeGeneratedWidgetContent(event);
+            lastRenderableDraftRef.current = normalizedDraft;
+            setDraftContent(normalizedDraft);
           }
         },
         onDraft: (raw) => {
           if (!isActiveGenerationRun(run)) return;
           setRawOutput(raw);
           try {
-            setDraftContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(raw)));
+            const normalizedDraft = normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(raw));
+            lastRenderableDraftRef.current = normalizedDraft;
+            setDraftContent(normalizedDraft);
           } catch {
             // Partial streams are expected to be unparsable until closing tags arrive.
           }
@@ -431,7 +439,9 @@ export const useAiGenerator = (
       if (!isActiveGenerationRun(run)) return;
       setRawOutput(result.raw);
       setGeneratedContent(normalizeGeneratedWidgetContent(parseGeneratedWidgetContent(result.raw)));
+      lastRenderableDraftRef.current = null;
       setDraftContent(null);
+      setGenerationProgress(null);
     } catch (error: unknown) {
       if (isTimeoutError(error)) {
         const message = error.message || 'Widget generation timed out.';
@@ -439,9 +449,18 @@ export const useAiGenerator = (
         setGenerationError(message);
         setGeneratedContent(null);
         setDraftContent(null);
+        setGenerationProgress(null);
         return;
       }
       if (isAbortError(error) || run.signal.aborted) {
+        return;
+      }
+      if (lastRenderableDraftRef.current) {
+        setGeneratedContent(lastRenderableDraftRef.current);
+        setDraftContent(null);
+        setGenerationError(null);
+        setGenerationProgress(null);
+        toast.warning('Using the last rendered widget draft after a late provider failure.');
         return;
       }
       if (import.meta.env.DEV) console.error(`Error generating content:`, error);
@@ -449,6 +468,7 @@ export const useAiGenerator = (
       setGenerationError(error instanceof Error ? error.message : String(error));
       setGeneratedContent(null);
       setDraftContent(null);
+      setGenerationProgress(null);
       setIsPreviewOpen(false);
     } finally {
       if (generationRunIdRef.current === run.id) {
@@ -497,9 +517,9 @@ export const useAiGenerator = (
       });
 
       // Add header and footer for standalone use
-      const standalonePrompt = `# STANDALONE WIDGET GENERATOR PROMPT
+    const standalonePrompt = `# STANDALONE WIDGET GENERATOR PROMPT
 
-**Instructions**: Copy this entire prompt and paste it into your preferred AI chatbot (ChatGPT, Claude, Gemini, etc.). After receiving the response, copy the \`<htmljs>\` and \`<css>\` sections and paste them back using the "Paste AI Response" button.
+**Instructions**: Copy this entire prompt and paste it into your preferred AI chatbot (ChatGPT, Claude, Gemini, etc.). After receiving the response, copy the \`<htmljs>\`, \`<css>\`, and optional \`<js>\` sections and paste them back using the "Paste AI Response" button.
 
 ═══════════════════════════════════════════════════════════════
 
@@ -510,14 +530,18 @@ ${combinedPrompt}
 **IMPORTANT**: Your response must use this EXACT format:
 
 <htmljs>
-<!-- Your complete HTML code here. Do not include script tags. -->
+<!-- Your complete HTML code here. Keep scripts out of HTML. -->
 </htmljs>
 
 <css>
 /* Your complete CSS code here */
 </css>
 
-Do NOT use markdown code blocks. Do NOT use JSON format. Use ONLY the <htmljs> and <css> tags shown above.
+<js>
+/* Optional root-scoped behavior. Use widget.root/query/queryAll only. */
+</js>
+
+Do NOT use markdown code blocks. Do NOT use JSON format. Use ONLY the tags shown above.
 ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(s) provided above. Use them in your HTML.` : ''}`;
 
       await navigator.clipboard.writeText(standalonePrompt);
@@ -563,11 +587,11 @@ ${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(
     stagedGeneration,
     generationProgress: isLoadingPrompt
       ? {
-          currentStage: draftContent
-            ? 'Building and validating the design...'
-            : 'Preparing storefront context...',
+          currentStage: generationProgress?.currentStage ?? (
+            draftContent ? 'Rendering a live draft...' : 'Preparing storefront context...'
+          ),
           totalSections: 1,
-          percentage: draftContent ? 78 : 35,
+          percentage: generationProgress?.percentage ?? (draftContent ? 78 : 35),
         }
       : undefined,
     draftContent: isLoadingPrompt ? draftContent : null,

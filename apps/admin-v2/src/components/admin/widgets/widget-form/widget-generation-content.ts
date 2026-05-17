@@ -6,7 +6,7 @@ import {
   stripWidgetRuntimeMarkup,
 } from '@scalius/shared/widget-rendering';
 
-export type GeneratedWidgetContent = { html: string; css: string };
+export type GeneratedWidgetContent = { html: string; css: string; js?: string };
 
 const COMPOSITION_BOUNDARY_GUARD_CSS = `
 
@@ -39,6 +39,7 @@ function assertRenderableWidgetContent(widget: GeneratedWidgetContent): void {
     id: 'preview-validation',
     htmlContent: widget.html,
     cssContent: widget.css,
+    jsContent: widget.js,
   });
 
   if (report.hasInputHtml && !report.hasRenderableHtml) {
@@ -71,6 +72,7 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
     const widget = {
       html: tagResult.data.html,
       css: tagResult.data.css || '',
+      js: tagResult.data.js || '',
     };
     assertRenderableWidgetContent(widget);
     return widget;
@@ -92,13 +94,18 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
     htmlContent?: string;
     css?: string;
     cssContent?: string;
+    js?: string;
+    javascript?: string;
+    jsContent?: string;
   };
   const html = widgetData.html || widgetData.htmljs || widgetData.htmlContent || '';
   const css = widgetData.css || widgetData.cssContent || '';
+  const js = widgetData.js || widgetData.javascript || widgetData.jsContent || '';
   assertUsableCss(css);
   const widget = {
     html,
     css,
+    js,
   };
   assertRenderableWidgetContent(widget);
   return widget;
@@ -106,5 +113,5 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
 
 export function normalizeGeneratedWidgetContent(widget: GeneratedWidgetContent): GeneratedWidgetContent {
   const html = stripWidgetRuntimeMarkup(widget.html);
-  return { html, css: `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}` };
+  return { html, css: `${widget.css || ''}${COMPOSITION_BOUNDARY_GUARD_CSS}`, js: widget.js || '' };
 }

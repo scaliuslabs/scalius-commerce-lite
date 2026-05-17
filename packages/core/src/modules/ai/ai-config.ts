@@ -155,19 +155,24 @@ export const PROMPT_INSTRUCTIONS = {
 
   json: `RESPONSE FORMAT - USE SIMPLE TAGS:
 
+<css>
+/* Your complete scoped CSS code here. Emit this first. */
+</css>
+
 <htmljs>
-<!-- Your HTML code here. Do not include script tags. -->
+<!-- Your HTML code here. Keep scripts out of HTML. -->
 </htmljs>
 
-<css>
-/* Your CSS code here */
-</css>
+<js>
+/* Optional local widget behavior. Use widget.root, widget.query(), or widget.queryAll(). */
+</js>
 
 IMPORTANT RULES:
 - Use the simple tag format shown above
 - Do NOT wrap in markdown code blocks (\`\`\`html or \`\`\`json)
 - Do NOT use JSON format
-- Do NOT include JavaScript or <script> tags. Widget previews and storefront rendering are HTML/CSS only.
+- Emit <css> before <htmljs> so the artifact is styled even if the provider stops early
+- Use <js> only when local interaction/effects improve the widget. JS must be root-scoped and must not touch global storefront state.
 - Make sure to close all tags properly
 - For multi-section widgets, use <part1>, <part2>, etc. with nested tags`,
 
@@ -186,8 +191,8 @@ Simply use these URLs directly in your buttons or links.`,
   improvement: `IMPORTANT: This is an IMPROVEMENT request for existing code.
 - Maintain the overall structure and style unless specifically asked to change it
 - Only modify what the user requested
-- Ensure the improved code is still valid HTML/CSS
-- Use the same tag format: <htmljs>...</htmljs> and <css>...</css>`,
+- Ensure the improved code is still valid HTML/CSS/optional scoped JS
+- Use the same tag format: <htmljs>...</htmljs>, <css>...</css>, and optional <js>...</js>`,
 
   sectionSpecific: (sectionIndex: number, totalSections: number) => `CRITICAL: SECTION-SPECIFIC IMPROVEMENT
 You are improving ONLY Section ${sectionIndex + 1} of ${totalSections} total sections.
@@ -197,7 +202,7 @@ You are improving ONLY Section ${sectionIndex + 1} of ${totalSections} total sec
 - Maintain compatibility with other sections
 - Preserve the shared visual system and tight vertical rhythm so the combined widget reads as one composition
 - Do not add large top/bottom margins or spacer elements to compensate for section boundaries
-- Format: <htmljs>section content</htmljs><css>section styles</css>`,
+- Format: <htmljs>section content</htmljs><css>section styles</css><js>optional root-scoped behavior</js>`,
 } as const;
 
 // ============================================================================
@@ -260,8 +265,8 @@ export const ERROR_MESSAGES = {
   rateLimitError: "Rate limit exceeded. Please wait a moment and try again.",
 
   // Parsing errors
-  jsonParseFailed: "Failed to parse AI response. The response was not valid JSON.",
-  jsonRepairFailed: "Could not repair malformed JSON response. Please try generating again.",
+  jsonParseFailed: "Failed to parse AI response. The response was not a valid widget artifact.",
+  jsonRepairFailed: "Could not repair malformed widget artifact. Please try generating again.",
   validationFailed: (error: string) => `Response validation failed: ${error}`,
 
   // Model capability errors

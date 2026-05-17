@@ -63,6 +63,7 @@ export const widgets = sqliteTable(
         name: text("name").notNull(),
         htmlContent: text("html_content").notNull(),
         cssContent: text("css_content"),
+        jsContent: text("js_content"),
         aiContext: text("ai_context"),
         isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
         displayTarget: text("display_target", { enum: ["homepage"] }).notNull().default("homepage"),
@@ -158,6 +159,7 @@ export const widgetHistory = sqliteTable("widget_history", {
         .references(() => widgets.id, { onDelete: "cascade" }),
     htmlContent: text("html_content").notNull(),
     cssContent: text("css_content"),
+    jsContent: text("js_content"),
     reason: text("reason").notNull().default("updated"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()

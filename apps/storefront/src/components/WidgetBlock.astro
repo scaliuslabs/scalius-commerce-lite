@@ -1,6 +1,6 @@
 ---
 import type { ApiWidget } from "@/lib/api";
-import { prepareWidgetContent } from "@/lib/widget-content";
+import { createScopedWidgetScript, prepareWidgetContent } from "@/lib/widget-content";
 
 interface Props {
   widget: ApiWidget;
@@ -9,7 +9,8 @@ interface Props {
 }
 
 const { widget, class: className = "", priority = false } = Astro.props;
-const { scopeClass, html, css } = prepareWidgetContent(widget, { priority });
+const { scopeClass, html, css, js } = prepareWidgetContent(widget, { priority });
+const scopedScript = createScopedWidgetScript(widget.id, js);
 ---
 
 {css && <style set:html={css} />}
@@ -20,3 +21,4 @@ const { scopeClass, html, css } = prepareWidgetContent(widget, { priority });
 >
   <Fragment set:html={html} />
 </div>
+{scopedScript && <script is:inline set:html={scopedScript} />}

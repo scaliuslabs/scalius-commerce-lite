@@ -119,6 +119,40 @@ describe("runWidgetGeneration", () => {
     ).rejects.toThrow("Provider failed");
   });
 
+  it("recovers the last preview patch when a later step fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          streamFromChunks([
+            [
+              sse("preview.patch", {
+                type: "preview.patch",
+                html: "<section>Accepted preview</section>",
+                css: ".accepted{color:red}",
+              }),
+              sse("run.failed", {
+                type: "run.failed",
+                runId: "run_1",
+                error: { message: "Late provider failure" },
+              }),
+            ].join(""),
+          ]),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const result = await runWidgetGeneration({
+      promptType: "widget",
+      operation: "create",
+      userPrompt: "Create a hero",
+    });
+
+    expect(result.raw).toContain("Accepted preview");
+    expect(result.raw).toContain(".accepted");
+  });
+
   it("does not treat streamed draft text as a completed artifact", async () => {
     vi.stubGlobal(
       "fetch",

@@ -50,13 +50,15 @@ describe('widget generation content parsing', () => {
     ).toThrow(/malformed|incomplete/i);
   });
 
-  it('rejects generated HTML that sanitizes away before preview', () => {
-    expect(() =>
-      parseGeneratedWidgetContent(`
-        <htmljs><script>alert(1)</script></htmljs>
-        <css>.promo { color: red; }</css>
-      `),
-    ).toThrow(/HTML/i);
+  it('extracts local-safe script tags into JS before preview', () => {
+    const content = parseGeneratedWidgetContent(`
+      <htmljs><section class="promo"><button>Deal</button><script>widget.query("button")?.classList.add("ready")</script></section></htmljs>
+      <css>.promo { color: red; }</css>
+    `);
+
+    expect(content.html).toContain('<section class="promo">');
+    expect(content.html).not.toContain('<script>');
+    expect(content.js).toContain('widget.query("button")');
   });
 
   it('strips platform runtime wrappers before previewing generated content', () => {

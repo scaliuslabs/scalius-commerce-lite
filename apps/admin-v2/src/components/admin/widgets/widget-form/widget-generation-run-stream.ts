@@ -8,7 +8,7 @@ export type WidgetGenerationRunEvent =
   | { type: "tool.started"; tool: string }
   | { type: "tool.completed"; tool: string; elapsedMs: number; metadata?: Record<string, unknown> }
   | { type: "draft.delta"; delta: string }
-  | { type: "preview.patch"; html: string; css: string; metadata?: Record<string, unknown> }
+  | { type: "preview.patch"; html: string; css: string; js?: string; metadata?: Record<string, unknown> }
   | { type: "artifact.validated"; metadata?: Record<string, unknown> }
   | { type: "warning"; warnings: unknown }
   | { type: "artifact"; raw: string; metadata?: Record<string, unknown> }
@@ -16,6 +16,7 @@ export type WidgetGenerationRunEvent =
   | { type: "run.failed"; runId: string; error: { message: string } };
 
 export interface WidgetGenerationRunRequest {
+  sessionId?: string;
   provider?: string;
   model?: string;
   promptType: "widget" | "landing-page" | "collection";
@@ -23,10 +24,21 @@ export interface WidgetGenerationRunRequest {
   userPrompt: string;
   existingHtml?: string;
   existingCss?: string;
+  existingJs?: string;
   targetSection?: number;
-  sections?: Array<{ html: string; css: string; description?: string }>;
+  sections?: Array<{ html: string; css: string; js?: string; description?: string }>;
   improvementHistory?: Array<{ section?: number; prompt: string; timestamp: number; modelUsed?: string }>;
-  selectedImages?: Array<{ url: string; mimeType?: string; alt?: string }>;
+  selectedImages?: Array<{
+    id?: string;
+    url: string;
+    filename?: string;
+    size?: number;
+    createdAt?: string | Date;
+    mimeType?: string;
+    alt?: string;
+    role?: "visual_reference" | "product_media" | "brand_asset" | "merchant_upload";
+    label?: string;
+  }>;
   productIds?: string[];
   categoryIds?: string[];
   collectionIds?: string[];
@@ -37,6 +49,11 @@ export interface WidgetGenerationRunRequest {
 export interface WidgetGenerationRunResult {
   raw: string;
   events: WidgetGenerationRunEvent[];
+}
+
+function previewPatchToRaw(event: Extract<WidgetGenerationRunEvent, { type: "preview.patch" }>): string {
+  const js = event.js?.trim();
+  return `<htmljs>\n${event.html.trim()}\n</htmljs>\n\n<css>\n${event.css.trim()}\n</css>${js ? `\n\n<js>\n${js}\n</js>` : ""}`;
 }
 
 function parseSseEvent(block: string): WidgetGenerationRunEvent | null {
@@ -62,10 +79,13 @@ export async function runWidgetGeneration(
     onDraft?: (raw: string) => void;
   } = {},
 ): Promise<WidgetGenerationRunResult> {
+  const sessionId =
+    request.sessionId ||
+    `widget-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
   const response = await fetchWidgetAi("/api/v1/admin/widget-generation-runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
+    body: JSON.stringify({ ...request, sessionId }),
     signal: options.signal,
   });
 
@@ -82,6 +102,7 @@ export async function runWidgetGeneration(
   let buffer = "";
   let raw = "";
   let receivedArtifact = false;
+  let lastPreviewPatch: Extract<WidgetGenerationRunEvent, { type: "preview.patch" }> | null = null;
 
   const handleBlock = (block: string) => {
     const event = parseSseEvent(block);
@@ -93,11 +114,19 @@ export async function runWidgetGeneration(
       options.onDraft?.(raw);
       return;
     }
+    if (event.type === "preview.patch") {
+      lastPreviewPatch = event;
+    }
     if (event.type === "artifact") {
       raw = event.raw;
       receivedArtifact = true;
     }
     if (event.type === "run.failed") {
+      if (lastPreviewPatch) {
+        raw = previewPatchToRaw(lastPreviewPatch);
+        receivedArtifact = true;
+        return;
+      }
       throw new Error(event.error.message);
     }
   };

@@ -260,6 +260,13 @@
       "when": 1778641790683,
       "tag": "0036_atomic_discount_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1778918400000,
+      "tag": "0037_widget_js_content",
+      "breakpoints": true
     }
   ]
 }

@@ -211,6 +211,7 @@ export interface ApiWidget {
   name: string;
   htmlContent: string;
   cssContent?: string | null;
+  jsContent?: string | null;
   isActive: boolean;
   displayTarget: string;
   placementRule: string;

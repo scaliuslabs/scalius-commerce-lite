@@ -2,6 +2,9 @@ export type WidgetGenerationToolName =
   | "load_settings"
   | "hydrate_context"
   | "build_prompt"
+  | "plan_artifact"
+  | "generate_section"
+  | "assemble_artifact"
   | "generate";
 
 export type WidgetGenerationToolEvent =

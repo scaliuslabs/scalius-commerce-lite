@@ -274,7 +274,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ aiContext, aiGenerator
             <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
               <div className="font-medium text-foreground">Production guardrails</div>
               <div className="mt-2 space-y-1">
-                <p>Uses only HTML/CSS. Scripts are rejected before storefront rendering.</p>
+                <p>Uses scoped HTML, CSS, and optional local JS. Runtime wrappers isolate widget effects.</p>
                 <p>Selected products provide real buy-now URLs, pricing, images, and category context.</p>
                 <p>Generation, improvement, context hydration, and validation run through one API pipeline.</p>
               </div>

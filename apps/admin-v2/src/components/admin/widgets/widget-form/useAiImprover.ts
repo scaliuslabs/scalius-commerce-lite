@@ -15,13 +15,14 @@ import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@scalius/core/modules/ai/ai-co
 import { notifyAiContextWarnings, type AiContextBatchDetails } from './ai-context-warnings';
 import { limitImagesForModel } from './ai-context-limits';
 import { normalizeGeneratedWidgetContent, parseGeneratedWidgetContent } from './widget-generation-content';
-import { runWidgetGeneration } from './widget-generation-run-stream';
+import { runWidgetGeneration, type WidgetGenerationRunEvent } from './widget-generation-run-stream';
 import type { ImprovementHistoryEntry } from '@scalius/core/modules/ai/ai-context-schema';
 import type { useAiContext } from './useAiContext';
 import type { useAiGenerator } from './useAiGenerator';
 import type { SectionContent } from './useStagedGeneration';
 
 type ImprovementRun = { id: number; signal: AbortSignal };
+type ImprovementProgress = { currentStage: string; percentage: number };
 
 interface ModelInfo {
   id: string;
@@ -41,9 +42,27 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+function progressForImprovementEvent(event: WidgetGenerationRunEvent): ImprovementProgress | null {
+  if (event.type === 'run.started') return { currentStage: 'Starting the design agent...', percentage: 10 };
+  if (event.type === 'tool.started' || event.type === 'step.started') {
+    const key = event.type === 'tool.started' ? event.tool : event.step;
+    if (key === 'load_settings') return { currentStage: 'Checking AI provider settings...', percentage: 20 };
+    if (key === 'hydrate_context') return { currentStage: 'Loading selected products and categories...', percentage: 35 };
+    if (key === 'build_prompt') return { currentStage: 'Preparing the improvement brief...', percentage: 50 };
+    if (key === 'generate') return { currentStage: 'Reworking the artifact...', percentage: 68 };
+    return { currentStage: 'Improving the widget...', percentage: 55 };
+  }
+  if (event.type === 'preview.patch') return { currentStage: 'Rendering the improved draft...', percentage: 82 };
+  if (event.type === 'artifact.validated') return { currentStage: 'Validating the improved artifact...', percentage: 92 };
+  if (event.type === 'artifact') return { currentStage: 'Preparing the improved preview...', percentage: 96 };
+  if (event.type === 'run.completed') return { currentStage: 'Improvement ready.', percentage: 100 };
+  return null;
+}
+
 export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
-  const [contentToImprove, setContentToImprove] = useState<{ html: string; css: string } | null>(null);
+  const [contentToImprove, setContentToImprove] = useState<{ html: string; css: string; js?: string } | null>(null);
   const [isImproving, setIsImproving] = useState(false);
+  const [improvementProgress, setImprovementProgress] = useState<ImprovementProgress | null>(null);
   const [improvementHistory, setImprovementHistory] = useState<ImprovementHistoryEntry[]>([]);
   const [currentImprovementTarget, setCurrentImprovementTarget] = useState<number | undefined>(undefined);
   const [rawOutput, setRawOutput] = useState<string>(''); // Capture raw LLM output for debugging
@@ -69,6 +88,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
     }
     improvementRunIdRef.current += 1;
     setIsImproving(false);
+    setImprovementProgress(null);
     setCurrentImprovementTarget(undefined);
     if (!options?.silent) {
       toast.info('Improvement cancelled.');
@@ -100,6 +120,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       const run = startImprovementRun();
 
       setIsImproving(true);
+      setImprovementProgress({ currentStage: 'Starting the design agent...', percentage: 10 });
       setCurrentImprovementTarget(targetSection);
 
       try {
@@ -116,7 +137,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           }
 
           const section = sections[targetSection];
-          codeToImprove = { html: section.html, css: section.css };
+          codeToImprove = { html: section.html, css: section.css, js: section.js };
           toast.info(`Improving Section ${targetSection + 1} of ${sections.length}`);
         }
 
@@ -140,10 +161,12 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
           userPrompt: aiGenerator.getPlacementAwareInstructions(promptToUse),
           existingHtml: codeToImprove.html,
           existingCss: codeToImprove.css,
+          existingJs: codeToImprove.js,
           targetSection,
           sections: sections.map((section: SectionContent) => ({
             html: section.html,
             css: section.css,
+            js: section.js,
             description: section.description,
           })),
           improvementHistory,
@@ -156,10 +179,21 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
         }, {
           signal: run.signal,
           onEvent: (event) => {
+            if (!isActiveImprovementRun(run)) return;
+            const progress = progressForImprovementEvent(event);
+            if (progress) setImprovementProgress(progress);
+            if (event.type === 'preview.patch') {
+              setContentToImprove({
+                html: event.html,
+                css: event.css,
+                js: event.js,
+              });
+            }
             if (event.type === 'warning') {
               notifyAiContextWarnings({ warnings: event.warnings as AiContextBatchDetails['warnings'] } as AiContextBatchDetails);
             }
           },
+          onDraft: setRawOutput,
         });
         if (!isActiveImprovementRun(run)) return false;
         setRawOutput(result.raw);
@@ -175,11 +209,12 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
               ...oldSection,
               html: improvedContent.html,
               css: improvedContent.css,
+              js: improvedContent.js,
               timestamp: Date.now(),
             };
 
-            setContentToImprove(
-              reconstructWidgetFromSections(
+            setContentToImprove({
+              ...reconstructWidgetFromSections(
                 updatedSections.map((section, index) => ({
                   index,
                   html: section.html,
@@ -189,7 +224,8 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
                   timestamp: section.timestamp,
                 })),
               ),
-            );
+              js: updatedSections.map((section) => section.js).filter(Boolean).join('\n\n'),
+            });
 
             // Update the staged generation state immutably
             aiGenerator.stagedGeneration.updateSections(updatedSections);
@@ -240,6 +276,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
       } finally {
         if (improvementRunIdRef.current === run.id) {
           setIsImproving(false);
+          setImprovementProgress(null);
           setCurrentImprovementTarget(undefined);
           if (improvementAbortRef.current?.signal === run.signal) {
             improvementAbortRef.current = null;
@@ -254,7 +291,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
    * Initialize improvement session with content
    */
   const startImprovement = useCallback(
-    (content: { html: string; css: string }) => {
+    (content: { html: string; css: string; js?: string }) => {
       setContentToImprove(content);
       improvementBaselineRef.current = improvementHistory;
     },
@@ -297,6 +334,7 @@ export function useAiImprover({ aiContext, aiGenerator }: UseAiImproverProps) {
     // State
     contentToImprove,
     isImproving,
+    improvementProgress,
     improvementHistory,
     currentImprovementTarget,
     rawOutput,

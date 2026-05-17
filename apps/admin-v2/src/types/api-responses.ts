@@ -461,6 +461,7 @@ export interface Widget {
   name: string;
   htmlContent: string;
   cssContent: string | null;
+  jsContent: string | null;
   aiContext: string | null;
   isActive: boolean;
   displayTarget: string;
@@ -493,6 +494,7 @@ export interface WidgetHistoryEntry {
   widgetId: string;
   htmlContent: string;
   cssContent: string | null;
+  jsContent: string | null;
   reason: string;
   createdAt: number;
 }

@@ -31,6 +31,7 @@ export const WidgetDetails: React.FC<WidgetDetailsProps> = ({
   const [isCodeOpen, setIsCodeOpen] = React.useState(false);
   const html = watch("htmlContent") || "";
   const css = watch("cssContent") || "";
+  const js = watch("jsContent") || "";
   const hasContent = html.trim().length > 0;
 
   React.useEffect(() => {
@@ -46,8 +47,8 @@ export const WidgetDetails: React.FC<WidgetDetailsProps> = ({
           <CardTitle className="text-base">Widget content</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
             {hasContent
-              ? `${html.length.toLocaleString()} HTML chars, ${css.length.toLocaleString()} CSS chars`
-              : "Generate, paste, or write widget HTML/CSS."}
+              ? `${html.length.toLocaleString()} HTML, ${css.length.toLocaleString()} CSS, ${js.length.toLocaleString()} JS chars`
+              : "Generate, paste, or write a widget artifact."}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -86,7 +87,7 @@ export const WidgetDetails: React.FC<WidgetDetailsProps> = ({
             <Button type="button" variant="outline" className="w-full justify-between">
               <span className="inline-flex items-center gap-2">
                 <Code2 className="h-4 w-4" />
-                Advanced HTML/CSS
+                Advanced Code
               </span>
               <ChevronDown className={cn("h-4 w-4 transition-transform", isCodeOpen && "rotate-180")} />
             </Button>
@@ -119,6 +120,21 @@ export const WidgetDetails: React.FC<WidgetDetailsProps> = ({
               {errors.cssContent && (
                 <p className="text-sm text-destructive">
                   {errors.cssContent.message}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="jsContent">JS</Label>
+              <Textarea
+                id="jsContent"
+                {...register("jsContent")}
+                rows={6}
+                placeholder="/* Optional. Use widget.root, widget.query(), or widget.queryAll(). */"
+                className="font-mono text-xs"
+              />
+              {errors.jsContent && (
+                <p className="text-sm text-destructive">
+                  {errors.jsContent.message}
                 </p>
               )}
             </div>

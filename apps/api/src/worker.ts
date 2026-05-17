@@ -4,6 +4,7 @@ import app from "./app";
 import { handleQueueBatch } from "./queue-consumer";
 import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+export { WidgetDesignAgent } from "./agents/widget-design-agent";
 
 export type { AppType } from "./app";
 

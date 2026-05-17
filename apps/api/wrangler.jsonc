@@ -46,6 +46,20 @@
   "ai": {
     "binding": "AI"
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WidgetDesignAgent",
+        "class_name": "WidgetDesignAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "widget_design_agent_v1",
+      "new_sqlite_classes": ["WidgetDesignAgent"]
+    }
+  ],
   "queues": {
     "producers": [
       {

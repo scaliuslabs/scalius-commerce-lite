@@ -69,6 +69,7 @@ export const WIDGET_DESTINATION_RUNTIME_CONTRACTS: Record<AiPromptType, string> 
   widget: `SERVER DESTINATION CONTRACT: Homepage Widget
 - Generate a compact insertable homepage module, usually 1-2 connected bands inside one root wrapper.
 - Prioritize store/category signal, featured picks/categories, simple discovery paths, trust cues, and a light action close.
+- If the merchant asks for a "homepage collection section", produce a homepage collection-feature module using selected products/categories, not a full collection-page merchandising flow.
 - Use homepage density: strong scanning and medium visual weight, not a full-page campaign.
 - Avoid full campaign funnels, long proof stacks, FAQ blocks, oversized heroes, dense comparison tables, and large external gaps.`,
   "landing-page": `SERVER DESTINATION CONTRACT: Landing Section
@@ -78,6 +79,7 @@ export const WIDGET_DESTINATION_RUNTIME_CONTRACTS: Record<AiPromptType, string> 
 - Do not collapse into a generic product grid or homepage discovery banner unless the merchant explicitly asks.`,
   collection: `SERVER DESTINATION CONTRACT: Collection Section
 - Generate practical collection merchandising inside one root wrapper, not a generic homepage banner or campaign microsite.
+- Use this only for collection-page placements or the explicit Collection Section goal; do not override Homepage Widget just because the merchant used the word "collection" in a homepage request.
 - Product comparison, product cards, buying-guide cues, prices/links supplied in context, and scan-first density are the priority.
 - At least half of the meaningful content should help shoppers compare or choose products.
 - Keep hero treatment restrained and make product facts more prominent than decorative copy.`,
