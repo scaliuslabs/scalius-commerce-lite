@@ -92,10 +92,6 @@ import {
   updateAttributeValues,
   bulkDeleteAttributes,
   bulkRestoreAttributes,
-  // Analytics
-  createAnalyticsScript,
-  updateAnalyticsScript,
-  deleteAnalyticsScript,
   // Settings
   updateSettingsByCategory,
   saveHeaderConfig,
@@ -149,6 +145,11 @@ import {
   deleteWidgetHistory,
   restoreWidgetHistory,
 } from "./api.functions";
+import {
+  createAnalyticsScript,
+  deleteAnalyticsScript,
+  updateAnalyticsScript,
+} from "./api-functions/analytics";
 
 // ═══════════════════════════════════════════════════════════════════
 //  PRODUCTS

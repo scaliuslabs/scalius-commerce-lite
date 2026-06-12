@@ -26,7 +26,10 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
-import { createAnalyticsScript, updateAnalyticsScript } from "@/lib/api.functions";
+import {
+  createAnalyticsScript,
+  updateAnalyticsScript,
+} from "@/lib/api-functions/analytics";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { analyticsFormSchema, type AnalyticsFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";

@@ -159,7 +159,7 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
 
-Status: In progress as of 2026-06-13. Cache server functions were extracted to `apps/admin-v2/src/lib/api-functions/cache.ts` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
+Status: In progress as of 2026-06-13. Cache and analytics-script server functions were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
 
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 

@@ -1154,46 +1154,6 @@ export const removeAttributeValue = createServerFn({ method: "POST" })
   });
 
 // ═══════════════════════════════════════════════════════════════════
-//  ANALYTICS SCRIPTS
-// ═══════════════════════════════════════════════════════════════════
-
-export const getAnalyticsScripts = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<unknown[]>("/analytics");
-  },
-);
-
-export const getAnalyticsScript = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiGet<Record<string, unknown>>(`/analytics/${data.id}`);
-  });
-
-export const createAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost<Record<string, unknown>>("/analytics", data);
-  });
-
-export const updateAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string } & Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPut<Record<string, unknown>>(`/analytics/${data.id}`, data);
-  });
-
-export const deleteAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/analytics/${data.id}`);
-  });
-
-export const toggleAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string; isActive: boolean }) => data)
-  .handler(async ({ data }) => {
-    return apiPost(`/analytics/${data.id}/toggle`, { isActive: data.isActive });
-  });
-
-// ═══════════════════════════════════════════════════════════════════
 //  INVENTORY
 // ═══════════════════════════════════════════════════════════════════
 
