@@ -54,7 +54,7 @@ import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import { abandonedCheckoutsQueryOptions } from "@/lib/api.queries";
-import { deleteAbandonedCheckouts } from "@/lib/api.functions";
+import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 // --- Type Definitions ---
@@ -93,6 +93,10 @@ type SortKey = keyof AbandonedCheckout;
 
 const formatCurrency = (amount: number, sym: string) => {
   return `${sym}${amount.toFixed(2)}`;
+};
+
+const getCheckoutDisplayId = (checkout: AbandonedCheckout): string => {
+  return checkout.checkoutId || checkout.id;
 };
 
 const timeSince = (date: Date | null): string => {
@@ -188,7 +192,7 @@ const CheckoutRow = React.memo(
           />
         </TableCell>
         <TableCell className="font-mono text-xs">
-          {checkout.checkoutId.substring(0, 12)}
+          {getCheckoutDisplayId(checkout).substring(0, 12)}
         </TableCell>
         <TableCell className="font-medium">
           {checkout.customerPhone ? formatPhoneForDisplay(checkout.customerPhone) : (
@@ -246,7 +250,9 @@ const DetailsModal = ({
           <DialogTitle>Checkout Details</DialogTitle>
           <DialogDescription>
             Full data for checkout{" "}
-            <span className="font-mono text-xs">{checkout.checkoutId}</span>
+            <span className="font-mono text-xs">
+              {getCheckoutDisplayId(checkout)}
+            </span>
           </DialogDescription>
         </DialogHeader>
         <div className="grid md:grid-cols-2 gap-x-8 gap-y-6 py-4 max-h-[60vh] overflow-y-auto p-2">
