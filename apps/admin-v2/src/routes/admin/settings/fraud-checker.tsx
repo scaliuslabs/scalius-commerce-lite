@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { FraudCheckerSettings } from "~/components/admin/FraudCheckerSettings";
 import { fraudCheckerProvidersQueryOptions } from "~/lib/api.queries";
-import type { FraudCheckerProvider } from "~/types/api-responses";
+import type { FraudCheckerProviderPayload } from "~/lib/api-functions/fraud-checker";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/settings/fraud-checker")({
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/admin/settings/fraud-checker")({
 
 function FraudCheckerPage() {
   const { data } = useSuspenseQuery(fraudCheckerProvidersQueryOptions());
-  const providers = (Array.isArray(data) ? data : []) as FraudCheckerProvider[];
+  const providers: FraudCheckerProviderPayload[] = Array.isArray(data) ? data : [];
 
   return (
     <div className="container py-6 space-y-6">

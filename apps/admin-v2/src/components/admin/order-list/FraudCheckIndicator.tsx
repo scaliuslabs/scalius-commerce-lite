@@ -8,31 +8,15 @@ import {
 import { Shield, ShieldAlert, ShieldCheck, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { fraudCheckerLookup } from "@/lib/api.functions";
+import {
+  fraudCheckerLookup,
+  type FraudLookupData,
+  type RiskLevel,
+} from "@/lib/api-functions/fraud-checker";
 
 interface FraudCheckIndicatorProps {
   phone: string;
   orderId: string;
-}
-
-type RiskLevel = "low" | "medium" | "high" | "unknown";
-
-interface CourierFraudStats {
-  total_parcels: number;
-  total_delivered_parcels: number;
-  total_cancelled_parcels: number;
-}
-
-interface FraudLookupData {
-  mobile_number?: string;
-  total_parcels?: number;
-  total_delivered?: number;
-  total_cancel?: number;
-  provider_status?: string;
-  message?: string;
-  customer_tag?: string;
-  riskLevel?: RiskLevel;
-  apis?: Record<string, CourierFraudStats>;
 }
 
 export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
@@ -43,7 +27,7 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
   const handleCheck = async () => {
     setIsLoading(true);
     try {
-      const result = await fraudCheckerLookup({ data: { phone } }) as FraudLookupData;
+      const result = await fraudCheckerLookup({ data: { phone } });
       setFraudData(result);
     } catch (error) {
       toast.error("Check Failed", { description: getServerFnError(error, "Failed to check fraud data") });

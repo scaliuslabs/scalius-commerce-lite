@@ -71,8 +71,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  // Fraud Checker
-  getFraudCheckerProviders,
   // RBAC
   getRbacRoles,
   getRbacPermissions,
@@ -129,6 +127,7 @@ import {
   getNavigationPreviewProducts,
   type NavigationPreviewProductsInput,
 } from "./api-functions/navigation";
+import { getFraudCheckerProviders } from "./api-functions/fraud-checker";
 
 // Query staleTime constants (how long data is considered fresh)
 const STALE = {
