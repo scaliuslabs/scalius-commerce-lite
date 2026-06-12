@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Eraser } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { clearCache } from "@/lib/api.functions";
+import { clearCache } from "@/lib/api-functions/cache";
 import { Button } from "../ui/button";
 import {
   Tooltip,

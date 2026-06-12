@@ -29,7 +29,7 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 
 | ID | Severity | Status | Owner | Summary | Primary Verification |
 | --- | --- | --- | --- | --- | --- |
-| ADMIN-001 | P2 | Not Started | Admin/API | Split `api.functions.ts` and remove `@ts-nocheck` slice by slice. | Touched slice typechecks without file-level nocheck. |
+| ADMIN-001 | P2 | In Progress | Admin/API | Split `api.functions.ts` and remove `@ts-nocheck` slice by slice. | Touched slice typechecks without file-level nocheck. |
 | ADMIN-002 | P2 | Verified | Admin/RBAC | Align admin shell role guard with API RBAC. | `admin-access` tests plus admin/API auth typecheck tests pass. |
 | ADMIN-003 | P2 | Verified | Admin/Routes | Add `loaderDeps` for URL-search-driven list loaders. | Admin typecheck and root tests pass after loader-deps sweep. |
 | ADMIN-004 | P2 | Verified | Admin/API | Reduce drift between server-function transport and browser proxy. | Same endpoint behavior compared through both paths. |
@@ -56,9 +56,9 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 
 | ID | Severity | Status | Owner | Summary | Primary Verification |
 | --- | --- | --- | --- | --- | --- |
-| DOC-001 | P3 | Not Started | Docs | Package README counts/dependency claims are stale. | Docs remove volatile counts or generate them. |
+| DOC-001 | P3 | Verified | Docs | Package README counts/dependency claims are stale. | Docs remove volatile counts or generate them. |
 | CLEAN-001 | P3 | Verified | Admin/Cleanup | `.DS_Store` exists under admin route directory. | File removed; root `.gitignore` already ignores `.DS_Store`. |
-| UI-001 | P3 | Not Started | Admin/Dashboard | Empty disposable dashboard emits Recharts zero-size warning. | Browser dashboard render has no chart width/height warning. |
+| UI-001 | P3 | Verified | Admin/Dashboard | Empty disposable dashboard emits Recharts zero-size warning. | Empty daily activity renders a fixed-height empty state instead of mounting Recharts. |
 
 ## Recently Verified Baseline
 
@@ -100,6 +100,9 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 - `DB-001` fixed by adding `packages/database/scripts/check-migration-metadata.mjs`, which verifies SQL migrations, `_journal.json`, snapshots, and an explicit allowlist for the 12 manual migrations without snapshots (`0019`-`0026`, `0030`, `0031`, `0036`, `0037`). Verification: `pnpm --filter @scalius/database check:migrations`, `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`, and `pnpm --filter @scalius/database typecheck`.
 - `PLAT-001` fixed by adding `scripts/check-worker-env.mjs` and root `pnpm check:env`, making Wrangler binding/var names the checked source of truth for API, admin, and storefront Worker `Env` declarations. Removed stale API/admin `EMAIL` declarations, removed stale API `ASSETS` from `hono-env.d.ts`, and removed the unused API `SESSION` KV binding from production/local API Wrangler configs. Verification: `pnpm check:env`, `node --check scripts/check-worker-env.mjs`, `pnpm --filter @scalius/api typecheck`, `pnpm --filter @scalius/admin-v2 typecheck`, and `pnpm --filter @scalius/storefront typecheck`.
 - Broad checkpoint verification after the platform/env guard: `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass. Lint remains warnings-only; root tests pass 84 files / 523 tests.
+- `ADMIN-001` first slice extracted cache server functions from `apps/admin-v2/src/lib/api.functions.ts` into `apps/admin-v2/src/lib/api-functions/cache.ts`, with no file-level `@ts-nocheck` in the extracted module. Verification: `pnpm --filter @scalius/admin-v2 typecheck`.
+- `UI-001` fixed by keeping `DashboardChart` from mounting Recharts until the client is mounted and non-empty daily activity exists; empty dashboards render a fixed-height empty state, and chart containers keep stable dimensions. Verification: `pnpm exec vitest run apps/admin-v2/src/components/admin/dashboard-chart-data.test.ts --passWithNoTests` and `pnpm --filter @scalius/admin-v2 typecheck`.
+- `DOC-001` fixed by removing volatile generated SDK counts from `packages/api-client/README.md`, correcting `@hey-api/client-fetch` as a runtime dependency, removing fragile database column counts from `packages/database/README.md`, adding the `widgetPlacements` table, updating migration notes through `0037`, and removing a stale singleton-constraint limitation. Verification: `rg -n "245|343|27,500|52 tables|33 migrations|0000-0032|No runtime dependencies|client-fetch.*dev|Columns \\|" packages/api-client/README.md packages/database/README.md` returns no matches.
 
 ## Local Dev Verification Notes
 
@@ -113,7 +116,7 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 - `pnpm dev:storefront` now applies pending local D1 migrations before API starts. It applied `0037_widget_js_content.sql` to the stale local DB, then started API and storefront.
 - Browser check of `http://localhost:4322/` rendered the storefront homepage with no console errors. Direct API check of `http://localhost:8787/api/v1/storefront/homepage` returned 200 after migrations.
 - `pnpm dev:admin:create --help`, `pnpm dev:setup --help`, and `pnpm dev:reset --help` print the new local admin options.
-- Remaining local UI warning: the empty dashboard can emit Recharts `width(-1) and height(-1)` warnings; tracked as `UI-001`.
+- Empty dashboard chart warning is fixed by rendering a stable empty state until daily activity data exists.
 
 ## Tracker Update Template
 
