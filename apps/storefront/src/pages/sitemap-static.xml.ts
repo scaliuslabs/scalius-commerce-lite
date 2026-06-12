@@ -1,6 +1,6 @@
 /**
  * Static Pages Sitemap
- * Contains static URLs like homepage, search, cart, etc.
+ * Contains crawlable static URLs like homepage and search.
  */
 
 import { generateSitemap, getSitemapHeaders } from '@/lib/sitemap-utils';
@@ -24,11 +24,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
         loc: `${baseUrl}/search`,
         changefreq: 'weekly',
         priority: 0.8,
-      },
-      {
-        loc: `${baseUrl}/cart`,
-        changefreq: 'weekly',
-        priority: 0.3,
       },
     ];
 

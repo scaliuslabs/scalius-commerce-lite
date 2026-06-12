@@ -5,6 +5,12 @@
 // Entity schemas define strict shapes for OpenAPI documentation and SDK type generation.
 
 import { z } from "@hono/zod-openapi";
+import {
+  nullableTimestampSchema,
+  optionalNullableTimestampSchema,
+  optionalTimestampSchema,
+  timestampSchema,
+} from "./timestamps";
 
 // ─────────────────────────────────────────
 // Products
@@ -23,8 +29,8 @@ export const productSummarySchema = z
     discountType: z.string(),
     discountAmount: z.number(),
     freeDelivery: z.boolean(),
-    createdAt: z.string().or(z.date()),
-    updatedAt: z.string().or(z.date()),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
     category: z.object({ name: z.string() }),
     variantCount: z.number(),
     imageCount: z.number(),
@@ -41,7 +47,7 @@ export const productImageSchema = z
     alt: z.string().nullable(),
     isPrimary: z.boolean(),
     sortOrder: z.number(),
-    createdAt: z.string().or(z.date()),
+    createdAt: timestampSchema,
   })
 
 /** Product variant — returned by variant CRUD endpoints. */
@@ -59,7 +65,7 @@ export const productVariantSchema = z
     preorderStock: z.number().optional(),
     lowStockThreshold: z.number().nullable().optional(),
     allowPreorder: z.boolean().optional(),
-    preorderDate: z.union([z.string(), z.number()]).nullable().optional(),
+    preorderDate: optionalNullableTimestampSchema,
     preorderMessage: z.string().nullable().optional(),
     allowBackorder: z.boolean().optional(),
     backorderLimit: z.number().optional(),
@@ -70,9 +76,9 @@ export const productVariantSchema = z
     barcodeType: z.string().nullable().optional(),
     colorSortOrder: z.number().nullable().optional(),
     sizeSortOrder: z.number().nullable().optional(),
-    createdAt: z.union([z.string(), z.number()]).optional(),
-    updatedAt: z.union([z.string(), z.number()]).optional(),
-    deletedAt: z.union([z.string(), z.number()]).nullable().optional(),
+    createdAt: optionalTimestampSchema,
+    updatedAt: optionalTimestampSchema,
+    deletedAt: optionalNullableTimestampSchema,
     stockVersion: z.number().optional(),
     version: z.number().optional(),
   });
@@ -107,9 +113,9 @@ export const productDetailSchema = z
     isActive: z.boolean(),
     discountPercentage: z.number().nullable(),
     freeDelivery: z.boolean(),
-    createdAt: z.string().or(z.date()),
-    updatedAt: z.string().or(z.date()),
-    deletedAt: z.string().or(z.date()).nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: nullableTimestampSchema,
     category: z.object({ name: z.string().nullable() }).nullable(),
     variants: z.array(productVariantSchema),
     images: z.array(productImageSchema),
@@ -141,9 +147,9 @@ export const orderShipmentSummarySchema = z
     rawStatus: z.string().nullable(),
     externalId: z.string().nullable(),
     trackingId: z.string().nullable(),
-    lastChecked: z.string().or(z.date()).nullable(),
-    updatedAt: z.string().or(z.date()),
-    createdAt: z.string().or(z.date()),
+    lastChecked: nullableTimestampSchema,
+    updatedAt: timestampSchema,
+    createdAt: timestampSchema,
   })
 
 /** Order summary — returned by listOrders (admin). */
@@ -161,8 +167,8 @@ export const orderSummarySchema = z
     paymentStatus: z.string().nullable(),
     paymentMethod: z.string().nullable(),
     fulfillmentStatus: z.string().nullable(),
-    createdAt: z.string().or(z.date()),
-    updatedAt: z.string().or(z.date()),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
     city: z.string().nullable(),
     zone: z.string().nullable(),
     area: z.string().nullable(),
@@ -213,9 +219,9 @@ export const orderDetailSchema = z
     areaName: z.string().nullable(),
     paidAmount: z.number().nullable(),
     balanceDue: z.number().nullable(),
-    createdAt: z.string().or(z.date()),
-    updatedAt: z.string().or(z.date()),
-    deletedAt: z.string().or(z.date()).nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: nullableTimestampSchema,
     itemCount: z.number(),
     items: z.array(orderItemSchema),
     latestShipment: orderShipmentSummarySchema.nullable(),
@@ -319,9 +325,9 @@ export const collectionSchema = z
     config: z.string(),
     sortOrder: z.number(),
     isActive: z.boolean(),
-    createdAt: z.union([z.string(), z.number()]).nullable(),
-    updatedAt: z.union([z.string(), z.number()]).nullable(),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
 
 // ─────────────────────────────────────────
@@ -342,12 +348,12 @@ export const discountSchema = z
     maxUses: z.number().nullable(),
     limitOnePerCustomer: z.boolean(),
     customerSegment: z.string().nullable(),
-    startDate: z.union([z.string(), z.number()]),
-    endDate: z.union([z.string(), z.number()]).nullable(),
+    startDate: timestampSchema,
+    endDate: nullableTimestampSchema,
     isActive: z.boolean(),
-    createdAt: z.union([z.string(), z.number()]),
-    updatedAt: z.union([z.string(), z.number()]),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
 
 // ─────────────────────────────────────────
@@ -366,8 +372,8 @@ export const pageFeaturedImageSchema = z
     width: z.number().nullable().optional(),
     height: z.number().nullable().optional(),
     folderId: z.string().nullable().optional(),
-    createdAt: z.union([z.string(), z.number()]).optional(),
-    updatedAt: z.union([z.string(), z.number()]).optional(),
+    createdAt: optionalTimestampSchema,
+    updatedAt: optionalTimestampSchema,
   })
   .passthrough();
 
@@ -384,11 +390,11 @@ export const pageSchema = z
     hideFooter: z.boolean(),
     hideTitle: z.boolean(),
     featuredImage: pageFeaturedImageSchema.nullable().optional(),
-    publishedAt: z.union([z.string(), z.number()]).nullable().optional(),
+    publishedAt: optionalNullableTimestampSchema,
     sortOrder: z.number(),
-    createdAt: z.union([z.string(), z.number()]).nullable(),
-    updatedAt: z.union([z.string(), z.number()]).nullable(),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
 
 // ─────────────────────────────────────────
@@ -407,9 +413,9 @@ export const widgetPlacementSchema = z
     anchorId: z.string().nullable(),
     sortOrder: z.number(),
     isActive: z.boolean(),
-    createdAt: z.union([z.string(), z.number()]).nullable(),
-    updatedAt: z.union([z.string(), z.number()]).nullable(),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
   .passthrough();
 
@@ -423,9 +429,9 @@ export const publicWidgetPlacementSchema = z.object({
   anchorId: z.string().nullable(),
   sortOrder: z.number(),
   isActive: z.boolean(),
-  createdAt: z.union([z.string(), z.number()]).nullable(),
-  updatedAt: z.union([z.string(), z.number()]).nullable(),
-  deletedAt: z.union([z.string(), z.number()]).nullable(),
+  createdAt: nullableTimestampSchema,
+  updatedAt: nullableTimestampSchema,
+  deletedAt: nullableTimestampSchema,
 });
 
 export const widgetSchema = z
@@ -442,9 +448,9 @@ export const widgetSchema = z
     referenceCollectionId: z.string().nullable(),
     sortOrder: z.number(),
     placements: z.array(widgetPlacementSchema).optional(),
-    createdAt: z.union([z.string(), z.number()]).nullable(),
-    updatedAt: z.union([z.string(), z.number()]).nullable(),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
 
 export const publicWidgetSchema = widgetSchema.omit({ aiContext: true }).extend({
@@ -463,9 +469,9 @@ export const attributeSchema = z
     slug: z.string(),
     filterable: z.boolean(),
     options: z.array(z.string()).nullable(),
-    createdAt: z.union([z.string(), z.number()]),
-    updatedAt: z.union([z.string(), z.number()]),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: nullableTimestampSchema,
   });
 
 // ─────────────────────────────────────────
@@ -484,9 +490,9 @@ export const mediaSchema = z
     width: z.number().nullable().optional(),
     height: z.number().nullable().optional(),
     folderId: z.string().nullable(),
-    createdAt: z.union([z.string(), z.number()]),
-    updatedAt: z.union([z.string(), z.number()]),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
 
 /** Media folder. */
@@ -495,9 +501,9 @@ export const mediaFolderSchema = z
     id: z.string(),
     name: z.string(),
     parentId: z.string().nullable(),
-    createdAt: z.union([z.string(), z.number()]),
-    updatedAt: z.union([z.string(), z.number()]),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
 
 // ─────────────────────────────────────────

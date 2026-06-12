@@ -2,7 +2,7 @@
 // All DB queries and business logic for the CMS pages domain.
 
 import { pages } from "@scalius/database/schema";
-import { sql, asc, desc, isNull, isNotNull, and, inArray, eq, type SQL } from "drizzle-orm";
+import { sql, asc, desc, isNull, isNotNull, and, or, lte, inArray, eq, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
@@ -16,6 +16,14 @@ import {
 } from "./pages.validation";
 
 export { createPageSchema, updatePageSchema, type CreatePageInput, type UpdatePageInput };
+
+export function publicPageVisibilityCondition(): SQL {
+    return and(
+        isNull(pages.deletedAt),
+        eq(pages.isPublished, true),
+        or(isNull(pages.publishedAt), lte(pages.publishedAt, sql`unixepoch()`)),
+    ) as SQL;
+}
 
 // ─────────────────────────────────────────
 // Queries
@@ -109,7 +117,7 @@ export async function getPublicPageById(db: Database, id: string) {
     const page = await db
         .select()
         .from(pages)
-        .where(and(eq(pages.id, id), eq(pages.isPublished, true), isNull(pages.deletedAt)))
+        .where(and(eq(pages.id, id), publicPageVisibilityCondition()))
         .get() ?? null;
 
     return sanitizePageContent(page);
@@ -119,7 +127,7 @@ export async function getPublicPageBySlug(db: Database, slug: string) {
     const page = await db
         .select()
         .from(pages)
-        .where(and(eq(pages.slug, slug), eq(pages.isPublished, true), isNull(pages.deletedAt)))
+        .where(and(eq(pages.slug, slug), publicPageVisibilityCondition()))
         .get() ?? null;
 
     return sanitizePageContent(page);
@@ -135,8 +143,7 @@ export async function getPublicPages(
 ) {
     const { page = 1, limit = 10, sort = "title" } = options;
 
-    const conditions = [isNull(pages.deletedAt), eq(pages.isPublished, true)];
-    const whereClause = and(...conditions);
+    const whereClause = publicPageVisibilityCondition();
 
     const total = (await db
         .select({ count: sql<number>`count(*)` })

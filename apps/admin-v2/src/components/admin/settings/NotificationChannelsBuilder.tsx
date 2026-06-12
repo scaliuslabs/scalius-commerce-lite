@@ -17,16 +17,16 @@ import {
   getAdminNotificationChannels,
   updateAdminNotificationChannels,
 } from "@/lib/api.functions";
+import {
+  ORDER_NOTIFICATION_LABELS,
+  ORDER_NOTIFICATION_TYPES,
+  type OrderNotificationType,
+} from "@scalius/core/modules/notifications";
 
-const ORDER_STATUSES = [
-  { key: "order_created", label: "Order Created" },
-  { key: "order_confirmed", label: "Order Confirmed" },
-  { key: "order_processing", label: "Order Processing" },
-  { key: "order_shipped", label: "Order Shipped" },
-  { key: "order_delivered", label: "Order Delivered" },
-  { key: "order_cancelled", label: "Order Cancelled" },
-  { key: "order_returned", label: "Order Returned" },
-] as const;
+const ORDER_STATUSES = ORDER_NOTIFICATION_TYPES.map((key) => ({
+  key,
+  label: ORDER_NOTIFICATION_LABELS[key],
+}));
 
 const CHANNELS = [
   { key: "email", label: "Email" },
@@ -35,24 +35,17 @@ const CHANNELS = [
   { key: "push", label: "Push" },
 ] as const;
 
-const ADMIN_STATUSES = [
-  { key: "order_created", label: "New Order" },
-  { key: "order_confirmed", label: "Order Confirmed" },
-  { key: "order_processing", label: "Order Processing" },
-  { key: "order_shipped", label: "Order Shipped" },
-  { key: "order_delivered", label: "Order Delivered" },
-  { key: "order_cancelled", label: "Order Cancelled" },
-] as const;
+const ADMIN_STATUSES = ORDER_STATUSES;
 
 const ADMIN_CHANNELS = [
   { key: "push", label: "Push" },
 ] as const;
 
-type StatusKey = (typeof ORDER_STATUSES)[number]["key"];
+type StatusKey = OrderNotificationType;
 type ChannelKey = (typeof CHANNELS)[number]["key"];
 type ChannelConfig = Record<StatusKey, Record<ChannelKey, boolean>>;
 
-type AdminStatusKey = (typeof ADMIN_STATUSES)[number]["key"];
+type AdminStatusKey = OrderNotificationType;
 type AdminChannelKey = (typeof ADMIN_CHANNELS)[number]["key"];
 type AdminChannelConfig = Record<AdminStatusKey, Record<AdminChannelKey, boolean>>;
 

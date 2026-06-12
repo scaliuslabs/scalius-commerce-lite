@@ -47,13 +47,12 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
   };
 }
 
-const defaultApiParams = mapParams(searchSchema.parse({}));
-
 export const Route = createFileRoute("/admin/pages/")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => search,
   staleTime: 0,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(pagesQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(pagesQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

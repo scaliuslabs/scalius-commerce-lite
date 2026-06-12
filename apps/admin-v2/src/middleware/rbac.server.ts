@@ -6,6 +6,7 @@ import { getDb } from "@scalius/database/client";
 import { getUserPermissions, isSuperAdmin } from "@scalius/core/auth/rbac/helpers";
 import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
 import { env as cfEnv } from "cloudflare:workers";
+import { hasRbacAdminAccess } from "~/lib/admin-access";
 
 function getCfEnv(): Env {
   return cfEnv;
@@ -22,7 +23,7 @@ export interface RbacContext {
  */
 export async function loadUserPermissions(
   userId: string,
-  userRole?: string | null,
+  _userRole?: string | null,
 ): Promise<RbacContext> {
   const env = getCfEnv();
   const db = getDb(env);
@@ -36,6 +37,6 @@ export async function loadUserPermissions(
   return {
     permissions,
     isSuperAdmin: superAdmin,
-    hasAdminAccess: superAdmin || userRole === "admin" || permissions.size > 0,
+    hasAdminAccess: hasRbacAdminAccess({ isSuperAdmin: superAdmin, permissions }),
   };
 }

@@ -7,7 +7,12 @@ import { NotFoundError, ConflictError } from "../utils/api-error";
 
 import { ok, created, noContent } from "../utils/api-response";
 import { successEnvelope, paginatedEnvelope, noContentResponse, messageResponse, errorResponses } from "../schemas/responses";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../schemas/timestamps";
+
+type CheckoutLanguageRouteApp = OpenAPIHono<{ Bindings: Env }>;
+
+const publicApp = new OpenAPIHono<{ Bindings: Env }>();
+const adminApp = new OpenAPIHono<{ Bindings: Env }>();
 
 const checkoutLanguageSchema = z.object({
   id: z.string(),
@@ -17,9 +22,9 @@ const checkoutLanguageSchema = z.object({
   fieldVisibility: z.union([z.string(), z.record(z.string(), z.unknown())]),
   isActive: z.boolean(),
   isDefault: z.boolean(),
-  createdAt: z.union([z.string(), z.number()]).optional(),
-  updatedAt: z.union([z.string(), z.number()]).optional(),
-  deletedAt: z.union([z.string(), z.number()]).nullable().optional(),
+  createdAt: optionalTimestampSchema,
+  updatedAt: optionalTimestampSchema,
+  deletedAt: optionalNullableTimestampSchema,
 }).passthrough();
 
 const defaultLanguageData = {
@@ -90,60 +95,65 @@ const getActiveRoute = createRoute({
   }
 });
 
-app.openapi(getActiveRoute, async (c) => {
-  const db = c.get("db");
-  let language = await db
-    .select()
-    .from(checkoutLanguages)
-    .where(
-      and(
-        eq(checkoutLanguages.isActive, true),
-        isNull(checkoutLanguages.deletedAt),
-      ),
-    )
-    .get();
-
-  if (!language) {
-    language = await db
+function registerGetActiveRoute(target: CheckoutLanguageRouteApp) {
+  target.openapi(getActiveRoute, async (c) => {
+    const db = c.get("db");
+    let language = await db
       .select()
       .from(checkoutLanguages)
       .where(
         and(
-          eq(checkoutLanguages.isDefault, true),
+          eq(checkoutLanguages.isActive, true),
           isNull(checkoutLanguages.deletedAt),
         ),
       )
       .get();
-  }
 
-  if (!language) {
-    const fallbackFieldVisibility = {
-      showEmailField: true,
-      showOrderNotesField: true,
-      showAreaField: true
+    if (!language) {
+      language = await db
+        .select()
+        .from(checkoutLanguages)
+        .where(
+          and(
+            eq(checkoutLanguages.isDefault, true),
+            isNull(checkoutLanguages.deletedAt),
+          ),
+        )
+        .get();
+    }
+
+    if (!language) {
+      const fallbackFieldVisibility = {
+        showEmailField: true,
+        showOrderNotesField: true,
+        showAreaField: true
+      };
+
+      return ok(c, {
+        language: {
+          id: "fallback",
+          name: "English (Fallback)",
+          code: "en",
+          languageData: defaultLanguageData,
+          fieldVisibility: fallbackFieldVisibility,
+          isActive: true,
+          isDefault: true
+        }
+      });
+    }
+
+    const parsedLanguage = {
+      ...language,
+      languageData: JSON.parse(language.languageData),
+      fieldVisibility: JSON.parse(language.fieldVisibility)
     };
 
-    return ok(c, {
-      language: {
-        id: "fallback",
-        name: "English (Fallback)",
-        code: "en",
-        languageData: defaultLanguageData,
-        fieldVisibility: fallbackFieldVisibility,
-        isActive: true,
-        isDefault: true
-      }
-    });
-  }
+    return ok(c, { language: parsedLanguage });
+  });
+}
 
-  const parsedLanguage = {
-    ...language,
-    languageData: JSON.parse(language.languageData),
-    fieldVisibility: JSON.parse(language.fieldVisibility)
-  };
-
-  return ok(c, { language: parsedLanguage });
-});
+registerGetActiveRoute(publicApp);
+registerGetActiveRoute(adminApp);
 
 // GET /checkout-languages — list all checkout languages
 const listRoute = createRoute({
@@ -170,7 +180,7 @@ const listRoute = createRoute({
   }
 });
 
-app.openapi(listRoute, async (c) => {
+adminApp.openapi(listRoute, async (c) => {
   const db = c.get("db");
   const q = c.req.valid("query");
   const page = q.page;
@@ -252,7 +262,7 @@ const createRoute2 = createRoute({
   }
 });
 
-app.openapi(createRoute2, async (c) => {
+adminApp.openapi(createRoute2, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
 
@@ -304,7 +314,7 @@ const getByIdRoute = createRoute({
   }
 });
 
-app.openapi(getByIdRoute, async (c) => {
+adminApp.openapi(getByIdRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   const language = await db.select().from(checkoutLanguages).where(eq(checkoutLanguages.id, id)).get();
@@ -339,7 +349,7 @@ const updateRoute = createRoute({
   }
 });
 
-app.openapi(updateRoute, async (c) => {
+adminApp.openapi(updateRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   const data = c.req.valid("json");
@@ -391,7 +401,7 @@ const softDeleteRoute = createRoute({
   }
 });
 
-app.openapi(softDeleteRoute, async (c) => {
+adminApp.openapi(softDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: sql`(cast(strftime('%s','now') as int))` }).where(eq(checkoutLanguages.id, id));
@@ -414,7 +424,7 @@ const hardDeleteRoute = createRoute({
   }
 });
 
-app.openapi(hardDeleteRoute, async (c) => {
+adminApp.openapi(hardDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.delete(checkoutLanguages).where(eq(checkoutLanguages.id, id));
@@ -441,11 +451,14 @@ const restoreRoute = createRoute({
   }
 });
 
-app.openapi(restoreRoute, async (c) => {
+adminApp.openapi(restoreRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: null }).where(eq(checkoutLanguages.id, id));
   return ok(c, {});
 });
 
-export { app as checkoutLanguageRoutes };
+export {
+  adminApp as checkoutLanguageRoutes,
+  publicApp as publicCheckoutLanguageRoutes,
+};

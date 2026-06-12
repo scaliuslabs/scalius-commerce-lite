@@ -7,11 +7,15 @@ import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-se
 import type { SSLCommerzIPNPayload } from "@scalius/core/modules/payments/types";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import { getEncryptionKey } from "../../utils/encryption-key";
+import {
+  buildWebhookEventId,
+  claimWebhookEvent,
+  markWebhookEventFailed,
+  markWebhookEventProcessed,
+  markWebhookEventQueued,
+} from "../../utils/webhook-idempotency";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-const KV_WEBHOOK_PREFIX = "ssl_wh:";
-const KV_WEBHOOK_TTL = 86400; // 24 hours
 
 app.post("/", async (c) => {
   const db = c.get("db");
@@ -41,9 +45,17 @@ app.post("/", async (c) => {
     return c.text("OK");
   }
 
-  const kvKey = `${KV_WEBHOOK_PREFIX}${tranId}_${valId}`;
-  const alreadyProcessed = await c.env.CACHE?.get(kvKey);
-  if (alreadyProcessed) {
+  const eventId = buildWebhookEventId("sslcommerz", "ipn", `${tranId}:${valId}`);
+  const claim = await claimWebhookEvent(db, {
+    id: eventId,
+    provider: "sslcommerz",
+    eventType: "ipn",
+    orderId: tranId,
+    status: "processing",
+    result: { tranId, valId },
+  });
+
+  if (!claim.claimed) {
     return c.text("OK");
   }
 
@@ -51,6 +63,7 @@ app.post("/", async (c) => {
 
   if (!validation) {
     console.error(`[ssl-webhook] IPN validation API call failed for order ${tranId}`);
+    await markWebhookEventFailed(db, eventId, { tranId, valId, error: "Validation API call failed" });
     return c.text("RETRY", 503);
   }
 
@@ -84,11 +97,37 @@ app.post("/", async (c) => {
     };
   } else {
     console.warn(`[ssl-webhook] IPN non-terminal status for order ${tranId}: ${validation.status}`);
+    await markWebhookEventProcessed(db, eventId, {
+      tranId,
+      valId,
+      status: validation.status,
+      enqueued: false,
+    });
     return c.text("OK");
   }
 
-  await c.env.PAYMENT_EVENTS_QUEUE.send(message);
-  await c.env.CACHE?.put(kvKey, "queued", { expirationTtl: KV_WEBHOOK_TTL });
+  const queue = c.env.PAYMENT_EVENTS_QUEUE;
+  if (!queue) {
+    await markWebhookEventFailed(db, eventId, { tranId, valId, error: "Queue not available" });
+    return c.text("RETRY", 503);
+  }
+
+  try {
+    await queue.send(message);
+    await markWebhookEventQueued(db, eventId, {
+      tranId,
+      valId,
+      status: validation.status,
+    });
+  } catch (error) {
+    await markWebhookEventFailed(db, eventId, {
+      tranId,
+      valId,
+      status: validation.status,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.text("RETRY", 503);
+  }
 
   return c.text("OK");
 });

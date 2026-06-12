@@ -48,16 +48,10 @@ export async function updateOrderStatusFromShipment(
     let newOrderStatus = order.status;
 
     switch (newStatus.toLowerCase()) {
+      case "pickup_assigned":
       case "picked_up":
-        if (
-          order.status !== "delivered" &&
-          order.status !== "returned" &&
-          order.status !== "cancelled"
-        ) {
-          newOrderStatus = "shipped";
-        }
-        break;
       case "in_transit":
+      case "out_for_delivery":
         if (
           order.status !== "delivered" &&
           order.status !== "returned" &&
@@ -66,12 +60,15 @@ export async function updateOrderStatusFromShipment(
           newOrderStatus = "shipped";
         }
         break;
+      case "partial_delivered":
       case "delivered":
         newOrderStatus = "delivered";
         break;
       case "returned":
         newOrderStatus = "returned";
         break;
+      case "pickup_failed":
+      case "delivery_failed":
       case "failed":
         // Only update if the order is in shipped or processing status
         if (order.status === "shipped" || order.status === "processing") {
@@ -93,6 +90,8 @@ export async function updateOrderStatusFromShipment(
         }
         // Otherwise keep the current status
         break;
+      case "on_hold":
+      case "unknown":
       case "pending":
         // No change for pending shipments
         break;

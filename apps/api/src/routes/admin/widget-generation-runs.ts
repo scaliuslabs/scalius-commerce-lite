@@ -2,6 +2,7 @@ import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { getAgentByName } from "agents";
 import { GENERATION_CONFIG } from "@scalius/core/modules/ai";
 import { enforceAiRateLimit } from "./ai";
+import { optionalTimestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -28,7 +29,7 @@ const selectedImageSchema = z
       .refine(isAllowedWidgetImageUrl, "Image URLs must use HTTPS or data URLs."),
     filename: z.string().max(500).optional(),
     size: z.number().int().min(0).optional(),
-    createdAt: z.union([z.string(), z.date()]).optional(),
+    createdAt: optionalTimestampSchema,
     mimeType: z.string().max(120).optional(),
     alt: z.string().max(500).optional(),
     role: z.enum(["visual_reference", "product_media", "brand_asset", "merchant_upload"]).optional(),

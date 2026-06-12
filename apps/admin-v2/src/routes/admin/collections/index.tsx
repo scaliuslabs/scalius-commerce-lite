@@ -39,13 +39,12 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
   };
 }
 
-const defaultApiParams = mapParams(searchSchema.parse({}));
-
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => search,
   staleTime: 0,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(collectionsQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(collectionsQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

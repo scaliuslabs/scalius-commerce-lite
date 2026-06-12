@@ -9,6 +9,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses } from "../../schemas/responses";
 import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import { nullableTimestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -60,9 +61,9 @@ const inventoryAlertSchema = z.object({
     currentQty: z.number(),
     threshold: z.number(),
     alertStatus: z.string(),
-    alertSentAt: z.union([z.string(), z.number()]).nullable(),
-    acknowledgedAt: z.union([z.string(), z.number()]).nullable(),
-    resolvedAt: z.union([z.string(), z.number()]).nullable(),
+    alertSentAt: nullableTimestampSchema,
+    acknowledgedAt: nullableTimestampSchema,
+    resolvedAt: nullableTimestampSchema,
     productName: z.string().nullable(),
     variantSku: z.string().nullable(),
     variantSize: z.string().nullable(),

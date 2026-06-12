@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
@@ -8,13 +8,17 @@ import { PermissionProvider } from "@/contexts/PermissionContext";
 import { Toaster } from "@/components/ui/sonner";
 import { adminRouteGuard } from "~/lib/auth.fns";
 import { useFirebaseInit } from "~/hooks/use-firebase-init";
+import { ADMIN_ACCESS_DENIED_PATH, shouldAllowAdminPath } from "~/lib/admin-access";
 
 export const Route = createFileRoute("/admin")({
   // Admin is behind auth, never crawled — skip SSR for faster client navigation
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     // Auth + RBAC guard: redirects to /auth/setup, /auth/login, or /auth/two-factor as needed
     const authContext = await adminRouteGuard();
+    if (!shouldAllowAdminPath(location.pathname, authContext.hasAdminAccess)) {
+      throw redirect({ to: ADMIN_ACCESS_DENIED_PATH });
+    }
     return authContext;
   },
   component: AdminLayout,

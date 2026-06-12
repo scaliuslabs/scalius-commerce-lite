@@ -8,6 +8,7 @@ import { dirname, resolve } from "node:path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const persistStatePath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 
 export default defineConfig({
   server: {
@@ -32,7 +33,7 @@ export default defineConfig({
     tailwindcss(),
     cloudflare({
       viteEnvironment: { name: "ssr" },
-      persistState: { path: "../../.wrangler/state" },
+      persistState: { path: persistStatePath },
     }),
     tanstackStart(),
     viteReact(),

@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import CustomDropdown from "@/components/CustomDropdown";
 import SimpleDropdown from "@/components/SimpleDropdown";
 import { getZones, getAreas, type LocationData } from "@/lib/api";
+import {
+  resolveLocationOption,
+  type LocationPrefillDetail,
+} from "./location-selector-utils";
 
 // Use the LocationData type directly from api-client
 interface LocationSelectorProps {
@@ -28,41 +32,89 @@ export default function LocationSelector({
   const [isLoadingZones, setIsLoadingZones] = useState<boolean>(false);
   const [isLoadingAreas, setIsLoadingAreas] = useState<boolean>(false);
 
-  const loadZones = async (cityId: string) => {
-    if (!cityId) return;
+  const loadZones = useCallback(async (cityId: string): Promise<LocationData[]> => {
+    if (!cityId) return [];
     setIsLoadingZones(true);
     try {
       const response = await getZones(cityId);
-      if (response) {
-        setZones(response);
-      } else {
-        setZones([]);
-      }
+      const nextZones = response || [];
+      setZones(nextZones);
+      return nextZones;
     } catch (error: unknown) {
       console.error("Error loading zones:", error);
       setZones([]);
+      return [];
     } finally {
       setIsLoadingZones(false);
     }
-  };
+  }, []);
 
-  const loadAreas = async (zoneId: string) => {
-    if (!zoneId) return;
+  const loadAreas = useCallback(async (zoneId: string): Promise<LocationData[]> => {
+    if (!zoneId) return [];
     setIsLoadingAreas(true);
     try {
       const response = await getAreas(zoneId);
-      if (response) {
-        setAreas(response);
-      } else {
-        setAreas([]);
-      }
+      const nextAreas = response || [];
+      setAreas(nextAreas);
+      return nextAreas;
     } catch (error: unknown) {
       console.error("Error loading areas:", error);
       setAreas([]);
+      return [];
     } finally {
       setIsLoadingAreas(false);
     }
-  };
+  }, []);
+
+  const dispatchZoneSelected = useCallback(
+    (zoneId: string, sourceZones = zones) => {
+      const selectedZoneData = sourceZones.find((z) => z.id === zoneId);
+      const event = new CustomEvent("zone-selected", {
+        detail: {
+          zoneId,
+          zoneName: selectedZoneData?.name || "",
+        },
+      });
+      window.dispatchEvent(event);
+    },
+    [zones],
+  );
+
+  const prefillLocation = useCallback(
+    async (detail: LocationPrefillDetail) => {
+      const city = resolveLocationOption(cities, detail.city, detail.cityName);
+      if (!city) return;
+
+      setSelectedCity(city.id);
+      setSelectedZone("");
+      setSelectedArea("");
+      setZones([]);
+      setAreas([]);
+
+      const nextZones = await loadZones(city.id);
+      const zone = resolveLocationOption(nextZones, detail.zone, detail.zoneName);
+      if (!zone) return;
+
+      setSelectedZone(zone.id);
+      dispatchZoneSelected(zone.id, nextZones);
+
+      const nextAreas = await loadAreas(zone.id);
+      const area = resolveLocationOption(nextAreas, detail.area, detail.areaName);
+      if (area) {
+        setSelectedArea(area.id);
+      }
+    },
+    [cities, dispatchZoneSelected, loadAreas, loadZones],
+  );
+
+  useEffect(() => {
+    const handlePrefill = (event: Event) => {
+      void prefillLocation((event as CustomEvent<LocationPrefillDetail>).detail || {});
+    };
+
+    window.addEventListener("location-prefill", handlePrefill);
+    return () => window.removeEventListener("location-prefill", handlePrefill);
+  }, [prefillLocation]);
 
   const handleCityChange = (value: string) => {
     setSelectedCity(value);
@@ -70,7 +122,7 @@ export default function LocationSelector({
     setSelectedArea("");
     setZones([]);
     setAreas([]);
-    loadZones(value);
+    void loadZones(value);
   };
 
   const handleZoneChange = (value: string) => {
@@ -78,16 +130,8 @@ export default function LocationSelector({
     setSelectedArea("");
     setAreas([]);
     if (value) {
-      loadAreas(value);
-      // Dispatch a custom event when the zone is selected
-      const selectedZoneData = zones.find((z) => z.id === value);
-      const event = new CustomEvent("zone-selected", {
-        detail: {
-          zoneId: value,
-          zoneName: selectedZoneData?.name || "",
-        },
-      });
-      window.dispatchEvent(event);
+      void loadAreas(value);
+      dispatchZoneSelected(value);
     }
   };
 

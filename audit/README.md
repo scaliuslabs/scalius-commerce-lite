@@ -1,47 +1,40 @@
-# Scalius Commerce Audit Index
+# Scalius Commerce Audit
 
-Date: 2026-04-22
+Audit refresh date: 2026-06-13, workspace timezone.
 
-This folder contains a full 13-slice audit of the Scalius Commerce monorepo, covering runtime architecture, database foundations, auth/RBAC, core order and payment logic, public and admin APIs, admin UI, storefront behavior, and shared contracts/tests.
+This folder is the working audit system for slice-by-slice remediation. It replaces the older broad report set because several prior findings had become stale, partially remediated, or too vague to hand to future agents safely.
 
-## Coverage
+## Files
 
-- [01-repo-architecture-runtime.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/01-repo-architecture-runtime.md) reviews Turborepo task graph correctness, Worker runtime composition, bindings, deploy flow, and cache/runtime drift.
-- [02-database-migrations.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/02-database-migrations.md) reviews Drizzle schema, replayed SQLite/D1 migration reality, constraints, defaults, and integrity drift.
-- [03-auth-rbac-security.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/03-auth-rbac-security.md) reviews Better Auth, RBAC, scanner auth, customer auth, JWT/token flows, and security boundaries.
-- [04-orders-inventory.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/04-orders-inventory.md) reviews order creation, queue ingest, inventory reservation/deduction/release, fulfillment, refunds, and CAS correctness.
-- [05-payments-delivery-notifications.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/05-payments-delivery-notifications.md) reviews payment initiation, webhook processing, refund orchestration, delivery sync, and notification fan-out.
-- [06-catalog-content.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/06-catalog-content.md) reviews products, categories, collections, pages, widgets, media, storefront composition, and content invalidation.
-- [07-settings-integrations-analytics-ai.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/07-settings-integrations-analytics-ai.md) reviews settings storage, encryption/decryption paths, provider registries, analytics, and OpenRouter/AI config.
-- [08-api-public.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/08-api-public.md) reviews the public API surface, auth exposure, cache behavior, schema/runtime mismatches, and proxy risks.
-- [09-api-admin.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/09-api-admin.md) reviews the admin API route graph, RBAC coverage, route-layer business logic, and handler/runtime drift.
-- [10-admin-shell-data.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/10-admin-shell-data.md) reviews TanStack Start shell behavior, auth context, query/mutation transport, and admin data-layer consistency.
-- [11-admin-workflows.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/11-admin-workflows.md) reviews admin route workflows, 2FA gating, invoice/scanner access, workflow permissioning, and screen-to-API mismatches.
-- [12-storefront-app.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/12-storefront-app.md) reviews SSR/runtime env wiring, storefront caching, cart/checkout/account flows, order-success privacy, logout, and SEO drift.
-- [13-shared-contracts-tests.md](/Users/arob/Desktop/open/scalius-commerce-lite/audit/13-shared-contracts-tests.md) reviews shared helpers, SDK/OpenAPI contract edges, CORS helper behavior, rate limiting, and the real value of the current test suite.
+- [AUDIT_REPORT.md](AUDIT_REPORT.md) - current findings, evidence, stale-claim corrections, and simplification themes.
+- [REMEDIATION_TRACKER.md](REMEDIATION_TRACKER.md) - actionable issue list for future fixing agents.
+- [VERIFICATION_PLAYBOOK.md](VERIFICATION_PLAYBOOK.md) - commands and manual flows to verify fixes when full local dev is difficult.
+- [PORTION_REWRITE_CHECKLIST.md](PORTION_REWRITE_CHECKLIST.md) - the checklist to use when rewriting one portion at a time.
+- [AGENT_HANDOFFS.md](AGENT_HANDOFFS.md) - recommended ownership slices and prompts for future agents.
+- [STALE_OR_SUPERSEDED_CLAIMS.md](STALE_OR_SUPERSEDED_CLAIMS.md) - old audit claims that should not be repeated without fresh evidence.
 
-## Highest-Priority Risks
+## Current Validation Snapshot
 
-1. Admin 2FA is not enforced at the real API boundary, so password-only admin sessions can call `/api/v1/admin/*` directly.
-2. Scanner auth is effectively a bearer-token inventory admin path because the API worker does not enforce the device-binding claim.
-3. The public `order-success` page can expose full order/customer details by `orderId` through the storefront's privileged service-auth path.
-4. Public checkout-language mutation endpoints are mounted without auth, which exposes storefront-critical configuration changes to the internet.
-5. Order, inventory, payment, COD, and refund flows still have several non-atomic side-effect paths that can diverge stock/payment state from order state.
-6. The replayed D1 schema materially drifts from the current Drizzle schema, including timestamp defaults, missing foreign keys, and constraint mismatches.
-7. Secret-handling is inconsistent across settings and runtime consumers, and several encrypted settings can break live email, SMS, AI, and delivery integrations after normal admin edits.
-8. Homepage widgets bypass the sanitizer on the consolidated storefront path and are rendered with `set:html`, creating a live XSS path.
-9. Admin RBAC coverage has drifted badly from the mounted route graph, leaving many endpoints protected only by the weak fallback gate.
+- `pnpm typecheck` passes at the repo root.
+- `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts` passes.
+- `pnpm test` currently passes: 77 test files and 507 tests.
+- Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
+- Several hard-to-run flows require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
 
-## Verification Snapshot
+## How To Use This Folder
 
-- Root `pnpm typecheck` passed.
-- Root `pnpm build` passed.
-- Root `pnpm test` passed with 9 files and 143 tests, but the shared/tests audit concludes many of those tests are shadow-model tests rather than real implementation coverage.
-- `pnpm lint` did not provide trustworthy full-repo coverage because admin is missing a lint script and API lint still failed.
-- Slice-specific checks also passed where run, including storefront typecheck, shared/api-client typechecks, and a targeted Vitest pass in the orders/inventory slice.
+1. Pick one tracker item or one coherent domain slice.
+2. Read the relevant section in [AUDIT_REPORT.md](AUDIT_REPORT.md).
+3. Use [PORTION_REWRITE_CHECKLIST.md](PORTION_REWRITE_CHECKLIST.md) before editing.
+4. Add or update focused tests before changing behavior when feasible.
+5. Run the smallest meaningful verification from [VERIFICATION_PLAYBOOK.md](VERIFICATION_PLAYBOOK.md).
+6. Update [REMEDIATION_TRACKER.md](REMEDIATION_TRACKER.md) with status, owner, commit/PR, and verification evidence.
+7. Update `AGENTS.md` only when the fix changes a real convention, architecture rule, command, or limitation.
 
-## Recommended First Response
+## Ground Rules
 
-1. Lock down the active security/privacy issues first: admin 2FA enforcement, scanner token enforcement, order-success exposure, and public checkout-language CRUD.
-2. Stabilize data integrity next: fix non-atomic inventory/payment/order paths and repair schema-vs-migration drift before more logic piles on top.
-3. Repair trust boundaries and configuration safety after that: RBAC map coverage, secret encryption/decryption consistency, and storefront/widget cache/content safety.
+- Do not hand-edit generated files: `apps/admin-v2/src/routeTree.gen.ts` or `packages/api-client/src/generated/**`.
+- Do not read or print real `.dev.vars` or `.env.development` contents.
+- Preserve unrelated dirty work.
+- Treat every old finding as a hypothesis until re-verified against current code.
+- Prefer focused remediation over broad refactors. The goal is a codebase that becomes more reliable after each slice.

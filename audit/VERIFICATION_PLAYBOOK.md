@@ -1,121 +1,327 @@
-# Scalius Commerce Verification Playbook
+# Verification Playbook
 
-Date started: 2026-04-22
+This repo is hard to run end to end locally. Use this playbook to prove one slice at a time, and record exactly what was and was not verified.
 
-This file is the repeatable testing guide for the remediation campaign.
+## Baseline Commands
 
-## Local First Rule
+Run these before broad remediation work:
 
-Every fix should be tested locally before any deploy:
+```bash
+git status --short
+pnpm typecheck
+pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts
+pnpm --filter @scalius/database check:migrations
+pnpm check:env
+pnpm test
+```
 
-1. targeted test or typecheck
-2. API-level manual verification if needed
-3. browser flow verification with Computer Use for admin/storefront behavior
-4. only then remote/deployed validation when the flow truly depends on external providers
+Current expected result:
 
-## Local Run Checklist
+- `pnpm typecheck` passes.
+- Drizzle check passes.
+- Database migration metadata guard passes.
+- Worker Env declaration guard passes.
+- Root tests currently pass with `pnpm test`.
 
-### Before starting
+## Focused Typecheck Commands
 
-- confirm branch/worktree state with `git status --short`
-- verify dependencies: `node -v`, `pnpm -v`
-- if local state seems broken, use:
-  - `pnpm dev:setup`
-  - `pnpm dev:reset`
+```bash
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/admin-v2 typecheck
+pnpm --filter @scalius/storefront typecheck
+pnpm --filter @scalius/core typecheck
+pnpm --filter @scalius/database typecheck
+```
 
-### Primary boot
+Note: admin typecheck does not fully protect `apps/admin-v2/src/lib/api.functions.ts` while that file has `@ts-nocheck`.
 
-- run `pnpm dev`
-- verify expected local URLs:
-  - admin: `http://localhost:4323/admin`
-  - storefront: `http://localhost:4322`
-  - API docs: `http://localhost:8787/api/v1/docs`
+## Focused Test Patterns
 
-### Baseline smoke after boot
+API routes:
 
-- admin login page loads
-- storefront home loads
-- product page loads
-- cart page loads
-- API docs/OpenAPI load
+```bash
+pnpm --filter @scalius/api test -- src/routes/path/to/test.ts
+```
 
-## Computer Use Flows
+Core services:
 
-Use Computer Use after the relevant fix batch. Minimum recurring flows:
+```bash
+pnpm --filter @scalius/core test -- src/modules/domain/domain.test.ts
+```
 
-### Admin flows
+Admin components:
 
-1. login flow
-2. 2FA flow if the affected change touches auth
-3. dashboard shell load
-4. one CRUD flow for the affected module
-5. one settings save flow if settings-related code changed
-6. scanner flow if scanner/security/inventory paths changed
+```bash
+pnpm exec vitest run apps/admin-v2/src/path/to/test.ts
+```
 
-### Storefront flows
+Admin shell/list routing:
 
-1. homepage render
-2. product detail
-3. add to cart
-4. cart totals and discount flow
-5. checkout progression
-6. account login/session flow when auth/session code changes
-7. order-success flow when order/checkout/privacy code changes
+```bash
+pnpm exec vitest run apps/admin-v2/src/lib/admin-access.test.ts apps/admin-v2/src/routes/api/scanner-token.test.tsx
+pnpm --filter @scalius/admin-v2 typecheck
+```
 
-## Mandatory Verification By Fix Area
+Storefront tests:
 
-### Auth / RBAC / security
+```bash
+pnpm --filter @scalius/storefront exec vitest run src/path/to/test.ts --passWithNoTests
+```
 
-- test session and token flows locally
-- verify unauthorized access is blocked at API layer, not just UI layer
-- verify admin UI still works for intended roles
-- verify customer auth cookies are set/cleared correctly in browser
+Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
-### Orders / inventory / payments
+Storefront checkout/content/SEO regression checks:
 
-- run targeted Vitest slice
-- exercise at least one real create/update/status path locally
-- confirm no double-submit or stale-state behavior in browser
-- if payment gateway behavior is remote-only, locally verify pre-gateway state first
+```bash
+pnpm --filter @scalius/storefront exec vitest run src/lib/checkout/render-summary.test.ts src/pages/seo-regressions.test.ts src/components/LocationSelector.test.ts
+pnpm --filter @scalius/core test -- src/modules/pages/pages.service.test.ts
+pnpm --filter @scalius/storefront typecheck
+```
 
-### Database / migrations
+Storefront API contract checks:
 
-- run DB typecheck
-- run Drizzle migration integrity checks
-- if schema changes are made, replay/apply locally and verify the actual DB shape, not just TS types
+```bash
+pnpm --filter @scalius/storefront exec vitest run src/lib/api/client-url-policy.test.ts src/lib/checkout/render-summary.test.ts
+pnpm --filter @scalius/storefront typecheck
+pnpm --filter @scalius/api-client typecheck
+pnpm --filter @scalius/api test -- src/routes/orders-create.test.ts
+pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts
+rg -n 'discounts/usage|recordDiscountUsage\(' apps/storefront/src apps/api/src packages/core/src
+```
 
-### Storefront / caching / content
+SDK timestamp contract checks:
 
-- verify cache invalidation behavior manually after mutation
-- test fresh page load plus second load
-- verify no stale home/layout/page/category artifacts remain after change
+```bash
+pnpm generate:sdk
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/api-client typecheck
+pnpm --filter @scalius/storefront typecheck
+rg -n 'string \| number \| unknown|string \| string \| unknown|number \| unknown' packages/api-client/src/generated/types.gen.ts
+```
 
-### Admin shell / workflows
+Notification and credential-encryption checks:
 
-- verify route enter, deep-link behavior, and failed-permission behavior
-- verify pages do not merely hide nav items while still loading unauthorized content
+```bash
+pnpm --filter @scalius/api test -- src/queue-consumer.test.ts src/utils/encryption-key.test.ts
+pnpm --filter @scalius/core test -- src/modules/notifications/notifications.service.test.ts
+pnpm --filter @scalius/core typecheck
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/admin-v2 typecheck
+```
 
-## Deploy-Then-Verify Cases
+## Local Dev Commands
 
-Use remote deployment for:
+```bash
+pnpm dev
+pnpm dev:all
+pnpm dev:admin
+pnpm dev:storefront
+pnpm dev:setup
+pnpm dev:reset
+pnpm dev:admin:create
+pnpm dev:admin:reset
+pnpm dev:admin:status
+```
 
-- Stripe / SSLCommerz / Polar live callback loops
-- third-party webhook sources that require public URLs
-- cookie/domain behavior that depends on real deployed domains
+Expected ports:
 
-When doing this:
+- API: `http://localhost:8787`
+- Admin: `http://localhost:4323/admin`
+- Storefront: `http://localhost:4322`
+- Swagger UI: `http://localhost:8787/api/v1/docs`
+- OpenAPI: `http://localhost:8787/api/v1/openapi.json`
 
-1. deploy with `pnpm run deploy`
-2. verify login using an approved production admin account from the team's password manager or secure operations vault
-3. test only the remote-only scenarios
-4. capture any new findings back into `audit/REMEDIATION_TRACKER.md`
+Known local-dev risks:
 
-## Documentation Discipline
+- `dev:setup` and `dev:reset` create `admin@local.scalius.test` / `ScaliusLocal123!` by default. Override with `--admin-email`, `--admin-password`, `--admin-name`, or `LOCAL_ADMIN_*`.
+- API local dev uses `apps/api/wrangler.local.jsonc`, which omits the remote Workers AI binding so setup/admin/storefront can boot without a Cloudflare remote proxy session.
+- Dev startup applies pending local D1 migrations before API starts unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
+- Use `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state` to test setup/reset/dev against disposable local state without touching the default `.wrangler/state`.
+- Admin production uses `env.API`; local dev should hit HTTP fallback whenever `PUBLIC_API_BASE_URL` points at localhost. Verify both server functions and `/api/v1/admin/*` browser proxy routes after transport changes.
+- `scripts/dev.sh` kills only Scalius dev ports by default. Set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only when aggressive cleanup is needed.
 
-When a fix batch ends, record:
+Disposable reset smoke test:
 
-- what was fixed
-- how it was verified
-- what still remains risky or blocked
+```bash
+rm -rf /tmp/scalius-commerce-state
+SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:reset \
+  --admin-email disposable@local.test \
+  --admin-password 'Disposable123!' \
+  --admin-name 'Disposable Admin'
 
-This is mandatory so future turns and compaction do not lose the thread.
+SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:admin
+```
+
+Expected result:
+
+- All D1 migrations apply to the disposable path.
+- `/api/v1/setup` creates the admin.
+- Browser login at `http://localhost:4323/auth/login` reaches `/admin`.
+- API worker logs show `GET /api/v1/admin/dashboard 200 OK`.
+- The admin proxy route can be checked with a cookie jar; `GET http://localhost:4323/api/v1/admin/dashboard` should return `200 OK` and `x-proxy-base-url: http://localhost:8787/api/v1`.
+
+## Turbo And Deploy Checks
+
+Inspect the actual task graph before trusting root scripts:
+
+```bash
+node --check scripts/deploy.mjs
+pnpm exec turbo run build --dry=json
+pnpm exec turbo run lint --filter='!@scalius/tsconfig' --dry=json
+pnpm exec turbo run deploy --filter=@scalius/api --dry=json
+pnpm exec turbo run deploy --filter=@scalius/admin-v2 --dry=json
+pnpm exec turbo run deploy --filter=@scalius/storefront --dry=json
+```
+
+Use these checks to verify:
+
+- Deploy targets include typecheck and migration gates where required.
+- Lint tasks actually exist for the seven code workspaces; `@scalius/tsconfig` is intentionally filtered from root lint.
+- Build inputs include relevant `src/**`, `public/**`, scripts, configs, and generated asset inputs.
+- Storefront build cache does not preserve stale build IDs.
+- Root `deploy:*` shortcuts route through `scripts/deploy.mjs --only ...` and keep typecheck/migration gates.
+- `scripts/copy-flags.mjs` fails if `country-flag-icons` or required copied flags are missing.
+
+## Generated Contract Checks
+
+OpenAPI/SDK:
+
+```bash
+pnpm generate:sdk
+git diff --exit-code packages/api-client/openapi.json packages/api-client/src/generated
+```
+
+Database:
+
+```bash
+pnpm db:generate
+git diff -- packages/database/migrations packages/database/src/schema
+```
+
+Cloudflare bindings:
+
+```bash
+pnpm check:env
+pnpm --filter @scalius/api exec wrangler types
+pnpm --filter @scalius/admin-v2 exec wrangler types
+pnpm --filter @scalius/storefront exec wrangler types
+```
+
+Use `pnpm check:env` as the routine drift guard. Use generated Wrangler output only when intentionally replacing or refreshing type declaration files. Do not hand-edit generated SDK files.
+
+## Security And Privacy Verification
+
+2FA API boundary:
+
+1. Create or use an admin with 2FA enabled.
+2. Start a session that has not completed 2FA.
+3. Call an admin API route directly.
+4. Expected after fix: API rejects the request until 2FA is verified.
+
+Scanner RBAC:
+
+1. Log in as an admin without inventory stock permissions.
+2. `POST /api/scanner-token`.
+3. Exchange the token for scanner session.
+4. Attempt `POST /api/v1/admin/inventory/stock-adjust`.
+5. Expected after fix: token minting or scanner mutation is denied.
+
+Public order receipt:
+
+1. Create an order and capture both `orderId` and `receiptToken`.
+2. Open `http://localhost:4322/order-success?orderId=<id>` in a private browser with no cookies.
+3. Expected: storefront redirects away from the receipt page and no order PII is rendered.
+4. Open `http://localhost:4322/order-success?orderId=<id>&token=<receiptToken>`.
+5. Expected: minimal receipt renders, but phone, email, customer ID, shipments, delivery provider objects, and notes are absent.
+6. Call `GET /api/v1/orders/receipt/<id>?token=wrong`.
+7. Expected: `404`; wrong tokens must not reach the order lookup path.
+
+Checkout DOM injection:
+
+1. Before visiting `/checkout`, set checkout session data with a customer name such as `<img src=x onerror=alert(1)>`.
+2. Load checkout.
+3. Expected after fix: the string renders as text or is rejected.
+
+Public checkout-language mutations:
+
+```bash
+curl -i -X POST http://localhost:8787/api/v1/checkout-languages \
+  -H 'Content-Type: application/json' \
+  --data '{"name":"Test","code":"xx"}'
+```
+
+Expected after fix: public mutation returns 401/403/404/405, while admin-authenticated mutation still works through the admin route.
+
+## Order, Inventory, Payment, Delivery Verification
+
+For every order-state fix, create tests that assert both success and failure ordering:
+
+- CAS conflict after provider success.
+- Provider failure after local claim.
+- Inventory transition success followed by shipment/order batch failure.
+- Duplicate webhook delivery.
+- Queue redelivery of one failed message in a mixed batch.
+- Full refund with payment, order status, inventory, and notification expectations.
+
+Suggested focused commands:
+
+```bash
+pnpm --filter @scalius/core test -- src/modules/orders/orders.fulfillment.test.ts
+pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts
+pnpm --filter @scalius/core test -- src/modules/inventory/expiry.test.ts
+pnpm --filter @scalius/core test -- src/modules/payments/process-payment.test.ts
+pnpm --filter @scalius/core test -- src/modules/payments/polar.test.ts
+pnpm --filter @scalius/core test -- src/modules/delivery/tracking.test.ts
+pnpm --filter @scalius/api test -- src/routes/webhooks/stripe.test.ts src/routes/webhooks/sslcommerz.test.ts
+pnpm --filter @scalius/api test -- src/routes/webhooks/steadfast.test.ts
+pnpm --filter @scalius/api test -- src/utils/cache-invalidation.test.ts
+pnpm --filter @scalius/storefront exec vitest run src/lib/cache-purge-policy.test.ts --passWithNoTests
+pnpm --filter @scalius/storefront typecheck
+```
+
+## Storefront Verification
+
+Use browser checks after storefront changes:
+
+- Cart form still submits with guest and logged-in customer.
+- Location dropdowns prefill saved city/zone.
+- Checkout supports COD and at least one redirect gateway without losing recoverability.
+- Customer auth proxy sets cookies on the storefront domain.
+- Search/config browser calls do not hit a missing `/api/v1/**` storefront route.
+- `sitemap-static.xml` excludes cart/checkout/account/private pages.
+- Future `publishedAt` pages are not visible and not in sitemap.
+- Cache purge changes are visible after L1 clear and Cache API/L2 behavior is tested under Wrangler or deployed Worker runtime.
+
+Useful commands:
+
+```bash
+curl -i 'http://localhost:4322/api/v1/search?q=test'
+curl -s http://localhost:4322/sitemap-static.xml | rg '/cart|/checkout|/account'
+curl -s http://localhost:4322/cart | rg -i 'noindex|robots'
+```
+
+## Hard-To-Run Areas
+
+These need Wrangler, provider sandboxes, or deployed Worker verification:
+
+- Cloudflare service bindings between admin/storefront and API.
+- Cache API L2 invalidation across isolates.
+- Queues and retry behavior.
+- Cron reservation expiry.
+- Stripe, SSLCommerz, Polar, Pathao, Steadfast webhooks.
+- OTP delivery over email/SMS/WhatsApp.
+- Production cookie domain behavior.
+
+When local verification is blocked, write a focused unit or route test first, then document the remaining deployed-runtime check in the tracker.
+
+## Reporting Template
+
+```md
+Verification:
+- Commands run:
+- Manual flows run:
+- Passed:
+- Failed:
+- Blocked:
+- Follow-up tracker IDs:
+```

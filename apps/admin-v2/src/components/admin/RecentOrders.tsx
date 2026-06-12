@@ -28,13 +28,12 @@ import { useCurrency } from "@/hooks/use-currency";
 import { OrderStatusBadge } from "./shared/StatusBadges";
 import { Link } from "@tanstack/react-router";
 
-// Refined Order Interface (assuming createdAt is a Date object or string that can be parsed)
 interface Order {
   id: string;
   customerName: string;
   totalAmount: number;
   status: string;
-  createdAt: string | Date; // Allow string for potential API response
+  createdAt: string | number | Date;
 }
 
 interface RecentOrdersProps {
@@ -42,10 +41,15 @@ interface RecentOrdersProps {
 }
 
 // Helper to safely parse date
-const parseOrderDate = (date: string | Date | null | undefined): Date | null => {
+const parseOrderDate = (date: string | number | Date | null | undefined): Date | null => {
   if (!date) return null;
   try {
-    const d = typeof date === "string" ? new Date(date) : date;
+    const d =
+      typeof date === "number"
+        ? new Date(date < 10_000_000_000 ? date * 1000 : date)
+        : typeof date === "string"
+          ? new Date(date)
+          : date;
     return d instanceof Date && !isNaN(d.getTime()) ? d : null;
   } catch {
     return null;

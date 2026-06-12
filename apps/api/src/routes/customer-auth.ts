@@ -30,6 +30,7 @@ import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import { getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
+import { nullableTimestampSchema } from "../schemas/timestamps";
 import { ok } from "../utils/api-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -395,7 +396,7 @@ const getCustomerOrdersRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            orders: z.array(z.object({ id: z.string(), status: z.string(), totalAmount: z.number(), createdAt: z.union([z.string(), z.number()]).nullable() }).passthrough()),
+            orders: z.array(z.object({ id: z.string(), status: z.string(), totalAmount: z.number(), createdAt: nullableTimestampSchema }).passthrough()),
             customer: z.object({ id: z.string(), name: z.string(), phone: z.string() }).passthrough(),
           })),
         },

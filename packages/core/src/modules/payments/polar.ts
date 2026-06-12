@@ -4,8 +4,8 @@
 
 import { Polar } from "@polar-sh/sdk";
 import { Webhook } from "standardwebhooks";
-import { eq, sql } from "drizzle-orm";
-import { orders, PaymentStatus } from "@scalius/database/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { orders, OrderStatus, PaymentStatus } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { PolarSettings } from "./gateway-settings";
 import type { CreatePolarCheckoutParams, PolarCheckoutResult, PolarRefundParams, PolarRefundResult } from "./types";
@@ -19,6 +19,7 @@ import type {
 } from "./provider";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { canTransitionTo } from "../orders/order-state-machine";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 
@@ -190,6 +191,37 @@ export interface PolarWebhookPayload {
 // Webhook-driven refund processing
 // ---------------------------------------------------------------------------
 
+const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
+    OrderStatus.PENDING,
+    OrderStatus.PROCESSING,
+    OrderStatus.CONFIRMED,
+]);
+
+function getOrderStatusAfterWebhookRefund(currentStatus: string, isFullRefund: boolean): string | undefined {
+    if (!isFullRefund) {
+        return canTransitionTo("order", currentStatus, OrderStatus.PARTIALLY_REFUNDED)
+            ? OrderStatus.PARTIALLY_REFUNDED
+            : undefined;
+    }
+
+    if (canTransitionTo("order", currentStatus, OrderStatus.REFUNDED)) {
+        return OrderStatus.REFUNDED;
+    }
+
+    if (
+        PRE_FULFILLMENT_REFUND_STATUSES.has(currentStatus) &&
+        canTransitionTo("order", currentStatus, OrderStatus.CANCELLED)
+    ) {
+        return OrderStatus.CANCELLED;
+    }
+
+    return undefined;
+}
+
+function shouldReleaseInventoryForWebhookRefund(currentStatus: string, nextStatus: string | undefined): boolean {
+    return nextStatus === OrderStatus.CANCELLED && PRE_FULFILLMENT_REFUND_STATUSES.has(currentStatus);
+}
+
 export interface PolarWebhookRefundParams {
     orderId: string;
     /** Cumulative refunded amount from Polar, in smallest currency unit (cents). */
@@ -211,8 +243,9 @@ export interface PolarWebhookRefundParams {
  *
  * 1. Converts the cumulative refunded amount from smallest currency unit to
  *    major unit.
- * 2. Updates order.paidAmount and order.paymentStatus.
- * 3. On full refund: releases inventory via applyInventoryForStatusChange().
+ * 2. Updates order.paidAmount, order.paymentStatus, and order.status when the
+ *    order state machine allows a refund/cancel transition.
+ * 3. On pre-fulfillment full refund: releases inventory via applyInventoryForStatusChange().
  *
  * Idempotent: uses the Polar order status to determine the correct state.
  * If our order is already marked as REFUNDED, this is a no-op.
@@ -228,6 +261,8 @@ export async function processPolarWebhookRefund(
                 paidAmount: orders.paidAmount,
                 paymentStatus: orders.paymentStatus,
                 totalAmount: orders.totalAmount,
+                status: orders.status,
+                version: orders.version,
             })
             .from(orders)
             .where(eq(orders.id, params.orderId))
@@ -237,12 +272,18 @@ export async function processPolarWebhookRefund(
             return { success: false, error: `Order ${params.orderId} not found` };
         }
 
-        // Already fully refunded — idempotent no-op
-        if (order.paymentStatus === PaymentStatus.REFUNDED) {
+        const isFullRefund = params.polarStatus === "refunded";
+        const nextOrderStatus = getOrderStatusAfterWebhookRefund(order.status, isFullRefund);
+        const shouldChangeOrderStatus = Boolean(nextOrderStatus && nextOrderStatus !== order.status);
+
+        // Already fully refunded and any allowed order-status transition is complete.
+        if (
+            isFullRefund &&
+            order.paymentStatus === PaymentStatus.REFUNDED &&
+            !shouldChangeOrderStatus
+        ) {
             return { success: true };
         }
-
-        const isFullRefund = params.polarStatus === "refunded";
 
         // For currency-converted payments (e.g. BDT→USD), the refunded amount from
         // Polar is in the gateway currency (USD cents), but order.paidAmount is in
@@ -267,20 +308,31 @@ export async function processPolarWebhookRefund(
             ? PaymentStatus.REFUNDED
             : PaymentStatus.PARTIAL;
 
-        await db
-            .update(orders)
-            .set({
-                paidAmount: isFullRefund ? 0 : newPaidAmount,
-                paymentStatus: newPaymentStatus,
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(eq(orders.id, params.orderId));
+        const updateValues = {
+            paidAmount: isFullRefund ? 0 : newPaidAmount,
+            paymentStatus: newPaymentStatus,
+            ...(shouldChangeOrderStatus ? { status: nextOrderStatus } : {}),
+            version: sql`${orders.version} + 1`,
+            updatedAt: sql`unixepoch()`,
+        };
 
-        // On full refund, release inventory (mirrors refund-service.ts behavior).
-        // Partial refunds do NOT restore inventory — a partial refund does not
-        // imply items were returned.
-        if (isFullRefund) {
-            await applyInventoryForStatusChange(db, params.orderId, "cancelled");
+        const updateResult = await db
+            .update(orders)
+            .set(updateValues)
+            .where(and(
+                eq(orders.id, params.orderId),
+                eq(orders.version, order.version),
+            ))
+            .returning({ id: orders.id });
+
+        if (updateResult.length === 0) {
+            return { success: false, error: "Order was modified concurrently while applying Polar refund; retry required" };
+        }
+
+        // On pre-fulfillment full refund, release reservations (mirrors refund-service.ts behavior).
+        // Shipped/delivered/completed refunds do NOT auto-restore stock; returns own that transition.
+        if (isFullRefund && shouldReleaseInventoryForWebhookRefund(order.status, nextOrderStatus)) {
+            await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
         }
 
         return { success: true };

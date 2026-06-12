@@ -397,6 +397,25 @@ export interface Order {
   deliveryProviders: OrderDeliveryProvider[];
 }
 
+export interface OrderReceipt {
+  id: string;
+  customerName: string;
+  shippingAddress: string;
+  totalAmount: number;
+  shippingCharge: number;
+  discountAmount: number | null;
+  city: string;
+  zone: string;
+  area: string | null;
+  cityName: string | null;
+  zoneName: string | null;
+  areaName: string | null;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  items: OrderItem[];
+}
+
 export interface OrderShipment {
   id: string;
   status: string;
@@ -413,33 +432,7 @@ export interface OrderDeliveryProvider {
   isActive?: boolean;
 }
 
-// CreateOrderPayload is a local subset of the SDK's OrderPostRequest.
-// The SDK type includes additional fields (productName, variantLabel, inventoryPool, polar payment).
-// Keep this local type until consumers are migrated to use OrderPostRequest directly.
-export interface CreateOrderPayload {
-  customerName: string;
-  customerPhone: string;
-  customerEmail?: string | null;
-  shippingAddress: string;
-  city: string;
-  zone: string;
-  area?: string | null;
-  cityName?: string | null;
-  zoneName?: string | null;
-  areaName?: string | null;
-  notes?: string | null;
-  items: Array<{
-    productId: string;
-    variantId?: string | null;
-    quantity: number;
-    price: number;
-  }>;
-  shippingCharge: number;
-  shippingMethodId?: string;
-  discountAmount?: number | null;
-  discountCode?: string | null;
-  paymentMethod?: "cod" | "stripe" | "sslcommerz";
-}
+export type CreateOrderPayload = OrderPostRequest;
 
 // ---------------------------------------------------------------------------
 // Other Types (local domain types — SDK only has response wrappers)

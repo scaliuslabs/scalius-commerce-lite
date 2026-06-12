@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
+import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
 
 // ─────────────────────────────────────────
 // Types
@@ -196,17 +197,9 @@ export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Prom
 
 const VALID_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
 
-const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = {
-    order_created: ["email"],
-    order_confirmed: ["email"],
-    order_processing: ["email"],
-    order_shipped: ["email"],
-    order_delivered: ["email"],
-    order_completed: ["email"],
-    order_cancelled: ["email"],
-    order_returned: ["email"],
-    order_refunded: ["email"],
-};
+const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = Object.fromEntries(
+    ORDER_NOTIFICATION_TYPES.map((type) => [type, ["email"]]),
+);
 
 /**
  * Get notification channel preferences per order status.
@@ -248,8 +241,9 @@ function normalizeParsedChannels(parsed: unknown): Record<string, string[]> {
         ? (parsed as Record<string, unknown>).channels as Record<string, unknown>
         : parsed as Record<string, unknown>;
 
-    const result: Record<string, string[]> = {};
+    const result: Record<string, string[]> = { ...DEFAULT_NOTIFICATION_CHANNELS };
     for (const [status, value] of Object.entries(record)) {
+        if (!(ORDER_NOTIFICATION_TYPES as readonly string[]).includes(status)) continue;
         if (Array.isArray(value)) {
             // Already in string array format
             result[status] = value.filter((v): v is string => typeof v === "string");
@@ -294,14 +288,12 @@ export async function updateNotificationChannels(
 
 const VALID_ADMIN_CHANNELS = ["push"] as const;
 
-const DEFAULT_ADMIN_CHANNELS: Record<string, string[]> = {
-    order_created: ["push"],
-    order_confirmed: [],
-    order_processing: [],
-    order_shipped: [],
-    order_delivered: [],
-    order_cancelled: ["push"],
-};
+const DEFAULT_ADMIN_CHANNELS: Record<string, string[]> = Object.fromEntries(
+    ORDER_NOTIFICATION_TYPES.map((type) => [
+        type,
+        type === "order_created" || type === "order_cancelled" ? ["push"] : [],
+    ]),
+);
 
 /**
  * Get admin notification channel preferences per order status.
@@ -339,8 +331,9 @@ function normalizeAdminChannels(parsed: unknown): Record<string, string[]> {
         ? (parsed as Record<string, unknown>).channels as Record<string, unknown>
         : parsed as Record<string, unknown>;
 
-    const result: Record<string, string[]> = {};
+    const result: Record<string, string[]> = { ...DEFAULT_ADMIN_CHANNELS };
     for (const [status, value] of Object.entries(record)) {
+        if (!(ORDER_NOTIFICATION_TYPES as readonly string[]).includes(status)) continue;
         if (Array.isArray(value)) {
             result[status] = value.filter((v): v is string => typeof v === "string");
         } else if (value && typeof value === "object") {

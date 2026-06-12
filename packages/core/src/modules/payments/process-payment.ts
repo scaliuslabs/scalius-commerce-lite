@@ -2,19 +2,18 @@
 // Shared business logic for processing confirmed payments.
 // Called by both Stripe and SSLCommerz webhook handlers after signature verification.
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   orders,
-  orderItems,
   orderPayments,
   paymentPlans,
   webhookEvents,
   PaymentStatus,
   OrderStatus,
-  InventoryPool,
+  PaymentRecordStatus,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { releaseMultiple } from "../inventory/release";
+import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { validateTransition } from "../orders/order-state-machine";
@@ -29,6 +28,11 @@ function isConstraintError(error: unknown): boolean {
 
 function paymentRecordMatchesAmount(recordedAmount: number, incomingAmount: number): boolean {
   return pricesEqual(roundPrice(recordedAmount), roundPrice(incomingAmount));
+}
+
+function failedAttemptCanBePromoted(record: { amount: number; status: string }, incomingAmount: number): boolean {
+  if (record.status === PaymentRecordStatus.FAILED) return true;
+  return paymentRecordMatchesAmount(record.amount, incomingAmount);
 }
 
 /**
@@ -55,13 +59,16 @@ export async function processPaymentConfirmed(
       const existing = await db
         .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
         .from(orderPayments)
-        .where(eq(orderPayments.stripePaymentIntentId, params.stripePaymentIntentId))
+        .where(and(
+          eq(orderPayments.orderId, params.orderId),
+          eq(orderPayments.stripePaymentIntentId, params.stripePaymentIntentId),
+        ))
         .get();
       if (existing) {
-        if (!paymentRecordMatchesAmount(existing.amount, params.amount)) {
+        if (!failedAttemptCanBePromoted(existing, params.amount)) {
           return { success: false, error: "Existing Stripe payment amount does not match webhook amount" };
         }
-        if (existing.status === "succeeded") return { success: true };
+        if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
         paymentId = existing.id;
       }
     }
@@ -69,13 +76,16 @@ export async function processPaymentConfirmed(
       const existing = await db
         .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
         .from(orderPayments)
-        .where(eq(orderPayments.sslcommerzTranId, params.sslcommerzTranId))
+        .where(and(
+          eq(orderPayments.orderId, params.orderId),
+          eq(orderPayments.sslcommerzTranId, params.sslcommerzTranId),
+        ))
         .get();
       if (existing) {
-        if (!paymentRecordMatchesAmount(existing.amount, params.amount)) {
+        if (!failedAttemptCanBePromoted(existing, params.amount)) {
           return { success: false, error: "Existing SSLCommerz payment amount does not match webhook amount" };
         }
-        if (existing.status === "succeeded") return { success: true };
+        if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
         paymentId = existing.id;
       }
     }
@@ -83,13 +93,16 @@ export async function processPaymentConfirmed(
       const existing = await db
         .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
         .from(orderPayments)
-        .where(eq(orderPayments.polarCheckoutId, params.polarCheckoutId))
+        .where(and(
+          eq(orderPayments.orderId, params.orderId),
+          eq(orderPayments.polarCheckoutId, params.polarCheckoutId),
+        ))
         .get();
       if (existing) {
-        if (!paymentRecordMatchesAmount(existing.amount, params.amount)) {
+        if (!failedAttemptCanBePromoted(existing, params.amount)) {
           return { success: false, error: "Existing Polar payment amount does not match webhook amount" };
         }
-        if (existing.status === "succeeded") return { success: true };
+        if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
         paymentId = existing.id;
       }
     }
@@ -105,7 +118,7 @@ export async function processPaymentConfirmed(
           currency: currencyConfig.code,
           paymentMethod: params.paymentGateway,
           paymentType: params.paymentType,
-          status: "pending",
+          status: PaymentRecordStatus.PENDING,
           stripePaymentIntentId: params.stripePaymentIntentId ?? null,
           stripeChargeId: params.stripeChargeId ?? null,
           sslcommerzTranId: params.sslcommerzTranId ?? null,
@@ -174,16 +187,24 @@ export async function processPaymentConfirmed(
             SELECT 1 FROM order_payments
             WHERE id = ${paymentId}
               AND order_id = ${params.orderId}
-              AND status = 'pending'
+              AND status IN ('pending', 'failed')
           )`,
         )).returning({ id: orders.id }),
         db.update(orderPayments).set({
-          status: "succeeded",
+          amount: params.amount,
+          currency: currencyConfig.code,
+          paymentMethod: params.paymentGateway,
+          paymentType: params.paymentType,
+          status: PaymentRecordStatus.SUCCEEDED,
+          stripeChargeId: params.stripeChargeId ?? null,
+          sslcommerzValId: params.sslcommerzValId ?? null,
+          sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
+          metadata: params.metadata ? JSON.stringify(params.metadata) : null,
           updatedAt: sql`unixepoch()`,
         }).where(and(
           eq(orderPayments.id, paymentId),
           eq(orderPayments.orderId, params.orderId),
-          eq(orderPayments.status, "pending"),
+          inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.FAILED]),
           sql`EXISTS (
             SELECT 1 FROM orders
             WHERE id = ${params.orderId}
@@ -257,6 +278,38 @@ export async function processPaymentFailed(
   intentId?: string
 ): Promise<void> {
   try {
+    if (intentId) {
+      const existing = await db
+        .select({ id: orderPayments.id, status: orderPayments.status })
+        .from(orderPayments)
+        .where(and(
+          eq(orderPayments.orderId, orderId),
+          gateway === "stripe"
+            ? eq(orderPayments.stripePaymentIntentId, intentId)
+            : gateway === "sslcommerz"
+              ? eq(orderPayments.sslcommerzTranId, intentId)
+              : eq(orderPayments.polarCheckoutId, intentId),
+        ))
+        .get();
+
+      if (existing?.status === PaymentRecordStatus.FAILED || existing?.status === PaymentRecordStatus.SUCCEEDED) {
+        return;
+      }
+      if (existing?.status === PaymentRecordStatus.PENDING) {
+        await db
+          .update(orderPayments)
+          .set({
+            status: PaymentRecordStatus.FAILED,
+            updatedAt: sql`unixepoch()`,
+          })
+          .where(and(
+            eq(orderPayments.id, existing.id),
+            eq(orderPayments.status, PaymentRecordStatus.PENDING),
+          ));
+        return;
+      }
+    }
+
     const order = await db
       .select({ paidAmount: orders.paidAmount, paymentStatus: orders.paymentStatus })
       .from(orders)
@@ -264,6 +317,27 @@ export async function processPaymentFailed(
       .get();
 
     if (!order) return;
+
+    const currencyConfig = await getCurrencyConfig(db);
+    try {
+      await db.insert(orderPayments).values({
+        id: crypto.randomUUID(),
+        orderId,
+        amount: 0,
+        currency: currencyConfig.code,
+        paymentMethod: gateway,
+        paymentType: "full",
+        status: PaymentRecordStatus.FAILED,
+        stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
+        sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
+        polarCheckoutId: gateway === "polar" ? (intentId ?? null) : null,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      });
+    } catch (error: unknown) {
+      if (intentId && isConstraintError(error)) return;
+      throw error;
+    }
 
     // Only mark as failed if no prior payment was collected
     if (!order.paidAmount || order.paidAmount <= 0) {
@@ -275,23 +349,6 @@ export async function processPaymentFailed(
         })
         .where(eq(orders.id, orderId));
     }
-
-    // Record the failed attempt
-    const currencyConfig = await getCurrencyConfig(db);
-    await db.insert(orderPayments).values({
-      id: crypto.randomUUID(),
-      orderId,
-      amount: 0,
-      currency: currencyConfig.code,
-      paymentMethod: gateway,
-      paymentType: "full",
-      status: "failed",
-      stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
-      sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
-      polarCheckoutId: gateway === "polar" ? (intentId ?? null) : null,
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    });
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error:`, err);
     throw err;
@@ -307,42 +364,7 @@ export async function releaseOrderInventory(
   orderId: string
 ): Promise<void> {
   try {
-    const order = await db
-      .select({ inventoryPool: orders.inventoryPool })
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .get();
-
-    if (!order) return;
-
-    const items = await db
-      .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
-      .from(orderItems)
-      .where(eq(orderItems.orderId, orderId))
-      .all();
-
-    const pool = (order.inventoryPool ?? InventoryPool.REGULAR) as
-      | "regular"
-      | "preorder"
-      | "backorder";
-
-    const entries = items
-      .filter((i) => i.variantId !== null)
-      .map((i) => ({
-        variantId: i.variantId as string,
-        quantity: i.quantity,
-        pool,
-      }));
-
-    if (entries.length > 0) {
-      await releaseMultiple(db, entries, orderId);
-    }
-
-    // Mark inventory as restored
-    await db
-      .update(orders)
-      .set({ inventoryAction: "restored" })
-      .where(eq(orders.id, orderId));
+    await applyInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED);
   } catch (err: unknown) {
     console.error(`[process-payment] Inventory release error for order ${orderId}:`, err);
     throw err;

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {
   SCANNER_COOKIE_NAME,
   SCANNER_SESSION_TTL_SECONDS,
@@ -13,6 +14,34 @@ import {
 
 interface CloudflareEnv {
   CACHE?: Pick<KVNamespace, "get" | "put" | "delete">;
+}
+
+interface ScannerAuthUser {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+}
+
+interface ScannerAuthResult {
+  session?: unknown;
+  user?: ScannerAuthUser | null;
+}
+
+interface ScannerRbacContext {
+  permissions: Set<string>;
+  isSuperAdmin: boolean;
+}
+
+interface CreateScannerTokenDeps {
+  getAuthSession?: (headers: Headers) => Promise<ScannerAuthResult | null>;
+  loadUserPermissions?: (
+    userId: string,
+    userRole?: string | null,
+  ) => Promise<ScannerRbacContext>;
+  getEnv?: () => Promise<CloudflareEnv> | CloudflareEnv;
+  createToken?: () => Promise<string> | string;
+  now?: () => number;
 }
 
 function jsonResponse(
@@ -30,6 +59,75 @@ function jsonResponse(
 function shouldUseSecureCookie(request: Request): boolean {
   const url = new URL(request.url);
   return url.protocol === "https:";
+}
+
+function canMintScannerToken(rbac: ScannerRbacContext): boolean {
+  return (
+    rbac.isSuperAdmin ||
+    (rbac.permissions.has(PERMISSIONS.PRODUCTS_VIEW) &&
+      rbac.permissions.has(PERMISSIONS.PRODUCTS_EDIT))
+  );
+}
+
+async function defaultGetAuthSession(headers: Headers): Promise<ScannerAuthResult | null> {
+  const { getAuthSession } = await import("~/lib/auth.server");
+  return getAuthSession(headers) as Promise<ScannerAuthResult | null>;
+}
+
+async function defaultLoadUserPermissions(
+  userId: string,
+  userRole?: string | null,
+): Promise<ScannerRbacContext> {
+  const { loadUserPermissions } = await import("~/middleware/rbac.server");
+  return loadUserPermissions(userId, userRole);
+}
+
+async function defaultGetEnv(): Promise<CloudflareEnv> {
+  const { env } = await import("cloudflare:workers");
+  return env as CloudflareEnv;
+}
+
+async function defaultCreateToken(): Promise<string> {
+  const { nanoid } = await import("nanoid");
+  return nanoid(40);
+}
+
+export async function handleCreateScannerToken(
+  request: Request,
+  deps: CreateScannerTokenDeps = {},
+): Promise<Response> {
+  const getAuthSession = deps.getAuthSession ?? defaultGetAuthSession;
+  const loadUserPermissions = deps.loadUserPermissions ?? defaultLoadUserPermissions;
+  const authResult = await getAuthSession(request.headers);
+
+  if (!authResult?.session || !authResult?.user) {
+    return jsonResponse({ success: false, error: "Authentication required" }, 401);
+  }
+
+  const user = authResult.user;
+  const rbac = await loadUserPermissions(user.id, user.role);
+  if (!canMintScannerToken(rbac)) {
+    return jsonResponse({ success: false, error: "Inventory permission required" }, 403);
+  }
+
+  const env = deps.getEnv ? await deps.getEnv() : await defaultGetEnv();
+  const kv = env.CACHE;
+  if (!kv) {
+    return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
+  }
+
+  const token = deps.createToken ? await deps.createToken() : await defaultCreateToken();
+  const payload: ScannerTokenPayload = {
+    adminId: user.id,
+    adminName: user.name || user.email || "",
+    createdAt: deps.now ? deps.now() : Date.now(),
+  };
+
+  await kv.put(await getScannerTokenKey(token), JSON.stringify(payload), {
+    expirationTtl: SCANNER_TOKEN_TTL_SECONDS,
+  });
+
+  return jsonResponse({ success: true, token });
 }
 
 async function readScannerSession(
@@ -82,34 +180,7 @@ export const Route = createFileRoute("/api/scanner-token")({
        * POST -- Generate scanner token. Requires admin session.
        */
       POST: async ({ request }) => {
-        const { getAuthSession } = await import("~/lib/auth.server");
-        const authResult = await getAuthSession(request.headers);
-
-        if (!authResult?.session || !authResult?.user) {
-          return jsonResponse({ success: false, error: "Authentication required" }, 401);
-        }
-
-        const user = authResult.user;
-
-        const { env } = await import("cloudflare:workers");
-        const kv = (env as CloudflareEnv)?.CACHE;
-        if (!kv) {
-          return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
-        }
-
-        const { nanoid } = await import("nanoid");
-        const token = nanoid(40);
-        const payload: ScannerTokenPayload = {
-          adminId: user.id,
-          adminName: user.name || user.email || "",
-          createdAt: Date.now(),
-        };
-
-        await kv.put(await getScannerTokenKey(token), JSON.stringify(payload), {
-          expirationTtl: SCANNER_TOKEN_TTL_SECONDS,
-        });
-
-        return jsonResponse({ success: true, token });
+        return handleCreateScannerToken(request);
       },
 
       /**

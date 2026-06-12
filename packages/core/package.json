@@ -66,6 +66,7 @@
     "zod": "^4.3.6"
   },
   "scripts": {
+    "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -17,6 +17,7 @@ export interface PaymentResult {
   success: boolean;
   redirectUrl?: string;
   error?: string;
+  clearCartOnRedirect?: boolean;
 }
 
 export interface GatewayHandler {

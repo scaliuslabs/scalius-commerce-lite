@@ -1,0 +1,116 @@
+{
+  "name": "scalius-api-local",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-02-01",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public",
+    "disable_nodejs_process_v2"
+  ],
+  "limits": {
+    "cpu_ms": 300000
+  },
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "scalius-commerce",
+      "database_id": "2efcad0d-841e-4f8d-b8f6-5b735d881edc",
+      "migrations_dir": "../../packages/database/migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
+    },
+    {
+      "binding": "SHARED_AUTH_CACHE",
+      "id": "9f577136c05144349f2b8013a4fc1cc5"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "scalius-media"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WidgetDesignAgent",
+        "class_name": "WidgetDesignAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "widget_design_agent_v1",
+      "new_sqlite_classes": ["WidgetDesignAgent"]
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "PAYMENT_EVENTS_QUEUE",
+        "queue": "payment-events"
+      },
+      {
+        "binding": "ORDER_NOTIFICATIONS_QUEUE",
+        "queue": "order-notifications"
+      },
+      {
+        "binding": "AUTH_OTP_QUEUE",
+        "queue": "auth-otp"
+      },
+      {
+        "binding": "ORDER_INGEST_QUEUE",
+        "queue": "order-ingest"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "payment-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "payment-events-dlq"
+      },
+      {
+        "queue": "order-notifications",
+        "max_batch_size": 20,
+        "max_batch_timeout": 3,
+        "max_retries": 3,
+        "dead_letter_queue": "order-notifications-dlq"
+      },
+      {
+        "queue": "auth-otp",
+        "max_batch_size": 10,
+        "max_batch_timeout": 2,
+        "max_retries": 5,
+        "dead_letter_queue": "auth-otp-dlq"
+      },
+      {
+        "queue": "order-ingest",
+        "max_batch_size": 100,
+        "max_batch_timeout": 1,
+        "max_retries": 3,
+        "dead_letter_queue": "order-ingest-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "vars": {
+    "PUBLIC_API_BASE_URL": "http://localhost:8787",
+    "BETTER_AUTH_URL": "http://localhost:4323",
+    "STOREFRONT_URL": "http://localhost:4322",
+    "CDN_DOMAIN_URL": "localhost:8787",
+    "R2_PUBLIC_URL": "http://localhost:8787/api/v1/media",
+    "PURGE_URL": "http://localhost:4322/api/purge-cache"
+  }
+}

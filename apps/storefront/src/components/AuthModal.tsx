@@ -21,8 +21,7 @@ import type { Country } from "react-phone-number-input";
  */
 async function fetchCheckoutConfigClient(): Promise<CheckoutConfig | null> {
   try {
-    const apiBase = window.__API_BASE_URL__ || "/api/v1";
-    const res = await fetch(`${apiBase}/checkout/config`);
+    const res = await fetch(createApiUrl("/checkout/config"));
     if (!res.ok) return null;
     const json = await res.json() as { success: boolean; data: CheckoutConfig };
     return json.data;

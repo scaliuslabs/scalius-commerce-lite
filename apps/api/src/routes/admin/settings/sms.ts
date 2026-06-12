@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getSmsSettings, saveSmsSettings, invalidateSmsCache, SMS_PROVIDER_IDS } from "@scalius/core/integrations/sms";
-import { getEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 
@@ -57,6 +57,20 @@ const saveSmsSchema = z.object({
     gennetSid: z.string().optional(),
 });
 
+const SMS_SECRET_FIELDS = [
+    "bdbulksmsToken",
+    "mimsmsApiKey",
+    "smsnetbdApiKey",
+    "gennetApiToken",
+] as const;
+
+function hasSmsSecretWrite(body: z.infer<typeof saveSmsSchema>): boolean {
+    return SMS_SECRET_FIELDS.some((field) => {
+        const value = body[field];
+        return typeof value === "string" && value.trim() !== "" && !value.startsWith("••••");
+    });
+}
+
 const saveSmsRoute = createRoute({
     method: "post",
     path: "/sms",
@@ -72,7 +86,9 @@ const saveSmsRoute = createRoute({
 app.openapi(saveSmsRoute, async (c) => {
     const db = c.get("db");
     const body = c.req.valid("json");
-    const encKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encKey = hasSmsSecretWrite(body)
+        ? requireEncryptionKey(c.env as Record<string, unknown>)
+        : getCredentialEncryptionKey(c.env as Record<string, unknown>);
     await saveSmsSettings(db, body, encKey);
     invalidateSmsCache();
     return ok(c, { message: "SMS settings saved successfully" });

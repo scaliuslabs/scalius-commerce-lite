@@ -36,6 +36,9 @@ type CheckoutStatusDetails = {
     nextRetryAt?: number;
 };
 
+const CHECKOUT_RETRY_DATABASE_ERROR = "Database write error during heavy traffic. Retrying.";
+const CHECKOUT_RETRY_RESERVATION_ERROR = "Insufficient stock preventing batch ingestion.";
+
 // ── KV checkout status helper ───────────────────────────────────────────────
 
 /**
@@ -108,6 +111,44 @@ async function releaseReservationsByOrder(
     }
 }
 
+async function reserveQueuedEntriesForOrder(
+    db: ReturnType<typeof getDb>,
+    orderId: string,
+    entries: QueuedReservationEntry[],
+): Promise<{ success: true; reservedEntries: QueuedReservationEntry[] } | { success: false; error: string }> {
+    const reservedEntries: QueuedReservationEntry[] = [];
+    const byPool = new Map<"regular" | "preorder" | "backorder", QueuedReservationEntry[]>();
+    for (const entry of entries) {
+        const poolEntries = byPool.get(entry.pool) ?? [];
+        poolEntries.push(entry);
+        byPool.set(entry.pool, poolEntries);
+    }
+
+    for (const [pool, poolEntries] of byPool) {
+        const batchItems = poolEntries.map((entry) => ({
+            variantId: entry.variantId,
+            quantity: entry.quantity,
+            orderId: entry.orderId,
+        }));
+        const reserveResult = await reserveStockBatch(db, batchItems, pool);
+        if (!reserveResult.success) {
+            console.error(`[Queue] reserveStockBatch failed for order ${orderId}, pool ${pool}:`, reserveResult.results);
+            if (reservedEntries.length > 0) {
+                await releaseReservationsByOrder(db, reservedEntries).catch((releaseErr) =>
+                    console.error("[Queue] Order reservation rollback failed:", releaseErr),
+                );
+            }
+            return {
+                success: false,
+                error: reserveResult.error ?? "Insufficient stock preventing order ingestion.",
+            };
+        }
+        reservedEntries.push(...poolEntries);
+    }
+
+    return { success: true, reservedEntries };
+}
+
 export function groupReservationEntriesByOrder(
     entries: QueuedReservationEntry[],
 ): Map<string, QueuedReservationEntry[]> {
@@ -129,7 +170,7 @@ export function groupReservationEntriesByOrder(
  *
  * Strategy:
  *   1. Pre-process each message: accumulate DB write statements and reservation entries.
- *   2. Run inventory reservations for the whole batch in one call.
+ *   2. Run inventory reservations per order so one bad cart cannot poison the batch.
  *   3. Execute all DB writes in one db.batch() call.
  *   4. On success: ack messages and init COD tracking where applicable.
  *   5. On DB failure: rollback inventory reservations, retry all messages.
@@ -144,6 +185,7 @@ export async function handleOrderIngestBatch(
 
     // Drizzle D1 batch() requires specific tuple types
     const writeBatch: unknown[] = [];
+    const orderWriteStatements = new Map<string, unknown[]>();
     const reservationEntries: QueuedReservationEntry[] = [];
     // Track which writeBatch indices belong to each order (for Phase 1b removal)
     const orderWriteRanges = new Map<string, { start: number; end: number }>();
@@ -299,6 +341,7 @@ export async function handleOrderIngestBatch(
             }
 
             orderWriteRanges.set(od.id, { start: writeStart, end: writeBatch.length });
+            orderWriteStatements.set(od.id, writeBatch.slice(writeStart));
             successMessages.push(msg);
         } catch (e: unknown) {
             console.error(`[Queue] Error preparing order ${payload.orderData.id}:`, e);
@@ -432,60 +475,49 @@ export async function handleOrderIngestBatch(
         }
     }
 
-    // Remove rejected or already-ingested orders' write statements from the batch.
-    if (rejectedWriteIndices.size > 0) {
-        for (let i = writeBatch.length - 1; i >= 0; i--) {
-            if (rejectedWriteIndices.has(i)) writeBatch.splice(i, 1);
-        }
-    }
-
     const successfulOrderIds = new Set(successMessages.map((msg) => msg.body.orderData.id));
     const activeReservationEntries = reservationEntries.filter((entry) =>
         successfulOrderIds.has(entry.orderId),
     );
+    const reservedEntries: QueuedReservationEntry[] = [];
 
     // ── Phase 2: Inventory reservations ─────────────────────────────────────
 
     if (activeReservationEntries.length > 0) {
         console.log(`[Queue] Running reserveStockBatch for ${activeReservationEntries.length} entries`);
-        // Group entries by pool for the batch call. All entries in a single
-        // order share the same pool, but across a batch we may have mixed
-        // pools. reserveStockBatch takes a single pool, so group and call
-        // once per pool.
-        const byPool = new Map<"regular" | "preorder" | "backorder", typeof activeReservationEntries>();
-        for (const entry of activeReservationEntries) {
-            const pool = entry.pool;
-            if (!byPool.has(pool)) byPool.set(pool, []);
-            byPool.get(pool)!.push(entry);
-        }
+        const byOrder = groupReservationEntriesByOrder(activeReservationEntries);
 
-        const reservedEntries: QueuedReservationEntry[] = [];
-        for (const [pool, entries] of byPool) {
-            const batchItems = entries.map((e) => ({
-                variantId: e.variantId,
-                quantity: e.quantity,
-                orderId: e.orderId,
-            }));
-            const reserveResult = await reserveStockBatch(db, batchItems, pool);
+        for (let i = successMessages.length - 1; i >= 0; i--) {
+            const msg = successMessages[i];
+            if (!msg) continue;
+
+            const orderId = msg.body.orderData.id;
+            const orderReservations = byOrder.get(orderId);
+            if (!orderReservations || orderReservations.length === 0) continue;
+
+            const reserveResult = await reserveQueuedEntriesForOrder(db, orderId, orderReservations);
             if (!reserveResult.success) {
-                console.error(`[Queue] reserveStockBatch failed for pool ${pool}:`, reserveResult.results);
-                if (reservedEntries.length > 0) {
-                    console.log(`[Queue] Rolling back ${reservedEntries.length} reservations from earlier pools...`);
-                    await releaseReservationsByOrder(db, reservedEntries).catch((releaseErr) =>
-                        console.error("[Queue] Multi-pool rollback release failed:", releaseErr),
-                    );
-                }
-                // Keep checkout polling non-terminal while Cloudflare retries the batch.
-                for (const msg of batch.messages) {
-                    const delaySeconds = 15;
-                    await setCheckoutRetryStatus(env, msg, "Insufficient stock preventing batch ingestion.", delaySeconds);
-                    msg.retry({ delaySeconds });
-                }
-                return;
+                const range = orderWriteRanges.get(orderId);
+                if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
+                successMessages.splice(i, 1);
+                const delaySeconds = 15;
+                await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_RESERVATION_ERROR, delaySeconds);
+                msg.retry({ delaySeconds });
+                continue;
             }
-            reservedEntries.push(...entries);
+
+            reservedEntries.push(...reserveResult.reservedEntries);
         }
         console.log(`[Queue] reserveStockBatch completed successfully`);
+    }
+
+    // Remove rejected, already-ingested, or reservation-failed orders' write
+    // statements after all per-order filters have run. Delaying this keeps
+    // stored write indices stable.
+    if (rejectedWriteIndices.size > 0) {
+        for (let i = writeBatch.length - 1; i >= 0; i--) {
+            if (rejectedWriteIndices.has(i)) writeBatch.splice(i, 1);
+        }
     }
 
     // ── Phase 3: Atomic DB write ─────────────────────────────────────────────
@@ -541,38 +573,84 @@ export async function handleOrderIngestBatch(
     } catch (batchError: unknown) {
         // ── Phase 4: Rollback on DB failure ───────────────────────────────────
         console.error("[Queue] Order ingest DB batch failed WITH EXCEPTION:", batchError);
-        const batchErrorMessage = batchError instanceof Error ? batchError.message : String(batchError);
 
-        if (activeReservationEntries.length > 0) {
+        if (reservedEntries.length > 0) {
             console.log(`[Queue] Rolling back inventory...`);
-            await releaseReservationsByOrder(db, activeReservationEntries).catch((releaseErr) =>
+            await releaseReservationsByOrder(db, reservedEntries).catch((releaseErr) =>
                 console.error("[Queue] Rollback release failed:", releaseErr),
             );
         }
 
-        if (batchErrorMessage.includes("DISCOUNT_MAX_USES_EXCEEDED") ||
-            batchErrorMessage.includes("DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED")) {
-            const error = batchErrorMessage.includes("DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED")
-                ? "Discount already used by this customer"
-                : "Discount code has reached its usage limit";
+        const activeReservationsByOrder = groupReservationEntriesByOrder(activeReservationEntries);
+        for (const msg of successMessages) {
+            const payload = msg.body;
+            const orderId = payload.orderData.id;
+            const orderReservations = activeReservationsByOrder.get(orderId) ?? [];
+            let orderReservedEntries: QueuedReservationEntry[] = [];
 
-            for (const msg of successMessages) {
-                await setCheckoutStatus(env, msg.body.checkoutToken, "failed", error);
+            try {
+                if (orderReservations.length > 0) {
+                    const reserveResult = await reserveQueuedEntriesForOrder(db, orderId, orderReservations);
+                    if (!reserveResult.success) {
+                        const delaySeconds = 15;
+                        await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_RESERVATION_ERROR, delaySeconds);
+                        msg.retry({ delaySeconds });
+                        continue;
+                    }
+                    orderReservedEntries = reserveResult.reservedEntries;
+                }
+
+                const orderWrites = orderWriteStatements.get(orderId) ?? [];
+                if (orderWrites.length > 0) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+                    await db.batch(orderWrites as any);
+                }
+
+                if (payload.orderData.paymentMethod === "cod") {
+                    await initCODTracking(db, { orderId }).catch((err: unknown) =>
+                        console.error("[Queue] COD tracking init failed for order", orderId, err),
+                    );
+                }
+
+                await setCheckoutStatus(env, payload.checkoutToken, "completed");
                 msg.ack();
+                console.log(`[Queue] Acked isolated order ${orderId} after shared batch failure`);
+
+                if (env.ORDER_NOTIFICATIONS_QUEUE) {
+                    try {
+                        await env.ORDER_NOTIFICATIONS_QUEUE.send({
+                            type: "order.notification",
+                            orderId,
+                            customerEmail: payload.orderData.customerEmail ?? undefined,
+                            customerName: payload.orderData.customerName,
+                            notificationType: "order_created",
+                        });
+                    } catch (notifErr) {
+                        console.error(`[Queue] Failed to enqueue order_created notification for ${orderId}:`, notifErr);
+                    }
+                }
+            } catch (isolatedError: unknown) {
+                if (orderReservedEntries.length > 0) {
+                    await releaseReservationsByOrder(db, orderReservedEntries).catch((releaseErr) =>
+                        console.error("[Queue] Isolated rollback release failed:", releaseErr),
+                    );
+                }
+                const delaySeconds = 15;
+                console.error(`[Queue] Isolated order ingest failed for ${msg.body.orderData.id}:`, isolatedError);
+                await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_DATABASE_ERROR, delaySeconds);
+                msg.retry({ delaySeconds });
             }
-            return;
         }
 
-        // Retry every message in the batch
-        for (const msg of batch.messages) {
+        for (const failed of failedMessages) {
             const delaySeconds = 15;
             await setCheckoutRetryStatus(
                 env,
-                msg,
-                "Database write error during heavy traffic. Retrying.",
+                failed.msg,
+                CHECKOUT_RETRY_DATABASE_ERROR,
                 delaySeconds,
             );
-            msg.retry({ delaySeconds });
+            failed.msg.retry({ delaySeconds });
         }
     }
 }

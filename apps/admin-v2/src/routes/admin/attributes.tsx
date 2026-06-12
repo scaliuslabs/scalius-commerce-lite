@@ -45,13 +45,12 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
   };
 }
 
-const defaultApiParams = mapParams(searchSchema.parse({}));
-
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => search,
   staleTime: 0,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(attributesQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(attributesQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

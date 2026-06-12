@@ -26,7 +26,8 @@ import type { Client } from "@scalius/api-client/factory";
 // 1. SSR runtime: Cloudflare Worker env from runtime-env.ts (wrangler.jsonc vars)
 // 2. Client-side: window.__API_BASE_URL__ injected by Layout.astro
 // 3. Build-time: import.meta.env.PUBLIC_API_URL (from .env if present)
-// 4. Last resort: /api/v1 (same-origin proxy for local dev)
+// Missing configuration fails loudly because storefront does not expose a
+// catch-all same-origin /api/v1 proxy.
 
 function getApiBaseUrl(): string {
   // SSR: try runtime env (set per-request by middleware from locals.runtime.env)
@@ -40,8 +41,12 @@ function getApiBaseUrl(): string {
     return window.__API_BASE_URL__;
   }
 
-  // Fallback: same-origin relative path (works for both dev proxy and production)
-  return "/api/v1";
+  const buildTimeUrl = import.meta.env.PUBLIC_API_URL;
+  if (buildTimeUrl) return String(buildTimeUrl);
+
+  throw new Error(
+    "PUBLIC_API_URL is not configured. The storefront does not proxy /api/v1; set PUBLIC_API_URL to the API worker URL.",
+  );
 }
 
 // --- JWT Token Management ---

@@ -15,6 +15,7 @@ import { orderSummarySchema, orderDetailSchema, orderItemSchema, productVariantS
 import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
+import { getEncryptionKey } from "../../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -201,7 +202,8 @@ const bulkShipRoute = createRoute({
 app.openapi(bulkShipRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options);
+    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
     const successCount = results.filter((r) => r.success).length;
 
     // Enqueue order_shipped notifications for each successfully shipped order

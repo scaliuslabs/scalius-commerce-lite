@@ -107,9 +107,11 @@ if (Astro.request.method === "POST" && codOnly) {
 
     const result = await processOrder(formData);
 
-    if (result.success && result.orderId) {
+    if (result.success && result.orderId && result.receiptToken) {
       successOrderId = result.orderId;
-      return Astro.redirect(`/order-success?orderId=${result.orderId}`);
+      return Astro.redirect(
+        `/order-success?orderId=${encodeURIComponent(result.orderId)}&token=${encodeURIComponent(result.receiptToken)}`,
+      );
     } else {
       console.error("Order processing failed:", result.error);
       errorMessage =
@@ -130,7 +132,7 @@ const submitLabel = codOnly
   : "Proceed to Payment →";
 ---
 
-<Layout title={lang.languageData.pageTitle} layoutData={layoutData}>
+<Layout title={lang.languageData.pageTitle} layoutData={layoutData} noindex>
   <!-- Hidden checkout meta for client-side JS -->
   <div
     id="checkout-meta"
@@ -524,46 +526,20 @@ const submitLabel = codOnly
     }
   };
 
-  // Helper to auto-select City/Zone dropdowns
-  const fillLocationDropdowns = async (customer: any) => {
+  // Helper to auto-select City/Zone dropdowns through LocationSelector's event API.
+  const fillLocationDropdowns = (customer: any) => {
     try {
       if (!customer?.cityName && !customer?.city) return;
-
-      const citySelect = document.querySelector('select[name="city"]') as unknown as HTMLSelectElement;
-      const zoneSelect = document.querySelector('select[name="zone"]') as unknown as HTMLSelectElement;
-      if (!citySelect || !zoneSelect) return;
-
-      // Ensure cities are loaded (they should be rendered by LocationSelector visually, but we need the internal options mapping)
-      // Since LocationSelector is a React component, we have to interact with its rendered raw HTML elements
-      
-      const cityId = customer.city || customer.cityName; // Either ID or Name fallback
-      let foundCity = false;
-
-      // 1. Find the city option
-      for (let i = 0; i < citySelect.options.length; i++) {
-        if (citySelect.options[i].text === customer.cityName || citySelect.options[i].value === cityId) {
-          citySelect.selectedIndex = i;
-          foundCity = true;
-          break;
-        }
-      }
-
-      if (foundCity) {
-        // Dispatch 'change' so LocationSelector triggers its internal Zone fetch
-        citySelect.dispatchEvent(new Event("change", { bubbles: true }));
-
-        // Wait a beat for the React component to fetch the Zones
-        setTimeout(() => {
-          const expectedZone = customer.zoneName || customer.zone;
-          for (let i = 0; i < zoneSelect.options.length; i++) {
-            if (zoneSelect.options[i].text === expectedZone || zoneSelect.options[i].value === expectedZone) {
-              zoneSelect.selectedIndex = i;
-              zoneSelect.dispatchEvent(new Event("change", { bubbles: true }));
-              break;
-            }
-          }
-        }, 800);
-      }
+      window.dispatchEvent(new CustomEvent("location-prefill", {
+        detail: {
+          city: customer.city,
+          cityName: customer.cityName,
+          zone: customer.zone,
+          zoneName: customer.zoneName,
+          area: customer.area,
+          areaName: customer.areaName,
+        },
+      }));
     } catch(err: unknown) {
       console.error("Cart autofill location err:", err);
     }
@@ -576,7 +552,7 @@ const submitLabel = codOnly
       const session = await getCustomerSession();
       if (session?.authenticated && session.customer) {
         fillBasicCustomerFields(session.customer);
-        await fillLocationDropdowns(session.customer);
+        fillLocationDropdowns(session.customer);
       }
     }
   });

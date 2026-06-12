@@ -6,6 +6,7 @@ import { getDashboardStats, getRecentOrders, getDailyActivityData } from "@scali
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
+import { timestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -38,7 +39,7 @@ const recentOrderSchema = z.object({
     customerName: z.string(),
     totalAmount: z.number(),
     status: z.string(),
-    createdAt: z.string().or(z.date()),
+    createdAt: timestampSchema,
 }).passthrough();
 
 const dailyActivitySchema = z.object({

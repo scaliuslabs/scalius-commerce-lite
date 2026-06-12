@@ -22,6 +22,7 @@ import { getDb } from "@scalius/database/client";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
 import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
+import type { OrderNotificationType } from "@scalius/core/modules/notifications";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -119,7 +120,7 @@ export type PaymentQueueMessage =
     orderId: string;
     customerEmail?: string;
     customerName: string;
-    notificationType: "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_cancelled" | "order_returned";
+    notificationType: OrderNotificationType;
     data?: Record<string, unknown>;
   };
 
@@ -148,8 +149,9 @@ export async function handleQueueBatch(
 ): Promise<void> {
   const db = getDb(env);
 
-  // Order ingest uses a different strategy: a single db.batch() across all messages
-  if (batch.queue === "order-ingest-queue" || batch.messages.some(m => m.body.type === "order.ingest")) {
+  // Order ingest uses a different strategy and must be routed by queue name so
+  // a mixed/manual batch is not cast wholesale to order messages.
+  if (batch.queue === "order-ingest" || batch.queue === "order-ingest-queue") {
     await handleOrderIngestBatch(batch as unknown as MessageBatch<OrderIngestQueueMessage>, db, env);
     return;
   }
@@ -386,16 +388,16 @@ async function processQueueMessage(
 
     case "order.notification": {
       // Customer notifications (email, SMS, etc.)
-      if (payload.customerEmail) {
-        await sendOrderNotificationEmail(
-          payload.customerEmail,
-          payload.customerName,
-          payload.orderId,
-          payload.notificationType,
-          payload.data,
-          db,
-        );
-      }
+      const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+      await sendOrderNotificationEmail(
+        payload.customerEmail,
+        payload.customerName,
+        payload.orderId,
+        payload.notificationType,
+        payload.data,
+        db,
+        { encryptionKey },
+      );
 
       // Admin push notification — check admin channel settings before sending
       try {

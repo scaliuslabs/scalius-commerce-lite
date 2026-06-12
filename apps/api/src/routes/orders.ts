@@ -23,10 +23,38 @@ import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+const RECEIPT_TOKEN_PREFIX = "order_receipt:";
+const RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+
 const unixToDate = (timestamp: number | null): Date | null => {
   if (!timestamp) return null;
   return new Date(timestamp * 1000);
 };
+
+async function validateReceiptToken(
+  kv: KVNamespace | undefined,
+  orderId: string,
+  token: string | undefined,
+): Promise<void> {
+  if (!kv || !token || !token.startsWith("chk_")) {
+    throw new NotFoundError("Order receipt not found");
+  }
+
+  const raw = await kv.get(`${RECEIPT_TOKEN_PREFIX}${token}`);
+  if (!raw) {
+    throw new NotFoundError("Order receipt not found");
+  }
+
+  try {
+    const data = JSON.parse(raw) as { orderId?: unknown };
+    if (data.orderId !== orderId) {
+      throw new NotFoundError("Order receipt not found");
+    }
+  } catch (error) {
+    if (error instanceof NotFoundError) throw error;
+    throw new NotFoundError("Order receipt not found");
+  }
+}
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
@@ -198,11 +226,142 @@ app.openapi(getOrderStatusRoute, async (c) => {
       .limit(1);
 
     if (orderExists.length > 0) {
-      return ok(c, { status: "completed", orderId: statusData.orderId });
+      return ok(c, {
+        status: "completed",
+        orderId: statusData.orderId,
+        receiptToken: token,
+      });
     }
   }
 
   return ok(c, statusData);
+});
+
+// ─── GET /receipt/:id ───────────────────────────────────────────────────────
+
+const orderReceiptSchema = z.object({
+  id: z.string(),
+  customerName: z.string(),
+  shippingAddress: z.string(),
+  totalAmount: z.number(),
+  shippingCharge: z.number(),
+  discountAmount: z.number().nullable(),
+  city: z.string(),
+  zone: z.string(),
+  area: z.string().nullable(),
+  cityName: z.string().nullable(),
+  zoneName: z.string().nullable(),
+  areaName: z.string().nullable(),
+  status: z.string(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+  items: z.array(z.object({
+    id: z.string(),
+    productId: z.string(),
+    variantId: z.string().nullable(),
+    quantity: z.number(),
+    price: z.number(),
+    productName: z.string().nullable(),
+    productImage: z.string().nullable(),
+    variantSize: z.string().nullable(),
+    variantColor: z.string().nullable(),
+  })),
+});
+
+const getOrderReceiptRoute = createRoute({
+  method: "get",
+  path: "/receipt/{id}",
+  tags: ["Orders"],
+  summary: "Get minimal order receipt by ID and receipt token",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+    query: z.object({
+      token: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Minimal order receipt",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({ order: orderReceiptSchema })),
+        },
+      },
+    },
+    404: errorResponses[404],
+  },
+});
+
+app.openapi(getOrderReceiptRoute, async (c) => {
+  const db = c.get("db");
+  const id = c.req.valid("param").id;
+  const token = c.req.valid("query").token;
+
+  c.header("Cache-Control", "no-cache, no-store, must-revalidate");
+  c.header("Pragma", "no-cache");
+  c.header("Expires", "0");
+
+  await validateReceiptToken(c.env.CACHE, id, token);
+
+  const order = await db
+    .select({
+      id: orders.id,
+      customerName: orders.customerName,
+      shippingAddress: orders.shippingAddress,
+      totalAmount: orders.totalAmount,
+      shippingCharge: orders.shippingCharge,
+      discountAmount: orders.discountAmount,
+      city: orders.city,
+      zone: orders.zone,
+      area: orders.area,
+      cityName: orders.cityName,
+      zoneName: orders.zoneName,
+      areaName: orders.areaName,
+      status: orders.status,
+      createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+      updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
+    })
+    .from(orders)
+    .where(eq(orders.id, id))
+    .get();
+
+  if (!order) {
+    throw new NotFoundError("Order receipt not found");
+  }
+
+  const items = await db
+    .select({
+      id: orderItems.id,
+      productId: orderItems.productId,
+      variantId: orderItems.variantId,
+      quantity: orderItems.quantity,
+      price: orderItems.price,
+      productName: products.name,
+      productImage: sql<string>`(
+        SELECT ${productImages.url}
+        FROM ${productImages}
+        WHERE ${productImages.productId} = ${products.id}
+        AND ${productImages.isPrimary} = 1
+        LIMIT 1
+      )`.as("productImage"),
+      variantSize: productVariants.size,
+      variantColor: productVariants.color
+    })
+    .from(orderItems)
+    .leftJoin(products, eq(products.id, orderItems.productId))
+    .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+    .where(eq(orderItems.orderId, id));
+
+  return ok(c, {
+    order: {
+      ...order,
+      createdAt: unixToDate(order.createdAt)?.toISOString() || null,
+      updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
+      items,
+    },
+  });
 });
 
 // ─── POST / ──────────────────────────────────────────────────────────────────
@@ -276,6 +435,7 @@ const createOrderRoute = createRoute({
         success: z.literal(true),
         data: z.object({
           checkoutToken: z.string(),
+          receiptToken: z.string(),
           orderId: z.string(),
           paymentMethod: z.string(),
           totalAmount: z.number(),
@@ -318,9 +478,6 @@ app.openapi(createOrderRoute, async (c) => {
       ),
     );
 
-    // Dispatch to Cloudflare Queue
-    await c.env.ORDER_INGEST_QUEUE.send(result.queuePayload);
-
     // Write initial pending state to KV so the Storefront can poll it
     const kvKey = `checkout_status:${result.checkoutToken}`;
     await c.env.CACHE.put(
@@ -328,12 +485,36 @@ app.openapi(createOrderRoute, async (c) => {
       JSON.stringify({ status: "processing", orderId: result.orderId }),
       { expirationTtl: 300 },
     );
+    await c.env.CACHE.put(
+      `${RECEIPT_TOKEN_PREFIX}${result.checkoutToken}`,
+      JSON.stringify({ orderId: result.orderId }),
+      { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
+    );
+
+    // Dispatch only after KV polling/receipt state exists. If the send fails,
+    // keep the checkout token terminal instead of leaving the browser polling.
+    try {
+      await c.env.ORDER_INGEST_QUEUE.send(result.queuePayload);
+    } catch (queueError) {
+      await c.env.CACHE.put(
+        kvKey,
+        JSON.stringify({
+          status: "failed",
+          orderId: result.orderId,
+          error: "Order queue is unavailable. Please try again.",
+          updatedAt: Date.now(),
+        }),
+        { expirationTtl: 86400 },
+      );
+      throw queueError;
+    }
 
     return c.json(
       {
         success: true,
         data: {
           checkoutToken: result.checkoutToken,
+          receiptToken: result.checkoutToken,
           orderId: result.orderId,
           paymentMethod: result.paymentMethod,
           totalAmount: result.totalAmount,

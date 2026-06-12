@@ -7,6 +7,7 @@ import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
 import { eq, sql, and, inArray } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import type { OrderNotificationType } from "./notification-types";
 
 // ─────────────────────────────────────────
 // Admin push notification
@@ -131,7 +132,9 @@ export async function sendOrderNotification(
 // Order email notifications
 // ─────────────────────────────────────────
 
-type OrderEmailType = "order_created" | "order_confirmed" | "order_processing" | "order_shipped" | "order_delivered" | "order_completed" | "order_cancelled" | "order_returned" | "order_refunded";
+interface OrderNotificationOptions {
+    encryptionKey?: string;
+}
 
 /**
  * Dispatches order notifications to all enabled channels (email, SMS, WhatsApp).
@@ -141,12 +144,13 @@ type OrderEmailType = "order_created" | "order_confirmed" | "order_processing" |
  * @param db - Database instance for reading channel preferences and customer data
  */
 export async function sendOrderNotificationEmail(
-    email: string,
+    email: string | null | undefined,
     name: string,
     orderId: string,
-    type: OrderEmailType,
+    type: OrderNotificationType,
     data?: Record<string, unknown>,
     db?: Database,
+    options: OrderNotificationOptions = {},
 ): Promise<void> {
     // Determine which channels are enabled for this notification type
     let enabledChannels: string[] = ["email"]; // default: email only
@@ -163,7 +167,7 @@ export async function sendOrderNotificationEmail(
     const safeName = escapeHtml(name);
     const safeTrackingId = data?.trackingId ? escapeHtml(String(data.trackingId)) : "";
 
-    const subjects: Record<string, string> = {
+    const subjects: Record<OrderNotificationType, string> = {
         order_created: `Order #${orderId} Received`,
         order_confirmed: `Order #${orderId} Confirmed`,
         order_processing: `Order #${orderId} Processing`,
@@ -175,7 +179,7 @@ export async function sendOrderNotificationEmail(
         order_refunded: `Order #${orderId} Refunded`,
     };
 
-    const htmlMessages: Record<string, string> = {
+    const htmlMessages: Record<OrderNotificationType, string> = {
         order_created: `Thank you for your order, ${safeName}! We've received your order <strong>#${orderId}</strong> and will process it shortly.`,
         order_confirmed: `Great news, ${safeName}! Your order <strong>#${orderId}</strong> has been confirmed and is being prepared.`,
         order_processing: `Your order <strong>#${orderId}</strong> is being processed, ${safeName}! We'll update you when it ships.`,
@@ -187,7 +191,7 @@ export async function sendOrderNotificationEmail(
         order_refunded: `Your order <strong>#${orderId}</strong> has been refunded, ${safeName}. The refund will be processed to your original payment method. If you have questions, please contact our support team.`,
     };
 
-    const smsMessages: Record<string, string> = {
+    const smsMessages: Record<OrderNotificationType, string> = {
         order_created: `Hi ${name}, your order #${orderId} has been received. We'll process it shortly.`,
         order_confirmed: `Hi ${name}, your order #${orderId} has been confirmed and is being prepared.`,
         order_processing: `Hi ${name}, your order #${orderId} is being processed. We'll update you when it ships.`,
@@ -231,7 +235,7 @@ export async function sendOrderNotificationEmail(
             const orderRow = await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eqOp(orders.id, orderId)).get();
             const customerPhone = orderRow?.customerPhone;
             if (customerPhone) {
-                const smsProvider = await getActiveSmsProvider(db);
+                const smsProvider = await getActiveSmsProvider(db, options.encryptionKey);
                 if (smsProvider) {
                     const msg = smsMessages[type] || `Hi ${name}, your order #${orderId} status has been updated.`;
                     const smsResult = await smsProvider.sendSms({ to: customerPhone, message: msg });

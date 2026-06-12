@@ -4,6 +4,9 @@
  *
  * Usage:
  *   node scripts/deploy.mjs                  # full deploy (build + migrate + deploy all workers)
+ *   node scripts/deploy.mjs --only api       # typecheck + build/deploy API and migrate D1
+ *   node scripts/deploy.mjs --only admin     # typecheck + build/deploy admin
+ *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
  *
@@ -26,6 +29,10 @@ const apiDir = resolve(root, "apps", "api");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
+const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
+const onlyArgIndex = args.indexOf("--only");
+const onlyTarget = onlyArgIndex >= 0 ? args[onlyArgIndex + 1] : null;
+const deployTargets = ["api", "admin", "storefront"];
 
 // Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
 process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
@@ -62,6 +69,43 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
   }
 }
 
+function validateOnlyTarget() {
+  if (onlyArgIndex === -1) return null;
+  if (!onlyTarget || onlyTarget.startsWith("--") || !deployTargets.includes(onlyTarget)) {
+    console.error(`✗ Invalid --only target. Use one of: ${deployTargets.join(", ")}`);
+    process.exit(1);
+  }
+  return onlyTarget;
+}
+
+function buildTarget(target) {
+  switch (target) {
+    case "api":
+      run("pnpm --filter @scalius/api build", "Build API workspace");
+      break;
+    case "admin":
+      run("pnpm --filter @scalius/admin-v2 build", "Build Admin V2 workspace");
+      break;
+    case "storefront":
+      run("pnpm --filter @scalius/storefront build", "Build Storefront workspace");
+      break;
+  }
+}
+
+function deployTarget(target) {
+  switch (target) {
+    case "api":
+      runWithRetry("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
+      break;
+    case "admin":
+      runWithRetry("pnpm exec wrangler deploy", "Deploy Admin V2 Worker", resolve(root, "apps", "admin-v2"));
+      break;
+    case "storefront":
+      runWithRetry("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));
+      break;
+  }
+}
+
 // ── Main
 (async () => {
   let config;
@@ -83,7 +127,8 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
 
   const dbName = d1.database_name;
   const target = local ? "local" : "remote";
-  const persistFlag = local ? " --persist-to ../../.wrangler/state" : "";
+  const persistFlag = local ? ` --persist-to ${shellQuote(localPersistPath)}` : "";
+  const requestedTarget = validateOnlyTarget();
 
   if (migrateOnly) {
     console.log(`\n🗄  Applying D1 migrations → "${dbName}" (${target})\n`);
@@ -101,12 +146,28 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
     return;
   }
 
-  console.log(`\n🚀 Deploying "${config.name}" → D1: "${dbName}"\n`);
+  console.log(`\n🚀 Deploying "${config.name}"${requestedTarget ? ` (${requestedTarget} only)` : ""} → D1: "${dbName}"\n`);
   console.log("=".repeat(60));
 
   try {
     // 1. Typecheck first — catches type mismatches esbuild ignores
     run("pnpm typecheck", "Typecheck all workspaces");
+
+    if (requestedTarget) {
+      buildTarget(requestedTarget);
+
+      if (requestedTarget === "api") {
+        runWithRetry(
+          `pnpm exec wrangler d1 migrations apply ${dbName} --remote`,
+          `Apply D1 migrations → ${dbName}`,
+          apiDir
+        );
+      }
+
+      deployTarget(requestedTarget);
+      console.log(`\n✓ Deploy complete (${requestedTarget}).`);
+      return;
+    }
 
     // 2. Build: all workspaces via Turbo
     run("pnpm build", "Build all workspaces");
@@ -119,9 +180,9 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
     );
 
     // 4. Deploy all three workers (admin-v2 replaces the old Astro admin)
-    runWithRetry("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
-    runWithRetry("pnpm exec wrangler deploy", "Deploy Admin V2 Worker", resolve(root, "apps", "admin-v2"));
-    runWithRetry("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));
+    deployTarget("api");
+    deployTarget("admin");
+    deployTarget("storefront");
 
     console.log("\n✓ Deploy complete (API + Admin V2 + Storefront).");
   } catch {
@@ -129,3 +190,7 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
     process.exit(1);
   }
 })();
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}

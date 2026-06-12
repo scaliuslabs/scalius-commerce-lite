@@ -98,7 +98,7 @@ export const stripeHandler: GatewayHandler = {
     }
 
     try {
-      const orderId = await createOrder(ctx.checkoutData, "stripe");
+      const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "stripe");
 
       // Backend computes amount from DB order -- only send orderId
       const intentPayload: Record<string, unknown> = {
@@ -131,7 +131,11 @@ export const stripeHandler: GatewayHandler = {
       if (error) throw new Error(error.message || "Card payment failed");
 
       if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
-        return { success: true, redirectUrl: `/order-success?orderId=${orderId}&payment=stripe` };
+        return {
+          success: true,
+          redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}&token=${encodeURIComponent(receiptToken)}&payment=stripe`,
+          clearCartOnRedirect: true,
+        };
       }
 
       throw new Error("Payment was not completed");

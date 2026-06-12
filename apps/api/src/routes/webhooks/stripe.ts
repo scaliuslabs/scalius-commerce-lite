@@ -7,11 +7,15 @@ import { verifyStripeWebhook } from "@scalius/core/modules/payments/stripe";
 import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import { getEncryptionKey } from "../../utils/encryption-key";
+import {
+  buildWebhookEventId,
+  claimWebhookEvent,
+  markWebhookEventFailed,
+  markWebhookEventProcessed,
+  markWebhookEventQueued,
+} from "../../utils/webhook-idempotency";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-const KV_WEBHOOK_PREFIX = "stripe_wh:";
-const KV_WEBHOOK_TTL = 86400; // 24 hours
 
 app.post("/", async (c) => {
   const db = c.get("db");
@@ -38,19 +42,54 @@ app.post("/", async (c) => {
     return c.json({ error: "Invalid signature" }, 400);
   }
 
-  const kvKey = `${KV_WEBHOOK_PREFIX}${event.id}`;
-  const alreadyProcessed = await c.env.CACHE?.get(kvKey);
-  if (alreadyProcessed) {
-    return c.json({ received: true, skipped: true });
+  const message = buildQueueMessage(event);
+  const eventId = buildWebhookEventId("stripe", event.type, event.id);
+  const claim = await claimWebhookEvent(db, {
+    id: eventId,
+    provider: "stripe",
+    eventType: event.type,
+    orderId: message?.orderId ?? null,
+    status: "processing",
+    result: { sourceEventId: event.id },
+  });
+
+  if (!claim.claimed) {
+    return c.json({
+      received: true,
+      skipped: true,
+      duplicate: true,
+      status: claim.existing?.status ?? "unknown",
+    });
   }
 
-  const message = buildQueueMessage(event);
+  const queue = c.env.PAYMENT_EVENTS_QUEUE;
+  if (!queue && message) {
+    await markWebhookEventFailed(db, eventId, { error: "Queue not available" });
+    return c.json({ error: "Queue not available" }, 503);
+  }
 
   if (message) {
-    await c.env.PAYMENT_EVENTS_QUEUE.send(message);
-    await c.env.CACHE?.put(kvKey, "queued", { expirationTtl: KV_WEBHOOK_TTL });
+    try {
+      await queue.send(message);
+      await markWebhookEventQueued(db, eventId, {
+        sourceEventId: event.id,
+        eventType: event.type,
+      });
+    } catch (error) {
+      await markWebhookEventFailed(db, eventId, {
+        sourceEventId: event.id,
+        eventType: event.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json({ error: "Failed to enqueue payment event" }, 503);
+    }
   } else {
     console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
+    await markWebhookEventProcessed(db, eventId, {
+      sourceEventId: event.id,
+      eventType: event.type,
+      enqueued: false,
+    });
   }
 
   return c.json({ received: true });

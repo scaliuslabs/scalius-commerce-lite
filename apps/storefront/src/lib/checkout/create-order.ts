@@ -3,6 +3,18 @@
  * Shared by all gateway handlers.
  */
 import { getCheckoutErrorMessage } from "./error-messages";
+import type { CreateOrderPayload } from "@/lib/api/types";
+
+type PaymentMethod = NonNullable<CreateOrderPayload["paymentMethod"]>;
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : String(value ?? "");
+}
+
+function readOptionalString(value: unknown): string | null {
+  const str = readString(value).trim();
+  return str ? str : null;
+}
 
 export function parseDiscountInput(checkoutData: Record<string, unknown>): {
   code?: string;
@@ -44,8 +56,8 @@ export function parseDiscountInput(checkoutData: Record<string, unknown>): {
 
 export async function createOrder(
   checkoutData: Record<string, unknown>,
-  paymentMethod: string,
-): Promise<string> {
+  paymentMethod: PaymentMethod,
+): Promise<{ orderId: string; receiptToken: string }> {
   let cartItems: Record<string, { id: string; variantId?: string; quantity: number; price: number }> = {};
   try {
     cartItems = JSON.parse((checkoutData.cartItems as string) || "{}");
@@ -61,21 +73,21 @@ export async function createOrder(
   }));
   const discount = parseDiscountInput(checkoutData);
 
-  const payload = {
-    customerName: checkoutData.customerName,
-    customerPhone: checkoutData.customerPhone,
-    customerEmail: checkoutData.customerEmail || null,
-    shippingAddress: checkoutData.shippingAddress,
-    city: checkoutData.city,
-    zone: checkoutData.zone,
-    area: checkoutData.area || null,
-    cityName: checkoutData.cityName || undefined,
-    zoneName: checkoutData.zoneName || undefined,
-    areaName: checkoutData.areaName || undefined,
-    notes: checkoutData.notes || null,
+  const payload: CreateOrderPayload = {
+    customerName: readString(checkoutData.customerName),
+    customerPhone: readString(checkoutData.customerPhone),
+    customerEmail: readOptionalString(checkoutData.customerEmail),
+    shippingAddress: readString(checkoutData.shippingAddress),
+    city: readString(checkoutData.city),
+    zone: readString(checkoutData.zone),
+    area: readOptionalString(checkoutData.area),
+    cityName: readOptionalString(checkoutData.cityName),
+    zoneName: readOptionalString(checkoutData.zoneName),
+    areaName: readOptionalString(checkoutData.areaName),
+    notes: readOptionalString(checkoutData.notes),
     items,
     shippingCharge: parseFloat((checkoutData.shippingCharge as string) || "0"),
-    shippingMethodId: checkoutData.shippingMethodId,
+    shippingMethodId: readOptionalString(checkoutData.shippingMethodId),
     discountAmount: discount.amount,
     discountCode: discount.code,
     paymentMethod,
@@ -96,6 +108,8 @@ export async function createOrder(
 
   const data = await res.json();
   const orderId = data.data?.id || data.orderId || data.id || data.order?.id;
+  const receiptToken = data.data?.receiptToken || data.receiptToken || data.checkoutToken;
   if (!orderId) throw new Error("Order creation failed");
-  return orderId as string;
+  if (!receiptToken) throw new Error("Order receipt token missing");
+  return { orderId: orderId as string, receiptToken: receiptToken as string };
 }

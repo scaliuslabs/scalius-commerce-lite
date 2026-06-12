@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     return new Response(JSON.stringify({
       success: true,
-      data: { id: result.orderId }
+      data: { id: result.orderId, receiptToken: result.receiptToken }
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

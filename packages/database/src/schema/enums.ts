@@ -154,12 +154,22 @@ export const PaymentPlanStatus = {
 export type PaymentPlanStatusType = (typeof PaymentPlanStatus)[keyof typeof PaymentPlanStatus];
 
 export const ShipmentStatus = {
+    CREATING: "creating",
     PENDING: "pending",
+    PICKUP_ASSIGNED: "pickup_assigned",
     PICKED_UP: "picked_up",
+    PICKUP_FAILED: "pickup_failed",
     IN_TRANSIT: "in_transit",
+    OUT_FOR_DELIVERY: "out_for_delivery",
     DELIVERED: "delivered",
+    PARTIAL_DELIVERED: "partial_delivered",
+    DELIVERY_FAILED: "delivery_failed",
+    ON_HOLD: "on_hold",
+    FAILED: "failed",
     RETURNED: "returned",
     CANCELLED: "cancelled",
+    PROCESSING: "processing",
+    UNKNOWN: "unknown",
 } as const;
 
 export type ShipmentStatusType = (typeof ShipmentStatus)[keyof typeof ShipmentStatus];

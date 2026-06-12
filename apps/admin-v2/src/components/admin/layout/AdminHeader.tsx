@@ -15,7 +15,7 @@ interface AdminHeaderProps {
     name: string;
     email: string;
     image: string | null;
-    role: string;
+    role: string | null;
     twoFactorEnabled: boolean;
     isSuperAdmin: boolean;
   };

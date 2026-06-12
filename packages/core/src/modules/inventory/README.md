@@ -58,8 +58,8 @@ Stock follows a clear lifecycle driven by order status transitions. The order-le
                                    │
               ┌────────────────────┼────────────────────┐
               │                    │                     │
-     deductStock()        releaseReservation()    [expiry cron]
-     [payment confirmed]  [cancel/payment fail]   releaseExpiredReservations()
+     deductStock()        releaseReservation()    [orphan cleanup cron]
+     [order shipped]      [cancel/payment fail]   releaseExpiredReservations()
      stock -= qty         reservedStock -= qty    reservedStock -= qty
      reservedStock -= qty stockVersion += 1       stockVersion += 1
      stockVersion += 1
@@ -113,9 +113,11 @@ The pool is stored on `orders.inventoryPool` and flows through all inventory ope
 A reservation is considered expired when:
 1. It is a movement of type `reserved` or `preorder_reserved`
 2. It was created more than `maxAgeMinutes` ago (default: 30)
-3. It has an `orderId` (not null)
+3. It has an `orderId` (not null), but no matching row exists in `orders`
 4. No corresponding `deducted` / `preorder_deducted` movement exists for the same order+variant
 5. No corresponding `released` movement exists for the same order+variant (prevents double-release after cancellations, payment failures, queue rollbacks, or previous sweeps)
+
+Existing orders are not expired by this cron. Stale order cancellation must update order status, `orders.inventoryAction`, variant counters, and movement logs through explicit order transition logic.
 
 The sweep groups by `(variantId, orderId)`, sums quantities, and for each expired group:
 - Decrements `reservedStock` on the variant (clamped to 0 via `MAX(0, ...)`)
@@ -247,4 +249,4 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 ## Known Gaps
 
 - **Batch deduction not implemented** -- `deductMultiple()` is sequential (no batch equivalent like `reserveStockBatch()`)
-- **Expiry sweep has no batch limit** -- `releaseExpiredReservations()` processes all expired reservations in a single invocation with no cap, which could be slow if many reservations expire simultaneously
+- **Expiry sweep has no batch limit** -- `releaseExpiredReservations()` processes all orphaned expired reservations in a single invocation with no cap, which could be slow if many reservations need cleanup simultaneously

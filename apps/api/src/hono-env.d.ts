@@ -17,6 +17,7 @@ declare module "hono" {
     };
     session: {
       id: string;
+      twoFactorVerified?: boolean | null;
       [key: string]: unknown;
     };
     env: Env;
@@ -29,16 +30,12 @@ declare global {
   // Secrets are set in the Cloudflare dashboard (or via wrangler secret put).
   type Env = {
     // Service / resource bindings
-    ASSETS: Fetcher;
     DB: D1Database;
     CACHE: KVNamespace;
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
     AI?: Ai;
     WidgetDesignAgent: DurableObjectNamespace;
-
-    // Cloudflare Email Workers binding (optional)
-    EMAIL?: SendEmail;
 
     // Cloudflare Queue bindings
     PAYMENT_EVENTS_QUEUE: Queue;

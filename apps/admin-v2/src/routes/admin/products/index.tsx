@@ -73,18 +73,14 @@ function mapParams(deps: SearchParams) {
   };
 }
 
-// ── Default params for initial prefetch ───────────────────────────
-// Computed once at module level so the loader prefetches the exact cache
-// key the component will query on first mount (no blank flash).
-const defaultApiParams = mapParams(searchSchema.parse({}));
-
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => search,
   staleTime: 0,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(productsQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(productsQueryOptions(mapParams(deps)));
     void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
     void queryClient.prefetchQuery(productStatsQueryOptions());
   },

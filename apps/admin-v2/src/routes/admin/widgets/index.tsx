@@ -28,9 +28,13 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/admin/widgets/")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => search,
   staleTime: 0,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(widgetsQueryOptions({ showTrashed: false }));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(widgetsQueryOptions({
+      showTrashed: false,
+      search: deps.search || undefined,
+    }));
   },
   head: () => ({ meta: [{ title: "Widgets | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,

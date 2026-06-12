@@ -21,6 +21,33 @@ vi.mock("@scalius/core/auth/rbac/helpers", () => ({
 
 import { adminAuthMiddleware } from "./admin-auth";
 
+function mockBetterAuthSession(
+  overrides: {
+    user?: Record<string, unknown>;
+    session?: Record<string, unknown>;
+  } = {},
+) {
+  mocks.getAuth.mockReturnValue({
+    api: {
+      getSession: vi.fn().mockResolvedValue({
+        session: {
+          id: "session_1",
+          twoFactorVerified: true,
+          ...overrides.session,
+        },
+        user: {
+          id: "admin_1",
+          email: "admin@example.com",
+          name: "Admin",
+          role: "admin",
+          twoFactorEnabled: false,
+          ...overrides.user,
+        },
+      }),
+    },
+  });
+}
+
 function createContext(
   pathname: string,
   method = "GET",
@@ -50,13 +77,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    mocks.getAuth.mockReturnValue({
-      api: {
-        getSession: vi.fn().mockResolvedValue({
-          user: { id: "admin_1", email: "admin@example.com", name: "Admin", role: "admin" },
-        }),
-      },
-    });
+    mockBetterAuthSession();
   });
 
   it("allows a mapped admin route when the user has the required permission", async () => {
@@ -66,6 +87,88 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     await adminAuthMiddleware(createContext("/api/v1/admin/products") as never, next);
 
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores the Better Auth session on the Hono context", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+    const context = createContext("/api/v1/admin/products");
+
+    await adminAuthMiddleware(context as never, next);
+
+    expect(context.set).toHaveBeenCalledWith(
+      "session",
+      expect.objectContaining({ id: "session_1", twoFactorVerified: true }),
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an admin API request when the session has not completed 2FA", async () => {
+    mockBetterAuthSession({
+      user: { twoFactorEnabled: true },
+      session: { twoFactorVerified: false },
+    });
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(createContext("/api/v1/admin/products") as never, next),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Two-factor verification required",
+    });
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("allows admin API requests after 2FA is verified", async () => {
+    mockBetterAuthSession({
+      user: { twoFactorEnabled: true },
+      session: { twoFactorVerified: true },
+    });
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(createContext("/api/v1/admin/products") as never, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows exact 2FA completion endpoints before the session is marked verified", async () => {
+    mockBetterAuthSession({
+      user: { twoFactorEnabled: true },
+      session: { twoFactorVerified: false },
+    });
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+
+    for (const [pathname, method] of [
+      ["/api/v1/admin/auth/2fa/info", "GET"],
+      ["/api/v1/admin/auth/2fa/verify", "POST"],
+      ["/api/v1/admin/auth/2fa/mark-verified", "POST"],
+    ] as const) {
+      const next = vi.fn().mockResolvedValue(undefined);
+      await adminAuthMiddleware(createContext(pathname, method) as never, next);
+      expect(next).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("does not allow broader 2FA management endpoints before verification", async () => {
+    mockBetterAuthSession({
+      user: { twoFactorEnabled: true },
+      session: { twoFactorVerified: false },
+    });
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(createContext("/api/v1/admin/auth/2fa/method", "POST") as never, next),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Two-factor verification required",
+    });
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("fails closed for an unmapped admin route even when the user has admin permissions", async () => {

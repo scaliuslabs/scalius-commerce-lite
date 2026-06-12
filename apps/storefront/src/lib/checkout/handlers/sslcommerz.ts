@@ -17,10 +17,11 @@ export const sslcommerzHandler: GatewayHandler = {
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     try {
-      const orderId = await createOrder(ctx.checkoutData, "sslcommerz");
+      const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "sslcommerz");
 
       const sessionPayload: Record<string, unknown> = {
         orderId,
+        receiptToken,
         currency: (window as unknown as Record<string, unknown>).__CURRENCY_CODE__ || "BDT",
         paymentType: ctx.config.partialPaymentEnabled ? "deposit" : "full",
       };

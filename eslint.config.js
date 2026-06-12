@@ -72,15 +72,28 @@ export default tseslint.config(
     },
   },
 
-  // React hooks rules for TSX files
+  // React hooks rules for TS/TSX files. Several hook helpers live in .ts files.
   {
-    files: ["**/*.tsx"],
+    files: ["**/*.ts", "**/*.tsx"],
     plugins: {
       "react-hooks": reactHooksPlugin,
     },
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+    },
+  },
+
+  // Sanitizer helpers intentionally match control characters and bidi ranges.
+  {
+    files: [
+      "packages/shared/src/css-sanitize.ts",
+      "packages/shared/src/css-scope.ts",
+      "packages/shared/src/html-sanitize.ts",
+    ],
+    rules: {
+      "no-control-regex": "off",
+      "no-misleading-character-class": "off",
     },
   },
 );

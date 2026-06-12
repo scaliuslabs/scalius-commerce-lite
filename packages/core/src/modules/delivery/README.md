@@ -92,12 +92,16 @@ Single format: 11 mappings including `_approval_pending` suffixes. Normalized to
 
 | Shipment Status | Order Status | Conditions |
 |----------------|-------------|------------|
+| `pickup_assigned` | `shipped` | Order not already delivered/returned/cancelled |
 | `picked_up` | `shipped` | Order not already delivered/returned/cancelled |
 | `in_transit` | `shipped` | Order not already delivered/returned/cancelled |
-| `delivered` | `delivered` | Always |
+| `out_for_delivery` | `shipped` | Order not already delivered/returned/cancelled |
+| `partial_delivered` | `delivered` | Same as delivered |
+| `delivered` | `delivered` | Allowed direct from confirmed; deducts reserved stock if the order skipped shipped locally |
 | `returned` | `returned` | Always |
-| `failed` | `confirmed` | Only if order is shipped or processing |
+| `pickup_failed`, `delivery_failed`, `failed` | `confirmed` | Only if order is shipped or processing |
 | `cancelled` | `confirmed` or `cancelled` | If shipped -> confirmed; if pending/processing -> cancelled |
+| `pending`, `on_hold`, `unknown` | No order change | Shipment-only state |
 
 Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects.
 

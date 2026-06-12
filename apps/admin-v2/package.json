@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "deploy": "pnpm run build && pnpm exec wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
     "cf-typegen": "pnpm exec wrangler types"
   },
   "dependencies": {

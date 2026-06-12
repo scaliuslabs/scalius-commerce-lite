@@ -57,8 +57,8 @@ It connects to the **Scalius Commerce Lite** backend for data and commerce logic
     Copy `.env.example` to `.env` and configure your backend connection:
 
     ```env
-    PUBLIC_API_URL=http://localhost:4321/api/v1
-    PUBLIC_API_BASE_URL=http://localhost:4321
+    PUBLIC_API_URL=http://localhost:8787/api/v1
+    PUBLIC_API_BASE_URL=http://localhost:8787
     API_TOKEN=your_backend_api_token
     PURGE_TOKEN=your_backend_purge_token
     ```
@@ -69,7 +69,7 @@ It connects to the **Scalius Commerce Lite** backend for data and commerce logic
     ```bash
     pnpm dev
     ```
-    The storefront runs at `http://localhost:4321` (or `http://localhost:4322` if the backend uses 4321).
+    The storefront runs at `http://localhost:4322`; the local API runs at `http://localhost:8787`.
 
 ## 💻 Development Workflow
 

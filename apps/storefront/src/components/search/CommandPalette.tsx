@@ -14,6 +14,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { createApiUrl } from "@/lib/api/client";
 
 interface SearchResultItem {
   id: string;
@@ -114,9 +115,6 @@ export default function CommandPalette() {
 
     const timer = setTimeout(async () => {
       try {
-        const apiBaseUrl =
-          (typeof window !== "undefined" && window.__API_BASE_URL__) ||
-          "/api/v1";
         const params = new URLSearchParams({
           q: query,
           limit: "8",
@@ -124,7 +122,7 @@ export default function CommandPalette() {
           searchPages: "true",
         });
 
-        const res = await fetch(`${apiBaseUrl}/search?${params}`);
+        const res = await fetch(createApiUrl(`/search?${params}`));
         if (!res.ok) throw new Error("Search failed");
 
         const json = (await res.json()) as ApiResponse;
