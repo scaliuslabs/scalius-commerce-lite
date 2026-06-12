@@ -155,11 +155,11 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 ### ADMIN-001: Admin API wrapper layer is too large and partially outside TypeScript
 
-`apps/admin-v2/src/lib/api.functions.ts` is still about 2,037 lines, has `@ts-nocheck`, and contains 235 server functions after the first extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 19 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
+`apps/admin-v2/src/lib/api.functions.ts` is still about 2,007 lines, has `@ts-nocheck`, and contains 233 server functions after the first extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 20 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
 
 Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
 
-Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, and fraud-checker server functions were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
+Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, and abandoned-checkout delete server functions were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
 
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 

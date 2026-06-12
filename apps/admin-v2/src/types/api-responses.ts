@@ -371,11 +371,11 @@ export interface OrderFormData {
 
 export interface AbandonedCheckout {
   id: string;
-  checkoutId: string;
+  checkoutId: string | null;
   customerPhone: string | null;
   checkoutData: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
 }
 
 // ---------------------------------------------------------------------------

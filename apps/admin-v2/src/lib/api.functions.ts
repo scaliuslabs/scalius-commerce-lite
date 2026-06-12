@@ -1290,36 +1290,6 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
   });
 
 // ═══════════════════════════════════════════════════════════════════
-//  ABANDONED CHECKOUTS
-// ═══════════════════════════════════════════════════════════════════
-
-export const getAbandonedCheckouts = createServerFn({ method: "GET" })
-  .inputValidator(
-    (data: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      sort?: string;
-      order?: string;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const params: Record<string, string> = {};
-    if (data.page) params.page = String(data.page);
-    if (data.limit) params.limit = String(data.limit);
-    if (data.search) params.search = data.search;
-    if (data.sort) params.sort = data.sort;
-    if (data.order) params.order = data.order;
-    return apiGet<unknown>("/abandoned-checkouts", params);
-  });
-
-export const deleteAbandonedCheckouts = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete("/abandoned-checkouts", data);
-  });
-
-// ═══════════════════════════════════════════════════════════════════
 //  RBAC (Roles & Permissions)
 // ═══════════════════════════════════════════════════════════════════
 

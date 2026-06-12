@@ -9,20 +9,7 @@
  */
 
 import { queryOptions } from "@tanstack/react-query";
-import type {
-  DashboardData,
-  Category,
-  ProductListItem,
-  ProductDetail,
-  OrderDetail,
-  Customer,
-  Discount,
-  Page,
-  Widget,
-  DeliveryProviderRecord,
-  FraudCheckerProvider,
-  AnalyticsScript,
-} from "~/types/api-responses";
+import type { DashboardData } from "~/types/api-responses";
 import { queryKeys } from "./query-keys";
 import {
   // Dashboard
