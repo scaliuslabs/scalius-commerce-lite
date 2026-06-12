@@ -22,7 +22,7 @@ The highest current risks are not "wrong stack" problems. They are boundary and 
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 84 test files and 523 tests.
+- `pnpm test`: passed 87 test files and 531 tests.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
@@ -155,11 +155,11 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 ### ADMIN-001: Admin API wrapper layer is too large and partially outside TypeScript
 
-`apps/admin-v2/src/lib/api.functions.ts` is about 2,176 lines, has `@ts-nocheck`, and contains roughly 254 server functions. It uses many identity validators and loose payload shapes.
+`apps/admin-v2/src/lib/api.functions.ts` is still about 2,080 lines, has `@ts-nocheck`, and contains 241 server functions after the first extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 13 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
 
 Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
 
-Status: In progress as of 2026-06-13. Cache and analytics-script server functions were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
+Status: In progress as of 2026-06-13. Cache, analytics-script, and navigation item/preview server functions were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
 
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 
@@ -182,6 +182,12 @@ Status: remediated on 2026-06-13. Products, orders, categories, customers, pages
 Server functions unwrap envelopes and forward selected headers. The browser proxy forwards all headers/body and passes responses through. Exceptions exist for abandoned checkouts, uploads, scanner flows, widget streaming, and other flows.
 
 Fix direction: create one shared transport policy and document intentional exceptions.
+
+### ADMIN-005: Dynamic navigation product preview route was missing
+
+The admin dynamic navigation dialog called `/admin/navigation/preview-products`, but the API did not register that route. Preview counts for category/filter links therefore failed even though the UI path existed.
+
+Status: Remediated 2026-06-13. `GET /api/v1/admin/navigation/preview-products` now validates `categoryId`, ignores reserved list params when building attribute filters, delegates count logic to storefront product filtering through `getNavigationPreviewProductCount()`, enforces `products.view` via API RBAC, and is included in the regenerated SDK.
 
 ### STORE-002: Storefront browser `/api/v1` fallback is not a real proxy
 

@@ -1290,25 +1290,6 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
   });
 
 // ═══════════════════════════════════════════════════════════════════
-//  NAVIGATION
-// ═══════════════════════════════════════════════════════════════════
-
-export const getNavigationItems = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<unknown[]>("/navigation/items");
-  },
-);
-
-export const getNavigationPreviewProducts = createServerFn({ method: "GET" })
-  .inputValidator((data: Record<string, string>) => data)
-  .handler(async ({ data }) => {
-    return apiGet<Record<string, unknown>>(
-      "/navigation/preview-products",
-      data,
-    );
-  });
-
-// ═══════════════════════════════════════════════════════════════════
 //  FRAUD CHECKER
 // ═══════════════════════════════════════════════════════════════════
 

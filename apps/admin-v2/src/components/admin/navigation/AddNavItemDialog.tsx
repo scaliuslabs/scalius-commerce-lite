@@ -39,13 +39,16 @@ import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import type { NavigationItem, NavigationSource } from "./types";
 import {
-  getNavigationItems,
   getCategories,
   getPages,
   getAttributes,
   getAttributeValues,
-  getNavigationPreviewProducts,
 } from "~/lib/api.functions";
+import {
+  getNavigationItems,
+  getNavigationPreviewProducts,
+  type NavigationPreviewProductsInput,
+} from "~/lib/api-functions/navigation";
 
 type NavItemType = "category" | "page" | "dynamic" | "custom" | "label";
 
@@ -260,11 +263,11 @@ export function AddNavItemDialog({
       setIsLoading(true);
       try {
         const [navData, attrData] = await Promise.all([
-          getNavigationItems() as unknown as Promise<Record<string, unknown>>,
+          getNavigationItems(),
           getAttributes({ data: { limit: 100 } }) as unknown as Promise<Record<string, unknown>>,
         ]);
 
-        const items = navData.items as Record<string, NavigationSource[]> | undefined;
+        const items = navData.items;
         setAllCategories(items?.categories || []);
 
         const attrs = (attrData.attributes || []) as Array<{
@@ -342,7 +345,7 @@ export function AddNavItemDialog({
     const fetchPreview = async () => {
       setIsLoadingPreview(true);
       try {
-        const params: Record<string, string> = {
+        const params: NavigationPreviewProductsInput = {
           categoryId: dynamicCategory,
         };
         dynamicFilters.forEach((f) => {
@@ -351,10 +354,10 @@ export function AddNavItemDialog({
           }
         });
 
-        const data = (await getNavigationPreviewProducts({
+        const data = await getNavigationPreviewProducts({
           data: params,
-        })) as Record<string, unknown>;
-        setPreviewCount(data.count as number);
+        });
+        setPreviewCount(data.count);
       } catch (error: unknown) {
         if (import.meta.env.DEV) console.error("Error fetching preview:", error);
       } finally {

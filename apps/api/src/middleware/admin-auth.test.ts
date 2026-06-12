@@ -216,6 +216,29 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("requires product view permission for navigation product previews", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.SETTINGS_HEADER_EDIT]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/navigation/preview-products", "GET") as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action",
+    });
+
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/navigation/preview-products", "GET") as never,
+      next,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("allows scanner sessions only on exact scanner workflow endpoints", async () => {
     mocks.getAuth.mockReturnValue({
       api: { getSession: vi.fn().mockResolvedValue(null) },
