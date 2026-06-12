@@ -8,6 +8,7 @@
  * 2. Generates secrets and creates .dev.vars for all three apps
  * 3. Creates .env.development for admin + storefront (Vite/Astro build-time vars)
  * 4. Applies local D1 migrations
+ * 5. Creates the default local admin account unless --skip-admin is passed
  */
 
 import { execSync } from "child_process";
@@ -23,6 +24,28 @@ const apiDir = resolve(root, "apps", "api");
 const storefrontDir = resolve(root, "apps", "storefront");
 const args = process.argv.slice(2);
 const forceRegenerate = args.includes("--force");
+const skipInstall = args.includes("--skip-install");
+const skipAdmin = args.includes("--skip-admin");
+const showHelp = args.includes("--help") || args.includes("-h");
+
+const localAdminEmail = getArgValue("--admin-email") || process.env.LOCAL_ADMIN_EMAIL || "admin@local.scalius.test";
+const localAdminPassword = getArgValue("--admin-password") || process.env.LOCAL_ADMIN_PASSWORD || "ScaliusLocal123!";
+const localAdminName = getArgValue("--admin-name") || process.env.LOCAL_ADMIN_NAME || "Local Admin";
+
+if (showHelp) {
+  console.log(`
+Usage: pnpm dev:setup [options]
+
+Options:
+  --force                    Regenerate local env files
+  --skip-install             Do not run pnpm install
+  --skip-admin               Do not create the default local admin
+  --admin-email <email>      Local admin email (default: ${localAdminEmail})
+  --admin-password <value>   Local admin password, 12+ chars (default: ${localAdminPassword})
+  --admin-name <name>        Local admin name (default: ${localAdminName})
+`);
+  process.exit(0);
+}
 
 function run(cmd, label) {
   console.log(`\n▶ ${label}`);
@@ -34,17 +57,34 @@ function generateSecret() {
   return crypto.randomBytes(32).toString("base64");
 }
 
+function getArgValue(name) {
+  const inline = args.find((arg) => arg.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1);
+  const index = args.indexOf(name);
+  if (index >= 0) return args[index + 1];
+  return undefined;
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
 console.log("\n🚀 Scalius Commerce — Local Development Setup\n");
 console.log("=".repeat(55));
 
 // 1. Install dependencies
-run("pnpm install", "Installing dependencies");
+if (skipInstall) {
+  console.log("\n⚡ Skipping dependency install");
+} else {
+  run("pnpm install", "Installing dependencies");
+}
 
 // 2. Create .dev.vars for both apps
 const betterAuthSecret = generateSecret();
 const jwtSecret = generateSecret();
 const apiToken = generateSecret();
 const purgeToken = generateSecret();
+const credentialEncryptionKey = generateSecret();
 
 // API Worker .dev.vars
 const apiDevVarsPath = resolve(apiDir, ".dev.vars");
@@ -62,6 +102,7 @@ if (existsSync(apiDevVarsPath) && !forceRegenerate) {
     `BETTER_AUTH_SECRET=${betterAuthSecret}`,
     `JWT_SECRET=${jwtSecret}`,
     `API_TOKEN=${apiToken}`,
+    `CREDENTIAL_ENCRYPTION_KEY=${credentialEncryptionKey}`,
     "",
     "# ── Local overrides ──",
     "BETTER_AUTH_URL=http://localhost:4323",
@@ -91,6 +132,7 @@ if (existsSync(adminDevVarsPath) && !forceRegenerate) {
     `BETTER_AUTH_SECRET=${betterAuthSecret}`,
     `JWT_SECRET=${jwtSecret}`,
     `API_TOKEN=${apiToken}`,
+    `CREDENTIAL_ENCRYPTION_KEY=${credentialEncryptionKey}`,
     "",
     "# ── Local overrides ──",
     "BETTER_AUTH_URL=http://localhost:4323",
@@ -174,11 +216,28 @@ run(
   "Applying local D1 migrations"
 );
 
+// 5. Create default local admin through the same setup endpoint used by the UI.
+if (skipAdmin) {
+  console.log("\n⚡ Skipping local admin creation");
+} else {
+  run(
+    [
+      "node scripts/dev-admin.mjs create",
+      `--email ${shellQuote(localAdminEmail)}`,
+      `--password ${shellQuote(localAdminPassword)}`,
+      `--name ${shellQuote(localAdminName)}`,
+    ].join(" "),
+    "Creating default local admin if needed",
+  );
+}
+
 console.log("\n" + "=".repeat(55));
 console.log("✅ Setup complete!\n");
 console.log("Next steps:");
-console.log("  1. pnpm dev          — Start admin + API");
-console.log("  2. pnpm dev:all      — Start all three workers");
-console.log(
-  "  3. Visit http://localhost:4323/admin to create your first admin account\n"
-);
+console.log("  1. pnpm dev          — Start API + admin + storefront");
+console.log("  2. http://localhost:4323/admin");
+if (!skipAdmin) {
+  console.log(`  3. Sign in with ${localAdminEmail} / ${localAdminPassword}\n`);
+} else {
+  console.log("  3. Create the first admin in the browser or run pnpm dev:admin:create\n");
+}

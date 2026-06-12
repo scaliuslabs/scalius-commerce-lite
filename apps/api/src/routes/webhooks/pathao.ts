@@ -6,13 +6,19 @@ import { eq } from "drizzle-orm";
 import { deliveryShipments, orders } from "@scalius/database/schema";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
 import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
+import {
+    buildWebhookEventId,
+    claimWebhookEvent,
+    markWebhookEventFailed,
+    markWebhookEventProcessed,
+} from "../../utils/webhook-idempotency";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.post("/", async (c) => {
     const db = c.get("db");
+    let claimedEventId: string | null = null;
 
     // Read raw body for signature verification (must be done before .json())
     const rawBody = await c.req.text();
@@ -82,14 +88,6 @@ app.post("/", async (c) => {
             return c.json({ success: false, error: "Missing consignment_id" }, 400);
         }
 
-        // Idempotency: deduplicate webhook events via KV
-        const eventId = `${consignmentId}_${event}`;
-        const kvKey = `delivery_wh:pathao:${eventId}`;
-        const existing = await c.env.CACHE.get(kvKey);
-        if (existing) {
-            return c.json({ received: true, deduplicated: true });
-        }
-
         const shipment = await db
             .select()
             .from(deliveryShipments)
@@ -104,6 +102,25 @@ app.post("/", async (c) => {
                 { "X-Pathao-Merchant-Webhook-Integration-Secret": merchantSecret },
             );
         }
+
+        const eventId = buildWebhookEventId("pathao", event, `${consignmentId}:${event}`);
+        const claim = await claimWebhookEvent(db, {
+            id: eventId,
+            provider: "pathao",
+            eventType: event,
+            orderId: shipment.orderId,
+            status: "processing",
+            result: { consignmentId },
+        });
+
+        if (!claim.claimed) {
+            return c.json(
+                { received: true, deduplicated: true, status: claim.existing?.status ?? "unknown" },
+                202,
+                { "X-Pathao-Merchant-Webhook-Integration-Secret": merchantSecret },
+            );
+        }
+        claimedEventId = eventId;
 
         // Map the event field (e.g. "order.delivered") to internal status
         const normalizedStatus = mapProviderStatus("pathao", event);
@@ -174,18 +191,11 @@ app.post("/", async (c) => {
             }
         }
 
-        await recordWebhookEvent(
+        await markWebhookEventProcessed(
             db,
-            `pathao_${consignmentId}_${event}`,
-            "pathao",
-            "status_update",
-            shipment.orderId,
-            "processed",
-            { consignmentId, event, normalizedStatus, previousStatus }
+            eventId,
+            { consignmentId, event, normalizedStatus, previousStatus },
         );
-
-        // Mark event as processed in KV (24h TTL)
-        await c.env.CACHE.put(kvKey, JSON.stringify({ processedAt: Date.now() }), { expirationTtl: 86400 });
 
         // Pathao requires HTTP 202 and the merchant secret header
         return c.json(
@@ -195,6 +205,11 @@ app.post("/", async (c) => {
         );
     } catch (error: unknown) {
         console.error("[pathao-webhook] Error:", error);
+        if (claimedEventId) {
+            await markWebhookEventFailed(db, claimedEventId, {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
         return c.json({ success: false, error: "Internal processing error" }, 500);
     }
 });

@@ -20,8 +20,10 @@ const ORDER_STATUS_TRANSITIONS: Record<OrderStatusValue, readonly OrderStatusVal
     [OrderStatus.INCOMPLETE]: [OrderStatus.PENDING, OrderStatus.CANCELLED],
     [OrderStatus.PENDING]: [OrderStatus.PROCESSING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
     [OrderStatus.PROCESSING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
-    [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
-    [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.RETURNED, OrderStatus.CANCELLED],
+    [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED],
+    // `shipped -> confirmed` is used when a carrier delivery attempt fails and
+    // the merchant needs to retry shipment without restoring/deducting stock.
+    [OrderStatus.SHIPPED]: [OrderStatus.CONFIRMED, OrderStatus.DELIVERED, OrderStatus.RETURNED, OrderStatus.CANCELLED],
     [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED, OrderStatus.RETURNED, OrderStatus.REFUNDED, OrderStatus.PARTIALLY_REFUNDED],
     [OrderStatus.COMPLETED]: [OrderStatus.RETURNED, OrderStatus.REFUNDED, OrderStatus.PARTIALLY_REFUNDED],
     // Admin override only: merchants can reactivate cancelled orders.

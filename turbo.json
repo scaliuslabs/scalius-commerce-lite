@@ -1,10 +1,10 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalDependencies": [".env*", "pnpm-lock.yaml"],
+  "globalDependencies": [".env*", "pnpm-lock.yaml", "eslint.config.js", "scripts/copy-flags.mjs"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "package.json", "tsconfig.json", "wrangler.jsonc", "astro.config.mjs", "*.config.*"],
+      "inputs": ["src/**", "public/**", "scripts/**", "package.json", "tsconfig.json", "wrangler.jsonc", "wrangler.local.jsonc", "astro.config.mjs", "*.config.*"],
       "outputs": ["dist/**", ".astro/**"]
     },
     "dev": {
@@ -18,11 +18,12 @@
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "tsconfig.json", "*.config.*"],
+      "inputs": ["src/**", "scripts/**", "tsconfig.json", "*.config.*"],
       "outputs": []
     },
     "lint": {
       "dependsOn": ["^build"],
+      "inputs": ["src/**", "scripts/**", "eslint.config.js", "package.json", "tsconfig.json", "*.config.*"],
       "cache": true
     },
     "test": {

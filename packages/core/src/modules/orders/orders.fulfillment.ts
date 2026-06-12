@@ -20,8 +20,15 @@ import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { validateTransition } from "./order-state-machine";
 import type { StatusUpdateResult } from "./orders.types";
+import type { OrderNotificationType } from "../notifications/notification-types";
 
-export async function bulkShipOrders(db: Database, orderIds: string[], providerId: string, options: Record<string, unknown>) {
+export async function bulkShipOrders(
+    db: Database,
+    orderIds: string[],
+    providerId: string,
+    options: Record<string, unknown>,
+    encryptionKey?: string,
+) {
     const results = [];
     for (const orderId of orderIds) {
         try {
@@ -29,15 +36,29 @@ export async function bulkShipOrders(db: Database, orderIds: string[], providerI
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
             validateTransition("order", order.status, OrderStatus.SHIPPED);
 
-            const shipment = await createShipment(db, orderId, providerId, options);
+            const claimResult = await db.update(orders).set({
+                version: order.version + 1,
+                updatedAt: sql`unixepoch()`,
+            }).where(and(
+                eq(orders.id, orderId),
+                eq(orders.version, order.version),
+                eq(orders.status, order.status),
+            )).returning({ id: orders.id });
+
+            if (claimResult.length === 0) {
+                results.push({ orderId, success: false, error: "Order was modified concurrently" });
+                continue;
+            }
+
+            const shipment = await createShipment(db, orderId, providerId, options, encryptionKey);
             if (shipment.success) {
                 // CAS update first — only apply inventory if we win the version check
                 const casResult = await db.update(orders).set({
                     status: OrderStatus.SHIPPED,
                     fulfillmentStatus: FulfillmentStatus.COMPLETE,
-                    version: order.version + 1,
+                    version: order.version + 2,
                     updatedAt: sql`unixepoch()`,
-                }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))).returning({ id: orders.id });
+                }).where(and(eq(orders.id, orderId), eq(orders.version, order.version + 1))).returning({ id: orders.id });
 
                 if (casResult.length === 0) {
                     results.push({ orderId, success: false, error: "Order was modified concurrently" });
@@ -86,10 +107,10 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             const currentStatus = order.status === OrderStatus.CONFIRMED ? OrderStatus.SHIPPED : order.status;
             validateTransition("order", currentStatus, OrderStatus.DELIVERED);
 
-            const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
-            if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
             const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
             if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+            const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
+            if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
             return { message: "COD collection recorded" };
         }
         case "failed": {
@@ -98,10 +119,11 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return { message: "COD failure recorded" };
         }
         case "returned": {
-            const retResult = await markCODReturned(db, orderId);
-            if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
+            validateTransition("order", order.status, OrderStatus.RETURNED);
             const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))).returning({ id: orders.id });
             if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+            const retResult = await markCODReturned(db, orderId);
+            if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
             await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
             await db.update(orders).set({ inventoryAction: "restored" }).where(eq(orders.id, orderId));
             return { message: "Order marked as returned" };
@@ -116,7 +138,7 @@ export async function getOrderShipments(db: Database, orderId: string) {
 }
 
 export async function createFulfillmentShipment(db: Database, orderId: string, body: Record<string, unknown>) {
-    const order = await db.select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, orderId)).get();
+    const order = await db.select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus, version: orders.version }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
         throw new ValidationError("Cannot fulfill a cancelled/returned order");
@@ -134,6 +156,28 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     const isFinalShipment = (body.isFinalShipment as boolean | undefined) ?? ((shipmentItemIds as string[]).every((sid: string) => unfulfilledItemIds.includes(sid)) && unfulfilledItemIds.every((uid) => (shipmentItemIds as string[]).includes(uid)));
 
     const newFulfillmentStatus = isFinalShipment ? FulfillmentStatus.COMPLETE : FulfillmentStatus.PARTIAL;
+    const orderUpdate: Record<string, unknown> = {
+        fulfillmentStatus: newFulfillmentStatus,
+        version: order.version + 1,
+        updatedAt: sql`unixepoch()`,
+    };
+    const shouldShipOrder = isFinalShipment && order.status === OrderStatus.CONFIRMED;
+    if (shouldShipOrder) {
+        validateTransition("order", order.status, OrderStatus.SHIPPED);
+        orderUpdate.status = OrderStatus.SHIPPED;
+    }
+
+    const orderClaim = await db.update(orders).set(orderUpdate).where(and(
+        eq(orders.id, orderId),
+        eq(orders.version, order.version),
+        eq(orders.status, order.status),
+        eq(orders.fulfillmentStatus, order.fulfillmentStatus),
+    )).returning({ id: orders.id });
+
+    if (orderClaim.length === 0) {
+        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+    }
+
     // Drizzle D1 batch() requires specific tuple types
     const writes: unknown[] = [];
 
@@ -148,24 +192,19 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         writes.push(db.update(orderItems).set({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED }).where(eq(orderItems.id, itemId)));
     }
 
-    const orderUpdate: Record<string, unknown> = { fulfillmentStatus: newFulfillmentStatus, updatedAt: sql`unixepoch()` };
-    if (isFinalShipment && order.status === OrderStatus.CONFIRMED) {
-        validateTransition("order", order.status, OrderStatus.SHIPPED);
-        // Apply inventory before batch so the transition is included
-        const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
-        orderUpdate.status = OrderStatus.SHIPPED;
-        orderUpdate.inventoryAction = newInventoryAction;
-    }
-
-    writes.push(db.update(orders).set(orderUpdate).where(eq(orders.id, orderId)));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(writes as any);
+
+    if (shouldShipOrder) {
+        const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
+        await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+    }
 
     return { shipmentId, isFinalShipment, fulfillmentStatus: newFulfillmentStatus };
 }
 
 // Statuses that warrant a customer notification email
-const NOTIFICATION_STATUSES: Record<string, string> = {
+const NOTIFICATION_STATUSES: Record<string, OrderNotificationType> = {
     pending: "order_created",
     confirmed: "order_confirmed",
     processing: "order_processing",

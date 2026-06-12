@@ -1,8 +1,8 @@
 import { ServiceUnavailableError } from "./api-error";
 
 export function getEncryptionKey(env: Record<string, unknown>): string | undefined {
-    return (env.JWT_SECRET as string | undefined)
-        ?? (env.CREDENTIAL_ENCRYPTION_KEY as string | undefined);
+    return (env.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
+        ?? (env.JWT_SECRET as string | undefined);
 }
 
 export function getCredentialEncryptionKey(env: Record<string, unknown>): string | undefined {

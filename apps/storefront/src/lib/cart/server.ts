@@ -9,7 +9,6 @@ import {
   getProductBySlug,
   getShippingMethods,
   validateDiscount,
-  recordDiscountUsage,
   type LocationData,
   deleteAbandonedCheckout,
 } from "@/lib/api";
@@ -292,7 +291,6 @@ export async function processOrder(formData: FormData) {
       shippingCharge = 0;
     }
 
-    let discountId: string | null = null;
     let discountAmount: number | null = null;
     let discountCode: string | null = null;
     let finalNotes = notes || "";
@@ -313,7 +311,6 @@ export async function processOrder(formData: FormData) {
         );
       }
 
-      discountId = validationResult.discount?.id || null;
       discountAmount = validationResult.discountAmount || null;
       discountCode = validationResult.discount?.code || null;
 
@@ -337,6 +334,7 @@ export async function processOrder(formData: FormData) {
       notes: finalNotes,
       items: processedItems,
       shippingCharge,
+      shippingMethodId: shippingLocationId,
       discountAmount,
       discountCode: discountCode || undefined,
       paymentMethod: "cod",
@@ -345,17 +343,6 @@ export async function processOrder(formData: FormData) {
     const result = await createOrder(payload);
 
     if (result.success && result.orderId) {
-      // Log discount usage if applicable
-      if (discountId && discountAmount && discountAmount > 0) {
-        // We can also make this non-blocking but ensure it runs
-        await recordDiscountUsage(
-          discountId,
-          result.orderId,
-          null,
-          discountAmount,
-        );
-      }
-
       // If the order was successful, await the deletion of the abandoned checkout record.
       if (checkoutId) {
         try {

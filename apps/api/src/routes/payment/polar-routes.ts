@@ -28,6 +28,7 @@ const polarSessionSchema = z.object({
     customerName: z.string().optional(),
     customerEmail: z.string().optional(),
     customerPhone: z.string().optional(),
+    receiptToken: z.string().optional(),
     successUrl: z.string().optional(),
     cancelUrl: z.string().optional()
 });
@@ -145,7 +146,10 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const amountInCents = Math.round(paymentAmount * Math.pow(10, decimals));
 
     const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();
-    const successUrl = body.successUrl || `${baseUrl}/api/v1/payment/polar/success?order_id=${orderId}`;
+    const receiptQuery = body.receiptToken
+        ? `&receipt_token=${encodeURIComponent(body.receiptToken)}`
+        : "";
+    const successUrl = body.successUrl || `${baseUrl}/api/v1/payment/polar/success?order_id=${encodeURIComponent(orderId)}${receiptQuery}`;
 
     const result = await createPolarCheckout(polarSettings, {
         orderId,
@@ -219,6 +223,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
 polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
+    const receiptToken = c.req.query("receipt_token") ?? "";
 
     const envObj = c.env;
     const storefrontUrl = String(envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
@@ -229,7 +234,7 @@ polarPaymentRoutes.get("/success", async (c) => {
             const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) return c.redirect(`${storefrontUrl}/checkout?error=invalid_order`);
         }
-        return c.redirect(`${storefrontUrl}/order-success?orderId=${orderId ?? ""}&payment=polar`);
+        return c.redirect(`${storefrontUrl}/order-success?orderId=${encodeURIComponent(orderId ?? "")}&token=${encodeURIComponent(receiptToken)}&payment=polar`);
     }
 
     return c.redirect("/");

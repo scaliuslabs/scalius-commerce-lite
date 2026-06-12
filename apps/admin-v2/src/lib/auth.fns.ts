@@ -157,7 +157,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
       name: authResult.user.name,
       email: authResult.user.email,
       image: authResult.user.image ?? null,
-      role: authResult.user.role ?? "admin",
+      role: authResult.user.role ?? null,
       twoFactorEnabled: authResult.user.twoFactorEnabled ?? false,
       isSuperAdmin: rbac.isSuperAdmin,
     },

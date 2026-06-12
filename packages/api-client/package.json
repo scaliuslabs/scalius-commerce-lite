@@ -13,6 +13,7 @@
   "scripts": {
     "generate": "node --import tsx scripts/generate-spec.ts && openapi-ts && node scripts/post-generate.mjs",
     "generate:spec": "node --import tsx scripts/generate-spec.ts",
+    "lint": "eslint src/ scripts/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -160,7 +160,10 @@ const workerEnv = (() => {
     return null;
   }
 })();
-const publicApiUrl = (workerEnv?.PUBLIC_API_URL as string) || "";
+const publicApiUrl =
+  (workerEnv?.PUBLIC_API_URL as string) ||
+  (import.meta.env.PUBLIC_API_URL as string) ||
+  "";
 const envCdnDomainUrl = (workerEnv?.CDN_DOMAIN_URL as string) || "";
 const mediaSettings = layoutData?.media;
 const configuredCdnBase =
@@ -211,7 +214,7 @@ const cdnDomain = cdnDomainUrl || null;
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
     <script
       is:inline
-      set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl || "/api/v1")};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_OPTIMIZATION_ENABLED__=${JSON.stringify(imageOptimizationEnabled)};window.__IMAGE_CDN_BASE_URL__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_CDN_HOSTS__=${JSON.stringify(imageCdnHosts)};window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${JSON.stringify(imageCdnAliases)};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};window.__CURRENCY_DECIMAL_PLACES__=${currencyDecimalPlaces};`}
+      set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl)};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_OPTIMIZATION_ENABLED__=${JSON.stringify(imageOptimizationEnabled)};window.__IMAGE_CDN_BASE_URL__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_CDN_HOSTS__=${JSON.stringify(imageCdnHosts)};window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${JSON.stringify(imageCdnAliases)};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};window.__CURRENCY_DECIMAL_PLACES__=${currencyDecimalPlaces};`}
     />
 
     <!-- Stale Asset Detector -->

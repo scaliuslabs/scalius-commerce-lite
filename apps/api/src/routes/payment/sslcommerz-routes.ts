@@ -18,6 +18,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const sessionSchema = z.object({
   orderId: z.string().min(1),
+  receiptToken: z.string().optional(),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
@@ -116,6 +117,9 @@ app.openapi(createSessionRoute, async (c) => {
 
   const origin = body.baseUrl ?? new URL(c.req.url).origin;
   const apiBase = `${origin}/api/v1`;
+  const receiptQuery = body.receiptToken
+    ? `?receipt_token=${encodeURIComponent(body.receiptToken)}`
+    : "";
 
   const result = await initSSLCommerzSession(
     ssl.storeId,
@@ -125,7 +129,7 @@ app.openapi(createSessionRoute, async (c) => {
       orderId: body.orderId,
       totalAmount: chargeAmount,
       currency: body.currency,
-      successUrl: `${apiBase}/payment/sslcommerz/success`,
+      successUrl: `${apiBase}/payment/sslcommerz/success${receiptQuery}`,
       failUrl: `${apiBase}/payment/sslcommerz/fail`,
       cancelUrl: `${apiBase}/payment/sslcommerz/cancel`,
       ipnUrl: `${apiBase}/webhooks/sslcommerz`,
@@ -193,23 +197,25 @@ function getStorefrontUrl(c: { env?: { STOREFRONT_URL?: string }; req: { url: st
 app.post("/success", async (c) => {
   const tran_id = await extractTranId(c);
   const storefront = getStorefrontUrl(c);
+  const receiptToken = c.req.query("receipt_token") ?? "";
   if (tran_id) {
     const db = c.get("db");
     const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
     if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
   }
-  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&payment=sslcommerz`);
+  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&token=${encodeURIComponent(receiptToken)}&payment=sslcommerz`);
 });
 
 app.get("/success", async (c) => {
   const tran_id = c.req.query("tran_id") ?? "";
   const storefront = getStorefrontUrl(c);
+  const receiptToken = c.req.query("receipt_token") ?? "";
   if (tran_id) {
     const db = c.get("db");
     const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, tran_id)).get();
     if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
   }
-  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&payment=sslcommerz`);
+  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(tran_id)}&token=${encodeURIComponent(receiptToken)}&payment=sslcommerz`);
 });
 
 app.post("/fail", async (c) => {

@@ -47,10 +47,43 @@ async function generateSpec() {
 }
 
 function writeSpec(spec: any) {
+  normalizeNullableAnyOf(spec);
   const outputPath = resolve(__dirname, "../openapi.json");
   writeFileSync(outputPath, JSON.stringify(spec, null, 2));
   console.log(`OpenAPI spec written to ${outputPath}`);
   console.log(`Routes documented: ${Object.keys(spec.paths || {}).length}`);
+}
+
+function normalizeNullableAnyOf(value: unknown): void {
+  if (!value || typeof value !== "object") return;
+
+  if (Array.isArray(value)) {
+    for (const item of value) normalizeNullableAnyOf(item);
+    return;
+  }
+
+  const schema = value as Record<string, unknown>;
+  for (const key of ["anyOf", "oneOf"] as const) {
+    const variants = schema[key];
+    if (!Array.isArray(variants)) continue;
+
+    const nullableOnlyIndex = variants.findIndex((variant) => {
+      if (!variant || typeof variant !== "object" || Array.isArray(variant)) {
+        return false;
+      }
+      const entries = Object.entries(variant as Record<string, unknown>);
+      return entries.length === 1 && entries[0]?.[0] === "nullable" && entries[0]?.[1] === true;
+    });
+
+    if (nullableOnlyIndex >= 0) {
+      variants.splice(nullableOnlyIndex, 1);
+      schema.nullable = true;
+    }
+  }
+
+  for (const child of Object.values(schema)) {
+    normalizeNullableAnyOf(child);
+  }
 }
 
 generateSpec().catch(console.error);

@@ -6,6 +6,7 @@ import { NotFoundError, ValidationError, ConflictError } from "../../../utils/ap
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
+import { nullableTimestampSchema } from "../../../schemas/timestamps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const sliderImageSchema = z.object({
@@ -44,7 +45,7 @@ const heroSliderSchema = z.object({
     isActive: z.boolean(),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
-    deletedAt: z.union([z.string(), z.number()]).nullable(),
+    deletedAt: nullableTimestampSchema,
 }).passthrough();
 
 const listRoute = createRoute({

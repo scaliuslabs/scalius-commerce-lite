@@ -1,17 +1,17 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
-import { getOrderDetails, getLayoutData, type Order, type OrderItem, type LayoutData } from "@/lib/api";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { getOrderReceipt, getLayoutData, type OrderReceipt, type OrderItem, type LayoutData } from "@/lib/api";
 
 
 const orderId = Astro.url.searchParams.get("orderId");
+const receiptToken = Astro.url.searchParams.get("token");
 
-if (!orderId) {
+if (!orderId || !receiptToken) {
   return Astro.redirect("/");
 }
 
-let order: Order | null = null;
+let order: OrderReceipt | null = null;
 let layoutData: LayoutData | null = null;
 let errorFetching = false;
 
@@ -19,7 +19,7 @@ try {
   // Parallel fetch: layout + order details
   const [fetchedLayoutData, fetchedOrder] = await Promise.all([
     getLayoutData(),
-    getOrderDetails(orderId),
+    getOrderReceipt(orderId, receiptToken),
   ]);
   layoutData = fetchedLayoutData;
   order = fetchedOrder;
@@ -157,18 +157,6 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
             <span class="font-medium">{order.customerName}</span>
           </p>
           <p>
-            <span class="text-gray-600">Phone:</span>{" "}
-            <span class="font-medium">{formatPhoneForDisplay(order.customerPhone)}</span>
-          </p>
-          {
-            order.customerEmail && (
-              <p>
-                <span class="text-gray-600">Email:</span>{" "}
-                <span class="font-medium">{order.customerEmail}</span>
-              </p>
-            )
-          }
-          <p>
             <span class="text-gray-600">Address:</span>{" "}
             <span class="font-medium">{order.shippingAddress}</span>
           </p>
@@ -256,9 +244,14 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 
 <script>
   import { trackFbPurchase } from "@/lib/analytics";
-  import type { OrderItem, Order } from "@/lib/api";
+  import type { OrderItem, OrderReceipt } from "@/lib/api";
+  import { clearCheckoutSession } from "@/lib/checkout/session-state";
+  import { clearCart } from "@/store/cart";
 
   document.addEventListener("DOMContentLoaded", () => {
+    clearCheckoutSession();
+    clearCart();
+
     const mainElement = document.querySelector(
       "main[data-fb-order-details]"
     ) as HTMLElement | null;
@@ -276,13 +269,12 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
     }
 
     try {
-      const parsedData: { order: Order; items: OrderItem[] } =
+      const parsedData: { order: OrderReceipt; items: OrderItem[] } =
         JSON.parse(orderDataAttr);
       const { order, items: orderItems } = parsedData;
 
       setTimeout(() => {
         if (typeof window.fbq === "function" && order && orderItems) {
-          // --- CAPI: Call trackFbPurchase with PII from the order object ---
           trackFbPurchase(
             {
               order_id: order.id,
@@ -303,10 +295,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
               ),
               value: order.totalAmount,
             },
-            {
-              em: order.customerEmail || undefined,
-              ph: order.customerPhone,
-            }
+            {}
           );
           console.log("FB Purchase event tracked for order:", order.id);
         } else {

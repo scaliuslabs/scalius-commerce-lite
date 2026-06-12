@@ -6,13 +6,56 @@ import { eq } from "drizzle-orm";
 import { deliveryShipments, orders } from "@scalius/database/schema";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { recordWebhookEvent } from "@scalius/core/modules/payments/process-payment";
 import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
+import {
+    buildWebhookEventId,
+    claimWebhookEvent,
+    markWebhookEventFailed,
+    markWebhookEventProcessed,
+} from "../../utils/webhook-idempotency";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+interface SteadfastWebhookPayload {
+    notification_type?: string;
+    consignment_id?: number;
+    invoice?: string;
+    cod_amount?: number;
+    status?: string;
+    delivery_charge?: number;
+    tracking_message?: string;
+    updated_at?: string;
+    [key: string]: unknown;
+}
+
+function normalizeKeyPart(value: unknown): string {
+    const raw = value === undefined || value === null || value === "" ? "unknown" : String(value);
+    return raw
+        .toLowerCase()
+        .replace(/[^a-z0-9:_-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 120) || "unknown";
+}
+
+export function buildSteadfastWebhookDedupKey(payload: SteadfastWebhookPayload): string {
+    const notificationType = payload.notification_type || "unknown";
+    const identifier = payload.consignment_id ?? payload.invoice ?? "unknown";
+    const eventPart = notificationType === "delivery_status"
+        ? payload.status
+        : payload.updated_at ?? payload.tracking_message ?? "unknown";
+
+    return [
+        "delivery_wh:steadfast",
+        normalizeKeyPart(identifier),
+        normalizeKeyPart(notificationType),
+        normalizeKeyPart(eventPart),
+    ].join(":");
+}
+
 app.post("/", async (c) => {
     const db = c.get("db");
+    let claimedEventId: string | null = null;
 
     // Read raw body for signature verification (must be done before .json())
     const rawBody = await c.req.text();
@@ -31,27 +74,9 @@ app.post("/", async (c) => {
     }
 
     try {
-        const payload = JSON.parse(rawBody) as {
-            notification_type?: string;
-            consignment_id?: number;
-            invoice?: string;
-            cod_amount?: number;
-            status?: string;
-            delivery_charge?: number;
-            tracking_message?: string;
-            updated_at?: string;
-            [key: string]: unknown;
-        };
+        const payload = JSON.parse(rawBody) as SteadfastWebhookPayload;
 
         const notificationType = payload.notification_type;
-
-        // Idempotency: deduplicate webhook events via KV
-        const consignmentIdRaw = String(payload.consignment_id ?? "");
-        const kvKey = `delivery_wh:steadfast:${consignmentIdRaw}_${notificationType || "unknown"}`;
-        const existing = await c.env.CACHE.get(kvKey);
-        if (existing) {
-            return c.json({ status: "success", message: "Webhook received successfully.", deduplicated: true });
-        }
 
         // Only process delivery_status notifications; acknowledge tracking_update without processing
         if (notificationType === "tracking_update") {
@@ -76,6 +101,26 @@ app.post("/", async (c) => {
             }
 
             if (shipment) {
+                const sourceEventId = buildSteadfastWebhookDedupKey(payload);
+                const eventId = buildWebhookEventId("steadfast", "tracking_update", sourceEventId);
+                const claim = await claimWebhookEvent(db, {
+                    id: eventId,
+                    provider: "steadfast",
+                    eventType: "tracking_update",
+                    orderId: shipment.orderId,
+                    status: "processing",
+                    result: { sourceEventId },
+                });
+
+                if (!claim.claimed) {
+                    return c.json({
+                        status: "success",
+                        message: "Webhook received successfully.",
+                        deduplicated: true,
+                    });
+                }
+                claimedEventId = eventId;
+
                 let existingMeta: Record<string, unknown> = {};
                 try { existingMeta = JSON.parse(shipment.metadata ?? "{}"); } catch { /* invalid JSON */ }
                 await db
@@ -89,10 +134,13 @@ app.post("/", async (c) => {
                         }),
                     })
                     .where(eq(deliveryShipments.id, shipment.id));
-            }
 
-            // Mark event as processed in KV (24h TTL)
-            await c.env.CACHE.put(kvKey, JSON.stringify({ processedAt: Date.now() }), { expirationTtl: 86400 });
+                await markWebhookEventProcessed(db, eventId, {
+                    sourceEventId,
+                    trackingMessage: payload.tracking_message,
+                    updatedAt: payload.updated_at,
+                });
+            }
 
             return c.json({ status: "success", message: "Webhook received successfully." });
         }
@@ -130,6 +178,26 @@ app.post("/", async (c) => {
             console.warn(`[steadfast-webhook] No shipment found for consignment: ${consignmentId}, invoice: ${invoice}`);
             return c.json({ status: "success", message: "Webhook received successfully." });
         }
+
+        const sourceEventId = buildSteadfastWebhookDedupKey(payload);
+        const eventId = buildWebhookEventId("steadfast", "delivery_status", sourceEventId);
+        const claim = await claimWebhookEvent(db, {
+            id: eventId,
+            provider: "steadfast",
+            eventType: "delivery_status",
+            orderId: shipment.orderId,
+            status: "processing",
+            result: { sourceEventId, consignmentId, invoice, rawStatus },
+        });
+
+        if (!claim.claimed) {
+            return c.json({
+                status: "success",
+                message: "Webhook received successfully.",
+                deduplicated: true,
+            });
+        }
+        claimedEventId = eventId;
 
         const normalizedStatus = mapProviderStatus("steadfast", rawStatus);
         const previousStatus = shipment.status;
@@ -197,23 +265,21 @@ app.post("/", async (c) => {
             }
         }
 
-        await recordWebhookEvent(
+        await markWebhookEventProcessed(
             db,
-            `steadfast_${consignmentId}_${rawStatus}`,
-            "steadfast",
-            "status_update",
-            shipment.orderId,
-            "processed",
-            { consignmentId, invoice, rawStatus, normalizedStatus, previousStatus }
+            eventId,
+            { consignmentId, invoice, rawStatus, normalizedStatus, previousStatus },
         );
-
-        // Mark event as processed in KV (24h TTL)
-        await c.env.CACHE.put(kvKey, JSON.stringify({ processedAt: Date.now() }), { expirationTtl: 86400 });
 
         // Steadfast expects HTTP 200 with this exact response shape
         return c.json({ status: "success", message: "Webhook received successfully." });
     } catch (error: unknown) {
         console.error("[steadfast-webhook] Error:", error);
+        if (claimedEventId) {
+            await markWebhookEventFailed(db, claimedEventId, {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
         return c.json({ status: "error", message: "Internal processing error" }, 500);
     }
 });

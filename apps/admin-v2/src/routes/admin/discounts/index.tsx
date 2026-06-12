@@ -42,13 +42,12 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
   };
 }
 
-const defaultApiParams = mapParams(searchSchema.parse({}));
-
 export const Route = createFileRoute("/admin/discounts/")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => search,
   staleTime: 0,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(discountsQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(discountsQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

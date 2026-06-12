@@ -1,6 +1,6 @@
 // src/lib/api/discounts.ts
 
-import { createApiUrl, fetchWithRetry, getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./client";
 import type { CartItem } from "@/store/cart";
 import type { DiscountValidationResponse } from "./types";
 import { unwrapData } from "./unwrap";
@@ -59,57 +59,5 @@ export async function validateDiscount(
       valid: false,
       error: "An unexpected error occurred while validating the discount.",
     };
-  }
-}
-
-/**
- * Records the usage of a discount for a specific order.
- * This should be called after an order is successfully created.
- *
- * @param discountId The ID of the discount that was used.
- * @param orderId The ID of the order where the discount was applied.
- * @param customerId The ID of the customer, if available.
- * @param amountDiscounted The final amount that was discounted from the order.
- * @returns A promise resolving to true on success, false on failure.
- */
-export async function recordDiscountUsage(
-  discountId: string,
-  orderId: string,
-  customerId: string | null,
-  amountDiscounted: number,
-): Promise<boolean> {
-  try {
-    // No SDK function for POST /discounts/usage — use fetchWithRetry directly
-    const url = createApiUrl("/discounts/usage");
-    const payload = {
-      discountId,
-      orderId,
-      customerId,
-      amountDiscounted,
-    };
-
-    const response = await fetchWithRetry(
-      url,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      },
-      0, // No retries — backend has unique constraint on (discountId, orderId)
-      8000,
-      true
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Failed to record discount usage:", errorText);
-      return false;
-    }
-
-    console.log(`Successfully recorded usage for discount ${discountId} on order ${orderId}.`);
-    return true;
-  } catch (error: unknown) {
-    console.error(`Error recording discount usage for discount ID "${discountId}":`, error);
-    return false;
   }
 }

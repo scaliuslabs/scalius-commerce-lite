@@ -57,7 +57,7 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     trackingId: text("tracking_id"),
     trackingUrl: text("tracking_url"),
     courierName: text("courier_name"),
-    /** Valid: pending | picked_up | in_transit | delivered | returned | cancelled (see ShipmentStatus enum) */
+    /** Plain-text shipment lifecycle/status. Common values are listed in ShipmentStatus enum. */
     status: text("status").notNull().default(ShipmentStatus.PENDING),
     rawStatus: text("raw_status"),
     note: text("note"),

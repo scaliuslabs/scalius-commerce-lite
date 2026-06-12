@@ -2,134 +2,200 @@
 
 ## Overview
 
-Turborepo monorepo: TanStack Start admin dashboard + Astro SSR storefront + standalone Hono API — all deployed as Cloudflare Workers. Admin and storefront communicate with the API worker via Cloudflare Service Bindings.
+Turborepo monorepo: TanStack Start admin dashboard + Astro SSR storefront + standalone Hono API, all deployed as Cloudflare Workers. Admin and storefront communicate with the API worker through Cloudflare Service Bindings in production, with HTTP fallbacks for local development.
 
 ## Monorepo Structure
 
 ```
 apps/
-  admin-v2/       # @scalius/admin-v2 — TanStack Start admin dashboard (Cloudflare Worker)
-  api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
-  storefront/     # @scalius/storefront — Astro 6 SSR customer-facing store (Cloudflare Worker)
+  admin-v2/       # @scalius/admin-v2 — TanStack Start admin dashboard Worker
+  api/            # @scalius/api — Hono API Worker, queues, cron, WidgetDesignAgent DO
+  storefront/     # @scalius/storefront — Astro 6 SSR storefront Worker
 packages/
-  api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
-  core/           # @scalius/core — Domain modules, auth, integrations, search
-  database/       # @scalius/database — Drizzle schema, client, migrations
-  shared/         # @scalius/shared — Pure utility functions
-  tsconfig/       # @scalius/tsconfig — Shared TypeScript configs
+  api-client/     # @scalius/api-client — generated SDK from OpenAPI spec
+  core/           # @scalius/core — domain services, auth, providers, integrations, search
+  database/       # @scalius/database — Drizzle schema, D1 client, migrations
+  shared/         # @scalius/shared — shared utilities
+  tsconfig/       # @scalius/tsconfig — shared TS config package
 ```
 
 ## Quick Commands
 
 | Command | Purpose |
 |---------|---------|
-| `pnpm dev` | Start all three: admin :4323 + storefront :4322 + API :8787 (staggered) |
-| `pnpm dev:admin` | Start admin :4323 + API :8787 only |
+| `pnpm dev` | Start API :8787, admin :4323, storefront :4322 via `scripts/dev.sh` |
+| `pnpm dev:all` | Alias for `pnpm dev` |
+| `pnpm dev:admin` | Start admin :4323 + API :8787 |
 | `pnpm dev:storefront` | Start storefront :4322 + API :8787 |
-| `pnpm build` | Build all workspaces |
-| `pnpm dev:setup` | First-time local dev setup |
-| `pnpm dev:reset` | Wipe local DB and re-apply migrations |
-| `pnpm db:generate` | Generate Drizzle migrations |
-| `pnpm db:migrate:local` | Apply pending migrations locally |
+| `pnpm build` | Run `prebuild` (`scripts/copy-flags.mjs`) then Turbo build for workspaces with build scripts |
+| `pnpm typecheck` | Run type checks through Turbo |
+| `pnpm lint` | Run lint through Turbo for the seven code workspaces |
+| `pnpm test` | Run all Vitest tests directly with `vitest run --passWithNoTests` |
+| `pnpm test:watch` | Run Vitest in watch mode |
+| `pnpm dev:setup` | Install deps, create local env files, apply local D1 migrations, create default local admin |
+| `pnpm dev:reset` | Wipe local state, re-apply migrations, recreate default local admin |
+| `pnpm dev:admin:create` | Create default local admin if none exists |
+| `pnpm dev:admin:reset` | Reset local auth/admin credentials without wiping catalog/order data |
+| `pnpm dev:admin:status` | Check whether a local admin exists |
+| `pnpm db:generate` | Generate Drizzle migrations via the API workspace |
+| `pnpm db:migrate:local` | Apply D1 migrations to local Wrangler state |
+| `pnpm db:migrate:remote` | Apply D1 migrations to remote D1 |
 | `pnpm db:studio` | Drizzle Studio DB browser |
-| `pnpm test` | Run all tests via vitest |
-| `pnpm test:watch` | Run tests in watch mode |
-| `pnpm generate:sdk` | Regenerate API client from OpenAPI spec |
-| `pnpm deploy` | Build + migrate + deploy all workers |
+| `pnpm --filter @scalius/database check:migrations` | Verify migration SQL/journal/snapshot metadata and the manual snapshot-gap allowlist |
+| `pnpm check:env` | Verify Wrangler binding/var names match Worker `Env` declarations |
+| `pnpm generate:sdk` | Regenerate API client from the API OpenAPI spec |
+| `pnpm deploy` | Typecheck, build, migrate remote D1, deploy API + admin + storefront |
+| `pnpm deploy:api` | Typecheck, build API, migrate remote D1, deploy API |
+| `pnpm deploy:admin` | Typecheck, build admin, deploy admin |
+| `pnpm deploy:storefront` | Typecheck, build storefront, deploy storefront |
 
 ## Architecture
 
 ### Apps
 
-- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. 252 server functions, 78 query options, 126 mutation hooks, 60+ pages. Communicates with API via service binding (`env.API`).
-- **API (`apps/api/`)**: Standalone Hono worker. Owns all API routes, queue consumer, OpenAPI spec. Exports `WorkerEntrypoint` with HTTP fetch + queue handler.
-- **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer-facing store. Owns product pages, cart, checkout, search. Communicates with API via service binding (`env.BACKEND_API`). Has its own L1 (in-memory) + L2 (Cloudflare Cache API + KV versioning) caching layer. Imports `@scalius/shared` and `@scalius/api-client`.
+- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is roughly 254 exported API-wrapper server functions, 78 query option wrappers, 115 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
+- **API (`apps/api/`)**: Standalone Hono `OpenAPIHono` app mounted at `/api/v1`. Exports a `WorkerEntrypoint` with `fetch`, `queue`, and scheduled inventory-expiry cron handlers. Owns public/admin API routes, webhook ingestion, OpenAPI spec, queue consumer, and `WidgetDesignAgent` Durable Object for widget AI generation.
+- **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer storefront. Owns product, category, cart, checkout, search, customer auth proxy, SEO, sitemaps, error pages, and L1/L2 caching. Uses `env.BACKEND_API` service binding in production; intentionally skips service binding in local dev because separate Miniflare processes cannot reliably share the Fetcher.
 
-### Packages (JIT — no build step, consumed directly by bundler)
+### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI spec — typed API client and response types used by admin and storefront
-- **`@scalius/database`**: Drizzle schema (13 files, 52 tables across 10 domains), `getDb()` client factory, 33 migrations
-- **`@scalius/core`**: Domain services (`src/modules/`), Better Auth config (`src/auth/`), RBAC, integrations (email, storage, firebase, meta), FTS5 search, cache utils
-- **`@scalius/shared`**: Pure utilities (currency, cors, image-optimizer, rate-limit, etc.)
-- **`@scalius/tsconfig`**: Shared TypeScript configs (base, astro, worker)
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 252 paths / 349 operations. Has runtime dependency `@hey-api/client-fetch`. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
+- **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 38 SQL migrations (`0000` through `0037`).
+- **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
+- **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.
+- **`@scalius/tsconfig`**: Exports `base.json`, `worker.json`, and `astro.json`. Some apps use local framework configs instead of extending it directly.
+
+Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most package manifests expose `.ts` subpaths and do not have build scripts.
 
 ## Tech Stack
 
-- TanStack Start (admin) — full-stack React on Cloudflare Workers
-- Astro 6 (storefront) — SSR, Cloudflare adapter
+- TanStack Start (admin) on Cloudflare Workers
+- Astro 6 SSR (storefront) with Cloudflare adapter
 - Vite 8 + React 19
-- Hono (API framework with OpenAPI/Swagger)
-- Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search
-- Tailwind CSS v4 + shadcn/ui
+- Hono + `@hono/zod-openapi` + Swagger UI
+- Cloudflare D1 (SQLite) + Drizzle ORM + FTS5
+- Tailwind CSS v4 + shadcn/ui/Radix-style components
 - Better Auth (email/password + optional 2FA)
-- Cloudflare KV (caching), R2 (media), Queues (async processing)
-- Cloudflare Service Bindings (admin→API, storefront→API)
+- Cloudflare KV, R2, Queues, Cache API, Durable Objects, Workers AI binding
+- AI SDK providers for OpenRouter/OpenAI/Gemini/Cloudflare widget generation
+- Cloudflare Service Bindings
 - Turborepo + pnpm workspaces
 
 ## Key Conventions
 
-- **Thin HTTP layer**: `apps/api/src/routes/**` handles validation and auth, then delegates to `@scalius/core` services
-- **API routes use OpenAPIHono**: All routes in `apps/api/src/routes/` use `createRoute()` from `@hono/zod-openapi`. OpenAPI spec is auto-generated at `/api/v1/openapi.json`.
-- **Standardized API errors**: Use `ApiError` classes from `apps/api/src/utils/api-error.ts` (ValidationError, NotFoundError, etc.)
-- **Standardized API responses**: Use helpers from `apps/api/src/utils/api-response.ts` (ok, created, noContent)
-- **Response envelope contract**: ALL success responses return `{ success: true, data: T }`. The `T` passed to `ok(c, T)` must be the FINAL payload — never include redundant `success: true` or `data:` wrapping inside `T`. All consumers (admin, storefront) read `json.data` to get `T`. The admin proxy passes responses through unchanged.
-- **202 Accepted responses**: Must ALSO include `success: true` at top level (storefront checks it). Use `c.json({ success: true, data: {...} }, 202)` — not `ok()` (which forces 200).
-- **Storefront proxy endpoints** (`apps/storefront/src/pages/api/checkout/*.ts`): Must unwrap `.data` before returning to browser — the checkout page reads top-level fields.
-- **Never use `import.meta.env` for secrets**: Secrets (`API_TOKEN`, `JWT_SECRET`, `PURGE_TOKEN`) come ONLY from Cloudflare runtime (`env.*` via `wrangler secret put`). Build-time `import.meta.env` bakes `.dev.vars` values into production bundles.
-- **JIT packages**: No build step for packages — wrangler/esbuild bundles directly from TypeScript source
-- **Two env files per app**: `.dev.vars` (Cloudflare runtime bindings) and `.env.development` (Vite/Astro build-time vars)
-- **Service bindings**: Admin uses `env.API`, storefront uses `env.BACKEND_API` — both point to the API worker
-- **Port 4323**: Admin-v2 dashboard. Port 4322: Storefront. Port 8787: API worker.
-- **RBAC auto-seed**: Permissions/roles auto-seed on first admin dashboard access
-- **FTS5**: All text search uses SQLite FTS5. Helpers in `packages/core/src/search/fts5.ts`
-- **SDK types**: Both admin and storefront use `@scalius/api-client` for API types
-- **Storefront shared imports**: Storefront imports `@scalius/shared` (utilities) and `@scalius/api-client` (types). It does NOT import `@scalius/core` or `@scalius/database` directly.
+- **Thin HTTP layer is the target**: Normal `apps/api/src/routes/**` handlers validate/authenticate and delegate to `@scalius/core`. Some webhook and streaming routes still do inline DB work or dispatch because they are integration boundaries.
+- **API route pattern**: New documented JSON endpoints should use `OpenAPIHono`, `createRoute()`, and `app.openapi()`. Exceptions exist for webhooks, health/root/docs/OpenAPI, Partytown proxy, redirects, text responses, and streaming/widget-generation routes.
+- **OpenAPI timestamp schemas**: Use shared helpers from `apps/api/src/schemas/timestamps.ts` for mixed string/number/null timestamp fields. Do not hand-roll nullable timestamp unions that regenerate SDK fields as `unknown`.
+- **Standardized API errors**: Import API-facing error classes from `apps/api/src/utils/api-error.ts` (re-exported from `@scalius/core/errors`).
+- **Standardized API responses**: Use `ok(c, data)`, `created(c, data)`, and `noContent(c)` from `apps/api/src/utils/api-response.ts` for normal JSON endpoints.
+- **Response envelope contract**: Normal success JSON endpoints return `{ success: true, data: T }`. The `T` passed to `ok(c, T)` is the final payload; do not nest another `{ success, data }` inside it. Explicit exceptions: root/health/OpenAPI/docs, webhooks, proxies, redirects, text responses, and `204` no-content responses.
+- **202 Accepted responses**: Must include top-level `success: true`; use `c.json({ success: true, data: {...} }, 202)` because `ok()` forces 200.
+- **Admin API behavior**: Admin server functions in `apps/admin-v2/src/lib/api.server.ts` unwrap API envelopes and return `data` to components. The browser proxy route `apps/admin-v2/src/routes/api/v1/admin/$.ts` passes API responses through unchanged.
+- **Admin shell RBAC**: The admin shell uses permission-based RBAC, not legacy `user.role === "admin"`. `apps/admin-v2/src/lib/admin-access.ts` is the pure guard helper; only `/admin/access-denied` remains reachable for authenticated users with no admin permissions.
+- **Storefront checkout proxies**: Payment session proxy endpoints unwrap `.data` because the checkout handlers read top-level gateway fields. `apps/storefront/src/pages/api/checkout/create-order.ts` intentionally returns `{ success: true, data: { id } }`, and the browser helper accepts either enveloped or legacy top-level IDs.
+- **Payment webhook idempotency**: Stripe, SSLCommerz, and Polar webhook routes must use the durable `webhook_events` claim-before-side-effect helpers in `apps/api/src/utils/webhook-idempotency.ts` before enqueueing `PAYMENT_EVENTS_QUEUE`. Duplicates return success without enqueueing; queue failures mark the event `failed` and return retryable `503`.
+- **Payment event consumers**: Confirmed gateway events use `processPaymentConfirmed()` and gateway-ID partial unique indexes. Failed gateway events must be idempotent and must not block a later successful event for the same retryable intent. Payment cancellation inventory release goes through `applyInventoryForStatusChange(..., OrderStatus.CANCELLED)`. Polar webhook refunds must CAS-update payment and order status through refund state-machine rules before releasing pre-fulfillment inventory.
+- **Secrets and env**: Secrets (`API_TOKEN`, `JWT_SECRET`, `BETTER_AUTH_SECRET`, `PURGE_TOKEN`, `CREDENTIAL_ENCRYPTION_KEY`) come from Cloudflare runtime env/secret bindings. Never read secrets from `import.meta.env`. `pnpm dev:setup` creates `.dev.vars` for all three apps and `.env.development` only for admin/storefront build-time public values.
+- **Credential encryption**: Runtime credential reads use `getEncryptionKey()` with `CREDENTIAL_ENCRYPTION_KEY` preferred and JWT as legacy fallback. New credential writes should use `requireEncryptionKey()` when real provider secrets are submitted.
+- **Local admin credentials**: `pnpm dev:setup` and `pnpm dev:reset` create `admin@local.scalius.test` / `ScaliusLocal123!` by default through the real `/api/v1/setup` endpoint. Override with `--admin-email`, `--admin-password`, `--admin-name`, or `LOCAL_ADMIN_*` env vars. Use `pnpm dev:admin:reset` to reset only local auth/admin credentials.
+- **Service bindings**: Admin uses `env.API`; storefront uses `env.BACKEND_API`. Production uses bindings. Local dev must fall back to HTTP/Vite proxy; admin treats a localhost `PUBLIC_API_BASE_URL` as a signal to ignore the service binding even if Wrangler exposes it.
+- **API local Wrangler config**: `apps/api/package.json` uses `apps/api/wrangler.local.jsonc` for `pnpm --filter @scalius/api dev`. This local config intentionally omits the remote Workers AI binding so API/admin/storefront can boot without a Cloudflare remote proxy session. Production deploy/build still use `apps/api/wrangler.jsonc`.
+- **Ports**: Admin 4323, storefront 4322, API 8787. Wrangler inspector ports are also cleaned by `scripts/dev.sh`.
+- **RBAC auto-seed**: Permissions/roles auto-seed on first admin access via `apps/admin-v2/src/middleware/rbac.server.ts`.
+- **FTS5**: Text search uses SQLite FTS5 helpers in `packages/core/src/search/fts5.ts`.
+- **Inventory expiry**: `releaseExpiredReservations()` is for orphaned reservation movements whose order row is missing. Do not use the cron sweeper to cancel stale existing orders; existing orders must move inventory through explicit order transition logic so `orders.inventoryAction`, `productVariants`, and movement logs stay consistent.
+- **Shipment creation**: Route-facing provider shipment creation must go through `@scalius/core/modules/orders` fulfillment helpers. `packages/core/src/modules/delivery/delivery.service.ts#createShipment()` is a low-level primitive and assumes the caller has already performed the durable order claim/transition.
+- **Order ingest queue isolation**: `handleOrderIngestBatch()` may batch DB writes for throughput, but stock reservation, DB-write fallback, checkout status, ack/retry, and rollback decisions must remain per order. A rejected/acked message must not be retried because another message in the same queue batch failed.
+- **Order creation queue handoff**: Storefront order creation must write checkout polling and receipt-token KV before sending to `ORDER_INGEST_QUEUE`. If queue send fails after KV creation, rewrite checkout status to terminal `failed` so storefront polling does not hang.
+- **Delivery webhook/status semantics**: Pathao and Steadfast webhooks must claim durable `webhook_events` before shipment/order side effects. Delivery event identities must include enough provider event/status/update data to allow later status changes for the same shipment; Steadfast delivery-status identities include the raw status. Any status emitted by `packages/core/src/modules/delivery/status-mapper.ts` should either be handled explicitly in `updateOrderStatusFromShipment()` or documented as shipment-only. `shipped -> confirmed` is allowed only for failed carrier delivery retry semantics.
+- **Generated files**: Do not edit `apps/admin-v2/src/routeTree.gen.ts` or generated API client files by hand.
+- **Database migration metadata**: `packages/database/scripts/check-migration-metadata.mjs` enforces SQL/journal/snapshot consistency and documents the allowed manual migrations without snapshots. Update the allowlist only when intentionally adding a manual migration without a Drizzle snapshot.
+- **Storefront import boundary**: Storefront may import `@scalius/shared` and `@scalius/api-client`; do not add `@scalius/core` or `@scalius/database` imports there without an architecture decision.
+- **Storefront build ID**: `apps/storefront/src/config/build-id.ts` is generated and git-ignored. `apps/storefront/scripts/generate-build-id.js` must run before storefront typecheck/build/deploy. It prefers commit SHA env vars and otherwise hashes stable source/config inputs; do not reintroduce timestamp-only build IDs.
+- **Package subpath imports**: `@scalius/database` and `@scalius/shared` do not expose useful root imports. Use subpaths such as `@scalius/database/client`, `@scalius/database/schema`, and `@scalius/shared/utils`.
+- **Cloudflare bindings/types**: Wrangler configs are the source of truth for Worker bindings and vars. Keep each app's `env.d.ts`/`hono-env.d.ts` in sync and run `pnpm check:env` after binding/var changes. The check also guards allowed secret-only Env names; update its allowlist only when code really reads a runtime secret or dashboard-only override.
+
+## Admin App Notes
+
+- Local auth routes under `apps/admin-v2/src/routes/api/auth/$.ts` are handled by the admin worker, not the API worker.
+- `@/` and `~/` both alias to `apps/admin-v2/src`.
+- Most data access flows through `api.functions.ts`, `api.queries.ts`, and `api.mutations.ts`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
+- URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
+- `api.functions.ts` currently has `@ts-nocheck` due a TanStack Start handler typing issue. Treat it as a known limitation, not an invitation to weaken adjacent files.
+
+## Storefront Notes
+
+- Runtime Cloudflare env is made request-scoped via `apiContext`/AsyncLocalStorage in `apps/storefront/src/middleware.ts`; API base URL resolution is lazy in `apps/storefront/src/lib/api/client.ts`. Browser API calls require configured `PUBLIC_API_URL`/injected `window.__API_BASE_URL__`; the storefront intentionally does not fall back to a fake same-origin `/api/v1` proxy.
+- Same-origin customer auth must go through `apps/storefront/src/pages/api/customer-auth/[...path].ts` so `Set-Cookie` works on the storefront domain. Logout clears host-only cookies in `apps/storefront/src/pages/api/auth/logout.ts`.
+- HTML caching is allowlisted in middleware. Cart, checkout, account, health, API routes, private sessions, and payment-sensitive flows must bypass cache.
+- `/api/purge-cache` rejects purge credentials in query strings; send `Authorization: Bearer ...` or the configured purge-token header. Full purges bump the KV cache version and clear L1. Selective prefix purges also bump the KV cache version so L2 Cache API keys move, but only HTML-affecting purges warm critical pages.
+- Public CMS page visibility is centralized in `packages/core/src/modules/pages/pages.service.ts`; public routes and page sitemaps must enforce `isPublished`, not deleted, and `publishedAt` null or not in the future.
+- Cart supports COD server POST and multi-gateway sessionStorage redirect to `/checkout`; checkout gateway handlers live in `apps/storefront/src/lib/checkout/`. Redirect gateways must preserve cart/session state until the protected `/order-success` page loads, unless the handler explicitly marks the redirect as a completed-order path.
+- Cart saved-location prefill goes through `LocationSelector`'s `location-prefill` event API. Do not drive nonexistent native `select[name="city"]`/`select[name="zone"]` elements.
+- `/order-success` requires both `orderId` and a receipt `token`; public receipt rendering must use `GET /api/v1/orders/receipt/{id}?token=...` and a minimal receipt DTO, never the full order-by-ID response.
+- Storefront order payloads use `CreateOrderPayload = OrderPostRequest` from the generated SDK. Do not reintroduce a hand-maintained local order request interface, and do not call the removed `/discounts/usage` endpoint from the storefront.
+
+## Widget AI / Agents
+
+- Widget AI provider settings live under `packages/core/src/modules/ai/` and API routes under `apps/api/src/routes/admin/settings/ai.ts`, `ai.ts`, `ai-models.ts`, `ai-prompts.ts`, and `ai-context.ts`.
+- Long-running/staged widget generation uses `apps/api/src/agents/widget-design-agent.ts` (`WidgetDesignAgent` Durable Object) and `apps/api/src/routes/admin/widget-generation-runs.ts`.
+- Admin UI pieces live under `apps/admin-v2/src/components/admin/widgets/widget-form/` and use streaming helpers such as `widget-generation-run-stream.ts`.
+- AI provider credentials are encrypted; API credential reads prefer `CREDENTIAL_ENCRYPTION_KEY`, with JWT kept only as a legacy fallback for already-encrypted values.
 
 ## Settings Storage Patterns
 
-- **`siteSettings` table**: Singleton row for site-wide typed config (guestCheckoutEnabled, checkoutMode, headerConfig JSON, footerConfig JSON, storefrontUrl, SEO fields). Use for always-present, typed boolean/string fields.
-- **`settings` table**: Key-value store with `category` + `key` + `value` columns for extensible config (payment gateways, currency, email, Firebase, OpenRouter, fraud checker, theme, phone). Use for optional, category-grouped, provider-specific config.
+- **`siteSettings` table**: Singleton row for always-present typed config such as guest checkout, checkout mode, header/footer config JSON, storefront URL, and SEO fields.
+- **`settings` table**: Category/key/value store for optional/provider-specific config such as payment gateways, currency, email, Firebase, OpenRouter/widget AI, fraud checker, theme, phone, SMS, notification channels, and business info.
 
 ## How-To Recipes
 
 ### Add a New Field to an Entity
-1. Schema: `packages/database/src/schema/{domain}.ts` — add column
-2. Migration: `pnpm db:generate` to create SQL migration
-3. Validation: `packages/core/src/modules/{domain}/{domain}.validation.ts` — add to Zod schema
-4. Service: `packages/core/src/modules/{domain}/{domain}.admin.ts` — add to select/insert/update
-5. API route: `apps/api/src/routes/admin/{domain}.ts` — usually no change (passes validated data through)
-6. Admin form: `apps/admin-v2/src/components/admin/{domain}-form/` — add to form schema
-7. Admin component: Add input field in the appropriate section component
-8. Storefront (if displayed): `packages/core/src/modules/{domain}/{domain}.storefront.ts` — add to select
+
+1. Schema: `packages/database/src/schema/{domain}.ts` — add column.
+2. Migration: `pnpm db:generate`.
+3. Validation: `packages/core/src/modules/{domain}/{domain}.validation.ts` — update Zod schemas.
+4. Service: `packages/core/src/modules/{domain}/{domain}.admin.ts` or equivalent service — update selects/inserts/updates.
+5. API route: usually no change if it already passes validated service data through; otherwise update route schemas.
+6. Admin form schema/component: update the relevant form files in `apps/admin-v2/src/components/admin/`.
+7. Storefront display: update storefront-facing core service/API client/storefront UI as needed.
+8. SDK: run `pnpm generate:sdk` if the OpenAPI surface changed.
 
 ### Add a New Payment Gateway
-See `packages/core/src/modules/payments/README.md` for provider details, key patterns, and API endpoints.
+
+See `packages/core/src/modules/payments/README.md`. Current payment reality is mixed: legacy payment modules/gateway registry are active, and the universal provider registry has a Stripe adapter. Coordinate storage, admin settings, webhook routes, queue events, SDK regeneration, and tests.
 
 ### Add a Notification Type
-1. Template: `packages/core/src/modules/notifications/notifications.service.ts` — add case to `sendOrderNotificationEmail()`
-2. Queue: The queue consumer at `apps/api/src/queue-consumer.ts` already dispatches generically by `order.notification` type
-3. Trigger: In the API route that changes status, enqueue `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
+
+1. Add the key and label to `packages/core/src/modules/notifications/notification-types.ts`.
+2. Add template/channel handling in `packages/core/src/modules/notifications/notifications.service.ts`.
+3. Confirm defaults and validation in `packages/core/src/modules/settings/settings.service.ts` still merge the new type.
+4. Queue message typing in `apps/api/src/queue-consumer.ts` should pick it up through `OrderNotificationType`.
+5. Trigger by enqueueing `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE` from the route/service that owns the state transition.
+6. Update admin notification settings UI only if the shared labels/ordering are not sufficient.
 
 ### Add a New Admin Settings Tab
-1. Component: Create `apps/admin-v2/src/components/admin/settings/MySettingsBuilder.tsx`
-2. Route: Add a new settings sub-route in `apps/admin-v2/src/routes/admin/settings/`
-3. API route: Create or extend a route in `apps/api/src/routes/admin/settings/`
-4. Storage: Use `siteSettings` for typed fields, `settings` table for KV config (see Settings Storage Patterns above)
+
+1. Component: create `apps/admin-v2/src/components/admin/settings/MySettingsBuilder.tsx`.
+2. Route: add sub-route under `apps/admin-v2/src/routes/admin/settings/`.
+3. API: create or extend `apps/api/src/routes/admin/settings/*`.
+4. Storage: use `siteSettings` for typed singleton fields and `settings` for provider/category config.
+5. Add query/mutation wrappers and invalidate the right query keys.
 
 ## Queue Bindings
 
 | Queue | Binding | Message Types | Handler |
 |-------|---------|---------------|---------|
-| `ORDER_INGEST_QUEUE` | Cloudflare Queue | `order.ingest` | `handleOrderIngestBatch()` in `orders.queue.ts` |
-| `PAYMENT_EVENTS_QUEUE` | Cloudflare Queue | `payment.stripe.confirmed/failed/canceled/refunded`, `payment.sslcommerz.confirmed/failed`, `payment.polar.confirmed/failed/refunded` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()` in `process-payment.ts` |
-| `ORDER_NOTIFICATIONS_QUEUE` | Cloudflare Queue | `order.notification`, `auth.send_otp` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) in `notifications.service.ts` |
+| `order-ingest` | `ORDER_INGEST_QUEUE` | `order.ingest` | `handleOrderIngestBatch()` in `packages/core/src/modules/orders/orders.queue.ts` |
+| `payment-events` | `PAYMENT_EVENTS_QUEUE` | `payment.stripe.confirmed/failed/canceled/refunded`, `payment.sslcommerz.confirmed/failed`, `payment.polar.confirmed/failed/refunded` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()`, `processPolarWebhookRefund()` |
+| `order-notifications` | `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | `sendOrderNotificationEmail()` and `sendOrderNotification()` in `notifications.service.ts` |
+| `auth-otp` | `AUTH_OTP_QUEUE` | `auth.send_otp` | inline OTP branch in `apps/api/src/queue-consumer.ts` (email, WhatsApp, configured SMS provider) |
 
-All queues are consumed by `apps/api/src/queue-consumer.ts`.
+All queues are consumed by `apps/api/src/queue-consumer.ts`. `ORDER_INGEST_QUEUE` uses a batch strategy; other queues process messages independently with ack/retry.
 
 ## Import Conventions
 
 ```typescript
-// From admin/api apps, import packages like:
+// Admin/API package imports
 import { getDb } from "@scalius/database/client";
 import { products } from "@scalius/database/schema";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
@@ -137,15 +203,17 @@ import { createAuth } from "@scalius/core/auth";
 import { ftsMatch } from "@scalius/core/search";
 import { cn } from "@scalius/shared/utils";
 
-// Import SDK types:
+// SDK types and generated methods
 import type { Product, Category } from "@scalius/api-client/types";
+import { getApiV1Products } from "@scalius/api-client/sdk";
+import { createClient, createConfig } from "@scalius/api-client/factory";
 
-// Import SDK client:
-import { client } from "@scalius/api-client";
-
-// Within apps, use @/ alias for local files:
-import { SomeComponent } from "@/components/SomeComponent";
+// Local app aliases
+import { SomeAdminComponent } from "@/components/SomeAdminComponent";
+import { queryKeys } from "~/lib/query-keys";
 ```
+
+Storefront should use its configured SDK clients from `apps/storefront/src/lib/api/client.ts`, not the default generated singleton client, when requests need storefront runtime env, retry behavior, auth, or service-binding transport.
 
 ## Key URLs (Local Dev)
 
@@ -159,40 +227,50 @@ import { SomeComponent } from "@/components/SomeComponent";
 
 - API Worker entry: `apps/api/src/worker.ts`
 - Hono app entry: `apps/api/src/app.ts`
-- API Response Helpers: `apps/api/src/utils/api-response.ts`
-- API Error Classes: `apps/api/src/utils/api-error.ts`
+- API queue consumer: `apps/api/src/queue-consumer.ts`
+- API response helpers: `apps/api/src/utils/api-response.ts`
+- API error classes: `apps/api/src/utils/api-error.ts`
+- Widget Design Agent: `apps/api/src/agents/widget-design-agent.ts`
 - Admin Vite config: `apps/admin-v2/vite.config.ts`
-- Admin Router: `apps/admin-v2/src/router.tsx`
-- Admin Server Functions: `apps/admin-v2/src/lib/api.functions.ts`
-- Admin Query Options: `apps/admin-v2/src/lib/api.queries.ts`
-- Admin Mutations: `apps/admin-v2/src/lib/api.mutations.ts`
+- Admin router: `apps/admin-v2/src/router.tsx`
+- Admin generated route tree: `apps/admin-v2/src/routeTree.gen.ts`
+- Admin server functions: `apps/admin-v2/src/lib/api.functions.ts`
+- Admin API server helper: `apps/admin-v2/src/lib/api.server.ts`
+- Admin query options: `apps/admin-v2/src/lib/api.queries.ts`
+- Admin mutations: `apps/admin-v2/src/lib/api.mutations.ts`
+- Admin auth server helpers: `apps/admin-v2/src/lib/auth.server.ts`
+- Admin auth functions: `apps/admin-v2/src/lib/auth.fns.ts`
+- Admin RBAC: `apps/admin-v2/src/middleware/rbac.server.ts`
 - Storefront Astro config: `apps/storefront/astro.config.mjs`
+- Storefront middleware/cache context: `apps/storefront/src/middleware.ts`
+- Storefront API client: `apps/storefront/src/lib/api/client.ts`
+- Storefront edge cache: `apps/storefront/src/lib/edge-cache.ts`
+- Storefront customer auth proxy: `apps/storefront/src/pages/api/customer-auth/[...path].ts`
+- Storefront purge endpoint: `apps/storefront/src/pages/api/purge-cache.ts`
 - API Wrangler config: `apps/api/wrangler.jsonc`
+- API local Wrangler config: `apps/api/wrangler.local.jsonc`
 - Admin Wrangler config: `apps/admin-v2/wrangler.jsonc`
 - Storefront Wrangler config: `apps/storefront/wrangler.jsonc`
 - Drizzle config: `packages/database/drizzle.config.ts`
-- Admin Auth: `apps/admin-v2/src/lib/auth.server.ts`
-- Admin RBAC: `apps/admin-v2/src/middleware/rbac.server.ts`
-- Storefront Middleware: `apps/storefront/src/middleware.ts`
 - Auth config: `packages/core/src/auth/auth.ts`
 - Auth client: `apps/admin-v2/src/lib/auth-client.ts`
-- Storefront API client: `apps/storefront/src/lib/api/client.ts`
-- SDK Package: `packages/api-client/`
-- SDK Generated Types: `packages/api-client/src/generated/types.gen.ts`
-- Customer Auth Service: `packages/core/src/modules/customers/customer-auth.service.ts`
-- DB Schema: `packages/database/src/schema/`
+- SDK package: `packages/api-client/`
+- OpenAPI source artifact: `packages/api-client/openapi.json`
+- SDK generated types: `packages/api-client/src/generated/types.gen.ts`
+- Customer auth service: `packages/core/src/modules/customers/customer-auth.service.ts`
+- DB schema: `packages/database/src/schema/`
 - Migrations: `packages/database/migrations/`
 
 ## Dependency Graph
 
 ```
-@scalius/shared          → (no deps)
+@scalius/shared          → external utility deps only
 @scalius/database        → drizzle-orm
 @scalius/core            → @scalius/database, @scalius/shared, better-auth, zod, stripe, etc.
-@scalius/api-client      → (generated, no runtime deps)
+@scalius/api-client      → @hey-api/client-fetch (generated SDK)
 @scalius/api             → @scalius/core, @scalius/database, @scalius/shared, hono
-@scalius/admin-v2        → @scalius/core, @scalius/database, @scalius/shared, @scalius/api-client, tanstack-start, react
-@scalius/storefront      → @scalius/shared, @scalius/api-client, astro, react
+@scalius/admin-v2        → @scalius/core, @scalius/database, @scalius/shared, @scalius/api-client, TanStack Start, React
+@scalius/storefront      → @scalius/shared, @scalius/api-client, Astro, React
 ```
 
 ## Production Domains
@@ -201,60 +279,60 @@ import { SomeComponent } from "@/components/SomeComponent";
 dashboard.scalius.com  → scalius-admin-v2 (Admin Worker)
 api.scalius.com        → scalius-api (API Worker)
 storefront.scalius.com → scalius-storefront (Storefront Worker)
-cloud.scalius.com      → R2 bucket (CDN + Image Resizing)
+cloud.scalius.com      → scalius-media R2 bucket/CDN/Image Resizing
 ```
+
+These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-domain/route attachments are managed in Cloudflare and are not declared in this repo.
 
 ## Dev Server Notes
 
-- Dev commands (`pnpm dev`, `pnpm dev:admin`, `pnpm dev:storefront`) use `scripts/dev.sh` wrapper
-- The wrapper auto-kills stale processes from previous runs on startup
-- Apps start with staggered delays to prevent Vite inspector port conflicts
-- If ports are stuck: `lsof -ti :8787,:4322,:4323 | xargs kill -9`
+- Dev commands use `scripts/dev.sh`.
+- The wrapper applies pending local D1 migrations before starting API unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
+- The wrapper kills stale processes on app ports `8787`, `4322`, `4323`, and inspector ports `9229-9233`.
+- Full `pnpm dev` starts API, admin, then storefront with staggered delays to avoid inspector port conflicts.
+- Filtered `dev:admin` and `dev:storefront` also start API first with a short delay; other filtered dev commands hand off to Turbo.
+- `scripts/dev.sh` only kills processes on Scalius dev ports by default. Set `SCALIUS_DEV_KILL_ALL_WORKERD=1` for the old all-`workerd` cleanup behavior.
+- Set `SCALIUS_WRANGLER_STATE=/tmp/some-path` to run setup/reset/dev against a disposable local Wrangler state directory.
+- If ports are stuck: `lsof -tiTCP:8787 -iTCP:4322 -iTCP:4323 -iTCP:9229 -iTCP:9230 -iTCP:9231 -iTCP:9232 -iTCP:9233 -sTCP:LISTEN | xargs kill -9`, then kill lingering `workerd` if needed.
 
-## Recent Changes
+## Current Highlights
 
-- **Monorepo Migration** (March 14): Refactored from monolith to Turborepo with 3 apps + 5 packages
-- **Codebase Hardening** (March 16): 33 commits. Full spec at `docs/superpowers/specs/2026-03-16-codebase-hardening-design.md`
-- **Admin Refactoring** (March 16-18): Component splitting, proxy simplification, Vite proxy root cause fix
-- **Multi-Session Audit + Fix** (March 20): 25-agent audit + 8-agent fix team, ~130 fixes across entire codebase
-- **SDK Generation** (March 20): Generated SDK from OpenAPI spec (245 paths, 27k+ types), integrated into admin + storefront
-- **Comprehensive Audit + Fix** (March 22): 10-agent audit + fix team. CAS on all status-change paths, 9 notification types, SMS channel dispatch, business/invoice settings, Bengali FTS5
-- **Payments**: atomic `processPaymentConfirmed()` via `db.batch()`, COD idempotency, refund amount validation, SSLCommerz redirect validation, payment idempotency indexes (migration 0030), refund now updates `orders.status` to REFUNDED/PARTIALLY_REFUNDED via state machine
-- **Orders**: queue batch orderId bug fixed, CANCELLED allows admin reactivation, order routes split into 3 files (orders.ts, orders-refund.ts, orders-status.ts), CAS on `processCodAction()` and `bulkShipOrders()`, notification enqueue on all 9 status changes
-- **Inventory**: `stockVersion` column for stock-specific CAS, inventory transitions module, restore logic, CAS correctly ordered (version bump before inventory) in all paths including tracking.ts
-- **Delivery**: KV-based webhook replay protection (Pathao/Steadfast), insert-first shipment creation, AES-GCM credential encryption, CAS in `updateOrderStatusFromShipment()` (admin changes take priority)
-- **Customers**: phone normalization (E.164 format), OTP logging removed, SMS OTP delivery via 4 providers
-- **Notifications**: 9 notification types (added order_completed, order_returned, order_refunded), SMS channel dispatch via 4 providers (smsnetbd, bdbulksms, mimsms, gennet), per-status channel independence
-- **Settings**: business info settings (company name, TIN, logo, address), invoice prefix/counter, SMS provider settings, admin notification channels
-- **API Standardization**: ALL routes use `ok()`/`created()`/`ApiError`, `CACHE_TTLS` constants, centralized entity schemas (`apps/api/src/schemas/entities.ts`)
-- **Schema**: 33 migrations (0000-0032), 52 tables across 13 schema files, timestamp defaults standardized, FK indexes added, singleton constraints, Bengali FTS5 tokenizer (migration 0031)
-- **Admin**: unified PaymentGatewaysManager, NotificationChannelsBuilder, media manager rewrite, error pages (404/500)
-- **Storefront**: L1+L2 caching layer, response unwrapping utilities, error pages (404/500), SEO (JSON-LD, OG tags, canonical URLs)
-- **Shared Utilities**: css-scope, html-escape, html-sanitize, status-badges (all 11 statuses), timestamps modules added
+- Monorepo migration is complete: three Workers apps plus five shared packages.
+- API standardization is mostly in place: normal routes use `ok()`/`created()`/`ApiError`; edge routes have documented exceptions.
+- Schema is at 38 migrations with 53 table declarations.
+- SDK generation is integrated into admin/storefront and should be regenerated after API surface changes.
+- Payments include durable webhook idempotency, gateway-payment CAS/atomic updates, refund validation, COD handling, SSLCommerz redirect validation, and Polar refund webhook processing.
+- Orders use status state-machine validation, CAS on status/fulfillment paths, queue ingest, and notification enqueueing for status transitions.
+- Inventory uses `stockVersion`, reservations, restore/release logic, and a scheduled expiry sweep every 15 minutes.
+- Delivery uses legacy provider/factory implementations, durable webhook replay protection keyed by provider event identity, encrypted credentials, shipment status CAS, and direct notification enqueueing in active webhook/admin paths.
+- Customer auth uses normalized phone numbers, OTP queues, same-origin storefront cookie proxying, and SMS/email/WhatsApp delivery paths.
+- Storefront uses L1 in-memory + L2 Cache API caching keyed by KV version plus deterministic generated build ID, plus purge-cache warming.
+- Admin widget AI supports provider/model settings, AI context, streaming/staged generation, and a Durable Object agent.
 
-## Known Backlog
+## Known Backlog / Limitations
 
-- **`publishedAt` field unused**: Pages store `publishedAt` but it's never used for scheduled publishing.
-- **Dual provider systems**: Universal provider registry exists (email + payment + SMS migrated) but delivery has type definitions with zero registered implementations in the new system. Legacy interfaces still in use.
-- **In-memory state**: Rate limiter and layout cache use in-memory Maps (reset on Worker isolate restart). Acceptable for single-tenant but needs KV migration for scale.
-- **Delivery webhook notifications**: `notifyShipmentStatusChange()` in tracking.ts is a placeholder (logs only). Should enqueue to ORDER_NOTIFICATIONS_QUEUE.
-- **Bulk ship notifications**: `bulkShipOrders()` does not enqueue "order_shipped" notifications.
-
-## Known Limitations / TODO
-
-- **Scanner app**: standalone `/scanner` route exists with QR-token auth — needs testing and polish
-- **Type safety**: ~30 `any` type usages remain across the admin app (mostly Cloudflare env probing, debounce utils, and window globals)
-- **Test coverage**: 9 test files in `tests/` (payments, inventory, orders, discounts, response envelope)
-- **Widget history**: API endpoints exist (GET/POST/DELETE `/admin/widgets/{id}/history/*`) — needs UI testing
+- **Mixed provider systems**: Universal provider registry currently has Stripe payment + Resend email adapters. SMS still uses the legacy integrations registry with smsnetbd, bdbulksms, mimsms, and gennet. Delivery uses legacy factory/provider files; universal delivery provider exports are type-only.
+- **In-memory state**: Storefront L1 caches and shared layout cache are in-memory and reset on Worker isolate restart. Shared rate limiting is KV-based now.
+- **Delivery notification helper**: `notifyShipmentStatusChange()` in `packages/core/src/modules/delivery/tracking.ts` is still a log-only placeholder. Active Pathao/Steadfast/admin shipment paths enqueue notifications directly.
+- **Scanner app**: Standalone `/scanner` route exists with QR-token auth; still needs focused testing/polish.
+- **Type safety**: Admin still has notable `any` usage and `api.functions.ts` has a targeted `@ts-nocheck`. Improve locally when touching relevant code, but do not broad-refactor casually.
+- **Test coverage**: There are dozens of Vitest files across apps/packages, not a comprehensive suite. Add focused tests for risky service, queue, payment, inventory, response-envelope, AI, or storefront cache changes.
+- **Generated docs drift**: `packages/api-client/README.md` may lag generated SDK counts; trust `packages/api-client/openapi.json` and generated files over prose.
 
 ## Agent Team Guidelines
 
 When working as part of an agent team on this codebase:
 
-- **Avoid file conflicts**: coordinate so each teammate owns different files/modules
-- **Domain boundaries**: `packages/core/src/modules/` is organized by domain — each teammate should own a complete domain when possible
-- **Test changes**: run `pnpm typecheck` (NOT just `pnpm build` — esbuild strips types without checking them)
-- **Don't touch env files**: `.dev.vars` and `.env.development` contain secrets
-- **Schema changes need migrations**: after modifying `packages/database/src/schema/`, run `pnpm db:generate`
-- **Package changes**: when adding imports from a new package, ensure it's listed in the consuming workspace's `package.json`
-- **Storefront shared imports only**: storefront imports `@scalius/shared` and `@scalius/api-client` — don't add `@scalius/core` or `@scalius/database` imports without coordinating
+- **Avoid file conflicts**: coordinate so each teammate owns different files/modules.
+- **Domain boundaries**: `packages/core/src/modules/` is organized by domain; each teammate should own a complete domain when possible.
+- **Run type checks**: use `pnpm typecheck` for meaningful validation. `pnpm build` bundles Workers/apps and can miss type errors that `tsc`/`astro check` catch.
+- **Run lint honestly**: root `pnpm lint` intentionally filters out `@scalius/tsconfig` and runs real `lint` scripts for API, admin, storefront, api-client, core, database, and shared.
+- **Run focused tests**: use `pnpm test` or direct Vitest filters for touched areas.
+- **Do not touch env files**: `.dev.vars` and `.env.development` can contain secrets.
+- **Schema changes need migrations**: after modifying `packages/database/src/schema/`, run `pnpm db:generate`.
+- **API surface changes need SDK regeneration**: after changing OpenAPI route schemas, run `pnpm generate:sdk`.
+- **Package changes need manifests**: when adding imports from a new package, update the consuming workspace `package.json`.
+- **Storefront shared imports only**: do not add `@scalius/core` or `@scalius/database` imports to storefront without coordination.
+- **Generated files are off-limits**: do not hand-edit `routeTree.gen.ts` or `packages/api-client/src/generated/**`.
+- **Cloudflare bindings must stay synchronized**: update Wrangler config and Env declarations together.
+- **Deploy shortcuts stay safety-gated**: root `deploy:*` shortcuts route through `scripts/deploy.mjs --only ...`; keep typecheck and required migration gates when changing deploy scripts.

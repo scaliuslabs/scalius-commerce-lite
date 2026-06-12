@@ -3,7 +3,11 @@
 // Designed to be called from a queue consumer or cron trigger.
 
 import { eq, and, sql, lt } from "drizzle-orm";
-import { inventoryMovements, productVariants } from "@scalius/database/schema";
+import {
+  inventoryMovements,
+  orders,
+  productVariants,
+} from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
 
@@ -21,15 +25,31 @@ export interface ExpiryResult {
   errors: string[];
 }
 
+async function reservationOrderExists(
+  db: Database,
+  orderId: string
+): Promise<boolean> {
+  const order = await db
+    .select({
+      id: orders.id,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .get();
+
+  return Boolean(order);
+}
+
 /**
- * Find and release expired stock reservations.
+ * Find and release orphaned expired stock reservations.
  *
  * A reservation is "expired" when:
  *   1. It is an inventory_movement of type "reserved" (or "preorder_reserved")
  *   2. It was created more than `maxAgeMinutes` ago
- *   3. There is no corresponding "deducted" movement for the same order
+ *   3. It is orphaned from its order row
+ *   4. There is no corresponding "deducted" movement for the same order
  *      (meaning payment was never confirmed)
- *   4. There is no corresponding "released" movement for the same order
+ *   5. There is no corresponding "released" movement for the same order
  *      (meaning it hasn't already been released)
  *
  * For each expired reservation, this function:
@@ -61,8 +81,8 @@ export async function releaseExpiredReservations(
   const cutoffSeconds = Math.floor(Date.now() / 1000) - maxAgeMinutes * 60;
 
   // Find expired reservations: "reserved" movements older than cutoff
-  // that do NOT have a corresponding "deducted" or "released" movement
-  // for the same order.
+  // whose order row no longer exists, and do NOT have a corresponding
+  // "deducted" or "released" movement for the same order.
   //
   // We use a subquery approach since D1/SQLite supports it well.
   // Group by (variantId, orderId) to handle cases where multiple
@@ -79,6 +99,14 @@ export async function releaseExpiredReservations(
         sql`${inventoryMovements.type} IN ('reserved', 'preorder_reserved')`,
         lt(inventoryMovements.createdAt, new Date(cutoffSeconds * 1000)),
         sql`${inventoryMovements.orderId} IS NOT NULL`,
+        // Active/live orders may remain reserved for longer than the checkout
+        // timeout. Order cancellation must go through order transition logic;
+        // this sweeper only cleans up inventory movements whose order row was
+        // never committed or has otherwise disappeared.
+        sql`NOT EXISTS (
+          SELECT 1 FROM orders AS o
+          WHERE o.id = ${inventoryMovements}.order_id
+        )`,
         // No corresponding deduction for this order
         sql`NOT EXISTS (
           SELECT 1 FROM inventory_movements AS im2
@@ -109,9 +137,11 @@ export async function releaseExpiredReservations(
   for (const reservation of expiredReservations) {
     const { variantId, orderId, totalQuantity } = reservation;
 
-    if (!variantId || totalQuantity <= 0) continue;
+    if (!variantId || !orderId || totalQuantity <= 0) continue;
 
     try {
+      if (await reservationOrderExists(db, orderId)) continue;
+
       // Read current variant state for the movement log
       const variant = await db
         .select({

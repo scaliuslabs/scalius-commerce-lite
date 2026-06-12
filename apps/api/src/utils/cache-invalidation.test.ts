@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CATALOG_CACHE_GROUPS,
+  INVALIDATION_GROUPS,
   WIDGET_CACHE_GROUPS,
   getGroupsForPath,
   getStorefrontPrefixesForGroups,
@@ -134,6 +135,39 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(body.prefixes).toEqual(
       expect.arrayContaining(["page_render_", "widgets_scope_", "collection_by_id_"]),
     );
+  });
+
+  it("invalidates public checkout config KV cache with the checkout group", () => {
+    const checkoutGroup = INVALIDATION_GROUPS.checkout;
+    expect(checkoutGroup).toBeDefined();
+    expect(checkoutGroup!.kvPrefixes).toEqual(
+      expect.arrayContaining(["api:checkout:config:"]),
+    );
+  });
+
+  it("sends checkout prefixes without marking the purge as HTML-affecting", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await purgeStorefrontForGroups(["checkout"], {
+      PURGE_URL: "https://storefront.example.com/api/purge-cache",
+      PURGE_TOKEN: "secret-token",
+    } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">);
+
+    expect(result).toEqual({ attempted: true, ok: true, status: 200 });
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      groups: ["checkout"],
+      prefixes: [
+        "global_shipping_cities",
+        "shipping_zones_",
+        "shipping_areas_",
+        "global_shipping_methods",
+        "checkout_config",
+        "global_checkout_language",
+      ],
+      bumpVersion: false,
+    });
   });
 
   it("does not purge when config or valid groups are missing", () => {

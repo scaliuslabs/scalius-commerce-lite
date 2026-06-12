@@ -3,6 +3,7 @@ import { parseTagBasedResponse, validateParsedWidget } from '@scalius/shared/tag
 import {
   evaluateWidgetRenderability,
   hasLikelyTruncatedCss,
+  normalizeWidgetParts,
   stripWidgetRuntimeMarkup,
 } from '@scalius/shared/widget-rendering';
 
@@ -59,6 +60,20 @@ function assertRenderableWidgetContent(widget: GeneratedWidgetContent): void {
   }
 }
 
+function normalizeParsedWidgetContent(widget: GeneratedWidgetContent): GeneratedWidgetContent {
+  const parts = normalizeWidgetParts({
+    htmlContent: widget.html,
+    cssContent: widget.css,
+    jsContent: widget.js,
+  });
+
+  return {
+    html: parts.html,
+    css: parts.css,
+    js: parts.js,
+  };
+}
+
 export function parseGeneratedWidgetContent(content: string): GeneratedWidgetContent {
   const tagResult = parseTagBasedResponse(content);
 
@@ -69,11 +84,11 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
     }
 
     assertUsableCss(tagResult.data.css || '');
-    const widget = {
+    const widget = normalizeParsedWidgetContent({
       html: tagResult.data.html,
       css: tagResult.data.css || '',
       js: tagResult.data.js || '',
-    };
+    });
     assertRenderableWidgetContent(widget);
     return widget;
   }
@@ -102,11 +117,11 @@ export function parseGeneratedWidgetContent(content: string): GeneratedWidgetCon
   const css = widgetData.css || widgetData.cssContent || '';
   const js = widgetData.js || widgetData.javascript || widgetData.jsContent || '';
   assertUsableCss(css);
-  const widget = {
+  const widget = normalizeParsedWidgetContent({
     html,
     css,
     js,
-  };
+  });
   assertRenderableWidgetContent(widget);
   return widget;
 }

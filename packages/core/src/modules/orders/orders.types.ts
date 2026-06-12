@@ -1,6 +1,8 @@
 // src/modules/orders/orders.types.ts
 // Shared TypeScript interfaces for the orders module.
 
+import type { OrderNotificationType } from "../notifications/notification-types";
+
 // ─────────────────────────────────────────
 // Admin types
 // ─────────────────────────────────────────
@@ -159,7 +161,7 @@ export interface StatusUpdateResult {
         orderId: string;
         customerEmail?: string;
         customerName: string;
-        notificationType: string;
+        notificationType: OrderNotificationType;
         trackingId?: string;
     };
 }

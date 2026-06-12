@@ -55,10 +55,15 @@ vi.mock("./utils/encryption-key", () => ({
 }));
 
 import { handleQueueBatch, type PaymentQueueMessage } from "./queue-consumer";
+import type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 
-function createMessage(body: PaymentQueueMessage): Message<PaymentQueueMessage> {
+function createMessage(body: PaymentQueueMessage): Message<PaymentQueueMessage>;
+function createMessage(body: OrderIngestQueueMessage): Message<OrderIngestQueueMessage>;
+function createMessage<T>(body: T): Message<T>;
+function createMessage<T>(body: T): Message<T> {
+  const record = body as Record<string, unknown>;
   return {
-    id: `msg-${body.type}-${body.orderId}`,
+    id: `msg-${String(record.type)}-${String(record.orderId ?? "no-order")}`,
     timestamp: new Date("2026-01-01T00:00:00Z"),
     body,
     attempts: 1,
@@ -67,9 +72,12 @@ function createMessage(body: PaymentQueueMessage): Message<PaymentQueueMessage> 
   };
 }
 
-function createBatch(messages: Array<Message<PaymentQueueMessage>>): MessageBatch<PaymentQueueMessage> {
+function createBatch<T>(
+  messages: Array<Message<T>>,
+  queue = "payment-events-queue",
+): MessageBatch<T> {
   return {
-    queue: "payment-events-queue",
+    queue,
     messages,
     metadata: {
       metrics: {
@@ -81,6 +89,43 @@ function createBatch(messages: Array<Message<PaymentQueueMessage>>): MessageBatc
     ackAll: vi.fn(),
     retryAll: vi.fn(),
   };
+}
+
+function createOrderMessage(orderId: string): Message<OrderIngestQueueMessage> {
+  const body: OrderIngestQueueMessage = {
+    type: "order.ingest",
+    checkoutToken: `chk_${orderId}`,
+    existingCustomer: null,
+    orderData: {
+      id: orderId,
+      customerName: "Queue Customer",
+      customerPhone: "01700000000",
+      customerEmail: null,
+      shippingAddress: "123 Queue Street",
+      city: "city_1",
+      zone: "zone_1",
+      area: null,
+      cityName: "City",
+      zoneName: "Zone",
+      areaName: null,
+      notes: null,
+      totalAmount: 100,
+      shippingCharge: 0,
+      discountAmount: 0,
+      status: "pending",
+      paymentMethod: "cod",
+      paymentStatus: "unpaid",
+      paidAmount: 0,
+      balanceDue: 100,
+      fulfillmentStatus: "pending",
+      inventoryPool: "regular",
+      inventoryAction: "reserved",
+    },
+    items: [],
+    discountUsage: null,
+    requestUrl: "http://localhost/api/v1/orders",
+  };
+  return createMessage(body);
 }
 
 describe("handleQueueBatch payment confirmation retries", () => {
@@ -143,5 +188,65 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("routes the configured order-ingest queue to the order ingest handler", async () => {
+    const message = createOrderMessage("order_1");
+
+    await handleQueueBatch(
+      createBatch([message], "order-ingest") as never,
+      {} as Env,
+    );
+
+    expect(mocks.handleOrderIngestBatch).toHaveBeenCalledTimes(1);
+    expect(mocks.handleOrderIngestBatch.mock.calls[0]?.[0]).toMatchObject({
+      queue: "order-ingest",
+    });
+  });
+
+  it("does not cast a mixed non-order queue to order ingest", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    const payment = createMessage({
+      type: "payment.stripe.confirmed",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_123",
+      amount: 12345,
+      currency: "usd",
+    });
+    const strayOrder = createOrderMessage("order_stray");
+
+    await handleQueueBatch(
+      createBatch([payment, strayOrder] as Array<Message<Record<string, unknown>>>) as never,
+      {} as Env,
+    );
+
+    expect(mocks.handleOrderIngestBatch).not.toHaveBeenCalled();
+    expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatches order notifications without requiring customer email and passes encryption key", async () => {
+    const message = createMessage({
+      type: "order.notification",
+      orderId: "order-refunded",
+      customerName: "SMS Customer",
+      notificationType: "order_refunded",
+      data: { reason: "refund" },
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+    } as Env);
+
+    expect(mocks.getEncryptionKey).toHaveBeenCalledTimes(1);
+    expect(mocks.sendOrderNotificationEmail).toHaveBeenCalledWith(
+      undefined,
+      "SMS Customer",
+      "order-refunded",
+      "order_refunded",
+      { reason: "refund" },
+      { id: "db" },
+      { encryptionKey: "test-key" },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
   });
 });

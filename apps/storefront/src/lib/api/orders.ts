@@ -1,7 +1,7 @@
 // src/lib/api/orders.ts
 
 import { createApiUrl, fetchWithRetry, getConfiguredSdkAuthClient } from "./client";
-import type { Order, CreateOrderPayload } from "./types";
+import type { Order, OrderReceipt, CreateOrderPayload } from "./types";
 import { unwrapData } from "./unwrap";
 import { getApiV1OrdersById } from "@scalius/api-client/sdk";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
@@ -15,7 +15,7 @@ import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
  */
 export async function createOrder(
   payload: CreateOrderPayload,
-): Promise<{ success: boolean; orderId?: string; error?: any }> {
+): Promise<{ success: boolean; orderId?: string; receiptToken?: string; error?: any }> {
   try {
     // Use fetchWithRetry directly for orders because:
     // 1. We need retries=0 to prevent double ingestion
@@ -39,7 +39,7 @@ export async function createOrder(
       error?: unknown;
       details?: unknown;
       message?: unknown;
-      data?: { id?: string; orderId?: string; checkoutToken?: string };
+      data?: { id?: string; orderId?: string; checkoutToken?: string; receiptToken?: string };
     };
 
     if (!response.ok || !data.success) {
@@ -75,7 +75,11 @@ export async function createOrder(
           // But 202 responses use raw c.json(): { status: "processing" }
           const statusData: Record<string, any> = statusJson.data ?? statusJson;
           if (statusData.status === "completed") {
-            return { success: true, orderId: statusData.orderId || initialOrderId };
+            return {
+              success: true,
+              orderId: statusData.orderId || initialOrderId,
+              receiptToken: statusData.receiptToken || checkoutToken,
+            };
           } else if (statusData.status === "failed") {
             return { success: false, error: statusData.error || "Order ingestion failed during high traffic. Please try again." };
           }
@@ -86,7 +90,11 @@ export async function createOrder(
     }
 
     // Normal synchronous return
-    return { success: true, orderId: data.data?.id || data.data?.orderId };
+    return {
+      success: true,
+      orderId: data.data?.id || data.data?.orderId,
+      receiptToken: data.data?.receiptToken || data.data?.checkoutToken,
+    };
   } catch (error: unknown) {
     console.error("Error creating order:", error);
     return {
@@ -118,6 +126,34 @@ export async function getOrderDetails(orderId: string): Promise<Order | null> {
     return unwrapData<{ order: Order }>(data)?.order ?? null;
   } catch (error: unknown) {
     console.error(`Error fetching details for order "${orderId}":`, error);
+    return null;
+  }
+}
+
+export async function getOrderReceipt(
+  orderId: string,
+  receiptToken: string,
+): Promise<OrderReceipt | null> {
+  if (!orderId || !receiptToken) {
+    console.error("getOrderReceipt: orderId and receiptToken are required.");
+    return null;
+  }
+
+  try {
+    const params = new URLSearchParams({ token: receiptToken });
+    const response = await fetchWithRetry(
+      createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}?${params}`),
+      {},
+      2,
+      5000,
+      true,
+    );
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    return unwrapData<{ order: OrderReceipt }>(data)?.order ?? null;
+  } catch (error: unknown) {
+    console.error(`Error fetching receipt for order "${orderId}":`, error);
     return null;
   }
 }

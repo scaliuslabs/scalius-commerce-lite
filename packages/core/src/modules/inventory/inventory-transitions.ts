@@ -19,9 +19,11 @@ import type { ReservationEntry, StockOperationResult } from "./types";
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
 
-// Stock is only permanently deducted when the order ships.
+// Stock is permanently deducted when the order ships. A delivered webhook can
+// arrive before the local order was marked shipped, so delivered also deducts
+// reserved stock when needed.
 // Pre-ship statuses (pending, processing, confirmed) keep stock as "reserved".
-const STOCK_DEDUCT_STATUSES = new Set(["shipped"]);
+const STOCK_DEDUCT_STATUSES = new Set(["shipped", "delivered"]);
 
 /**
  * Inventory action values tracked on each order:

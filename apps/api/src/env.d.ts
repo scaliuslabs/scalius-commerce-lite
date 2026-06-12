@@ -2,18 +2,6 @@
 // Cloudflare Workers type definitions for the API worker.
 // Only worker-related types — no Astro-specific types.
 
-// Cloudflare Email Workers send binding type
-interface SendEmail {
-  send(message: EmailMessage): Promise<void>;
-}
-
-// EmailMessage class for Cloudflare Email Workers
-declare class EmailMessage {
-  constructor(from: string, to: string, raw: string | ReadableStream);
-  readonly from: string;
-  readonly to: string;
-}
-
 // ---------------------------------------------------------------------------
 // Minimal Cloudflare Workers type stubs
 // These avoid importing @cloudflare/workers-types globally, which can conflict
@@ -157,7 +145,6 @@ interface Env {
   SHARED_AUTH_CACHE: KVNamespace;
   AI?: Ai;
   WidgetDesignAgent: DurableObjectNamespace;
-  EMAIL?: SendEmail;
 
   // Cloudflare Queue bindings
   PAYMENT_EVENTS_QUEUE: Queue;

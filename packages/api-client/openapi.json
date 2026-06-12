@@ -3859,11 +3859,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "sortOrder": {
                                 "type": "number"
@@ -3875,11 +3873,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -3888,11 +3884,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -3901,11 +3895,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -4148,11 +4140,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "sortOrder": {
                               "type": "number"
@@ -4164,11 +4154,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -4177,11 +4165,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -4190,11 +4176,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -4492,11 +4476,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "sortOrder": {
                               "type": "number"
@@ -4508,11 +4490,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -4521,11 +4501,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -4534,11 +4512,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -4918,6 +4894,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "jsContent": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "isActive": {
                               "type": "boolean"
                             },
@@ -4976,11 +4956,9 @@
                                       },
                                       {
                                         "type": "number"
-                                      },
-                                      {
-                                        "nullable": true
                                       }
-                                    ]
+                                    ],
+                                    "nullable": true
                                   },
                                   "updatedAt": {
                                     "anyOf": [
@@ -4989,11 +4967,9 @@
                                       },
                                       {
                                         "type": "number"
-                                      },
-                                      {
-                                        "nullable": true
                                       }
-                                    ]
+                                    ],
+                                    "nullable": true
                                   },
                                   "deletedAt": {
                                     "anyOf": [
@@ -5002,11 +4978,9 @@
                                       },
                                       {
                                         "type": "number"
-                                      },
-                                      {
-                                        "nullable": true
                                       }
-                                    ]
+                                    ],
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
@@ -5032,11 +5006,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -5045,11 +5017,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -5058,11 +5028,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -5070,6 +5038,7 @@
                             "name",
                             "htmlContent",
                             "cssContent",
+                            "jsContent",
                             "isActive",
                             "displayTarget",
                             "placementRule",
@@ -5258,6 +5227,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "jsContent": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "isActive": {
                                 "type": "boolean"
                               },
@@ -5316,11 +5289,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "updatedAt": {
                                       "anyOf": [
@@ -5329,11 +5300,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "deletedAt": {
                                       "anyOf": [
@@ -5342,11 +5311,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
@@ -5372,11 +5339,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -5385,11 +5350,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -5398,11 +5361,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -5410,6 +5371,7 @@
                               "name",
                               "htmlContent",
                               "cssContent",
+                              "jsContent",
                               "isActive",
                               "displayTarget",
                               "placementRule",
@@ -5544,6 +5506,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "jsContent": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "isActive": {
                                 "type": "boolean"
                               },
@@ -5602,11 +5568,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "updatedAt": {
                                       "anyOf": [
@@ -5615,11 +5579,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "deletedAt": {
                                       "anyOf": [
@@ -5628,11 +5590,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
@@ -5658,11 +5618,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -5671,11 +5629,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -5684,11 +5640,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -5696,6 +5650,7 @@
                               "name",
                               "htmlContent",
                               "cssContent",
+                              "jsContent",
                               "isActive",
                               "displayTarget",
                               "placementRule",
@@ -6193,6 +6148,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "jsContent": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "isActive": {
                                 "type": "boolean"
                               },
@@ -6251,11 +6210,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "updatedAt": {
                                       "anyOf": [
@@ -6264,11 +6221,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "deletedAt": {
                                       "anyOf": [
@@ -6277,11 +6232,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
@@ -6307,11 +6260,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -6320,11 +6271,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -6333,11 +6282,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -6345,6 +6292,7 @@
                               "name",
                               "htmlContent",
                               "cssContent",
+                              "jsContent",
                               "isActive",
                               "displayTarget",
                               "placementRule",
@@ -6569,11 +6517,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "sortOrder": {
                               "type": "number"
@@ -6585,11 +6531,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -6598,11 +6542,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -6611,11 +6553,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -6650,6 +6590,10 @@
                                 "type": "string"
                               },
                               "cssContent": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "jsContent": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -6711,11 +6655,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "updatedAt": {
                                       "anyOf": [
@@ -6724,11 +6666,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "deletedAt": {
                                       "anyOf": [
@@ -6737,11 +6677,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
@@ -6767,11 +6705,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -6780,11 +6716,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -6793,11 +6727,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -6805,6 +6737,7 @@
                               "name",
                               "htmlContent",
                               "cssContent",
+                              "jsContent",
                               "isActive",
                               "displayTarget",
                               "placementRule",
@@ -8602,11 +8535,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -8954,11 +8885,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -8978,2058 +8907,6 @@
                       "required": [
                         "language"
                       ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/checkout-languages": {
-      "get": {
-        "tags": [
-          "Checkout Languages"
-        ],
-        "summary": "List all checkout languages with pagination",
-        "parameters": [
-          {
-            "schema": {
-              "type": "number",
-              "nullable": true,
-              "default": 1,
-              "description": "Page number"
-            },
-            "required": false,
-            "description": "Page number",
-            "name": "page",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "number",
-              "nullable": true,
-              "default": 10,
-              "description": "Items per page"
-            },
-            "required": false,
-            "description": "Items per page",
-            "name": "limit",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "default": "",
-              "description": "Search query"
-            },
-            "required": false,
-            "description": "Search query",
-            "name": "search",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "default": "name",
-              "description": "Sort field"
-            },
-            "required": false,
-            "description": "Sort field",
-            "name": "sort",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ],
-              "default": "asc",
-              "description": "Sort order"
-            },
-            "required": false,
-            "description": "Sort order",
-            "name": "order",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ],
-              "default": "false",
-              "description": "Show trashed items"
-            },
-            "required": false,
-            "description": "Show trashed items",
-            "name": "trashed",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Checkout language list with pagination",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "languages": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "code": {
-                                "type": "string"
-                              },
-                              "languageData": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                      "nullable": true
-                                    }
-                                  }
-                                ]
-                              },
-                              "fieldVisibility": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                      "nullable": true
-                                    }
-                                  }
-                                ]
-                              },
-                              "isActive": {
-                                "type": "boolean"
-                              },
-                              "isDefault": {
-                                "type": "boolean"
-                              },
-                              "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
-                                  }
-                                ]
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "name",
-                              "code",
-                              "languageData",
-                              "fieldVisibility",
-                              "isActive",
-                              "isDefault"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
-                          }
-                        },
-                        "pagination": {
-                          "type": "object",
-                          "properties": {
-                            "page": {
-                              "type": "number"
-                            },
-                            "limit": {
-                              "type": "number"
-                            },
-                            "total": {
-                              "type": "number"
-                            },
-                            "totalPages": {
-                              "type": "number"
-                            },
-                            "hasNextPage": {
-                              "type": "boolean"
-                            },
-                            "hasPrevPage": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "page",
-                            "limit",
-                            "total",
-                            "totalPages",
-                            "hasNextPage",
-                            "hasPrevPage"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "languages",
-                        "pagination"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Checkout Languages"
-        ],
-        "summary": "Create a new checkout language",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100,
-                    "description": "Language name"
-                  },
-                  "code": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 10,
-                    "description": "Language code"
-                  },
-                  "languageData": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": {
-                      "nullable": true
-                    },
-                    "description": "Language strings"
-                  },
-                  "fieldVisibility": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": {
-                      "nullable": true
-                    },
-                    "description": "Field visibility settings"
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether this language is active"
-                  },
-                  "isDefault": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether this is the default language"
-                  }
-                },
-                "required": [
-                  "name",
-                  "code"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created checkout language",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "language": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "code": {
-                              "type": "string"
-                            },
-                            "languageData": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "object",
-                                  "additionalProperties": {
-                                    "nullable": true
-                                  }
-                                }
-                              ]
-                            },
-                            "fieldVisibility": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "object",
-                                  "additionalProperties": {
-                                    "nullable": true
-                                  }
-                                }
-                              ]
-                            },
-                            "isActive": {
-                              "type": "boolean"
-                            },
-                            "isDefault": {
-                              "type": "boolean"
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "nullable": true
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "name",
-                            "code",
-                            "languageData",
-                            "fieldVisibility",
-                            "isActive",
-                            "isDefault"
-                          ],
-                          "additionalProperties": {
-                            "nullable": true
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/checkout-languages/{id}": {
-      "get": {
-        "tags": [
-          "Checkout Languages"
-        ],
-        "summary": "Get checkout language by ID",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Checkout language details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "code": {
-                          "type": "string"
-                        },
-                        "languageData": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "object",
-                              "additionalProperties": {
-                                "nullable": true
-                              }
-                            }
-                          ]
-                        },
-                        "fieldVisibility": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "object",
-                              "additionalProperties": {
-                                "nullable": true
-                              }
-                            }
-                          ]
-                        },
-                        "isActive": {
-                          "type": "boolean"
-                        },
-                        "isDefault": {
-                          "type": "boolean"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "nullable": true
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "name",
-                        "code",
-                        "languageData",
-                        "fieldVisibility",
-                        "isActive",
-                        "isDefault"
-                      ],
-                      "additionalProperties": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Checkout Languages"
-        ],
-        "summary": "Update a checkout language",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100,
-                    "description": "Language name"
-                  },
-                  "code": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 10,
-                    "description": "Language code"
-                  },
-                  "languageData": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": {
-                      "nullable": true
-                    },
-                    "description": "Language strings"
-                  },
-                  "fieldVisibility": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": {
-                      "nullable": true
-                    },
-                    "description": "Field visibility settings"
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether this language is active"
-                  },
-                  "isDefault": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether this is the default language"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated checkout language",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "language": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "code": {
-                              "type": "string"
-                            },
-                            "languageData": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "object",
-                                  "additionalProperties": {
-                                    "nullable": true
-                                  }
-                                }
-                              ]
-                            },
-                            "fieldVisibility": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "object",
-                                  "additionalProperties": {
-                                    "nullable": true
-                                  }
-                                }
-                              ]
-                            },
-                            "isActive": {
-                              "type": "boolean"
-                            },
-                            "isDefault": {
-                              "type": "boolean"
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "nullable": true
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "name",
-                            "code",
-                            "languageData",
-                            "fieldVisibility",
-                            "isActive",
-                            "isDefault"
-                          ],
-                          "additionalProperties": {
-                            "nullable": true
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "Checkout Languages"
-        ],
-        "summary": "Soft delete a checkout language",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {}
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Checkout Languages"
-        ],
-        "summary": "Hard delete a checkout language",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No content"
-          }
-        }
-      }
-    },
-    "/api/v1/checkout-languages/{id}/restore": {
-      "post": {
-        "tags": [
-          "Checkout Languages"
-        ],
-        "summary": "Restore a soft-deleted checkout language",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {}
                     }
                   },
                   "required": [
@@ -12412,6 +10289,42 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/media/{key}": {
+      "get": {
+        "tags": [
+          "Media Server"
+        ],
+        "summary": "Serve R2 objects in local development",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Media file",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "R2 bucket not available"
           }
         }
       }
@@ -15377,6 +13290,230 @@
         }
       }
     },
+    "/api/v1/orders/receipt/{id}": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Get minimal order receipt by ID and receipt token",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "token",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Minimal order receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            },
+                            "shippingAddress": {
+                              "type": "string"
+                            },
+                            "totalAmount": {
+                              "type": "number"
+                            },
+                            "shippingCharge": {
+                              "type": "number"
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "city": {
+                              "type": "string"
+                            },
+                            "zone": {
+                              "type": "string"
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "cityName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zoneName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "productId": {
+                                    "type": "string"
+                                  },
+                                  "variantId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "quantity": {
+                                    "type": "number"
+                                  },
+                                  "price": {
+                                    "type": "number"
+                                  },
+                                  "productName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "productImage": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "variantSize": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "variantColor": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "productId",
+                                  "variantId",
+                                  "quantity",
+                                  "price",
+                                  "productName",
+                                  "productImage",
+                                  "variantSize",
+                                  "variantColor"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "customerName",
+                            "shippingAddress",
+                            "totalAmount",
+                            "shippingCharge",
+                            "discountAmount",
+                            "city",
+                            "zone",
+                            "area",
+                            "cityName",
+                            "zoneName",
+                            "areaName",
+                            "status",
+                            "createdAt",
+                            "updatedAt",
+                            "items"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "order"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/orders": {
       "post": {
         "tags": [
@@ -15550,6 +13687,9 @@
                         "checkoutToken": {
                           "type": "string"
                         },
+                        "receiptToken": {
+                          "type": "string"
+                        },
                         "orderId": {
                           "type": "string"
                         },
@@ -15565,6 +13705,7 @@
                       },
                       "required": [
                         "checkoutToken",
+                        "receiptToken",
                         "orderId",
                         "paymentMethod",
                         "totalAmount",
@@ -18785,11 +16926,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -18798,11 +16937,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -18811,11 +16948,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -19188,11 +17323,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -19201,11 +17334,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -19214,11 +17345,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -20964,11 +19093,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -20977,11 +19104,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -20990,11 +19115,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -21181,11 +19304,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -21194,11 +19315,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -21207,11 +19326,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -23987,11 +22104,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "sortOrder": {
                                 "type": "number"
@@ -24003,11 +22118,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -24016,11 +22129,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -24029,11 +22140,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -24413,11 +22522,9 @@
                       },
                       {
                         "type": "string"
-                      },
-                      {
-                        "nullable": true
                       }
-                    ]
+                    ],
+                    "nullable": true
                   },
                   "isPublished": {
                     "type": "boolean",
@@ -26015,11 +24122,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "sortOrder": {
                           "type": "number"
@@ -26031,11 +24136,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -26044,11 +24147,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -26057,11 +24158,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -26346,11 +24445,9 @@
                       },
                       {
                         "type": "string"
-                      },
-                      {
-                        "nullable": true
                       }
-                    ]
+                    ],
+                    "nullable": true
                   },
                   "sortOrder": {
                     "type": "number"
@@ -27174,6 +25271,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "jsContent": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "aiContext": {
                                 "type": "string",
                                 "nullable": true
@@ -27236,11 +25337,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "updatedAt": {
                                       "anyOf": [
@@ -27249,11 +25348,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "deletedAt": {
                                       "anyOf": [
@@ -27262,11 +25359,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
@@ -27304,6 +25399,7 @@
                               "name",
                               "htmlContent",
                               "cssContent",
+                              "jsContent",
                               "aiContext",
                               "isActive",
                               "displayTarget",
@@ -27665,6 +25761,9 @@
                   "cssContent": {
                     "type": "string"
                   },
+                  "jsContent": {
+                    "type": "string"
+                  },
                   "aiContext": {
                     "type": "object",
                     "nullable": true,
@@ -27800,6 +25899,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "jsContent": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "aiContext": {
                           "type": "string",
                           "nullable": true
@@ -27862,11 +25965,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -27875,11 +25976,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -27888,11 +25987,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -27921,11 +26018,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -27934,11 +26029,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -27947,11 +26040,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -27959,6 +26050,7 @@
                         "name",
                         "htmlContent",
                         "cssContent",
+                        "jsContent",
                         "aiContext",
                         "isActive",
                         "displayTarget",
@@ -29484,6 +27576,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "jsContent": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "aiContext": {
                           "type": "string",
                           "nullable": true
@@ -29546,11 +27642,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -29559,11 +27653,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -29572,11 +27664,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -29605,11 +27695,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -29618,11 +27706,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -29631,11 +27717,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -29643,6 +27727,7 @@
                         "name",
                         "htmlContent",
                         "cssContent",
+                        "jsContent",
                         "aiContext",
                         "isActive",
                         "displayTarget",
@@ -29896,6 +27981,9 @@
                   "cssContent": {
                     "type": "string"
                   },
+                  "jsContent": {
+                    "type": "string"
+                  },
                   "aiContext": {
                     "type": "object",
                     "nullable": true,
@@ -30023,6 +28111,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "jsContent": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "aiContext": {
                           "type": "string",
                           "nullable": true
@@ -30085,11 +28177,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -30098,11 +28188,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -30111,11 +28199,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -30144,11 +28230,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -30157,11 +28241,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -30170,11 +28252,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -30182,6 +28262,7 @@
                         "name",
                         "htmlContent",
                         "cssContent",
+                        "jsContent",
                         "aiContext",
                         "isActive",
                         "displayTarget",
@@ -31118,6 +29199,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "jsContent": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "aiContext": {
                           "type": "string",
                           "nullable": true
@@ -31180,11 +29265,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -31193,11 +29276,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -31206,11 +29287,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -31239,11 +29318,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "updatedAt": {
                           "anyOf": [
@@ -31252,11 +29329,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "deletedAt": {
                           "anyOf": [
@@ -31265,11 +29340,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -31277,6 +29350,7 @@
                         "name",
                         "htmlContent",
                         "cssContent",
+                        "jsContent",
                         "aiContext",
                         "isActive",
                         "displayTarget",
@@ -31548,6 +29622,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "jsContent": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "reason": {
                             "type": "string"
                           },
@@ -31567,6 +29645,7 @@
                           "widgetId",
                           "htmlContent",
                           "cssContent",
+                          "jsContent",
                           "reason",
                           "createdAt"
                         ],
@@ -31817,6 +29896,10 @@
                   "cssContent": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "jsContent": {
+                    "type": "string",
+                    "nullable": true
                   }
                 }
               }
@@ -31853,6 +29936,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "jsContent": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "reason": {
                           "type": "string"
                         },
@@ -31872,6 +29959,7 @@
                         "widgetId",
                         "htmlContent",
                         "cssContent",
+                        "jsContent",
                         "reason",
                         "createdAt"
                       ],
@@ -32745,11 +30833,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "isActive": {
                                 "type": "boolean"
@@ -32781,11 +30867,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -33153,11 +31237,9 @@
                       },
                       {
                         "type": "number"
-                      },
-                      {
-                        "nullable": true
                       }
-                    ]
+                    ],
+                    "nullable": true
                   },
                   "isActive": {
                     "type": "boolean",
@@ -33259,11 +31341,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "isActive": {
                           "type": "boolean"
@@ -33295,11 +31375,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -33692,11 +31770,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "isActive": {
                           "type": "boolean"
@@ -33728,11 +31804,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -34080,11 +32154,9 @@
                       },
                       {
                         "type": "number"
-                      },
-                      {
-                        "nullable": true
                       }
-                    ]
+                    ],
+                    "nullable": true
                   },
                   "isActive": {
                     "type": "boolean",
@@ -34190,11 +32262,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "isActive": {
                           "type": "boolean"
@@ -34226,11 +32296,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -35214,11 +33282,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -35561,11 +33627,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -35677,11 +33741,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -36033,11 +34095,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -36383,11 +34443,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -37173,11 +35231,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -37490,11 +35546,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -38238,11 +36292,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "acknowledgedAt": {
                                 "anyOf": [
@@ -38251,11 +36303,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "resolvedAt": {
                                 "anyOf": [
@@ -38264,11 +36314,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "productName": {
                                 "type": "string",
@@ -38444,11 +36492,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "acknowledgedAt": {
                                 "anyOf": [
@@ -38457,11 +36503,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "resolvedAt": {
                                 "anyOf": [
@@ -38470,11 +36514,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "productName": {
                                 "type": "string",
@@ -43209,8 +41251,7 @@
                                     "type": "string"
                                   },
                                   {
-                                    "type": "string",
-                                    "format": "date-time"
+                                    "type": "number"
                                   }
                                 ]
                               }
@@ -61017,11 +59058,9 @@
                               },
                               {
                                 "type": "number"
-                              },
-                              {
-                                "nullable": true
                               }
-                            ]
+                            ],
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -61390,11 +59429,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -61722,11 +59759,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -62100,11 +60135,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -62430,11 +60463,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -67202,13 +65233,10 @@
                                 "type": "string"
                               },
                               {
-                                "type": "string",
-                                "format": "date-time"
-                              },
-                              {
-                                "nullable": true
+                                "type": "number"
                               }
-                            ]
+                            ],
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -67334,13 +65362,10 @@
                               "type": "string"
                             },
                             {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "nullable": true
+                              "type": "number"
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -68834,8 +66859,7 @@
                                     "type": "string"
                                   },
                                   {
-                                    "type": "string",
-                                    "format": "date-time"
+                                    "type": "number"
                                   }
                                 ]
                               },
@@ -68845,8 +66869,7 @@
                                     "type": "string"
                                   },
                                   {
-                                    "type": "string",
-                                    "format": "date-time"
+                                    "type": "number"
                                   }
                                 ]
                               },
@@ -68920,13 +66943,10 @@
                                         "type": "string"
                                       },
                                       {
-                                        "type": "string",
-                                        "format": "date-time"
-                                      },
-                                      {
-                                        "nullable": true
+                                        "type": "number"
                                       }
-                                    ]
+                                    ],
+                                    "nullable": true
                                   },
                                   "updatedAt": {
                                     "anyOf": [
@@ -68934,8 +66954,7 @@
                                         "type": "string"
                                       },
                                       {
-                                        "type": "string",
-                                        "format": "date-time"
+                                        "type": "number"
                                       }
                                     ]
                                   },
@@ -68945,8 +66964,7 @@
                                         "type": "string"
                                       },
                                       {
-                                        "type": "string",
-                                        "format": "date-time"
+                                        "type": "number"
                                       }
                                     ]
                                   }
@@ -69463,8 +67481,7 @@
                               "type": "string"
                             },
                             {
-                              "type": "string",
-                              "format": "date-time"
+                              "type": "number"
                             }
                           ]
                         },
@@ -69474,8 +67491,7 @@
                               "type": "string"
                             },
                             {
-                              "type": "string",
-                              "format": "date-time"
+                              "type": "number"
                             }
                           ]
                         },
@@ -69485,13 +67501,10 @@
                               "type": "string"
                             },
                             {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "nullable": true
+                              "type": "number"
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "itemCount": {
                           "type": "number"
@@ -69587,13 +67600,10 @@
                                   "type": "string"
                                 },
                                 {
-                                  "type": "string",
-                                  "format": "date-time"
-                                },
-                                {
-                                  "nullable": true
+                                  "type": "number"
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -69601,8 +67611,7 @@
                                   "type": "string"
                                 },
                                 {
-                                  "type": "string",
-                                  "format": "date-time"
+                                  "type": "number"
                                 }
                               ]
                             },
@@ -69612,8 +67621,7 @@
                                   "type": "string"
                                 },
                                 {
-                                  "type": "string",
-                                  "format": "date-time"
+                                  "type": "number"
                                 }
                               ]
                             }
@@ -70346,11 +68354,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "preorderMessage": {
                                       "type": "string",
@@ -70417,11 +68423,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {
-                                          "nullable": true
                                         }
-                                      ]
+                                      ],
+                                      "nullable": true
                                     },
                                     "stockVersion": {
                                       "type": "number"
@@ -71207,8 +69211,7 @@
                                     "type": "string"
                                   },
                                   {
-                                    "type": "string",
-                                    "format": "date-time"
+                                    "type": "number"
                                   }
                                 ]
                               },
@@ -71218,8 +69221,7 @@
                                     "type": "string"
                                   },
                                   {
-                                    "type": "string",
-                                    "format": "date-time"
+                                    "type": "number"
                                   }
                                 ]
                               },
@@ -72226,8 +70228,7 @@
                               "type": "string"
                             },
                             {
-                              "type": "string",
-                              "format": "date-time"
+                              "type": "number"
                             }
                           ]
                         },
@@ -72237,8 +70238,7 @@
                               "type": "string"
                             },
                             {
-                              "type": "string",
-                              "format": "date-time"
+                              "type": "number"
                             }
                           ]
                         },
@@ -72248,13 +70248,10 @@
                               "type": "string"
                             },
                             {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "nullable": true
+                              "type": "number"
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "category": {
                           "type": "object",
@@ -72321,11 +70318,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "preorderMessage": {
                                 "type": "string",
@@ -72392,11 +70387,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "stockVersion": {
                                 "type": "number"
@@ -72448,8 +70441,7 @@
                                     "type": "string"
                                   },
                                   {
-                                    "type": "string",
-                                    "format": "date-time"
+                                    "type": "number"
                                   }
                                 ]
                               }
@@ -73843,11 +71835,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "preorderMessage": {
                           "type": "string",
@@ -73914,11 +71904,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "stockVersion": {
                           "type": "number"
@@ -74234,11 +72222,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "preorderMessage": {
                                 "type": "string",
@@ -74305,11 +72291,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "stockVersion": {
                                 "type": "number"
@@ -74715,11 +72699,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "preorderMessage": {
                           "type": "string",
@@ -74786,11 +72768,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "stockVersion": {
                           "type": "number"
@@ -75439,11 +73419,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "preorderMessage": {
                                 "type": "string",
@@ -75510,11 +73488,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "stockVersion": {
                                 "type": "number"
@@ -76402,11 +74378,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "preorderMessage": {
                           "type": "string",
@@ -76473,11 +74447,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "stockVersion": {
                           "type": "number"
@@ -82130,11 +80102,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "valueCount": {
                                 "type": "number"
@@ -82499,11 +80469,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -82847,11 +80815,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -88642,11 +86608,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -89053,11 +87017,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {
-                                    "nullable": true
                                   }
-                                ]
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -89468,11 +87430,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -89803,11 +87763,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {
-                              "nullable": true
                             }
-                          ]
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -90186,11 +88144,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {
-                                  "nullable": true
                                 }
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -92094,6 +90050,9 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "receiptToken": {
+                    "type": "string"
+                  },
                   "paymentType": {
                     "type": "string",
                     "enum": [
@@ -92407,6 +90366,9 @@
                     "type": "string"
                   },
                   "customerPhone": {
+                    "type": "string"
+                  },
+                  "receiptToken": {
                     "type": "string"
                   },
                   "successUrl": {

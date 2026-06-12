@@ -342,16 +342,17 @@ All error responses: `{ "success": false, "error": { "code": "...", "message": "
 
 ```bash
 # Development
-pnpm dev                # Start admin-v2 :4323 + API :8787
+pnpm dev                # Start API :8787 + admin-v2 :4323 + storefront :4322
+pnpm dev:all            # Alias for pnpm dev
+pnpm dev:admin          # Start API :8787 + admin-v2 :4323
 pnpm dev:storefront     # Start storefront :4322 + API :8787
-pnpm dev:all            # Start all three workers (staggered startup)
 
 # Build & Deploy
 pnpm build              # Build all workspaces via Turbo
 pnpm deploy             # Typecheck → build → migrate → deploy all workers
-pnpm deploy:api         # Deploy API worker only
-pnpm deploy:admin-v2    # Deploy admin-v2 worker only
-pnpm deploy:storefront  # Deploy storefront worker only
+pnpm deploy:api         # Typecheck → build API → migrate remote D1 → deploy API
+pnpm deploy:admin       # Typecheck → build admin-v2 → deploy admin-v2
+pnpm deploy:storefront  # Typecheck → build storefront → deploy storefront
 
 # Database
 pnpm db:generate        # Generate Drizzle migrations from schema changes
@@ -359,13 +360,17 @@ pnpm db:migrate:local   # Apply pending migrations locally
 pnpm db:studio          # Open Drizzle Studio DB browser
 
 # Testing & Quality
+pnpm lint               # ESLint all seven code workspaces through Turbo
 pnpm test               # Run all tests via Vitest
 pnpm typecheck          # TypeScript type checking (tsc, NOT esbuild)
 pnpm generate:sdk       # Regenerate API client from OpenAPI spec
 
 # Setup & Maintenance
-pnpm dev:setup          # First-time local setup (secrets + env + migrations)
-pnpm dev:reset          # Wipe local DB and re-apply all migrations
+pnpm dev:setup          # Install deps, create env, migrate, create local admin
+pnpm dev:reset          # Wipe local state, migrate, recreate local admin
+pnpm dev:admin:create   # Create local admin if none exists
+pnpm dev:admin:reset    # Reset local auth/admin credentials only
+pnpm dev:admin:status   # Check whether a local admin exists
 ```
 
 ---
@@ -378,22 +383,72 @@ pnpm dev:reset          # Wipe local DB and re-apply all migrations
 pnpm dev:setup
 ```
 
-Generates secrets, creates `.dev.vars` files, and applies D1 migrations.
+Generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists.
+
+Default local admin:
+
+```text
+Email:    admin@local.scalius.test
+Password: ScaliusLocal123!
+```
+
+Override the local admin with flags or environment variables:
+
+```bash
+pnpm dev:setup --admin-email owner@example.test --admin-password 'Use-12+-chars' --admin-name 'Owner'
+
+LOCAL_ADMIN_EMAIL=owner@example.test \
+LOCAL_ADMIN_PASSWORD='Use-12+-chars' \
+LOCAL_ADMIN_NAME='Owner' \
+pnpm dev:setup
+```
 
 ### 2) Start development servers
 
 ```bash
-pnpm dev              # Admin-v2 + API
-pnpm dev:all          # All three workers
+pnpm dev              # API + admin-v2 + storefront
+pnpm dev:admin        # API + admin-v2 only
+pnpm dev:storefront   # API + storefront only
 ```
 
-The dev wrapper (`scripts/dev.sh`) kills stale processes, staggers startup (3s delays to prevent Vite inspector port conflicts), and cleans up on Ctrl+C.
+The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, staggers startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
 
-### 3) Create the first admin account
+API local dev uses `apps/api/wrangler.local.jsonc`, which intentionally omits the remote Workers AI binding. Normal local admin/storefront/API work should not require Cloudflare remote proxy access. Production build/deploy still use `apps/api/wrangler.jsonc`.
 
-Visit `http://localhost:4323/admin`. If no admin exists, you're redirected to `/auth/setup`. The first account becomes super admin and RBAC permissions auto-seed.
+Admin production calls the API through the `env.API` service binding. Local admin dev uses HTTP fallback to `PUBLIC_API_BASE_URL` when that URL points at localhost, even though Wrangler still exposes the production binding shape.
 
-### 4) Local URLs
+For disposable local testing, point all Workers at another state directory:
+
+```bash
+SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:reset
+SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:admin
+```
+
+### 3) Sign in
+
+Visit `http://localhost:4323/admin` and sign in with the local admin credentials from setup. If you ran setup with `--skip-admin`, the browser still supports the first-admin setup flow at `/auth/setup`.
+
+### 4) Reset local credentials or state
+
+Reset only local admin credentials and sessions:
+
+```bash
+pnpm dev:admin:reset
+```
+
+Reset everything local, including D1/KV/R2/Cache state, then recreate the default admin:
+
+```bash
+pnpm dev:reset
+```
+
+Both commands accept the same admin override flags:
+
+```bash
+pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
+```
+
+### 5) Local URLs
 
 | URL | Service |
 |-----|---------|
@@ -420,6 +475,7 @@ Visit `http://localhost:4323/admin`. If no admin exists, you're redirected to `/
 | `JWT_SECRET` | API + Admin-v2 + Storefront | JWT signing |
 | `API_TOKEN` | All workers | Internal machine-to-machine auth |
 | `PURGE_TOKEN` | Storefront | Cache purge authentication |
+| `CREDENTIAL_ENCRYPTION_KEY` | API + Admin-v2 | Provider credential encryption |
 
 ### Dashboard-Configured Integrations
 
@@ -441,6 +497,11 @@ pnpm deploy
 ```
 
 Pipeline: `typecheck → build → migrate (remote D1) → deploy all workers`
+
+Targeted deploy shortcuts use the same safety wrapper: `pnpm deploy:api`
+typechecks, builds the API, applies remote D1 migrations, then deploys the API
+Worker; admin and storefront shortcuts typecheck before their focused build and
+deploy.
 
 ### Production Domains
 
@@ -468,8 +529,9 @@ Pipeline: `typecheck → build → migrate (remote D1) → deploy all workers`
 
 | Problem | Solution |
 |---------|----------|
-| Port conflicts on startup | `lsof -ti :8787,:4321,:4322,:4323 \| xargs kill -9` |
-| Auth sign-in loops | Run `pnpm dev:setup --force` to regenerate env files |
+| Port conflicts on startup | `lsof -tiTCP:8787 -iTCP:4322 -iTCP:4323 -iTCP:9229 -iTCP:9230 -iTCP:9231 -iTCP:9232 -iTCP:9233 -sTCP:LISTEN \| xargs kill -9` |
+| Forgot local admin credentials | Run `pnpm dev:admin:reset` |
+| Auth sign-in loops | Run `pnpm dev:admin:reset`, or `pnpm dev:setup --force` to regenerate env files |
 | D1 errors in dev | Run `pnpm dev:reset` for a clean database |
 | "Using default JWT secret" | Set `JWT_SECRET` in `.dev.vars` |
 | Stale OpenAPI types | Run `pnpm generate:sdk` with API running |

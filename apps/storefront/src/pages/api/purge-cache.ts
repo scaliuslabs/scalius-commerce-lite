@@ -4,6 +4,10 @@ import { env as cfEnv } from "cloudflare:workers";
 import { smartCache } from "@/lib/smart-cache";
 import { clearL1ByPrefixes } from "@/lib/edge-cache";
 import { getPurgeTokenFromHeaders, PURGE_TOKEN_HEADER } from "@/lib/purge-auth";
+import {
+  shouldBumpCacheVersionForSelectivePurge,
+  shouldWarmCriticalCachesForSelectivePurge,
+} from "@/lib/cache-purge-policy";
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
 
@@ -245,17 +249,20 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   const { groups = [], prefixes = [], bumpVersion = false } = body;
   const hostname = url.hostname;
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
+  const shouldBumpCacheVersion = shouldBumpCacheVersionForSelectivePurge({ prefixes, bumpVersion });
+  const shouldWarmCaches = shouldWarmCriticalCachesForSelectivePurge({ prefixes, bumpVersion });
 
   try {
     let newVersion: number | null = null;
 
-    // Only bump HTML version if requested (some groups like 'checkout' don't need it)
-    if (bumpVersion) {
+    // The KV version scopes both HTML and L2 API Cache keys. Prefix purges must
+    // bump it because Cloudflare Cache API cannot delete by prefix.
+    if (shouldBumpCacheVersion) {
       const currentVersionStr = await kv.get(cacheKey);
       const currentVersion = currentVersionStr ? parseInt(currentVersionStr, 10) : 0;
       newVersion = currentVersion + 1;
       await kv.put(cacheKey, newVersion.toString());
-      console.log(`[SelectivePurge] Bumped HTML version to ${newVersion} for ${hostname}`);
+      console.log(`[SelectivePurge] Bumped storefront cache version to ${newVersion} for ${hostname}`);
     }
 
     // Selectively clear L1 cache
@@ -267,8 +274,8 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       console.log("[SelectivePurge] Cleared all L1 cache (no prefixes specified)");
     }
 
-    // Warm critical caches if version was bumped
-    if (newVersion !== null) {
+    // Warm critical HTML caches only for groups that affect rendered pages.
+    if (newVersion !== null && shouldWarmCaches) {
       const protocol = url.protocol;
       const baseUrl = `${protocol}//${hostname}`;
       locals.cfContext.waitUntil(warmCriticalCaches(baseUrl));
@@ -280,10 +287,11 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         message: `Selective cache purge for ${hostname} completed.`,
         details: {
           groups,
+          cacheVersionBumped: shouldBumpCacheVersion,
           htmlVersionBumped: bumpVersion,
           newVersion,
           prefixesCleared: prefixes.length > 0 ? prefixes.length : "all",
-          cacheWarmingStarted: newVersion !== null,
+          cacheWarmingStarted: newVersion !== null && shouldWarmCaches,
         },
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },

@@ -5,6 +5,8 @@ import { stripeHandler } from "./handlers/stripe";
 import { sslcommerzHandler } from "./handlers/sslcommerz";
 import { polarHandler } from "./handlers/polar";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import type { PaymentResult } from "./types";
+import { clearCheckoutSession } from "./session-state";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -46,6 +48,32 @@ function currencyFmt(amount: number | string): string {
   return formatPrice(amount);
 }
 
+function appendTextElement(
+  parent: HTMLElement,
+  tagName: keyof HTMLElementTagNameMap,
+  className: string,
+  text: string,
+): HTMLElement {
+  const element = document.createElement(tagName);
+  element.className = className;
+  element.textContent = text;
+  parent.appendChild(element);
+  return element;
+}
+
+function appendSummaryRow(
+  parent: HTMLElement,
+  label: string,
+  value: string,
+  className = "flex justify-between",
+): void {
+  const row = document.createElement("div");
+  row.className = className;
+  appendTextElement(row, "span", "", label);
+  appendTextElement(row, "span", "", value);
+  parent.appendChild(row);
+}
+
 // ── Load checkout data ────────────────────────────────────────────────────────
 
 function loadCheckoutData(): boolean {
@@ -67,47 +95,73 @@ function loadCheckoutData(): boolean {
 
 // ── Render order summary ──────────────────────────────────────────────────────
 
+export function renderOrderSummaryDetails(
+  details: HTMLElement,
+  data: Record<string, unknown>,
+  config: CheckoutConfig,
+): void {
+  let cartItems: Record<string, { price: number; quantity: number }> = {};
+  try {
+    cartItems = JSON.parse(String(data.cartItems || "{}"));
+  } catch {
+    // ignore
+  }
+  const items = Object.values(cartItems);
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const shipping = parseFloat(String(data.shippingCharge || "0"));
+  const discount = parseFloat(String(data.discountAmount || "0"));
+  const total = subtotal + shipping - discount;
+
+  details.replaceChildren();
+  appendSummaryRow(details, `${items.length} item(s)`, currencyFmt(subtotal));
+  appendSummaryRow(details, "Shipping", currencyFmt(shipping));
+  if (discount > 0) {
+    appendSummaryRow(
+      details,
+      "Discount",
+      `-${currencyFmt(discount)}`,
+      "flex justify-between text-primary",
+    );
+  }
+  appendSummaryRow(
+    details,
+    "Total",
+    currencyFmt(total),
+    "flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",
+  );
+
+  if (config.partialPaymentEnabled && config.partialPaymentAmount > 0) {
+    const advance = Math.min(config.partialPaymentAmount, total);
+    const balance = total - advance;
+    appendSummaryRow(
+      details,
+      "Advance Payment Required",
+      currencyFmt(advance),
+      "flex justify-between font-bold text-primary bg-primary/10 p-2 rounded-lg mb-1 border border-primary/20",
+    );
+    appendSummaryRow(
+      details,
+      "Balance Due on Delivery",
+      currencyFmt(balance),
+      "flex justify-between text-gray-600 text-xs px-2 mb-2",
+    );
+  }
+
+  appendTextElement(
+    details,
+    "div",
+    "text-[10px] text-muted-foreground mt-2 border-t border-border pt-2",
+    `To: ${String(data.customerName || "")} \u2022 ${String(data.shippingAddress || "")}`,
+  );
+}
+
 function renderSummary(): void {
   if (!checkoutData || !checkoutConfig) return;
   const section = document.getElementById("orderSummary");
   const details = document.getElementById("summaryDetails");
   if (!section || !details) return;
 
-  let cartItems: Record<string, { price: number; quantity: number }> = {};
-  try {
-    cartItems = JSON.parse((checkoutData.cartItems as string) || "{}");
-  } catch {
-    // ignore
-  }
-  const items = Object.values(cartItems);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = parseFloat((checkoutData.shippingCharge as string) || "0");
-  const discount = parseFloat((checkoutData.discountAmount as string) || "0");
-  const total = subtotal + shipping - discount;
-
-  details.innerHTML = `
-    <div class="flex justify-between"><span>${items.length} item(s)</span><span>${currencyFmt(subtotal)}</span></div>
-    <div class="flex justify-between"><span>Shipping</span><span>${currencyFmt(shipping)}</span></div>
-    ${discount > 0 ? `<div class="flex justify-between text-primary"><span>Discount</span><span>-${currencyFmt(discount)}</span></div>` : ""}
-    <div class="flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2"><span>Total</span><span>${currencyFmt(total)}</span></div>
-  `;
-
-  if (checkoutConfig.partialPaymentEnabled && checkoutConfig.partialPaymentAmount > 0) {
-    const advance = Math.min(checkoutConfig.partialPaymentAmount, total);
-    const balance = total - advance;
-    details.innerHTML += `
-      <div class="flex justify-between font-bold text-primary bg-primary/10 p-2 rounded-lg mb-1 border border-primary/20">
-        <span>Advance Payment Required</span><span>${currencyFmt(advance)}</span>
-      </div>
-      <div class="flex justify-between text-gray-600 text-xs px-2 mb-2">
-        <span>Balance Due on Delivery</span><span>${currencyFmt(balance)}</span>
-      </div>
-    `;
-  }
-
-  details.innerHTML += `
-    <div class="text-[10px] text-muted-foreground mt-2 border-t border-border pt-2">To: ${checkoutData.customerName} \u2022 ${(checkoutData.shippingAddress as string) || ""}</div>
-  `;
+  renderOrderSummaryDetails(details, checkoutData, checkoutConfig);
 
   section.classList.remove("hidden");
 }
@@ -201,14 +255,17 @@ async function selectMethod(methodId: string, gw: { id: string; [key: string]: u
 
 // ── Process payment ───────────────────────────────────────────────────────────
 
-function clearCheckoutAndCart(): void {
-  sessionStorage.removeItem("scalius_checkout_data");
-  sessionStorage.removeItem("scalius_checkout_gateways");
+export function clearCheckoutAndCart(): void {
+  clearCheckoutSession();
   try {
     localStorage.removeItem("cart");
   } catch {
     // ignore
   }
+}
+
+export function shouldClearCheckoutBeforeRedirect(result: PaymentResult): boolean {
+  return result.clearCartOnRedirect === true;
 }
 
 async function processPayment(): Promise<void> {
@@ -277,7 +334,9 @@ async function processPayment(): Promise<void> {
     const result = await handler.processPayment(ctx);
 
     if (result.success && result.redirectUrl) {
-      clearCheckoutAndCart();
+      if (shouldClearCheckoutBeforeRedirect(result)) {
+        clearCheckoutAndCart();
+      }
       window.location.href = result.redirectUrl;
       return;
     }

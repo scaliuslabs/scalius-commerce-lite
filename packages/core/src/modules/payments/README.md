@@ -129,7 +129,7 @@ Dispatches `PaymentQueueMessage` types:
 | `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed |
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`) |
 | `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed |
-| `payment.polar.refunded` | `processPolarWebhookRefund()` | Updates payment status (refunded/partial), releases inventory on full refund |
+| `payment.polar.refunded` | `processPolarWebhookRefund()` | CAS-updates payment and allowed order status transitions; releases inventory on pre-fulfillment full refund |
 
 ## Provider Details
 
@@ -142,7 +142,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Cancel**: `cancelPaymentIntent()` cancels uncaptured intents
 - **Webhook verification**: `verifyStripeWebhook()` uses `constructEventAsync` (Web Crypto compatible)
 - **Webhook events handled**: `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `charge.refunded`
-- **Replay protection**: KV key `stripe_wh:{event.id}` with 24h TTL
+- **Replay protection**: Durable `webhook_events` claim `stripe:{event.type}:{event.id}` before queueing
 - **Refund**: `createRefund()` refunds by charge ID; supports partial amount and reason codes (`duplicate`, `fraudulent`, `requested_by_customer`)
 - **Settings**: `secret_key`, `publishable_key`, `webhook_secret`, `enabled` (stored in `settings` table, category `stripe`)
 - **Currency**: Amount in smallest currency unit. API route converts via `getDecimalPlaces(currency)`: `amount * Math.pow(10, decimals)` (e.g. USD/BDT: x100, JPY: x1, BHD: x1000). Queue consumer reverses: `amount / Math.pow(10, decimals)`.
@@ -157,7 +157,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Redirect handlers**: API has POST + GET handlers for `/success`, `/fail`, `/cancel`; each validates order exists before redirecting to storefront. SSLCommerz POSTs form-encoded `tran_id`; handlers extract via `parseBody()` (POST) or query param (GET). `STOREFRONT_URL` from env determines redirect target.
 - **IPN validation**: SSLCommerz does NOT sign webhooks. `validateSSLCommerzIPN()` makes a server-to-server API call to `/validator/api/validationserverAPI.php` using `val_id`. Only `VALID`/`VALIDATED` statuses are accepted.
 - **Transaction validation**: `validateSSLCommerzPayment()` validates by `tran_id` via `/validator/api/merchantTransIDvalidationAPI.php`
-- **Replay protection**: KV key `ssl_wh:{tran_id}_{val_id}` with 24h TTL
+- **Replay protection**: Durable `webhook_events` claim `sslcommerz:ipn:{tran_id}:{val_id}` before queueing
 - **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Refund amount formatted with `toFixed(2)` (SSLCommerz only supports BDT for refunds). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled).
 - **Settings**: `store_id`, `store_password`, `sandbox`, `enabled` (stored in `settings` table, category `sslcommerz`)
 
@@ -167,8 +167,8 @@ Dispatches `PaymentQueueMessage` types:
 - **Client singleton**: Module-level `_cachedClient` with token change detection
 - **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`.
 - **Webhook verification**: `verifyPolarWebhook()` base64-encodes the webhook secret before passing to `standardwebhooks`. Synchronous verification (not async).
-- **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (enqueue refund -> update payment status + inventory)
-- **Replay protection**: KV key `polar_webhook:{eventId}:{eventType}` with 24h TTL
+- **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (enqueue refund -> update payment and allowed order status + pre-fulfillment inventory)
+- **Replay protection**: Durable `webhook_events` claim before queueing
 - **Refund**: `createPolarRefund()` refunds by Polar order ID. Reason codes: `fraudulent`, `customer_request`, `duplicate`, `other`, `service_disruption`, `satisfaction_guarantee`, `dispute_prevention`.
 - **Settings**: `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` (stored in `settings` table, category `polar`)
 - **Currency**: Amount in smallest currency unit. API route converts via `getDecimalPlaces(currency)`: `amount * Math.pow(10, decimals)`. Queue consumer reverses: `amount / Math.pow(10, decimals)`.
@@ -202,7 +202,7 @@ Uses `roundPrice()` and `pricesEqual()` from `@scalius/shared/price-utils` for f
 
 Three layers of duplicate prevention:
 
-1. **Webhook level**: KV keys with 24h TTL prevent re-enqueuing the same webhook event (Stripe: `stripe_wh:{event.id}`, SSLCommerz: `ssl_wh:{tran_id}_{val_id}`, Polar: `polar_webhook:{eventId}:{eventType}`)
+1. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue failures mark the event `failed` so provider retries can reclaim it.
 2. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry)
 3. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (stripePaymentIntentId, sslcommerzTranId, polarCheckoutId) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
 

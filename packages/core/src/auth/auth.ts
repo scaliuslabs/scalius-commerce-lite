@@ -108,6 +108,16 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // Update session every day
+      additionalFields: {
+        twoFactorVerified: {
+          type: "boolean",
+          fieldName: "two_factor_verified",
+          required: false,
+          returned: true,
+          input: false,
+          defaultValue: false,
+        },
+      },
       cookieCache: {
         enabled: true,
         maxAge: 60 * 5, // 5 minutes

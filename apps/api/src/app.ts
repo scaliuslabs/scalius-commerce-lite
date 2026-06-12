@@ -32,7 +32,10 @@ import { discountRoutes } from "./routes/discounts";
 import { widgetRoutes } from "./routes/widgets";
 import { analyticsRoutes } from "./routes/analytics";
 import { partytownProxyRoutes } from "./routes/partytown-proxy";
-import { checkoutLanguageRoutes } from "./routes/checkout-languages";
+import {
+  checkoutLanguageRoutes,
+  publicCheckoutLanguageRoutes,
+} from "./routes/checkout-languages";
 import { abandonedCheckoutsRoutes } from "./routes/abandoned-checkouts";
 import { locationRoutes } from "./routes/locations";
 import { shippingMethodRoutes } from "./routes/shipping-methods";
@@ -208,7 +211,7 @@ app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
 app.route("/checkout", checkoutRoutes);
 app.route("/customer-auth", customerAuthRoutes);
-app.route("/checkout-languages", checkoutLanguageRoutes);
+app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
 app.route("/locations", locationRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);

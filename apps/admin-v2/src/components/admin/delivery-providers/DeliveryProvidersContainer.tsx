@@ -275,7 +275,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
   const getWebhookUrl = (providerType: string) => {
     const base = apiBaseUrl ||
       (typeof window !== "undefined"
-        ? window.location.origin.replace("dashboard.", "api.").replace(":4321", ":8787")
+        ? window.location.origin.replace("dashboard.", "api.").replace(":4323", ":8787")
         : "");
     return `${base}/api/v1/webhooks/${providerType}`;
   };

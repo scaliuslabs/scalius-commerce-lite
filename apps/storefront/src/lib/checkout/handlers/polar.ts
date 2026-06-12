@@ -17,10 +17,11 @@ export const polarHandler: GatewayHandler = {
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     try {
-      const orderId = await createOrder(ctx.checkoutData, "polar");
+      const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "polar");
 
       const sessionPayload: Record<string, unknown> = {
         orderId,
+        receiptToken,
         paymentType: ctx.config.partialPaymentEnabled ? "deposit" : "full",
       };
       if (ctx.config.partialPaymentEnabled) {

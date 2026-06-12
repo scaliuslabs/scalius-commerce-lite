@@ -1,8 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
-import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, createShipment, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
+import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { deliveryShipments, codTracking, orders, FulfillmentStatus } from "@scalius/database/schema";
+import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { validateTransition } from "@scalius/core/modules/orders/order-state-machine";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
@@ -10,6 +10,7 @@ import { ok, created, noContent } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
+import { nullableTimestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -40,7 +41,7 @@ const fulfillmentResultSchema = successEnvelope(z.object({
 
 const enhancedShipmentSchema = deliveryShipmentSchema.extend({
     providerName: z.string().nullable(),
-    lastChecked: z.string().or(z.date()).nullable(),
+    lastChecked: nullableTimestampSchema,
 }).passthrough();
 
 const refreshedShipmentSchema = deliveryShipmentSchema.extend({
@@ -358,20 +359,18 @@ app.openapi(createShipmentRoute, async (c) => {
     const db = c.get("db");
 
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-    const shipmentResult = await createShipment(db, orderId, data.providerId, data.options, encryptionKey);
+    const [shipmentResult] = await OrdersService.bulkShipOrders(
+        db,
+        [orderId],
+        data.providerId,
+        data.options ?? {},
+        encryptionKey,
+    );
 
-    if (!shipmentResult.success) {
-        console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult.message}`);
-        throw new ValidationError(shipmentResult.message || "Failed to create shipment");
+    if (!shipmentResult?.success) {
+        console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult?.error}`);
+        throw new ValidationError(shipmentResult?.error || "Failed to create shipment");
     }
-
-    // Update fulfillmentStatus to COMPLETE — provider shipments cover the entire order.
-    // This mirrors what bulkShipOrders() does. Safe because fulfillmentStatus is a
-    // display-only field with no business logic dependencies.
-    await db.update(orders).set({
-        fulfillmentStatus: FulfillmentStatus.COMPLETE,
-        updatedAt: sql`unixepoch()`,
-    }).where(eq(orders.id, orderId));
 
     const provider = await getDeliveryProvider(db, data.providerId);
     const createdShipmentRecord = await getLatestShipment(db, orderId);

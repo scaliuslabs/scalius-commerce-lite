@@ -19,7 +19,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
     return handleQueueBatch(batch as Parameters<typeof handleQueueBatch>[0], this.env);
   }
 
-  // Cron: release expired stock reservations every 15 minutes
+  // Cron: release orphaned reservation movements every 15 minutes
   async scheduled(controller: ScheduledController): Promise<void> {
     const db = getDb(this.env);
     const result = await releaseExpiredReservations(db, 30);

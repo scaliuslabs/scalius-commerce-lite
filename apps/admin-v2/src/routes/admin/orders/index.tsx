@@ -64,15 +64,14 @@ interface ShipmentStatus {
   [key: string]: unknown;
 }
 
-const defaultApiParams = mapParams(searchSchema.parse({}));
-
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/orders/")({
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => search,
   staleTime: 0,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(ordersQueryOptions(defaultApiParams));
+  loader: async ({ context: { queryClient }, deps }) => {
+    await queryClient.ensureQueryData(ordersQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

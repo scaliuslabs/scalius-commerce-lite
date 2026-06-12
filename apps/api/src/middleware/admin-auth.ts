@@ -18,11 +18,31 @@ interface User {
     email: string;
     name: string;
     role: string;
+    twoFactorEnabled?: boolean;
+    [key: string]: unknown;
+}
+
+interface Session {
+    id: string;
+    twoFactorVerified?: boolean | null;
     [key: string]: unknown;
 }
 
 interface ScannerKv {
     get(key: string): Promise<string | null>;
+}
+
+function normalizeAdminPath(url: string): string {
+    const pathname = new URL(url).pathname;
+    return pathname.startsWith("/api/v1") ? pathname : `/api/v1${pathname}`;
+}
+
+function isTwoFactorCompletionRequest(pathname: string, method: string): boolean {
+    return (
+        (method === "GET" && pathname === "/api/v1/admin/auth/2fa/info") ||
+        (method === "POST" && pathname === "/api/v1/admin/auth/2fa/verify") ||
+        (method === "POST" && pathname === "/api/v1/admin/auth/2fa/mark-verified")
+    );
 }
 
 /**
@@ -34,6 +54,7 @@ interface ScannerKv {
  */
 export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     let user: User | null = null;
+    let session: Session | null = null;
 
     // 1. Try Better Auth Session Cookie
     try {
@@ -43,6 +64,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         });
         if (sessionResult?.user) {
             user = sessionResult.user as User;
+            session = (sessionResult.session ?? null) as Session | null;
         }
     } catch (error: unknown) {
         console.warn("[AdminAuth] Session verification failed:", error instanceof Error ? error.message : "Unknown error");
@@ -101,16 +123,30 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     // Inject user into Hono context
     c.set("user", user);
+    if (session) {
+        c.set("session", session);
+    }
 
     // Scanner session — restrict to the exact scanner workflow endpoints only.
     if ((user as Record<string, unknown>)._isScannerSession) {
-        const pathname = new URL(c.req.url).pathname;
+        const pathname = normalizeAdminPath(c.req.url);
         if (!isAllowedScannerApiRequest(pathname, c.req.method)) {
             throw new ForbiddenError("Scanner sessions can only access scanner inventory endpoints");
         }
         // Skip full RBAC check — scanner has implicit permission only for the allowlisted endpoints.
         await next();
         return;
+    }
+
+    const pathname = normalizeAdminPath(c.req.url);
+    const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+    if (
+        user.twoFactorEnabled === true &&
+        session?.twoFactorVerified !== true &&
+        !isTwoFactorCompletionRequest(pathname, method)
+    ) {
+        throw new ForbiddenError("Two-factor verification required");
     }
 
     // 4. Admin & RBAC Validation
@@ -129,9 +165,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     // 4. Fine-grained Route Permissions mapped from Astro routes configuration
     // getRoutePermission expects paths like "/api/v1/admin/categories"
-    const honoPathname = new URL(c.req.url).pathname;
-    const pathname = honoPathname.startsWith("/api/v1") ? honoPathname : `/api/v1${honoPathname}`;
-    const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     const routePermission = getRoutePermission(pathname, method);
 
     if (!routePermission) {

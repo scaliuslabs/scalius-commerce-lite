@@ -48,17 +48,6 @@ interface BetterAuthSession {
   updatedAt: Date;
 }
 
-// Cloudflare Email Workers send binding type
-interface SendEmail {
-  send(message: EmailMessage): Promise<void>;
-}
-
-declare class EmailMessage {
-  constructor(from: string, to: string, raw: string | ReadableStream);
-  readonly from: string;
-  readonly to: string;
-}
-
 // Minimal Cloudflare Workers type stubs
 // Avoids importing @cloudflare/workers-types globally, which can conflict with DOM types.
 
@@ -202,7 +191,6 @@ interface Env {
   SESSION: KVNamespace;
   BUCKET: R2Bucket;
   SHARED_AUTH_CACHE: KVNamespace;
-  EMAIL?: SendEmail;
 
   // Service binding to API worker
   API: Fetcher;

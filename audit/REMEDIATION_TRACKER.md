@@ -1,184 +1,128 @@
-# Scalius Commerce Remediation Tracker
+# Remediation Tracker
 
-Date started: 2026-04-22
-Owner: Codex + subagent team
-Source: full audit set in [`audit/`]( /Users/arob/Desktop/open/scalius-commerce-lite/audit )
+Status values: `Not Started`, `In Progress`, `Blocked`, `Fixed`, `Verified`, `Won't Fix`.
 
-## Mission
+Update this file when a future agent starts or finishes a slice. Keep evidence short and link the PR/commit when available.
 
-Turn the audit into a fix-and-verify campaign that improves:
+## Priority Queue
 
-- production safety
-- business-logic correctness
-- local developer experience
-- end-to-end reliability across admin, API, and storefront
+| ID | Severity | Status | Owner | Summary | Primary Verification |
+| --- | --- | --- | --- | --- | --- |
+| SEC-001 | P0 | Verified | API/Auth | Enforce 2FA verification in admin API middleware. | API route tests for unverified 2FA session. |
+| SEC-002 | P0 | Verified | Admin/Auth/RBAC | Require inventory permission before scanner token minting. | Low-permission admin cannot mint scanner session. |
+| SEC-003 | P0 | Verified | API/Settings | Split public checkout-language reads from admin mutations. | Public mutation returns 404; admin mutation remains registered. |
+| PRIV-001 | P0 | Verified | Storefront/Orders | Protect order receipt PII with receipt token/minimal DTO. | Private browser cannot view PII by order ID alone. |
+| SEC-004 | P0 | Verified | Storefront/Checkout | Remove `innerHTML` rendering of checkout user data. | Injection string renders safely as text. |
+| ORDER-001 | P1 | Verified | Inventory/Orders | Reservation expiry can release live order reservations. | Expiry test with live reserved order. |
+| ORDER-002 | P1 | Verified | Orders/Fulfillment | Inventory/COD/provider side effects can precede local CAS/commit. | CAS/provider failure-ordering tests. |
+| ORDER-003 | P1 | Verified | Orders/Queue | Batch stock/discount failure can poison unrelated messages. | Mixed batch failure isolation tests. |
+| ORDER-004 | P1 | Verified | API/Orders | Queue send happens before checkout KV write. | Route test for queue success plus KV failure. |
+| PAY-001 | P1 | Verified | Payments/Webhooks | Stripe/SSL idempotency is KV-only and recorded after queue send. | Durable webhook claim tests plus payment duplicate tests. |
+| PAY-002 | P1 | Verified | Payments/Orders | Polar full refund skips order status transition. | Polar refund state-machine test. |
+| DEL-001 | P1 | Verified | Delivery | Webhook idempotency and shipment status semantics drift. | Steadfast durable claim and delivery tracking tests. |
+| STORE-001 | P1 | Verified | Storefront/Cache | Checkout/shipping cache purge can leave stale L2 entries. | Selective purge policy and checkout purge payload tests. |
+| OPS-001 | P1 | Verified | Platform/Storefront | Ignored generated `BUILD_ID` can break clean typecheck/deploy. | Storefront typecheck generation and deterministic build-id check. |
+| OPS-002 | P1 | Verified | Platform/Deploy | Single-worker deploy scripts skip safety gates. | `node --check scripts/deploy.mjs`; root deploy shortcuts route through `scripts/deploy.mjs --only ...`. |
+| TEST-001 | P1 | Verified | Admin/Widgets | Root test suite fails widget script extraction test. | `pnpm test` passes. |
 
-This is not a paper exercise. Every fix batch should end with:
+## Secondary Queue
 
-1. targeted tests
-2. typecheck/build where appropriate
-3. local flow verification
-4. Computer Use validation for admin/storefront UX where the flow is browser-visible
+| ID | Severity | Status | Owner | Summary | Primary Verification |
+| --- | --- | --- | --- | --- | --- |
+| ADMIN-001 | P2 | Not Started | Admin/API | Split `api.functions.ts` and remove `@ts-nocheck` slice by slice. | Touched slice typechecks without file-level nocheck. |
+| ADMIN-002 | P2 | Verified | Admin/RBAC | Align admin shell role guard with API RBAC. | `admin-access` tests plus admin/API auth typecheck tests pass. |
+| ADMIN-003 | P2 | Verified | Admin/Routes | Add `loaderDeps` for URL-search-driven list loaders. | Admin typecheck and root tests pass after loader-deps sweep. |
+| ADMIN-004 | P2 | Verified | Admin/API | Reduce drift between server-function transport and browser proxy. | Same endpoint behavior compared through both paths. |
+| STORE-002 | P2 | Verified | Storefront/API | Browser `/api/v1` fallback is not a real proxy. | Missing `PUBLIC_API_URL` fails loudly; no browser `/api/v1` fallback remains. |
+| STORE-003 | P2 | Verified | Storefront/Checkout | Redirect gateways clear cart before payment completion. | Redirect gateways preserve cart until tokenized success page loads; focused storefront tests/typecheck pass. |
+| STORE-004 | P2 | Verified | Storefront/Cart | Location prefill targets nonexistent selects. | Location prefill uses the React component event API; resolver tests and storefront typecheck pass. |
+| CONTENT-001 | P2 | Verified | Content/Storefront | `publishedAt` is not enforced on public pages/sitemap. | Future pages are hidden by a shared public visibility predicate; core test passes. |
+| CONTENT-002 | P2 | Verified | SEO/Storefront | Cart is in sitemap and lacks noindex. | Sitemap excludes cart; cart has noindex; focused storefront tests pass. |
+| NOTIF-001 | P2 | Verified | Notifications | Queue notification type union is narrower than service/settings. | Shared type used in queue/service/settings/admin UI. |
+| NOTIF-002 | P2 | Verified | Notifications/Settings | SMS notification path may lack credential encryption key. | SMS notification provider resolution receives the credential key; focused test passes. |
+| CONF-001 | P2 | Verified | API/Settings | Credential encryption helper prefers `JWT_SECRET`. | Credential key is preferred; JWT remains legacy fallback only; tests pass. |
+| CONTRACT-001 | P2 | Verified | Storefront/API | Storefront calls stale `/discounts/usage` endpoint. | Stale endpoint call removed; order creation/queue tests pass. |
+| CONTRACT-002 | P2 | Verified | Storefront/API | Local order payload type drifts from generated SDK. | `CreateOrderPayload` aliases generated `OrderPostRequest`; storefront/api-client typechecks pass. |
+| CONTRACT-003 | P2 | Verified | API/SDK | Timestamp schemas generate weak `unknown` SDK unions. | Regenerated SDK has precise `string | number | null` timestamp fields and no weak timestamp `unknown` unions. |
+| DB-001 | P2 | Verified | Database | Migration snapshot metadata appears incomplete. | Metadata/journal guard with manual snapshot-gap allowlist passes alongside Drizzle check. |
+| PLAT-001 | P2 | Verified | Platform | Cloudflare Env declarations are duplicated and drifting. | `pnpm check:env` plus focused app typechecks pass. |
+| DEV-001 | P2 | Verified | Platform/Docs | Local dev docs/scripts/cleanup are inconsistent. | Setup output, README, examples, cleanup verified. |
+| DEV-002 | P2 | Verified | Platform/Lint | Root lint gives false confidence. | `pnpm lint` runs seven real code workspace lint tasks. |
+| BUILD-001 | P2 | Verified | Platform/Turbo | Turbo build inputs omit public assets/helper scripts. | Storefront build dry-run includes `public/flags/BD.svg`, scripts, configs, and root flag-copy input. |
+| BUILD-002 | P2 | Verified | Platform/Assets | Flag prebuild relies on transitive dependency. | `node scripts/copy-flags.mjs` copies 265 SVGs and fails if required flags are missing. |
+| TEST-002 | P2 | Verified | Storefront/Tests | Storefront focused tests blocked by missing `happy-dom`. | Focused storefront test starts and runs. |
 
-## Operating Rules
+## Cleanup Queue
 
-1. Fix the highest-risk trust-boundary and data-integrity issues before lower-severity cleanup.
-2. Prefer code changes that reduce whole classes of bugs over narrow patches.
-3. Keep local dev reliable while fixing product logic. If a fix makes local run worse, stop and correct that first.
-4. Use runtime env and official framework/runtime guidance when the code touches Cloudflare Workers, Hono, TanStack Start, Astro SSR, Drizzle, or Turborepo behavior.
-5. Do not trust passing tests alone. The current suite includes many shadow-model tests; browser and route-level verification are required.
-6. Use deployed testing only when a third-party integration cannot be meaningfully exercised locally.
+| ID | Severity | Status | Owner | Summary | Primary Verification |
+| --- | --- | --- | --- | --- | --- |
+| DOC-001 | P3 | Not Started | Docs | Package README counts/dependency claims are stale. | Docs remove volatile counts or generate them. |
+| CLEAN-001 | P3 | Verified | Admin/Cleanup | `.DS_Store` exists under admin route directory. | File removed; root `.gitignore` already ignores `.DS_Store`. |
+| UI-001 | P3 | Not Started | Admin/Dashboard | Empty disposable dashboard emits Recharts zero-size warning. | Browser dashboard render has no chart width/height warning. |
 
-## Required Skills By Area
+## Recently Verified Baseline
 
-- Monorepo / scripts / task graph: `turborepo`
-- Admin route/data architecture: `tanstack-start`
-- API / route contracts / middleware: `hono-cf`
-- Database / schema / migrations: `drizzle`
-- Worker runtime / bindings / config: `workers-best-practices`
+- Root `pnpm typecheck`: passed.
+- Drizzle schema check: passed.
+- Root test suite: passes with `pnpm test` (84 files, 523 tests).
+- Storefront focused Vitest: passes after adding the missing `happy-dom` test dependency.
 
-If a subagent is assigned a slice that touches one of these areas, explicitly remind it to use the matching skill before concluding its work.
+## Remediation Notes
 
-## Priority Order
+2026-06-13:
 
-### Wave 0: Reproduce and stabilize local development
+- `SEC-003` fixed by splitting `apps/api/src/routes/checkout-languages.ts` into public active-read and admin CRUD routers, then mounting the public router only at `/api/v1/checkout-languages`. Regenerated `@scalius/api-client` from a live local API server. Verification: `pnpm --filter @scalius/api test -- src/routes/checkout-languages.test.ts`, `pnpm --filter @scalius/api typecheck`, `pnpm --filter @scalius/api-client typecheck`, and `git diff --check`.
+- `SEC-002` fixed by requiring `products.view` plus `products.edit`, or super-admin, before `apps/admin-v2/src/routes/api/scanner-token.tsx` writes a QR scanner token. Verification: `pnpm exec vitest run apps/admin-v2/src/routes/api/scanner-token.test.tsx --passWithNoTests` and `pnpm --filter @scalius/admin-v2 typecheck`.
+- `SEC-001` fixed by exposing `session.twoFactorVerified` through Better Auth, storing the Better Auth session in Hono context, and rejecting unverified 2FA sessions before admin RBAC except exact 2FA info/verify/mark-verified endpoints. Verification: `pnpm --filter @scalius/api test -- src/middleware/admin-auth.test.ts`, `pnpm --filter @scalius/api typecheck`, and `pnpm --filter @scalius/core typecheck`.
+- `SEC-004` fixed by rendering checkout summary customer name/address with DOM `textContent` instead of `innerHTML`. Added `happy-dom` to storefront dev dependencies, resolving `TEST-002`. Verification: `pnpm --filter @scalius/storefront exec vitest run src/lib/checkout/render-summary.test.ts --passWithNoTests` and `pnpm --filter @scalius/storefront typecheck`.
+- `PRIV-001` fixed by creating a KV-backed receipt token from the checkout token, adding `GET /api/v1/orders/receipt/{id}?token=...`, switching `/order-success` to require `orderId` plus `token`, and rendering a minimal receipt DTO that omits phone, email, customer ID, shipments, delivery providers, and notes. Regenerated `@scalius/api-client`; current OpenAPI surface is 252 paths / 349 operations. Verification: `pnpm --filter @scalius/api test -- src/routes/orders-receipt.test.ts`, the combined P0 API test run, and the focused typecheck chain through API, admin, storefront, core, and api-client.
+- `ORDER-001` fixed by constraining `releaseExpiredReservations()` to orphaned inventory movements whose order row no longer exists, with a second per-candidate order-existence guard before stock release. Active pending/confirmed/incomplete orders now keep their reservations until explicit order transition logic releases or deducts them. Verification: `pnpm --filter @scalius/core test -- src/modules/inventory/expiry.test.ts` and `pnpm --filter @scalius/core typecheck`.
+- `ORDER-002` fixed by moving provider shipment creation behind an order-version claim, removing the direct admin shipment route's low-level `createShipment()` bypass, moving COD collection/return writes after successful order CAS, and delaying manual-fulfillment inventory transitions until after the fulfillment claim and shipment/item writes. Verification: `pnpm --filter @scalius/core test -- src/modules/orders/orders.fulfillment.test.ts`, `pnpm --filter @scalius/core typecheck`, `pnpm --filter @scalius/api typecheck`, and `git diff --check`.
+- `ORDER-003` fixed by reserving stock per order inside `handleOrderIngestBatch()`, removing reservation-failed order writes before the DB batch, retrying only the message whose reservation failed, and falling back to isolated per-order reserve/write/ack handling after a shared DB batch failure. Verification: `pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts`, `pnpm --filter @scalius/core typecheck`, and `git diff --check`.
+- `ORDER-004` fixed by writing checkout polling KV and receipt-token KV before `ORDER_INGEST_QUEUE.send()`, rewriting checkout status to `failed` if enqueue fails after KV creation, and routing order-ingest queue batches by the actual queue name (`order-ingest`, plus legacy alias) instead of broad mixed-batch body detection. Verification: `pnpm --filter @scalius/api test -- src/routes/orders-create.test.ts src/queue-consumer.test.ts`, `pnpm --filter @scalius/api typecheck`, and `git diff --check`.
+- `PAY-001` fixed by moving Stripe and SSLCommerz webhook ingress to the existing durable `webhook_events` claim-before-enqueue helper, marking queue failures as retryable failed claims, and removing KV-only post-send dedupe. `processPaymentFailed()` now records/claims failed attempts before order updates, duplicate failed attempts no-op, failed attempts can be promoted by later successful gateway events, and payment cancellation releases inventory through the centralized idempotent inventory transition. Verification: `pnpm --filter @scalius/api test -- src/routes/webhooks/stripe.test.ts src/routes/webhooks/sslcommerz.test.ts src/routes/webhooks/polar.test.ts`, `pnpm --filter @scalius/core test -- src/modules/payments/process-payment.test.ts`, `pnpm --filter @scalius/api typecheck`, and `pnpm --filter @scalius/core typecheck`.
+- `PAY-002` fixed by making Polar webhook refunds CAS-update `orders.paymentStatus`, `orders.paidAmount`, and allowed `orders.status` transitions before inventory release. Pre-fulfillment full refunds now transition to `cancelled` and release reservations, fulfilled full refunds can transition to `refunded` without auto-restocking, and old rows with `paymentStatus=refunded` but stale order status are repaired on redelivery. Verification: `pnpm --filter @scalius/core test -- src/modules/payments/polar.test.ts src/modules/payments/process-payment.test.ts` and `pnpm --filter @scalius/core typecheck`.
+- `DEL-001` fixed by moving Pathao and Steadfast delivery webhooks to durable `webhook_events` claims before shipment/order side effects, making Steadfast event identity include delivery status or tracking update identity, and expanding `updateOrderStatusFromShipment()` to handle emitted canonical statuses (`pickup_assigned`, `out_for_delivery`, `partial_delivered`, `pickup_failed`, `delivery_failed`, `on_hold`, `unknown`). Failed carrier delivery retry semantics now explicitly allow `shipped -> confirmed`, and direct `confirmed -> delivered` webhooks deduct reserved inventory by treating `delivered` as a stock-deducting transition. Verification: `pnpm --filter @scalius/api test -- src/routes/webhooks/steadfast.test.ts`, `pnpm --filter @scalius/core test -- src/modules/delivery/tracking.test.ts`, `pnpm --filter @scalius/api typecheck`, and `pnpm --filter @scalius/core typecheck`.
+- `STORE-001` fixed by making selective storefront prefix purges bump the KV cache version used by L2 Cache API keys, while keeping critical-page warming tied to HTML-affecting purges. Checkout invalidation can keep `bumpVersion: false` from the API side but still invalidates L2 through the storefront purge policy when prefixes are present. Verification: `pnpm --filter @scalius/storefront exec vitest run src/lib/cache-purge-policy.test.ts --passWithNoTests`, `pnpm --filter @scalius/api test -- src/utils/cache-invalidation.test.ts`, `pnpm --filter @scalius/storefront typecheck`, and `pnpm --filter @scalius/api typecheck`.
+- `OPS-001` fixed by making storefront `typecheck` generate `src/config/build-id.ts` before `astro check` and changing `scripts/generate-build-id.js` from timestamp-only output to deterministic commit/source-hash output. Clean deploy is covered because root deploy runs `pnpm typecheck` before build. Verification: ran the generator twice and confirmed the same `BUILD_ID`, then ran `pnpm --filter @scalius/storefront typecheck`.
+- `OPS-002` fixed by routing root `deploy:api`, `deploy:admin`, and `deploy:storefront` through `scripts/deploy.mjs --only ...`; targeted deploys typecheck before building/deploying, and the API target applies remote D1 migrations first. Verification: `node --check scripts/deploy.mjs`, invalid target guard, and script inspection.
+- `TEST-001` fixed by making `parseGeneratedWidgetContent()` return normalized widget parts so local-safe HTML-owned script blocks move into widget JS before preview. Queue retry metadata now writes generic buyer-facing retry reasons, and the checkout DOM test runs under `happy-dom`. Verification: focused widget/queue/checkout tests plus root `pnpm test` passing 77 files / 507 tests.
+- `DEV-002` fixed by adding real lint scripts to admin, api-client, core, database, and shared, registering React Hooks linting for `.ts` helper files, and filtering root lint to the seven code workspaces. Verification: `pnpm lint`.
+- `BUILD-001` fixed by adding `public/**`, workspace `scripts/**`, Wrangler config files, and root config/script globals to Turbo task inputs. Verification: storefront build dry-run includes generated flags, `scripts/generate-build-id.js`, `wrangler.jsonc`, and root `scripts/copy-flags.mjs`.
+- `BUILD-002` fixed by declaring `country-flag-icons` directly and making `scripts/copy-flags.mjs` fail on missing/incomplete flag assets. Verification: `node scripts/copy-flags.mjs` copied 265 SVGs into both app public directories.
+- `ADMIN-002` fixed by centralizing admin shell access in `apps/admin-v2/src/lib/admin-access.ts`, removing legacy-role-only access from `loadUserPermissions()`, preserving real null roles in the guard context, and redirecting permissionless admin children to `/admin/access-denied`. Verification: `pnpm exec vitest run apps/admin-v2/src/lib/admin-access.test.ts apps/admin-v2/src/routes/api/scanner-token.test.tsx`, `pnpm --filter @scalius/api test -- src/middleware/admin-auth.test.ts`, `pnpm --filter @scalius/admin-v2 typecheck`, and root `pnpm test`.
+- `ADMIN-003` fixed by adding `loaderDeps` to search-driven admin list routes and prefetching from validated URL-search deps instead of module defaults. Verification: `pnpm --filter @scalius/admin-v2 typecheck` and root `pnpm test`.
+- `STORE-003`, `STORE-004`, `CONTENT-001`, and `CONTENT-002` fixed by preserving redirect-gateway cart/session state until the protected order-success page loads, adding a `LocationSelector` prefill event API for saved customer city/zone/area data, enforcing a shared `publishedAt <= unixepoch()` public page predicate, removing `/cart` from the static sitemap, and passing `noindex` on cart. Verification: `pnpm --filter @scalius/storefront exec vitest run src/lib/checkout/render-summary.test.ts src/pages/seo-regressions.test.ts src/components/LocationSelector.test.ts`, `pnpm --filter @scalius/core test -- src/modules/pages/pages.service.test.ts`, and `pnpm --filter @scalius/storefront typecheck`.
+- `STORE-002`, `CONTRACT-001`, and `CONTRACT-002` fixed by removing browser fallback to nonexistent same-origin `/api/v1`, routing AuthModal/search calls through the shared API URL helper, deleting the stale storefront `/discounts/usage` call, and aliasing `CreateOrderPayload` to the generated SDK `OrderPostRequest`. Verification: `pnpm --filter @scalius/storefront exec vitest run src/lib/api/client-url-policy.test.ts src/lib/checkout/render-summary.test.ts`, `pnpm --filter @scalius/storefront typecheck`, `pnpm --filter @scalius/api-client typecheck`, `pnpm --filter @scalius/api test -- src/routes/orders-create.test.ts`, `pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts`, and no `discounts/usage`/`recordDiscountUsage()` matches under app/package code.
+- `CONTRACT-003` fixed by centralizing API timestamp OpenAPI helpers, normalizing malformed nullable `anyOf` branches in the API-client spec generator before `openapi-ts`, and regenerating the SDK. Generated timestamp fields now use `string | number | null` instead of `string | number | unknown`; OpenAPI surface remains 252 paths / 349 operations. Verification: `pnpm generate:sdk`, `pnpm --filter @scalius/api typecheck`, `pnpm --filter @scalius/api-client typecheck`, `pnpm --filter @scalius/storefront typecheck`, and an `rg` scan for weak timestamp `unknown` unions.
+- `NOTIF-001`, `NOTIF-002`, and `CONF-001` fixed by centralizing `ORDER_NOTIFICATION_TYPES` in core, using that type in order status notifications and API queue messages, rendering all nine customer/admin notification statuses in the admin settings UI, merging notification-channel defaults on read/save, passing the runtime encryption key into SMS notification provider resolution, and changing `getEncryptionKey()` to prefer `CREDENTIAL_ENCRYPTION_KEY` before JWT legacy fallback. SMS secret writes now require the dedicated credential key when new secrets are submitted. Verification: `pnpm --filter @scalius/api test -- src/queue-consumer.test.ts src/utils/encryption-key.test.ts`, `pnpm --filter @scalius/core test -- src/modules/notifications/notifications.service.test.ts`, `pnpm --filter @scalius/core typecheck`, `pnpm --filter @scalius/api typecheck`, and `pnpm --filter @scalius/admin-v2 typecheck`.
+- `CLEAN-001` fixed by removing `apps/admin-v2/src/routes/.DS_Store`; root `.gitignore` already ignores `.DS_Store`. Verification: `find apps/admin-v2/src/routes -name .DS_Store -print` returns no files.
+- `DB-001` fixed by adding `packages/database/scripts/check-migration-metadata.mjs`, which verifies SQL migrations, `_journal.json`, snapshots, and an explicit allowlist for the 12 manual migrations without snapshots (`0019`-`0026`, `0030`, `0031`, `0036`, `0037`). Verification: `pnpm --filter @scalius/database check:migrations`, `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`, and `pnpm --filter @scalius/database typecheck`.
+- `PLAT-001` fixed by adding `scripts/check-worker-env.mjs` and root `pnpm check:env`, making Wrangler binding/var names the checked source of truth for API, admin, and storefront Worker `Env` declarations. Removed stale API/admin `EMAIL` declarations, removed stale API `ASSETS` from `hono-env.d.ts`, and removed the unused API `SESSION` KV binding from production/local API Wrangler configs. Verification: `pnpm check:env`, `node --check scripts/check-worker-env.mjs`, `pnpm --filter @scalius/api typecheck`, `pnpm --filter @scalius/admin-v2 typecheck`, and `pnpm --filter @scalius/storefront typecheck`.
+- Broad checkpoint verification after the platform/env guard: `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass. Lint remains warnings-only; root tests pass 84 files / 523 tests.
 
-Goal:
+## Local Dev Verification Notes
 
-- `pnpm dev` should boot reliably
-- admin, storefront, and API should load locally without manual rescue steps
-- known local blockers should be documented and then fixed
+2026-06-13:
 
-Target areas:
+- `pnpm dev:admin:status` starts a temporary API worker with `apps/api/wrangler.local.jsonc`, reaches `GET /api/v1/setup`, reports local admin status, and stops without a Cloudflare remote proxy session.
+- `pnpm dev:admin` starts API first, then admin. Browser check of `http://localhost:4323/admin` settled to `/auth/login` with title `Sign In - Scalius Admin` and no console errors.
+- Disposable full reset verified with `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-lite-disposable-state pnpm dev:reset --admin-email disposable@local.test --admin-password 'Disposable123!' --admin-name 'Disposable Admin'`. It applied all 38 migrations to the disposable state path and created the admin through the real `/api/v1/setup` endpoint.
+- Disposable admin login verified in the browser: `http://localhost:4323/auth/login` accepted the disposable credentials and rendered `/admin` with dashboard data from API `200` responses.
+- Admin local API transport verified after fix: server functions loaded dashboard data through HTTP fallback, and a curl sign-in plus cookie jar request to `http://localhost:4323/api/v1/admin/dashboard` returned `200 OK` with `x-proxy-base-url: http://localhost:8787/api/v1`.
+- `pnpm dev:storefront` now applies pending local D1 migrations before API starts. It applied `0037_widget_js_content.sql` to the stale local DB, then started API and storefront.
+- Browser check of `http://localhost:4322/` rendered the storefront homepage with no console errors. Direct API check of `http://localhost:8787/api/v1/storefront/homepage` returned 200 after migrations.
+- `pnpm dev:admin:create --help`, `pnpm dev:setup --help`, and `pnpm dev:reset --help` print the new local admin options.
+- Remaining local UI warning: the empty dashboard can emit Recharts `width(-1) and height(-1)` warnings; tracked as `UI-001`.
 
-- dev scripts and process cleanup
-- wrangler/env typing drift
-- service-binding local fallback behavior
-- local auth/token flows
-- cache and session behavior in local mode
+## Tracker Update Template
 
-### Wave 1: Active security and privacy risks
-
-Fix first:
-
-1. Admin API 2FA bypass
-2. Scanner bearer-token/device-binding gap
-3. Public `order-success` order-detail exposure
-4. Public checkout-language CRUD exposure
-5. Homepage widget sanitizer bypass/XSS path
-6. RBAC unmapped-route fallback behavior
-
-### Wave 2: Data integrity and business-logic correctness
-
-Fix next:
-
-1. non-atomic order/inventory/payment/COD/refund transitions
-2. queue reservation/orphan-hold issues
-3. payment confirmation lost-update races
-4. refund orchestration errors for split payments
-5. failed-payment/successful-confirmation suppression
-6. admin GET endpoints with hidden destructive behavior
-
-### Wave 3: Schema and configuration trustworthiness
-
-Fix next:
-
-1. Drizzle schema vs replayed migration drift
-2. missing FK / delete-behavior enforcement
-3. timestamp default mismatches
-4. contradictory nullability / FK semantics
-5. secrets encryption/decryption mismatches across settings consumers
-6. plaintext storage of high-value credentials
-
-### Wave 4: Storefront/admin product correctness and cache invalidation
-
-Fix next:
-
-1. content writes not purging storefront caches
-2. `publishedAt` ignored in public publishing paths
-3. category/search/product drift in storefront queries
-4. admin shell permission-context inconsistencies
-5. multi-gateway checkout/cart handoff drift
-6. logout/session-clearing correctness
-
-### Wave 5: Contract, testing, and maintainability hardening
-
-Fix next:
-
-1. stale response-envelope tests
-2. fragmented SDK/manual/fetch contract surface
-3. wildcard CORS overmatch
-4. non-atomic rate limiting
-5. route-level typing escapes and `any` holes
-6. missing admin lint coverage and weak integration coverage
-
-## Current Backlog
-
-### P0 / P1 candidates to resolve before broader cleanup
-
-- Admin API accepts sessions without checking `twoFactorVerified`
-- Scanner token device binding is not enforced by API middleware
-- `/order-success` exposes order/customer data via privileged SSR fetch
-- Public checkout-language create/update/delete routes are exposed
-- Homepage consolidated widget path bypasses sanitizer and renders raw HTML/CSS
-- RBAC route map drift leaves many admin endpoints on weak fallback auth
-- Order/inventory/payment/refund side effects are not reliably atomic
-- Queue ingest can reserve stock for rejected/non-persisted orders
-- D1 migration replay does not match current Drizzle schema
-- Settings encryption/decryption mismatches break runtime integrations
-
-## Implementation Pattern Per Fix Batch
-
-For each issue or small cluster:
-
-1. Reproduce the bug locally if possible.
-2. Add or adjust the narrowest meaningful test coverage first.
-3. Fix the code.
-4. Run the smallest relevant test slice.
-5. Re-run the local user flow in browser.
-6. Capture what was fixed and any remaining risk in this tracker or the matching audit file if needed.
-
-## Status Ledger
-
-Use this section as the running ledger for future turns.
-
-### Not started
-
-- Wave 0 local-dev reproduction
-- Wave 1 security/privacy fixes
-- Wave 2 data-integrity fixes
-- Wave 3 schema/configuration fixes
-- Wave 4 product/cache/admin/storefront fixes
-- Wave 5 contract/test hardening
-
-### In progress
-
-- creating persistence docs for continuation and compaction safety
-
-### Completed
-
-- full 13-slice audit written
-- root audit index written
-
-## Local Commands To Reuse
-
-- `pnpm dev`
-- `pnpm dev:admin`
-- `pnpm dev:storefront`
-- `pnpm typecheck`
-- `pnpm build`
-- `pnpm test`
-- `pnpm --filter @scalius/storefront typecheck`
-- `pnpm --filter @scalius/database typecheck`
-- `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`
-
-## Deploy Policy
-
-Use `pnpm run deploy` only when a scenario truly requires remote validation:
-
-- hosted payment gateway callback loops
-- provider webhooks that cannot be simulated locally with confidence
-- remote-only service binding or domain/cookie behavior
-- third-party admin/provider settings verification that depends on production-like origins
-
-When remote validation is needed, test locally first, then deploy, then verify the exact remote-only flow.
+```md
+ID:
+Status:
+Owner:
+Files changed:
+Verification:
+Remaining risk:
+PR/commit:
+```

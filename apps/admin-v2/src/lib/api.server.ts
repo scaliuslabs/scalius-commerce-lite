@@ -39,6 +39,16 @@ interface ApiEnvelope {
   [key: string]: unknown;
 }
 
+function isLocalApiBase(apiBase?: string): boolean {
+  if (!apiBase) return false;
+  try {
+    const { hostname } = new URL(apiBase);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Extract cookie and authorization headers for forwarding to the API worker.
  * Uses TanStack Start's request context (no AsyncLocalStorage needed).
@@ -144,15 +154,17 @@ async function apiFetchRaw(
     body: options?.body ? JSON.stringify(options.body) : undefined,
   };
 
-  // Production: service binding (env.API exists)
-  if (cfEnv.API) {
+  // Production: service binding. In local dev the binding may still be present
+  // from wrangler.jsonc, but the API runs in a separate Miniflare process.
+  const configuredApiBase = cfEnv.PUBLIC_API_BASE_URL as string | undefined;
+  if (cfEnv.API && !isLocalApiBase(configuredApiBase)) {
     const target = `http://api.internal${fullPath}`;
     const resp = await cfEnv.API.fetch(target, fetchOptions);
     return resp;
   }
 
   // Local dev: HTTP to API worker
-  const apiBase = cfEnv.PUBLIC_API_BASE_URL as string ?? "http://localhost:8787";
+  const apiBase = configuredApiBase ?? "http://localhost:8787";
   const target = `${apiBase}${fullPath}`;
   const resp = await fetch(target, fetchOptions);
   return resp;
