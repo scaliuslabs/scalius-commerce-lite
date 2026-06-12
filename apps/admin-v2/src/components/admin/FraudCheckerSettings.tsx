@@ -4,11 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
+  type FraudCheckerProviderPayload,
   createFraudCheckerProvider,
   updateFraudCheckerProvider,
   deleteFraudCheckerProvider,
   testFraudCheckerProvider,
-} from "~/lib/api.functions";
+} from "~/lib/api-functions/fraud-checker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,19 +41,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ExternalLink, Loader2, Plus, Pencil, Trash2, TestTube } from "lucide-react";
 import {
+  FRAUD_CHECK_PROVIDER_TYPES,
   FRAUD_CHECK_PROVIDER_DEFINITIONS,
   getFraudCheckProviderDefinition,
 } from "@scalius/core/modules/fraud-checker/provider";
 
-import type { FraudCheckerProvider } from "@/types/api-responses";
 import type { FraudCheckProviderType } from "@scalius/core/modules/fraud-checker/provider";
 
 // ── Types & Validation ──
 
-type FraudProvider = FraudCheckerProvider;
+type FraudProvider = FraudCheckerProviderPayload;
 
 const providerSchema = z.object({
-  providerType: z.string().min(1, "Provider type is required"),
+  providerType: z.enum(FRAUD_CHECK_PROVIDER_TYPES),
   name: z.string().min(1, "Name is required"),
   apiUrl: z.string().min(1, "API URL is required"),
   apiKey: z.string().min(1, "API key is required"),
@@ -77,7 +78,7 @@ const providerSchema = z.object({
 type ProviderFormValues = z.infer<typeof providerSchema>;
 
 interface FraudCheckerSettingsProps {
-  providers: FraudCheckerProvider[];
+  providers: FraudCheckerProviderPayload[];
 }
 
 const DEFAULT_PROVIDER_TYPE: FraudCheckProviderType = "default";
@@ -203,10 +204,10 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     try {
       let saved: FraudProvider;
       if (isCreating) {
-        saved = await createFraudCheckerProvider({ data: values }) as FraudProvider;
+        saved = await createFraudCheckerProvider({ data: values });
         setProviders((prev) => [...prev, saved]);
       } else if (selectedProvider) {
-        saved = await updateFraudCheckerProvider({ data: { ...values, id: selectedProvider.id } }) as FraudProvider;
+        saved = await updateFraudCheckerProvider({ data: { ...values, id: selectedProvider.id } });
         setProviders((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
       } else {
         return;
@@ -245,7 +246,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     if (!selectedProvider) return;
     setIsTesting(true);
     try {
-      const result = await testFraudCheckerProvider({ data: { id: selectedProvider.id } }) as { success: boolean; message?: string };
+      const result = await testFraudCheckerProvider({ data: { id: selectedProvider.id } });
       if (result.success) {
         toast.success(result.message || "Connection successful");
       } else {

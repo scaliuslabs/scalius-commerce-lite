@@ -1290,49 +1290,6 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
   });
 
 // ═══════════════════════════════════════════════════════════════════
-//  FRAUD CHECKER
-// ═══════════════════════════════════════════════════════════════════
-
-export const getFraudCheckerProviders = createServerFn({
-  method: "GET",
-}).handler(async () => {
-  return apiGet<unknown[]>("/fraud-checker");
-});
-
-export const createFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost<Record<string, unknown>>("/fraud-checker", data);
-  });
-
-export const updateFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string } & Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPut<Record<string, unknown>>("/fraud-checker", data);
-  });
-
-export const deleteFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/fraud-checker/${data.id}`);
-  });
-
-export const testFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiPost<Record<string, unknown>>(
-      `/fraud-checker/${data.id}/test`,
-      {},
-    );
-  });
-
-export const fraudCheckerLookup = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/fraud-checker/lookup", data);
-  });
-
-// ═══════════════════════════════════════════════════════════════════
 //  ABANDONED CHECKOUTS
 // ═══════════════════════════════════════════════════════════════════
 
