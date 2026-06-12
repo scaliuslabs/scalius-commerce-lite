@@ -48,4 +48,4 @@ Valid, but narrow it. The central known weakness is `apps/admin-v2/src/lib/api.f
 
 ### "Generated docs drift"
 
-Valid. API client and database READMEs contain volatile stale counts. Trust generated artifacts and source files over prose until docs are automated or simplified.
+Do not repeat without a fresh check. The API client and database READMEs were simplified on 2026-06-13 to avoid volatile generated counts and to correct the known runtime dependency/migration/table drift.

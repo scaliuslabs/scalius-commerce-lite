@@ -31,7 +31,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getCacheStats, getCacheLastCleared, getCacheGroups, clearCacheGroup, clearCache } from "@/lib/api.functions";
+import {
+  clearCache,
+  clearCacheGroup,
+  getCacheGroups,
+  getCacheLastCleared,
+  getCacheStats,
+  type CacheGroupDefinition,
+  type CacheStats,
+} from "@/lib/api-functions/cache";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Separator } from "../ui/separator";
 import {
@@ -45,23 +53,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-
-interface CacheStats {
-  size: number;
-  memory: string;
-  hitRate?: string;
-  missRate?: string;
-  uptime: string;
-  cacheType?: string;
-}
-
-interface GroupDef {
-  label: string;
-  description: string;
-  kvPrefixes: string[];
-  bumpsHtml: boolean;
-  storefrontPrefixes: string[];
-}
 
 // Group display config: icon, styling
 const GROUP_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; bgColor: string; iconColor: string; hoverBorder: string }> = {
@@ -92,7 +83,7 @@ function getRelativeTime(timestamp: number | null): string {
 
 export function CacheManager() {
   const [stats, setStats] = useState<CacheStats | null>(null);
-  const [groups, setGroups] = useState<Record<string, GroupDef>>({});
+  const [groups, setGroups] = useState<Record<string, CacheGroupDefinition>>({});
   const [pathMapping, setPathMapping] = useState<Record<string, string[]>>({});
   const [timestamps, setTimestamps] = useState<Record<string, number | null>>({});
   const [loading, setLoading] = useState(true);
@@ -105,15 +96,15 @@ export function CacheManager() {
     try {
       setLoading(true);
       const [statsData, timestampsData, groupsData] = await Promise.all([
-        getCacheStats() as Promise<Record<string, unknown>>,
-        getCacheLastCleared() as Promise<Record<string, unknown>>,
-        getCacheGroups() as Promise<Record<string, unknown>>,
+        getCacheStats(),
+        getCacheLastCleared(),
+        getCacheGroups(),
       ]);
 
-      setStats(statsData.stats as CacheStats);
-      setTimestamps((timestampsData.timestamps || {}) as Record<string, number | null>);
-      setGroups((groupsData.groups || {}) as Record<string, GroupDef>);
-      setPathMapping((groupsData.pathMapping || {}) as Record<string, string[]>);
+      setStats(statsData.stats);
+      setTimestamps(timestampsData.timestamps || {});
+      setGroups(groupsData.groups || {});
+      setPathMapping(groupsData.pathMapping || {});
       setLastUpdated(new Date());
     } catch (error: unknown) {
       console.error("Error fetching cache data:", error);

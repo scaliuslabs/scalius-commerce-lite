@@ -159,6 +159,8 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
 
+Status: In progress as of 2026-06-13. Cache server functions were extracted to `apps/admin-v2/src/lib/api-functions/cache.ts` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
+
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 
 The admin shell allows users with `role: "admin"` even when they lack RBAC permissions. The API requires mapped permissions and fails closed for missing route mappings. Users created as admin without a role ID can enter the shell and then hit 403s on API-backed screens.
@@ -331,6 +333,8 @@ Status: remediated on 2026-06-13. `happy-dom` is now declared in the storefront 
 
 Fix direction: remove volatile counts from prose or generate them automatically.
 
+Status: Remediated 2026-06-13. The API-client README now points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and correctly lists `@hey-api/client-fetch` as a runtime dependency. The database README now avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0037`, and removes a stale singleton-constraint limitation.
+
 ### CLEAN-001: Route directory contains `.DS_Store`
 
 `apps/admin-v2/src/routes/.DS_Store` exists under a generated route root.
@@ -338,6 +342,12 @@ Fix direction: remove volatile counts from prose or generate them automatically.
 Fix direction: remove the file and ensure `.DS_Store` is globally ignored.
 
 Status: Remediated 2026-06-13. The file was removed, and root `.gitignore` already ignores `.DS_Store`.
+
+### UI-001: Empty dashboard can emit Recharts zero-size warnings
+
+The disposable local dashboard can load with no daily activity data, which allowed Recharts to mount into a zero-size container and emit width/height warnings.
+
+Status: Remediated 2026-06-13. `DashboardChart` now renders a fixed-height empty state until client mount and non-empty daily activity data are available, with focused data-helper tests.
 
 ## Stale Or Corrected Old Findings
 

@@ -1,6 +1,6 @@
 # @scalius/database
 
-Drizzle ORM schema, client factory, and migrations for Cloudflare D1 (SQLite). This package defines the entire data model -- 52 tables across 13 schema files -- and provides a singleton `getDb()` factory for Drizzle-over-D1.
+Drizzle ORM schema, client factory, and migrations for Cloudflare D1 (SQLite). This package defines the checked data model in `src/schema/**` and provides a singleton `getDb()` factory for Drizzle-over-D1.
 
 ## Export Map
 
@@ -70,107 +70,111 @@ Some tables use inline enum arrays instead of the centralized enums:
 
 ## Table Inventory
 
-### `auth.ts` -- Better Auth (5 tables)
+This inventory is grouped by schema file and intentionally omits column counts;
+the schema declarations are the source of truth.
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `user` | 13 | Admin users. `role`, `isSuperAdmin`, `banned`, `twoFactorEnabled`, `twoFactorMethod` |
-| `session` | 9 | Auth sessions. `token` (unique), `expiresAt`, `twoFactorVerified`, `impersonatedBy` |
-| `account` | 12 | OAuth/credential accounts. `providerId`, `accessToken`, `refreshToken`, `password` |
-| `verification` | 5 | Email/phone verification tokens. `identifier`, `value`, `expiresAt` |
-| `twoFactor` | 5 | TOTP secrets and backup codes. `secret`, `backupCodes` (JSON string) |
+### `auth.ts` -- Better Auth
 
-### `rbac.ts` -- Role-Based Access Control (5 tables)
+| Table | Purpose |
+|-------|---------|
+| `user` | Admin users. `role`, `isSuperAdmin`, `banned`, `twoFactorEnabled`, `twoFactorMethod` |
+| `session` | Auth sessions. `token` (unique), `expiresAt`, `twoFactorVerified`, `impersonatedBy` |
+| `account` | OAuth/credential accounts. `providerId`, `accessToken`, `refreshToken`, `password` |
+| `verification` | Email/phone verification tokens. `identifier`, `value`, `expiresAt` |
+| `twoFactor` | TOTP secrets and backup codes. `secret`, `backupCodes` (JSON string) |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `permissions` | 9 | Permission definitions. `name` (unique), `resource`, `action`, `category`, `isSensitive` |
-| `roles` | 6 | Role definitions. `name` (unique), `isSystem` flag |
-| `rolePermissions` | 4 | Many-to-many: role <-> permission. Unique on `(roleId, permissionId)` |
-| `userRoles` | 5 | Many-to-many: user <-> role. `assignedBy` FK. Unique on `(userId, roleId)` |
-| `userPermissions` | 6 | Direct user-level permission overrides. `granted` boolean. Unique on `(userId, permissionId)` |
+### `rbac.ts` -- Role-Based Access Control
 
-### `products.ts` -- Product Domain (9 tables)
+| Table | Purpose |
+|-------|---------|
+| `permissions` | Permission definitions. `name` (unique), `resource`, `action`, `category`, `isSensitive` |
+| `roles` | Role definitions. `name` (unique), `isSystem` flag |
+| `rolePermissions` | Many-to-many: role <-> permission. Unique on `(roleId, permissionId)` |
+| `userRoles` | Many-to-many: user <-> role. `assignedBy` FK. Unique on `(userId, roleId)` |
+| `userPermissions` | Direct user-level permission overrides. `granted` boolean. Unique on `(userId, permissionId)` |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `products` | 14 | Core product. `slug`, `categoryId` FK, `isActive`, `discountPercentage/Type/Amount`, `freeDelivery` |
-| `productImages` | 7 | Product gallery. `productId` FK (cascade), `isPrimary`, `sortOrder` |
-| `productVariants` | 22 | SKU-level variants. `size`, `color`, `stock`, `reservedStock`, `preorderStock`, `version`, `stockVersion`, `barcode`, `barcodeType` |
-| `categories` | 9 | Product categories. `slug`, `imageUrl`, `metaTitle`, `metaDescription` |
-| `collections` | 8 | Homepage product groupings. `type` ("manual"/"dynamic"), `config` (JSON), `sortOrder` |
-| `productAttributes` | 7 | Filterable attribute definitions. `name` (unique), `slug` (unique), `options` (JSON array) |
-| `productAttributeValues` | 5 | Product-attribute assignments. Unique on `(productId, attributeId)` |
-| `productRichContent` | 7 | Product detail sections (tabs). `title`, `content`, `sortOrder` |
-| `media` | 8 | Uploaded media files. `filename`, `url`, `size`, `mimeType`, `folderId` FK |
-| `mediaFolders` | 5 | Media folder hierarchy. Self-referential `parentId` FK |
+### `products.ts` -- Product Domain
 
-### `customers.ts` -- Customer Domain (2 tables)
+| Table | Purpose |
+|-------|---------|
+| `products` | Core product. `slug`, `categoryId` FK, `isActive`, `discountPercentage/Type/Amount`, `freeDelivery` |
+| `productImages` | Product gallery. `productId` FK (cascade), `isPrimary`, `sortOrder` |
+| `productVariants` | SKU-level variants. `size`, `color`, `stock`, `reservedStock`, `preorderStock`, `version`, `stockVersion`, `barcode`, `barcodeType` |
+| `categories` | Product categories. `slug`, `imageUrl`, `metaTitle`, `metaDescription` |
+| `collections` | Homepage product groupings. `type` ("manual"/"dynamic"), `config` (JSON), `sortOrder` |
+| `productAttributes` | Filterable attribute definitions. `name` (unique), `slug` (unique), `options` (JSON array) |
+| `productAttributeValues` | Product-attribute assignments. Unique on `(productId, attributeId)` |
+| `productRichContent` | Product detail sections (tabs). `title`, `content`, `sortOrder` |
+| `mediaFolders` | Media folder hierarchy. Self-referential `parentId` FK |
+| `media` | Uploaded media files. `filename`, `url`, `size`, `mimeType`, `folderId` FK, media metadata |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `customers` | 14 | Customer records. `phone` (unique), `totalOrders`, `totalSpent`, `lastOrderAt`. Address: `city/zone/area` + `cityName/zoneName/areaName` |
-| `customerHistory` | 12 | Change audit log. `changeType` ("created"/"updated"/"deleted") |
+### `customers.ts` -- Customer Domain
 
-### `orders.ts` -- Order Domain (7 tables)
+| Table | Purpose |
+|-------|---------|
+| `customers` | Customer records. `phone` (unique), order totals, last order timestamp, address IDs/names |
+| `customerHistory` | Change audit log. `changeType` ("created"/"updated"/"deleted") |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `orders` | 25 | Core order. `status`, `paymentMethod`, `paymentStatus`, `paidAmount`, `balanceDue`, `fulfillmentStatus`, `inventoryPool`, `inventoryAction`, `version` (optimistic locking), `customerId` FK |
-| `orderItems` | 9 | Line items. `productId` FK, `variantId` FK, `quantity`, `price`, `fulfillmentStatus` |
-| `orderPayments` | 16 | Payment records. Gateway-specific columns: `stripePaymentIntentId/ChargeId`, `sslcommerzTranId/ValId/BankTranId`, `polarCheckoutId`, `codCollectedBy/At/ReceiptUrl`. `metadata` (JSON). Unique partial indexes on gateway IDs per order (migration 0030). |
-| `paymentPlans` | 10 | Partial payment tracking. `orderId` (unique), `depositAmount`, `balanceDue`, `status` |
-| `codTracking` | 11 | COD lifecycle tracking. `orderId` (unique), `deliveryAttempts`, `codStatus`, `failureReason` |
-| `webhookEvents` | 7 | Webhook audit log. `provider`, `eventType`, `status` |
-| `abandonedCheckouts` | 5 | Saved checkout state. `checkoutId` (unique), `checkoutData` (JSON) |
+### `orders.ts` -- Order Domain
 
-### `inventory.ts` -- Inventory Domain (2 tables)
+| Table | Purpose |
+|-------|---------|
+| `orders` | Core order. Status, payment, fulfillment, inventory, optimistic locking, customer linkage |
+| `orderItems` | Line items. Product/variant IDs, quantity, price, fulfillment status |
+| `orderPayments` | Payment records. Gateway IDs, COD collection fields, metadata JSON, partial unique indexes for gateway idempotency |
+| `paymentPlans` | Partial payment tracking. `orderId` (unique), deposit/balance fields, status |
+| `codTracking` | COD lifecycle tracking. `orderId` (unique), attempts, COD status, failure reason |
+| `webhookEvents` | Webhook audit log. Provider, event type, status |
+| `abandonedCheckouts` | Saved checkout state. `checkoutId` (unique), `checkoutData` JSON |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `inventoryMovements` | 9 | Stock movement audit log. `type` (reserved/deducted/released/adjusted/preorder_reserved/preorder_deducted), `quantity` (+/-), `previousStock`, `newStock` |
-| `productLowStockAlerts` | 10 | Low stock alert tracking. `variantId` (unique), `alertStatus` (active/acknowledged/resolved) |
+### `inventory.ts` -- Inventory Domain
 
-### `delivery.ts` -- Delivery Domain (3 tables)
+| Table | Purpose |
+|-------|---------|
+| `inventoryMovements` | Stock movement audit log. Movement type, quantity delta, previous/new stock |
+| `productLowStockAlerts` | Low stock alert tracking. `variantId` (unique), alert status |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `deliveryLocations` | 10 | City/zone/area hierarchy. `type` ("city"/"zone"/"area"), self-referential `parentId` FK, `externalIds` (JSON), `metadata` (JSON) |
-| `deliveryProviders` | 8 | Provider config (Pathao/Steadfast). `credentials` (JSON, AES-GCM encrypted), `config` (JSON) |
-| `deliveryShipments` | 15 | Shipment records. `externalId`, `trackingId`, `trackingUrl`, `status`, `rawStatus`, `metadata` (JSON), `shipmentItems` (JSON), `isFinalShipment` |
+### `delivery.ts` -- Delivery Domain
 
-### `marketing.ts` -- Marketing Domain (6 tables)
+| Table | Purpose |
+|-------|---------|
+| `deliveryLocations` | City/zone/area hierarchy with provider external IDs and metadata |
+| `deliveryProviders` | Pathao/Steadfast provider config. Credentials may be AES-GCM encrypted |
+| `deliveryShipments` | Shipment records. Provider IDs, tracking, status, metadata, shipment items, final-shipment flag |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `discounts` | 18 | Discount codes. `code`, `type`, `valueType`, `discountValue`, `minPurchaseAmount`, date range, `limitOnePerCustomer`, `combineWith*` flags |
-| `discountProducts` | 5 | Discount-product junction. `applicationType` ("get") |
-| `discountCollections` | 5 | Discount-collection junction. `applicationType` ("get") |
-| `discountUsage` | 6 | Discount usage tracking. `orderId` FK, `customerId` FK, `amountDiscounted` |
-| `metaConversionsSettings` | 8 | Meta Pixel CAPI settings. `singletonKey` constraint, `pixelId`, `accessToken`, `isEnabled` |
-| `metaConversionsLogs` | 8 | CAPI event log. `eventId` (unique), `eventName`, `status`, `requestPayload` (JSON), `responsePayload` (JSON) |
+### `marketing.ts` -- Marketing Domain
 
-### `content.ts` -- Content Domain (6 tables)
+| Table | Purpose |
+|-------|---------|
+| `discounts` | Discount codes, types, values, date range, usage limits, combination flags |
+| `discountProducts` | Discount-product junction. `applicationType` ("get") |
+| `discountCollections` | Discount-collection junction. `applicationType` ("get") |
+| `discountUsage` | Discount usage tracking. `orderId` FK, `customerId` FK, amount discounted |
+| `metaConversionsSettings` | Meta Pixel CAPI settings. `singletonKey` constraint, pixel/access token, enabled flag |
+| `metaConversionsLogs` | CAPI event log. Event identity, status, request/response JSON |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `pages` | 13 | CMS pages. `slug`, `content`, `isPublished`, `hideHeader/Footer/Title`, `sortOrder` |
-| `widgets` | 12 | AI-generated widgets. `htmlContent`, `cssContent`, `aiContext`, `placementRule`, `referenceCollectionId` FK, `sortOrder` |
-| `widgetHistory` | 5 | Widget version history. `widgetId` FK (cascade), `htmlContent`, `cssContent`, `reason` |
-| `heroSections` | 7 | Legacy hero config. `type`, `config` (JSON) |
-| `heroSliders` | 7 | Homepage sliders. `type` ("desktop"/"mobile"), `images` (JSON array) |
-| `pageTemplates` | 7 | Page template definitions. `type`, `config` (JSON) |
+### `content.ts` -- Content Domain
 
-### `system.ts` -- System Domain (6 tables)
+| Table | Purpose |
+|-------|---------|
+| `pages` | CMS pages. Slug, content, published flags/timestamps, featured image, SEO fields |
+| `widgets` | AI-generated widgets. HTML/CSS/JS content, AI context, placement defaults |
+| `widgetPlacements` | Scoped widget placement records for homepage/page/product/category/collection slots |
+| `widgetHistory` | Widget version history. Widget FK, HTML/CSS/JS content, reason |
+| `heroSections` | Legacy hero config. Type and JSON config |
+| `heroSliders` | Homepage sliders. Desktop/mobile type and image array |
+| `pageTemplates` | Page template definitions. Type and JSON config |
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `settings` | 7 | Key-value settings store. `key` + `category` unique constraint, `value`, `type`, `expiresAt` |
-| `siteSettings` | 21 | Singleton site config. `singletonKey`, `headerConfig` (JSON), `footerConfig` (JSON), `socialLinks` (JSON), `contactInfo` (JSON), checkout settings, WhatsApp OTP config |
-| `analytics` | 8 | Analytics script configs. `type`, `config` (JSON script content), `location`, `usePartytown` |
-| `adminFcmTokens` | 8 | Firebase Cloud Messaging tokens. `userId` FK, `token` (unique), `deviceInfo` (JSON) |
-| `shippingMethods` | 8 | Shipping method options. `name` (unique), `fee`, `sortOrder` |
-| `checkoutLanguages` | 9 | Checkout i18n. `code` (unique), `languageData` (JSON), `fieldVisibility` (JSON) |
+### `system.ts` -- System Domain
+
+| Table | Purpose |
+|-------|---------|
+| `settings` | Key-value settings store. `key` + `category` unique constraint, value, type, expiry |
+| `siteSettings` | Singleton site config. Header/footer JSON, checkout settings, SEO, WhatsApp OTP config |
+| `analytics` | Analytics script configs. Type, raw script config, location, Partytown flag |
+| `adminFcmTokens` | Firebase Cloud Messaging tokens. User FK, unique token, device metadata |
+| `shippingMethods` | Shipping method options. Name, fee, sort order |
+| `checkoutLanguages` | Checkout i18n. Unique code, language data JSON, field visibility JSON |
 
 ## JSON Column Shapes
 
@@ -249,7 +253,9 @@ Soft-delete columns (`deletedAt`) follow the same pattern but are nullable with 
 
 ## Migrations
 
-33 migrations in `packages/database/migrations/` (0000-0032). Generated by Drizzle Kit (`pnpm db:generate`), applied via Wrangler:
+Migration SQL lives in `packages/database/migrations/`. Generated migrations
+come from Drizzle Kit (`pnpm db:generate`); intentional manual migrations must
+also be reflected in the migration metadata check.
 
 ```bash
 # Generate a new migration after schema changes
@@ -274,6 +280,17 @@ Notable migrations:
 - `0030` -- Payment idempotency: unique partial indexes on `orderPayments` for `stripePaymentIntentId`, `sslcommerzTranId`, `polarCheckoutId` per order (with dedup cleanup)
 - `0031` -- Bengali FTS5 tokenizer: reconfigures 5 FTS tables with `unicode61` tokenizer for Bengali script support
 - `0032` -- Additional schema changes
+- `0033` -- Media metadata: `altText`, `width`, `height`
+- `0034` -- Page featured image JSON
+- `0035` -- Scoped `widgetPlacements` table and migration from legacy widget placement fields
+- `0036` -- Atomic discount redemption triggers for max uses and one-per-customer
+- `0037` -- Scoped widget JavaScript content on widgets and widget history
+
+Validate migration metadata after schema or migration edits:
+
+```bash
+pnpm --filter @scalius/database check:migrations
+```
 
 Drizzle config (`drizzle.config.ts`):
 - Schema: `./src/schema/index.ts`
@@ -284,12 +301,11 @@ Drizzle config (`drizzle.config.ts`):
 
 | Package | Purpose |
 |---------|---------|
-| `drizzle-orm` ^0.45.1 | ORM, schema definitions, query builder |
+| `drizzle-orm` ^0.45.2 | ORM, schema definitions, query builder |
 | `drizzle-kit` (dev) ^0.31.9 | Migration generation |
 | `@cloudflare/workers-types` (dev) | `D1Database` type |
 
 ## Known Gaps
 
 - No FTS5 virtual tables in the Drizzle schema -- FTS5 tables are created via raw SQL in migration `0016_fts5_search.sql` and queried via helpers in `@scalius/core/search/fts5.ts`.
-- `siteSettings` and `metaConversionsSettings` have `singletonKey` columns with unique constraints (enforced in migration 0024) but no Drizzle-level unique constraint on `singletonKey` in the schema definition.
 - Several JSON columns (`headerConfig`, `footerConfig`, etc.) are typed as plain `text()` -- there are no Drizzle JSON mode annotations or Zod validators at the schema level. Validation happens in the service layer.

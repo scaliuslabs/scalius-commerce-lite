@@ -4,13 +4,17 @@ Generated TypeScript SDK from the API worker's OpenAPI spec. Provides typed API 
 
 ## Current State
 
-**The SDK is fully generated and operational.** The OpenAPI spec covers 245 paths, generating ~27,500 lines of TypeScript types and 343 SDK methods.
+**The SDK is fully generated and operational.** The source of truth is
+`openapi.json` plus the generated files in `src/generated/**`; do not rely on
+README prose for endpoint counts because the API surface changes often.
 
 | File | Contents |
 |------|----------|
-| `src/generated/types.gen.ts` | ~27,500 lines of typed request/response interfaces for all API endpoints |
-| `src/generated/sdk.gen.ts` | 343 typed SDK methods (one per endpoint operation) |
-| `src/generated/client.gen.ts` | HTTP client using `@hey-api/client-fetch` with `createClient()` and `createConfig()` |
+| `openapi.json` | Checked-in OpenAPI artifact used by the generator |
+| `src/generated/types.gen.ts` | Typed request/response interfaces for generated API endpoints |
+| `src/generated/sdk.gen.ts` | Typed SDK methods generated from OpenAPI operations |
+| `src/generated/client.gen.ts` | Generated default HTTP client |
+| `src/generated/client-core.ts` | Generated client core used by the custom client factory |
 | `src/generated/index.ts` | Barrel re-export of all generated files |
 | `src/client-factory.ts` | Transport-agnostic client factory (Service Binding or HTTP) |
 | `src/index.ts` | Root barrel re-export of generated types, SDK, client, and factory |
@@ -82,7 +86,7 @@ To regenerate the SDK after API changes:
 
 ```bash
 # 1. Start the API worker (it serves the OpenAPI spec)
-pnpm dev --filter=@scalius/api
+pnpm --filter @scalius/api dev
 
 # 2. Generate the spec and SDK
 pnpm generate:sdk
@@ -123,10 +127,10 @@ Both admin and storefront import types and SDK methods:
 | Package | Purpose |
 |---------|---------|
 | `@hey-api/openapi-ts` (dev) | Code generation from OpenAPI spec |
-| `@hey-api/client-fetch` (dev) | Runtime HTTP client (bundled into generated output) |
+| `@hey-api/client-fetch` | Runtime Fetch client used by generated output |
 | `tsx` (dev) | TypeScript execution for the spec generation script |
 
 ## Known Gaps
 
 - Only routes using `@hono/zod-openapi`'s `createRoute()` appear in the generated spec. Any routes using plain Hono `.get()`/`.post()` are invisible to the SDK generator.
-- No runtime dependencies -- this is a dev-time code generation package. The generated client bundles `@hey-api/client-fetch` inline.
+- Generated files are not hand-maintained. Regenerate with `pnpm generate:sdk` after changing an OpenAPI route schema or response contract.

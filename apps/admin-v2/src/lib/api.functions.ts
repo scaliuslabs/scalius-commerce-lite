@@ -1,5 +1,5 @@
-// @ts-nocheck — Known TanStack Start issue: TS2345 on handler types when Register includes router context (QueryClient).
-// See: https://github.com/TanStack/router/issues/6185
+// @ts-nocheck - Remaining legacy server-function barrel still returns broad API shapes.
+// Extracted slices should live under ./api-functions/** without file-level nocheck.
 /**
  * TanStack Start server functions for ALL admin API endpoints.
  *
@@ -24,9 +24,6 @@ import {
   apiBasePost,
 } from "./api.server";
 
-// TanStack Start's .handler() has overly strict generics with async functions.
-// This cast helper satisfies the type checker without changing runtime behavior.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 // ═══════════════════════════════════════════════════════════════════
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════════════════
@@ -2113,40 +2110,6 @@ export const getAiContextBatchDetails = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
   .handler(async ({ data }) => {
     return apiPost("/ai-context/batch-details", data);
-  });
-
-// ═══════════════════════════════════════════════════════════════════
-//  CACHE (non-admin endpoints)
-// ═══════════════════════════════════════════════════════════════════
-
-export const getCacheStats = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiBaseGet<Record<string, unknown>>("/cache/stats");
-  },
-);
-
-export const getCacheLastCleared = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiBaseGet<unknown>("/cache/last-cleared");
-  },
-);
-
-export const getCacheGroups = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiBaseGet<unknown>("/cache/groups");
-  },
-);
-
-export const clearCache = createServerFn({ method: "POST" }).handler(
-  async () => {
-    return apiBasePost("/cache/clear");
-  },
-);
-
-export const clearCacheGroup = createServerFn({ method: "POST" })
-  .inputValidator((data: { groupName: string }) => data)
-  .handler(async ({ data }) => {
-    return apiBasePost("/cache/clear-group", { groups: [data.groupName] });
   });
 
 // ═══════════════════════════════════════════════════════════════════

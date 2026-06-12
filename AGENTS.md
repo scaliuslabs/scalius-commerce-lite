@@ -120,8 +120,9 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - Local auth routes under `apps/admin-v2/src/routes/api/auth/$.ts` are handled by the admin worker, not the API worker.
 - `@/` and `~/` both alias to `apps/admin-v2/src`.
 - Most data access flows through `api.functions.ts`, `api.queries.ts`, and `api.mutations.ts`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
+- When touching admin server functions, prefer extracting a domain slice under `apps/admin-v2/src/lib/api-functions/` with normal typechecking instead of adding to the legacy `api.functions.ts` barrel.
 - URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
-- `api.functions.ts` currently has `@ts-nocheck` due a TanStack Start handler typing issue. Treat it as a known limitation, not an invitation to weaken adjacent files.
+- `api.functions.ts` currently has `@ts-nocheck` because the legacy barrel still exposes broad `unknown` API shapes that TanStack Start rejects as non-serializable. Treat it as a migration target, not an invitation to weaken adjacent files.
 
 ## Storefront Notes
 

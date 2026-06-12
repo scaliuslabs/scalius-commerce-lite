@@ -116,15 +116,16 @@ import {
   getHeroSliders,
   // AI
   getAiPrompts,
-  // Cache
-  getCacheStats,
-  getCacheLastCleared,
-  getCacheGroups,
   // Setup
   getSetupStatus,
   // Firebase
   getFirebaseConfig,
 } from "./api.functions";
+import {
+  getCacheGroups,
+  getCacheLastCleared,
+  getCacheStats,
+} from "./api-functions/cache";
 
 // Query staleTime constants (how long data is considered fresh)
 const STALE = {
