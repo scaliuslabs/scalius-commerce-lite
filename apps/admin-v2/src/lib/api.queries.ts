@@ -66,9 +66,6 @@ import {
   // Attributes
   getAttributes,
   getAttributeValues,
-  // Analytics
-  getAnalyticsScripts,
-  getAnalyticsScript,
   // Inventory
   getInventory,
   // Media
@@ -121,6 +118,10 @@ import {
   // Firebase
   getFirebaseConfig,
 } from "./api.functions";
+import {
+  getAnalyticsScript,
+  getAnalyticsScripts,
+} from "./api-functions/analytics";
 import {
   getCacheGroups,
   getCacheLastCleared,

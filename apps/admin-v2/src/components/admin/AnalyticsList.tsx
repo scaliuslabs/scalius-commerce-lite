@@ -31,9 +31,12 @@ import { Edit, Trash2, Plus, Power, PowerOff } from "lucide-react";
 import { formatDate } from "@scalius/shared/utils";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { deleteAnalyticsScript, toggleAnalyticsScript } from "@/lib/api.functions";
+import {
+  deleteAnalyticsScript,
+  toggleAnalyticsScript,
+} from "@/lib/api-functions/analytics";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouter, Link } from "@tanstack/react-router";
+import { useRouter, Link } from "@tanstack/react-router";
 import { AdminListPagination } from "./shared/AdminListPagination";
 import { useDeleteHandler } from "@/hooks/use-delete-handler";
 
@@ -53,7 +56,6 @@ interface AnalyticsListProps {
 }
 
 export function AnalyticsList({ analytics }: AnalyticsListProps) {
-  const navigate = useNavigate();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isDeleting, handleDelete } = useDeleteHandler({
