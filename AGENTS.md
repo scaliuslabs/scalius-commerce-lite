@@ -53,13 +53,13 @@ packages/
 
 ### Apps
 
-- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is roughly 254 exported API-wrapper server functions, 78 query option wrappers, 115 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
+- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is roughly 241 server functions remaining in the legacy `api.functions.ts` barrel, plus 13 extracted functions under `src/lib/api-functions/`, 78 query option wrappers, 115 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
 - **API (`apps/api/`)**: Standalone Hono `OpenAPIHono` app mounted at `/api/v1`. Exports a `WorkerEntrypoint` with `fetch`, `queue`, and scheduled inventory-expiry cron handlers. Owns public/admin API routes, webhook ingestion, OpenAPI spec, queue consumer, and `WidgetDesignAgent` Durable Object for widget AI generation.
 - **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer storefront. Owns product, category, cart, checkout, search, customer auth proxy, SEO, sitemaps, error pages, and L1/L2 caching. Uses `env.BACKEND_API` service binding in production; intentionally skips service binding in local dev because separate Miniflare processes cannot reliably share the Fetcher.
 
 ### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 252 paths / 349 operations. Has runtime dependency `@hey-api/client-fetch`. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 350 operations. Has runtime dependency `@hey-api/client-fetch`. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
 - **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 38 SQL migrations (`0000` through `0037`).
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.

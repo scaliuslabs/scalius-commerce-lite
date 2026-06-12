@@ -5,6 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     getNavigationItems,
     getNavigationMenus,
+    getNavigationPreviewProductCount,
     saveNavigationConfig,
     updateNavigationConfig,
     deleteNavigationConfig,
@@ -33,6 +34,31 @@ const navSourceItemSchema = z.object({
     type: z.string(),
     url: z.string(),
 });
+
+const previewProductsQuerySchema = z
+    .object({
+        categoryId: z.string().min(1),
+        search: z.string().optional(),
+        minPrice: z.coerce.number().optional(),
+        maxPrice: z.coerce.number().optional(),
+        freeDelivery: z.enum(["true", "false"]).optional(),
+        hasDiscount: z.enum(["true", "false"]).optional(),
+    })
+    .catchall(z.string().optional());
+
+const RESERVED_PREVIEW_QUERY_KEYS = new Set([
+    "categoryId",
+    "search",
+    "minPrice",
+    "maxPrice",
+    "freeDelivery",
+    "hasDiscount",
+    "page",
+    "limit",
+    "sort",
+    "sortBy",
+    "order",
+]);
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -65,6 +91,71 @@ app.openapi(listItemsRoute, async (c) => {
     const db = c.get("db");
     const items = await getNavigationItems(db);
     return ok(c, { items });
+});
+
+// ── Preview Dynamic Navigation Product Count ──
+
+const previewProductsRoute = createRoute({
+    method: "get",
+    path: "/preview-products",
+    tags: ["Admin - Navigation"],
+    summary: "Preview dynamic navigation product count",
+    request: {
+        query: previewProductsQuerySchema,
+    },
+    responses: {
+        200: {
+            description: "Matching product count",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        count: z.number(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(previewProductsRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query") as Record<string, string | number | undefined> & {
+        categoryId: string;
+        search?: string;
+        minPrice?: number;
+        maxPrice?: number;
+        freeDelivery?: "true" | "false";
+        hasDiscount?: "true" | "false";
+    };
+    const {
+        categoryId,
+        search,
+        minPrice,
+        maxPrice,
+        freeDelivery,
+        hasDiscount,
+        ...rawFilters
+    } = query;
+    const attributeFilters = Object.entries(rawFilters)
+        .filter(([key, value]) => (
+            !RESERVED_PREVIEW_QUERY_KEYS.has(key)
+            && typeof value === "string"
+            && value.trim().length > 0
+        ))
+        .map(([slug, value]) => ({ slug, value: value as string }));
+
+    const result = await getNavigationPreviewProductCount(db, {
+        categoryId,
+        search,
+        minPrice,
+        maxPrice,
+        freeDelivery,
+        hasDiscount,
+        attributeFilters,
+    });
+
+    return ok(c, result);
 });
 
 // ── Get Navigation Config ──

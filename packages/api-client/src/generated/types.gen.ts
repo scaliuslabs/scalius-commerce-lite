@@ -11765,6 +11765,94 @@ export type GetApiV1AdminNavigationItemsResponses = {
 
 export type GetApiV1AdminNavigationItemsResponse = GetApiV1AdminNavigationItemsResponses[keyof GetApiV1AdminNavigationItemsResponses];
 
+export type GetApiV1AdminNavigationPreviewProductsData = {
+    body?: never;
+    path?: never;
+    query: {
+        categoryId: string;
+        search?: string;
+        minPrice?: number | null;
+        maxPrice?: number | null;
+        freeDelivery?: 'true' | 'false';
+        hasDiscount?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/navigation/preview-products';
+};
+
+export type GetApiV1AdminNavigationPreviewProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationPreviewProductsError = GetApiV1AdminNavigationPreviewProductsErrors[keyof GetApiV1AdminNavigationPreviewProductsErrors];
+
+export type GetApiV1AdminNavigationPreviewProductsResponses = {
+    /**
+     * Matching product count
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationPreviewProductsResponse = GetApiV1AdminNavigationPreviewProductsResponses[keyof GetApiV1AdminNavigationPreviewProductsResponses];
+
 export type GetApiV1AdminNavigationData = {
     body?: never;
     path?: never;

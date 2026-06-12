@@ -6,6 +6,8 @@ import { isNull, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
+import { getPublicCategoryById } from "../categories/categories.storefront";
+import { getStorefrontProducts } from "../products/products.storefront";
 
 // ─────────────────────────────────────────
 // Types
@@ -16,6 +18,16 @@ export interface NavigationItem {
     title: string;
     href?: string;
     subMenu?: NavigationItem[];
+}
+
+export interface NavigationPreviewProductCountInput {
+    categoryId: string;
+    search?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    freeDelivery?: "true" | "false";
+    hasDiscount?: "true" | "false";
+    attributeFilters?: { slug: string; value: string }[];
 }
 
 // ─────────────────────────────────────────
@@ -68,6 +80,31 @@ export async function getNavigationItems(db: Database) {
         categories: categoryItems,
         pages: pageItems,
     };
+}
+
+export async function getNavigationPreviewProductCount(
+    db: Database,
+    input: NavigationPreviewProductCountInput,
+) {
+    const category = await getPublicCategoryById(db, input.categoryId);
+    if (!category) {
+        throw new NotFoundError("Category not found");
+    }
+
+    const result = await getStorefrontProducts(db, {
+        category: input.categoryId,
+        search: input.search,
+        minPrice: input.minPrice,
+        maxPrice: input.maxPrice,
+        freeDelivery: input.freeDelivery,
+        hasDiscount: input.hasDiscount,
+        page: 1,
+        limit: 1,
+        sort: "newest",
+        attributeFilters: input.attributeFilters ?? [],
+    });
+
+    return { count: result.pagination.total };
 }
 
 /** Get navigation configs (header + footer) from siteSettings with safe JSON.parse.

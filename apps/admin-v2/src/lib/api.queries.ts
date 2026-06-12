@@ -71,9 +71,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  // Navigation
-  getNavigationItems,
-  getNavigationPreviewProducts,
   // Fraud Checker
   getFraudCheckerProviders,
   // RBAC
@@ -127,6 +124,11 @@ import {
   getCacheLastCleared,
   getCacheStats,
 } from "./api-functions/cache";
+import {
+  getNavigationItems,
+  getNavigationPreviewProducts,
+  type NavigationPreviewProductsInput,
+} from "./api-functions/navigation";
 
 // Query staleTime constants (how long data is considered fresh)
 const STALE = {
@@ -557,7 +559,7 @@ export const navigationItemsQueryOptions = () =>
   });
 
 export const navigationPreviewProductsQueryOptions = (
-  params: Record<string, string>,
+  params: NavigationPreviewProductsInput,
 ) =>
   queryOptions({
     queryKey: queryKeys.navigation.previewProducts(params),
