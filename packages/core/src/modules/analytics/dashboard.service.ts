@@ -6,6 +6,36 @@ import type { Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc } from "drizzle-orm";
 
+const DASHBOARD_QUERY_RETRY_DELAYS_MS = [150, 350, 750] as const;
+
+function isTransientD1Error(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes("D1 DB is overloaded") ||
+        message.includes("Requests queued for too long") ||
+        message.includes("code: 7429");
+}
+
+async function wait(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runDashboardQuery<T>(operation: () => Promise<T> | T): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= DASHBOARD_QUERY_RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            const delay = DASHBOARD_QUERY_RETRY_DELAYS_MS[attempt];
+            if (!isTransientD1Error(error) || delay === undefined) break;
+            await wait(delay);
+        }
+    }
+
+    throw lastError;
+}
+
 /** Aggregated dashboard metrics for the admin home page. */
 export async function getDashboardStats(db: Database) {
     const now = new Date();
@@ -21,21 +51,19 @@ export async function getDashboardStats(db: Database) {
         firstDayOfLastMonth.getTime() / 1000,
     );
 
-    const [
-        totalProductsArr,
-        totalCustomersArr,
-        currentMonthArr,
-        lastMonthArr,
-        totalRevenueArr,
-    ] = await Promise.all([
+    const totalProductsArr = await runDashboardQuery(() =>
         db
             .select({ count: sql<number>`count(*)` })
             .from(products)
             .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`),
+    );
+    const totalCustomersArr = await runDashboardQuery(() =>
         db
             .select({ count: sql<number>`count(*)` })
             .from(customers)
             .where(sql`${customers.deletedAt} is null`),
+    );
+    const currentMonthArr = await runDashboardQuery(() =>
         db
             .select({
                 count: sql<number>`count(*)`,
@@ -49,6 +77,8 @@ export async function getDashboardStats(db: Database) {
             .where(
                 sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs}`,
             ),
+    );
+    const lastMonthArr = await runDashboardQuery(() =>
         db
             .select({
                 count: sql<number>`count(*)`,
@@ -58,6 +88,8 @@ export async function getDashboardStats(db: Database) {
             .where(
                 sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
             ),
+    );
+    const totalRevenueArr = await runDashboardQuery(() =>
         db
             .select({
                 total: sql<number>`sum(total_amount)`,
@@ -66,7 +98,7 @@ export async function getDashboardStats(db: Database) {
             .where(
                 sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
             ),
-    ]);
+    );
 
     const totalProducts = totalProductsArr[0]?.count ?? 0;
     const totalCustomers = totalCustomersArr[0]?.count ?? 0;
@@ -115,7 +147,7 @@ export async function getDashboardStats(db: Database) {
 
 /** Returns the N most recent orders for the dashboard feed. */
 export async function getRecentOrders(db: Database, limit = 5) {
-    const recentOrders = await db
+    const recentOrders = await runDashboardQuery(() => db
         .select({
             id: orders.id,
             customerName: orders.customerName,
@@ -125,7 +157,7 @@ export async function getRecentOrders(db: Database, limit = 5) {
         })
         .from(orders)
         .orderBy(desc(orders.createdAt))
-        .limit(limit);
+        .limit(limit));
 
     return recentOrders.map((order) => ({
         ...order,
@@ -143,7 +175,7 @@ export async function getDailyActivityData(db: Database, days: number) {
     startDate.setDate(now.getDate() - days);
     const startDateTs = Math.floor(startDate.getTime() / 1000);
 
-    const dailyOrderData = await db
+    const dailyOrderData = await runDashboardQuery(() => db
         .select({
             date: sql<string>`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
             orderCount: sql<number>`count(*)`.mapWith(Number),
@@ -162,9 +194,9 @@ export async function getDailyActivityData(db: Database, days: number) {
         )
         .orderBy(
             sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch')) asc`,
-        );
+        ));
 
-    const dailyCustomerData = await db
+    const dailyCustomerData = await runDashboardQuery(() => db
         .select({
             date: sql<string>`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
             customerCount: sql<number>`count(*)`.mapWith(Number),
@@ -181,7 +213,7 @@ export async function getDailyActivityData(db: Database, days: number) {
         )
         .orderBy(
             sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch')) asc`,
-        );
+        ));
 
     const result = [];
     const currentDate = new Date(startDate);
