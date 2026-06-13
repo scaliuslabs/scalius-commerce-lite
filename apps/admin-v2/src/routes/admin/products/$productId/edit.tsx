@@ -49,7 +49,7 @@ function EditProductPage() {
     images: (product.images || []).map((img: ProductImageDetail) => ({
       id: img.id,
       url: img.url,
-      filename: img.altText || img.url.split("/").pop() || "",
+      filename: img.alt ?? img.altText ?? img.url.split("/").pop() ?? "",
       size: 0,
       createdAt: new Date(img.createdAt),
     })),

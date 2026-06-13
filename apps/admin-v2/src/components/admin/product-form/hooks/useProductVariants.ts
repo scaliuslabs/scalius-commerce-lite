@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { extractUniqueColors } from "../utils";
 import { productVariantsQueryOptions } from "@/lib/api.queries";
 import { queryKeys } from "@/lib/query-keys";
+import type { ProductVariantDto } from "@/lib/api-functions/products";
 
 interface UseProductVariantsOptions {
   productId?: string;
@@ -11,7 +12,7 @@ interface UseProductVariantsOptions {
 }
 
 interface UseProductVariantsReturn {
-  variants: Array<{ color?: string | null; colorSortOrder?: number; [key: string]: unknown }>;
+  variants: ProductVariantDto[];
   uniqueColorOptions: string[];
   isLoading: boolean;
   refreshVariants: () => void;
@@ -28,15 +29,8 @@ export function useProductVariants({
     enabled: !!productId && isEdit,
   });
 
-  // The API returns { variants: [...] } or a raw array — normalize to array
   const variants = useMemo(() => {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    if (typeof data === "object" && "variants" in (data as Record<string, unknown>)) {
-      const obj = data as Record<string, unknown>;
-      return Array.isArray(obj.variants) ? obj.variants : [];
-    }
-    return [];
+    return data?.variants ?? [];
   }, [data]);
 
   // Extract unique colors from variants for image mapping

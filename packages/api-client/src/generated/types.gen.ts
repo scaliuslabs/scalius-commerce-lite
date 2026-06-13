@@ -22358,6 +22358,8 @@ export type GetApiV1AdminProductsByIdResponses = {
             metaDescription: string | null;
             isActive: boolean;
             discountPercentage: number | null;
+            discountType: 'percentage' | 'flat' | null;
+            discountAmount: number | null;
             freeDelivery: boolean;
             createdAt: string | number;
             updatedAt: string | number;

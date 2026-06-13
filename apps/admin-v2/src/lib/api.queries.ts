@@ -11,12 +11,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
 import {
-  // Products
-  getProducts,
-  getProduct,
-  getProductStats,
-  getProductVariants,
-  getVariantSortOrder,
   // Orders
   getOrders,
   getOrder,
@@ -34,6 +28,14 @@ import {
   getWidget,
   getWidgetHistory,
 } from "./api.functions";
+import {
+  getProduct,
+  getProducts,
+  getProductStats,
+  getProductVariants,
+  getVariantSortOrder,
+  type ProductsQueryInput,
+} from "./api-functions/products";
 import {
   getCategories,
   getCategory,
@@ -164,15 +166,7 @@ export const dashboardQueryOptions = () =>
 //  PRODUCTS
 // ═══════════════════════════════════════════════════════════════════
 
-export const productsQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  categoryId?: string;
-  sort?: string;
-  order?: string;
-  showTrashed?: boolean;
-}) =>
+export const productsQueryOptions = (params: ProductsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.products.list(params),
     queryFn: () => getProducts({ data: params }),

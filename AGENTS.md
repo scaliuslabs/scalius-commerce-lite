@@ -54,7 +54,7 @@ packages/
 
 ### Apps
 
-- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is 65 server functions remaining in the legacy `api.functions.ts` barrel, plus 188 extracted functions under `src/lib/api-functions/`, 78 query option wrappers, 114 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
+- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is 46 server functions remaining in the legacy `api.functions.ts` barrel, plus 207 extracted functions under `src/lib/api-functions/`, 78 query option wrappers, 114 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
 - **API (`apps/api/`)**: Standalone Hono `OpenAPIHono` app mounted at `/api/v1`. Exports a `WorkerEntrypoint` with `fetch`, `queue`, and scheduled inventory-expiry cron handlers. Owns public/admin API routes, webhook ingestion, OpenAPI spec, queue consumer, and `WidgetDesignAgent` Durable Object for widget AI generation.
 - **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer storefront. Owns product, category, cart, checkout, search, customer auth proxy, SEO, sitemaps, error pages, and L1/L2 caching. Uses `env.BACKEND_API` service binding in production; intentionally skips service binding in local dev because separate Miniflare processes cannot reliably share the Fetcher.
 

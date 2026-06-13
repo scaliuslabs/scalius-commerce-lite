@@ -16,13 +16,6 @@ import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "./query-keys";
 import {
-  // Products
-  createProduct,
-  updateProduct,
-  deleteProduct,
-  permanentDeleteProduct,
-  restoreProduct,
-  bulkDeleteProducts,
   // Orders
   createOrder,
   updateOrder,
@@ -49,19 +42,31 @@ import {
   restoreWidget,
   bulkDeleteWidgets,
   bulkRestoreWidgets,
-  // Product Variants
-  createProductVariant,
-  updateProductVariant,
-  deleteProductVariant,
-  bulkCreateProductVariants,
-  bulkUpdateProductVariants,
-  bulkDeleteProductVariants,
-  duplicateProductVariant,
   // Widget History
   createWidgetHistorySnapshot,
   deleteWidgetHistory,
   restoreWidgetHistory,
 } from "./api.functions";
+import {
+  bulkCreateProductVariants,
+  bulkDeleteProducts,
+  bulkDeleteProductVariants,
+  bulkUpdateProductVariants,
+  createProduct,
+  createProductVariant,
+  deleteProduct,
+  deleteProductVariant,
+  duplicateProductVariant,
+  permanentDeleteProduct,
+  restoreProduct,
+  updateProduct,
+  updateProductVariant,
+  type BulkProductVariantInput,
+  type CreateProductInput,
+  type ProductVariantInput,
+  type ProductVariantUpdateInput,
+  type UpdateProductInput,
+} from "./api-functions/products";
 import {
   bulkDeleteCategories,
   bulkRestoreCategories,
@@ -232,7 +237,7 @@ function serializeUpdateDiscountInput(
 export function useCreateProduct() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createProduct({ data }),
+    mutationFn: (data: CreateProductInput) => createProduct({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
@@ -246,8 +251,7 @@ export function useCreateProduct() {
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateProduct({ data }),
+    mutationFn: (data: UpdateProductInput) => updateProduct({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       queryClient.invalidateQueries({
@@ -1649,7 +1653,7 @@ export function useCreateProductVariant() {
   return useMutation({
     mutationFn: (data: {
       productId: string;
-      variant: Record<string, unknown>;
+      variant: ProductVariantInput;
     }) => createProductVariant({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -1671,7 +1675,7 @@ export function useUpdateProductVariant() {
     mutationFn: (data: {
       productId: string;
       variantId: string;
-      variant: Record<string, unknown>;
+      variant: ProductVariantInput;
     }) => updateProductVariant({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -1711,7 +1715,7 @@ export function useBulkCreateProductVariants() {
   return useMutation({
     mutationFn: (data: {
       productId: string;
-      variants: Record<string, unknown>[];
+      variants: BulkProductVariantInput[];
     }) => bulkCreateProductVariants({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -1732,7 +1736,7 @@ export function useBulkUpdateProductVariants() {
   return useMutation({
     mutationFn: (data: {
       productId: string;
-      updates: Record<string, unknown>[];
+      updates: ProductVariantUpdateInput[];
     }) => bulkUpdateProductVariants({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
