@@ -46,13 +46,14 @@ All functions are standalone exports from `media.service.ts` (not methods on a c
 
 | Function        | Signature                                                             | Behavior                                                                                        |
 |-----------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
-| `listMediaFiles`   | `(db, page, limit, searchQuery, folderId?) => {files, pagination}`   | Paginated list. `folderId` of `"all"` returns all, `"root"`/`"null"`/`""` returns root (no folder), else filters by folder ID. Filters by `deletedAt IS NULL`, optional LIKE search on filename. |
+| `listMediaFiles`   | `(db, page, limit, searchQuery, folderId?, sortBy?, sortOrder?, mimeType?) => {files, pagination}`   | Paginated list. `folderId` of `"all"` returns all, `"root"`/`"null"`/`""` returns root (no folder), else filters by folder ID. Filters by `deletedAt IS NULL`, optional LIKE search on filename, optional MIME prefix, and supports `createdAt`/`size`/`filename` sorting. |
 | `uploadMediaFiles` | `(db, files: File[], folderId) => response`                         | Validates each file (max 10MB, max 50 files). Uploads in batches of 5 with 100ms inter-batch delay. Calls `uploadFile()` from `@scalius/core/integrations/storage`. Returns `{files, summary}` with status 201/207/400. On total failure throws `ValidationError`. All catch blocks use typed `error: unknown` with `instanceof Error` checks. |
-| `updateMediaFile`  | `(db, id, {filename?, folderId?}) => file`                          | Updates metadata only (filename, folder). Throws `NotFoundError` if missing.                   |
+| `updateMediaFile`  | `(db, id, {filename?, altText?, folderId?}) => file`                 | Updates metadata only (filename, alt text, folder). Throws `NotFoundError` if missing.          |
 | `deleteMediaFile`  | `(db, id) => void`                                                   | Extracts R2 key from URL via `extractKeyFromUrl()`, calls `deleteFile()` from storage, then hard-deletes DB row. Throws `NotFoundError` if missing. |
-| `moveMediaFiles`   | `(db, fileIds[], folderId) => void`                                  | Bulk update `folderId` using `inArray`.                                                         |
+| `moveMediaFiles`   | `(db, fileIds[], folderId) => { movedCount }`                        | Bulk update `folderId` using `inArray` for active files and returns how many rows moved.        |
 | `listMediaFolders` | `(db) => folders[]`                                                  | All folders where `deletedAt IS NULL`, ordered by `createdAt DESC`.                            |
 | `createMediaFolder`| `(db, name, parentId?) => folder`                                    | Inserts with `"folder_" + nanoid()` ID.                                                        |
+| `updateMediaFolder`| `(db, id, name) => folder`                                           | Renames an active folder. Throws `NotFoundError` if missing.                                   |
 | `deleteMediaFolder`| `(db, id) => void`                                                   | Moves all files in folder to root (`folderId = null`), then soft-deletes the folder.           |
 
 ## Validation Schemas
@@ -61,11 +62,12 @@ From `media.validation.ts`:
 
 | Schema | Fields | Purpose |
 |--------|--------|---------|
-| `updateMediaSchema` | `filename?`, `folderId?` | Update file metadata |
+| `updateMediaSchema` | `filename?`, `altText?`, `folderId?` | Update file metadata |
 | `moveMediaSchema` | `fileIds[]` (min 1), `folderId?` | Move files to folder |
 | `createFolderSchema` | `name` (min 1), `parentId?` | Create folder |
+| `updateFolderSchema` | `name` (min 1) | Rename folder |
 
-Exported types: `UpdateMediaInput`, `MoveMediaInput`, `CreateFolderInput`.
+Exported types: `UpdateMediaInput`, `MoveMediaInput`, `CreateFolderInput`, `UpdateFolderInput`.
 
 ## R2 Storage Integration
 
@@ -125,6 +127,7 @@ All mounted under `/api/v1/admin/media` (admin-only, auth required).
 | POST     | `/move`              | Move files to folder            | 200 `{message}` |
 | GET      | `/folders`           | List all folders                | 200 `{folders}` |
 | POST     | `/folders`           | Create folder                   | 201 `{folder}` |
+| PUT      | `/folders/{id}`      | Rename folder                   | 200 `{folder}` |
 | DELETE   | `/folders/{id}`      | Delete folder (soft)            | 204            |
 
 **Media server** (local dev only): `GET /media/{key}` -- serves R2 objects directly with `Cache-Control: public, max-age=31536000`. Defined in `apps/api/src/routes/media-server.ts`.
@@ -139,10 +142,7 @@ All mounted under `/api/v1/admin/media` (admin-only, auth required).
 
 ## Known Gaps
 
-- **No `alt` field on media table** -- images have no alt-text metadata in DB.
-- **No dimensions stored** -- width/height of uploaded images are not captured or stored.
 - **Hard delete only** -- `deleteMediaFile()` hard-deletes the DB row despite the table having a `deletedAt` column. No soft-delete/trash for individual files.
 - **Bulk delete is sequential** -- `MediaApiClient.deleteFiles()` deletes one-by-one in a loop (no batch endpoint). Slow for large selections.
 - **No rename of R2 keys** -- renaming a file only updates `media.filename` in DB, not the R2 object key. The URL never changes.
 - **`parentId` on folders is unused** -- the column exists, `createMediaFolder` accepts it, but FolderBrowser is flat (no nested folder tree rendering).
-- **No `sortBy`/`sortOrder` support server-side** -- `listMediaFiles` always sorts by `createdAt DESC`. The filter bar sends `sortBy`/`sortOrder` params but the API ignores them.

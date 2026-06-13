@@ -170,7 +170,11 @@ export function MediaManager({
                   filters={mm.filters}
                   onFiltersChange={(newFilters) => {
                     const folderParam =
-                      mm.currentFolderId === "all" ? "all" : mm.currentFolderId;
+                      mm.currentFolderId === "all"
+                        ? "all"
+                        : mm.currentFolderId === null
+                          ? "root"
+                          : mm.currentFolderId;
                     mm.applyFilters({ ...newFilters, folderId: folderParam });
                   }}
                   selectionMode={mm.selectionMode}

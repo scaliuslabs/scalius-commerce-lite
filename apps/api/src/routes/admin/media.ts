@@ -20,13 +20,36 @@ import {
     moveMediaFiles,
     listMediaFolders,
     createMediaFolder,
+    updateMediaFolder,
     deleteMediaFolder,
     updateMediaSchema,
     moveMediaSchema,
-    createFolderSchema
+    createFolderSchema,
+    updateFolderSchema
 } from "@scalius/core/modules/media";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+const uploadedMediaSchema = mediaSchema.pick({
+    id: true,
+    filename: true,
+    url: true,
+    size: true,
+    mimeType: true,
+    altText: true,
+    width: true,
+    height: true,
+    createdAt: true,
+});
+
+const uploadResponseSchema = successEnvelope(
+    z.object({
+        files: z.array(uploadedMediaSchema),
+        summary: z.string().optional(),
+        warnings: z.array(z.object({ filename: z.string(), error: z.string() })).optional(),
+        partialSuccess: z.boolean().optional(),
+    }),
+);
 
 // ── List Media ──
 
@@ -79,11 +102,11 @@ const uploadRoute = createRoute({
     responses: {
         200: {
             description: "Upload result (partial success or info)",
-            content: { "application/json": { schema: successEnvelope(z.object({ files: z.array(mediaSchema) }).passthrough()) } },
+            content: { "application/json": { schema: uploadResponseSchema } },
         },
         201: {
             description: "All files uploaded successfully",
-            content: { "application/json": { schema: successEnvelope(z.object({ files: z.array(mediaSchema) }).passthrough()) } },
+            content: { "application/json": { schema: uploadResponseSchema } },
         },
         ...errorResponses,
     }
@@ -267,6 +290,38 @@ app.openapi(createFolderRoute, (async (c: any) => {
     const folder = await createMediaFolder(db, name, parentId);
     return created(c, { folder });
 }) as any);
+
+// ── Update Folder ──
+
+const updateFolderRoute = createRoute({
+    method: "put",
+    path: "/folders/{id}",
+    tags: ["Admin - Media"],
+    summary: "Rename a media folder",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: updateFolderSchema } } }
+    },
+    responses: {
+        200: {
+            description: "Folder renamed",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ folder: mediaFolderSchema })),
+                },
+            },
+        },
+        ...errorResponses,
+    }
+});
+
+app.openapi(updateFolderRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const { name } = c.req.valid("json");
+    const folder = await updateMediaFolder(db, id, name);
+    return ok(c, { folder });
+});
 
 // ── Delete Folder ──
 

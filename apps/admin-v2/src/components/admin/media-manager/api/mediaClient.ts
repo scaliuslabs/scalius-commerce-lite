@@ -4,9 +4,9 @@ import type {
   MediaFile,
   MediaFolder,
   MediaApiResponse,
-  MediaFoldersApiResponse,
   MediaFilterOptions,
 } from "../types";
+import { unixToDate } from "@scalius/shared/timestamps";
 import { extractApiError, extractApiErrorDetails, unwrapEnvelope } from "~/lib/api-helpers";
 import {
   getMediaList as getMediaFiles,
@@ -16,15 +16,53 @@ import {
   createMediaFolder as createMediaFolderFn,
   deleteMediaFolder as deleteMediaFolderFn,
   moveMediaFiles as moveMediaFilesFn,
-} from "~/lib/api.functions";
+  type MediaFileDto,
+  type MediaFolderDto,
+} from "~/lib/api-functions/media";
 
 /** Shape of the upload response JSON — varies between success, partial, and error */
 interface UploadResponseData {
-  files?: MediaFile[];
+  files?: MediaFileDto[];
   warnings?: Array<{ filename: string; error: string }>;
   summary?: string;
   error?: string;
   details?: Array<{ filename: string; error: string }> | string;
+}
+
+function toDate(value: string | number | Date | null | undefined): Date {
+  return unixToDate(value) ?? new Date(0);
+}
+
+function toOptionalDate(
+  value: string | number | Date | null | undefined,
+): Date | undefined {
+  return unixToDate(value) ?? undefined;
+}
+
+function toMediaFile(file: MediaFileDto): MediaFile {
+  return {
+    id: file.id,
+    url: file.url,
+    filename: file.filename,
+    size: file.size,
+    mimeType: file.mimeType,
+    altText: file.altText ?? null,
+    width: file.width ?? null,
+    height: file.height ?? null,
+    folderId: file.folderId ?? null,
+    createdAt: toDate(file.createdAt),
+    updatedAt: toOptionalDate(file.updatedAt),
+  };
+}
+
+function toMediaFolder(folder: MediaFolderDto): MediaFolder {
+  return {
+    id: folder.id,
+    name: folder.name,
+    parentId: folder.parentId ?? null,
+    createdAt: toDate(folder.createdAt),
+    updatedAt: toOptionalDate(folder.updatedAt),
+  };
 }
 
 export class MediaApiClient {
@@ -41,13 +79,17 @@ export class MediaApiClient {
         page,
         limit,
         search: filters.search,
-        folderId: filters.folderId ?? undefined,
+        folderId:
+          filters.folderId === undefined ? undefined : filters.folderId,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
         mimeType: filters.mimeType ?? undefined,
       },
     });
-    return data as MediaApiResponse;
+    return {
+      files: data.files.map(toMediaFile),
+      pagination: data.pagination,
+    };
   }
 
   /**
@@ -108,21 +150,17 @@ export class MediaApiClient {
       // Unwrap envelope for success responses
       const data = unwrapEnvelope<UploadResponseData>(rawData);
 
-      // Handle success (201) and partial success (207)
-      if (response.status === 207 || response.status === 201) {
-        // Return the full response object if there are warnings or summary
-        if (data.warnings || data.summary) {
-          return {
-            files: data.files || [],
-            warnings: data.warnings,
-            summary: data.summary,
-          };
-        }
-        return data.files || [];
+      const uploadedFiles = (data.files || []).map(toMediaFile);
+
+      if (data.warnings || data.summary) {
+        return {
+          files: uploadedFiles,
+          warnings: data.warnings,
+          summary: data.summary,
+        };
       }
 
-      // Fallback for unexpected responses
-      return data.files || [];
+      return uploadedFiles;
     } catch (error: unknown) {
       // Re-throw with better context if it's a network error
       if (error instanceof TypeError && error.message.includes("fetch")) {
@@ -170,8 +208,8 @@ export class MediaApiClient {
    * Fetch all folders
    */
   static async fetchFolders(): Promise<MediaFolder[]> {
-    const data = await getMediaFolders() as unknown as MediaFoldersApiResponse;
-    return data.folders ?? [];
+    const data = await getMediaFolders();
+    return (data.folders ?? []).map(toMediaFolder);
   }
 
   /**
@@ -183,8 +221,8 @@ export class MediaApiClient {
   ): Promise<MediaFolder> {
     const data = await createMediaFolderFn({
       data: { name, parentId: parentId || undefined },
-    }) as { folder: MediaFolder };
-    return data.folder;
+    });
+    return toMediaFolder(data.folder);
   }
 
   /**
@@ -201,7 +239,7 @@ export class MediaApiClient {
     fileIds: string[],
     folderId: string | null,
   ): Promise<void> {
-    await moveMediaFilesFn({ data: { fileIds, targetFolderId: folderId } });
+    await moveMediaFilesFn({ data: { fileIds, folderId } });
   }
 
   /**
@@ -213,8 +251,8 @@ export class MediaApiClient {
   ): Promise<MediaFile> {
     const data = await updateMedia({
       data: { fileId, update: updates },
-    }) as { file: MediaFile };
-    return data.file;
+    });
+    return toMediaFile(data.file);
   }
 
   /**
@@ -226,7 +264,7 @@ export class MediaApiClient {
   ): Promise<MediaFile> {
     const data = await updateMedia({
       data: { fileId, update: { altText } },
-    }) as { file: MediaFile };
-    return data.file;
+    });
+    return toMediaFile(data.file);
   }
 }

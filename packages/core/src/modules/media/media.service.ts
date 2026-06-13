@@ -249,6 +249,20 @@ export async function createMediaFolder(dbOp: Database, name: string, parentId?:
     return folder;
 }
 
+export async function updateMediaFolder(dbOp: Database, id: string, name: string) {
+    const [folder] = await dbOp
+        .update(mediaFolders)
+        .set({ name, updatedAt: sql`(unixepoch())` })
+        .where(and(eq(mediaFolders.id, id), isNull(mediaFolders.deletedAt)))
+        .returning();
+
+    if (!folder) {
+        throw new NotFoundError("Folder not found");
+    }
+
+    return folder;
+}
+
 export async function deleteMediaFolder(dbOp: Database, id: string) {
     await dbOp.update(media).set({ folderId: null, updatedAt: sql`(unixepoch())` }).where(eq(media.folderId, id));
     await dbOp.update(mediaFolders).set({ deletedAt: sql`(unixepoch())` }).where(eq(mediaFolders.id, id));

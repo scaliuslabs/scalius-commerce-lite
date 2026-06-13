@@ -60,7 +60,7 @@ packages/
 
 ### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 350 operations. Has runtime dependency `@hey-api/client-fetch`. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 351 operations. Has runtime dependency `@hey-api/client-fetch`. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
 - **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 38 SQL migrations (`0000` through `0037`).
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.

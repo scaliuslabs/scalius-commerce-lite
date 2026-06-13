@@ -100,13 +100,6 @@ import {
   bulkUpdateProductVariants,
   bulkDeleteProductVariants,
   duplicateProductVariant,
-  // Media
-  deleteMedia,
-  updateMedia,
-  moveMediaFiles,
-  createMediaFolder,
-  deleteMediaFolder,
-  renameMediaFolder,
   // Widget History
   createWidgetHistorySnapshot,
   deleteWidgetHistory,
@@ -123,6 +116,18 @@ import {
   deleteAnalyticsScript,
   updateAnalyticsScript,
 } from "./api-functions/analytics";
+import {
+  createMediaFolder,
+  deleteMedia,
+  deleteMediaFolder,
+  moveMediaFiles,
+  renameMediaFolder,
+  updateMedia,
+  type CreateMediaFolderInput,
+  type MoveMediaFilesInput,
+  type RenameMediaFolderInput,
+  type UpdateMediaInput,
+} from "./api-functions/media";
 import {
   type SettingsPayload,
   updateAuthSettings,
@@ -1762,8 +1767,7 @@ export function useDeleteMedia() {
 export function useUpdateMedia() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { fileId: string; update: Record<string, unknown> }) =>
-      updateMedia({ data }),
+    mutationFn: (data: UpdateMediaInput) => updateMedia({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
       toast.success("File updated");
@@ -1776,8 +1780,7 @@ export function useUpdateMedia() {
 export function useMoveMediaFiles() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { fileIds: string[]; targetFolderId: string | null }) =>
-      moveMediaFiles({ data }),
+    mutationFn: (data: MoveMediaFilesInput) => moveMediaFiles({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
@@ -1791,8 +1794,7 @@ export function useMoveMediaFiles() {
 export function useCreateMediaFolder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; parentId?: string }) =>
-      createMediaFolder({ data }),
+    mutationFn: (data: CreateMediaFolderInput) => createMediaFolder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
       toast.success("Folder created");
@@ -1819,8 +1821,7 @@ export function useDeleteMediaFolder() {
 export function useRenameMediaFolder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { folderId: string; name: string }) =>
-      renameMediaFolder({ data }),
+    mutationFn: (data: RenameMediaFolderInput) => renameMediaFolder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.media.folders() });
       toast.success("Folder renamed");

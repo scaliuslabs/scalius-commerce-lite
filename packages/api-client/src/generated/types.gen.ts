@@ -10616,12 +10616,14 @@ export type PostApiV1AdminMediaUploadResponses = {
                 altText?: string | null;
                 width?: number | null;
                 height?: number | null;
-                folderId: string | null;
                 createdAt: string | number;
-                updatedAt: string | number;
-                deletedAt: string | number | null;
             }>;
-            [key: string]: unknown;
+            summary?: string;
+            warnings?: Array<{
+                filename: string;
+                error: string;
+            }>;
+            partialSuccess?: boolean;
         };
     };
     /**
@@ -10639,12 +10641,14 @@ export type PostApiV1AdminMediaUploadResponses = {
                 altText?: string | null;
                 width?: number | null;
                 height?: number | null;
-                folderId: string | null;
                 createdAt: string | number;
-                updatedAt: string | number;
-                deletedAt: string | number | null;
             }>;
-            [key: string]: unknown;
+            summary?: string;
+            warnings?: Array<{
+                filename: string;
+                error: string;
+            }>;
+            partialSuccess?: boolean;
         };
     };
 };
@@ -11269,6 +11273,98 @@ export type DeleteApiV1AdminMediaFoldersByIdResponses = {
 };
 
 export type DeleteApiV1AdminMediaFoldersByIdResponse = DeleteApiV1AdminMediaFoldersByIdResponses[keyof DeleteApiV1AdminMediaFoldersByIdResponses];
+
+export type PutApiV1AdminMediaFoldersByIdData = {
+    body?: {
+        name: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/folders/{id}';
+};
+
+export type PutApiV1AdminMediaFoldersByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminMediaFoldersByIdError = PutApiV1AdminMediaFoldersByIdErrors[keyof PutApiV1AdminMediaFoldersByIdErrors];
+
+export type PutApiV1AdminMediaFoldersByIdResponses = {
+    /**
+     * Folder renamed
+     */
+    200: {
+        success: true;
+        data: {
+            folder: {
+                id: string;
+                name: string;
+                parentId: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminMediaFoldersByIdResponse = PutApiV1AdminMediaFoldersByIdResponses[keyof PutApiV1AdminMediaFoldersByIdResponses];
 
 export type GetApiV1AdminInventoryData = {
     body?: never;
