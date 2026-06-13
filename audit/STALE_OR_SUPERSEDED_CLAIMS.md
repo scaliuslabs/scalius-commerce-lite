@@ -30,7 +30,7 @@ Current related issue: the root test suite fails an admin widget-generation pars
 
 ### "Root tests pass with 9 files and 143 tests"
 
-This is stale. The latest root test run reported 62 files and 448 tests, with one failing test.
+This is stale. The latest root test run reported 93 files and 559 tests passing.
 
 ### "pnpm dev starts only admin + API"
 
@@ -40,7 +40,7 @@ This is stale. Root `pnpm dev` starts API, admin, and storefront through `script
 
 ### "Local dev is hard to run"
 
-Valid, but be specific. The problems are service-binding-vs-HTTP fallback verification, startup race in filtered dev commands, all-`workerd` cleanup, external provider dependencies, queues, Cache API behavior, and secrets/sandbox requirements.
+Valid, but be specific and re-check current helpers first. Service-binding-vs-HTTP fallback verification, external provider dependencies, queues, Cache API behavior, and secrets/sandbox requirements remain the likely hard parts. The old all-`workerd` cleanup behavior is now opt-in, and wrapper commands now apply local migrations and wait for API readiness before dependent app startup.
 
 ### "Admin has type safety issues"
 

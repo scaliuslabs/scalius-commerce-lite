@@ -153,7 +153,9 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 - Local admin/status/reset helpers now avoid irrelevant password validation: `dev:admin:status` works even if `LOCAL_ADMIN_PASSWORD` is invalid, `dev:reset --skip-admin` skips password validation, and validation failures print concise messages instead of Node stack traces.
 - `pnpm dev:admin:create/reset/status` apply local migrations before starting a temporary API worker unless `--skip-migrations` is passed. `--api` custom origins now require `--no-start`, and `--state` paths resolve from the repo root.
 - `pnpm dev:doctor` is a non-mutating readiness check for repo shape, tooling, env files, local URL values, shared secrets, Wrangler state, ports, and API/admin/storefront responses. On this machine it reports stopped services and the Node-version mismatch as warnings without modifying secrets.
-- Local-dev helper regressions now cover valueless option flags, reset-before-delete ordering, build-time env repair expectations, local URL validation without value leakage, and `scripts/dev.sh` preserving failing exit codes through cleanup.
+- `pnpm dev:api` now runs through the same local wrapper as `pnpm dev`, applying local migrations and waiting for API `/api/v1/setup`. Combined admin/storefront modes also wait for API readiness before starting dependents.
+- Live `SCALIUS_SKIP_DEV_MIGRATIONS=1 pnpm dev:api` verified the wrapper waits until Wrangler serves `GET /api/v1/setup 200 OK`; direct checks of `/api/v1/setup` and `/api/v1/health` returned successful JSON responses before cleanup stopped the server.
+- Local-dev helper regressions now cover valueless option flags, reset-before-delete ordering, build-time env repair expectations, local URL validation without value leakage, API-only wrapper startup, API-readiness ordering, and `scripts/dev.sh` preserving failing exit codes through cleanup.
 - Empty dashboard chart warning is fixed by rendering a stable empty state until daily activity data exists.
 
 ## Tracker Update Template

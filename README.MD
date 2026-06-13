@@ -344,6 +344,7 @@ FTS5 full-text search with Bengali tokenizer is enabled by migration `0031`.
 # Development
 pnpm dev                # Start API :8787 + admin-v2 :4323 + storefront :4322
 pnpm dev:all            # Alias for pnpm dev
+pnpm dev:api            # Start API :8787 through the local wrapper
 pnpm dev:admin          # Start API :8787 + admin-v2 :4323
 pnpm dev:storefront     # Start storefront :4322 + API :8787
 
@@ -412,12 +413,13 @@ pnpm dev:setup
 
 ```bash
 pnpm dev              # API + admin-v2 + storefront
+pnpm dev:api          # API only
 pnpm dev:admin        # API + admin-v2 only
 pnpm dev:storefront   # API + storefront only
 pnpm dev:doctor --require-running
 ```
 
-The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, staggers startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
+The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, waits for API `/api/v1/setup` before starting admin/storefront, staggers admin/storefront startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
 
 Use `pnpm dev:doctor --require-running` after the full `pnpm dev` stack is up to verify API, admin, and storefront are reachable. After `pnpm dev:admin` or `pnpm dev:storefront`, run plain `pnpm dev:doctor` and expect a warning for the intentionally stopped app.
 

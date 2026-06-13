@@ -25,6 +25,7 @@ packages/
 |---------|---------|
 | `pnpm dev` | Start API :8787, admin :4323, storefront :4322 via `scripts/dev.sh` |
 | `pnpm dev:all` | Alias for `pnpm dev` |
+| `pnpm dev:api` | Start API :8787 via `scripts/dev.sh` with local migrations/readiness |
 | `pnpm dev:admin` | Start admin :4323 + API :8787 |
 | `pnpm dev:storefront` | Start storefront :4322 + API :8787 |
 | `pnpm build` | Run `prebuild` (`scripts/copy-flags.mjs`) then Turbo build for workspaces with build scripts |
@@ -295,8 +296,8 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 - Run `pnpm dev:doctor` before debugging vague local failures. It checks env-file presence, shared-secret drift, and local URL values for the expected API/admin/storefront localhost ports. Use `pnpm dev:doctor --require-running` after starting dev servers when you need API/admin/storefront to be live.
 - The wrapper applies pending local D1 migrations before starting API unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
 - The wrapper kills stale processes on app ports `8787`, `4322`, `4323`, and inspector ports `9229-9233`.
-- Full `pnpm dev` starts API, admin, then storefront with staggered delays to avoid inspector port conflicts.
-- Filtered `dev:admin` and `dev:storefront` also start API first with a short delay; other filtered dev commands hand off to Turbo.
+- Full `pnpm dev` starts API, waits for `/api/v1/setup`, then starts admin and storefront with a small stagger to avoid inspector port conflicts.
+- `pnpm dev:api`, `pnpm dev:admin`, and `pnpm dev:storefront` all run through `scripts/dev.sh`, apply pending local D1 migrations unless skipped, and wait for API readiness before starting dependent apps.
 - `scripts/dev.sh` only kills processes on Scalius dev ports by default. Set `SCALIUS_DEV_KILL_ALL_WORKERD=1` for the old all-`workerd` cleanup behavior.
 - Set `SCALIUS_WRANGLER_STATE=/tmp/some-path`, or pass `--state /tmp/some-path` to setup/reset/admin helper scripts, to run against a disposable local Wrangler state directory. Script `--state` paths are normalized from the repo root, so absolute paths are safest in handoffs.
 - If ports are stuck: `lsof -tiTCP:8787 -iTCP:4322 -iTCP:4323 -iTCP:9229 -iTCP:9230 -iTCP:9231 -iTCP:9232 -iTCP:9233 -sTCP:LISTEN | xargs kill -9`, then kill lingering `workerd` if needed.
