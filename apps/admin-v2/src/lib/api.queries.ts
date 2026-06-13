@@ -63,7 +63,6 @@ import {
   getAllDeliveryLocations,
   getImportPathaoStatus,
   getCheckoutLanguages,
-  getShippingMethods,
   getHeroSliders,
   // AI
   getAiPrompts,
@@ -114,6 +113,10 @@ import {
   getStorefrontUrl,
   getThemeSettings,
 } from "./api-functions/settings";
+import {
+  getShippingMethods,
+  type ShippingMethodsQueryInput,
+} from "./api-functions/shipping-methods";
 
 // Query staleTime constants (how long data is considered fresh)
 const STALE = {
@@ -829,14 +832,9 @@ export const checkoutLanguagesQueryOptions = (
     staleTime: STALE.CONFIG,
   });
 
-export const shippingMethodsQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-  order?: string;
-  trashed?: boolean;
-}) =>
+export const shippingMethodsQueryOptions = (
+  params: ShippingMethodsQueryInput,
+) =>
   queryOptions({
     queryKey: queryKeys.settings.shippingMethods(params),
     queryFn: () => getShippingMethods({ data: params }),

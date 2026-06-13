@@ -14,21 +14,14 @@ import {
   deleteShippingMethod as deleteShippingMethodFn,
   permanentDeleteShippingMethod as permanentDeleteShippingMethodFn,
   restoreShippingMethod as restoreShippingMethodFn,
-} from "@/lib/api.functions";
+  type ShippingMethod,
+  type ShippingMethodWriteInput,
+  type ShippingMethodsPagination,
+  type ShippingMethodsQueryInput,
+} from "@/lib/api-functions/shipping-methods";
 import { getServerFnError } from "@/lib/api-helpers";
 
-// Local type replacing @scalius/database/schema import
-export interface ShippingMethod {
-  id: string;
-  name: string;
-  fee: number;
-  description: string | null;
-  isActive: boolean;
-  sortOrder: number;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
-}
+export type { ShippingMethod };
 
 export type SortField =
   | "name"
@@ -39,16 +32,7 @@ export type SortField =
   | "updatedAt";
 export type SortOrder = "asc" | "desc";
 
-interface PaginationState {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-}
-
-const DEFAULT_PAGINATION: PaginationState = {
+const DEFAULT_PAGINATION: ShippingMethodsPagination = {
   total: 0,
   page: 1,
   limit: 10,
@@ -56,6 +40,8 @@ const DEFAULT_PAGINATION: PaginationState = {
   hasNextPage: false,
   hasPrevPage: false,
 };
+
+const EMPTY_SHIPPING_METHODS: ShippingMethod[] = [];
 
 export function useShippingMethods() {
   const queryClient = useQueryClient();
@@ -77,14 +63,7 @@ export function useShippingMethods() {
 
   // Build query params
   const queryParams = useMemo(() => {
-    const params: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      sort?: string;
-      order?: string;
-      trashed?: boolean;
-    } = {
+    const params: ShippingMethodsQueryInput = {
       page,
       limit,
       sort: sort.field,
@@ -102,12 +81,8 @@ export function useShippingMethods() {
   });
 
   // Parse response
-  const rawData = data as
-    | { shippingMethods?: ShippingMethod[]; pagination?: PaginationState }
-    | undefined;
-
-  const methods = (rawData?.shippingMethods ?? []) as ShippingMethod[];
-  const pagination = rawData?.pagination ?? DEFAULT_PAGINATION;
+  const methods = data?.shippingMethods ?? EMPTY_SHIPPING_METHODS;
+  const pagination = data?.pagination ?? DEFAULT_PAGINATION;
 
   // Mutations
   const createMutation = useCreateShippingMethod();
@@ -177,11 +152,11 @@ export function useShippingMethods() {
         if (editingMethodId) {
           await updateMutation.mutateAsync({
             id: editingMethodId,
-            update: formData as Record<string, unknown>,
+            update: formData as ShippingMethodWriteInput,
           });
         } else {
           await createMutation.mutateAsync(
-            formData as Record<string, unknown>,
+            formData as ShippingMethodWriteInput,
           );
           setPage(1);
         }
