@@ -26,6 +26,15 @@ import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { useUpdateFulfillmentStatus } from "@/lib/api.mutations";
+import type { UpdateFulfillmentStatusInput } from "@/lib/api-functions/orders";
+
+type FulfillmentStatus = UpdateFulfillmentStatusInput["status"];
+
+const FULFILLMENT_STATUSES = ["pending", "partial", "complete"] as const;
+
+function isFulfillmentStatus(value: string): value is FulfillmentStatus {
+  return FULFILLMENT_STATUSES.includes(value as FulfillmentStatus);
+}
 
 interface OrderViewHeaderProps {
   order: Order;
@@ -191,7 +200,10 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                 <Select
                   value={order.fulfillmentStatus}
                   onValueChange={(value) => {
-                    if (value !== order.fulfillmentStatus) {
+                    if (
+                      value !== order.fulfillmentStatus &&
+                      isFulfillmentStatus(value)
+                    ) {
                       fulfillmentMutation.mutate({ orderId: order.id, status: value });
                     }
                   }}

@@ -16,10 +16,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Truck, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
-import type { DeliveryShipment } from "@/types/api-responses";
 import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
-import type { Order } from "./types";
+import type { Order, OrderShipment } from "./types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreateOrderShipment } from "@/lib/api.mutations";
 
@@ -102,7 +101,7 @@ const ShipmentHistoryItem = ({
   orderId,
   onStatusUpdated,
 }: {
-  shipment: DeliveryShipment;
+  shipment: OrderShipment;
   orderId: string;
   onStatusUpdated: () => void;
 }) => {
@@ -125,6 +124,8 @@ const ShipmentHistoryItem = ({
                   ? shipment.lastChecked.toISOString()
                   : typeof shipment.lastChecked === "string"
                     ? shipment.lastChecked
+                    : typeof shipment.lastChecked === "number"
+                      ? new Date(shipment.lastChecked).toISOString()
                     : undefined,
             }}
             onStatusUpdated={onStatusUpdated}

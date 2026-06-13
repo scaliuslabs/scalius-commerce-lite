@@ -1,4 +1,7 @@
-import type { DeliveryProviderRecord, DeliveryShipment } from "@/types/api-responses";
+import type { DeliveryProviderRecord } from "@/types/api-responses";
+
+export type OrderTimestamp = Date | string | number;
+export type ShipmentMetadata = Record<string, unknown> | string | null;
 
 export interface OrderItem {
   id: string;
@@ -25,15 +28,15 @@ export interface Order {
   discountAmount: number | null;
   shippingCharge: number;
   status: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: OrderTimestamp;
+  updatedAt: OrderTimestamp;
   items: OrderItem[];
   totalAmount: number;
   customerId: string | null;
   cityName?: string;
   zoneName?: string;
   areaName?: string | null;
-  shipments?: DeliveryShipment[];
+  shipments?: OrderShipment[];
   deliveryProviders?: DeliveryProviderRecord[];
   // Payment fields
   paymentMethod?: string | null;
@@ -42,6 +45,22 @@ export interface Order {
   balanceDue?: number | null;
   fulfillmentStatus?: string | null;
   inventoryPool?: string | null;
+}
+
+export interface OrderShipment {
+  id: string;
+  orderId: string;
+  providerId: string | null;
+  providerType: string | null;
+  providerName?: string | null;
+  externalId: string | null;
+  trackingId: string | null;
+  status: string;
+  rawStatus: string | null;
+  metadata?: ShipmentMetadata;
+  createdAt: OrderTimestamp;
+  updatedAt?: OrderTimestamp;
+  lastChecked?: OrderTimestamp | null;
 }
 
 // All valid order statuses — matches the state machine in order-state-machine.ts

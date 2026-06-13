@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "@tanstack/react-router";
-import { refreshShipmentStatus } from "~/lib/api.functions";
+import { refreshShipmentStatus } from "~/lib/api-functions/orders";
 
 /**
  * Clean an orderId to remove any path-like prefixes
@@ -36,7 +36,7 @@ export function useShipmentStatus() {
     try {
       const updatedShipment = await refreshShipmentStatus({
         data: { orderId: cleanedOrderId, shipmentId },
-      }) as Record<string, unknown>;
+      });
 
       if (updatedShipment.statusChanged) {
         toast.success(`Status updated to: ${updatedShipment.status}`);

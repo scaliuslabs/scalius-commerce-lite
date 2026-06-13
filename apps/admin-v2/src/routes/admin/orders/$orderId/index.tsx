@@ -10,6 +10,92 @@ import {
   deliveryProvidersQueryOptions,
 } from "~/lib/api.queries";
 import { RouteErrorComponent } from "~/lib/list-helpers";
+import type {
+  OrderDetailDto,
+  OrderShipmentDto,
+} from "~/lib/api-functions/orders";
+import type { OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
+
+type ShipmentMetadata = Record<string, unknown> | string | null;
+
+function toOptionalString(value: string | null | undefined): string | undefined {
+  return value ?? undefined;
+}
+
+function toTimestamp(
+  value: unknown,
+  fallback: OrderTimestamp = new Date().toISOString(),
+): OrderTimestamp {
+  return typeof value === "string" || typeof value === "number" || value instanceof Date
+    ? value
+    : fallback;
+}
+
+function toMetadata(value: unknown): ShipmentMetadata {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function toOrderShipment(shipment: OrderShipmentDto): OrderShipment {
+  const raw = shipment as Record<string, unknown>;
+  const createdAt = toTimestamp(raw.createdAt);
+  const updatedAt = toTimestamp(raw.updatedAt, createdAt);
+  return {
+    id: shipment.id,
+    orderId: shipment.orderId,
+    providerId: shipment.providerId,
+    providerType: shipment.providerType,
+    providerName: shipment.providerName,
+    externalId: shipment.externalId,
+    trackingId: shipment.trackingId,
+    status: shipment.status,
+    rawStatus: shipment.rawStatus,
+    metadata: toMetadata(raw.metadata),
+    createdAt,
+    updatedAt,
+    lastChecked: shipment.lastChecked ?? updatedAt,
+  };
+}
+
+function toOrderViewModel(
+  order: OrderDetailDto,
+  shipments: OrderShipmentDto[],
+  deliveryProviders: DeliveryProviderRecord[],
+): Order {
+  return {
+    id: order.id,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    customerEmail: order.customerEmail,
+    shippingAddress: order.shippingAddress ?? "",
+    city: order.city ?? "",
+    zone: order.zone ?? "",
+    area: order.area,
+    notes: order.notes,
+    discountAmount: order.discountAmount,
+    shippingCharge: order.shippingCharge,
+    status: order.status,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    items: order.items,
+    totalAmount: order.totalAmount,
+    customerId: order.customerId,
+    cityName: toOptionalString(order.cityName),
+    zoneName: toOptionalString(order.zoneName),
+    areaName: order.areaName,
+    shipments: shipments.map(toOrderShipment),
+    deliveryProviders,
+    paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus,
+    paidAmount: order.paidAmount,
+    balanceDue: order.balanceDue,
+    fulfillmentStatus: order.fulfillmentStatus,
+  };
+}
 
 export const Route = createFileRoute("/admin/orders/$orderId/")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -48,11 +134,7 @@ function OrderViewPage() {
     const activeProviders = Array.isArray(providers)
       ? (providers as DeliveryProviderRecord[]).filter((p) => p.isActive)
       : [];
-    return {
-      ...(order as Record<string, unknown>),
-      shipments: Array.isArray(shipments) ? shipments : [],
-      deliveryProviders: activeProviders,
-    } as Order;
+    return toOrderViewModel(order, shipments, activeProviders);
   }, [order, shipments, providers]);
 
   // fullOrder is guaranteed non-null — useSuspenseQuery ensures order exists

@@ -65304,8 +65304,26 @@
                             "orderId": {
                               "type": "string"
                             },
-                            "status": {
+                            "deliveryAttempts": {
+                              "type": "number"
+                            },
+                            "lastAttemptAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "codStatus": {
                               "type": "string"
+                            },
+                            "failureReason": {
+                              "type": "string",
+                              "nullable": true
                             },
                             "collectedBy": {
                               "type": "string",
@@ -65315,15 +65333,18 @@
                               "type": "number",
                               "nullable": true
                             },
+                            "collectedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
                             "receiptUrl": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "reason": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "notes": {
                               "type": "string",
                               "nullable": true
                             },
@@ -65351,18 +65372,17 @@
                           "required": [
                             "id",
                             "orderId",
-                            "status",
+                            "deliveryAttempts",
+                            "lastAttemptAt",
+                            "codStatus",
+                            "failureReason",
                             "collectedBy",
                             "collectedAmount",
+                            "collectedAt",
                             "receiptUrl",
-                            "reason",
-                            "notes",
                             "createdAt",
                             "updatedAt"
-                          ],
-                          "additionalProperties": {
-                            "nullable": true
-                          }
+                          ]
                         }
                       },
                       "required": [
@@ -68713,26 +68733,110 @@
                               "orderId": {
                                 "type": "string"
                               },
-                              "paymentMethod": {
-                                "type": "string"
-                              },
                               "amount": {
                                 "type": "number"
                               },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "paymentMethod": {
+                                "type": "string"
+                              },
+                              "paymentType": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string"
+                              },
+                              "stripePaymentIntentId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "stripeChargeId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sslcommerzTranId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sslcommerzValId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sslcommerzBankTranId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "polarCheckoutId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "codCollectedBy": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "codCollectedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "codReceiptUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
                               }
                             },
                             "required": [
                               "id",
                               "orderId",
-                              "paymentMethod",
                               "amount",
-                              "status"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                              "currency",
+                              "paymentMethod",
+                              "paymentType",
+                              "status",
+                              "stripePaymentIntentId",
+                              "stripeChargeId",
+                              "sslcommerzTranId",
+                              "sslcommerzValId",
+                              "sslcommerzBankTranId",
+                              "polarCheckoutId",
+                              "codCollectedBy",
+                              "codCollectedAt",
+                              "codReceiptUrl",
+                              "metadata",
+                              "createdAt",
+                              "updatedAt"
+                            ]
                           }
                         },
                         "plan": {
@@ -68748,19 +68852,79 @@
                             "totalAmount": {
                               "type": "number"
                             },
+                            "depositAmount": {
+                              "type": "number"
+                            },
+                            "balanceDue": {
+                              "type": "number"
+                            },
                             "paidAmount": {
                               "type": "number"
+                            },
+                            "depositPaidAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "balancePaidAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "balanceDueDate": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
                             }
                           },
                           "required": [
                             "id",
                             "orderId",
                             "totalAmount",
-                            "paidAmount"
-                          ],
-                          "additionalProperties": {
-                            "nullable": true
-                          }
+                            "depositAmount",
+                            "balanceDue",
+                            "paidAmount",
+                            "depositPaidAt",
+                            "balancePaidAt",
+                            "balanceDueDate",
+                            "status",
+                            "createdAt",
+                            "updatedAt"
+                          ]
                         }
                       },
                       "required": [

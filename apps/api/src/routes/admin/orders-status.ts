@@ -6,7 +6,7 @@ import { deliveryShipments, codTracking, orders } from "@scalius/database/schema
 import { eq, sql } from "drizzle-orm";
 import { validateTransition } from "@scalius/core/modules/orders/order-state-machine";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
-import { ok, created, noContent } from "../../utils/api-response";
+import { ok, created } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
@@ -19,15 +19,17 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const codTrackingSchema = z.object({
     id: z.string(),
     orderId: z.string(),
-    status: z.string(),
+    deliveryAttempts: z.number(),
+    lastAttemptAt: z.union([z.string(), z.number()]).nullable(),
+    codStatus: z.string(),
+    failureReason: z.string().nullable(),
     collectedBy: z.string().nullable(),
     collectedAmount: z.number().nullable(),
+    collectedAt: z.union([z.string(), z.number()]).nullable(),
     receiptUrl: z.string().nullable(),
-    reason: z.string().nullable(),
-    notes: z.string().nullable(),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
-}).passthrough().nullable();
+}).nullable();
 
 const codActionResponseSchema = successEnvelope(z.object({
     message: z.string(),

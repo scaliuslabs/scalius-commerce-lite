@@ -43,17 +43,39 @@ const bulkShipResponseSchema = successEnvelope(z.object({
 const orderPaymentSchema = z.object({
     id: z.string(),
     orderId: z.string(),
-    paymentMethod: z.string(),
     amount: z.number(),
+    currency: z.string(),
+    paymentMethod: z.string(),
+    paymentType: z.string(),
     status: z.string(),
-}).passthrough();
+    stripePaymentIntentId: z.string().nullable(),
+    stripeChargeId: z.string().nullable(),
+    sslcommerzTranId: z.string().nullable(),
+    sslcommerzValId: z.string().nullable(),
+    sslcommerzBankTranId: z.string().nullable(),
+    polarCheckoutId: z.string().nullable(),
+    codCollectedBy: z.string().nullable(),
+    codCollectedAt: z.union([z.string(), z.number()]).nullable(),
+    codReceiptUrl: z.string().nullable(),
+    metadata: z.string().nullable(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+});
 
 const paymentPlanSchema = z.object({
     id: z.string(),
     orderId: z.string(),
     totalAmount: z.number(),
+    depositAmount: z.number(),
+    balanceDue: z.number(),
     paidAmount: z.number(),
-}).passthrough().nullable();
+    depositPaidAt: z.union([z.string(), z.number()]).nullable(),
+    balancePaidAt: z.union([z.string(), z.number()]).nullable(),
+    balanceDueDate: z.string().nullable(),
+    status: z.string(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+}).nullable();
 
 const orderFormDataSchema = z.object({
     id: z.string(),

@@ -155,11 +155,11 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 ### ADMIN-001: Admin API wrapper layer is too large and partially outside TypeScript
 
-`apps/admin-v2/src/lib/api.functions.ts` is still 462 lines, has `@ts-nocheck`, and contains 46 server functions after the current extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 207 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
+`apps/admin-v2/src/lib/api.functions.ts` is still 255 lines, has `@ts-nocheck`, and contains 25 server functions after the current extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 226 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
 
 Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
 
-Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, auth/admin-users/2FA/setup, settings, shipping methods, checkout languages, delivery, hero sliders, AI/Firebase, dashboard, inventory, media, attributes, pages, discounts, categories, collections, and products/variants were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs orders/shipments, customers, and widgets extracted domain by domain.
+Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, auth/admin-users/2FA/setup, settings, shipping methods, checkout languages, delivery, hero sliders, AI/Firebase, dashboard, inventory, media, attributes, pages, discounts, categories, collections, products/variants, and orders/shipments were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs customers and widgets extracted domain by domain.
 
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 

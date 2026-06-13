@@ -44,8 +44,14 @@ import type { Order } from "./types";
 import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orderPaymentsQueryOptions, orderCodQueryOptions } from "@/lib/api.queries";
 import { useUpdateOrderCod, useRefundOrder } from "@/lib/api.mutations";
+import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+
+type CodFailureReason = Extract<
+  UpdateOrderCodInput,
+  { action: "failed" }
+>["reason"];
 
 interface OrderPayment {
   id: string;
@@ -127,7 +133,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const [codAction, setCodAction] = React.useState<"collected" | "failed" | "returned" | null>(null);
   const [collectedBy, setCollectedBy] = React.useState("");
   const [collectedAmount, setCollectedAmount] = React.useState("");
-  const [failReason, setFailReason] = React.useState<string>("not_home");
+  const [failReason, setFailReason] =
+    React.useState<CodFailureReason>("not_home");
   const [failNotes, setFailNotes] = React.useState("");
 
   // totalAmount already includes shipping and discount (computed server-side)
@@ -166,16 +173,26 @@ export function PaymentCard({ order }: PaymentCardProps) {
       }
     }
 
-    const body: Record<string, unknown> = { action: codAction, orderId: order.id };
+    let body: UpdateOrderCodInput;
     if (codAction === "collected") {
-      body.collectedBy = collectedBy.trim();
-      body.collectedAmount = parseFloat(collectedAmount);
+      body = {
+        orderId: order.id,
+        action: "collected",
+        collectedBy: collectedBy.trim(),
+        collectedAmount: parseFloat(collectedAmount),
+      };
     } else if (codAction === "failed") {
-      body.reason = failReason;
-      if (failNotes.trim()) body.notes = failNotes.trim();
+      body = {
+        orderId: order.id,
+        action: "failed",
+        reason: failReason,
+        ...(failNotes.trim() ? { notes: failNotes.trim() } : {}),
+      };
+    } else {
+      body = { orderId: order.id, action: "returned" };
     }
 
-    codMutation.mutate(body as { orderId: string; action: string } & Record<string, unknown>, {
+    codMutation.mutate(body, {
       onSuccess: () => {
         const messages: Record<string, string> = {
           collected: "COD collection recorded.",
@@ -490,7 +507,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label htmlFor="failReason">Reason</Label>
-              <Select value={failReason} onValueChange={setFailReason}>
+              <Select
+                value={failReason}
+                onValueChange={(value) =>
+                  setFailReason(value as CodFailureReason)
+                }
+              >
                 <SelectTrigger id="failReason">
                   <SelectValue />
                 </SelectTrigger>

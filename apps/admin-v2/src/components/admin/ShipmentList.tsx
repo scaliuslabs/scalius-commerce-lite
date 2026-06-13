@@ -4,20 +4,36 @@ import { ShipmentMetadataDisplay } from "../ui/ShipmentMetadataDisplay";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
 import { formatDate } from "@scalius/shared/timestamps";
-import { getOrderShipments, refreshShipmentStatus, deleteShipment } from "@/lib/api.functions";
+import {
+  deleteShipment,
+  getOrderShipments,
+  refreshShipmentStatus,
+  type OrderShipmentDto,
+  type RefreshedShipmentPayload,
+} from "@/lib/api-functions/orders";
 
-interface Shipment {
-  id: string;
-  orderId: string;
-  providerId: string;
-  providerName: string;
-  externalId: string;
-  trackingId?: string;
-  status: string;
-  metadata: string;
-  createdAt: string;
-  updatedAt: string;
-  lastChecked?: string;
+type ShipmentMetadata = Record<string, unknown> | string | null;
+type ShipmentTimestamp = string | number;
+type ShipmentApiPayload = OrderShipmentDto | RefreshedShipmentPayload;
+
+type Shipment = ShipmentApiPayload & {
+  metadata: ShipmentMetadata;
+  createdAt: ShipmentTimestamp;
+  updatedAt: ShipmentTimestamp;
+  lastChecked: ShipmentTimestamp | null;
+};
+
+function toTimestamp(value: unknown): ShipmentTimestamp | null {
+  return typeof value === "string" || typeof value === "number" ? value : null;
+}
+
+function toMetadata(value: unknown): ShipmentMetadata {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
 }
 
 interface ShipmentListProps {
@@ -34,17 +50,26 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
   );
   const [showMetadata, setShowMetadata] = useState<boolean>(false);
 
+  const normalizeShipment = (shipment: ShipmentApiPayload): Shipment => {
+    const raw = shipment as Record<string, unknown>;
+    const createdAt = toTimestamp(raw.createdAt) ?? new Date().toISOString();
+    const updatedAt = toTimestamp(raw.updatedAt) ?? createdAt;
+    const lastChecked = shipment.lastChecked ?? updatedAt;
+    return {
+      ...shipment,
+      metadata: toMetadata(raw.metadata),
+      createdAt,
+      updatedAt,
+      lastChecked,
+    };
+  };
+
   // Load shipments
   const fetchShipments = async () => {
     setIsLoading(true);
     try {
-      const data = await getOrderShipments({ data: { orderId } }) as unknown;
-      // Initialize lastChecked to updatedAt for existing shipments
-      const enhancedData = (Array.isArray(data) ? data : []).map((shipment: Shipment) => ({
-        ...shipment,
-        lastChecked: shipment.lastChecked || shipment.updatedAt,
-      }));
-      setShipments(enhancedData);
+      const data = await getOrderShipments({ data: { orderId } });
+      setShipments(data.map(normalizeShipment));
     } catch (error: unknown) {
       console.error("Error fetching shipments:", error);
       toast.error("Failed to load shipments");
@@ -70,15 +95,17 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
         ),
       );
 
-      const updatedShipment = await refreshShipmentStatus({ data: { orderId, shipmentId: shipment.id } }) as Record<string, unknown>;
-
-      // Add the lastChecked timestamp to the updated shipment
-      updatedShipment.lastChecked = now;
+      const updatedShipment = normalizeShipment({
+        ...(await refreshShipmentStatus({
+          data: { orderId, shipmentId: shipment.id },
+        })),
+        lastChecked: now,
+      });
 
       // Update the shipment in the list
       setShipments((prevShipments) =>
         prevShipments.map((s) =>
-          s.id === updatedShipment.id ? { ...s, ...updatedShipment } as Shipment : s,
+          s.id === updatedShipment.id ? { ...s, ...updatedShipment } : s,
         ),
       );
 
@@ -91,7 +118,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
 
       // If this was the selected shipment, update it
       if (selectedShipment?.id === updatedShipment.id) {
-        setSelectedShipment({ ...selectedShipment, ...updatedShipment } as Shipment);
+        setSelectedShipment({ ...selectedShipment, ...updatedShipment });
       }
 
       if (onRefresh) {
@@ -147,8 +174,8 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
   // formatDate → shared utility (date+time format)
 
   // Calculate relative time for last checked
-  const getRelativeTime = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const getRelativeTime = (dateValue: ShipmentTimestamp) => {
+    const date = new Date(dateValue);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 

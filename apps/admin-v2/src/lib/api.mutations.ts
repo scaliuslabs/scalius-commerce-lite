@@ -16,17 +16,6 @@ import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "./query-keys";
 import {
-  // Orders
-  createOrder,
-  updateOrder,
-  updateOrderStatus,
-  createOrderShipment,
-  updateFulfillmentStatus,
-  updateOrderCod,
-  refundOrder,
-  returnOrder,
-  restoreOrder,
-  bulkDeleteOrders,
   // Customers
   createCustomer,
   updateCustomer,
@@ -67,6 +56,27 @@ import {
   type ProductVariantUpdateInput,
   type UpdateProductInput,
 } from "./api-functions/products";
+import {
+  bulkDeleteOrders,
+  createOrder,
+  createOrderShipment,
+  refundOrder,
+  restoreOrder,
+  returnOrder,
+  updateFulfillmentStatus,
+  updateOrder,
+  updateOrderCod,
+  updateOrderStatus,
+  type BulkDeleteOrdersInput,
+  type CreateOrderInput,
+  type CreateOrderShipmentInput,
+  type RefundOrderInput,
+  type ReturnOrderInput,
+  type UpdateFulfillmentStatusInput,
+  type UpdateOrderCodInput,
+  type UpdateOrderInput,
+  type UpdateOrderStatusInput,
+} from "./api-functions/orders";
 import {
   bulkDeleteCategories,
   bulkRestoreCategories,
@@ -471,7 +481,7 @@ export function useBulkRestoreCategories() {
 export function useCreateOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createOrder({ data }),
+    mutationFn: (data: CreateOrderInput) => createOrder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       toast.success("Order created");
@@ -484,8 +494,7 @@ export function useCreateOrder() {
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateOrder({ data }),
+    mutationFn: (data: UpdateOrderInput) => updateOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -501,8 +510,7 @@ export function useUpdateOrder() {
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderId: string; status: string; note?: string }) =>
-      updateOrderStatus({ data }),
+    mutationFn: (data: UpdateOrderStatusInput) => updateOrderStatus({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -518,12 +526,8 @@ export function useUpdateOrderStatus() {
 export function useCreateOrderShipment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      orderId: string;
-      shipment?: Record<string, unknown>;
-      providerId?: string;
-      options?: Record<string, unknown>;
-    }) => createOrderShipment({ data }),
+    mutationFn: (data: CreateOrderShipmentInput) =>
+      createOrderShipment({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -542,7 +546,7 @@ export function useCreateOrderShipment() {
 export function useUpdateFulfillmentStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderId: string; status: string }) =>
+    mutationFn: (data: UpdateFulfillmentStatusInput) =>
       updateFulfillmentStatus({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -558,8 +562,7 @@ export function useUpdateFulfillmentStatus() {
 export function useRefundOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderId: string; amount?: number; reason?: string }) =>
-      refundOrder({ data }),
+    mutationFn: (data: RefundOrderInput) => refundOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -578,9 +581,7 @@ export function useRefundOrder() {
 export function useUpdateOrderCod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (
-      data: { orderId: string; action: string } & Record<string, unknown>,
-    ) => updateOrderCod({ data }),
+    mutationFn: (data: UpdateOrderCodInput) => updateOrderCod({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
@@ -601,12 +602,7 @@ export function useUpdateOrderCod() {
 export function useReturnOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      orderId: string;
-      reason?: string;
-      items?: unknown[];
-      autoRefund?: boolean;
-    }) => returnOrder({ data }),
+    mutationFn: (data: ReturnOrderInput) => returnOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -636,8 +632,7 @@ export function useRestoreOrder() {
 export function useBulkDeleteOrders() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderIds: string[]; permanent?: boolean }) =>
-      bulkDeleteOrders({ data }),
+    mutationFn: (data: BulkDeleteOrdersInput) => bulkDeleteOrders({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       toast.success(
