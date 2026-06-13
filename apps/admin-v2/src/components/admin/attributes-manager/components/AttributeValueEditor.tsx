@@ -37,7 +37,7 @@ import {
   renameAttributeValue,
   addAttributeValue,
   removeAttributeValue,
-} from "~/lib/api.functions";
+} from "~/lib/api-functions/attributes";
 
 interface AttributeValueEditorProps {
   attributeId: string | null;
@@ -65,7 +65,7 @@ export function AttributeValueEditor({
 
     setIsLoading(true);
     try {
-      const data = await getAttributeValues({ data: { attributeId } }) as { values?: AttributeValue[] };
+      const data = await getAttributeValues({ data: { attributeId } });
       setValues(data.values || []);
     } catch (error: unknown) {
       console.error("Error fetching values:", error);

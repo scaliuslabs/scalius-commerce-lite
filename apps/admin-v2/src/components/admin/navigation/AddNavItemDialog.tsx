@@ -38,12 +38,11 @@ import {
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import type { NavigationItem, NavigationSource } from "./types";
+import { getCategories, getPages } from "~/lib/api.functions";
 import {
-  getCategories,
-  getPages,
   getAttributes,
   getAttributeValues,
-} from "~/lib/api.functions";
+} from "~/lib/api-functions/attributes";
 import {
   getNavigationItems,
   getNavigationPreviewProducts,
@@ -264,18 +263,13 @@ export function AddNavItemDialog({
       try {
         const [navData, attrData] = await Promise.all([
           getNavigationItems(),
-          getAttributes({ data: { limit: 100 } }) as unknown as Promise<Record<string, unknown>>,
+          getAttributes({ data: { limit: 100 } }),
         ]);
 
         const items = navData.items;
         setAllCategories(items?.categories || []);
 
-        const attrs = (attrData.attributes || []) as Array<{
-          id: string;
-          name: string;
-          slug: string;
-          filterable?: boolean;
-        }>;
+        const attrs = attrData.attributes || [];
         setAttributes(
           attrs
             .filter((a) => a.filterable !== false)
@@ -316,15 +310,12 @@ export function AddNavItemDialog({
 
       setLoadingAttrValues((prev) => ({ ...prev, [attributeId]: true }));
       try {
-        const data = (await getAttributeValues({
+        const data = await getAttributeValues({
           data: { attributeId },
-        })) as Record<string, unknown>;
+        });
         setAttributeValues((prev) => ({
           ...prev,
-          [attributeId]: (data.values || []) as {
-            value: string;
-            productCount: number;
-          }[],
+          [attributeId]: data.values || [],
         }));
       } catch (error: unknown) {
         if (import.meta.env.DEV) console.error("Error fetching attribute values:", error);

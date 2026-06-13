@@ -17,10 +17,15 @@ import {
 } from "@/components/ui/popover";
 import { Plus, Trash2, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
-import type { ProductAttribute } from "@/types/api-responses";
 import { cn } from "@scalius/shared/utils";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getAttributes, createAttribute, getAttributeValues, addAttributeValue } from "@/lib/api.functions";
+import {
+  addAttributeValue,
+  createAttribute,
+  getAttributes,
+  getAttributeValues,
+  type AttributeDto,
+} from "@/lib/api-functions/attributes";
 
 interface AssignedAttribute {
   attributeId: string;
@@ -36,7 +41,7 @@ interface AttributeManagerProps {
   ) => void;
 }
 
-interface AttributeDefinition extends ProductAttribute {}
+type AttributeDefinition = AttributeDto;
 
 export function AttributeManager({
   initialAttributes,
@@ -55,9 +60,9 @@ export function AttributeManager({
 
   const fetchAllAttributes = useCallback(async () => {
     try {
-      const data = await getAttributes({ data: { limit: 500 } }) as Record<string, unknown>;
-      setAvailableAttributes(data.attributes as AttributeDefinition[]);
-      return data.attributes as AttributeDefinition[];
+      const data = await getAttributes({ data: { limit: 500 } });
+      setAvailableAttributes(data.attributes);
+      return data.attributes;
     } catch (error: unknown) {
       toast.error(getServerFnError(error, "Could not load attributes"));
       return [];
@@ -99,8 +104,8 @@ export function AttributeManager({
     try {
       const data = await createAttribute({
         data: { name, slug, filterable: true, options: [] },
-      }) as Record<string, unknown>;
-      const created = data.attribute as AttributeDefinition;
+      });
+      const created = data.attribute;
 
       toast.success("Attribute created");
       setAvailableAttributes((prev) => [...prev, created]);
@@ -355,8 +360,8 @@ function AttributeValueSelector({
       try {
         const data = await getAttributeValues({
           data: { attributeId, page: pageNum, limit: 10, sort: "desc", ...(text ? { search: text } : {}) },
-        }) as Record<string, unknown>;
-        const values = (data.values || []) as FetchedValue[];
+        });
+        const values = data.values || [];
         setItems((prev) => (reset ? values : [...prev, ...values]));
         setHasMore(values.length === 10);
       } finally {
