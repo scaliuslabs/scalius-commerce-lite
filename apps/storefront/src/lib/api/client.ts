@@ -228,8 +228,11 @@ export async function fetchWithRetry(
  * Custom fetch that routes through service bindings in production
  * and applies retry logic. Used as the transport for SDK clients.
  */
-function createStorefrontFetch(requiresAuth: boolean) {
-  return async (request: Request): Promise<Response> => {
+function createStorefrontFetch(requiresAuth: boolean): typeof fetch {
+  return async (input, init): Promise<Response> => {
+    const request = input instanceof Request && init === undefined
+      ? input
+      : new Request(input, init);
     const url = request.url;
     // Delegate to fetchWithRetry which handles service bindings, retries, auth
     return fetchWithRetry(
