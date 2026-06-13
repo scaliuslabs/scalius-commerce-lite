@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks.
 
 ## Validation Performed
 
@@ -24,7 +24,9 @@ Current tracked remediation state: the original tracker items are marked `Verifi
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 93 test files and 556 tests.
+- `pnpm test`: passed 95 test files and 568 tests.
+- Full `pnpm run deploy`: passed and redeployed API, admin, and storefront Workers.
+- Live HTTP and browser checks: API health, admin `/admin`, and storefront `/` returned successfully after redeploy.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
@@ -186,6 +188,14 @@ Status: Verified on 2026-06-13. Root targeted deploy scripts now use `scripts/de
 Status: Verified on 2026-06-13. `parseGeneratedWidgetContent()` now returns normalized widget parts so HTML-owned `<script>` blocks are moved into JS before preview. Root `pnpm test` passes.
 
 Fix direction: fix parser behavior or update the test only if the intended contract changed.
+
+### DEPLOY-001: Stale admin route chunks can strand `/admin` in the error boundary
+
+A live post-deploy visit to `https://dashboard.scalius.com/admin` showed the generic 500 error boundary. Worker requests for the redeployed admin route and auth/session endpoints were successful, so the durable failure mode was a recoverable client route-load/chunk failure during or after deploy that left users stuck on the generic error screen.
+
+Fix direction: detect known recoverable dynamic-import/chunk load errors, perform one bounded reload per route/error signature, and keep an explicit reload action for users if the automatic recovery already fired.
+
+Status: Verified on 2026-06-13. The admin router now recognizes stale route-load/chunk failures and reloads once, with focused tests. Dashboard analytics filters also compare Unix timestamps against Unix timestamp columns. Verification included focused admin tests, admin/core typechecks, admin build, root `pnpm test`, root `pnpm lint`, full `pnpm run deploy`, live API/admin/storefront HTTP checks, browser checks, and `wrangler tail` confirmation that `/admin`, `_serverFn`, and `/api/auth/get-session` served without exceptions after redeploy. See `DEPLOY-001` in `REMEDIATION_TRACKER.md`.
 
 ## P2 Findings
 

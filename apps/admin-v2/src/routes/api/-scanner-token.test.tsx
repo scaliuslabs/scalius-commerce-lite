@@ -71,7 +71,10 @@ describe("handleCreateScannerToken", () => {
         user: { id: "user_1", name: "Inventory Admin", role: "admin" },
       }),
       loadUserPermissions: vi.fn().mockResolvedValue({
-        permissions: new Set([PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT]),
+        permissions: new Set([
+          PERMISSIONS.PRODUCTS_VIEW,
+          PERMISSIONS.PRODUCTS_EDIT,
+        ]),
         isSuperAdmin: false,
       }),
       getEnv: () => ({ CACHE: kv }),

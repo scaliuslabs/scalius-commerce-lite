@@ -4,7 +4,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
-import { and, sql, desc, gte } from "drizzle-orm";
+import { and, sql, desc } from "drizzle-orm";
 
 /** Aggregated dashboard metrics for the admin home page. */
 export async function getDashboardStats(db: Database) {
@@ -141,6 +141,7 @@ export async function getDailyActivityData(db: Database, days: number) {
     const now = new Date();
     const startDate = new Date(now);
     startDate.setDate(now.getDate() - days);
+    const startDateTs = Math.floor(startDate.getTime() / 1000);
 
     const dailyOrderData = await db
         .select({
@@ -152,7 +153,7 @@ export async function getDailyActivityData(db: Database, days: number) {
         .where(
             and(
                 sql`${orders.deletedAt} is null`,
-                gte(orders.createdAt, startDate),
+                sql`${orders.createdAt} >= ${startDateTs}`,
                 sql`${orders.status} NOT IN ('cancelled', 'returned')`,
             ),
         )
@@ -172,7 +173,7 @@ export async function getDailyActivityData(db: Database, days: number) {
         .where(
             and(
                 sql`${customers.deletedAt} is null`,
-                gte(customers.createdAt, startDate),
+                sql`${customers.createdAt} >= ${startDateTs}`,
             ),
         )
         .groupBy(
