@@ -193,15 +193,15 @@ Tracker IDs: `ADMIN-001`, `ADMIN-003`, `ADMIN-004`.
 
 Scope:
 
-- `apps/admin-v2/src/lib/api.functions.ts`
+- `apps/admin-v2/src/lib/api-functions/**`
 - `apps/admin-v2/src/lib/api.queries.ts`
 - `apps/admin-v2/src/lib/api.mutations.ts`
 - one selected admin domain route/component set
 
-Current state: cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, and auth/admin-users/2FA/setup functions are already extracted under `apps/admin-v2/src/lib/api-functions/`. A strong next slice is settings because many settings wrappers still use broad `Record<string, unknown>` payloads in the legacy barrel.
+Current state: `ADMIN-001` is verified. The legacy admin server-function barrel has been removed, and 251 server functions live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`. Future admin simplification should focus on one domain at a time: remove UI casts, replace broad DTO adapters, keep URL-search loaders aligned with query keys, and reduce direct component calls where a mutation/query wrapper would be clearer.
 
 Prompt:
 
 ```md
-Refactor one admin API domain out of the giant wrapper files. Keep behavior unchanged, replace identity validators with typed schemas or generated SDK types, add loaderDeps for URL-search-driven loaders in that domain, and prove the extracted slice typechecks without file-level `@ts-nocheck`.
+Simplify one existing admin API domain slice. Keep behavior unchanged, replace broad local DTO casts with generated SDK types or shared schemas, align route loaderDeps with rendered query keys, and prove the touched slice with focused typecheck/lint/tests.
 ```

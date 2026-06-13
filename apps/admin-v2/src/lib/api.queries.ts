@@ -15,7 +15,8 @@ import {
   getWidgets,
   getWidget,
   getWidgetHistory,
-} from "./api.functions";
+  type WidgetsQueryInput,
+} from "./api-functions/widgets";
 import {
   getCustomer,
   getCustomerHistory,
@@ -373,10 +374,7 @@ export const pageQueryOptions = (id: string) =>
 //  WIDGETS
 // ═══════════════════════════════════════════════════════════════════
 
-export const widgetsQueryOptions = (params: {
-  search?: string;
-  showTrashed?: boolean;
-}) =>
+export const widgetsQueryOptions = (params: WidgetsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.widgets.list(params),
     queryFn: () => getWidgets({ data: params }),

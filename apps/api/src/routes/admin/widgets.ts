@@ -20,7 +20,7 @@ import {
     restoreFromHistory,
     deleteHistoryEntry,
 } from "@scalius/core/modules/widgets";
-import { NotFoundError, ApiError } from "../../utils/api-error";
+import { NotFoundError } from "../../utils/api-error";
 import {
     successEnvelope,
     messageResponse,
@@ -53,33 +53,33 @@ const widgetListItemSchema = z.object({
     createdAt: z.number(),
     updatedAt: z.number(),
     deletedAt: z.number().nullable(),
-}).passthrough();
+});
 
 const collectionSummarySchema = z.object({
     id: z.string(),
     name: z.string(),
     sortOrder: z.number(),
     type: z.string(),
-}).passthrough();
+});
 
 const pageSummarySchema = z.object({
     id: z.string(),
     title: z.string(),
     slug: z.string(),
     sortOrder: z.number(),
-}).passthrough();
+});
 
 const referencedProductSummarySchema = z.object({
     id: z.string(),
     name: z.string(),
     slug: z.string(),
-}).passthrough();
+});
 
 const referencedCategorySummarySchema = z.object({
     id: z.string(),
     name: z.string(),
     slug: z.string(),
-}).passthrough();
+});
 
 const placementTargetTypeSchema = z.enum(["page", "product", "category", "collection"]);
 
@@ -98,7 +98,7 @@ const widgetHistoryEntrySchema = z.object({
     jsContent: z.string().nullable(),
     reason: z.string(),
     createdAt: z.union([z.string(), z.number()]),
-}).passthrough();
+});
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 

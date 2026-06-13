@@ -21,7 +21,7 @@ import {
   getWidgetHistory,
   createWidgetHistorySnapshot,
   deleteWidgetHistory,
-} from '~/lib/api.functions';
+} from '~/lib/api-functions/widgets';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -583,8 +583,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
       setSelectedHistoryItem(null);
       setHistory([]);
       try {
-        const data = await getWidgetHistory({ data: { widgetId: widget.id } });
-        const entries = data as WidgetHistoryEntry[];
+        const entries = await getWidgetHistory({ data: { widgetId: widget.id } });
         setHistory(entries);
         setSelectedHistoryItem(entries[0] ?? null);
       } catch (error: unknown) {
@@ -673,7 +672,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
 
     setIsSavingVersion(true);
     try {
-      const entry = (await createWidgetHistorySnapshot({
+      const entry = await createWidgetHistorySnapshot({
         data: {
           widgetId: widget.id,
           snapshot: {
@@ -683,7 +682,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
             jsContent: jsContent ?? null,
           },
         },
-      })) as WidgetHistoryEntry;
+      });
       toast.success('Version saved!');
       setHistory((prev) => [entry, ...prev.filter((item) => item.id !== entry.id)]);
       setSelectedHistoryItem(entry);

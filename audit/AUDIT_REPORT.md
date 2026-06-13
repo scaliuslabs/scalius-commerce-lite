@@ -16,7 +16,7 @@ The highest current risks are not "wrong stack" problems. They are boundary and 
 ## Validation Performed
 
 - Root `pnpm typecheck`: passed.
-- `pnpm --filter @scalius/admin-v2 typecheck`: passed, but does not cover `api.functions.ts` because that file has `@ts-nocheck`.
+- `pnpm --filter @scalius/admin-v2 typecheck`: passed after the final widget extraction; the former `api.functions.ts` barrel no longer exists.
 - `pnpm --filter @scalius/api typecheck`: passed.
 - `pnpm --filter @scalius/storefront typecheck`: passed.
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
@@ -153,13 +153,13 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 ## P2 Findings
 
-### ADMIN-001: Admin API wrapper layer is too large and partially outside TypeScript
+### ADMIN-001: Admin API wrapper layer was too large and partially outside TypeScript
 
-`apps/admin-v2/src/lib/api.functions.ts` is still 170 lines, has `@ts-nocheck`, and contains 16 server functions after the current extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 235 typed server functions. The remaining legacy barrel still uses identity validators and loose payload shapes for the widget domain.
+The legacy `apps/admin-v2/src/lib/api.functions.ts` barrel has been removed. Admin server functions now live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, currently 251 exported server functions. The final widget extraction also moved widget history/placement-target calls to generated SDK request/response types, stripped widget update path IDs from JSON bodies, and tightened widget OpenAPI schemas before regenerating the SDK.
 
-Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
+Fix direction: keep new admin data access in domain-specific server-function slices with generated SDK request types or shared schemas. Do not reintroduce a broad barrel or file-level `@ts-nocheck`.
 
-Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, auth/admin-users/2FA/setup, settings, shipping methods, checkout languages, delivery, hero sliders, AI/Firebase, dashboard, inventory, media, attributes, pages, discounts, categories, collections, products/variants, orders/shipments, and customers were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs widgets extracted.
+Status: Verified on 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, auth/admin-users/2FA/setup, settings, shipping methods, checkout languages, delivery, hero sliders, AI/Firebase, dashboard, inventory, media, attributes, pages, discounts, categories, collections, products/variants, orders/shipments, customers, and widgets were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`.
 
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 
@@ -384,7 +384,7 @@ Status: Remediated 2026-06-13. `DashboardChart` now renders a fixed-height empty
 
 - Make state transitions explicit and shared: order, inventory, payment, delivery, and notification should not each implement their own partial transition rules.
 - Put durable idempotency before side effects for webhooks, queues, and provider calls.
-- Split admin API wrappers by domain and remove `@ts-nocheck` slice by slice.
+- Keep admin API wrappers domain-sliced and typed with generated SDK payloads or shared schemas.
 - Use generated SDK types or shared Zod schemas where app-local payload types currently drift.
 - Generate Cloudflare Env types from Wrangler configs.
 - Make local verification smaller and reliable instead of relying on one fragile full-stack run.

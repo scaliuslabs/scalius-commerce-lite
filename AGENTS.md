@@ -54,7 +54,7 @@ packages/
 
 ### Apps
 
-- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is 16 server functions remaining in the legacy `api.functions.ts` barrel, plus 235 extracted functions under `src/lib/api-functions/`, 78 query option wrappers, 114 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
+- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is 251 typed server functions under `src/lib/api-functions/`, 78 query option wrappers, 114 exported mutation hooks, and 62 non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
 - **API (`apps/api/`)**: Standalone Hono `OpenAPIHono` app mounted at `/api/v1`. Exports a `WorkerEntrypoint` with `fetch`, `queue`, and scheduled inventory-expiry cron handlers. Owns public/admin API routes, webhook ingestion, OpenAPI spec, queue consumer, and `WidgetDesignAgent` Durable Object for widget AI generation.
 - **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer storefront. Owns product, category, cart, checkout, search, customer auth proxy, SEO, sitemaps, error pages, and L1/L2 caching. Uses `env.BACKEND_API` service binding in production; intentionally skips service binding in local dev because separate Miniflare processes cannot reliably share the Fetcher.
 
@@ -120,11 +120,11 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 
 - Local auth routes under `apps/admin-v2/src/routes/api/auth/$.ts` are handled by the admin worker, not the API worker.
 - `@/` and `~/` both alias to `apps/admin-v2/src`.
-- Most data access flows through the legacy `api.functions.ts` barrel, extracted slices in `api-functions/`, `api.queries.ts`, and `api.mutations.ts`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
-- When touching admin server functions, prefer extracting a domain slice under `apps/admin-v2/src/lib/api-functions/` with normal typechecking instead of adding to the legacy `api.functions.ts` barrel.
+- Admin server functions live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, with route-facing wrappers in `api.queries.ts` and `api.mutations.ts`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
+- Add new admin server functions to a domain slice under `apps/admin-v2/src/lib/api-functions/` with normal typechecking; do not recreate a broad legacy barrel.
 - Account settings must use the parent `/admin` route's effective permission context. Do not feed the full RBAC permission catalog into a nested `PermissionProvider`.
 - URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
-- `api.functions.ts` currently has `@ts-nocheck` because the legacy barrel still exposes broad `unknown` API shapes that TanStack Start rejects as non-serializable. Treat it as a migration target, not an invitation to weaken adjacent files.
+- Keep server-function payloads route-shaped and JSON-serializable. If generated SDK responses include index signatures, strip them with local DTO helpers instead of adding file-level `@ts-nocheck`.
 
 ## Storefront Notes
 
@@ -237,7 +237,7 @@ Storefront should use its configured SDK clients from `apps/storefront/src/lib/a
 - Admin Vite config: `apps/admin-v2/vite.config.ts`
 - Admin router: `apps/admin-v2/src/router.tsx`
 - Admin generated route tree: `apps/admin-v2/src/routeTree.gen.ts`
-- Admin server functions: `apps/admin-v2/src/lib/api.functions.ts`
+- Admin server functions: `apps/admin-v2/src/lib/api-functions/`
 - Admin API server helper: `apps/admin-v2/src/lib/api.server.ts`
 - Admin query options: `apps/admin-v2/src/lib/api.queries.ts`
 - Admin mutations: `apps/admin-v2/src/lib/api.mutations.ts`
@@ -319,7 +319,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 - **In-memory state**: Storefront L1 caches and shared layout cache are in-memory and reset on Worker isolate restart. Shared rate limiting is KV-based now.
 - **Delivery notification helper**: `notifyShipmentStatusChange()` in `packages/core/src/modules/delivery/tracking.ts` is still a log-only placeholder. Active Pathao/Steadfast/admin shipment paths enqueue notifications directly.
 - **Scanner app**: Standalone `/scanner` route exists with QR-token auth; still needs focused testing/polish.
-- **Type safety**: Admin still has notable `any` usage and `api.functions.ts` has a targeted `@ts-nocheck`. Improve locally when touching relevant code, but do not broad-refactor casually.
+- **Type safety**: Admin still has notable `any` usage in some UI edges and broad DTO adapters. Improve locally when touching relevant code, but do not broad-refactor casually.
 - **Test coverage**: There are dozens of Vitest files across apps/packages, not a comprehensive suite. Add focused tests for risky service, queue, payment, inventory, response-envelope, AI, or storefront cache changes.
 - **Generated docs drift**: `packages/api-client/README.md` may lag generated SDK counts; trust `packages/api-client/openapi.json` and generated files over prose.
 

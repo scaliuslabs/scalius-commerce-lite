@@ -422,8 +422,7 @@ export const widgetPlacementSchema = z
     createdAt: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
     deletedAt: nullableTimestampSchema,
-  })
-  .passthrough();
+  });
 
 export const publicWidgetPlacementSchema = z.object({
   id: z.string(),
