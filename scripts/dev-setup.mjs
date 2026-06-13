@@ -34,6 +34,7 @@ const args = process.argv.slice(2);
 const forceRegenerate = args.includes("--force");
 const skipInstall = args.includes("--skip-install");
 const skipAdmin = args.includes("--skip-admin");
+const envOnly = args.includes("--env-only") || args.includes("--repair-env");
 const showHelp = args.includes("--help") || args.includes("-h");
 const wranglerState = getArgValue(args, "--state") || process.env.SCALIUS_WRANGLER_STATE;
 const resolvedWranglerState = wranglerState ? resolveLocalStatePath(root, wranglerState) : null;
@@ -104,6 +105,7 @@ Usage: pnpm dev:setup [options]
 
 Options:
   --force                    Regenerate local env files
+  --env-only                 Create/repair env files only; skip install, migrations, admin
   --skip-install             Do not run pnpm install
   --skip-admin               Do not create the default local admin
   --admin-email <email>      Local admin email (default: ${localAdminEmail})
@@ -114,7 +116,9 @@ Options:
   process.exit(0);
 }
 
-assertPassword(localAdminPassword);
+if (!skipAdmin && !envOnly) {
+  assertPassword(localAdminPassword);
+}
 
 function run(cmd, label) {
   console.log(`\n▶ ${label}`);
@@ -146,7 +150,7 @@ console.log("\n🚀 Scalius Commerce — Local Development Setup\n");
 console.log("=".repeat(55));
 
 // 1. Install dependencies
-if (skipInstall) {
+if (skipInstall || envOnly) {
   console.log("\n⚡ Skipping dependency install");
 } else {
   run("pnpm install", "Installing dependencies");
@@ -286,14 +290,20 @@ if (existsSync(storefrontEnvDevPath) && !forceRegenerate) {
   console.log("  ✓ Created apps/storefront/.env.development");
 }
 
-// 4. Apply local D1 migrations (via API worker's wrangler config)
-run(
-  "node scripts/deploy.mjs --migrate-only --local",
-  "Applying local D1 migrations"
-);
+if (envOnly) {
+  console.log("\n⚡ Env-only mode: skipping local D1 migrations and admin creation");
+} else {
+  // 4. Apply local D1 migrations (via API worker's wrangler config)
+  run(
+    "node scripts/deploy.mjs --migrate-only --local",
+    "Applying local D1 migrations"
+  );
+}
 
 // 5. Create default local admin through the same setup endpoint used by the UI.
-if (skipAdmin) {
+if (envOnly) {
+  // Already handled above.
+} else if (skipAdmin) {
   console.log("\n⚡ Skipping local admin creation");
 } else {
   run(
@@ -310,12 +320,18 @@ if (skipAdmin) {
 }
 
 console.log("\n" + "=".repeat(55));
-console.log("✅ Setup complete!\n");
+console.log(envOnly ? "✅ Env repair complete!\n" : "✅ Setup complete!\n");
 console.log("Next steps:");
-console.log("  1. pnpm dev          — Start API + admin + storefront");
-console.log("  2. http://localhost:4323/admin");
-if (!skipAdmin) {
-  console.log(`  3. Sign in with ${localAdminEmail} / ${localAdminPassword}\n`);
+if (envOnly) {
+  console.log("  1. pnpm dev:doctor   — Re-check local readiness");
+  console.log("  2. pnpm dev:setup    — Apply migrations and create local admin if needed");
+  console.log("  3. pnpm dev          — Start API + admin + storefront\n");
 } else {
-  console.log("  3. Create the first admin in the browser or run pnpm dev:admin:create\n");
+  console.log("  1. pnpm dev          — Start API + admin + storefront");
+  console.log("  2. http://localhost:4323/admin");
+  if (!skipAdmin) {
+    console.log(`  3. Sign in with ${localAdminEmail} / ${localAdminPassword}\n`);
+  } else {
+    console.log("  3. Create the first admin in the browser or run pnpm dev:admin:create\n");
+  }
 }

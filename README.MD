@@ -387,6 +387,8 @@ pnpm dev:setup
 
 `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
+Use `pnpm dev:setup --env-only` when `dev:doctor` only reports missing or stale env files. It repairs `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin.
+
 Default local admin:
 
 ```text
