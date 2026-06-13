@@ -13,7 +13,7 @@ import { Separator } from "~/components/ui/separator";
 import { Loader2, KeyRound, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
-import { changePassword } from "~/lib/api.functions";
+import { changePassword } from "~/lib/api-functions/auth-management";
 
 function getPasswordStrength(password: string) {
   if (!password) return { strength: 0, label: "", color: "" };

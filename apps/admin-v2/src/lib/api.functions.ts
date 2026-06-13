@@ -21,7 +21,6 @@ import {
   apiPatch,
   apiDelete,
   apiBaseGet,
-  apiBasePost,
 } from "./api.server";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1290,71 +1289,6 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
   });
 
 // ═══════════════════════════════════════════════════════════════════
-//  AUTH / ADMIN USERS
-// ═══════════════════════════════════════════════════════════════════
-
-export const getAdminUsers = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<unknown[]>("/auth/users");
-  },
-);
-
-export const createAdminUser = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost<Record<string, unknown>>("/auth/users", data);
-  });
-
-export const deleteAdminUser = createServerFn({ method: "POST" })
-  .inputValidator((data: { userId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/auth/users/${data.userId}`);
-  });
-
-export const updateProfile = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/auth/update-profile", data);
-  });
-
-export const changePassword = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { currentPassword: string; newPassword: string }) => data,
-  )
-  .handler(async ({ data }) => {
-    return apiPost("/auth/change-password", data);
-  });
-
-export const getAccountSecurity = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<{
-      twoFactorMethod: string | null;
-      isSuperAdmin: boolean;
-    }>("/auth/account-security");
-  },
-);
-
-// ─── 2FA ─────────────────────────────────────────────────────────
-
-export const set2faMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: { method: string | null }) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/auth/2fa/method", data);
-  });
-
-export const mark2faVerified = createServerFn({ method: "POST" }).handler(
-  async () => {
-    return apiPost("/auth/2fa/mark-verified", {});
-  },
-);
-
-export const get2faInfo = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<Record<string, unknown>>("/auth/2fa/info");
-  },
-);
-
-// ═══════════════════════════════════════════════════════════════════
 //  SETTINGS
 // ═══════════════════════════════════════════════════════════════════
 
@@ -1915,22 +1849,6 @@ export const getAiContextBatchDetails = createServerFn({ method: "POST" })
   .inputValidator((data: Record<string, unknown>) => data)
   .handler(async ({ data }) => {
     return apiPost("/ai-context/batch-details", data);
-  });
-
-// ═══════════════════════════════════════════════════════════════════
-//  SETUP (non-admin endpoint)
-// ═══════════════════════════════════════════════════════════════════
-
-export const getSetupStatus = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiBaseGet<{ adminExists: boolean }>("/setup");
-  },
-);
-
-export const runSetup = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiBasePost("/setup", data);
   });
 
 // ═══════════════════════════════════════════════════════════════════

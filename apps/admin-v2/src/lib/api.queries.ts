@@ -58,10 +58,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  // Auth / Admin Users
-  getAdminUsers,
-  getAccountSecurity,
-  get2faInfo,
   // Settings
   getSettingsByCategory,
   getGeneralSettings,
@@ -92,11 +88,15 @@ import {
   getHeroSliders,
   // AI
   getAiPrompts,
-  // Setup
-  getSetupStatus,
   // Firebase
   getFirebaseConfig,
 } from "./api.functions";
+import {
+  get2faInfo,
+  getAccountSecurity,
+  getAdminUsers,
+  getSetupStatus,
+} from "./api-functions/auth-management";
 import { getRbacPermissions, getRbacRoles } from "./api-functions/rbac";
 import {
   getAnalyticsScript,

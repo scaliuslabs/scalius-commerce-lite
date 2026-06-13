@@ -1,19 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { AccountSettingsWithPermissions } from "~/components/admin/AccountSettingsWithPermissions";
-import {
-  accountSecurityQueryOptions,
-  rbacPermissionsQueryOptions,
-} from "~/lib/api.queries";
-import type { AccountSecurity, RbacPermission } from "~/types/api-responses";
+import { accountSecurityQueryOptions } from "~/lib/api.queries";
+import type { AccountSecurity } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/settings/account")({
   loader: async ({ context: { queryClient } }) => {
-    await Promise.all([
-      queryClient.ensureQueryData(accountSecurityQueryOptions()),
-      queryClient.ensureQueryData(rbacPermissionsQueryOptions()),
-    ]);
+    await queryClient.ensureQueryData(accountSecurityQueryOptions());
   },
   head: () => ({ meta: [{ title: "Account Settings | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
@@ -22,21 +16,19 @@ export const Route = createFileRoute("/admin/settings/account")({
 
 function AccountSettingsPage() {
   const { data: securityResult } = useSuspenseQuery(accountSecurityQueryOptions());
-  const { data: permissionsResult } = useSuspenseQuery(rbacPermissionsQueryOptions());
+  const {
+    user,
+    permissions,
+    isSuperAdmin: routeIsSuperAdmin,
+  } = Route.useRouteContext();
 
   const security = securityResult as AccountSecurity;
   const userData = {
-    id: "",
-    name: "Admin",
-    email: "",
-    image: null,
-    role: "admin",
-    twoFactorEnabled: !!security.twoFactorMethod,
+    ...user,
+    twoFactorEnabled: user.twoFactorEnabled ?? false,
     twoFactorMethod: security.twoFactorMethod,
   };
-  const permsList: RbacPermission[] = permissionsResult.permissions;
-  const permissions = permsList.map((p) => p.name || p.id);
-  const isSuperAdmin = security.isSuperAdmin ?? false;
+  const isSuperAdmin = routeIsSuperAdmin || (security.isSuperAdmin ?? false);
 
   return (
     <div className="max-w-3xl mx-auto">

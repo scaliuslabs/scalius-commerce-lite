@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { authClient } from "@/lib/auth-client";
-import { runSetup } from "@/lib/api.functions";
+import { runSetup } from "@/lib/api-functions/auth-management";
 import { markFirstUserAsSuperAdmin } from "@/lib/auth.fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

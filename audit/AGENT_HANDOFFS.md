@@ -198,7 +198,7 @@ Scope:
 - `apps/admin-v2/src/lib/api.mutations.ts`
 - one selected admin domain route/component set
 
-Current state: cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, and RBAC role/permission functions are already extracted under `apps/admin-v2/src/lib/api-functions/`. A strong next slice is auth/admin-users/2FA because it still has broad return types and caller casts.
+Current state: cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, and auth/admin-users/2FA/setup functions are already extracted under `apps/admin-v2/src/lib/api-functions/`. A strong next slice is settings because many settings wrappers still use broad `Record<string, unknown>` payloads in the legacy barrel.
 
 Prompt:
 

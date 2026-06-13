@@ -2,7 +2,10 @@
 // Simple email-based 2FA setup - sends code to email automatically
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { set2faMethod, mark2faVerified } from "@/lib/api.functions";
+import {
+  mark2faVerified,
+  set2faMethod,
+} from "@/lib/api-functions/auth-management";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
