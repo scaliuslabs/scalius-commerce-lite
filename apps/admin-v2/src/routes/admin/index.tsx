@@ -1,15 +1,54 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { DashboardStats } from "~/components/admin/DashboardStats";
 import { RecentOrders } from "~/components/admin/RecentOrders";
 import { QuickActions } from "~/components/admin/QuickActions";
 import { WelcomeBanner } from "~/components/admin/WelcomeBanner";
 import { dashboardQueryOptions } from "~/lib/api.queries";
 import { RouteErrorComponent } from "~/lib/list-helpers";
+import type { DashboardData } from "~/lib/api-functions/dashboard";
+
+const EMPTY_DASHBOARD_DATA: DashboardData = {
+  stats: {
+    totalProducts: 0,
+    totalCustomers: 0,
+    totalRevenue: 0,
+    currentMonth: {
+      orders: 0,
+      revenue: 0,
+      orderGrowth: 0,
+      revenueGrowth: 0,
+      orderStatus: {
+        delivered: 0,
+        processing: 0,
+        shipping: 0,
+        cancelled: 0,
+      },
+    },
+    lastMonth: {
+      orders: 0,
+      revenue: 0,
+    },
+  },
+  recentOrders: [],
+  dailyActivityData: [],
+};
+
+function isTransientDashboardError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("D1 DB is overloaded") ||
+    message.includes("Requests queued for too long") ||
+    message.includes("code: 7429");
+}
 
 export const Route = createFileRoute("/admin/")({
   loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(dashboardQueryOptions());
+    try {
+      await queryClient.ensureQueryData(dashboardQueryOptions());
+    } catch (error) {
+      if (!isTransientDashboardError(error)) throw error;
+      console.warn("Dashboard prefetch skipped after transient D1 overload", error);
+    }
   },
   head: () => ({ meta: [{ title: "Dashboard | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
@@ -17,11 +56,24 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function DashboardPage() {
-  const { data } = useSuspenseQuery(dashboardQueryOptions());
+  const dashboardQuery = useQuery({
+    ...dashboardQueryOptions(),
+    retry: (failureCount, error) => failureCount < 3 && isTransientDashboardError(error),
+  });
+  const data = dashboardQuery.data ?? EMPTY_DASHBOARD_DATA;
 
   return (
     <div className="space-y-8">
       <WelcomeBanner />
+
+      {dashboardQuery.isError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          Dashboard metrics are temporarily unavailable. You can keep using the admin while the data refreshes.
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-gray-100/80 dark:border-gray-800/60 bg-white dark:bg-gray-900/50 shadow-[0_1px_3px_0_rgb(0,0,0,0.08)] dark:shadow-none transition-all duration-200 ease-out">
         <div className="p-5 md:p-6">
