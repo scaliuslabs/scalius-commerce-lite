@@ -15,6 +15,13 @@ import { execFileSync, spawn } from "child_process";
 import { readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
+import {
+  assertLocalUrl,
+  assertPassword,
+  parseOptions,
+  resolveLocalStatePath,
+  trimTrailingSlash,
+} from "./dev-local-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -29,7 +36,7 @@ const defaults = {
   email: process.env.LOCAL_ADMIN_EMAIL || "admin@local.scalius.test",
   password: process.env.LOCAL_ADMIN_PASSWORD || "ScaliusLocal123!",
   name: process.env.LOCAL_ADMIN_NAME || "Local Admin",
-  wranglerState: process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state",
+  wranglerState: resolveLocalStatePath(root, process.env.SCALIUS_WRANGLER_STATE),
 };
 
 if (options.help || command === "help") {
@@ -43,11 +50,14 @@ const config = {
   password: options.password || defaults.password,
   name: options.name || defaults.name,
   noStart: Boolean(options["no-start"]),
-  wranglerState: options.state || defaults.wranglerState,
+  skipMigrations: Boolean(options["skip-migrations"] || options["no-migrate"]),
+  wranglerState: resolveLocalStatePath(root, options.state || defaults.wranglerState),
 };
 
 assertLocalUrl(config.apiBaseUrl);
 assertPassword(config.password);
+
+let migrationsApplied = false;
 
 try {
   if (command === "status") {
@@ -60,6 +70,7 @@ try {
       await createAdmin({ allowExisting: true });
     });
   } else if (command === "reset") {
+    ensureLocalMigrations();
     resetLocalAuthTables();
     await withApi(async () => {
       await createAdmin({ allowExisting: false });
@@ -73,29 +84,6 @@ try {
   console.error(`\nLocal admin ${command} failed.`);
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
-}
-
-function parseOptions(rawArgs) {
-  const parsed = {};
-  for (let i = 0; i < rawArgs.length; i++) {
-    const arg = rawArgs[i];
-    if (!arg.startsWith("--")) continue;
-    const withoutPrefix = arg.slice(2);
-    const equalsIndex = withoutPrefix.indexOf("=");
-    if (equalsIndex >= 0) {
-      parsed[withoutPrefix.slice(0, equalsIndex)] = withoutPrefix.slice(equalsIndex + 1);
-      continue;
-    }
-
-    const next = rawArgs[i + 1];
-    if (next && !next.startsWith("--")) {
-      parsed[withoutPrefix] = next;
-      i++;
-    } else {
-      parsed[withoutPrefix] = true;
-    }
-  }
-  return parsed;
 }
 
 function printHelp() {
@@ -112,31 +100,14 @@ Options:
   --password <value>    Admin password, 12+ chars (default: ${defaults.password})
   --name <name>         Admin name (default: ${defaults.name})
   --api <url>           Local API origin (default: ${defaults.apiBaseUrl})
-  --state <path>        Wrangler local state path (default: ${defaults.wranglerState})
+  --state <path>        Wrangler local state path; relative paths resolve from repo root
   --no-start            Require API to already be running
+  --skip-migrations     Do not apply local D1 migrations before starting/resetting
 
 Environment overrides:
   LOCAL_ADMIN_EMAIL, LOCAL_ADMIN_PASSWORD, LOCAL_ADMIN_NAME, LOCAL_API_BASE_URL,
   SCALIUS_WRANGLER_STATE
 `);
-}
-
-function trimTrailingSlash(value) {
-  return value.replace(/\/+$/, "");
-}
-
-function assertLocalUrl(value) {
-  const url = new URL(value);
-  const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-  if (!localHosts.has(url.hostname)) {
-    throw new Error(`Refusing to run against non-local API URL: ${value}`);
-  }
-}
-
-function assertPassword(password) {
-  if (password.length < 12) {
-    throw new Error("Local admin password must be at least 12 characters.");
-  }
 }
 
 async function withApi(work) {
@@ -147,7 +118,14 @@ async function withApi(work) {
     if (config.noStart) {
       throw new Error(`API is not running at ${config.apiBaseUrl}. Start it with pnpm --filter @scalius/api dev.`);
     }
+    if (config.apiBaseUrl !== defaults.apiBaseUrl) {
+      throw new Error(
+        `Custom --api ${config.apiBaseUrl} requires --no-start with an already running API worker. ` +
+        `The bundled API dev script starts on ${defaults.apiBaseUrl}.`,
+      );
+    }
 
+    ensureLocalMigrations();
     console.log(`Starting temporary API worker at ${config.apiBaseUrl}...`);
     child = spawn("pnpm", ["--filter", "@scalius/api", "dev"], {
       cwd: root,
@@ -209,6 +187,21 @@ async function waitForApi(getChildStatus = () => null) {
     await sleep(1000);
   }
   throw new Error(`Timed out waiting for API at ${config.apiBaseUrl}.`);
+}
+
+function ensureLocalMigrations() {
+  if (config.skipMigrations || migrationsApplied) return;
+
+  console.log("Ensuring local D1 migrations are applied...");
+  execFileSync("node", ["scripts/deploy.mjs", "--migrate-only", "--local"], {
+    cwd: root,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      SCALIUS_WRANGLER_STATE: config.wranglerState,
+    },
+  });
+  migrationsApplied = true;
 }
 
 function sleep(ms) {

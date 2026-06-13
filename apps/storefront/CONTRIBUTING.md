@@ -47,29 +47,19 @@ It connects to the **Scalius Commerce Lite** backend for data and commerce logic
     cd scalius-commerce-storefront
     ```
 
-2.  **Install Dependencies**
+2.  **Run Local Setup From The Repo Root**
 
     ```bash
-    pnpm install
+    pnpm dev:setup
     ```
 
-3.  **Environment Variables**
-    Copy `.env.example` to `.env` and configure your backend connection:
+    This installs dependencies, creates `.dev.vars` and `.env.development` files for all Workers, applies local D1 migrations, and creates the default local admin. The generated API token, JWT secret, and purge token are shared across the API/storefront files automatically.
 
-    ```env
-    PUBLIC_API_URL=http://localhost:8787/api/v1
-    PUBLIC_API_BASE_URL=http://localhost:8787
-    API_TOKEN=your_backend_api_token
-    PURGE_TOKEN=your_backend_purge_token
-    ```
-
-    See the README for the full list of variables.
-
-4.  **Run Development Server**
+3.  **Run Storefront Development**
     ```bash
-    pnpm dev
+    pnpm dev:storefront
     ```
-    The storefront runs at `http://localhost:4322`; the local API runs at `http://localhost:8787`.
+    The storefront runs at `http://localhost:4322`; the local API runs at `http://localhost:8787`. Use `pnpm dev` when you also want the admin dashboard.
 
 ## 💻 Development Workflow
 

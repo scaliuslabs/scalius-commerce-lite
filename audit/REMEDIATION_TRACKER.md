@@ -127,6 +127,8 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 - `pnpm dev:storefront` now applies pending local D1 migrations before API starts. It applied `0037_widget_js_content.sql` to the stale local DB, then started API and storefront.
 - Browser check of `http://localhost:4322/` rendered the storefront homepage with no console errors. Direct API check of `http://localhost:8787/api/v1/storefront/homepage` returned 200 after migrations.
 - `pnpm dev:admin:create --help`, `pnpm dev:setup --help`, and `pnpm dev:reset --help` print the new local admin options.
+- `pnpm dev:setup` now reuses existing shared local secrets when filling missing `.dev.vars` files, writes API `PURGE_TOKEN`/`PURGE_URL`, and fails loudly on existing secret drift instead of silently creating a broken local environment.
+- `pnpm dev:admin:create/reset/status` apply local migrations before starting a temporary API worker unless `--skip-migrations` is passed. `--api` custom origins now require `--no-start`, and `--state` paths resolve from the repo root.
 - Empty dashboard chart warning is fixed by rendering a stable empty state until daily activity data exists.
 
 ## Tracker Update Template

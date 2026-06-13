@@ -89,8 +89,8 @@ flowchart TB
     subgraph AdminV2 ["Admin Dashboard (TanStack Start)"]
         direction TB
         TSRouter["TanStack Router<br/>(60+ pages)"]
-        TSQuery["TanStack Query<br/>(78 queryOptions, 126 mutations)"]
-        ServerFns["252 Server Functions<br/>(createServerFn)"]
+        TSQuery["TanStack Query<br/>(78 queryOptions, 115 mutations)"]
+        ServerFns["261 Server Functions<br/>(214 legacy + 47 extracted)"]
     end
 
     subgraph Storefront ["Storefront (Astro 6 SSR)"]
@@ -216,16 +216,16 @@ The admin dashboard is built with **TanStack Start** — a full-stack React fram
 
 ```mermaid
 flowchart LR
-    SF["createServerFn<br/>(252 functions)"] --> QO["queryOptions<br/>(78 wrappers)"]
+    SF["createServerFn<br/>(214 legacy + 47 extracted)"] --> QO["queryOptions<br/>(78 wrappers)"]
     QO --> L["Route Loader<br/>(ensureQueryData)"]
     L --> C["Component<br/>(useSuspenseQuery)"]
-    C --> M["useMutation<br/>(126 hooks)"]
+    C --> M["useMutation<br/>(115 hooks)"]
     M -->|invalidateQueries| QO
 ```
 
-- **Server Functions** (`api.functions.ts`): 252 typed RPC functions that call the API worker
+- **Server Functions**: 214 functions remain in the legacy `api.functions.ts` barrel, plus 47 extracted typed functions under `api-functions/`
 - **Query Options** (`api.queries.ts`): 78 React Query wrappers with 7 staleTime tiers (10s → 1hr)
-- **Mutations** (`api.mutations.ts`): 126 hooks with cache invalidation and toast notifications
+- **Mutations** (`api.mutations.ts`): 115 exported hooks with cache invalidation and toast notifications
 - **Stale-While-Revalidate**: Detail queries use `staleTime: 0` + loader `staleTime: Infinity` for instant navigation
 
 ### Pages (60+)
@@ -383,7 +383,7 @@ pnpm dev:admin:status   # Check whether a local admin exists
 pnpm dev:setup
 ```
 
-Generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists.
+Generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
 Default local admin:
 
@@ -420,9 +420,11 @@ Admin production calls the API through the `env.API` service binding. Local admi
 For disposable local testing, point all Workers at another state directory:
 
 ```bash
-SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:reset
+pnpm dev:reset --state /tmp/scalius-commerce-state
 SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:admin
 ```
+
+Relative `--state` paths resolve from the repo root; absolute paths are easiest to reason about across Wrangler commands.
 
 ### 3) Sign in
 
@@ -474,7 +476,7 @@ pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
 | `BETTER_AUTH_SECRET` | API + Admin-v2 | Session signing |
 | `JWT_SECRET` | API + Admin-v2 + Storefront | JWT signing |
 | `API_TOKEN` | All workers | Internal machine-to-machine auth |
-| `PURGE_TOKEN` | Storefront | Cache purge authentication |
+| `PURGE_TOKEN` | API + Storefront | Cache purge authentication |
 | `CREDENTIAL_ENCRYPTION_KEY` | API + Admin-v2 | Provider credential encryption |
 
 ### Dashboard-Configured Integrations
