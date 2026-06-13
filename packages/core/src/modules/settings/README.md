@@ -178,13 +178,13 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/payment-methods` | Get enabled methods + default + gateway status (stripe/sslcommerz/polar/cod) |
-| POST | `/payment-methods` | Save enabled methods + default. Validates default is in enabled list |
+| POST | `/payment-methods` | Save enabled methods + default. Validates default is in enabled list. Invalidates checkout config/cache |
 | GET | `/stripe` | Get Stripe keys (masks secret + webhook) |
-| POST | `/stripe` | Save Stripe keys. Invalidates stripe + payment methods KV cache |
+| POST | `/stripe` | Save Stripe keys. Invalidates stripe, payment methods, and checkout config/cache |
 | GET | `/sslcommerz` | Get SSLCommerz credentials (masks password) |
-| POST | `/sslcommerz` | Save SSLCommerz credentials. Invalidates sslcommerz + payment methods KV cache |
+| POST | `/sslcommerz` | Save SSLCommerz credentials. Invalidates sslcommerz, payment methods, and checkout config/cache |
 | GET | `/polar` | Get Polar credentials (masks token + webhook) |
-| POST | `/polar` | Save Polar credentials. Invalidates polar + payment methods KV cache |
+| POST | `/polar` | Save Polar credentials. Invalidates polar, payment methods, and checkout config/cache |
 
 ### `shipping.ts` -- Shipping methods CRUD
 Full CRUD with soft-delete, restore, permanent delete, pagination, search, sort.
@@ -198,6 +198,7 @@ List, create, update, test connection, delete. Masks sensitive credential fields
 ## Checkout Config (Storefront)
 
 The storefront checkout endpoint returns:
+- `gateways` filtered by `payment_methods.enabled_methods`, each gateway's own enabled/configured state, and `checkoutMode`
 - `allowedCountries: string[]` -- country codes for phone validation
 - `allowedCountriesMode: "include" | "exclude"` -- whether the list is allowlist or blocklist
 - `currency.decimalPlaces: number` -- ISO 4217 decimal places for the configured currency

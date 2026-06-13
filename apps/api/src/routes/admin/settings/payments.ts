@@ -5,6 +5,10 @@ import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { getEncryptionKey } from "../../../utils/encryption-key";
+import {
+    invalidateGroups,
+    purgeStorefrontForGroups,
+} from "../../../utils/cache-invalidation";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 import {
     upsertSetting,
@@ -21,6 +25,12 @@ import {
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
+const CHECKOUT_CACHE_GROUPS = ["checkout"];
+
+async function invalidateCheckoutCaches(c: { env: Env }): Promise<void> {
+    await invalidateGroups(CHECKOUT_CACHE_GROUPS, c.env.CACHE);
+    await purgeStorefrontForGroups(CHECKOUT_CACHE_GROUPS, c.env);
+}
 
 // ─────────────────────────────────────────
 // VALIDATION SCHEMAS
@@ -128,7 +138,10 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     ]);
 
     const kv = getKv();
-    await invalidatePaymentMethodsCache(kv);
+    await Promise.all([
+        invalidatePaymentMethodsCache(kv),
+        invalidateCheckoutCaches(c),
+    ]);
 
     return ok(c, { message: "Payment methods updated" });
 });
@@ -194,7 +207,11 @@ app.openapi(saveStripeRoute, async (c) => {
         await Promise.all(ops);
 
         const kv = getKv();
-        await Promise.all([invalidateStripeCache(kv), invalidatePaymentMethodsCache(kv)]);
+        await Promise.all([
+            invalidateStripeCache(kv),
+            invalidatePaymentMethodsCache(kv),
+            invalidateCheckoutCaches(c),
+        ]);
 
         return ok(c, { message: "Stripe settings saved successfully" });
 });
@@ -260,7 +277,11 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         await Promise.all(ops);
 
         const kv = getKv();
-        await Promise.all([invalidateSSLCommerzCache(kv), invalidatePaymentMethodsCache(kv)]);
+        await Promise.all([
+            invalidateSSLCommerzCache(kv),
+            invalidatePaymentMethodsCache(kv),
+            invalidateCheckoutCaches(c),
+        ]);
 
         return ok(c, { message: "SSLCommerz settings saved successfully" });
 });
@@ -329,7 +350,11 @@ app.openapi(savePolarRoute, async (c) => {
         await Promise.all(ops);
 
         const kv = getKv();
-        await Promise.all([invalidatePolarCache(kv), invalidatePaymentMethodsCache(kv)]);
+        await Promise.all([
+            invalidatePolarCache(kv),
+            invalidatePaymentMethodsCache(kv),
+            invalidateCheckoutCaches(c),
+        ]);
 
         return ok(c, { message: "Polar settings saved successfully" });
 });

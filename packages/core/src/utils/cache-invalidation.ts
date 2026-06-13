@@ -70,7 +70,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   checkout: {
     label: "Checkout",
     description: "Shipping methods, delivery locations, payment settings",
-    kvPrefixes: ["api:shipping-methods:", "api:locations:"],
+    kvPrefixes: ["api:checkout:config:", "api:shipping-methods:", "api:locations:"],
     bumpsHtml: false,
     storefrontPrefixes: ["global_shipping_cities", "shipping_zones_", "shipping_areas_", "global_shipping_methods", "checkout_config", "global_checkout_language"],
   },
@@ -135,6 +135,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/payment-methods": ["checkout"],
   "/api/v1/admin/settings/stripe": ["checkout"],
   "/api/v1/admin/settings/sslcommerz": ["checkout"],
+  "/api/v1/admin/settings/polar": ["checkout"],
   "/api/v1/admin/settings/shipping-methods": ["checkout"],
   "/api/v1/admin/settings/checkout-languages": ["checkout"],
   "/api/v1/admin/settings/meta-conversions": ["layout"],
