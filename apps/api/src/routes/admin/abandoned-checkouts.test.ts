@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { abandonedCheckouts, OrderStatus, orders } from "@scalius/database/schema";
+import { abandonedCheckouts, OrderStatus, orders, PaymentStatus } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 
 const mocks = vi.hoisted(() => ({
@@ -25,6 +25,13 @@ type StaleOrder = {
     id: string;
     customerPhone: string | null;
     inventoryAction: string;
+    status: string;
+    paymentStatus: string;
+    paidAmount: number;
+    deletedAt: number | null;
+    version: number;
+    shipmentClaimId: string | null;
+    shipmentClaimExpiresAt: number | null;
     createdAt: number;
     updatedAt: number;
 };
@@ -34,6 +41,13 @@ function staleOrder(overrides: Partial<StaleOrder> = {}): StaleOrder {
         id: overrides.id ?? "order_1",
         customerPhone: overrides.customerPhone ?? "+8801712345678",
         inventoryAction: overrides.inventoryAction ?? "reserved",
+        status: overrides.status ?? OrderStatus.INCOMPLETE,
+        paymentStatus: overrides.paymentStatus ?? PaymentStatus.UNPAID,
+        paidAmount: overrides.paidAmount ?? 0,
+        deletedAt: overrides.deletedAt ?? null,
+        version: overrides.version ?? 7,
+        shipmentClaimId: overrides.shipmentClaimId ?? null,
+        shipmentClaimExpiresAt: overrides.shipmentClaimExpiresAt ?? null,
         createdAt: overrides.createdAt ?? 1_764_977_200,
         updatedAt: overrides.updatedAt ?? 1_764_977_200,
     };
@@ -41,6 +55,7 @@ function staleOrder(overrides: Partial<StaleOrder> = {}): StaleOrder {
 
 function createDbMock(staleOrders: StaleOrder[]) {
     const operations: Operation[] = [];
+    const updateResults: Array<Array<{ id: string }>> = [];
 
     const db = {
         select: vi.fn(() => ({
@@ -70,8 +85,13 @@ function createDbMock(staleOrders: StaleOrder[]) {
                 set(values: Record<string, unknown>) {
                     operations.push({ op: "update.set", table, values });
                     return {
-                        where: async () => {
+                        where: () => {
                             operations.push({ op: "update.where", table });
+                            return {
+                                returning: async () => {
+                                    return updateResults.shift() ?? [{ id: "order_1" }];
+                                },
+                            };
                         },
                     };
                 },
@@ -82,7 +102,7 @@ function createDbMock(staleOrders: StaleOrder[]) {
         }),
     };
 
-    return { db: db as unknown as Database, operations, rawDb: db };
+    return { db: db as unknown as Database, operations, rawDb: db, updateResults };
 }
 
 describe("archiveStaleIncompleteOrders", () => {
@@ -104,13 +124,20 @@ describe("archiveStaleIncompleteOrders", () => {
         expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.CANCELLED);
         expect(rawDb.delete).not.toHaveBeenCalled();
 
+        const claimIndex = operations.findIndex((entry) =>
+            entry.op === "update.set" && entry.values?.status === OrderStatus.CANCELLED
+        );
         const releaseIndex = operations.findIndex((entry) => entry.op === "inventory.release");
         const insertIndex = operations.findIndex((entry) => entry.op === "insert.values");
-        const updateIndex = operations.findIndex((entry) => entry.op === "update.set");
+        const finalizeIndex = operations.findIndex((entry) =>
+            entry.op === "update.set" && entry.values?.deletedAt !== undefined
+        );
 
+        expect(claimIndex).toBeGreaterThanOrEqual(0);
         expect(releaseIndex).toBeGreaterThanOrEqual(0);
-        expect(releaseIndex).toBeLessThan(insertIndex);
-        expect(insertIndex).toBeLessThan(updateIndex);
+        expect(claimIndex).toBeLessThan(releaseIndex);
+        expect(releaseIndex).toBeLessThan(finalizeIndex);
+        expect(finalizeIndex).toBeLessThan(insertIndex);
         expect(operations[insertIndex]).toMatchObject({
             table: abandonedCheckouts,
             values: {
@@ -119,10 +146,15 @@ describe("archiveStaleIncompleteOrders", () => {
                 customerPhone: "+8801712345678",
             },
         });
-        expect(operations[updateIndex]).toMatchObject({
+        expect(operations[claimIndex]).toMatchObject({
             table: orders,
             values: {
                 status: OrderStatus.CANCELLED,
+            },
+        });
+        expect(operations[finalizeIndex]).toMatchObject({
+            table: orders,
+            values: {
                 inventoryAction: "restored",
             },
         });
@@ -141,7 +173,15 @@ describe("archiveStaleIncompleteOrders", () => {
         });
         expect(rawDb.delete).not.toHaveBeenCalled();
         expect(operations.some((entry) => entry.op.startsWith("insert"))).toBe(false);
-        expect(operations.some((entry) => entry.op.startsWith("update"))).toBe(false);
+        expect(operations.some((entry) =>
+            entry.op === "update.set" && entry.values?.status === OrderStatus.CANCELLED
+        )).toBe(true);
+        expect(operations.some((entry) =>
+            entry.op === "update.set" && entry.values?.status === OrderStatus.INCOMPLETE
+        )).toBe(true);
+        expect(operations.some((entry) =>
+            entry.op === "update.set" && entry.values?.deletedAt !== undefined
+        )).toBe(false);
     });
 
     it("archives empty-inventory orders without calling the inventory transition helper", async () => {
@@ -154,5 +194,34 @@ describe("archiveStaleIncompleteOrders", () => {
         expect(rawDb.delete).not.toHaveBeenCalled();
         expect(operations.some((entry) => entry.op === "insert.values")).toBe(true);
         expect(operations.some((entry) => entry.op === "update.set")).toBe(true);
+    });
+
+    it("skips stale orders when the cleanup claim loses to a concurrent payment update", async () => {
+        const { db, rawDb, operations, updateResults } = createDbMock([staleOrder()]);
+        updateResults.push([]);
+
+        const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
+
+        expect(result).toEqual({ archived: 0, failed: 0, errors: [] });
+        expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+        expect(rawDb.delete).not.toHaveBeenCalled();
+        expect(operations.some((entry) => entry.op.startsWith("insert"))).toBe(false);
+        expect(operations.filter((entry) => entry.op === "update.set")).toHaveLength(1);
+    });
+
+    it("does not create an abandoned checkout archive when final soft-delete loses its guard", async () => {
+        const { db, rawDb, operations, updateResults } = createDbMock([staleOrder({ inventoryAction: "none" })]);
+        updateResults.push([{ id: "order_1" }], []);
+
+        const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
+
+        expect(result).toEqual({
+            archived: 0,
+            failed: 1,
+            errors: [{ orderId: "order_1", error: "Stale order cleanup changed concurrently before final archive" }],
+        });
+        expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+        expect(rawDb.delete).not.toHaveBeenCalled();
+        expect(operations.some((entry) => entry.op.startsWith("insert"))).toBe(false);
     });
 });
