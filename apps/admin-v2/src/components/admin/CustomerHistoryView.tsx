@@ -39,57 +39,17 @@ import { Separator } from "../ui/separator";
 import { ScrollArea } from "../ui/scroll-area";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-
-// --- Interfaces ---
-interface Customer {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string;
-  address: string | null;
-  city: string | null;
-  zone: string | null;
-  area: string | null;
-  totalOrders: number;
-  totalSpent: number;
-  lastOrderAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date | string | number | null;
-  cityName?: string | null;
-  zoneName?: string | null;
-  areaName?: string | null;
-}
-
-interface CustomerHistory {
-  id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  city: string | null;
-  zone: string | null;
-  area: string | null;
-  changeType: string | null;
-  createdAt: Date;
-  cityName?: string | null;
-  zoneName?: string | null;
-  areaName?: string | null;
-}
-
-interface Order {
-  id: string;
-  totalAmount: number;
-  status: string;
-  createdAt: Date;
-}
+import type {
+  Customer,
+  CustomerHistoryRecord,
+  CustomerOrderSummary,
+} from "@/types/api-responses";
 
 interface CustomerHistoryViewProps {
   customer: Customer;
-  history: CustomerHistory[];
-  orders: Order[];
+  history: CustomerHistoryRecord[];
+  orders: CustomerOrderSummary[];
 }
-// --- End Interfaces ---
 
 // --- Helper Functions ---
 
@@ -105,7 +65,7 @@ const getInitials = (name: string) => {
 };
 
 const getChangeTypeBadgeVariant = (
-  type: CustomerHistory["changeType"],
+  type: CustomerHistoryRecord["changeType"],
 ): string => {
   switch (type) {
     case "created":

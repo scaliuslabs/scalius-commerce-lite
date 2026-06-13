@@ -312,6 +312,10 @@ export const customerDetailSchema = z
     areaName: z.string().nullable(),
     totalOrders: z.number(),
     totalSpent: z.number(),
+    lastOrderAt: nullableTimestampSchema,
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: nullableTimestampSchema,
   })
 
 // ─────────────────────────────────────────

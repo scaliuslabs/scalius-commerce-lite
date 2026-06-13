@@ -20485,66 +20485,10 @@
                       "properties": {
                         "id": {
                           "type": "string"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "email": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "phone": {
-                          "type": "string"
-                        },
-                        "address": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "city": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "zone": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "area": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "cityName": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "zoneName": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "areaName": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "totalOrders": {
-                          "type": "number"
-                        },
-                        "totalSpent": {
-                          "type": "number"
                         }
                       },
                       "required": [
-                        "id",
-                        "name",
-                        "email",
-                        "phone",
-                        "address",
-                        "city",
-                        "zone",
-                        "area",
-                        "cityName",
-                        "zoneName",
-                        "areaName",
-                        "totalOrders",
-                        "totalSpent"
+                        "id"
                       ]
                     }
                   },
@@ -20875,6 +20819,48 @@
                         },
                         "totalSpent": {
                           "type": "number"
+                        },
+                        "lastOrderAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "updatedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "deletedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -20890,7 +20876,11 @@
                         "zoneName",
                         "areaName",
                         "totalOrders",
-                        "totalSpent"
+                        "totalSpent",
+                        "lastOrderAt",
+                        "createdAt",
+                        "updatedAt",
+                        "deletedAt"
                       ]
                     }
                   },
@@ -21541,6 +21531,48 @@
                             },
                             "totalSpent": {
                               "type": "number"
+                            },
+                            "lastOrderAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "deletedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -21556,7 +21588,10 @@
                             "zoneName",
                             "areaName",
                             "totalOrders",
-                            "totalSpent"
+                            "totalSpent",
+                            "lastOrderAt",
+                            "createdAt",
+                            "updatedAt"
                           ]
                         },
                         "history": {
@@ -21634,10 +21669,7 @@
                               "areaName",
                               "changeType",
                               "createdAt"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "orders": {
@@ -21670,10 +21702,7 @@
                               "totalAmount",
                               "status",
                               "createdAt"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         }
                       },

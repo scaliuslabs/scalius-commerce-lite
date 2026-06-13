@@ -16,11 +16,12 @@ import {
 } from "@scalius/core/modules/customers";
 import { customers, customerHistory, orders, deliveryLocations } from "@scalius/database/schema";
 import { eq, sql, inArray, isNull, and } from "drizzle-orm";
-import { NotFoundError, ApiError } from "../../utils/api-error";
+import { NotFoundError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
-import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
 import { customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
+import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── List Customers ──
@@ -44,6 +45,42 @@ const listRoute = createRoute({
         200: { description: "Customer list with pagination", content: { "application/json": { schema: paginatedEnvelope("customers", customerSummarySchema) } } },
         ...errorResponses,
     }
+});
+
+const customerHistoryEntrySchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().nullable(),
+    phone: z.string().nullable(),
+    address: z.string().nullable(),
+    city: z.string().nullable(),
+    zone: z.string().nullable(),
+    area: z.string().nullable(),
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
+    areaName: z.string().nullable(),
+    changeType: z.string(),
+    createdAt: timestampSchema,
+});
+
+const customerHistoryOrderSchema = z.object({
+    id: z.string(),
+    totalAmount: z.number(),
+    status: z.string(),
+    createdAt: timestampSchema,
+});
+
+const customerHistoryCustomerSchema = customerDetailSchema.extend({
+    lastOrderAt: nullableTimestampSchema,
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: optionalNullableTimestampSchema,
+});
+
+const customerHistoryPayloadSchema = z.object({
+    customer: customerHistoryCustomerSchema,
+    history: z.array(customerHistoryEntrySchema),
+    orders: z.array(customerHistoryOrderSchema),
 });
 
 app.openapi(listRoute, async (c) => {
@@ -71,17 +108,17 @@ const createCustomerRoute = createRoute({
         body: { content: { "application/json": { schema: createCustomerSchema } } }
     },
     responses: {
-        201: { description: "Customer created", content: { "application/json": { schema: successEnvelope(customerDetailSchema) } } },
+        201: { description: "Customer created", content: { "application/json": { schema: idResponse } } },
         ...errorResponses,
     }
 });
 
-app.openapi(createCustomerRoute, (async (c: any) => {
+app.openapi(createCustomerRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createCustomer(db, data);
     return created(c, result);
-}) as any);
+});
 
 // ── Bulk Delete Customers ──
 
@@ -239,7 +276,7 @@ const getHistoryRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Customer history data", content: { "application/json": { schema: successEnvelope(z.object({ customer: customerDetailSchema, history: z.array(z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), address: z.string().nullable(), city: z.string().nullable(), zone: z.string().nullable(), area: z.string().nullable(), cityName: z.string().nullable(), zoneName: z.string().nullable(), areaName: z.string().nullable(), changeType: z.string(), createdAt: z.union([z.string(), z.number()]) }).passthrough()), orders: z.array(z.object({ id: z.string(), totalAmount: z.number(), status: z.string(), createdAt: z.union([z.string(), z.number()]) }).passthrough()) })) } } },
+        200: { description: "Customer history data", content: { "application/json": { schema: successEnvelope(customerHistoryPayloadSchema) } } },
         ...errorResponses,
     }
 });

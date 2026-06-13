@@ -16,13 +16,6 @@ import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "./query-keys";
 import {
-  // Customers
-  createCustomer,
-  updateCustomer,
-  deleteCustomer,
-  permanentDeleteCustomer,
-  restoreCustomer,
-  bulkDeleteCustomers,
   // Widgets
   createWidget,
   updateWidget,
@@ -36,6 +29,17 @@ import {
   deleteWidgetHistory,
   restoreWidgetHistory,
 } from "./api.functions";
+import {
+  bulkDeleteCustomers,
+  createCustomer,
+  deleteCustomer,
+  permanentDeleteCustomer,
+  restoreCustomer,
+  updateCustomer,
+  type BulkDeleteCustomersInput,
+  type CreateCustomerInput,
+  type UpdateCustomerInput,
+} from "./api-functions/customers";
 import {
   bulkCreateProductVariants,
   bulkDeleteProducts,
@@ -860,7 +864,7 @@ export function useUpdateSmsSettings() {
 export function useCreateCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createCustomer({ data }),
+    mutationFn: (data: CreateCustomerInput) => createCustomer({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       toast.success("Customer created");
@@ -873,8 +877,7 @@ export function useCreateCustomer() {
 export function useUpdateCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateCustomer({ data }),
+    mutationFn: (data: UpdateCustomerInput) => updateCustomer({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       queryClient.invalidateQueries({
@@ -936,8 +939,7 @@ export function useRestoreCustomer() {
 export function useBulkDeleteCustomers() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { customerIds: string[]; permanent?: boolean }) =>
-      bulkDeleteCustomers({ data }),
+    mutationFn: (data: BulkDeleteCustomersInput) => bulkDeleteCustomers({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       toast.success(

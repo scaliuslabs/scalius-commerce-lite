@@ -554,20 +554,20 @@ export interface Customer {
   lastOrderAt: Date | string | number | null;
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
-  deletedAt: Date | string | number | null;
+  deletedAt?: Date | string | number | null;
 }
 
 export interface CustomerHistoryRecord {
   id: string;
-  name: string | null;
+  name: string;
   email: string | null;
   phone: string | null;
   address: string | null;
   city: string | null;
   zone: string | null;
   area: string | null;
-  cityName: string;
-  zoneName: string;
+  cityName: string | null;
+  zoneName: string | null;
   areaName: string | null;
   changeType: string | null;
   createdAt: Date | string | number;
