@@ -16,7 +16,7 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
     ]);
     if (!productResult) throw redirect({ to: "/admin/products" });
   },
-  head: ({ loaderData }) => ({
+  head: () => ({
     meta: [{ title: `Edit Product | Scalius Admin` }],
   }),
   errorComponent: RouteErrorComponent,
@@ -29,7 +29,7 @@ function EditProductPage() {
   const { data: categoryData } = useSuspenseQuery(categoryFormOptionsQueryOptions());
 
   const product = productResult as ProductDetail;
-  const allCategories = ((categoryData as Record<string, unknown>)?.categories || []) as Category[];
+  const allCategories = categoryData.categories as Category[];
 
   const defaultValues = {
     id: product.id,

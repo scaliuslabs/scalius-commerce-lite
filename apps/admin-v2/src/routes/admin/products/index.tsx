@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
-import { toast } from "sonner";
 import {
   Plus,
   Package,
@@ -122,8 +121,7 @@ function ProductsPage() {
   const { data: statsData } = useQuery(productStatsQueryOptions());
 
   const categories = useMemo(
-    () =>
-      ((catData as Record<string, unknown>)?.categories ?? []) as Category[],
+    () => (catData?.categories ?? []) as Category[],
     [catData],
   );
 

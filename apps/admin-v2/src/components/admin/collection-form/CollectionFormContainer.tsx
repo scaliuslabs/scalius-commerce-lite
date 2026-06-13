@@ -17,7 +17,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
-import { createCollection, updateCollection } from "~/lib/api.functions";
+import { createCollection, updateCollection } from "~/lib/api-functions/collections";
 import { ProductSelectionSection } from "./ProductSelectionSection";
 import { LayoutSettingsSection } from "./LayoutSettingsSection";
 import {

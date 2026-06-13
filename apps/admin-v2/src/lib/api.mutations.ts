@@ -23,14 +23,6 @@ import {
   permanentDeleteProduct,
   restoreProduct,
   bulkDeleteProducts,
-  // Categories
-  createCategory,
-  updateCategory,
-  deleteCategory,
-  deleteCategoryPermanent,
-  restoreCategory,
-  bulkDeleteCategories,
-  bulkRestoreCategories,
   // Orders
   createOrder,
   updateOrder,
@@ -57,15 +49,6 @@ import {
   restoreWidget,
   bulkDeleteWidgets,
   bulkRestoreWidgets,
-  // Collections
-  createCollection,
-  updateCollection,
-  deleteCollection,
-  deleteCollectionPermanent,
-  restoreCollection,
-  reorderCollections,
-  bulkDeleteCollections,
-  bulkRestoreCollections,
   // Product Variants
   createProductVariant,
   updateProductVariant,
@@ -79,6 +62,29 @@ import {
   deleteWidgetHistory,
   restoreWidgetHistory,
 } from "./api.functions";
+import {
+  bulkDeleteCategories,
+  bulkRestoreCategories,
+  createCategory,
+  deleteCategory,
+  deleteCategoryPermanent,
+  restoreCategory,
+  updateCategory,
+  type CreateCategoryInput,
+  type UpdateCategoryInput,
+} from "./api-functions/categories";
+import {
+  bulkDeleteCollections,
+  bulkRestoreCollections,
+  createCollection,
+  deleteCollection,
+  deleteCollectionPermanent,
+  reorderCollections,
+  restoreCollection,
+  updateCollection,
+  type CreateCollectionInput,
+  type UpdateCollectionInput,
+} from "./api-functions/collections";
 import {
   saveFooterConfig,
   saveHeaderConfig,
@@ -329,7 +335,7 @@ export function useBulkDeleteProducts() {
 export function useCreateCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createCategory({ data }),
+    mutationFn: (data: CreateCategoryInput) => createCategory({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
@@ -345,8 +351,7 @@ export function useCreateCategory() {
 export function useUpdateCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateCategory({ data }),
+    mutationFn: (data: UpdateCategoryInput) => updateCategory({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
@@ -1375,7 +1380,7 @@ export function useDeleteAnalyticsScript() {
 export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createCollection({ data }),
+    mutationFn: (data: CreateCollectionInput) => createCollection({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       queryClient.invalidateQueries({
@@ -1391,8 +1396,7 @@ export function useCreateCollection() {
 export function useUpdateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateCollection({ data }),
+    mutationFn: (data: UpdateCollectionInput) => updateCollection({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       queryClient.invalidateQueries({

@@ -26,7 +26,7 @@ import {
     idResponse,
     noContentResponse,
 } from "../../schemas/responses";
-import { categorySummarySchema } from "../../schemas/entities";
+import { categoryDetailSchema, categorySummarySchema } from "../../schemas/entities";
 import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -111,19 +111,19 @@ const getByIdRoute = createRoute({
     responses: {
         200: {
             description: "Category details",
-            content: { "application/json": { schema: successEnvelope(categorySummarySchema) } },
+            content: { "application/json": { schema: successEnvelope(categoryDetailSchema) } },
         },
         ...errorResponses,
     }
 });
 
-app.openapi(getByIdRoute, (async (c: any) => {
+app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const category = await getCategoryById(db, id);
     if (!category) throw new NotFoundError("Category not found");
     return ok(c, category);
-}) as any);
+});
 
 // ── Create Category ──
 

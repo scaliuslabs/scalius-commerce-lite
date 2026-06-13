@@ -14795,18 +14795,9 @@
                           "nullable": true
                         },
                         "createdAt": {
-                          "type": "string",
-                          "nullable": true
+                          "type": "number"
                         },
                         "updatedAt": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "deletedAt": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "productCount": {
                           "type": "number"
                         }
                       },
@@ -14819,9 +14810,7 @@
                         "metaTitle",
                         "metaDescription",
                         "createdAt",
-                        "updatedAt",
-                        "deletedAt",
-                        "productCount"
+                        "updatedAt"
                       ]
                     }
                   },
@@ -16572,12 +16561,17 @@
                               },
                               "price": {
                                 "type": "number"
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
                               }
                             },
                             "required": [
                               "id",
                               "name",
-                              "price"
+                              "price",
+                              "categoryId"
                             ]
                           }
                         }

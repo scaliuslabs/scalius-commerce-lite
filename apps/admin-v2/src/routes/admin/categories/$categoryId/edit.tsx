@@ -2,7 +2,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CategoryForm } from "~/components/admin/CategoryForm";
 import { categoryQueryOptions } from "~/lib/api.queries";
-import type { Category } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
@@ -21,7 +20,7 @@ function EditCategoryPage() {
   const { categoryId } = Route.useParams();
   const { data: categoryData } = useSuspenseQuery(categoryQueryOptions(categoryId));
 
-  const c = categoryData as Category;
+  const c = categoryData;
   const defaultValues = {
     ...c,
     slugEdited: true,

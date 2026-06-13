@@ -17,14 +17,6 @@ import {
   getProductStats,
   getProductVariants,
   getVariantSortOrder,
-  // Categories
-  getCategories,
-  getCategory,
-  getCategoryFormOptions,
-  // Collections
-  getCollections,
-  getCollection,
-  getCollectionFormOptions,
   // Orders
   getOrders,
   getOrder,
@@ -42,6 +34,18 @@ import {
   getWidget,
   getWidgetHistory,
 } from "./api.functions";
+import {
+  getCategories,
+  getCategory,
+  getCategoryFormOptions,
+  type CategoriesQueryInput,
+} from "./api-functions/categories";
+import {
+  getCollection,
+  getCollectionFormOptions,
+  getCollections,
+  type CollectionsQueryInput,
+} from "./api-functions/collections";
 import {
   getAttributes,
   getAttributeValues,
@@ -207,14 +211,7 @@ export const variantSortOrderQueryOptions = (productId: string) =>
 //  CATEGORIES
 // ═══════════════════════════════════════════════════════════════════
 
-export const categoriesQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-  order?: string;
-  showTrashed?: boolean;
-}) =>
+export const categoriesQueryOptions = (params: CategoriesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.categories.list(params),
     queryFn: () => getCategories({ data: params }),
@@ -239,15 +236,7 @@ export const categoryFormOptionsQueryOptions = () =>
 //  COLLECTIONS
 // ═══════════════════════════════════════════════════════════════════
 
-export const collectionsQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-  order?: string;
-  showTrashed?: boolean;
-  trashed?: boolean;
-}) =>
+export const collectionsQueryOptions = (params: CollectionsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.collections.list(params),
     queryFn: () => getCollections({ data: params }),
