@@ -15,11 +15,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
   apiGet,
-  apiGetText,
   apiPost,
   apiPut,
   apiDelete,
-  apiBaseGet,
 } from "./api.server";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1286,29 +1284,3 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return apiDelete(`/media/folders/${data.folderId}`);
   });
-
-// ═══════════════════════════════════════════════════════════════════
-//  AI (OpenRouter / Prompts / Context)
-// ═══════════════════════════════════════════════════════════════════
-
-export const getAiPrompts = createServerFn({ method: "GET" })
-  .inputValidator((data: { type: string }) => data)
-  .handler(async ({ data }) => {
-    return apiGetText("/ai-prompts", { type: data.type });
-  });
-
-export const getAiContextBatchDetails = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/ai-context/batch-details", data);
-  });
-
-// ═══════════════════════════════════════════════════════════════════
-//  FIREBASE CONFIG (non-admin endpoint)
-// ═══════════════════════════════════════════════════════════════════
-
-export const getFirebaseConfig = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiBaseGet<Record<string, string>>("/auth/firebase-config");
-  },
-);

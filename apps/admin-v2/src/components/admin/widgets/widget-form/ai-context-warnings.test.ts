@@ -18,13 +18,19 @@ describe("notifyAiContextWarnings", () => {
 
   it("warns when selected context is truncated or unavailable", () => {
     notifyAiContextWarnings({
+      products: [],
+      categories: [],
+      collections: [],
       warnings: {
         productsTruncated: true,
         categoriesTruncated: true,
+        collectionsTruncated: false,
         productsUnavailable: 2,
         categoriesUnavailable: 1,
+        collectionsUnavailable: 0,
         maxProducts: 20,
         maxCategories: 50,
+        maxCollections: 10,
       },
     });
 
