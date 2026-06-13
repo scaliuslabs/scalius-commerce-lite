@@ -103,6 +103,7 @@ export const stripeHandler: GatewayHandler = {
       // Backend computes amount from DB order -- only send orderId
       const intentPayload: Record<string, unknown> = {
         orderId,
+        receiptToken,
         paymentType: ctx.config.partialPaymentEnabled ? "deposit" : "full",
       };
       if (ctx.config.partialPaymentEnabled) {

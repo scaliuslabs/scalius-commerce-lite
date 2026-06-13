@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005` as `Not Started`; treat those as the next high-risk remediation targets.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; `PAY-003` is now verified, and `ORDER-005` remains the next high-risk remediation target.
 
 ## Validation Performed
 
@@ -24,7 +24,7 @@ Current tracked remediation state: the original tracker items are marked `Verifi
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 91 test files and 549 tests.
+- `pnpm test`: passed 92 test files and 553 tests.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
@@ -141,11 +141,11 @@ Status: Verified on 2026-06-13. Polar webhook refunds now CAS-update payment and
 
 ### PAY-003: Payment session creation trusts caller-controlled checkout data
 
-Public payment-session routes are reachable through storefront proxies and currently trust request-body order identifiers, receipt tokens, and redirect/callback URLs too much. A caller can shape gateway session requests without proving possession of the checkout receipt token, and some callback/success URLs are derived from caller input instead of trusted storefront/runtime configuration.
+At re-audit time, public payment-session routes were reachable through storefront proxies and trusted request-body order identifiers, receipt tokens, and redirect/callback URLs too much. A caller could shape gateway session requests without proving possession of the checkout receipt token, and some callback/success URLs were derived from caller input instead of trusted storefront/runtime configuration.
 
 Fix direction: require receipt-token or checkout-token proof for the target order before creating any external payment session, load the canonical order/checkout state server-side, and derive gateway callback/success/cancel URLs from trusted runtime settings.
 
-Status: Not Started as of 2026-06-13. Add route/provider tests that reject missing or wrong receipt tokens, ignore attacker-supplied callback URLs, and avoid calling gateway providers until order ownership/session proof passes.
+Status: Verified on 2026-06-13. Stripe, SSLCommerz, and Polar payment-session routes now require receipt-token proof for the target order before gateway settings/provider calls, gateway request URLs are derived from trusted API runtime config instead of caller-provided URLs, and generated SDK request types require `receiptToken` without caller URL fields. Focused API route tests cover missing/foreign tokens and URL injection.
 
 ### DEL-001: Delivery webhook and shipment semantics are inconsistent
 

@@ -18,43 +18,20 @@ import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError, ValidationError, RateLimitError } from "../utils/api-error";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
+import {
+  RECEIPT_TOKEN_PREFIX,
+  RECEIPT_TOKEN_TTL_SECONDS,
+  validateReceiptToken,
+} from "../utils/order-receipt-token";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const RECEIPT_TOKEN_PREFIX = "order_receipt:";
-const RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
-
 const unixToDate = (timestamp: number | null): Date | null => {
   if (!timestamp) return null;
   return new Date(timestamp * 1000);
 };
-
-async function validateReceiptToken(
-  kv: KVNamespace | undefined,
-  orderId: string,
-  token: string | undefined,
-): Promise<void> {
-  if (!kv || !token || !token.startsWith("chk_")) {
-    throw new NotFoundError("Order receipt not found");
-  }
-
-  const raw = await kv.get(`${RECEIPT_TOKEN_PREFIX}${token}`);
-  if (!raw) {
-    throw new NotFoundError("Order receipt not found");
-  }
-
-  try {
-    const data = JSON.parse(raw) as { orderId?: unknown };
-    if (data.orderId !== orderId) {
-      throw new NotFoundError("Order receipt not found");
-    }
-  } catch (error) {
-    if (error instanceof NotFoundError) throw error;
-    throw new NotFoundError("Order receipt not found");
-  }
-}
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 

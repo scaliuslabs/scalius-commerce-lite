@@ -28281,6 +28281,7 @@ export type PostApiV1SetupResponse = PostApiV1SetupResponses[keyof PostApiV1Setu
 export type PostApiV1PaymentStripeIntentData = {
     body?: {
         orderId: string;
+        receiptToken: string;
         paymentType?: 'full' | 'deposit' | 'balance';
         depositAmount?: number;
         currency?: string;
@@ -28372,11 +28373,10 @@ export type PostApiV1PaymentStripeIntentResponse = PostApiV1PaymentStripeIntentR
 export type PostApiV1PaymentSslcommerzSessionData = {
     body?: {
         orderId: string;
-        receiptToken?: string;
+        receiptToken: string;
         paymentType?: 'full' | 'deposit' | 'balance';
         depositAmount?: number;
         currency?: string;
-        baseUrl?: string;
     };
     path?: never;
     query?: never;
@@ -28468,9 +28468,7 @@ export type PostApiV1PaymentPolarSessionData = {
         customerName?: string;
         customerEmail?: string;
         customerPhone?: string;
-        receiptToken?: string;
-        successUrl?: string;
-        cancelUrl?: string;
+        receiptToken: string;
     };
     path?: never;
     query?: never;

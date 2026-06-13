@@ -3,15 +3,16 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { type Database } from "@scalius/database/client";
-import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
+import { orders, paymentPlans, PaymentMethod, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
 import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { NotFoundError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
+import { NotFoundError, ServiceUnavailableError, ApiError, ValidationError } from "../../utils/api-error";
 import { getEncryptionKey } from "../../utils/encryption-key";
+import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
@@ -28,9 +29,7 @@ const polarSessionSchema = z.object({
     customerName: z.string().optional(),
     customerEmail: z.string().optional(),
     customerPhone: z.string().optional(),
-    receiptToken: z.string().optional(),
-    successUrl: z.string().optional(),
-    cancelUrl: z.string().optional()
+    receiptToken: z.string().min(1)
 });
 
 const createPolarSessionRoute = createRoute({
@@ -69,6 +68,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const db: Database = c.get("db");
     const kv = getKv();
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    await validateReceiptToken(c.env.CACHE, orderId, body.receiptToken);
 
     // Get Polar credentials from DB
     const polarSettings = await getPolarSettings(db, kv, encryptionKey);
@@ -91,6 +91,15 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         .get();
 
     if (!order) throw new NotFoundError("Order not found");
+    if (order.paymentStatus === PaymentStatus.PAID) {
+        throw new ValidationError("Order is already fully paid");
+    }
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
+        throw new ValidationError("Cannot pay a cancelled/returned order");
+    }
+    if (order.paymentMethod !== PaymentMethod.POLAR) {
+        throw new ValidationError("Order is not configured for Polar payment");
+    }
 
     // Get configured currency
     const currencyConfig = await getCurrencyConfig(db);
@@ -99,16 +108,23 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     // Determine the correct amount based on payment type
     let paymentAmount = order.totalAmount;
     if (type === "deposit") {
-        paymentAmount = body.depositAmount || order.totalAmount;
+        if (!body.depositAmount) {
+            throw new ValidationError("depositAmount required for deposit payment");
+        }
+        if (body.depositAmount >= order.totalAmount) {
+            throw new ValidationError("Deposit amount must be less than order total");
+        }
+        paymentAmount = body.depositAmount;
     } else if (type === "balance") {
         const plan = await db
             .select()
             .from(paymentPlans)
             .where(eq(paymentPlans.orderId, orderId))
             .get();
-        if (plan) {
-            paymentAmount = plan.balanceDue;
+        if (!plan || plan.balanceDue <= 0) {
+            throw new ValidationError("No balance due");
         }
+        paymentAmount = plan.balanceDue;
     }
 
     // Polar only supports specific currencies. If the store currency isn't
@@ -145,11 +161,12 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const decimals = getDecimalPlaces(currency);
     const amountInCents = Math.round(paymentAmount * Math.pow(10, decimals));
 
-    const baseUrl = (c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin).trim();
+    const baseUrl = getTrustedApiOrigin(c.env, c.req.url);
     const receiptQuery = body.receiptToken
         ? `&receipt_token=${encodeURIComponent(body.receiptToken)}`
         : "";
-    const successUrl = body.successUrl || `${baseUrl}/api/v1/payment/polar/success?order_id=${encodeURIComponent(orderId)}${receiptQuery}`;
+    const successUrl = `${baseUrl}/api/v1/payment/polar/success?order_id=${encodeURIComponent(orderId)}${receiptQuery}`;
+    const cancelUrl = `${baseUrl}/api/v1/payment/polar/cancel?order_id=${encodeURIComponent(orderId)}`;
 
     const result = await createPolarCheckout(polarSettings, {
         orderId,
@@ -158,7 +175,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         productId: polarSettings.productId,
         paymentType: type,
         successUrl,
-        cancelUrl: body.cancelUrl,
+        cancelUrl,
         customerName: body.customerName,
         customerEmail: body.customerEmail,
         metadata: {
@@ -221,6 +238,12 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 // ─── GET /success ────────────────────────────────────────────────────────────
 // Redirect handlers — not OpenAPI routes (external callbacks)
 
+function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: string): string {
+    const configured = env.PUBLIC_API_BASE_URL?.trim();
+    const base = configured || new URL(requestUrl).origin;
+    return base.replace(/\/+$/, "");
+}
+
 polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
     const receiptToken = c.req.query("receipt_token") ?? "";
@@ -243,8 +266,6 @@ polarPaymentRoutes.get("/success", async (c) => {
 // ─── GET /cancel ─────────────────────────────────────────────────────────────
 
 polarPaymentRoutes.get("/cancel", async (c) => {
-    const orderId = c.req.query("order_id");
-
     const envObj = c.env;
     const storefrontUrl = String(envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
 
