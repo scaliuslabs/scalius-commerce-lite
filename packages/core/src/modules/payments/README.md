@@ -105,7 +105,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 |-------|---------|
 | `orders` | Main order table. Payment fields: `paymentMethod` (stripe/sslcommerz/polar/cod), `paymentStatus` (unpaid/partial/paid/refunded/failed), `paymentIntentId` (stores Stripe PI ID, SSLCommerz session key, or Polar checkout ID), `paidAmount`, `balanceDue` |
 | `orderPayments` | Individual payment records. Per-gateway columns: `stripePaymentIntentId`, `stripeChargeId`, `sslcommerzTranId`, `sslcommerzValId`, `sslcommerzBankTranId`, `polarCheckoutId`, `codCollectedBy`, `codCollectedAt`, `codReceiptUrl`. Status: `pending`/`succeeded`/`failed`/`refunded`. Indexed on gateway-specific ID columns for idempotency lookups. |
-| `paymentPlans` | Partial payment tracking. `orderId` (unique), `totalAmount`, `depositAmount`, `balanceDue`, `depositPaidAt`, `balancePaidAt`, `status` (pending/deposit_paid/fully_paid) |
+| `paymentPlans` | Partial payment tracking. `orderId` (unique), `totalAmount`, `depositAmount`, `balanceDue`, `depositPaidAt`, `balancePaidAt`, `status` (pending/deposit_paid/completed/cancelled) |
 | `codTracking` | COD-specific tracking. `orderId` (unique), `deliveryAttempts`, `lastAttemptAt`, `codStatus` (pending/collected/failed/returned), `failureReason`, `collectedBy`, `collectedAmount`, `collectedAt`, `receiptUrl` |
 | `webhookEvents` | Webhook event log for auditing. `provider`, `eventType`, `orderId`, `status` (processed/failed), `result` |
 
@@ -153,11 +153,11 @@ Dispatches `PaymentQueueMessage` types:
 - **Base URLs**: `sandbox.sslcommerz.com` (sandbox) / `securepay.sslcommerz.com` (production)
 - **Session creation**: `initSSLCommerzSession()` POSTs to `/gwprocess/v4/api.php`; returns `GatewayPageURL` (redirect) + `sessionkey`
 - **Amount formatting**: Uses `totalAmount.toFixed(getDecimalPlaces(currency))` for ISO 4217-aware decimal formatting. e.g. BDT: `toFixed(2)`, JPY: `toFixed(0)`, BHD: `toFixed(3)`. No smallest-unit multiplication -- SSLCommerz always receives the display amount.
-- **Session params**: Includes `value_a` field to encode `paymentType` (full/deposit/balance) in metadata
-- **Redirect handlers**: API has POST + GET handlers for `/success`, `/fail`, `/cancel`; each validates order exists before redirecting to storefront. SSLCommerz POSTs form-encoded `tran_id`; handlers extract via `parseBody()` (POST) or query param (GET). `STOREFRONT_URL` from env determines redirect target.
+- **Session params**: Uses a unique merchant `tran_id` per payment attempt (`{orderId}_{paymentType}_{suffix}`), includes `value_a` for payment type, and includes `value_b` for the canonical order id.
+- **Redirect handlers**: API has POST + GET handlers for `/success`, `/fail`, `/cancel`; each validates order exists before redirecting to storefront. Trusted callback URLs include `order_id`; legacy callbacks can still derive the order id by parsing scoped `tran_id`. `STOREFRONT_URL` from env determines redirect target.
 - **IPN validation**: SSLCommerz does NOT sign webhooks. `validateSSLCommerzIPN()` makes a server-to-server API call to `/validator/api/validationserverAPI.php` using `val_id`. Only `VALID`/`VALIDATED` statuses are accepted.
 - **Transaction validation**: `validateSSLCommerzPayment()` validates by `tran_id` via `/validator/api/merchantTransIDvalidationAPI.php`
-- **Replay protection**: Durable `webhook_events` claim `sslcommerz:ipn:{tran_id}:{val_id}` before queueing
+- **Replay protection**: Durable `webhook_events` claim `sslcommerz:ipn:{tran_id}:{val_id}` before queueing. Confirmed payment idempotency uses canonical `val_id`; `tran_id` remains a merchant attempt/correlation field.
 - **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Refund amount formatted with `toFixed(2)` (SSLCommerz only supports BDT for refunds). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled).
 - **Settings**: `store_id`, `store_password`, `sandbox`, `enabled` (stored in `settings` table, category `sslcommerz`)
 
@@ -204,7 +204,7 @@ Three layers of duplicate prevention:
 
 1. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue failures mark the event `failed` so provider retries can reclaim it. Fresh `processing` claims dedupe in-flight work, while stale `processing` claims are lease-reclaimable so isolate failures before queue send do not black-hole provider retries.
 2. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry)
-3. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (stripePaymentIntentId, sslcommerzTranId, polarCheckoutId) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
+3. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (Stripe payment intent, SSLCommerz validation id with transaction-id fallback for legacy failed attempts, Polar checkout id) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
 
 COD collection (`recordCODCollection()`) has its own idempotency: queries for existing succeeded payment with `paymentMethod: "cod"`.
 
@@ -220,7 +220,7 @@ Before any writes, `processPaymentConfirmed()` calls `validateTransition()` for 
 Payment types: `full`, `deposit`, `balance`.
 
 - **Deposit flow**: API route validates `depositAmount < totalAmount`, creates a `paymentPlans` record, creates intent/session for deposit amount only. `processPaymentConfirmed()` sets payment plan status to `deposit_paid`.
-- **Balance flow**: API route computes `balanceDue` from order, creates intent/session for remaining amount. `processPaymentConfirmed()` sets payment plan status to `fully_paid` when balance reaches zero.
+- **Balance flow**: API route computes `balanceDue` from order, creates intent/session for remaining amount. `processPaymentConfirmed()` sets payment plan status to `completed` when balance reaches zero.
 - **Storefront**: When `partialPaymentEnabled` is true in checkout config, COD is hidden and button labels change to "Pay Advance via {gateway}". Advance amount is `min(partialPaymentAmount, totalAmount)`.
 
 ### Refund Flow

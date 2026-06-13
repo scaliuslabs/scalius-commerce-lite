@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OrderStatus, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
+import { OrderStatus, PaymentPlanStatus, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   getCurrencyConfig: vi.fn(),
@@ -147,6 +147,84 @@ describe("payment processing idempotency", () => {
       stripeChargeId: "ch_1",
       metadata: JSON.stringify({ currency: "bdt" }),
     }));
+  });
+
+  it("applies SSLCommerz balance payments with a distinct val_id even when tran_id is reused", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        null,
+        createPaymentOrder({
+          totalAmount: 100,
+          paidAmount: 25,
+          balanceDue: 75,
+          paymentStatus: PaymentStatus.PARTIAL,
+          status: OrderStatus.PENDING,
+        }),
+      ],
+      batchResults: [
+        [[{ id: "order_1" }], [{ id: "pay_balance" }], [{ id: "plan_1" }]],
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "sslcommerz",
+      paymentType: "balance",
+      sslcommerzTranId: "order_1",
+      sslcommerzValId: "val_balance",
+      sslcommerzBankTranId: "bank_balance",
+      amount: 75,
+      metadata: { currency: "BDT" },
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).toMatchObject({
+      orderId: "order_1",
+      amount: 75,
+      paymentType: "balance",
+      sslcommerzTranId: "order_1",
+    });
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(updates).toContainEqual(expect.objectContaining({
+      paidAmount: 100,
+      balanceDue: 0,
+      paymentStatus: PaymentStatus.PAID,
+    }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      status: PaymentRecordStatus.SUCCEEDED,
+      sslcommerzValId: "val_balance",
+      sslcommerzBankTranId: "bank_balance",
+    }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      status: PaymentPlanStatus.COMPLETED,
+    }));
+  });
+
+  it("dedupes exact duplicate SSLCommerz confirmations by val_id", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        { id: "pay_1", amount: 50, status: PaymentRecordStatus.SUCCEEDED },
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "sslcommerz",
+      paymentType: "deposit",
+      sslcommerzTranId: "order_1",
+      sslcommerzValId: "val_deposit",
+      sslcommerzBankTranId: "bank_deposit",
+      amount: 50,
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
   });
 
   it("does not rewrite duplicate failed gateway attempts", async () => {

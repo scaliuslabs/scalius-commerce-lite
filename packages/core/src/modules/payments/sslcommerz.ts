@@ -28,9 +28,39 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 /** SSLCommerz API base URLs */
 const SANDBOX_BASE = "https://sandbox.sslcommerz.com";
 const PRODUCTION_BASE = "https://securepay.sslcommerz.com";
+const SSL_COMMERZ_TRAN_SUFFIX_LENGTH = 8;
 
 function getBaseUrl(sandbox: boolean): string {
   return sandbox ? SANDBOX_BASE : PRODUCTION_BASE;
+}
+
+function createTransactionSuffix(): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, SSL_COMMERZ_TRAN_SUFFIX_LENGTH).toUpperCase();
+}
+
+export function buildSSLCommerzTranId(
+  orderId: string,
+  paymentType: InitSSLCommerzSessionParams["paymentType"],
+  suffix = createTransactionSuffix(),
+): string {
+  return `${orderId}_${paymentType}_${suffix.replace(/[^a-zA-Z0-9]/g, "").slice(0, SSL_COMMERZ_TRAN_SUFFIX_LENGTH).toUpperCase()}`;
+}
+
+export function parseSSLCommerzTranId(tranId: string): {
+  orderId: string;
+  paymentType: InitSSLCommerzSessionParams["paymentType"] | null;
+  transactionId: string;
+} {
+  const match = /^(.+)_(full|deposit|balance)_([a-zA-Z0-9]{6,32})$/.exec(tranId);
+  if (!match) {
+    return { orderId: tranId, paymentType: null, transactionId: tranId };
+  }
+
+  return {
+    orderId: match[1]!,
+    paymentType: match[2] as InitSSLCommerzSessionParams["paymentType"],
+    transactionId: tranId,
+  };
 }
 
 /**
@@ -52,7 +82,7 @@ export async function initSSLCommerzSession(
     // Use ISO 4217 decimal places for the currency (e.g. BDT: 2, JPY: 0, BHD: 3)
     total_amount: params.totalAmount.toFixed(getDecimalPlaces(params.currency)),
     currency: params.currency,
-    tran_id: params.orderId,
+    tran_id: params.transactionId ?? buildSSLCommerzTranId(params.orderId, params.paymentType),
     success_url: params.successUrl,
     fail_url: params.failUrl,
     cancel_url: params.cancelUrl,
@@ -69,8 +99,9 @@ export async function initSSLCommerzSession(
     product_profile: "general",
     shipping_method: "NO",
     num_of_item: String(params.numItems ?? 1),
-    // Custom metadata: encode paymentType as value_a
+    // Custom metadata returned by validated IPN responses.
     value_a: params.paymentType,
+    value_b: params.orderId,
   });
 
   try {

@@ -50,6 +50,7 @@ export interface StripePaymentIntentResult {
 
 export interface InitSSLCommerzSessionParams {
   orderId: string;
+  transactionId?: string;
   totalAmount: number; // Major units (e.g. 150.00 BDT) — SSLCommerz formats via toFixed(decimals)
   currency: string; // BDT | USD | EUR | GBP | SGD
   successUrl: string;
@@ -76,7 +77,7 @@ export interface SSLCommerzSessionResult {
 
 export interface SSLCommerzIPNPayload {
   status: string; // VALID | VALIDATED | INVALID_TRANSACTION | FAILED | etc.
-  tran_id: string; // Our order ID / transaction ID
+  tran_id: string; // Merchant transaction/attempt ID
   val_id: string; // SSLCommerz validation ID
   amount: string;
   store_amount: string;
