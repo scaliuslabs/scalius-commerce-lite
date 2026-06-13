@@ -9,7 +9,7 @@ import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
-import { saveHeaderConfig } from "~/lib/api.functions";
+import { saveHeaderConfig } from "~/lib/api-functions/settings";
 
 import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";
