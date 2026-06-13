@@ -19,7 +19,7 @@ meta-capi.ts                      meta-conversions.ts              conversions-a
 ## End-to-End Flow
 
 1. Storefront browser code calls `sendServerEvent()` from `apps/storefront/src/lib/tracking/meta-capi.ts`
-2. This collects standard user data (fbp/fbc cookies, phone, email, name, city from sessionStorage) and merges with event-specific data
+2. This collects browser attribution data (`_fbp`, `_fbc`, user agent) and merges only explicitly supplied event-specific `userData`
 3. Dispatches `POST /api/v1/meta/events` via `sendMetaCapiEvent()` from `@/lib/api/tracking`
 4. API route (`apps/api/src/routes/meta-conversions.ts`) validates the payload via Zod schema, enriches with IP/user-agent from request headers
 5. Calls `sendCapiEvent()` from this package, which:
@@ -98,9 +98,11 @@ Standalone functions (not a class):
 
 The storefront client is a thin dispatcher that:
 1. Collects `_fbp` and `_fbc` cookies (Meta click/browser IDs)
-2. Reads user data from sessionStorage (`scalius_user_phone`, `scalius_user_email`, `scalius_user_name`, `scalius_user_city`)
-3. Merges standard user data with event-specific user data
+2. Adds the browser user agent
+3. Merges only event-specific `userData` explicitly passed by the caller
 4. Calls `sendMetaCapiEvent()` which POSTs to `/api/v1/meta/events`
+
+The browser dispatcher must not read checkout/customer PII from `sessionStorage` or auto-enrich broad browsing events. Checkout PII should remain scoped to checkout/order APIs; any CAPI PII must be intentionally supplied for a narrow conversion event and is hashed server-side before Meta receives it.
 
 This runs in the browser. The actual CAPI call happens server-side in the API worker.
 

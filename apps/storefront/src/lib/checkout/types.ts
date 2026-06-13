@@ -18,6 +18,7 @@ export interface PaymentResult {
   redirectUrl?: string;
   error?: string;
   clearCartOnRedirect?: boolean;
+  clearCheckoutSessionOnRedirect?: boolean;
 }
 
 export interface GatewayHandler {

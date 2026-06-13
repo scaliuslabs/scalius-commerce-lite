@@ -491,9 +491,11 @@ const submitLabel = codOnly
 <script>
   import { initCartFunctionality } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
+  import { clearCheckoutSession } from "@/lib/checkout/session-state";
 
   // Initialize cart functionality
   initCartFunctionality();
+  clearCheckoutSession();
 
   // ── Customer login pre-fill ───────────────────────────────────────────────
   
@@ -712,31 +714,6 @@ const submitLabel = codOnly
       }
     });
   });
-
-  // ── PII capture (save to sessionStorage for Meta CAPI Matching) ───────────
-  function setupPiiCapture() {
-    const save = (key: string, value: string) => {
-      if (!value?.trim()) { sessionStorage.removeItem(key); return; }
-      try { sessionStorage.setItem(key, value.trim()); } catch {}
-    };
-
-    const captureInput = (id: string, storageKey: string) => {
-      const input = document.getElementById(id) as HTMLInputElement;
-      if (input) {
-        input.addEventListener("change", () => save(storageKey, input.value));
-        const saved = sessionStorage.getItem(storageKey);
-        if (saved && !input.value) input.value = saved;
-      }
-    };
-
-    captureInput("customerPhone", "scalius_user_phone");
-    captureInput("customerEmail", "scalius_user_email");
-    captureInput("customerName", "scalius_user_name");
-    captureInput("citySearch", "scalius_user_city");
-  }
-
-  document.addEventListener("DOMContentLoaded", setupPiiCapture);
-  document.addEventListener("astro:page-load", setupPiiCapture);
 
   // ── Abandoned checkout tracking ───────────────────────────────────────────
   function setupFormListeners() {

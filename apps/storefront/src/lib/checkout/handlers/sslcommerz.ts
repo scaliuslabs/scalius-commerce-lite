@@ -44,7 +44,11 @@ export const sslcommerzHandler: GatewayHandler = {
       const gatewayUrl = sessionData.gatewayUrl as string;
       if (!gatewayUrl) throw new Error("No gateway URL received");
 
-      return { success: true, redirectUrl: gatewayUrl };
+      return {
+        success: true,
+        redirectUrl: gatewayUrl,
+        clearCheckoutSessionOnRedirect: true,
+      };
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }

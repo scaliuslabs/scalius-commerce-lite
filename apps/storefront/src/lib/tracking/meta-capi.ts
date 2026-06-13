@@ -6,7 +6,7 @@
 import {
   sendMetaCapiEvent,
   type MetaCapiEventPayload,
-} from "@/lib/api/tracking";
+} from "../api/tracking";
 
 function getCookie(name: string): string {
   if (typeof document === "undefined") {
@@ -29,7 +29,7 @@ function getFromSession(key: string): string | null {
   }
 }
 
-function getStandardUserData(): Partial<MetaCapiEventPayload["userData"]> {
+function getBrowserUserData(): Partial<MetaCapiEventPayload["userData"]> {
   if (typeof window === "undefined") {
     return {};
   }
@@ -42,25 +42,6 @@ function getStandardUserData(): Partial<MetaCapiEventPayload["userData"]> {
     fbp: fbp,
     fbc: fbc,
   };
-
-  const userPhone = getFromSession("scalius_user_phone");
-  // Meta expects phone numbers to contain only digits, with country code. We will let the backend handle strict hashing if needed, or pass it raw here.
-  if (userPhone) userData.ph = userPhone.replace(/[^\d+]/g, "");
-
-  const userEmail = getFromSession("scalius_user_email");
-  if (userEmail) userData.em = userEmail.toLowerCase().trim();
-
-  const userName = getFromSession("scalius_user_name");
-  if (userName) {
-    const parts = userName.trim().split(/\s+/);
-    if (parts.length > 0) userData.fn = parts[0].toLowerCase();
-    if (parts.length > 1) userData.ln = parts.slice(1).join(" ").toLowerCase();
-  }
-
-  const userCity = getFromSession("scalius_user_city");
-  if (userCity) userData.ct = userCity.toLowerCase().trim();
-
-  // We only send explicitly collected user data (no hardcoded fallbacks for country, let Meta infer from IP if not provided by user checkout)
 
   return userData;
 }
@@ -82,8 +63,8 @@ export function sendServerEvent(
     eventName: event.eventName,
     eventSourceUrl: window.location.href,
     userData: {
-      ...getStandardUserData(), // Automatically include browser and session data
-      ...(event.userData || {}), // Merge with any event-specific user data
+      ...getBrowserUserData(),
+      ...(event.userData || {}),
     },
     customData: event.customData,
   };
