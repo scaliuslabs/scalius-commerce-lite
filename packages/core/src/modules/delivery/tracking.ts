@@ -153,6 +153,12 @@ export async function updateOrderStatusFromShipment(
       };
     }
 
+    const newInventoryAction = await applyInventoryForStatusChange(db, order.id, newOrderStatus);
+    await db
+      .update(orders)
+      .set({ inventoryAction: newInventoryAction })
+      .where(eq(orders.id, order.id));
+
     return null;
   } catch (error: unknown) {
     console.error("Error updating order status from shipment:", {

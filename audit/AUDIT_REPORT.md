@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, and `WEBHOOK-001` are now verified; `ORDER-007` through `ORDER-010` remain open.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, and `ORDER-007` are now verified; `ORDER-008` through `ORDER-010` remain open.
 
 ## Validation Performed
 
@@ -243,7 +243,7 @@ Some transitions persist order/payment status before applying inventory transiti
 
 Fix direction: make inventory reconciliation resumable even when status is already changed, or persist a durable transition/outbox state that retries until inventory state matches the order state.
 
-Status: Not Started. See `ORDER-007` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13. Status, fulfillment, COD, delivery, refund, return, and admin full-edit retries now reconcile inventory even when the order already has the requested or mapped status. Delivery webhooks and shipment refreshes invoke the order mapper even when the shipment row already stores the provider status, but notifications still require an actual order status change. Already-cancelled full-refund retries release only pre-fulfillment/non-deducted inventory and do not auto-restore fulfilled refunds. Focused core/API tests cover same-status admin status retries, bulk/manual shipment retries, COD delivered retries, delivery mapper retries, admin edit retries, Polar/admin refund retries, return retries, and fulfilled-refund non-restock guards. See `ORDER-007` in `REMEDIATION_TRACKER.md`.
 
 ### WEBHOOK-001: Durable webhook `processing` claims can black-hole events
 

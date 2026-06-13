@@ -155,38 +155,36 @@ app.post("/", async (c) => {
             })
             .where(eq(deliveryShipments.id, shipment.id));
 
-        if (normalizedStatus !== previousStatus) {
-            const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
+        const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
 
-            // Enqueue customer notification for delivery status changes
-            if (statusResult && statusResult.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
-                const DELIVERY_NOTIFICATION_MAP: Record<string, string> = {
-                    shipped: "order_shipped",
-                    delivered: "order_delivered",
-                    returned: "order_returned",
-                    cancelled: "order_cancelled",
-                };
-                const notifType = DELIVERY_NOTIFICATION_MAP[statusResult.newStatus];
-                if (notifType) {
-                    try {
-                        const order = await db.select({
-                            customerEmail: orders.customerEmail,
-                            customerName: orders.customerName,
-                        }).from(orders).where(eq(orders.id, statusResult.orderId)).get();
+        // Enqueue customer notification only for actual order status changes.
+        if (statusResult && statusResult.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
+            const DELIVERY_NOTIFICATION_MAP: Record<string, string> = {
+                shipped: "order_shipped",
+                delivered: "order_delivered",
+                returned: "order_returned",
+                cancelled: "order_cancelled",
+            };
+            const notifType = DELIVERY_NOTIFICATION_MAP[statusResult.newStatus];
+            if (notifType) {
+                try {
+                    const order = await db.select({
+                        customerEmail: orders.customerEmail,
+                        customerName: orders.customerName,
+                    }).from(orders).where(eq(orders.id, statusResult.orderId)).get();
 
-                        if (order) {
-                            await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
-                                type: "order.notification",
-                                orderId: statusResult.orderId,
-                                customerEmail: order.customerEmail ?? undefined,
-                                customerName: order.customerName,
-                                notificationType: notifType,
-                                data: shipment.trackingId ? { trackingId: shipment.trackingId } : undefined,
-                            });
-                        }
-                    } catch (notifErr) {
-                        console.error(`[pathao-webhook] Failed to enqueue notification:`, notifErr);
+                    if (order) {
+                        await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+                            type: "order.notification",
+                            orderId: statusResult.orderId,
+                            customerEmail: order.customerEmail ?? undefined,
+                            customerName: order.customerName,
+                            notificationType: notifType,
+                            data: shipment.trackingId ? { trackingId: shipment.trackingId } : undefined,
+                        });
                     }
+                } catch (notifErr) {
+                    console.error(`[pathao-webhook] Failed to enqueue notification:`, notifErr);
                 }
             }
         }

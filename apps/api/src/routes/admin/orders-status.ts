@@ -532,13 +532,11 @@ app.openapi(refreshShipmentRoute, async (c) => {
     const statusChanged = previousStatus !== updatedShipment.status;
     let orderStatusUpdate = false;
 
-    if (statusChanged) {
-        try {
-            const orderUpdate = await updateOrderStatusFromShipment(db, shipmentId, updatedShipment.status);
-            orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
-        } catch (e: unknown) {
-            console.error("Error updating order status:", e);
-        }
+    try {
+        const orderUpdate = await updateOrderStatusFromShipment(db, shipmentId, updatedShipment.status);
+        orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
+    } catch (e: unknown) {
+        console.error("Error updating order status:", e);
     }
 
     return ok(c, {

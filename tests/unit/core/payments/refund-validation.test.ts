@@ -366,6 +366,55 @@ function createRefundDbWithLostStatusCas() {
   };
 }
 
+function createAlreadyReturnedDb() {
+  const order = {
+    id: "ord_return_cas",
+    status: OrderStatus.RETURNED,
+    paymentStatus: PaymentStatus.PAID,
+    version: 5,
+  };
+
+  return {
+    select: vi.fn(() => createChain(order)),
+    update: vi.fn(() => createChain([{ id: order.id }])),
+  };
+}
+
+function createAlreadyRefundedCancelledDb() {
+  const order = {
+    id: "ord_refund_cas",
+    totalAmount: 100,
+    paidAmount: 0,
+    paymentStatus: PaymentStatus.REFUNDED,
+    paymentMethod: "cod",
+    status: OrderStatus.CANCELLED,
+    version: 9,
+  };
+
+  return {
+    select: vi.fn(() => createChain(order)),
+    update: vi.fn(() => createChain([{ id: order.id }])),
+  };
+}
+
+function createAlreadyRefundedCancelledDeductedDb() {
+  const order = {
+    id: "ord_refund_cas",
+    totalAmount: 100,
+    paidAmount: 0,
+    paymentStatus: PaymentStatus.REFUNDED,
+    paymentMethod: "cod",
+    status: OrderStatus.CANCELLED,
+    inventoryAction: "deducted",
+    version: 9,
+  };
+
+  return {
+    select: vi.fn(() => createChain(order)),
+    update: vi.fn(() => createChain([{ id: order.id }])),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -800,6 +849,73 @@ describe("refund validation", () => {
       });
 
       expect(createRefund).toHaveBeenCalledOnce();
+      expect(applyInventoryForStatusChange).not.toHaveBeenCalled();
+    });
+
+    it("reconciles return inventory when retry sees the order already returned", async () => {
+      const applyInventoryForStatusChange = vi.fn();
+      const { processReturn } = await importRefundServiceWithMocks({
+        applyInventoryForStatusChange,
+      });
+      const db = createAlreadyReturnedDb();
+
+      await expect(processReturn(db as never, undefined, {
+        orderId: "ord_return_cas",
+        reason: "Customer returned package",
+        autoRefund: false,
+      })).resolves.toEqual({});
+
+      expect(db.update).not.toHaveBeenCalled();
+      expect(applyInventoryForStatusChange).toHaveBeenCalledWith(
+        db,
+        "ord_return_cas",
+        OrderStatus.RETURNED,
+      );
+    });
+
+    it("reconciles pre-fulfillment refund inventory when retry sees the order already cancelled and refunded", async () => {
+      const applyInventoryForStatusChange = vi.fn();
+      const createRefund = vi.fn();
+      const { processRefund } = await importRefundServiceWithMocks({
+        applyInventoryForStatusChange,
+        createRefund,
+      });
+      const db = createAlreadyRefundedCancelledDb();
+
+      await expect(processRefund(db as never, undefined, {
+        orderId: "ord_refund_cas",
+        reason: "Customer cancelled before fulfillment",
+        gateway: "cod",
+      })).resolves.toMatchObject({
+        success: true,
+        amount: 0,
+        isFullRefund: true,
+      });
+
+      expect(createRefund).not.toHaveBeenCalled();
+      expect(applyInventoryForStatusChange).toHaveBeenCalledWith(
+        db,
+        "ord_refund_cas",
+        OrderStatus.CANCELLED,
+      );
+    });
+
+    it("does not auto-restore deducted inventory for an already-cancelled fulfilled refund retry", async () => {
+      const applyInventoryForStatusChange = vi.fn();
+      const createRefund = vi.fn();
+      const { processRefund } = await importRefundServiceWithMocks({
+        applyInventoryForStatusChange,
+        createRefund,
+      });
+      const db = createAlreadyRefundedCancelledDeductedDb();
+
+      await expect(processRefund(db as never, undefined, {
+        orderId: "ord_refund_cas",
+        reason: "Customer cancelled after fulfillment",
+        gateway: "cod",
+      })).rejects.toThrow("Order is already fully refunded");
+
+      expect(createRefund).not.toHaveBeenCalled();
       expect(applyInventoryForStatusChange).not.toHaveBeenCalled();
     });
   });

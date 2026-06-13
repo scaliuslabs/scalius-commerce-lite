@@ -932,7 +932,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             statusTransitionHandled = true;
         }
 
-        if (data.status !== existingOrder.status && !statusTransitionHandled) {
+        if (!statusTransitionHandled) {
             inventoryActionOverride = await applyInventoryForStatusChange(db, id, data.status);
         }
 
