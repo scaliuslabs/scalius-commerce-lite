@@ -8167,38 +8167,32 @@ export type GetApiV1AdminWidgetsResponses = {
                     createdAt: string | number | null;
                     updatedAt: string | number | null;
                     deletedAt: string | number | null;
-                    [key: string]: unknown;
                 }>;
                 createdAt: number;
                 updatedAt: number;
                 deletedAt: number | null;
-                [key: string]: unknown;
             }>;
             availableCollections: Array<{
                 id: string;
                 name: string;
                 sortOrder: number;
                 type: string;
-                [key: string]: unknown;
             }>;
             availablePages?: Array<{
                 id: string;
                 title: string;
                 slug: string;
                 sortOrder: number;
-                [key: string]: unknown;
             }>;
             referencedProducts?: Array<{
                 id: string;
                 name: string;
                 slug: string;
-                [key: string]: unknown;
             }>;
             referencedCategories?: Array<{
                 id: string;
                 name: string;
                 slug: string;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -8327,7 +8321,6 @@ export type PostApiV1AdminWidgetsResponses = {
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
-                [key: string]: unknown;
             }>;
             createdAt: string | number | null;
             updatedAt: string | number | null;
@@ -8926,7 +8919,6 @@ export type GetApiV1AdminWidgetsByIdResponses = {
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
-                [key: string]: unknown;
             }>;
             createdAt: string | number | null;
             updatedAt: string | number | null;
@@ -9060,7 +9052,6 @@ export type PutApiV1AdminWidgetsByIdResponses = {
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
-                [key: string]: unknown;
             }>;
             createdAt: string | number | null;
             updatedAt: string | number | null;
@@ -9327,7 +9318,6 @@ export type PatchApiV1AdminWidgetsByIdToggleStatusResponses = {
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
-                [key: string]: unknown;
             }>;
             createdAt: string | number | null;
             updatedAt: string | number | null;
@@ -9421,7 +9411,6 @@ export type GetApiV1AdminWidgetsByIdHistoryResponses = {
             jsContent: string | null;
             reason: string;
             createdAt: string | number;
-            [key: string]: unknown;
         }>;
     };
 };
@@ -9516,7 +9505,6 @@ export type PostApiV1AdminWidgetsByIdHistoryResponses = {
             jsContent: string | null;
             reason: string;
             createdAt: string | number;
-            [key: string]: unknown;
         };
     };
 };

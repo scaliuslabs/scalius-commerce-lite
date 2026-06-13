@@ -33,7 +33,7 @@ pnpm --filter @scalius/core typecheck
 pnpm --filter @scalius/database typecheck
 ```
 
-Note: admin typecheck does not fully protect `apps/admin-v2/src/lib/api.functions.ts` while that file has `@ts-nocheck`.
+Note: admin server functions now live under `apps/admin-v2/src/lib/api-functions/`; keep new slices covered by normal admin typecheck and avoid file-level `@ts-nocheck`.
 
 ## Focused Test Patterns
 

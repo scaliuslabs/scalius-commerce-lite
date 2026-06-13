@@ -470,9 +470,9 @@ export interface Widget {
   referenceCollectionId: string | null;
   sortOrder: number;
   placements?: WidgetPlacement[];
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
+  createdAt: Date | string | number | null;
+  updatedAt: Date | string | number | null;
+  deletedAt: Date | string | number | null;
 }
 
 export interface WidgetPlacement {
@@ -497,7 +497,7 @@ export interface WidgetHistoryEntry {
   cssContent: string | null;
   jsContent: string | null;
   reason: string;
-  createdAt: number;
+  createdAt: string | number;
 }
 
 export interface WidgetListResponse {

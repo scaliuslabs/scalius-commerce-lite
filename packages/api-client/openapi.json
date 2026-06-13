@@ -25400,10 +25400,7 @@
                                     "createdAt",
                                     "updatedAt",
                                     "deletedAt"
-                                  ],
-                                  "additionalProperties": {
-                                    "nullable": true
-                                  }
+                                  ]
                                 }
                               },
                               "createdAt": {
@@ -25432,10 +25429,7 @@
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "availableCollections": {
@@ -25461,10 +25455,7 @@
                               "name",
                               "sortOrder",
                               "type"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "availablePages": {
@@ -25490,10 +25481,7 @@
                               "title",
                               "slug",
                               "sortOrder"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "referencedProducts": {
@@ -25515,10 +25503,7 @@
                               "id",
                               "name",
                               "slug"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "referencedCategories": {
@@ -25540,10 +25525,7 @@
                               "id",
                               "name",
                               "slug"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         }
                       },
@@ -26028,10 +26010,7 @@
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "createdAt": {
@@ -27705,10 +27684,7 @@
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "createdAt": {
@@ -28240,10 +28216,7 @@
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "createdAt": {
@@ -29328,10 +29301,7 @@
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            ]
                           }
                         },
                         "createdAt": {
@@ -29671,10 +29641,7 @@
                           "jsContent",
                           "reason",
                           "createdAt"
-                        ],
-                        "additionalProperties": {
-                          "nullable": true
-                        }
+                        ]
                       }
                     }
                   },
@@ -29985,10 +29952,7 @@
                         "jsContent",
                         "reason",
                         "createdAt"
-                      ],
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      ]
                     }
                   },
                   "required": [

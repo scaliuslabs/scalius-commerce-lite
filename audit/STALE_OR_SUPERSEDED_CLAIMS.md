@@ -44,7 +44,7 @@ Valid, but be specific. The problems are service-binding-vs-HTTP fallback verifi
 
 ### "Admin has type safety issues"
 
-Valid, but narrow it. The central known weakness is `apps/admin-v2/src/lib/api.functions.ts` with file-level `@ts-nocheck`, plus large wrapper/query/mutation files and loose identity validators.
+Valid, but narrow it. The former `api.functions.ts` file-level `@ts-nocheck` weakness was removed on 2026-06-13. Remaining admin type-safety work is now local to UI `any` usage, broad DTO adapters, and query/mutation wrapper ergonomics.
 
 ### "Generated docs drift"
 

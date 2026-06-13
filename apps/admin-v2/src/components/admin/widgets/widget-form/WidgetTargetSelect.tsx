@@ -16,7 +16,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@scalius/shared/utils";
-import { getWidgetPlacementTargets } from "@/lib/api.functions";
+import { getWidgetPlacementTargets } from "@/lib/api-functions/widgets";
 import { queryKeys } from "@/lib/query-keys";
 import type { WidgetPlacementTargetOption } from "@/types/api-responses";
 

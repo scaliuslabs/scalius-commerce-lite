@@ -28,7 +28,13 @@ import {
   createWidgetHistorySnapshot,
   deleteWidgetHistory,
   restoreWidgetHistory,
-} from "./api.functions";
+  type BulkDeleteWidgetsInput,
+  type CreateWidgetHistorySnapshotInput,
+  type CreateWidgetInput,
+  type DeleteWidgetHistoryInput,
+  type RestoreWidgetHistoryInput,
+  type UpdateWidgetInput,
+} from "./api-functions/widgets";
 import {
   bulkDeleteCustomers,
   createCustomer,
@@ -1225,7 +1231,7 @@ export function useBulkRestorePages() {
 export function useCreateWidget() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createWidget({ data }),
+    mutationFn: (data: CreateWidgetInput) => createWidget({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.widgets.list() });
       toast.success("Widget created");
@@ -1238,8 +1244,7 @@ export function useCreateWidget() {
 export function useUpdateWidget() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateWidget({ data }),
+    mutationFn: (data: UpdateWidgetInput) => updateWidget({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.widgets.list() });
       queryClient.invalidateQueries({
@@ -1297,8 +1302,7 @@ export function useRestoreWidget() {
 export function useBulkDeleteWidgets() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
-      bulkDeleteWidgets({ data }),
+    mutationFn: (data: BulkDeleteWidgetsInput) => bulkDeleteWidgets({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.widgets.list() });
       toast.success(
@@ -1879,10 +1883,8 @@ export function useRenameMediaFolder() {
 export function useCreateWidgetHistorySnapshot() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      widgetId: string;
-      snapshot: Record<string, unknown>;
-    }) => createWidgetHistorySnapshot({ data }),
+    mutationFn: (data: CreateWidgetHistorySnapshotInput) =>
+      createWidgetHistorySnapshot({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.widgets.history(variables.widgetId),
@@ -1897,8 +1899,7 @@ export function useCreateWidgetHistorySnapshot() {
 export function useDeleteWidgetHistory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { widgetId: string; historyId: string }) =>
-      deleteWidgetHistory({ data }),
+    mutationFn: (data: DeleteWidgetHistoryInput) => deleteWidgetHistory({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.widgets.history(variables.widgetId),
@@ -1913,7 +1914,7 @@ export function useDeleteWidgetHistory() {
 export function useRestoreWidgetHistory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { widgetId: string; historyId: string }) =>
+    mutationFn: (data: RestoreWidgetHistoryInput) =>
       restoreWidgetHistory({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
