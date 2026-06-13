@@ -14,6 +14,7 @@ import { NotFoundError, ServiceUnavailableError, ApiError, ValidationError } fro
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { resolvePaymentSessionPolicy } from "./payment-session-policy";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -63,18 +64,11 @@ const createPolarSessionRoute = createRoute({
 polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const body = c.req.valid("json");
     const orderId = body.orderId;
-    const type = body.paymentType || body.type || "full";
 
     const db: Database = c.get("db");
     const kv = getKv();
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     await validateReceiptToken(c.env.CACHE, orderId, body.receiptToken);
-
-    // Get Polar credentials from DB
-    const polarSettings = await getPolarSettings(db, kv, encryptionKey);
-    if (!polarSettings || !polarSettings.enabled) {
-        throw new ServiceUnavailableError("Polar is not configured or disabled");
-    }
 
     // Validate the order exists
     const order = await db
@@ -84,7 +78,8 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
             status: orders.status,
             paymentMethod: orders.paymentMethod,
             paymentStatus: orders.paymentStatus,
-            paidAmount: orders.paidAmount
+            paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -103,28 +98,17 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
     // Get configured currency
     const currencyConfig = await getCurrencyConfig(db);
-    let currency = (body.currency ?? currencyConfig.code).toLowerCase();
+    let currency = currencyConfig.code.toLowerCase();
+    const policy = await resolvePaymentSessionPolicy(db, order, {
+        paymentType: body.paymentType || body.type,
+        depositAmount: body.depositAmount,
+    });
+    let paymentAmount = policy.chargeAmount;
 
-    // Determine the correct amount based on payment type
-    let paymentAmount = order.totalAmount;
-    if (type === "deposit") {
-        if (!body.depositAmount) {
-            throw new ValidationError("depositAmount required for deposit payment");
-        }
-        if (body.depositAmount >= order.totalAmount) {
-            throw new ValidationError("Deposit amount must be less than order total");
-        }
-        paymentAmount = body.depositAmount;
-    } else if (type === "balance") {
-        const plan = await db
-            .select()
-            .from(paymentPlans)
-            .where(eq(paymentPlans.orderId, orderId))
-            .get();
-        if (!plan || plan.balanceDue <= 0) {
-            throw new ValidationError("No balance due");
-        }
-        paymentAmount = plan.balanceDue;
+    // Get Polar credentials from DB
+    const polarSettings = await getPolarSettings(db, kv, encryptionKey);
+    if (!polarSettings || !polarSettings.enabled) {
+        throw new ServiceUnavailableError("Polar is not configured or disabled");
     }
 
     // Polar only supports specific currencies. If the store currency isn't
@@ -173,14 +157,14 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         amount: amountInCents,
         currency,
         productId: polarSettings.productId,
-        paymentType: type,
+        paymentType: policy.paymentType,
         successUrl,
         cancelUrl,
         customerName: body.customerName,
         customerEmail: body.customerEmail,
         metadata: {
             orderId,
-            paymentType: type,
+            paymentType: policy.paymentType,
             // Roundtrip original amounts through Polar webhook so the queue consumer
             // can record paidAmount in store currency, not gateway currency.
             originalAmount: String(originalLocalAmount),
@@ -205,25 +189,22 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
     // Set up payment plan for deposit orders.
     // Use original local currency amounts — NOT the converted gateway amount.
-    if (type === "deposit") {
-        const depositAmount = originalLocalAmount;
-        const balanceDue = order.totalAmount - depositAmount;
-
+    if (policy.paymentType === "deposit") {
         await db
             .insert(paymentPlans)
             .values({
                 id: crypto.randomUUID(),
                 orderId,
                 totalAmount: order.totalAmount,
-                depositAmount,
-                balanceDue,
+                depositAmount: policy.depositAmount,
+                balanceDue: policy.balanceDue,
                 status: "pending"
             })
             .onConflictDoUpdate({
                 target: paymentPlans.orderId,
                 set: {
-                    depositAmount,
-                    balanceDue,
+                    depositAmount: policy.depositAmount,
+                    balanceDue: policy.balanceDue,
                     updatedAt: sql`unixepoch()`
                 }
             });

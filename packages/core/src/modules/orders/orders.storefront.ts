@@ -154,7 +154,13 @@ export async function createStorefrontOrder(
             storefrontDb
                 .select()
                 .from(shippingMethods)
-                .where(eq(shippingMethods.id, data.shippingMethodId)),
+                .where(
+                    and(
+                        eq(shippingMethods.id, data.shippingMethodId),
+                        eq(shippingMethods.isActive, true),
+                        isNull(shippingMethods.deletedAt),
+                    ),
+                ),
         );
     } else {
         readBatch.push(storefrontDb.select().from(shippingMethods).limit(0));
@@ -257,15 +263,31 @@ export async function createStorefrontOrder(
 
     serverItemTotal = roundPrice(serverItemTotal);
 
-    // Determine exact shipping charge
-    let verifiedShippingCharge = shippingMethod ? (shippingMethod.fee as number) : (data.shippingCharge || 0);
-
     const hasFreeDeliveryProduct = data.items.some((item) => {
         const product = productMap.get(item.productId);
         return product?.freeDelivery === true;
     });
+
+    // Existing storefront behavior: any free-delivery item waives shipping method and charge.
+    let verifiedShippingCharge: number;
     if (hasFreeDeliveryProduct) {
         verifiedShippingCharge = 0;
+    } else {
+        const shippingMethodIsUsable =
+            shippingMethod &&
+            shippingMethod.isActive === true &&
+            shippingMethod.deletedAt == null;
+
+        if (!shippingMethodIsUsable) {
+            throw new ValidationError("A valid active shipping method is required for this order.");
+        }
+
+        const methodFee = Number(shippingMethod.fee);
+        if (!Number.isFinite(methodFee) || methodFee < 0) {
+            throw new ValidationError("Selected shipping method is misconfigured.");
+        }
+
+        verifiedShippingCharge = roundPrice(methodFee);
     }
 
     // ------------------------------------------------------------------

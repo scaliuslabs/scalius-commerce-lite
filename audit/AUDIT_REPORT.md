@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items (`PAY-004`, `PAY-005`, `ORDER-006` through `ORDER-010`, and `WEBHOOK-001`) that are not covered by the older verified tracker rows.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, and `ORDER-006` are now verified; `ORDER-007` through `ORDER-010` and `WEBHOOK-001` remain open.
 
 ## Validation Performed
 
@@ -219,7 +219,7 @@ The prior `PAY-003` fix proved receipt-token ownership and trusted redirect URLs
 
 Fix direction: derive payment mode, deposit amount, and capture behavior server-side from checkout/order/payment settings; reject deposit requests when partial payment is disabled or the amount does not match policy.
 
-Status: Not Started. See `PAY-004` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13. Stripe, SSLCommerz, and Polar session creation now goes through a shared server-side policy that rejects disabled/mismatched deposits, derives balance payments from server state, ignores caller currency, and forces public Stripe sessions to `manualCapture: false`. Focused payment-session tests cover disabled deposits, mismatched deposits, server-derived gateway amounts/currency, and ignored manual capture. See `PAY-004` in `REMEDIATION_TRACKER.md`.
 
 ### PAY-005: SSLCommerz webhook uses form transaction metadata after validation
 
@@ -227,7 +227,7 @@ The SSLCommerz webhook validates `val_id`, then enqueues payment using form `tra
 
 Fix direction: use canonical validated transaction/order metadata after validation, require it to match the expected order/session, and do not trust form `value_a` for payment type.
 
-Status: Not Started. See `PAY-005` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13. SSLCommerz IPN now validates `val_id` before durable claim, derives canonical transaction/payment data from the validation response, rejects inconsistent canonical identifiers, and resolves payment type from server-side order/payment-plan state instead of trusting form `value_a`. Focused webhook tests cover spoofed form fields, duplicate durability, queue failure, canonical mismatch, and payment-plan inference. See `PAY-005` in `REMEDIATION_TRACKER.md`.
 
 ### ORDER-006: Checkout shipping can be zeroed by missing or bogus shipping method
 
@@ -235,7 +235,7 @@ Storefront order creation accepts browser-provided shipping charge and optional 
 
 Fix direction: when shipping applies, require a valid active non-deleted shipping method and derive the charge on the backend.
 
-Status: Not Started. See `ORDER-006` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13. Storefront order creation now requires an active, non-deleted shipping method when shipping applies and derives shipping charge from the method fee. Free-delivery products still waive shipping explicitly. Focused core tests cover caller-supplied zero shipping, missing/unknown methods, inactive/deleted methods, and free-delivery behavior. See `ORDER-006` in `REMEDIATION_TRACKER.md`.
 
 ### ORDER-007: Status changes are not resumable when inventory fails after order CAS
 

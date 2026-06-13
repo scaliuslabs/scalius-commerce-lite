@@ -11,6 +11,7 @@ import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } fro
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { resolvePaymentSessionPolicy } from "./payment-session-policy";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -58,16 +59,6 @@ app.openapi(createSessionRoute, async (c) => {
   const body = c.req.valid("json");
   await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken);
 
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
-
-  if (!ssl) {
-    throw new ServiceUnavailableError("SSLCommerz is not configured. Please set credentials in the admin dashboard.");
-  }
-  if (!ssl.enabled) {
-    throw new ServiceUnavailableError("SSLCommerz gateway is disabled.");
-  }
-
   // Fetch order + customer info
   const order = await db
     .select({
@@ -90,12 +81,6 @@ app.openapi(createSessionRoute, async (c) => {
 
   if (!order) throw new NotFoundError("Order not found");
 
-  // Resolve currency
-  if (!body.currency) {
-    const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-    body.currency = currencyConfig.code;
-  }
-
   if (order.paymentStatus === PaymentStatus.PAID) {
     throw new ValidationError("Order is already fully paid");
   }
@@ -106,21 +91,21 @@ app.openapi(createSessionRoute, async (c) => {
     throw new ValidationError("Order is not configured for SSLCommerz payment");
   }
 
-  // Determine charge amount
-  let chargeAmount: number;
-  if (body.paymentType === "deposit") {
-    if (!body.depositAmount) {
-      throw new ValidationError("depositAmount required for deposit payment");
-    }
-    if (body.depositAmount >= order.totalAmount) {
-      throw new ValidationError("Deposit amount must be less than order total");
-    }
-    chargeAmount = body.depositAmount;
-  } else if (body.paymentType === "balance") {
-    chargeAmount = order.balanceDue ?? (order.totalAmount - (order.paidAmount ?? 0));
-    if (chargeAmount <= 0) throw new ValidationError("No balance due");
-  } else {
-    chargeAmount = order.totalAmount;
+  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+  const currency = currencyConfig.code;
+  const policy = await resolvePaymentSessionPolicy(db, order, {
+    paymentType: body.paymentType,
+    depositAmount: body.depositAmount,
+  });
+
+  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
+
+  if (!ssl) {
+    throw new ServiceUnavailableError("SSLCommerz is not configured. Please set credentials in the admin dashboard.");
+  }
+  if (!ssl.enabled) {
+    throw new ServiceUnavailableError("SSLCommerz gateway is disabled.");
   }
 
   const origin = getTrustedApiOrigin(c.env, c.req.url);
@@ -135,8 +120,8 @@ app.openapi(createSessionRoute, async (c) => {
     ssl.sandbox,
     {
       orderId: body.orderId,
-      totalAmount: chargeAmount,
-      currency: body.currency,
+      totalAmount: policy.chargeAmount,
+      currency,
       successUrl: `${apiBase}/payment/sslcommerz/success${receiptQuery}`,
       failUrl: `${apiBase}/payment/sslcommerz/fail`,
       cancelUrl: `${apiBase}/payment/sslcommerz/cancel`,
@@ -146,7 +131,7 @@ app.openapi(createSessionRoute, async (c) => {
       customerEmail: order.customerEmail ?? undefined,
       customerAddress: order.shippingAddress,
       customerCity: order.cityName ?? undefined,
-      paymentType: body.paymentType
+      paymentType: policy.paymentType
     }
   );
 
@@ -163,13 +148,13 @@ app.openapi(createSessionRoute, async (c) => {
   }
 
   // Create payment plan for deposit orders
-  if (body.paymentType === "deposit" && body.depositAmount) {
+  if (policy.paymentType === "deposit") {
     await db.insert(paymentPlans).values({
       id: crypto.randomUUID(),
       orderId: body.orderId,
       totalAmount: order.totalAmount,
-      depositAmount: body.depositAmount,
-      balanceDue: order.totalAmount - body.depositAmount,
+      depositAmount: policy.depositAmount,
+      balanceDue: policy.balanceDue,
       status: "pending",
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`
