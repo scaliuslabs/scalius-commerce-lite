@@ -3,12 +3,13 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
-import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@scalius/database/schema";
+import { orders, paymentPlans, PaymentMethod, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { initSSLCommerzSession } from "@scalius/core/modules/payments/sslcommerz";
 import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 import { getEncryptionKey } from "../../utils/encryption-key";
+import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
@@ -18,11 +19,10 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const sessionSchema = z.object({
   orderId: z.string().min(1),
-  receiptToken: z.string().optional(),
+  receiptToken: z.string().min(1),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
-  currency: z.string().optional(),
-  baseUrl: z.url().optional()
+  currency: z.string().optional()
 });
 
 const createSessionRoute = createRoute({
@@ -55,6 +55,9 @@ const createSessionRoute = createRoute({
 
 app.openapi(createSessionRoute, async (c) => {
   const db = c.get("db");
+  const body = c.req.valid("json");
+  await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken);
+
   const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
   const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
 
@@ -64,8 +67,6 @@ app.openapi(createSessionRoute, async (c) => {
   if (!ssl.enabled) {
     throw new ServiceUnavailableError("SSLCommerz gateway is disabled.");
   }
-
-  const body = c.req.valid("json");
 
   // Fetch order + customer info
   const order = await db
@@ -78,6 +79,7 @@ app.openapi(createSessionRoute, async (c) => {
       shippingAddress: orders.shippingAddress,
       cityName: orders.cityName,
       status: orders.status,
+      paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
       balanceDue: orders.balanceDue
@@ -100,12 +102,18 @@ app.openapi(createSessionRoute, async (c) => {
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
     throw new ValidationError("Cannot pay a cancelled/returned order");
   }
+  if (order.paymentMethod !== PaymentMethod.SSLCOMMERZ) {
+    throw new ValidationError("Order is not configured for SSLCommerz payment");
+  }
 
   // Determine charge amount
   let chargeAmount: number;
   if (body.paymentType === "deposit") {
     if (!body.depositAmount) {
       throw new ValidationError("depositAmount required for deposit payment");
+    }
+    if (body.depositAmount >= order.totalAmount) {
+      throw new ValidationError("Deposit amount must be less than order total");
     }
     chargeAmount = body.depositAmount;
   } else if (body.paymentType === "balance") {
@@ -115,7 +123,7 @@ app.openapi(createSessionRoute, async (c) => {
     chargeAmount = order.totalAmount;
   }
 
-  const origin = body.baseUrl ?? new URL(c.req.url).origin;
+  const origin = getTrustedApiOrigin(c.env, c.req.url);
   const apiBase = `${origin}/api/v1`;
   const receiptQuery = body.receiptToken
     ? `?receipt_token=${encodeURIComponent(body.receiptToken)}`
@@ -177,6 +185,12 @@ app.openapi(createSessionRoute, async (c) => {
 // ─── Redirect handlers ──────────────────────────────────────────────────────
 // SSLCommerz POSTs to these callback URLs. Also handle GET for edge cases.
 // These are NOT OpenAPI routes — external callbacks, not client-consumed APIs.
+
+function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: string): string {
+  const configured = env.PUBLIC_API_BASE_URL?.trim();
+  const base = configured || new URL(requestUrl).origin;
+  return base.replace(/\/+$/, "");
+}
 
 async function extractTranId(c: { req: { method: string; parseBody: () => Promise<Record<string, unknown>>; query: (key: string) => string | undefined } }): Promise<string> {
   if (c.req.method === "POST") {

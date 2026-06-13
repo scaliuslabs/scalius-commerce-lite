@@ -3,13 +3,14 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
-import { orders, paymentPlans, PaymentStatus, OrderStatus } from "@scalius/database/schema";
+import { orders, paymentPlans, PaymentMethod, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 import { getEncryptionKey } from "../../utils/encryption-key";
+import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 
 import { ok } from "../../utils/api-response";
@@ -19,6 +20,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const intentSchema = z.object({
   orderId: z.string().min(1),
+  receiptToken: z.string().min(1),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
   currency: z.string().length(3).optional(),
@@ -58,6 +60,9 @@ const createIntentRoute = createRoute({
 
 app.openapi(createIntentRoute, async (c) => {
   const db = c.get("db");
+  const body = c.req.valid("json");
+  await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken);
+
   const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
   const stripe = await getStripeSettings(db, c.env.CACHE, encryptionKey);
 
@@ -68,14 +73,13 @@ app.openapi(createIntentRoute, async (c) => {
     throw new ServiceUnavailableError("Stripe gateway is disabled.");
   }
 
-  const body = c.req.valid("json");
-
   // Fetch the order
   const order = await db
     .select({
       id: orders.id,
       totalAmount: orders.totalAmount,
       status: orders.status,
+      paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
       balanceDue: orders.balanceDue
@@ -97,6 +101,9 @@ app.openapi(createIntentRoute, async (c) => {
   }
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
     throw new ValidationError("Cannot pay a cancelled/returned order");
+  }
+  if (order.paymentMethod !== PaymentMethod.STRIPE) {
+    throw new ValidationError("Order is not configured for Stripe payment");
   }
 
   // Determine the amount to charge

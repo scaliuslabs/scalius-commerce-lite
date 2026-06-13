@@ -90543,6 +90543,10 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "receiptToken": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "paymentType": {
                     "type": "string",
                     "enum": [
@@ -90568,7 +90572,8 @@
                   }
                 },
                 "required": [
-                  "orderId"
+                  "orderId",
+                  "receiptToken"
                 ]
               }
             }
@@ -90842,7 +90847,8 @@
                     "minLength": 1
                   },
                   "receiptToken": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "paymentType": {
                     "type": "string",
@@ -90860,14 +90866,11 @@
                   },
                   "currency": {
                     "type": "string"
-                  },
-                  "baseUrl": {
-                    "type": "string",
-                    "format": "uri"
                   }
                 },
                 "required": [
-                  "orderId"
+                  "orderId",
+                  "receiptToken"
                 ]
               }
             }
@@ -91160,17 +91163,13 @@
                     "type": "string"
                   },
                   "receiptToken": {
-                    "type": "string"
-                  },
-                  "successUrl": {
-                    "type": "string"
-                  },
-                  "cancelUrl": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
-                  "orderId"
+                  "orderId",
+                  "receiptToken"
                 ]
               }
             }
