@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { PaymentStatus, paymentPlans, siteSettings } from "@scalius/database/schema";
+import { getUnpayableOrderReason } from "@scalius/core/modules/payments/payable-order";
 import { pricesEqual, roundPrice, subtractPrice } from "@scalius/shared/price-utils";
 import { ValidationError } from "../../utils/api-error";
 
@@ -9,9 +10,11 @@ export type PaymentSessionType = "full" | "deposit" | "balance";
 export interface PaymentSessionOrder {
   id: string;
   totalAmount: number;
+  status: string;
   paymentStatus: string;
   paidAmount?: number | null;
   balanceDue?: number | null;
+  deletedAt?: unknown | null;
 }
 
 export interface RequestedPaymentSession {
@@ -63,6 +66,13 @@ async function getPaymentPlan(db: Database, orderId: string) {
     .from(paymentPlans)
     .where(eq(paymentPlans.orderId, orderId))
     .get();
+}
+
+export function assertPaymentSessionOrderPayable(order: PaymentSessionOrder): void {
+  const unpayableReason = getUnpayableOrderReason(order);
+  if (unpayableReason) {
+    throw new ValidationError(unpayableReason);
+  }
 }
 
 export async function resolvePaymentSessionPolicy(

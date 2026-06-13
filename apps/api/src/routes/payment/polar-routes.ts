@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { type Database } from "@scalius/database/client";
-import { orders, paymentPlans, PaymentMethod, PaymentStatus, OrderStatus } from "@scalius/database/schema";
+import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
@@ -15,7 +15,7 @@ import { NotFoundError, ServiceUnavailableError, ApiError, ValidationError } fro
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
-import { resolvePaymentSessionPolicy } from "./payment-session-policy";
+import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -81,6 +81,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
             paymentStatus: orders.paymentStatus,
             paidAmount: orders.paidAmount,
             balanceDue: orders.balanceDue,
+            deletedAt: orders.deletedAt,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt
         })
@@ -90,12 +91,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
-    if (order.paymentStatus === PaymentStatus.PAID) {
-        throw new ValidationError("Order is already fully paid");
-    }
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
-        throw new ValidationError("Cannot pay a cancelled/returned order");
-    }
+    assertPaymentSessionOrderPayable(order);
     if (order.paymentMethod !== PaymentMethod.POLAR) {
         throw new ValidationError("Order is not configured for Polar payment");
     }

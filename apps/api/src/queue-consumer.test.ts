@@ -133,6 +133,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
   });
 
   it("retries confirmed payment messages when processing returns an unsuccessful result", async () => {
@@ -188,6 +189,30 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("acks non-retryable confirmed payment guard failures", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({
+      success: false,
+      error: "Cannot pay a cancelled order",
+      retryable: false,
+    });
+
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_late",
+      amount: 12345,
+      currency: "usd",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("requires manual reconciliation"),
+    );
   });
 
   it("routes the configured order-ingest queue to the order ingest handler", async () => {

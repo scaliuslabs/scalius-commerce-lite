@@ -37,6 +37,12 @@ function assertPaymentConfirmed(
   orderId: string,
 ): void {
   if (!result.success) {
+    if (result.retryable === false) {
+      console.warn(
+        `[Queue] ${gateway} payment confirmation for order ${orderId} requires manual reconciliation: ${result.error ?? "unknown error"}`,
+      );
+      return;
+    }
     throw new Error(`${gateway} payment confirmation failed for order ${orderId}: ${result.error ?? "unknown error"}`);
   }
 }

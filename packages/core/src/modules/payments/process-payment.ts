@@ -2,7 +2,7 @@
 // Shared business logic for processing confirmed payments.
 // Called by both Stripe and SSLCommerz webhook handlers after signature verification.
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import {
   orders,
   orderPayments,
@@ -19,6 +19,11 @@ import { getCurrencyConfig } from "../settings/settings.service";
 import { validateTransition } from "../orders/order-state-machine";
 import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
+import {
+  getUnpayableOrderReason,
+  PAYMENT_BLOCKED_ORDER_STATUSES,
+  PAYMENT_BLOCKED_PAYMENT_STATUSES,
+} from "./payable-order";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 
@@ -49,7 +54,7 @@ function failedAttemptCanBePromoted(record: { amount: number; status: string }, 
 export async function processPaymentConfirmed(
   db: Database,
   params: ProcessPaymentParams
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
   try {
     const shipmentClaim = await db
       .select({
@@ -120,6 +125,31 @@ export async function processPaymentConfirmed(
       }
     }
 
+    const initialOrder = await db
+      .select({
+        id: orders.id,
+        totalAmount: orders.totalAmount,
+        paidAmount: orders.paidAmount,
+        balanceDue: orders.balanceDue,
+        paymentStatus: orders.paymentStatus,
+        status: orders.status,
+        inventoryPool: orders.inventoryPool,
+        version: orders.version,
+        deletedAt: orders.deletedAt,
+      })
+      .from(orders)
+      .where(eq(orders.id, params.orderId))
+      .get();
+
+    if (!initialOrder) {
+      return { success: false, error: `Order ${params.orderId} not found` };
+    }
+
+    const initialUnpayableReason = getUnpayableOrderReason(initialOrder);
+    if (initialUnpayableReason) {
+      return { success: false, error: initialUnpayableReason, retryable: false };
+    }
+
     const currencyConfig = await getCurrencyConfig(db);
     if (!paymentId) {
       paymentId = crypto.randomUUID();
@@ -151,27 +181,31 @@ export async function processPaymentConfirmed(
     let paymentApplied = false;
     for (let attempt = 0; attempt < PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS; attempt += 1) {
       // ── 1. Fetch the latest order version for a CAS-safe amount update ──
-      const order = await db
-        .select({
-          id: orders.id,
-          totalAmount: orders.totalAmount,
-          paidAmount: orders.paidAmount,
-          balanceDue: orders.balanceDue,
-          paymentStatus: orders.paymentStatus,
-          status: orders.status,
-          inventoryPool: orders.inventoryPool,
-          version: orders.version,
-        })
-        .from(orders)
-        .where(eq(orders.id, params.orderId))
-        .get();
+      const order = attempt === 0
+        ? initialOrder
+        : await db
+          .select({
+            id: orders.id,
+            totalAmount: orders.totalAmount,
+            paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
+            paymentStatus: orders.paymentStatus,
+            status: orders.status,
+            inventoryPool: orders.inventoryPool,
+            version: orders.version,
+            deletedAt: orders.deletedAt,
+          })
+          .from(orders)
+          .where(eq(orders.id, params.orderId))
+          .get();
 
       if (!order) {
         return { success: false, error: `Order ${params.orderId} not found` };
       }
 
-      if (order.paymentStatus === PaymentStatus.PAID) {
-        return { success: false, error: "Order is already fully paid; payment requires manual reconciliation" };
+      const unpayableReason = getUnpayableOrderReason(order);
+      if (unpayableReason) {
+        return { success: false, error: unpayableReason, retryable: false };
       }
 
       const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
@@ -196,6 +230,9 @@ export async function processPaymentConfirmed(
         }).where(and(
           eq(orders.id, params.orderId),
           eq(orders.version, order.version),
+          isNull(orders.deletedAt),
+          notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
+          notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
           sql`EXISTS (
             SELECT 1 FROM order_payments
             WHERE id = ${paymentId}
