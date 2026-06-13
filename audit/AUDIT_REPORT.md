@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, and `ORDER-009` are now verified; `ORDER-010` remains open.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, and `ORDER-010` are now verified. The currently open high-risk findings are `ORDER-011` and `DEL-002`.
 
 ## Validation Performed
 
@@ -277,7 +277,23 @@ When a shared order-ingest DB batch fails after reservations, rollback release i
 
 Fix direction: track rollback success per order and only isolated-retry orders whose previous reservations were fully released; longer term, make reserve/release idempotent by order movement identity.
 
-Status: Not Started. See `ORDER-010` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13 and deployed to API version `b361f707-6450-42f0-9f88-a80d0b799d14`. The shared-batch-failure fallback now re-checks whether the order committed, reuses the reservation already acquired for isolated replay, releases only the failed order's original reservation, treats `releaseMultiple()` failure results as rollback failures, and fails checkout closed instead of retrying when release is uncertain. Focused queue tests cover isolated replay success, isolated replay failure, release failure, and ambiguous commit detection; root tests pass, and live dashboard/storefront browser checks completed without console errors. See `ORDER-010` in `REMEDIATION_TRACKER.md`.
+
+### ORDER-011: Restoring trashed orders can revive invalid inventory/status combinations
+
+`deleteOrder()` applies a cancelled inventory transition and soft-deletes the row while leaving the original status. `restoreOrder()` can then re-reserve inventory and set `inventoryAction = "reserved"` without reconciling terminal, deducted, cancelled, refunded, shipped, or delivered status semantics.
+
+Fix direction: make restore either reject unsafe terminal/deducted/restored statuses or atomically choose a valid status/inventory pair. Add focused tests for restored `delivered/deducted` and `cancelled/restored` orders so no order can end as `delivered + reserved` or `cancelled + reserved`.
+
+Status: Not Started. See `ORDER-011` in `REMEDIATION_TRACKER.md`.
+
+### DEL-002: Shipment deletion can erase reconciliation evidence while a claim remains active
+
+`deleteShipmentRecord()` blocks only `status = "creating"` and then hard-deletes the shipment row. It does not check whether the linked order has an active `shipmentClaimId` or an indefinite `shipmentClaimExpiresAt = null` claim, and it does not protect `reconcile_required` shipments. Deleting that row can leave the order blocked by an active claim with no reconciliation evidence.
+
+Fix direction: shipment deletion should load the linked order claim and block active claimed shipments, especially `reconcile_required`. Only non-claimed terminal/failed shipment rows should be deletable.
+
+Status: Not Started. See `DEL-002` in `REMEDIATION_TRACKER.md`.
 
 ### ADMIN-001: Admin API wrapper layer was too large and partially outside TypeScript
 
