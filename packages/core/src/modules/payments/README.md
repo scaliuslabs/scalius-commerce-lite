@@ -202,7 +202,7 @@ Uses `roundPrice()` and `pricesEqual()` from `@scalius/shared/price-utils` for f
 
 Three layers of duplicate prevention:
 
-1. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue failures mark the event `failed` so provider retries can reclaim it.
+1. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue failures mark the event `failed` so provider retries can reclaim it. Fresh `processing` claims dedupe in-flight work, while stale `processing` claims are lease-reclaimable so isolate failures before queue send do not black-hole provider retries.
 2. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry)
 3. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (stripePaymentIntentId, sslcommerzTranId, polarCheckoutId) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
 
