@@ -162,6 +162,7 @@ function checkPackageScripts(checks) {
   const scripts = packageJson?.scripts ?? {};
   const requiredScripts = [
     "dev",
+    "dev:api",
     "dev:admin",
     "dev:storefront",
     "dev:setup",
@@ -319,7 +320,7 @@ async function checkServices(checks, config) {
     {
       title: "API worker",
       url: `${config.apiBaseUrl}/api/v1/setup`,
-      downAction: "Start it with pnpm --filter @scalius/api dev, pnpm dev:admin, pnpm dev:storefront, or pnpm dev.",
+      downAction: "Start it with pnpm dev:api, pnpm dev:admin, pnpm dev:storefront, or pnpm dev.",
       validate: async (response) => {
         const data = await safeJson(response);
         const adminExists = data?.data?.adminExists ?? data?.adminExists;
