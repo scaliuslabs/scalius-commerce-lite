@@ -5,6 +5,7 @@
 import { getDb } from "@scalius/database/client";
 import { getUserPermissions, isSuperAdmin } from "@scalius/core/auth/rbac/helpers";
 import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
+import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 import { env as cfEnv } from "cloudflare:workers";
 import { hasRbacAdminAccess } from "~/lib/admin-access";
 
@@ -29,10 +30,10 @@ export async function loadUserPermissions(
   const db = getDb(env);
   const kv = env.CACHE as KVNamespace | undefined;
 
-  await autoSeedRbacIfNeeded(db);
+  await retryTransientD1(() => autoSeedRbacIfNeeded(db));
 
-  const permissions = await getUserPermissions(db, userId, kv);
-  const superAdmin = await isSuperAdmin(db, userId);
+  const permissions = await retryTransientD1(() => getUserPermissions(db, userId, kv));
+  const superAdmin = await retryTransientD1(() => isSuperAdmin(db, userId));
 
   return {
     permissions,
