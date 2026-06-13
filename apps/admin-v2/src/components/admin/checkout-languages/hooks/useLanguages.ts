@@ -8,20 +8,14 @@ import {
   useDeleteCheckoutLanguage,
   useRestoreCheckoutLanguage,
 } from "~/lib/api.mutations";
+import {
+  type CheckoutLanguage,
+  type CheckoutLanguagesPagination,
+  type CheckoutLanguagesQueryInput,
+  type CheckoutLanguageWriteInput,
+} from "@/lib/api-functions/checkout-languages";
 
-// Local type replacing @scalius/database/schema import
-export interface CheckoutLanguage {
-  id: string;
-  name: string;
-  code: string;
-  isActive: boolean;
-  isDefault: boolean;
-  languageData: string;
-  fieldVisibility: string;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
-}
+export type { CheckoutLanguage };
 
 export interface ManagerCheckoutLanguage
   extends Omit<CheckoutLanguage, "languageData" | "fieldVisibility"> {
@@ -80,16 +74,7 @@ export const defaultFieldVisibility: Record<string, boolean> = {
   showAreaField: true,
 };
 
-interface PaginationState {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-}
-
-const DEFAULT_PAGINATION: PaginationState = {
+const DEFAULT_PAGINATION: CheckoutLanguagesPagination = {
   total: 0,
   page: 1,
   limit: 10,
@@ -97,6 +82,54 @@ const DEFAULT_PAGINATION: PaginationState = {
   hasNextPage: false,
   hasPrevPage: false,
 };
+
+const EMPTY_CHECKOUT_LANGUAGES: CheckoutLanguage[] = [];
+
+function parseObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parseObject(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function toStringRecord(
+  value: unknown,
+  fallback: Record<string, string>,
+): Record<string, string> {
+  const parsed = parseObject(value);
+  if (!parsed) return { ...fallback };
+  const result = { ...fallback };
+  for (const [key, rawValue] of Object.entries(parsed)) {
+    if (typeof rawValue === "string") result[key] = rawValue;
+    else if (typeof rawValue === "number" || typeof rawValue === "boolean")
+      result[key] = String(rawValue);
+  }
+  return result;
+}
+
+function toBooleanRecord(
+  value: unknown,
+  fallback: Record<string, boolean>,
+): Record<string, boolean> {
+  const parsed = parseObject(value);
+  if (!parsed) return { ...fallback };
+  const result = { ...fallback };
+  for (const [key, rawValue] of Object.entries(parsed)) {
+    if (typeof rawValue === "boolean") result[key] = rawValue;
+    else if (rawValue === "true") result[key] = true;
+    else if (rawValue === "false") result[key] = false;
+    else if (typeof rawValue === "number") result[key] = rawValue !== 0;
+  }
+  return result;
+}
 
 export function useLanguages() {
   const queryClient = useQueryClient();
@@ -114,7 +147,7 @@ export function useLanguages() {
 
   // Build query params
   const queryParams = useMemo(() => {
-    const params: Record<string, string | number | boolean | undefined> = {
+    const params: CheckoutLanguagesQueryInput = {
       page,
       limit,
       sort: sort.field,
@@ -132,26 +165,19 @@ export function useLanguages() {
   });
 
   // Parse response
-  const rawData = data as
-    | { languages?: Record<string, unknown>[]; pagination?: PaginationState }
-    | undefined;
-
   const languages = useMemo<ManagerCheckoutLanguage[]>(() => {
-    if (!rawData?.languages) return [];
-    return rawData.languages.map((lang) => ({
+    const rawLanguages = data?.languages ?? EMPTY_CHECKOUT_LANGUAGES;
+    return rawLanguages.map((lang) => ({
       ...lang,
-      languageData:
-        typeof lang.languageData === "string"
-          ? JSON.parse(lang.languageData as string)
-          : lang.languageData,
-      fieldVisibility:
-        typeof lang.fieldVisibility === "string"
-          ? JSON.parse(lang.fieldVisibility as string)
-          : lang.fieldVisibility,
-    })) as unknown as ManagerCheckoutLanguage[];
-  }, [rawData?.languages]);
+      languageData: toStringRecord(lang.languageData, defaultLanguageData),
+      fieldVisibility: toBooleanRecord(
+        lang.fieldVisibility,
+        defaultFieldVisibility,
+      ),
+    }));
+  }, [data?.languages]);
 
-  const pagination = rawData?.pagination ?? DEFAULT_PAGINATION;
+  const pagination = data?.pagination ?? DEFAULT_PAGINATION;
 
   // Mutations
   const createMutation = useCreateCheckoutLanguage();
@@ -214,11 +240,11 @@ export function useLanguages() {
         if (editingLanguageId) {
           await updateMutation.mutateAsync({
             id: editingLanguageId,
-            update: formData as Record<string, unknown>,
+            update: formData as CheckoutLanguageWriteInput,
           });
         } else {
           await createMutation.mutateAsync(
-            formData as Record<string, unknown>,
+            formData as CheckoutLanguageWriteInput,
           );
           setPage(1);
         }
