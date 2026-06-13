@@ -6,7 +6,6 @@ import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
 import { OrderStatus } from "@/types/api-responses";
-import { generateOrderId } from "@scalius/shared/order-utils";
 import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
@@ -17,6 +16,10 @@ import {
 } from "@/store/orderStore";
 import { getDeliveryLocations } from "@/lib/api-functions/delivery";
 import { useCreateOrder, useUpdateOrder } from "@/lib/api.mutations";
+import type {
+  CreateOrderInput,
+  UpdateOrderInput,
+} from "@/lib/api-functions/orders";
 
 // Imports for our new, refactored components and types
 import {
@@ -29,6 +32,36 @@ import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection } from "./order-form/CustomerInfoSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
+
+function toCreateOrderInput(values: OrderFormValues): CreateOrderInput {
+  return {
+    customerName: values.customerName,
+    customerPhone: values.customerPhone,
+    customerEmail: values.customerEmail,
+    shippingAddress: values.shippingAddress,
+    city: values.city,
+    zone: values.zone,
+    area: values.area,
+    cityName: values.cityName,
+    zoneName: values.zoneName,
+    areaName: values.areaName ?? null,
+    notes: values.notes,
+    items: values.items,
+    discountAmount: values.discountAmount,
+    shippingCharge: values.shippingCharge,
+  };
+}
+
+function toUpdateOrderInput(
+  values: OrderFormValues,
+  id: string,
+): UpdateOrderInput {
+  return {
+    ...toCreateOrderInput(values),
+    id,
+    status: values.status ?? OrderStatus.PENDING,
+  };
+}
 
 export function OrderForm({
   products,
@@ -162,29 +195,28 @@ export function OrderForm({
       ? locations.areas.find((a) => a.id === values.area)
       : null;
 
-    // Enrich the form values with the location names before submission
-    values.cityName = city ? city.name : "";
-    values.zoneName = zone ? zone.name : "";
-    values.areaName = area ? area.name : null;
-
-    if (!isEdit) {
-      values.id = generateOrderId();
-    }
+    const enrichedValues: OrderFormValues = {
+      ...values,
+      cityName: city?.name,
+      zoneName: zone?.name,
+      areaName: area?.name ?? null,
+    };
 
     const onSuccess = () => {
       void navigate({ to: "/admin/orders" });
     };
 
     if (isEdit) {
-      updateMutation.mutate(
-        { ...(values as unknown as Record<string, unknown>), id: values.id || defaultValues?.id } as Record<string, unknown> & { id: string },
-        { onSuccess },
-      );
+      const orderId = enrichedValues.id || defaultValues?.id;
+      if (!orderId) {
+        toast.error("Missing order ID. Please refresh and try again.");
+        return;
+      }
+      updateMutation.mutate(toUpdateOrderInput(enrichedValues, orderId), {
+        onSuccess,
+      });
     } else {
-      createMutation.mutate(
-        values as unknown as Record<string, unknown>,
-        { onSuccess },
-      );
+      createMutation.mutate(toCreateOrderInput(enrichedValues), { onSuccess });
     }
   };
 

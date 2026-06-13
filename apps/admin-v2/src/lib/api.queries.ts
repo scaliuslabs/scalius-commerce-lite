@@ -11,14 +11,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
 import {
-  // Orders
-  getOrders,
-  getOrder,
-  getOrderFormData,
-  getOrderItems,
-  getOrderPayments,
-  getOrderCod,
-  getOrderShipments,
   // Customers
   getCustomers,
   getCustomer,
@@ -36,6 +28,16 @@ import {
   getVariantSortOrder,
   type ProductsQueryInput,
 } from "./api-functions/products";
+import {
+  getOrder,
+  getOrderCod,
+  getOrderFormData,
+  getOrderItems,
+  getOrderPayments,
+  getOrders,
+  getOrderShipments,
+  type OrdersQueryInput,
+} from "./api-functions/orders";
 import {
   getCategories,
   getCategory,
@@ -255,21 +257,7 @@ export const collectionFormOptionsQueryOptions = () =>
 //  ORDERS
 // ═══════════════════════════════════════════════════════════════════
 
-export const ordersQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  status?: string;
-  sort?: string;
-  order?: string;
-  showTrashed?: boolean;
-  trashed?: boolean;
-  startDate?: string;
-  endDate?: string;
-  paymentStatus?: string;
-  paymentMethod?: string;
-  fulfillmentStatus?: string;
-}) =>
+export const ordersQueryOptions = (params: OrdersQueryInput) =>
   queryOptions({
     queryKey: queryKeys.orders.list(params),
     queryFn: () => getOrders({ data: params }),

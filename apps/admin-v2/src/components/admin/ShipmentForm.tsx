@@ -1,13 +1,16 @@
 import { useState, useEffect, type FC } from "react";
-import type { DeliveryProviderRecord, DeliveryShipment } from "@/types/api-responses";
+import type { DeliveryProviderRecord } from "@/types/api-responses";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { createOrderShipment } from "@/lib/api.functions";
 import { getDeliveryProviders } from "@/lib/api-functions/delivery";
+import {
+  createOrderShipment,
+  type CreateOrderShipmentPayload,
+} from "@/lib/api-functions/orders";
 
 interface ShipmentFormProps {
   orderId: string;
-  onSuccess?: (shipment: DeliveryShipment) => void;
+  onSuccess?: (shipment: CreateOrderShipmentPayload) => void;
   onCancel?: () => void;
 }
 
@@ -60,7 +63,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
     try {
       const shipment = await createOrderShipment({
         data: { orderId, providerId: selectedProviderId, options: {} },
-      }) as DeliveryShipment;
+      });
       toast.success("Shipment created successfully");
 
       if (onSuccess) {

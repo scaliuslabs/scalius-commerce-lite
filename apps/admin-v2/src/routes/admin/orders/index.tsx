@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { toast } from "sonner";
 import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
@@ -16,7 +16,7 @@ import {
   useBulkDeleteOrders,
   useRestoreOrder,
 } from "~/lib/api.mutations";
-import { createOrderShipment, refreshShipmentStatus } from "~/lib/api.functions";
+import { createOrderShipment } from "~/lib/api-functions/orders";
 import { useCurrency } from "~/hooks/use-currency";
 import { useServerTable, DataTable } from "~/components/admin/data-table";
 import { getOrderColumns } from "~/components/admin/data-table/columns/order-columns";
@@ -434,7 +434,7 @@ function OrdersPage() {
           successCount++;
           setShipmentStatuses((prev) => ({
             ...prev,
-            [orderId]: result as unknown as ShipmentStatus,
+            [orderId]: result,
           }));
         } catch (error) {
           console.error(`Error for order ${orderId}:`, error);
