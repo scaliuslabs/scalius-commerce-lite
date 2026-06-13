@@ -2,6 +2,8 @@
 export interface ShipmentResult {
   success: boolean;
   message: string;
+  shipmentId?: string;
+  reconciliationRequired?: boolean;
   data?: {
     externalId?: string;
     trackingId?: string;

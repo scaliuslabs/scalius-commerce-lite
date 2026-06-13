@@ -89,6 +89,7 @@ describe("payment processing idempotency", () => {
   it("promotes a failed gateway attempt when the same Stripe intent later succeeds", async () => {
     const { db, inserts, updates, batch } = createDbMock({
       selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
         { id: "pay_1", amount: 0, status: PaymentRecordStatus.FAILED },
         {
           id: "order_1",
@@ -152,7 +153,7 @@ describe("payment processing idempotency", () => {
     const { db, operations, inserts, updates } = createDbMock({
       selectGetResults: [
         null,
-        { paidAmount: 0, paymentStatus: PaymentStatus.UNPAID },
+        { paidAmount: 0, paymentStatus: PaymentStatus.UNPAID, shipmentClaimId: null, shipmentClaimExpiresAt: null },
       ],
     });
 
@@ -172,12 +173,77 @@ describe("payment processing idempotency", () => {
   });
 
   it("uses the centralized inventory transition for payment cancellation releases", async () => {
-    await releaseOrderInventory({ id: "db" } as never, "order_1");
+    const { db } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+      ],
+    });
+
+    await releaseOrderInventory(db as never, "order_1");
 
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
-      { id: "db" },
+      db,
       "order_1",
       OrderStatus.CANCELLED,
     );
+  });
+
+  it("returns retryable failure before claiming a confirmed payment while shipment creation is active", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: "shp_active", shipmentClaimExpiresAt: new Date(Date.now() + 60_000) },
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "stripe",
+      paymentType: "full",
+      stripePaymentIntentId: "pi_1",
+      amount: 100,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Order has an active shipment creation in progress. Please retry shortly.",
+    });
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+  });
+
+  it("throws before recording failed payment state while shipment creation is active", async () => {
+    const { db, inserts, updates } = createDbMock({
+      selectGetResults: [
+        null,
+        {
+          paidAmount: 0,
+          paymentStatus: PaymentStatus.UNPAID,
+          shipmentClaimId: "shp_active",
+          shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
+        },
+      ],
+    });
+
+    await expect(processPaymentFailed(db as never, "order_1", "stripe", "pi_1"))
+      .rejects.toThrow("active shipment creation");
+
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+  });
+
+  it("throws before releasing cancellation inventory while shipment creation is active", async () => {
+    const { db } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: "shp_active", shipmentClaimExpiresAt: new Date(Date.now() + 60_000) },
+      ],
+    });
+
+    await expect(releaseOrderInventory(db as never, "order_1"))
+      .rejects.toThrow("active shipment creation");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 });

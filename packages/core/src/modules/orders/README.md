@@ -208,6 +208,8 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | POST | `/:id/refund` | `processRefund()` | Refund with optional gateway |
 | GET | `/:id/form-data` | direct query | Order + products for edit form |
 
+Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Queue/webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until reconciliation.
+
 ### Admin Shipments (`/api/v1/admin/shipments`)
 
 | Method | Path | Handler | Purpose |

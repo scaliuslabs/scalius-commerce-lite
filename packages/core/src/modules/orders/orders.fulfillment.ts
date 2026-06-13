@@ -11,16 +11,24 @@ import {
     ItemFulfillmentStatus,
     PaymentMethod,
     PaymentStatus,
+    ShipmentStatus,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure, validateCODCollectionDetails } from "../payments/cod";
-import { createShipment } from "../delivery/delivery.service";
+import { createShipment, markShipmentReconciliationRequired } from "../delivery/delivery.service";
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { validateTransition } from "./order-state-machine";
 import type { StatusUpdateResult } from "./orders.types";
 import type { OrderNotificationType } from "../notifications/notification-types";
+import {
+    assertNoActiveShipmentClaim,
+    hasActiveShipmentClaim,
+    noActiveShipmentClaimCondition,
+    SHIPMENT_CLAIM_CONFLICT_MESSAGE,
+    SHIPMENT_CLAIM_LEASE_SECONDS,
+} from "./shipment-claim";
 
 async function reconcileInventoryForStatus(
     db: Database,
@@ -29,6 +37,82 @@ async function reconcileInventoryForStatus(
 ): Promise<void> {
     const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
     await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+}
+
+function createShipmentClaimId(): string {
+    return `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+}
+
+async function clearShipmentClaim(db: Database, orderId: string, claimId: string): Promise<void> {
+    await db
+        .update(orders)
+        .set({
+            shipmentClaimId: null,
+            shipmentClaimExpiresAt: null,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(orders.id, orderId),
+            eq(orders.shipmentClaimId, claimId),
+        ));
+}
+
+async function holdShipmentClaimForReconciliation(db: Database, orderId: string, claimId: string): Promise<void> {
+    await db
+        .update(orders)
+        .set({
+            shipmentClaimExpiresAt: null,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(orders.id, orderId),
+            eq(orders.shipmentClaimId, claimId),
+        ));
+}
+
+async function resolveExpiredShipmentClaim(
+    db: Database,
+    orderId: string,
+    claimId: string,
+): Promise<{ blocked: true; result: Record<string, unknown> } | { blocked: false }> {
+    const shipment = await db
+        .select({
+            id: deliveryShipments.id,
+            status: deliveryShipments.status,
+            externalId: deliveryShipments.externalId,
+            trackingId: deliveryShipments.trackingId,
+            metadata: deliveryShipments.metadata,
+        })
+        .from(deliveryShipments)
+        .where(eq(deliveryShipments.id, claimId))
+        .get();
+
+    if (!shipment || shipment.status === ShipmentStatus.FAILED || shipment.status === ShipmentStatus.CANCELLED) {
+        await clearShipmentClaim(db, orderId, claimId);
+        return { blocked: false };
+    }
+
+    await markShipmentReconciliationRequired(
+        db,
+        claimId,
+        "expired_order_shipment_claim",
+        {
+            externalId: shipment.externalId ?? undefined,
+            trackingId: shipment.trackingId ?? undefined,
+            status: shipment.status,
+        },
+    );
+    await holdShipmentClaimForReconciliation(db, orderId, claimId);
+    return {
+        blocked: true,
+        result: {
+            orderId,
+            success: false,
+            reconciliationRequired: true,
+            shipmentId: claimId,
+            error: "Previous shipment creation attempt requires reconciliation before retry.",
+        },
+    };
 }
 
 export async function bulkShipOrders(
@@ -41,22 +125,45 @@ export async function bulkShipOrders(
     const results = [];
     for (const orderId of orderIds) {
         try {
-            const order = await db.select({ status: orders.status, version: orders.version }).from(orders).where(eq(orders.id, orderId)).get();
+            const order = await db.select({
+                status: orders.status,
+                version: orders.version,
+                shipmentClaimId: orders.shipmentClaimId,
+                shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
             if (order.status === OrderStatus.SHIPPED) {
+                if (order.shipmentClaimId) {
+                    await clearShipmentClaim(db, orderId, order.shipmentClaimId);
+                }
                 await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
                 results.push({ orderId, success: true, message: "Order already shipped; inventory reconciled" });
                 continue;
             }
+            if (hasActiveShipmentClaim(order)) {
+                results.push({ orderId, success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE });
+                continue;
+            }
+            if (order.shipmentClaimId) {
+                const expiredClaim = await resolveExpiredShipmentClaim(db, orderId, order.shipmentClaimId);
+                if (expiredClaim.blocked) {
+                    results.push(expiredClaim.result);
+                    continue;
+                }
+            }
             validateTransition("order", order.status, OrderStatus.SHIPPED);
 
+            const claimId = createShipmentClaimId();
             const claimResult = await db.update(orders).set({
+                shipmentClaimId: claimId,
+                shipmentClaimExpiresAt: sql`unixepoch() + ${SHIPMENT_CLAIM_LEASE_SECONDS}`,
                 version: order.version + 1,
                 updatedAt: sql`unixepoch()`,
             }).where(and(
                 eq(orders.id, orderId),
                 eq(orders.version, order.version),
                 eq(orders.status, order.status),
+                noActiveShipmentClaimCondition(),
             )).returning({ id: orders.id });
 
             if (claimResult.length === 0) {
@@ -64,22 +171,55 @@ export async function bulkShipOrders(
                 continue;
             }
 
-            const shipment = await createShipment(db, orderId, providerId, options, encryptionKey);
+            const shipment = await createShipment(db, orderId, providerId, options, encryptionKey, { shipmentId: claimId });
+            if (shipment.reconciliationRequired) {
+                await holdShipmentClaimForReconciliation(db, orderId, claimId);
+                results.push({
+                    orderId,
+                    success: false,
+                    shipmentId: claimId,
+                    reconciliationRequired: true,
+                    error: shipment.message,
+                });
+                continue;
+            }
             if (shipment.success) {
                 // CAS update first — only apply inventory if we win the version check
                 const casResult = await db.update(orders).set({
                     status: OrderStatus.SHIPPED,
                     fulfillmentStatus: FulfillmentStatus.COMPLETE,
+                    shipmentClaimId: null,
+                    shipmentClaimExpiresAt: null,
                     version: order.version + 2,
                     updatedAt: sql`unixepoch()`,
-                }).where(and(eq(orders.id, orderId), eq(orders.version, order.version + 1))).returning({ id: orders.id });
+                }).where(and(
+                    eq(orders.id, orderId),
+                    eq(orders.version, order.version + 1),
+                    eq(orders.shipmentClaimId, claimId),
+                )).returning({ id: orders.id });
 
                 if (casResult.length === 0) {
-                    results.push({ orderId, success: false, error: "Order was modified concurrently" });
+                    await markShipmentReconciliationRequired(
+                        db,
+                        claimId,
+                        "order_final_cas_conflict",
+                        shipment.data,
+                        "Order was modified concurrently after provider shipment creation",
+                    );
+                    await holdShipmentClaimForReconciliation(db, orderId, claimId);
+                    results.push({
+                        orderId,
+                        success: false,
+                        shipmentId: claimId,
+                        reconciliationRequired: true,
+                        error: "Shipment was created but order finalization requires reconciliation",
+                    });
                     continue;
                 }
 
                 await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
+            } else {
+                await clearShipmentClaim(db, orderId, claimId);
             }
             results.push({ orderId, success: shipment.success, shipment: shipment.success ? shipment : undefined, error: shipment.success ? undefined : shipment.message });
         } catch (error: unknown) {
@@ -96,8 +236,11 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
         totalAmount: orders.totalAmount,
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(order);
 
     switch (body.action) {
         case "collected": {
@@ -153,8 +296,16 @@ export async function getOrderShipments(db: Database, orderId: string) {
 }
 
 export async function createFulfillmentShipment(db: Database, orderId: string, body: Record<string, unknown>) {
-    const order = await db.select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus, version: orders.version }).from(orders).where(eq(orders.id, orderId)).get();
+    const order = await db.select({
+        id: orders.id,
+        status: orders.status,
+        fulfillmentStatus: orders.fulfillmentStatus,
+        version: orders.version,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(order);
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
         throw new ValidationError("Cannot fulfill a cancelled/returned order");
     }
@@ -247,8 +398,11 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         customerEmail: orders.customerEmail,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(existingOrder);
     if (existingOrder.status === status) {
         await reconcileInventoryForStatus(db, orderId, status);
         return { message: "Status unchanged; inventory reconciled" };

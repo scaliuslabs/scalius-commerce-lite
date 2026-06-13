@@ -3,6 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { canTransitionTo } from "../orders/order-state-machine";
 import type { Database } from "@scalius/database/client";
+import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
 
 /**
  * Updates the order status based on shipment status if applicable
@@ -35,6 +36,8 @@ export async function updateOrderStatusFromShipment(
         version: orders.version,
         customerPhone: orders.customerPhone,
         customerEmail: orders.customerEmail,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
       })
       .from(orders)
       .where(eq(orders.id, shipment.orderId));
@@ -43,6 +46,7 @@ export async function updateOrderStatusFromShipment(
       console.error(`Order with ID ${shipment.orderId} not found`);
       return;
     }
+    assertNoActiveShipmentClaim(order);
 
     // Map shipment status to order status
     let newOrderStatus = order.status;

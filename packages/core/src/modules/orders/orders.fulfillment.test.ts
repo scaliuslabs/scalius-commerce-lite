@@ -4,6 +4,7 @@ import { OrderStatus } from "@scalius/database/schema";
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
   createShipment: vi.fn(),
+  markShipmentReconciliationRequired: vi.fn(),
   markCODReturned: vi.fn(),
   recordCODCollection: vi.fn(),
   recordCODFailure: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
 
 vi.mock("../delivery/delivery.service", () => ({
   createShipment: mocks.createShipment,
+  markShipmentReconciliationRequired: mocks.markShipmentReconciliationRequired,
 }));
 
 vi.mock("../payments/cod", () => ({
@@ -89,6 +91,7 @@ describe("orders fulfillment side-effect ordering", () => {
     vi.clearAllMocks();
     mocks.applyInventoryForStatusChange.mockResolvedValue("deducted");
     mocks.createShipment.mockResolvedValue({ success: true, data: { id: "provider_shipment" } });
+    mocks.markShipmentReconciliationRequired.mockResolvedValue(undefined);
     mocks.markCODReturned.mockResolvedValue({ success: true });
     mocks.recordCODCollection.mockResolvedValue({ success: true });
     mocks.recordCODFailure.mockResolvedValue({ success: true });
@@ -113,6 +116,105 @@ describe("orders fulfillment side-effect ordering", () => {
       { orderId: "order_1", success: false, error: "Order was modified concurrently" },
     ]);
     expect(mocks.createShipment).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("does not call the delivery provider when another shipment claim is active", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        version: 7,
+        shipmentClaimId: "shp_active",
+        shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
+      },
+      updateResults: [],
+    });
+
+    const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
+
+    expect(result).toEqual([
+      {
+        orderId: "order_1",
+        success: false,
+        error: "Order has an active shipment creation in progress. Please retry shortly.",
+      },
+    ]);
+    expect(mocks.createShipment).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("sets an order shipment claim before calling the delivery provider", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },
+      updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
+    });
+
+    const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
+
+    expect(result[0]).toMatchObject({ orderId: "order_1", success: true });
+    expect(updates[0]).toMatchObject({
+      version: 8,
+      shipmentClaimId: expect.stringMatching(/^shp_/),
+    });
+    expect(mocks.createShipment).toHaveBeenCalledWith(
+      db,
+      "order_1",
+      "provider_1",
+      {},
+      undefined,
+      { shipmentId: updates[0]?.shipmentClaimId },
+    );
+  });
+
+  it("marks reconciliation required when provider succeeds but final order CAS fails", async () => {
+    mocks.createShipment.mockResolvedValue({
+      success: true,
+      shipmentId: "shp_claim",
+      data: { externalId: "ext_1", trackingId: "track_1", status: "pending" },
+      message: "created",
+    });
+    const { db } = createDbMock({
+      selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },
+      updateResults: [[{ id: "order_1" }], []],
+    });
+
+    const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
+
+    expect(result).toEqual([
+      {
+        orderId: "order_1",
+        success: false,
+        shipmentId: expect.stringMatching(/^shp_/),
+        reconciliationRequired: true,
+        error: "Shipment was created but order finalization requires reconciliation",
+      },
+    ]);
+    expect(mocks.markShipmentReconciliationRequired).toHaveBeenCalledWith(
+      db,
+      expect.stringMatching(/^shp_/),
+      "order_final_cas_conflict",
+      { externalId: "ext_1", trackingId: "track_1", status: "pending" },
+      "Order was modified concurrently after provider shipment creation",
+    );
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("clears the shipment claim when provider shipment creation is rejected", async () => {
+    mocks.createShipment.mockResolvedValue({ success: false, shipmentId: "shp_claim", message: "provider rejected" });
+    const { db, updates } = createDbMock({
+      selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
+
+    expect(result).toEqual([
+      { orderId: "order_1", success: false, shipment: undefined, error: "provider rejected" },
+    ]);
+    expect(updates.at(-1)).toMatchObject({
+      shipmentClaimId: null,
+      shipmentClaimExpiresAt: null,
+    });
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
@@ -294,5 +396,27 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(result).toEqual({ message: "Status unchanged; inventory reconciled" });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
     expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
+  });
+
+  it("rejects admin status updates while a shipment claim is active", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: "cod",
+        paymentStatus: "unpaid",
+        shipmentClaimId: "shp_active",
+        shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
+      },
+      updateResults: [],
+    });
+
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+      .rejects.toThrow("active shipment creation");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 });

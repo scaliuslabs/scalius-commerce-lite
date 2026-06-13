@@ -53,6 +53,8 @@ const orderRow = {
   paymentStatus: "unpaid",
   paidAmount: 0,
   balanceDue: 125,
+  shipmentClaimId: null as string | null,
+  shipmentClaimExpiresAt: null as Date | null,
 };
 
 type TokenMode = "valid" | "wrong" | "missing";
@@ -247,6 +249,48 @@ describe("payment session receipt-token proof", () => {
     expect(response.status).toBe(400);
     expect(mocks.getStripeSettings).not.toHaveBeenCalled();
     expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "Stripe intent",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz session",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar session",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      gateway: mocks.createPolarCheckout,
+    },
+  ])("rejects $label creation while shipment creation has an active claim", async ({ paymentMethod, path, gateway }) => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod,
+      order: {
+        shipmentClaimId: "shp_active",
+        shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(409);
+    expect(gateway).not.toHaveBeenCalled();
   });
 
   it("requires deposit amount to match the configured partial payment amount", async () => {

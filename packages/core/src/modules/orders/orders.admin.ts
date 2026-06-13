@@ -36,6 +36,7 @@ import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/err
 import { validateTransition } from "./order-state-machine";
 import type { OrderShipmentSummary, OrderDetails } from "./orders.types";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
+import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -753,12 +754,15 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
             version: orders.version,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
         .from(orders)
         .where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`)
         .get();
 
     if (!existingOrder) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(existingOrder);
 
     // Validate status transition if status is changing
     if (data.status !== existingOrder.status) {
@@ -975,8 +979,14 @@ async function updateCustomerStatsService(db: Database, customerId: string) {
 }
 
 export async function deleteOrder(db: Database, id: string) {
-    const orderToDelete = await db.select({ id: orders.id, inventoryAction: orders.inventoryAction }).from(orders).where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`).get();
+    const orderToDelete = await db.select({
+        id: orders.id,
+        inventoryAction: orders.inventoryAction,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    }).from(orders).where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`).get();
     if (!orderToDelete) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(orderToDelete);
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
     }
@@ -991,12 +1001,15 @@ export async function restoreOrder(db: Database, id: string) {
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
             deletedAt: orders.deletedAt,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
         .from(orders)
         .where(eq(orders.id, id))
         .get();
 
     if (!order) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(order);
     if (!order.deletedAt) throw new ValidationError("Order is not deleted");
 
     // If inventory was released during deletion (inventoryAction = "restored"),
@@ -1041,8 +1054,14 @@ export async function restoreOrder(db: Database, id: string) {
 }
 
 export async function permanentlyDeleteOrder(db: Database, id: string) {
-    const orderToDelete = await db.select({ inventoryAction: orders.inventoryAction, deletedAt: orders.deletedAt }).from(orders).where(eq(orders.id, id)).get();
+    const orderToDelete = await db.select({
+        inventoryAction: orders.inventoryAction,
+        deletedAt: orders.deletedAt,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    }).from(orders).where(eq(orders.id, id)).get();
     if (!orderToDelete) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(orderToDelete);
     if (!orderToDelete.deletedAt) throw new ValidationError("Order must be soft-deleted before permanent deletion");
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
@@ -1056,9 +1075,19 @@ export async function bulkDeleteOrders(db: Database, orderIds: string[], permane
 
     // Batch-read ALL affected orders in ONE query (Fix N+1)
     const affectedOrders = await db
-        .select({ id: orders.id, inventoryAction: orders.inventoryAction })
+        .select({
+            id: orders.id,
+            inventoryAction: orders.inventoryAction,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        })
         .from(orders)
         .where(inArray(orders.id, orderIds));
+
+    const claimedOrders = affectedOrders.filter((order) => hasActiveShipmentClaim(order));
+    if (claimedOrders.length > 0) {
+        throw new ConflictError(`Orders have active shipment creation in progress: ${claimedOrders.map((order) => order.id).join(", ")}`);
+    }
 
     // Apply inventory transitions for orders that need it
     // (applyInventoryForStatusChange reads order items internally and uses CAS operations)

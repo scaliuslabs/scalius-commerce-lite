@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, and `ORDER-007` are now verified; `ORDER-008` through `ORDER-010` remain open.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, and `ORDER-008` are now verified; `ORDER-009` and `ORDER-010` remain open.
 
 ## Validation Performed
 
@@ -259,7 +259,7 @@ Bulk shipment creation bumps order version before calling the carrier, but concu
 
 Fix direction: introduce an exclusive fulfillment claim or explicit in-progress state that all order mutations respect until shipment finalization or reconciliation.
 
-Status: Not Started. See `ORDER-008` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13. Bulk provider shipment creation now acquires a durable order-level shipment claim before carrier side effects, passes the claim id through to the insert-first `delivery_shipments` row, clears the claim only after local shipped state succeeds, and leaves `delivery_shipments.status = reconcile_required` plus an indefinite order claim when provider success cannot be finalized locally. Admin order/status/COD/fulfillment/edit/delete/refund/payment-session/shipment-refresh paths reject active claims; payment and delivery webhook/queue paths surface retryable failures instead of silently skipping external truth. Focused fulfillment, delivery tracking, payment-session, payment-queue, and order-edit tests cover the behavior. See `ORDER-008` in `REMEDIATION_TRACKER.md`.
 
 ## P2 Findings
 

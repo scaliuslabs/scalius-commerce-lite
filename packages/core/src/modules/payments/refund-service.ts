@@ -15,6 +15,7 @@ import { roundPrice } from "@scalius/shared/price-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { canTransitionTo } from "../orders/order-state-machine";
+import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
 
 export interface RefundRequest {
     orderId: string;
@@ -313,6 +314,8 @@ export async function processRefund(
             status: orders.status,
             inventoryAction: orders.inventoryAction,
             version: orders.version,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
         .from(orders)
         .where(eq(orders.id, params.orderId))
@@ -321,6 +324,7 @@ export async function processRefund(
     if (!order) {
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
+    assertNoActiveShipmentClaim(order);
 
     if (order.paymentStatus === PaymentStatus.UNPAID || order.paymentStatus === PaymentStatus.FAILED) {
         throw new ValidationError("Order has no payments to refund");
@@ -536,6 +540,8 @@ export async function processReturn(
             status: orders.status,
             paymentStatus: orders.paymentStatus,
             version: orders.version,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
         .from(orders)
         .where(eq(orders.id, params.orderId))
@@ -544,6 +550,7 @@ export async function processReturn(
     if (!order) {
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
+    assertNoActiveShipmentClaim(order);
 
     const returnableStatuses: string[] = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
     if (order.status !== OrderStatus.RETURNED && !returnableStatuses.includes(order.status)) {

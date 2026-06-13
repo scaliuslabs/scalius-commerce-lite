@@ -5,6 +5,7 @@ import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tr
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { validateTransition } from "@scalius/core/modules/orders/order-state-machine";
+import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
@@ -282,8 +283,13 @@ app.openapi(updateFulfillmentStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const { status } = c.req.valid("json");
 
-    const order = await db.select({ fulfillmentStatus: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, orderId)).get();
+    const order = await db.select({
+        fulfillmentStatus: orders.fulfillmentStatus,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(order);
 
     if (order.fulfillmentStatus !== status) {
         validateTransition("fulfillment", order.fulfillmentStatus, status);
@@ -370,8 +376,11 @@ app.openapi(createShipmentRoute, async (c) => {
     );
 
     if (!shipmentResult?.success) {
-        console.error(`Failed to create shipment for order ${orderId}: ${shipmentResult?.error}`);
-        throw new ValidationError(shipmentResult?.error || "Failed to create shipment");
+        const errorMessage = typeof shipmentResult?.error === "string"
+            ? shipmentResult.error
+            : "Failed to create shipment";
+        console.error(`Failed to create shipment for order ${orderId}: ${errorMessage}`);
+        throw new ValidationError(errorMessage);
     }
 
     const provider = await getDeliveryProvider(db, data.providerId);
