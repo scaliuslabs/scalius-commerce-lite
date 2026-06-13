@@ -292,7 +292,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 ## Dev Server Notes
 
 - Dev commands use `scripts/dev.sh`.
-- Run `pnpm dev:doctor` before debugging vague local failures. Use `pnpm dev:doctor --require-running` after starting dev servers when you need API/admin/storefront to be live.
+- Run `pnpm dev:doctor` before debugging vague local failures. It checks env-file presence, shared-secret drift, and local URL values for the expected API/admin/storefront localhost ports. Use `pnpm dev:doctor --require-running` after starting dev servers when you need API/admin/storefront to be live.
 - The wrapper applies pending local D1 migrations before starting API unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
 - The wrapper kills stale processes on app ports `8787`, `4322`, `4323`, and inspector ports `9229-9233`.
 - Full `pnpm dev` starts API, admin, then storefront with staggered delays to avoid inspector port conflicts.

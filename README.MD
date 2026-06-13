@@ -388,7 +388,7 @@ pnpm dev:setup
 
 Use Node 22 from `.nvmrc`; `pnpm dev:doctor` warns when your active Node version differs. `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
-Use `pnpm dev:setup --env-only` when `dev:doctor` reports missing or incomplete env files. It appends missing/blank keys in `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin; use `--force --env-only` only when you intentionally want to regenerate local env files.
+Use `pnpm dev:setup --env-only` when `dev:doctor` reports missing, incomplete, or non-local env URL values. It appends missing/blank keys in `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin; use `--force --env-only` only when you intentionally want to regenerate local env files.
 
 Default local admin:
 
@@ -423,7 +423,7 @@ Use `pnpm dev:doctor --require-running` after the full `pnpm dev` stack is up to
 
 API local dev uses `apps/api/wrangler.local.jsonc`, which intentionally omits the remote Workers AI binding. Normal local admin/storefront/API work should not require Cloudflare remote proxy access. Production build/deploy still use `apps/api/wrangler.jsonc`.
 
-Admin production calls the API through the `env.API` service binding. Local admin dev uses HTTP fallback to `PUBLIC_API_BASE_URL` when that URL points at localhost, even though Wrangler still exposes the production binding shape.
+Admin production calls the API through the `env.API` service binding. Local admin dev uses HTTP fallback to `PUBLIC_API_BASE_URL` when that URL points at localhost, even though Wrangler still exposes the production binding shape. `pnpm dev:doctor` validates that local API/admin/storefront URL values point at the expected localhost ports.
 
 For disposable local testing, point all Workers at another state directory:
 

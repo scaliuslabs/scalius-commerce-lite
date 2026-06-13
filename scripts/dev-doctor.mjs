@@ -15,6 +15,7 @@ import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import {
   assertStringOptions,
+  collectLocalUrlConfigIssues,
   collectLocalSecretSyncIssues,
   parseOptions,
   readEnvVarsIfExists,
@@ -247,6 +248,8 @@ function checkLocalEnvFiles(checks) {
   const apiVars = readEnvVarsIfExists(paths.api);
   const adminVars = readEnvVarsIfExists(paths.admin);
   const storefrontVars = readEnvVarsIfExists(paths.storefront);
+  const adminBuildVars = readEnvVarsIfExists(paths.adminBuild);
+  const storefrontBuildVars = readEnvVarsIfExists(paths.storefrontBuild);
   const drift = collectLocalSecretSyncIssues({ apiVars, adminVars, storefrontVars });
   if (drift.length === 0 && missingRuntime.length === 0) {
     pass(checks, "Shared local secrets", "API/admin/storefront shared secrets are present and aligned.");
@@ -264,6 +267,31 @@ function checkLocalEnvFiles(checks) {
     pass(checks, "API local env completeness", "API has credential encryption and purge config.");
   } else {
     fail(checks, "API local env completeness", `Missing ${missingApi.join(", ")}.`, "Run pnpm dev:setup --env-only to append missing local keys.");
+  }
+
+  const localUrlIssues = collectLocalUrlConfigIssues([
+    { label: "apps/api/.dev.vars", key: "BETTER_AUTH_URL", value: apiVars?.BETTER_AUTH_URL, port: 4323, pathname: "" },
+    { label: "apps/api/.dev.vars", key: "PUBLIC_API_BASE_URL", value: apiVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
+    { label: "apps/api/.dev.vars", key: "STOREFRONT_URL", value: apiVars?.STOREFRONT_URL, port: 4322, pathname: "" },
+    { label: "apps/api/.dev.vars", key: "PURGE_URL", value: apiVars?.PURGE_URL, port: 4322, pathname: "/api/purge-cache" },
+    { label: "apps/admin-v2/.dev.vars", key: "BETTER_AUTH_URL", value: adminVars?.BETTER_AUTH_URL, port: 4323, pathname: "" },
+    { label: "apps/admin-v2/.dev.vars", key: "PUBLIC_API_BASE_URL", value: adminVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
+    { label: "apps/admin-v2/.dev.vars", key: "STOREFRONT_URL", value: adminVars?.STOREFRONT_URL, port: 4322, pathname: "" },
+    { label: "apps/storefront/.dev.vars", key: "PUBLIC_API_URL", value: storefrontVars?.PUBLIC_API_URL, port: 8787, pathname: "/api/v1" },
+    { label: "apps/storefront/.dev.vars", key: "PUBLIC_API_BASE_URL", value: storefrontVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
+    { label: "apps/storefront/.dev.vars", key: "STOREFRONT_URL", value: storefrontVars?.STOREFRONT_URL, port: 4322, pathname: "" },
+    { label: "apps/admin-v2/.env.development", key: "PUBLIC_API_BASE_URL", value: adminBuildVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
+    { label: "apps/storefront/.env.development", key: "PUBLIC_API_URL", value: storefrontBuildVars?.PUBLIC_API_URL, port: 8787, pathname: "/api/v1" },
+    { label: "apps/storefront/.env.development", key: "PUBLIC_API_BASE_URL", value: storefrontBuildVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
+    { label: "apps/storefront/.env.development", key: "STOREFRONT_URL", value: storefrontBuildVars?.STOREFRONT_URL, port: 4322, pathname: "" },
+  ]);
+
+  if (localUrlIssues.length > 0) {
+    fail(checks, "Local URL config", localUrlIssues.join("; "), "Run pnpm dev:setup --env-only to restore localhost URL defaults.");
+  } else if (missingRuntime.length > 0 || missingBuild.length > 0) {
+    skip(checks, "Local URL config", "Skipped because one or more local env files are missing.", "Run pnpm dev:setup --env-only.");
+  } else {
+    pass(checks, "Local URL config", "Runtime and build-time URLs point at local API/admin/storefront ports.");
   }
 }
 
