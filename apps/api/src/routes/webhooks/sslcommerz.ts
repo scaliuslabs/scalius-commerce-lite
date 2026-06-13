@@ -2,9 +2,13 @@
 // Webhook handler for SSLCommerz IPN (Instant Payment Notification).
 
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
 import { validateSSLCommerzIPN } from "@scalius/core/modules/payments/sslcommerz";
 import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
-import type { SSLCommerzIPNPayload } from "@scalius/core/modules/payments/types";
+import type { PaymentType, SSLCommerzIPNPayload, SSLCommerzValidationResult } from "@scalius/core/modules/payments/types";
+import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
+import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import {
@@ -17,8 +21,108 @@ import {
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+const VALID_PAYMENT_TYPES = new Set<PaymentType>(["full", "deposit", "balance"]);
+
+type ServerPaymentContext = {
+  order: {
+    id: string;
+    totalAmount: number;
+    paidAmount: number;
+    balanceDue: number;
+    paymentMethod: string;
+  };
+  plan: {
+    depositAmount: number;
+    balanceDue: number;
+  } | null;
+};
+
+function clean(value: string | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function parseCanonicalAmount(validation: SSLCommerzValidationResult): number | null {
+  const amount = Number.parseFloat(clean(validation.amount) || clean(validation.store_amount));
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function parseCanonicalPaymentType(validation: SSLCommerzValidationResult): PaymentType | null {
+  const paymentType = clean(validation.value_a);
+  return VALID_PAYMENT_TYPES.has(paymentType as PaymentType) ? (paymentType as PaymentType) : null;
+}
+
+function amountsEqual(left: number, right: number, currency?: string): boolean {
+  return pricesEqual(roundPrice(left, currency), roundPrice(right, currency));
+}
+
+async function getServerPaymentContext(db: Database, orderId: string): Promise<ServerPaymentContext | null> {
+  const order = await db
+    .select({
+      id: orders.id,
+      totalAmount: orders.totalAmount,
+      paidAmount: orders.paidAmount,
+      balanceDue: orders.balanceDue,
+      paymentMethod: orders.paymentMethod,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .get();
+
+  if (!order) return null;
+
+  const plan = await db
+    .select({
+      depositAmount: paymentPlans.depositAmount,
+      balanceDue: paymentPlans.balanceDue,
+    })
+    .from(paymentPlans)
+    .where(eq(paymentPlans.orderId, orderId))
+    .get();
+
+  return { order, plan: plan ?? null };
+}
+
+function resolvePaymentType(
+  context: ServerPaymentContext,
+  amount: number,
+  currency: string,
+  canonicalPaymentType: PaymentType | null,
+): PaymentType | null {
+  const matchingTypes = new Set<PaymentType>();
+
+  if (amountsEqual(amount, context.order.totalAmount, currency)) {
+    matchingTypes.add("full");
+  }
+
+  if (context.plan) {
+    if (amountsEqual(amount, context.plan.depositAmount, currency)) {
+      matchingTypes.add("deposit");
+    }
+    if (context.plan.balanceDue > 0 && amountsEqual(amount, context.plan.balanceDue, currency)) {
+      matchingTypes.add("balance");
+    }
+  } else {
+    const outstanding = context.order.balanceDue ?? Math.max(0, context.order.totalAmount - (context.order.paidAmount ?? 0));
+    if (outstanding > 0 && context.order.paidAmount > 0 && amountsEqual(amount, outstanding, currency)) {
+      matchingTypes.add("balance");
+    }
+  }
+
+  if (canonicalPaymentType) {
+    return matchingTypes.has(canonicalPaymentType) ? canonicalPaymentType : null;
+  }
+
+  return matchingTypes.has("deposit")
+    ? "deposit"
+    : matchingTypes.has("balance")
+      ? "balance"
+      : matchingTypes.has("full")
+        ? "full"
+        : null;
+}
+
 app.post("/", async (c) => {
-  const db = c.get("db");
+  const db = c.get("db") as Database;
   const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
   const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
 
@@ -37,11 +141,29 @@ app.post("/", async (c) => {
     return c.text("OK");
   }
 
-  const tranId = payload.tran_id;
-  const valId = payload.val_id;
+  const requestedValId = clean(payload.val_id);
 
-  if (!tranId || !valId) {
-    console.warn("[ssl-webhook] IPN missing tran_id or val_id");
+  if (!requestedValId) {
+    console.warn("[ssl-webhook] IPN missing val_id");
+    return c.text("OK");
+  }
+
+  const validation = await validateSSLCommerzIPN(ssl.storeId, ssl.storePassword, ssl.sandbox, requestedValId);
+
+  if (!validation) {
+    console.error(`[ssl-webhook] IPN validation API call failed for val_id ${requestedValId}`);
+    return c.text("RETRY", 503);
+  }
+
+  const tranId = clean(validation.tran_id);
+  const valId = clean(validation.val_id);
+
+  if (!tranId || !valId || valId !== requestedValId) {
+    console.warn("[ssl-webhook] IPN validation response missing or inconsistent canonical identifiers", {
+      requestedValId,
+      validationTranId: tranId,
+      validationValId: valId,
+    });
     return c.text("OK");
   }
 
@@ -52,40 +174,65 @@ app.post("/", async (c) => {
     eventType: "ipn",
     orderId: tranId,
     status: "processing",
-    result: { tranId, valId },
+    result: { tranId, valId, status: validation.status },
   });
 
   if (!claim.claimed) {
     return c.text("OK");
   }
 
-  const validation = await validateSSLCommerzIPN(ssl.storeId, ssl.storePassword, ssl.sandbox, valId);
-
-  if (!validation) {
-    console.error(`[ssl-webhook] IPN validation API call failed for order ${tranId}`);
-    await markWebhookEventFailed(db, eventId, { tranId, valId, error: "Validation API call failed" });
-    return c.text("RETRY", 503);
-  }
-
   const isValid = validation.status === "VALID" || validation.status === "VALIDATED";
   const isTerminalFailure = validation.status === "FAILED" || validation.status === "CANCELLED";
 
-  let message: PaymentQueueMessage | null = null;
+  let message: PaymentQueueMessage;
 
   if (isValid) {
-    const amount = parseFloat(validation.amount ?? validation.store_amount ?? "0");
+    const amount = parseCanonicalAmount(validation);
+    const currency = clean(validation.currency_type) || clean(validation.currency);
+    const bankTranId = clean(validation.bank_tran_id);
+    const context = await getServerPaymentContext(db, tranId);
+
+    if (!amount || !currency || !bankTranId || !context) {
+      const error = !context
+        ? "Canonical order not found"
+        : "Validation response missing canonical payment data";
+      console.warn(`[ssl-webhook] ${error} for transaction ${tranId}`);
+      await markWebhookEventFailed(db, eventId, { tranId, valId, status: validation.status, error });
+      return c.text("RETRY", 503);
+    }
+
+    if (context.order.paymentMethod !== PaymentMethod.SSLCOMMERZ) {
+      const error = "Order is not configured for SSLCommerz payment";
+      console.warn(`[ssl-webhook] ${error} for transaction ${tranId}`);
+      await markWebhookEventFailed(db, eventId, { tranId, valId, status: validation.status, error });
+      return c.text("RETRY", 503);
+    }
+
+    const paymentType = resolvePaymentType(
+      context,
+      amount,
+      currency,
+      parseCanonicalPaymentType(validation),
+    );
+
+    if (!paymentType) {
+      const error = "Validated payment type or amount is inconsistent with server-side order state";
+      console.warn(`[ssl-webhook] ${error} for transaction ${tranId}`);
+      await markWebhookEventFailed(db, eventId, { tranId, valId, status: validation.status, error });
+      return c.text("RETRY", 503);
+    }
 
     message = {
       type: "payment.sslcommerz.confirmed",
       orderId: tranId,
       tranId,
       valId,
-      bankTranId: payload.bank_tran_id,
+      bankTranId,
       amount,
-      currency: payload.currency,
-      cardType: payload.card_type,
-      cardBrand: payload.card_brand,
-      paymentType: payload.value_a
+      currency,
+      cardType: clean(validation.card_type) || undefined,
+      cardBrand: clean(validation.card_brand) || undefined,
+      paymentType,
     };
   } else if (isTerminalFailure) {
     console.warn(`[ssl-webhook] IPN terminal failure for order ${tranId}: ${validation.status}`);

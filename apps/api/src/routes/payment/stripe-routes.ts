@@ -12,6 +12,7 @@ import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } fro
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { resolvePaymentSessionPolicy } from "./payment-session-policy";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -63,16 +64,6 @@ app.openapi(createIntentRoute, async (c) => {
   const body = c.req.valid("json");
   await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken);
 
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const stripe = await getStripeSettings(db, c.env.CACHE, encryptionKey);
-
-  if (!stripe) {
-    throw new ServiceUnavailableError("Stripe is not configured. Please set credentials in the admin dashboard.");
-  }
-  if (!stripe.enabled) {
-    throw new ServiceUnavailableError("Stripe gateway is disabled.");
-  }
-
   // Fetch the order
   const order = await db
     .select({
@@ -90,12 +81,6 @@ app.openapi(createIntentRoute, async (c) => {
 
   if (!order) throw new NotFoundError("Order not found");
 
-  // Resolve currency from settings if not provided
-  if (!body.currency) {
-    const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-    body.currency = currencyConfig.code.toLowerCase();
-  }
-
   if (order.paymentStatus === PaymentStatus.PAID) {
     throw new ValidationError("Order is already fully paid");
   }
@@ -106,34 +91,34 @@ app.openapi(createIntentRoute, async (c) => {
     throw new ValidationError("Order is not configured for Stripe payment");
   }
 
-  // Determine the amount to charge
-  let chargeAmount: number;
-  if (body.paymentType === "deposit") {
-    if (!body.depositAmount) {
-      throw new ValidationError("depositAmount required for deposit payment");
-    }
-    if (body.depositAmount >= order.totalAmount) {
-      throw new ValidationError("Deposit amount must be less than order total");
-    }
-    chargeAmount = body.depositAmount;
-  } else if (body.paymentType === "balance") {
-    chargeAmount = order.balanceDue ?? (order.totalAmount - (order.paidAmount ?? 0));
-    if (chargeAmount <= 0) throw new ValidationError("No balance due");
-  } else {
-    chargeAmount = order.totalAmount;
+  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+  const currency = currencyConfig.code.toLowerCase();
+  const policy = await resolvePaymentSessionPolicy(db, order, {
+    paymentType: body.paymentType,
+    depositAmount: body.depositAmount,
+  });
+
+  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const stripe = await getStripeSettings(db, c.env.CACHE, encryptionKey);
+
+  if (!stripe) {
+    throw new ServiceUnavailableError("Stripe is not configured. Please set credentials in the admin dashboard.");
+  }
+  if (!stripe.enabled) {
+    throw new ServiceUnavailableError("Stripe gateway is disabled.");
   }
 
   // Convert major-unit amount to smallest currency unit using ISO 4217 decimals.
   // e.g. USD/BDT: ×100, JPY: ×1, BHD: ×1000
-  const decimals = getDecimalPlaces(body.currency);
-  const amountInSmallestUnit = Math.round(chargeAmount * Math.pow(10, decimals));
+  const decimals = getDecimalPlaces(currency);
+  const amountInSmallestUnit = Math.round(policy.chargeAmount * Math.pow(10, decimals));
 
   const result = await createPaymentIntent(stripe.secretKey, {
     orderId: body.orderId,
     amount: amountInSmallestUnit,
-    currency: body.currency,
-    paymentType: body.paymentType,
-    manualCapture: body.manualCapture
+    currency,
+    paymentType: policy.paymentType,
+    manualCapture: false
   });
 
   if (!result.success) {
@@ -147,13 +132,13 @@ app.openapi(createIntentRoute, async (c) => {
     .where(eq(orders.id, body.orderId));
 
   // Create payment plan record for deposit orders
-  if (body.paymentType === "deposit" && body.depositAmount) {
+  if (policy.paymentType === "deposit") {
     await db.insert(paymentPlans).values({
       id: crypto.randomUUID(),
       orderId: body.orderId,
       totalAmount: order.totalAmount,
-      depositAmount: body.depositAmount,
-      balanceDue: order.totalAmount - body.depositAmount,
+      depositAmount: policy.depositAmount,
+      balanceDue: policy.balanceDue,
       status: "pending",
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`
@@ -164,8 +149,8 @@ app.openapi(createIntentRoute, async (c) => {
     clientSecret: result.clientSecret,
     paymentIntentId: result.paymentIntentId,
     publishableKey: stripe.publishableKey,
-    amount: chargeAmount,
-    currency: body.currency
+    amount: policy.chargeAmount,
+    currency
   });
 });
 

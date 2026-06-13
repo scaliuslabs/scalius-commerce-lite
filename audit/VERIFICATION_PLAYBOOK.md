@@ -121,15 +121,20 @@ pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/admin-v2 typecheck
 ```
 
-Payment-session and abandoned-checkout remediation checks:
+Payment-session, payment-webhook, shipping, and abandoned-checkout remediation checks:
 
 ```bash
-# PAY-003 coverage
+# PAY-003/PAY-004/PAY-005 coverage
 pnpm --filter @scalius/api test -- src/routes/payment/payment-session.test.ts src/routes/orders-receipt.test.ts
+pnpm --filter @scalius/api exec vitest run src/routes/payment/payment-session.test.ts src/routes/webhooks/sslcommerz.test.ts
 pnpm generate:sdk
 pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/storefront typecheck
 pnpm --filter @scalius/api-client typecheck
+
+# ORDER-006 coverage
+pnpm --filter @scalius/core test -- src/modules/orders/orders.storefront.test.ts
+pnpm --filter @scalius/core typecheck
 
 # ORDER-005 coverage
 pnpm --filter @scalius/api test -- src/routes/admin/abandoned-checkouts.test.ts
@@ -137,7 +142,7 @@ pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/api lint
 ```
 
-Use the PAY-003 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls and gateway URLs come from trusted config. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
+Use the PAY-003/PAY-004 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls, derive gateway URLs from trusted config, reject disabled or mismatched deposit attempts, ignore caller currency for session creation, and force public Stripe manual capture off. Use the PAY-005 SSLCommerz webhook checks to prove canonical validated transaction data is used instead of form metadata. Use the ORDER-006 checks to prove storefront order creation rejects bogus shipping methods and derives shipping from active backend methods. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
 
 ## Local Dev Commands
 
