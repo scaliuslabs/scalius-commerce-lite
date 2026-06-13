@@ -1,7 +1,7 @@
 // src/lib/rbac/auto-seed.ts
 // Auto-seeds permissions, roles, and sets first admin as super admin on first access
 
-import { eq, count, asc } from "drizzle-orm";
+import { eq, count, asc, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
   user,
@@ -16,57 +16,15 @@ import { PERMISSIONS, getAllPermissions } from "./permissions";
 // If you reset the DB manually, run `pnpm deploy` to get a fresh isolate.
 let seedingChecked = false;
 
-/**
- * Check if RBAC is already seeded by counting permissions
- */
-async function isRbacSeeded(db: Database): Promise<boolean> {
-  const result = await db
-    .select({ count: count() })
-    .from(permissions)
-    .get();
-  return (result?.count ?? 0) > 0;
-}
+type SystemRoleSeed = {
+  name: string;
+  displayName: string;
+  description: string;
+  permissions: string[];
+};
 
-/**
- * Seed all permissions into the database
- */
-async function seedPermissions(db: Database): Promise<void> {
-  const allPermissions = getAllPermissions();
-  const existingPermissions = await db.select({ name: permissions.name }).from(permissions);
-  const existingNames = new Set(existingPermissions.map((permission) => permission.name));
-
-  for (const perm of allPermissions) {
-    if (existingNames.has(perm.name)) continue;
-    try {
-      await db.insert(permissions).values({
-        id: crypto.randomUUID(),
-        name: perm.name,
-        displayName: perm.displayName,
-        description: perm.description,
-        resource: perm.resource,
-        action: perm.action,
-        category: perm.category,
-        isSensitive: perm.isSensitive,
-        createdAt: new Date(),
-      });
-    } catch (error: unknown) {
-      // Skip if already exists (UNIQUE constraint)
-      if (!(error instanceof Error && error.message?.includes("UNIQUE constraint failed"))) {
-        console.error(`Error seeding permission ${perm.name}:`, error instanceof Error ? error.message : String(error));
-      }
-    }
-  }
-}
-
-/**
- * Seed system roles with their permissions
- */
-async function seedRoles(db: Database): Promise<void> {
-  // Get all permissions from database
-  const dbPermissions = await db.select().from(permissions);
-  const permNameToId = new Map(dbPermissions.map((p) => [p.name, p.id]));
-
-  const systemRoles = [
+function getSystemRoleSeeds(): SystemRoleSeed[] {
+  return [
     {
       name: "super_admin",
       displayName: "Super Admin",
@@ -169,6 +127,59 @@ async function seedRoles(db: Database): Promise<void> {
       ],
     },
   ];
+}
+
+/**
+ * Check if RBAC is already seeded by counting permissions
+ */
+async function isRbacSeeded(db: Database): Promise<boolean> {
+  const result = await db
+    .select({ count: count() })
+    .from(permissions)
+    .get();
+  return (result?.count ?? 0) > 0;
+}
+
+/**
+ * Seed all permissions into the database
+ */
+async function seedPermissions(db: Database): Promise<void> {
+  const allPermissions = getAllPermissions();
+  const existingPermissions = await db.select({ name: permissions.name }).from(permissions);
+  const existingNames = new Set(existingPermissions.map((permission) => permission.name));
+
+  for (const perm of allPermissions) {
+    if (existingNames.has(perm.name)) continue;
+    try {
+      await db.insert(permissions).values({
+        id: crypto.randomUUID(),
+        name: perm.name,
+        displayName: perm.displayName,
+        description: perm.description,
+        resource: perm.resource,
+        action: perm.action,
+        category: perm.category,
+        isSensitive: perm.isSensitive,
+        createdAt: new Date(),
+      });
+    } catch (error: unknown) {
+      // Skip if already exists (UNIQUE constraint)
+      if (!(error instanceof Error && error.message?.includes("UNIQUE constraint failed"))) {
+        console.error(`Error seeding permission ${perm.name}:`, error instanceof Error ? error.message : String(error));
+      }
+    }
+  }
+}
+
+/**
+ * Seed system roles with their permissions
+ */
+async function seedRoles(db: Database): Promise<void> {
+  // Get all permissions from database
+  const dbPermissions = await db.select().from(permissions);
+  const permNameToId = new Map(dbPermissions.map((p) => [p.name, p.id]));
+
+  const systemRoles = getSystemRoleSeeds();
 
   for (const roleData of systemRoles) {
     try {
@@ -238,6 +249,59 @@ async function setFirstAdminAsSuperAdmin(db: Database): Promise<void> {
   }
 }
 
+async function isRbacSeedCurrent(db: Database): Promise<boolean> {
+  const allPermissions = getAllPermissions();
+  const systemRoles = getSystemRoleSeeds();
+  const systemRoleNames = systemRoles.map((role) => role.name);
+
+  const [permissionRows, roleRows, grantRows, firstAdminRows] = await db.batch([
+    db.select({ name: permissions.name }).from(permissions),
+    db.select({ name: roles.name })
+      .from(roles)
+      .where(inArray(roles.name, systemRoleNames)),
+    db.select({ roleName: roles.name, permissionName: permissions.name })
+      .from(roles)
+      .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(inArray(roles.name, systemRoleNames)),
+    db.select({ isSuperAdmin: user.isSuperAdmin })
+      .from(user)
+      .where(eq(user.role, "admin"))
+      .orderBy(asc(user.createdAt))
+      .limit(1),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+  ] as any) as [
+    { name: string }[],
+    { name: string }[],
+    { roleName: string; permissionName: string }[],
+    { isSuperAdmin: boolean | null }[],
+  ];
+
+  const permissionNames = new Set(permissionRows.map((permission) => permission.name));
+  if (!allPermissions.every((permission) => permissionNames.has(permission.name))) {
+    return false;
+  }
+
+  const roleNames = new Set(roleRows.map((role) => role.name));
+  if (!systemRoles.every((role) => roleNames.has(role.name))) {
+    return false;
+  }
+
+  const grants = new Set(
+    grantRows.map((grant) => `${grant.roleName}:${grant.permissionName}`),
+  );
+  if (
+    !systemRoles.every((role) =>
+      role.permissions.every((permission) => grants.has(`${role.name}:${permission}`)),
+    )
+  ) {
+    return false;
+  }
+
+  const firstAdmin = firstAdminRows[0];
+  return !firstAdmin || firstAdmin.isSuperAdmin === true;
+}
+
 /**
  * Auto-seed RBAC if not already seeded
  * Called from middleware on admin route access
@@ -251,6 +315,10 @@ export async function autoSeedRbacIfNeeded(db: Database): Promise<void> {
 
   try {
     const seeded = await isRbacSeeded(db);
+    if (seeded && await isRbacSeedCurrent(db)) {
+      seedingChecked = true;
+      return;
+    }
 
     if (!seeded) {
       console.log("RBAC: Auto-seeding permissions and roles...");

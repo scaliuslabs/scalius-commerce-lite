@@ -111,28 +111,61 @@ function temporaryAuthFailureResponse(): Response {
   );
 }
 
+async function runSignInEmailWithRetry(
+  handler: (request: Request) => Promise<Response>,
+  request: Request,
+): Promise<Response> {
+  const attempts = Array.from(
+    { length: AUTH_RETRY_DELAYS_MS.length + 1 },
+    () => request.clone(),
+  );
+  let lastResponse: Response | null = null;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts.length; attempt += 1) {
+    try {
+      const response = await handler(attempts[attempt] ?? request.clone());
+      if (response.status < 500) {
+        return response;
+      }
+      lastResponse = response;
+    } catch (error) {
+      lastError = error;
+    }
+
+    const delayMs = AUTH_RETRY_DELAYS_MS[attempt];
+    if (delayMs === undefined) break;
+
+    console.warn("Auth sign-in hit a retryable server failure; retrying", {
+      status: lastResponse?.status,
+      attempt: attempt + 1,
+      delayMs,
+      error: lastError instanceof Error ? lastError.message : lastError ? String(lastError) : undefined,
+    });
+    await wait(delayMs);
+  }
+
+  console.warn("Auth sign-in failed after retries; surfacing retryable failure", {
+    status: lastResponse?.status,
+    error: lastError instanceof Error ? lastError.message : lastError ? String(lastError) : undefined,
+    transient: lastError ? isTransientD1Error(lastError) : undefined,
+  });
+  return temporaryAuthFailureResponse();
+}
+
 async function runAuthHandlerWithRetry(
   handler: (request: Request) => Promise<Response>,
   request: Request,
 ): Promise<Response> {
+  if (isSignInEmailRequest(request)) {
+    return runSignInEmailWithRetry(handler, request);
+  }
+
   if (!isRetryableAuthRequest(request)) {
     try {
       const response = await handler(request);
-      if (isSignInEmailRequest(request) && response.status >= 500) {
-        console.warn("Auth sign-in returned server error; surfacing retryable failure", {
-          status: response.status,
-          pathname: new URL(request.url).pathname,
-        });
-        return temporaryAuthFailureResponse();
-      }
       return response;
     } catch (error) {
-      if (isSignInEmailRequest(request) && isTransientD1Error(error)) {
-        console.warn("Auth sign-in hit transient D1 error", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return temporaryAuthFailureResponse();
-      }
       throw error;
     }
   }
