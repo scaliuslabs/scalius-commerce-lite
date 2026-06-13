@@ -1290,69 +1290,6 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
   });
 
 // ═══════════════════════════════════════════════════════════════════
-//  RBAC (Roles & Permissions)
-// ═══════════════════════════════════════════════════════════════════
-
-export const getRbacRoles = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<unknown[]>("/rbac/roles");
-  },
-);
-
-export const getRbacPermissions = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<unknown[]>("/rbac/permissions");
-  },
-);
-
-export const createRbacRole = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost<Record<string, unknown>>("/rbac/roles", data);
-  });
-
-export const updateRbacRole = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { roleId: string; update: Record<string, unknown> }) => data,
-  )
-  .handler(async ({ data }) => {
-    return apiPut<Record<string, unknown>>(
-      `/rbac/roles/${data.roleId}`,
-      data.update,
-    );
-  });
-
-export const deleteRbacRole = createServerFn({ method: "POST" })
-  .inputValidator((data: { roleId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/rbac/roles/${data.roleId}`);
-  });
-
-export const assignUserRole = createServerFn({ method: "POST" })
-  .inputValidator((data: { userId: string; roleId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/rbac/user-roles", data);
-  });
-
-export const removeUserRole = createServerFn({ method: "POST" })
-  .inputValidator((data: { userId: string; roleId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete("/rbac/user-roles", data);
-  });
-
-export const assignUserPermission = createServerFn({ method: "POST" })
-  .inputValidator((data: { userId: string; permissionId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/rbac/user-permissions", data);
-  });
-
-export const removeUserPermission = createServerFn({ method: "POST" })
-  .inputValidator((data: { userId: string; permissionId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete("/rbac/user-permissions", data);
-  });
-
-// ═══════════════════════════════════════════════════════════════════
 //  AUTH / ADMIN USERS
 // ═══════════════════════════════════════════════════════════════════
 

@@ -28,24 +28,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Shield, AlertTriangle, Crown, X } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getRbacRoles, getRbacPermissions, assignUserRole, removeUserRole, assignUserPermission, removeUserPermission } from "@/lib/api.functions";
+import {
+  assignUserPermission,
+  assignUserRole,
+  getRbacPermissions,
+  getRbacRoles,
+  removeUserPermission,
+  removeUserRole,
+  type RbacPermissionMetadata,
+  type RbacRole,
+} from "@/lib/api-functions/rbac";
 
-interface Role {
-  id: string;
-  name: string;
-  displayName: string;
-  description: string | null;
-  isSystem: boolean;
-  permissions: string[];
-}
-
-interface PermissionMetadata {
-  name: string;
-  displayName: string;
-  description: string;
-  category: string;
-  isSensitive: boolean;
-}
+type Role = RbacRole;
+type PermissionMetadata = RbacPermissionMetadata;
 
 interface GroupedPermissions {
   [category: string]: PermissionMetadata[];
@@ -101,11 +96,9 @@ export function UserPermissionEditor({
           getRbacRoles(),
           getRbacPermissions(),
         ]);
-        const rolesData = rolesResult as unknown as { roles?: Role[] };
-        const permsData = permsResult as unknown as { grouped: Record<string, PermissionMetadata[]> };
 
-        setRoles((rolesData.roles || []) as Role[]);
-        setGroupedPermissions(permsData.grouped);
+        setRoles(rolesResult.roles);
+        setGroupedPermissions(permsResult.grouped);
       } catch (error: unknown) {
         console.error("Error fetching RBAC data:", error);
         toast.error("Failed to load roles and permissions");
@@ -159,7 +152,9 @@ export function UserPermissionEditor({
 
   const handleSetOverride = async (permission: string, granted: boolean) => {
     try {
-      await assignUserPermission({ data: { userId: user.id, permissionId: permission } });
+      await assignUserPermission({
+        data: { userId: user.id, permission, granted },
+      });
 
       setPermissionOverrides((prev) => {
         const grants = new Set(prev.grants);
@@ -188,7 +183,7 @@ export function UserPermissionEditor({
 
   const handleRemoveOverride = async (permission: string) => {
     try {
-      await removeUserPermission({ data: { userId: user.id, permissionId: permission } });
+      await removeUserPermission({ data: { userId: user.id, permission } });
       setPermissionOverrides((prev) => {
         const grants = new Set(prev.grants);
         const denials = new Set(prev.denials);

@@ -3,10 +3,10 @@ import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   getAdminUsers as getAdminUsersFn,
-  getRbacRoles,
   createAdminUser,
   deleteAdminUser,
 } from "~/lib/api.functions";
+import { getRbacRoles } from "~/lib/api-functions/rbac";
 
 export interface AdminUser {
   id: string;
@@ -25,7 +25,7 @@ export interface Role {
   id: string;
   name: string;
   displayName: string;
-  description: string | null;
+  description?: string | null;
   isSystem: boolean;
 }
 
@@ -47,7 +47,7 @@ export function useAdminUsers() {
 
   const fetchRoles = async () => {
     try {
-      const result = await getRbacRoles() as unknown as { roles: Role[] };
+      const result = await getRbacRoles();
       setAvailableRoles(result.roles.filter((r: Role) => r.name !== "super_admin"));
     } catch {
       if (import.meta.env.DEV) console.error("Failed to fetch roles");

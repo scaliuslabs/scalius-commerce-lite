@@ -53,26 +53,21 @@ import { usePermissions } from "@/contexts/PermissionContext";
 import { PermissionGate } from "./PermissionGate";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getRbacRoles, getRbacPermissions, createRbacRole, updateRbacRole, deleteRbacRole } from "@/lib/api.functions";
+import {
+  createRbacRole,
+  deleteRbacRole,
+  getRbacPermissions,
+  getRbacRoles,
+  updateRbacRole,
+  type CreateRbacRoleInput,
+  type RbacPermissionMetadata,
+  type RbacRole,
+  type UpdateRbacRoleInput,
+} from "@/lib/api-functions/rbac";
 
-interface Role {
-  id: string;
-  name: string;
-  displayName: string;
-  description: string | null;
-  isSystem: boolean;
-  permissions: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface PermissionMetadata {
-  name: string;
-  displayName: string;
-  description: string;
-  category: string;
-  isSensitive: boolean;
-}
+type Role = RbacRole;
+type PermissionMetadata = RbacPermissionMetadata;
+type RoleUpdateInput = UpdateRbacRoleInput["update"];
 
 interface GroupedPermissions {
   [category: string]: PermissionMetadata[];
@@ -80,7 +75,6 @@ interface GroupedPermissions {
 
 export function RolesManagement() {
   const [roles, setRoles] = useState<Role[]>([]);
-  const [, setAllPermissions] = useState<PermissionMetadata[]>([]);
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -95,13 +89,12 @@ export function RolesManagement() {
       setIsLoading(true);
       try {
         const [rolesData, permsData] = await Promise.all([
-          getRbacRoles() as unknown as Promise<Record<string, unknown>>,
-          getRbacPermissions() as unknown as Promise<Record<string, unknown>>,
+          getRbacRoles(),
+          getRbacPermissions(),
         ]);
 
-        setRoles((rolesData.roles || []) as Role[]);
-        setAllPermissions((permsData.permissions || []) as PermissionMetadata[]);
-        setGroupedPermissions(permsData.grouped as Record<string, PermissionMetadata[]>);
+        setRoles(rolesData.roles);
+        setGroupedPermissions(permsData.grouped);
       } catch (error: unknown) {
         console.error("Error fetching RBAC data:", error);
         toast.error("Failed to load roles and permissions");
@@ -113,15 +106,10 @@ export function RolesManagement() {
     fetchData();
   }, []);
 
-  const handleCreateRole = async (roleData: {
-    name: string;
-    displayName: string;
-    description?: string;
-    permissions: string[];
-  }) => {
+  const handleCreateRole = async (roleData: CreateRbacRoleInput) => {
     try {
-      const data = await createRbacRole({ data: roleData as Record<string, unknown> }) as Record<string, unknown>;
-      setRoles([...roles, data.role as Role]);
+      const data = await createRbacRole({ data: roleData });
+      setRoles([...roles, data.role]);
       toast.success("Role created successfully");
       return true;
     } catch (error: unknown) {
@@ -133,15 +121,11 @@ export function RolesManagement() {
 
   const handleUpdateRole = async (
     roleId: string,
-    updates: {
-      displayName?: string;
-      description?: string;
-      permissions?: string[];
-    }
+    updates: RoleUpdateInput,
   ) => {
     try {
-      const data = await updateRbacRole({ data: { roleId, update: updates as Record<string, unknown> } }) as Record<string, unknown>;
-      setRoles(roles.map((r) => (r.id === roleId ? (data.role as Role) : r)));
+      const data = await updateRbacRole({ data: { roleId, update: updates } });
+      setRoles(roles.map((r) => (r.id === roleId ? data.role : r)));
       toast.success("Role updated successfully");
       return true;
     } catch (error: unknown) {
@@ -233,7 +217,11 @@ export function RolesManagement() {
               role={editingRole}
               groupedPermissions={groupedPermissions}
               onSubmit={async (data) => {
-                const success = await handleUpdateRole(editingRole.id, data);
+                const success = await handleUpdateRole(editingRole.id, {
+                  displayName: data.displayName,
+                  description: data.description,
+                  permissions: data.permissions,
+                });
                 if (success) setEditingRole(null);
               }}
               onCancel={() => setEditingRole(null)}
@@ -329,12 +317,7 @@ function RoleForm({
 }: {
   role?: Role;
   groupedPermissions: GroupedPermissions;
-  onSubmit: (data: {
-    name: string;
-    displayName: string;
-    description?: string;
-    permissions: string[];
-  }) => Promise<boolean | void>;
+  onSubmit: (data: CreateRbacRoleInput) => Promise<boolean | void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(role?.name || "");

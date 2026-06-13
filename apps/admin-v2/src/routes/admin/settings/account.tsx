@@ -34,7 +34,7 @@ function AccountSettingsPage() {
     twoFactorEnabled: !!security.twoFactorMethod,
     twoFactorMethod: security.twoFactorMethod,
   };
-  const permsList = (Array.isArray(permissionsResult) ? permissionsResult : []) as RbacPermission[];
+  const permsList: RbacPermission[] = permissionsResult.permissions;
   const permissions = permsList.map((p) => p.name || p.id);
   const isSuperAdmin = security.isSuperAdmin ?? false;
 
