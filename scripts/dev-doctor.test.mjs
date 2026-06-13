@@ -43,6 +43,10 @@ describe("dev doctor helpers", () => {
     expect(getDoctorConfig(["-h"], {}).help).toBe(true);
   });
 
+  it("rejects missing values for value-style flags", () => {
+    expect(() => getDoctorConfig(["--state"], {})).toThrow(/requires a value/);
+  });
+
   it("formats reports without leaking secret-like details", () => {
     const report = formatTextReport({
       root: "/repo",

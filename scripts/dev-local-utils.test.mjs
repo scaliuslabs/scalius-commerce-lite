@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertLocalSecretSync,
   collectLocalSecretSyncIssues,
+  getArgValue,
   parseEnvFileContent,
   resolveLocalStatePath,
   resolveSharedLocalSecrets,
@@ -57,6 +58,15 @@ describe("local dev script helpers", () => {
   it("resolves relative Wrangler state paths from the repo root", () => {
     expect(resolveLocalStatePath("/repo", "tmp/state")).toBe("/repo/tmp/state");
     expect(resolveLocalStatePath("/repo", "/tmp/state")).toBe("/tmp/state");
+  });
+
+  it("rejects missing values for value-style CLI flags", () => {
+    expect(() => getArgValue(["--admin-password"], "--admin-password")).toThrow(
+      /requires a value/,
+    );
+    expect(() =>
+      getArgValue(["--admin-password", "--skip-admin"], "--admin-password"),
+    ).toThrow(/requires a value/);
   });
 
   it("points shared-secret drift repair at env-only setup", () => {

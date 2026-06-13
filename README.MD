@@ -51,9 +51,9 @@ apps/
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
   storefront/     # @scalius/storefront — Astro 6 SSR customer store (Cloudflare Worker)
 packages/
-  api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec (249 paths, 27k+ types)
+  api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
   core/           # @scalius/core — 21 domain modules, auth, integrations, FTS5 search
-  database/       # @scalius/database — Drizzle schema (13 files, 52 tables), migrations
+  database/       # @scalius/database — Drizzle schema and migrations
   shared/         # @scalius/shared — 65+ pure utility functions across 21 modules
   tsconfig/       # @scalius/tsconfig — Shared TypeScript configs (base, astro, worker)
 scripts/          # Dev setup, deploy pipeline, dev server wrapper
@@ -89,8 +89,8 @@ flowchart TB
     subgraph AdminV2 ["Admin Dashboard (TanStack Start)"]
         direction TB
         TSRouter["TanStack Router<br/>(60+ pages)"]
-        TSQuery["TanStack Query<br/>(78 queryOptions, 115 mutations)"]
-        ServerFns["261 Server Functions<br/>(214 legacy + 47 extracted)"]
+        TSQuery["TanStack Query<br/>(78 queryOptions, 114 mutations)"]
+        ServerFns["251 Typed Server Functions<br/>(domain slices)"]
     end
 
     subgraph Storefront ["Storefront (Astro 6 SSR)"]
@@ -108,7 +108,7 @@ flowchart TB
     end
 
     subgraph Infra ["Cloudflare Infrastructure"]
-        D1[(D1 Database<br/>52 tables)]
+        D1[(D1 Database<br/>Drizzle schema)]
         KV[(KV Namespaces<br/>cache + sessions + auth)]
         R2[(R2 Bucket<br/>media storage)]
         Queues["4 Queues<br/>(payment-events, notifications,<br/>auth-otp, order-ingest)"]
@@ -216,16 +216,16 @@ The admin dashboard is built with **TanStack Start** — a full-stack React fram
 
 ```mermaid
 flowchart LR
-    SF["createServerFn<br/>(214 legacy + 47 extracted)"] --> QO["queryOptions<br/>(78 wrappers)"]
+    SF["createServerFn<br/>(251 typed domain functions)"] --> QO["queryOptions<br/>(78 wrappers)"]
     QO --> L["Route Loader<br/>(ensureQueryData)"]
     L --> C["Component<br/>(useSuspenseQuery)"]
-    C --> M["useMutation<br/>(115 hooks)"]
+    C --> M["useMutation<br/>(114 hooks)"]
     M -->|invalidateQueries| QO
 ```
 
-- **Server Functions**: 214 functions remain in the legacy `api.functions.ts` barrel, plus 47 extracted typed functions under `api-functions/`
+- **Server Functions**: 251 typed functions live under domain slices in `src/lib/api-functions/`
 - **Query Options** (`api.queries.ts`): 78 React Query wrappers with 7 staleTime tiers (10s → 1hr)
-- **Mutations** (`api.mutations.ts`): 115 exported hooks with cache invalidation and toast notifications
+- **Mutations** (`api.mutations.ts`): 114 exported hooks with cache invalidation and toast notifications
 - **Stale-While-Revalidate**: Detail queries use `staleTime: 0` + loader `staleTime: Infinity` for instant navigation
 
 ### Pages (60+)
@@ -319,7 +319,7 @@ All error responses: `{ "success": false, "error": { "code": "...", "message": "
 
 ## Database (`packages/database/`)
 
-**52 tables** across 13 schema files, powered by Drizzle ORM on Cloudflare D1 (SQLite).
+Drizzle schema and SQL migrations for Cloudflare D1 (SQLite). The schema declarations and migration journal are the source of truth; avoid copying volatile table or migration counts into docs.
 
 | Domain | Tables | Key Tables |
 |--------|--------|------------|
@@ -334,7 +334,7 @@ All error responses: `{ "success": false, "error": { "code": "...", "message": "
 | Content | 6 | pages, widgets, widgetHistory, heroSections, heroSliders, pageTemplates |
 | System | 6 | settings, siteSettings, analytics, adminFcmTokens, shippingMethods, checkoutLanguages |
 
-**34 migrations** applied. FTS5 full-text search with Bengali tokenizer (migration 0031).
+FTS5 full-text search with Bengali tokenizer is enabled by migration `0031`.
 
 ---
 
@@ -381,13 +381,14 @@ pnpm dev:doctor         # Diagnose local env, state, ports, and service readines
 ### 1) First-time setup
 
 ```bash
+nvm use
 pnpm dev:doctor
 pnpm dev:setup
 ```
 
-`pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
+Use Node 22 from `.nvmrc`; `pnpm dev:doctor` warns when your active Node version differs. `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
-Use `pnpm dev:setup --env-only` when `dev:doctor` only reports missing or stale env files. It repairs `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin.
+Use `pnpm dev:setup --env-only` when `dev:doctor` reports missing or incomplete env files. It appends missing/blank keys in `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin; use `--force --env-only` only when you intentionally want to regenerate local env files.
 
 Default local admin:
 
@@ -418,7 +419,7 @@ pnpm dev:doctor --require-running
 
 The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, staggers startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
 
-Use `pnpm dev:doctor --require-running` after the dev servers are up to verify API, admin, and storefront are reachable.
+Use `pnpm dev:doctor --require-running` after the full `pnpm dev` stack is up to verify API, admin, and storefront are reachable. After `pnpm dev:admin` or `pnpm dev:storefront`, run plain `pnpm dev:doctor` and expect a warning for the intentionally stopped app.
 
 API local dev uses `apps/api/wrangler.local.jsonc`, which intentionally omits the remote Workers AI binding. Normal local admin/storefront/API work should not require Cloudflare remote proxy access. Production build/deploy still use `apps/api/wrangler.jsonc`.
 
@@ -525,7 +526,7 @@ deploy.
 
 | Binding | Type | Purpose |
 |---------|------|---------|
-| `DB` | D1 | Shared SQLite database (52 tables) |
+| `DB` | D1 | Shared SQLite database |
 | `CACHE` | KV | General caching |
 | `SESSION` | KV | Better Auth sessions |
 | `SHARED_AUTH_CACHE` | KV | Cross-worker auth token cache |

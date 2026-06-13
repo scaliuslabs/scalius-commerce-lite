@@ -27,11 +27,25 @@ export function parseOptions(rawArgs) {
   return parsed;
 }
 
+export function assertStringOptions(options, optionNames) {
+  for (const name of optionNames) {
+    if (options[name] === true) {
+      throw new Error(`Option --${name} requires a value.`);
+    }
+  }
+}
+
 export function getArgValue(args, name) {
   const inline = args.find((arg) => arg.startsWith(`${name}=`));
   if (inline) return inline.slice(name.length + 1);
   const index = args.indexOf(name);
-  if (index >= 0) return args[index + 1];
+  if (index >= 0) {
+    const value = args[index + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`Option ${name} requires a value.`);
+    }
+    return value;
+  }
   return undefined;
 }
 
@@ -52,6 +66,9 @@ export function assertLocalUrl(value) {
 }
 
 export function assertPassword(password) {
+  if (typeof password !== "string") {
+    throw new Error("Local admin password must be provided as a string.");
+  }
   if (password.length < 12) {
     throw new Error("Local admin password must be at least 12 characters.");
   }
