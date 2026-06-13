@@ -373,6 +373,10 @@ pnpm dev:admin:create   # Create local admin if none exists
 pnpm dev:admin:reset    # Reset local auth/admin credentials only
 pnpm dev:admin:status   # Check whether a local admin exists
 pnpm dev:doctor         # Diagnose local env, state, ports, and service readiness
+pnpm dev:doctor:api     # Require API :8787 to be running
+pnpm dev:doctor:admin   # Require API :8787 + admin-v2 :4323 to be running
+pnpm dev:doctor:storefront  # Require API :8787 + storefront :4322 to be running
+pnpm dev:doctor:all     # Require API, admin-v2, and storefront to be running
 ```
 
 ---
@@ -416,12 +420,12 @@ pnpm dev              # API + admin-v2 + storefront
 pnpm dev:api          # API only
 pnpm dev:admin        # API + admin-v2 only
 pnpm dev:storefront   # API + storefront only
-pnpm dev:doctor --require-running
+pnpm dev:doctor:all   # Verify full stack after pnpm dev
 ```
 
 The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, waits for API `/api/v1/setup` before starting admin/storefront, staggers admin/storefront startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
 
-Use `pnpm dev:doctor --require-running` after the full `pnpm dev` stack is up to verify API, admin, and storefront are reachable. After `pnpm dev:admin` or `pnpm dev:storefront`, run plain `pnpm dev:doctor` and expect a warning for the intentionally stopped app.
+Use the matching doctor command after startup: `pnpm dev:doctor:api` after `pnpm dev:api`, `pnpm dev:doctor:admin` after `pnpm dev:admin`, `pnpm dev:doctor:storefront` after `pnpm dev:storefront`, and `pnpm dev:doctor:all` after the full `pnpm dev` stack. Plain `pnpm dev:doctor` remains a non-mutating broad overview and will warn when a service is intentionally stopped.
 
 API local dev uses `apps/api/wrangler.local.jsonc`, which intentionally omits the remote Workers AI binding. Normal local admin/storefront/API work should not require Cloudflare remote proxy access. Production build/deploy still use `apps/api/wrangler.jsonc`.
 
