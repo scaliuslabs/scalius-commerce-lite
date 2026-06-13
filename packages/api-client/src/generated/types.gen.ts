@@ -24263,14 +24263,16 @@ export type GetApiV1AdminAuth2FaInfoResponses = {
 
 export type GetApiV1AdminAuth2FaInfoResponse = GetApiV1AdminAuth2FaInfoResponses[keyof GetApiV1AdminAuth2FaInfoResponses];
 
-export type PostApiV1AdminAuth2FaMarkVerifiedData = {
-    body?: never;
+export type PostApiV1AdminAuth2FaCompleteVerificationData = {
+    body?: {
+        sessionToken: string;
+    };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/auth/2fa/mark-verified';
+    url: '/api/v1/admin/auth/2fa/complete-verification';
 };
 
-export type PostApiV1AdminAuth2FaMarkVerifiedErrors = {
+export type PostApiV1AdminAuth2FaCompleteVerificationErrors = {
     /**
      * Validation error
      */
@@ -24328,11 +24330,11 @@ export type PostApiV1AdminAuth2FaMarkVerifiedErrors = {
     };
 };
 
-export type PostApiV1AdminAuth2FaMarkVerifiedError = PostApiV1AdminAuth2FaMarkVerifiedErrors[keyof PostApiV1AdminAuth2FaMarkVerifiedErrors];
+export type PostApiV1AdminAuth2FaCompleteVerificationError = PostApiV1AdminAuth2FaCompleteVerificationErrors[keyof PostApiV1AdminAuth2FaCompleteVerificationErrors];
 
-export type PostApiV1AdminAuth2FaMarkVerifiedResponses = {
+export type PostApiV1AdminAuth2FaCompleteVerificationResponses = {
     /**
-     * Session marked as verified
+     * 2FA verification completed
      */
     200: {
         success: true;
@@ -24342,7 +24344,7 @@ export type PostApiV1AdminAuth2FaMarkVerifiedResponses = {
     };
 };
 
-export type PostApiV1AdminAuth2FaMarkVerifiedResponse = PostApiV1AdminAuth2FaMarkVerifiedResponses[keyof PostApiV1AdminAuth2FaMarkVerifiedResponses];
+export type PostApiV1AdminAuth2FaCompleteVerificationResponse = PostApiV1AdminAuth2FaCompleteVerificationResponses[keyof PostApiV1AdminAuth2FaCompleteVerificationResponses];
 
 export type PostApiV1AdminAuth2FaMethodData = {
     body?: {
@@ -24431,7 +24433,7 @@ export type PostApiV1AdminAuth2FaVerifyData = {
     body?: {
         code: string;
         trustDevice?: boolean;
-        type?: string;
+        type?: 'totp' | 'email' | 'backup';
     };
     path?: never;
     query?: never;

@@ -77742,15 +77742,33 @@
         }
       }
     },
-    "/api/v1/admin/auth/2fa/mark-verified": {
+    "/api/v1/admin/auth/2fa/complete-verification": {
       "post": {
         "tags": [
           "Admin - Auth Management"
         ],
-        "summary": "Mark session as 2FA verified",
+        "summary": "Complete 2FA verification for a proven session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionToken": {
+                    "type": "string",
+                    "minLength": 32
+                  }
+                },
+                "required": [
+                  "sessionToken"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Session marked as verified",
+            "description": "2FA verification completed",
             "content": {
               "application/json": {
                 "schema": {
@@ -78262,6 +78280,11 @@
                   },
                   "type": {
                     "type": "string",
+                    "enum": [
+                      "totp",
+                      "email",
+                      "backup"
+                    ],
                     "default": "totp"
                   }
                 },

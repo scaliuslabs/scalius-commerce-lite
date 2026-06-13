@@ -11,16 +11,13 @@
     "./factory": "./src/client-factory.ts"
   },
   "scripts": {
-    "generate": "node --import tsx scripts/generate-spec.ts && openapi-ts && node scripts/post-generate.mjs",
+    "generate": "node --import tsx scripts/generate-spec.ts && openapi-ts",
     "generate:spec": "node --import tsx scripts/generate-spec.ts",
     "lint": "eslint src/ scripts/",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@hey-api/client-fetch": "^0.8.0"
-  },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.97.1",
+    "@hey-api/openapi-ts": "^0.98.2",
     "@scalius/tsconfig": "workspace:*",
     "tsx": "^4.19.0"
   }

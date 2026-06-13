@@ -67,7 +67,7 @@ packages/
 
 ### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 351 operations. Has runtime dependency `@hey-api/client-fetch`. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 351 operations. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
 - **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 39 SQL migrations (`0000` through `0038`).
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.
@@ -293,7 +293,7 @@ Storefront should use its configured SDK clients from `apps/storefront/src/lib/a
 @scalius/shared          → external utility deps only
 @scalius/database        → drizzle-orm
 @scalius/core            → @scalius/database, @scalius/shared, better-auth, zod, stripe, etc.
-@scalius/api-client      → @hey-api/client-fetch (generated SDK)
+@scalius/api-client      → generated SDK only (dev generator: @hey-api/openapi-ts)
 @scalius/api             → @scalius/core, @scalius/database, @scalius/shared, hono
 @scalius/admin-v2        → @scalius/core, @scalius/database, @scalius/shared, @scalius/api-client, TanStack Start, React
 @scalius/storefront      → @scalius/shared, @scalius/api-client, Astro, React

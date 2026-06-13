@@ -14,7 +14,7 @@ README prose for endpoint counts because the API surface changes often.
 | `src/generated/types.gen.ts` | Typed request/response interfaces for generated API endpoints |
 | `src/generated/sdk.gen.ts` | Typed SDK methods generated from OpenAPI operations |
 | `src/generated/client.gen.ts` | Generated default HTTP client |
-| `src/generated/client-core.ts` | Generated client core used by the custom client factory |
+| `src/generated/client/` | Bundled generated Fetch client used by the default client and factory |
 | `src/generated/index.ts` | Barrel re-export of all generated files |
 | `src/client-factory.ts` | Transport-agnostic client factory (Service Binding or HTTP) |
 | `src/index.ts` | Root barrel re-export of generated types, SDK, client, and factory |
@@ -103,7 +103,7 @@ pnpm generate:sdk
 2. **`openapi-ts`** (via `openapi-ts.config.ts`) reads `openapi.json` and generates:
    - `src/generated/types.gen.ts` -- TypeScript types for all request/response schemas
    - `src/generated/sdk.gen.ts` -- Typed SDK methods (one per endpoint)
-   - `src/generated/client.gen.ts` -- HTTP client using `@hey-api/client-fetch`
+   - `src/generated/client.gen.ts` and `src/generated/client/**` -- default client plus bundled Fetch client
 
 ### Configuration
 
@@ -113,7 +113,7 @@ pnpm generate:sdk
 |--------|---------|
 | `@hey-api/typescript` | Generate TypeScript types from OpenAPI schemas |
 | `@hey-api/sdk` | Generate typed SDK methods from OpenAPI operations |
-| `@hey-api/client-fetch` | Bundle the Fetch-based HTTP client |
+| `@hey-api/client-fetch` | Generate the bundled Fetch-based HTTP client |
 
 ## Consumers
 
@@ -127,7 +127,6 @@ Both admin and storefront import types and SDK methods:
 | Package | Purpose |
 |---------|---------|
 | `@hey-api/openapi-ts` (dev) | Code generation from OpenAPI spec |
-| `@hey-api/client-fetch` | Runtime Fetch client used by generated output |
 | `tsx` (dev) | TypeScript execution for the spec generation script |
 
 ## Known Gaps

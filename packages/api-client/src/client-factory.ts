@@ -5,7 +5,7 @@
  * - Service Binding: zero-latency RPC inside Cloudflare Workers (admin env.API, storefront env.BACKEND_API)
  * - HTTP: standard fetch for dev mode or external consumers
  */
-import { createClient, createConfig, type Client, type Config } from "./generated/client-core";
+import { createClient, createConfig, type Client, type Config } from "./generated/client";
 
 interface ServiceBindingOptions {
   /** Cloudflare Service Binding (env.API or env.BACKEND_API) */
@@ -27,7 +27,7 @@ export function createServiceBindingClient(options: ServiceBindingOptions): Clie
     createConfig({
       baseUrl: "http://api.internal",
       headers: options.headers,
-      fetch: (request: Request) => options.serviceBinding.fetch(request),
+      fetch: (input, init) => options.serviceBinding.fetch(input, init),
     }),
   );
 }

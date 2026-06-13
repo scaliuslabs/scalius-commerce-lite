@@ -599,6 +599,14 @@ Fix direction: keep app-local env files in Turbo global file inputs and declare 
 
 Status: Verified on 2026-06-14. `turbo.json` now includes the app env file globs in `globalDependencies` and the build-time env names in `globalEnv`; `scripts/turbo-config.test.mjs` guards the config. Turbo dry-run JSON shows app env files under `globalCacheInputs.files` and declared env names under `globalCacheInputs.environmentVariables.specified.env`; env values set for the dry run appear in `configured`.
 
+### SDK-001: Generated SDK runtime package is deprecated
+
+`@scalius/api-client` still depended on deprecated `@hey-api/client-fetch`, even though current `@hey-api/openapi-ts` bundles the Fetch client generator directly. The package also had a post-generation shim that rewrote generated imports to a custom `client-core.ts`, making SDK regeneration more fragile than necessary.
+
+Fix direction: update to the latest compatible `@hey-api/openapi-ts`, remove the deprecated runtime package and post-generation shim, point custom factories at the generated bundled client, regenerate the SDK, and typecheck API-client consumers.
+
+Status: Verified on 2026-06-14. Npm reports `@hey-api/openapi-ts` 0.98.2 as current and `@hey-api/client-fetch` as deprecated. The API client now uses `@hey-api/openapi-ts` 0.98.2, has no `@hey-api/client-fetch` runtime dependency, deletes `scripts/post-generate.mjs` and `src/generated/client-core.ts`, and imports `./generated/client` directly. Verification covered SDK regeneration from a live local API worker, API-client/admin/storefront focused typechecks, root typecheck, root tests, root lint, dependency audit, and diff checks.
+
 ### TEST-002: Storefront focused tests are blocked by missing `happy-dom`
 
 Storefront Vitest config requires `happy-dom`, but the storefront package does not declare it.
@@ -615,7 +623,7 @@ Status: Verified on 2026-06-13. `happy-dom` is now declared in the storefront pa
 
 Fix direction: remove volatile counts from prose or generate them automatically.
 
-Status: Verified on 2026-06-13. The API-client README now points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and correctly lists `@hey-api/client-fetch` as a runtime dependency. The database README now avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0037`, and removes a stale singleton-constraint limitation.
+Status: Verified on 2026-06-14. The API-client README points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and documents the bundled generated Fetch client instead of the deprecated `@hey-api/client-fetch` runtime package. The database README avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0037`, and removes a stale singleton-constraint limitation.
 
 ### CLEAN-001: Route directory contains `.DS_Store`
 

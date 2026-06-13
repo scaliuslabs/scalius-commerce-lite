@@ -373,9 +373,21 @@ Use these checks to verify:
 OpenAPI/SDK:
 
 ```bash
+pnpm view @hey-api/openapi-ts version engines peerDependencies dependencies --json
+pnpm view @hey-api/client-fetch version deprecated --json
 pnpm generate:sdk
+pnpm --filter @scalius/api-client typecheck
+pnpm --filter @scalius/admin-v2 typecheck
+pnpm --filter @scalius/storefront typecheck
+! rg -n '@hey-api/client-fetch|src/generated/client-core|scripts/post-generate|generated/client-core|\./client-core' \
+  packages/api-client/package.json \
+  packages/api-client/src \
+  packages/api-client/scripts \
+  pnpm-lock.yaml
 git diff --exit-code packages/api-client/openapi.json packages/api-client/src/generated
 ```
+
+The `@hey-api/client-fetch` plugin name should remain only in `packages/api-client/openapi-ts.config.ts`/docs as a bundled generator plugin, not as a package dependency or generated runtime shim.
 
 Database:
 
