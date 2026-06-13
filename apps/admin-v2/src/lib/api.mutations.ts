@@ -108,12 +108,6 @@ import {
   softDeleteCheckoutLanguage,
   deleteCheckoutLanguage,
   restoreCheckoutLanguage,
-  // Shipping Methods
-  createShippingMethod,
-  updateShippingMethod,
-  deleteShippingMethod,
-  permanentDeleteShippingMethod,
-  restoreShippingMethod,
   // Delivery Locations
   createDeliveryLocation,
   updateDeliveryLocation,
@@ -152,6 +146,14 @@ import {
   updateStorefrontUrl,
   updateThemeSettings,
 } from "./api-functions/settings";
+import {
+  createShippingMethod,
+  deleteShippingMethod,
+  permanentDeleteShippingMethod,
+  restoreShippingMethod,
+  type ShippingMethodWriteInput,
+  updateShippingMethod,
+} from "./api-functions/shipping-methods";
 
 // ═══════════════════════════════════════════════════════════════════
 //  PRODUCTS
@@ -1965,7 +1967,7 @@ export function useRestoreCheckoutLanguage() {
 export function useCreateShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: ShippingMethodWriteInput) =>
       createShippingMethod({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -1981,7 +1983,7 @@ export function useCreateShippingMethod() {
 export function useUpdateShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
+    mutationFn: (data: { id: string; update: ShippingMethodWriteInput }) =>
       updateShippingMethod({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({

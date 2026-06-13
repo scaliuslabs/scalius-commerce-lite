@@ -1467,62 +1467,6 @@ export const restoreCheckoutLanguage = createServerFn({ method: "POST" })
     return apiPost(`/settings/checkout-languages/${data.id}/restore`);
   });
 
-// ─── Shipping Methods ────────────────────────────────────────────
-
-export const getShippingMethods = createServerFn({ method: "GET" })
-  .inputValidator(
-    (data: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      sort?: string;
-      order?: string;
-      trashed?: boolean;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const params: Record<string, string> = {};
-    if (data.page) params.page = String(data.page);
-    if (data.limit) params.limit = String(data.limit);
-    if (data.search) params.search = data.search;
-    if (data.sort) params.sort = data.sort;
-    if (data.order) params.order = data.order;
-    if (data.trashed) params.trashed = "true";
-    return apiGet("/settings/shipping-methods", params);
-  });
-
-export const createShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/settings/shipping-methods", data);
-  });
-
-export const updateShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { id: string; update: Record<string, unknown> }) => data,
-  )
-  .handler(async ({ data }) => {
-    return apiPut(`/settings/shipping-methods/${data.id}`, data.update);
-  });
-
-export const deleteShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/settings/shipping-methods/${data.id}`);
-  });
-
-export const permanentDeleteShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/settings/shipping-methods/${data.id}/permanent-delete`);
-  });
-
-export const restoreShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiPost(`/settings/shipping-methods/${data.id}/restore`);
-  });
-
 // ─── Header/Footer Config ────────────────────────────────────────
 
 export const saveHeaderConfig = createServerFn({ method: "POST" })
