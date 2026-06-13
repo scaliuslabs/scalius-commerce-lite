@@ -2,7 +2,8 @@ import { useState, useEffect, type FC } from "react";
 import type { DeliveryProviderRecord, DeliveryShipment } from "@/types/api-responses";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getDeliveryProviders, createOrderShipment } from "@/lib/api.functions";
+import { createOrderShipment } from "@/lib/api.functions";
+import { getDeliveryProviders } from "@/lib/api-functions/delivery";
 
 interface ShipmentFormProps {
   orderId: string;
@@ -25,9 +26,9 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
     const fetchProviders = async () => {
       setIsLoading(true);
       try {
-        const data = await getDeliveryProviders() as DeliveryProviderRecord[];
+        const data = await getDeliveryProviders();
         // Only show active providers
-        const activeProviders = (Array.isArray(data) ? data : []).filter(
+        const activeProviders = data.filter(
           (p: DeliveryProviderRecord) => p.isActive,
         );
         setProviders(activeProviders);

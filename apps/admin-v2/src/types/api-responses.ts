@@ -389,8 +389,8 @@ export interface DeliveryProviderRecord {
   isActive: boolean;
   credentials: string;
   config: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date | string | number;
+  updatedAt?: Date | string | number;
 }
 
 export interface DeliveryShipment {
