@@ -29,7 +29,12 @@ import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadF
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
-import { createCategory, updateCategory } from "@/lib/api.functions";
+import {
+  createCategory,
+  updateCategory,
+  type CategoryImageInput,
+  type CreateCategoryInput,
+} from "@/lib/api-functions/categories";
 import { LoadingFallback } from "./shared/LoadingFallback";
 import { categoryFormSchema, type CategoryFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
@@ -38,6 +43,32 @@ import { queryKeys } from "@/lib/query-keys";
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
   isEdit?: boolean;
+}
+
+function serializeDate(value: Date | string | undefined): string | undefined {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function serializeCategoryImage(
+  image: CategoryFormValues["image"],
+): CategoryImageInput | null {
+  if (!image) return null;
+  return {
+    ...image,
+    createdAt: serializeDate(image.createdAt) ?? new Date().toISOString(),
+    updatedAt: serializeDate(image.updatedAt),
+  };
+}
+
+function toCategoryInput(values: CategoryFormValues): CreateCategoryInput {
+  return {
+    name: values.name,
+    description: values.description,
+    slug: values.slug,
+    metaTitle: values.metaTitle,
+    metaDescription: values.metaDescription,
+    image: serializeCategoryImage(values.image),
+  };
 }
 
 export function CategoryForm({
@@ -69,8 +100,9 @@ export function CategoryForm({
     entityName: "Category",
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => createCategory({ data: data as unknown as Record<string, unknown> }),
-    updateFn: (data) => updateCategory({ data: data as Record<string, unknown> & { id: string } }),
+    createFn: (data) => createCategory({ data: toCategoryInput(data) }),
+    updateFn: (data) =>
+      updateCategory({ data: { id: data.id, ...toCategoryInput(data) } }),
     invalidateKeys: [
       queryKeys.categories.list(),
       queryKeys.categories.formOptions(),

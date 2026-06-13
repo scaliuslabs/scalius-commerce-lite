@@ -4916,10 +4916,8 @@ export type GetApiV1AdminCategoriesByIdResponses = {
             imageUrl: string | null;
             metaTitle: string | null;
             metaDescription: string | null;
-            createdAt: string | null;
-            updatedAt: string | null;
-            deletedAt: string | null;
-            productCount: number;
+            createdAt: number;
+            updatedAt: number;
         };
     };
 };
@@ -5422,6 +5420,7 @@ export type GetApiV1AdminCollectionsFormOptionsResponses = {
                 id: string;
                 name: string;
                 price: number;
+                categoryId: string | null;
             }>;
         };
     };

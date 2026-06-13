@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
 import { getServerFnError } from "@/lib/api-helpers";
-import { createCategory } from "@/lib/api.functions";
+import { createCategory } from "@/lib/api-functions/categories";
 
 export interface Category {
   id: string;
@@ -160,10 +160,10 @@ function CategoryCombobox({
           metaDescription: null,
           image: null,
         },
-      }) as Record<string, unknown>;
+      });
 
       const newCategory: Category = {
-        id: data.id as string,
+        id: data.id,
         name: search.trim(),
       };
 

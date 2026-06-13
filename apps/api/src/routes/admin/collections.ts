@@ -43,7 +43,12 @@ const formOptionsRoute = createRoute({
             description: "Form options",
             content: { "application/json": { schema: successEnvelope(z.object({
                 categories: z.array(z.object({ id: z.string(), name: z.string() })),
-                products: z.array(z.object({ id: z.string(), name: z.string(), price: z.number() })),
+                products: z.array(z.object({
+                    id: z.string(),
+                    name: z.string(),
+                    price: z.number(),
+                    categoryId: z.string().nullable(),
+                })),
             })) } },
         },
         ...errorResponses,
@@ -57,7 +62,12 @@ app.openapi(formOptionsRoute, async (c) => {
             .from(categories)
             .where(isNull(categories.deletedAt))
             .limit(500),
-        db.select({ id: products.id, name: products.name, price: products.price })
+        db.select({
+            id: products.id,
+            name: products.name,
+            price: products.price,
+            categoryId: products.categoryId,
+        })
             .from(products)
             .where(isNull(products.deletedAt))
             .limit(500),

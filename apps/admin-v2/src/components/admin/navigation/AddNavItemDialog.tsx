@@ -38,7 +38,7 @@ import {
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import type { NavigationItem, NavigationSource } from "./types";
-import { getCategories } from "~/lib/api.functions";
+import { getCategories } from "~/lib/api-functions/categories";
 import {
   getAttributes,
   getAttributeValues,
@@ -153,14 +153,11 @@ export function AddNavItemDialog({
       }
 
       try {
-        const data = (await getCategories({
+        const data = await getCategories({
           data: { page, limit: PAGE_SIZE, search: search || undefined },
-        })) as {
-          categories?: Array<{ id: string; name: string; slug: string; [key: string]: unknown }>;
-          pagination?: { total: number; totalPages: number; page: number };
-        };
+        });
 
-        const cats: NavigationSource[] = (data.categories || []).map((c) => ({
+        const cats: NavigationSource[] = data.categories.map((c) => ({
           id: c.id,
           name: c.name,
           slug: c.slug,
@@ -168,7 +165,7 @@ export function AddNavItemDialog({
           url: `/categories/${c.slug}`,
         }));
 
-        const pagination = data.pagination || { total: 0, totalPages: 1, page: 1 };
+        const pagination = data.pagination;
 
         setCatState((prev) => ({
           items: append ? [...prev.items, ...cats] : cats,

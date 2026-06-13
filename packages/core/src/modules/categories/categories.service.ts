@@ -37,7 +37,7 @@ export async function listCategories(
         sort = "updatedAt",
         order = "desc",
     } = options;
-    const limit = Math.min(Math.max(rawLimit, 1), 100);
+    const limit = Math.min(Math.max(rawLimit, 1), 500);
 
     const whereConditions: (SQL | undefined)[] = [];
 

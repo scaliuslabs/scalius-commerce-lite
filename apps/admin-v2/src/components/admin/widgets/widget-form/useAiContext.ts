@@ -4,7 +4,11 @@ import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { Category } from '@/types/api-responses';
 import type { MediaFile, ProductSearchResult } from './types';
-import { getProducts, getCategories } from "@/lib/api.functions";
+import { getProducts } from "@/lib/api.functions";
+import {
+  getCategories,
+  type CategoryListItemDto,
+} from "@/lib/api-functions/categories";
 import {
   AI_CONTEXT_LIMITS,
   appendUniqueWithinLimit,
@@ -16,6 +20,20 @@ import {
 } from "./ai-product-selector";
 
 const PAGE_SIZE = 10;
+
+function toDate(value: string | number | null): Date | null {
+  if (value == null) return null;
+  return new Date(typeof value === "number" && value < 1_000_000_000_000 ? value * 1000 : value);
+}
+
+function toWidgetCategory(category: CategoryListItemDto): Category {
+  return {
+    ...category,
+    createdAt: toDate(category.createdAt) ?? new Date(0),
+    updatedAt: toDate(category.updatedAt) ?? new Date(0),
+    deletedAt: toDate(category.deletedAt),
+  };
+}
 
 interface AiContextSelection {
   images?: MediaFile[];
@@ -188,15 +206,15 @@ export const useAiContext = (
         limit: PAGE_SIZE,
       };
       if (normalizedSearch) params.search = normalizedSearch;
-      const data = await getCategories({ data: params }) as Record<string, unknown>;
+      const data = await getCategories({ data: params });
       if (requestId !== categoryRequestId.current) return;
 
-      const newCategories = (data.categories || []) as Category[];
+      const newCategories = data.categories.map(toWidgetCategory);
       setAllCategoriesList((prev) => pageToFetch === 1 ? newCategories : [...prev, ...newCategories]);
       setCategoryPage(pageToFetch);
-      const pagination = data.pagination as Record<string, unknown> | undefined;
+      const pagination = data.pagination;
       if (pagination) {
-        setHasMoreCategories((pagination.totalPages as number) > pageToFetch);
+        setHasMoreCategories(pagination.totalPages > pageToFetch);
       } else {
         // If no pagination info, assume no more if fewer than PAGE_SIZE returned
         setHasMoreCategories(newCategories.length >= PAGE_SIZE);

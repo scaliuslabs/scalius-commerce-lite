@@ -1,5 +1,5 @@
 //src/components/admin/discount/CollectionSelector.tsx
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Command,
   CommandEmpty,
@@ -13,7 +13,7 @@ import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Folder, Loader2, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
-import { getCollections } from "~/lib/api.functions";
+import { getCollections } from "~/lib/api-functions/collections";
 
 // Collection interface
 interface Collection {
@@ -54,7 +54,54 @@ export function CollectionSelector({
   const [totalPages, setTotalPages] = useState(1);
   const [totalCollections, setTotalCollections] = useState(0);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestSearchTermRef = useRef(searchTerm);
   const resolvedRef = useRef(false);
+
+  useEffect(() => {
+    latestSearchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  const loadCollections = useCallback(async (page = 1, search = "") => {
+    try {
+      if (page === 1) {
+        setIsSearching(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      const data = await getCollections({
+        data: {
+          limit: PAGE_SIZE,
+          page,
+          search: search.trim() || undefined,
+        },
+      });
+
+      const collectionsArray = data.collections;
+      const mapped: Collection[] = collectionsArray.map((c) => ({
+        id: c.id,
+        name: c.name,
+        description: null,
+        slug: "",
+        type: c.type,
+      }));
+
+      if (page === 1) {
+        setDisplayedCollections(mapped);
+      } else {
+        setDisplayedCollections((prev) => [...prev, ...mapped]);
+      }
+
+      setTotalPages(data.pagination?.totalPages || 1);
+      setTotalCollections(data.pagination?.total || 0);
+      setCurrentPage(page);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Error loading collections:", error);
+    } finally {
+      setIsSearching(false);
+      setIsLoadingMore(false);
+    }
+  }, []);
 
   // Resolve initially selected collections that only have IDs (name === id)
   useEffect(() => {
@@ -69,15 +116,9 @@ export function CollectionSelector({
 
     const resolveNames = async () => {
       try {
-        const data = (await getCollections({
+        const data = await getCollections({
           data: { limit: 100 },
-        })) as {
-          collections: Array<{
-            id: string;
-            name: string;
-            type?: "manual" | "dynamic";
-          }>;
-        };
+        });
         const allCollections = data.collections || [];
         const collectionMap = new Map(
           allCollections.map((c) => [c.id, c]),
@@ -116,9 +157,9 @@ export function CollectionSelector({
   // Load collections when dropdown opens
   useEffect(() => {
     if (open) {
-      loadCollections();
+      loadCollections(1, latestSearchTermRef.current);
     }
-  }, [open]);
+  }, [loadCollections, open]);
 
   // Handle search input changes
   useEffect(() => {
@@ -134,7 +175,7 @@ export function CollectionSelector({
     }
 
     searchTimeoutRef.current = setTimeout(() => {
-      loadCollections();
+      loadCollections(1, searchTerm);
     }, 300);
 
     return () => {
@@ -142,58 +183,12 @@ export function CollectionSelector({
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchTerm, open]);
-
-  // Main function to load collections
-  const loadCollections = async (page = 1) => {
-    try {
-      if (page === 1) {
-        setIsSearching(true);
-      } else {
-        setIsLoadingMore(true);
-      }
-
-      const data = (await getCollections({
-        data: {
-          limit: PAGE_SIZE,
-          page,
-          search: searchTerm.trim() || undefined,
-        },
-      })) as {
-        collections?: Array<Record<string, unknown>>;
-        pagination?: { totalPages: number; total: number };
-      };
-
-      const collectionsArray = data.collections || [];
-      const mapped: Collection[] = collectionsArray.map((c) => ({
-        id: c.id as string,
-        name: c.name as string,
-        description: (c.description as string) || null,
-        slug: (c.slug as string) || "",
-        type: (c.type as "manual" | "dynamic") || undefined,
-      }));
-
-      if (page === 1) {
-        setDisplayedCollections(mapped);
-      } else {
-        setDisplayedCollections((prev) => [...prev, ...mapped]);
-      }
-
-      setTotalPages(data.pagination?.totalPages || 1);
-      setTotalCollections(data.pagination?.total || 0);
-      setCurrentPage(page);
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error loading collections:", error);
-    } finally {
-      setIsSearching(false);
-      setIsLoadingMore(false);
-    }
-  };
+  }, [currentPage, loadCollections, open, searchTerm]);
 
   // Load more collections for pagination
   const loadMoreCollections = () => {
     if (currentPage < totalPages && !isLoadingMore) {
-      loadCollections(currentPage + 1);
+      loadCollections(currentPage + 1, searchTerm);
     }
   };
 

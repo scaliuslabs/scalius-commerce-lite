@@ -2,7 +2,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CollectionForm } from "~/components/admin/collection-form";
 import { collectionQueryOptions, collectionFormOptionsQueryOptions } from "~/lib/api.queries";
-import type { Collection } from "~/types/api-responses";
 import type { Category, Product } from "~/components/admin/collection-form/types";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 
@@ -24,8 +23,8 @@ function EditCollectionPage() {
   const { data: collectionData } = useSuspenseQuery(collectionQueryOptions(collectionId));
   const { data: formOptions } = useSuspenseQuery(collectionFormOptionsQueryOptions());
 
-  const c = collectionData as Collection;
-  const fo = formOptions as { categories?: Category[]; products?: Product[] };
+  const c = collectionData;
+  const fo: { categories?: Category[]; products?: Product[] } = formOptions;
   const parsedConfig = typeof c.config === "string" ? JSON.parse(c.config) : c.config || {};
   const config = {
     categoryIds: parsedConfig.categoryIds || [],

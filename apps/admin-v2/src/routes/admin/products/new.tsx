@@ -32,7 +32,7 @@ export const Route = createFileRoute("/admin/products/new")({
 
 function NewProductPage() {
   const { data: categoryData } = useSuspenseQuery(categoryFormOptionsQueryOptions());
-  const allCategories = ((categoryData as Record<string, unknown>)?.categories ?? []) as Category[];
+  const allCategories = categoryData.categories as Category[];
 
   return (
     <div className="container max-w-7xl py-4 pb-8">
