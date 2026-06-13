@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later re-audit opened new active P1/P2 items (`PAY-004`, `PAY-005`, `ORDER-006` through `ORDER-010`, and `WEBHOOK-001`) that are not covered by the older verified tracker rows.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items (`PAY-004`, `PAY-005`, `ORDER-006` through `ORDER-010`, and `WEBHOOK-001`) that are not covered by the older verified tracker rows.
 
 ## Validation Performed
 
@@ -204,6 +204,14 @@ Admin and storefront framework builds can leave local env files such as `.dev.va
 Fix direction: remove local env files after framework builds and fail deploy if any app `dist/` output still contains `.dev.vars`, `.env*`, or `*.vars`.
 
 Status: Verified on 2026-06-13. Admin/storefront build scripts now clean dist env files, Turbo build outputs exclude local env files, package-local deploy scripts route through the root safety wrapper, `scripts/deploy.mjs` checks all target dist outputs before deploy, and `pnpm check:dist-secrets` exposes the guard directly. Verification covered script syntax, cleanup, check mode, focused Vitest for the cleanup script, admin/storefront builds, direct dist-secret checks, and a Turbo build dry-run showing secret-like files excluded from outputs. See `BUILD-003` in `REMEDIATION_TRACKER.md`.
+
+### AUTH-001: Admin login/setup can fail from Better Auth schema drift and partial setup state
+
+Local `/admin` verification exposed two admin-auth readiness failures: Better Auth session creation rejected the configured additional session field because `fieldName` used the physical SQL column name instead of the Drizzle schema key, and first-admin setup could return a 500 when Better Auth had already inserted the user but the route failed before promoting it to admin. The unauthenticated `/admin` SSR opt-out also caused a React hydration mismatch by rendering the admin pending shell before the client redirected to `/auth/login`.
+
+Fix direction: align Better Auth additional-field mapping with the Drizzle schema key, make first-admin setup recover partially-created first users and release setup locks in `finally`, and let the `/admin` guard run during SSR so unauthenticated requests server-redirect before HTML is emitted.
+
+Status: Verified on 2026-06-13. `twoFactorVerified` maps to the Drizzle `session.twoFactorVerified` field, setup recovers the partial first-admin state and releases the KV lock, unauthenticated `/admin` returns `307 /auth/login`, authenticated local browser login renders the dashboard, and chart containers start Recharts with a valid initial size. Full `pnpm run deploy` completed after typecheck/build/migration gates, and live browser checks confirmed `https://dashboard.scalius.com/admin` reaches the login page without console errors while `https://storefront.scalius.com/` renders successfully. See `AUTH-001` in `REMEDIATION_TRACKER.md`.
 
 ### PAY-004: Public payment sessions still trust caller-selected deposit/manual-capture fields
 

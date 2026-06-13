@@ -548,6 +548,20 @@ const setupSchema = z.object({
     password: z.string().min(12, "Password must be at least 12 characters")
 });
 
+function isBetterAuthUserAlreadyExistsError(error: unknown): boolean {
+    const candidate = error as {
+        body?: { code?: string; message?: string };
+        message?: string;
+        statusCode?: number;
+    };
+
+    return (
+        candidate?.body?.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL" ||
+        candidate?.body?.message === "User already exists. Use another email." ||
+        candidate?.message === "User already exists. Use another email."
+    );
+}
+
 const setupRoute = createRoute({
     method: "post",
     path: "/",
@@ -582,6 +596,7 @@ setupApp.openapi(setupRoute, async (c) => {
     const rateLimitKey = `setup_rate:${ip}`;
     const setupLockKey = "setup:admin_creation_lock";
     const kv = env.CACHE as KVNamespace | undefined;
+    let setupLockAcquired = false;
     if (kv) {
         const raw = await kv.get(rateLimitKey);
         const attempts = raw ? parseInt(raw, 10) : 0;
@@ -597,23 +612,64 @@ setupApp.openapi(setupRoute, async (c) => {
             throw new ConflictError("Admin setup is already in progress. Please wait.");
         }
         await kv.put(setupLockKey, "1", { expirationTtl: 60 });
+        setupLockAcquired = true;
     }
 
     const auth = createAuth(env);
 
     const { name, email, password } = c.req.valid("json");
 
-    const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
-    if (!signUpResult || !signUpResult.user) {
-        throw new ServiceUnavailableError("Could not create user account");
+    try {
+        const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
+        if (!signUpResult || !signUpResult.user) {
+            throw new ServiceUnavailableError("Could not create user account");
+        }
+
+        await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
+
+        const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
+        await autoSeedRbacIfNeeded(db);
+
+        return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
+    } catch (error: unknown) {
+        if (!isBetterAuthUserAlreadyExistsError(error)) {
+            throw error;
+        }
+
+        const existingUser = await db
+            .select({ id: user.id })
+            .from(user)
+            .where(eq(user.email, email))
+            .get();
+
+        if (!existingUser) {
+            throw error;
+        }
+
+        const currentAdminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
+        const currentAdminExists = (currentAdminResult[0]?.count ?? 0) > 0;
+        if (currentAdminExists) {
+            throw new ForbiddenError("An admin user already exists. Please use the login page.");
+        }
+
+        await db
+            .update(user)
+            .set({ name, role: "admin", isSuperAdmin: true, emailVerified: true })
+            .where(eq(user.id, existingUser.id));
+
+        const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
+        await autoSeedRbacIfNeeded(db);
+
+        return created(c, { message: "Admin account recovered successfully", userId: existingUser.id });
+    } finally {
+        if (kv && setupLockAcquired) {
+            try {
+                await kv.delete(setupLockKey);
+            } catch (cleanupError) {
+                console.warn("Failed to release setup lock:", cleanupError);
+            }
+        }
     }
-
-    await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
-
-    const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-    await autoSeedRbacIfNeeded(db);
-
-    return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
 });
 
 export { app as adminAuthManagementRoutes, setupApp as authSetupRoutes };

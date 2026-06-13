@@ -176,6 +176,7 @@ Known local-dev risks:
 - `pnpm dev:doctor` is non-mutating. Plain mode reports missing env/state, non-local or wrong-port local URL values, and warns when servers are not running. Use the matching profile shortcut after startup: `pnpm dev:doctor:api`, `pnpm dev:doctor:admin`, `pnpm dev:doctor:storefront`, or `pnpm dev:doctor:all`.
 - Use `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state` or `--state /tmp/scalius-commerce-state` to test setup/reset/dev against disposable local state without touching the default `.wrangler/state`. Script `--state` values are normalized from the repo root; prefer absolute paths in audit notes.
 - Admin production uses `env.API`; local dev should hit HTTP fallback whenever `PUBLIC_API_BASE_URL` points at localhost. `pnpm dev:doctor` fails local env URL values that point at production domains or the wrong ports. Verify both server functions and `/api/v1/admin/*` browser proxy routes after transport changes.
+- Unauthenticated `/admin` should server-redirect before rendering HTML: `curl -i http://localhost:4323/admin` should return `307` with `location: /auth/login`. Authenticated browser login should render the dashboard without Better Auth session-schema errors.
 - `scripts/dev.sh` kills only Scalius dev ports by default. Set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only when aggressive cleanup is needed.
 
 Local helper regression checks:
@@ -218,6 +219,7 @@ Expected result:
 
 - All D1 migrations apply to the disposable path.
 - `/api/v1/setup` creates the admin.
+- If setup previously inserted a Better Auth user but failed before admin promotion, rerunning `pnpm dev:admin:create` should recover the partial first-admin state instead of returning a 500.
 - Browser login at `http://localhost:4323/auth/login` reaches `/admin`.
 - API worker logs show `GET /api/v1/admin/dashboard 200 OK`.
 - The admin proxy route can be checked with a cookie jar; `GET http://localhost:4323/api/v1/admin/dashboard` should return `200 OK` and `x-proxy-base-url: http://localhost:8787/api/v1`.
