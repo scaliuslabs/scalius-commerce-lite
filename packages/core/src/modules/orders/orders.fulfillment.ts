@@ -5,13 +5,17 @@ import type { Database } from "@scalius/database/client";
 import {
     orders,
     orderItems,
+    codTracking,
     deliveryShipments,
+    CodStatus,
     OrderStatus,
     FulfillmentStatus,
     ItemFulfillmentStatus,
     PaymentMethod,
+    PaymentRecordStatus,
     PaymentStatus,
     ShipmentStatus,
+    orderPayments,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure, validateCODCollectionDetails } from "../payments/cod";
@@ -55,6 +59,31 @@ async function clearShipmentClaim(db: Database, orderId: string, claimId: string
             eq(orders.id, orderId),
             eq(orders.shipmentClaimId, claimId),
         ));
+}
+
+async function hasRecordedCodCollection(db: Database, orderId: string): Promise<boolean> {
+    const payment = await db
+        .select({ id: orderPayments.id })
+        .from(orderPayments)
+        .where(and(
+            eq(orderPayments.orderId, orderId),
+            eq(orderPayments.paymentMethod, PaymentMethod.COD),
+            eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED),
+        ))
+        .get();
+
+    if (!payment) return false;
+
+    const tracking = await db
+        .select({ id: codTracking.id })
+        .from(codTracking)
+        .where(and(
+            eq(codTracking.orderId, orderId),
+            eq(codTracking.codStatus, CodStatus.COLLECTED),
+        ))
+        .get();
+
+    return Boolean(tracking);
 }
 
 async function holdShipmentClaimForReconciliation(db: Database, orderId: string, claimId: string): Promise<void> {
@@ -312,6 +341,19 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
 
     const allItems = await db.select({ id: orderItems.id, fulfillmentStatus: orderItems.fulfillmentStatus }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
     const shipmentItemIds = (body.itemIds as string[] | undefined) ?? allItems.map((i) => i.id);
+    const ownItemIds = new Set(allItems.map((item) => item.id));
+    const uniqueShipmentItemIds = new Set(shipmentItemIds as string[]);
+    const missingItemIds = (shipmentItemIds as string[]).filter((itemId) => !ownItemIds.has(itemId));
+
+    if (shipmentItemIds.length === 0) {
+        throw new ValidationError("At least one order item is required to create a fulfillment shipment");
+    }
+    if (uniqueShipmentItemIds.size !== shipmentItemIds.length) {
+        throw new ValidationError("Fulfillment shipment item IDs must be unique");
+    }
+    if (missingItemIds.length > 0) {
+        throw new ValidationError(`Fulfillment items do not belong to this order: ${missingItemIds.join(", ")}`);
+    }
 
     const alreadyFulfilled = allItems.filter((i) => (shipmentItemIds as string[]).includes(i.id) && (i.fulfillmentStatus === ItemFulfillmentStatus.SHIPPED || i.fulfillmentStatus === ItemFulfillmentStatus.DELIVERED));
     if (alreadyFulfilled.length > 0) throw new ConflictError(`Items already shipped: ${alreadyFulfilled.map((i) => i.id).join(", ")}`);
@@ -333,14 +375,20 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         orderUpdate.status = OrderStatus.SHIPPED;
     }
 
-    const orderClaim = await db.update(orders).set(orderUpdate).where(and(
+    const claimResult = await db.update(orders).set({
+        shipmentClaimId: shipmentId,
+        shipmentClaimExpiresAt: sql`unixepoch() + ${SHIPMENT_CLAIM_LEASE_SECONDS}`,
+        version: order.version + 1,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
         eq(orders.id, orderId),
         eq(orders.version, order.version),
         eq(orders.status, order.status),
         eq(orders.fulfillmentStatus, order.fulfillmentStatus),
+        noActiveShipmentClaimCondition(),
     )).returning({ id: orders.id });
 
-    if (orderClaim.length === 0) {
+    if (claimResult.length === 0) {
         throw new ConflictError("Order was modified by another request. Please reload and try again.");
     }
 
@@ -355,11 +403,40 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     }));
 
     for (const itemId of shipmentItemIds as string[]) {
-        writes.push(db.update(orderItems).set({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED }).where(eq(orderItems.id, itemId)));
+        writes.push(db.update(orderItems).set({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED }).where(and(
+            eq(orderItems.id, itemId),
+            eq(orderItems.orderId, orderId),
+        )));
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    await db.batch(writes as any);
+    writes.push(db.update(orders).set({
+        ...orderUpdate,
+        shipmentClaimId: null,
+        shipmentClaimExpiresAt: null,
+        version: order.version + 2,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(orders.id, orderId),
+        eq(orders.version, order.version + 1),
+        eq(orders.shipmentClaimId, shipmentId),
+    )));
+
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+        await db.batch(writes as any);
+    } catch (error) {
+        const committedShipment = await db
+            .select({ id: deliveryShipments.id })
+            .from(deliveryShipments)
+            .where(eq(deliveryShipments.id, shipmentId))
+            .get();
+
+        if (!committedShipment) {
+            await clearShipmentClaim(db, orderId, shipmentId);
+        }
+
+        throw error;
+    }
 
     const shouldReconcileShipmentInventory =
         isFinalShipment &&
@@ -398,6 +475,8 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         customerEmail: orders.customerEmail,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
+        paidAmount: orders.paidAmount,
+        balanceDue: orders.balanceDue,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
@@ -411,10 +490,19 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     // Validate the status transition before applying any side effects
     validateTransition("order", existingOrder.status, status);
 
-    // Auto-sync payment status for COD orders when delivered/completed
     const isCod = existingOrder.paymentMethod === PaymentMethod.COD;
     const isDeliveredOrCompleted = status === OrderStatus.DELIVERED || status === OrderStatus.COMPLETED;
-    const shouldMarkPaid = isCod && isDeliveredOrCompleted && existingOrder.paymentStatus !== PaymentStatus.PAID;
+    if (isCod && isDeliveredOrCompleted) {
+        const hasCodCollection = await hasRecordedCodCollection(db, orderId);
+        if (
+            !hasCodCollection ||
+            existingOrder.paymentStatus !== PaymentStatus.PAID ||
+            (existingOrder.balanceDue ?? 0) > 0 ||
+            (existingOrder.paidAmount ?? 0) <= 0
+        ) {
+            throw new ValidationError("Record COD collection through the COD action before marking the order delivered or completed.");
+        }
+    }
 
     // Optimistic locking: CAS update FIRST — only proceed with side effects
     // if we win the version check. This prevents the race condition where two
@@ -424,7 +512,6 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         status,
         version: existingOrder.version + 1,
         updatedAt: sql`unixepoch()`,
-        ...(shouldMarkPaid ? { paymentStatus: PaymentStatus.PAID } : {}),
     }).where(and(
         eq(orders.id, orderId),
         eq(orders.version, existingOrder.version),

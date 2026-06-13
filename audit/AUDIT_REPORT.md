@@ -127,9 +127,9 @@ Status: Verified on 2026-06-14. `archiveStaleIncompleteOrders()` now guards the 
 
 Manual fulfillment updates order status/fulfillment before the shipment insert and item updates are batched. A later failure can leave shipped/complete order status without durable shipment rows or shipped items.
 
-Fix direction: batch order update, shipment insert, and item updates together; make retry idempotently repair inventory when shipment/items already committed.
+Fix direction: acquire a private fulfillment claim before visible order status changes, then batch the shipment insert, scoped item updates, and final order status/fulfillment update together; make retry idempotently repair inventory when shipment/items already committed.
 
-Status: Not Started. Add batch-failure and retry-reconciliation tests.
+Status: Verified on 2026-06-14. Manual fulfillment now acquires a private `shipmentClaimId` without publishing shipped/complete state, validates that selected item IDs are non-empty, unique, and owned by the order, scopes item updates by `orderId`, and commits the manual shipment row, item updates, and final order status/fulfillment/claim-clear update in one D1 batch. If the batch fails before a shipment row exists, the private claim is cleared and inventory is untouched. Verification: focused core fulfillment tests, core/API typechecks, core lint, API dry-run build, root `pnpm test`, env/dist-secret checks, API deploy version `37698b5e-89fe-4978-b8df-2e94145021c3`, live API health/OpenAPI/auth/admin/storefront HTTP smoke, dashboard orders browser smoke, and storefront browser smoke.
 
 ### ORDER-014: COD delivered/completed status can mark paid without ledger rows
 
@@ -137,7 +137,7 @@ Generic order status updates can set COD orders to `paymentStatus: paid` on deli
 
 Fix direction: route COD collection through `recordCODCollection()` or require collection details before marking COD paid.
 
-Status: Not Started. Add COD delivered transition tests that reject ledgerless paid status or assert complete ledger/tracking creation.
+Status: Verified on 2026-06-14. Generic order status updates no longer synthesize COD paid state. COD `delivered`/`completed` transitions through the generic status path require successful COD payment evidence, collected COD tracking, `paymentStatus = paid`, positive `paidAmount`, and no remaining `balanceDue`; otherwise callers must use the COD collection action, which records `cod_tracking`, `order_payments`, and order payment totals together. Verification: focused core fulfillment/COD status tests, core/API typechecks, core lint, API dry-run build, root `pnpm test`, env/dist-secret checks, API deploy version `37698b5e-89fe-4978-b8df-2e94145021c3`, live API health/OpenAPI/auth/admin/storefront HTTP smoke, dashboard orders browser smoke, and storefront browser smoke.
 
 ### BUILD-004: Storefront test file is bundled as a public Astro route
 
