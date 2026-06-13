@@ -133,6 +133,7 @@ pnpm dev:reset
 pnpm dev:admin:create
 pnpm dev:admin:reset
 pnpm dev:admin:status
+pnpm dev:doctor
 ```
 
 Expected ports:
@@ -149,6 +150,7 @@ Known local-dev risks:
 - `dev:setup` reuses existing shared secrets when only some local `.dev.vars` files exist, and fails if existing API/admin/storefront shared secrets disagree. Use `pnpm dev:setup --force` when intentionally regenerating all local env files.
 - API local dev uses `apps/api/wrangler.local.jsonc`, which omits the remote Workers AI binding so setup/admin/storefront can boot without a Cloudflare remote proxy session.
 - Dev startup applies pending local D1 migrations before API starts unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
+- `pnpm dev:doctor` is non-mutating. Plain mode reports missing env/state and warns when servers are not running; `pnpm dev:doctor --require-running` treats API/admin/storefront downtime as a failure after you start the stack.
 - Use `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state` or `--state /tmp/scalius-commerce-state` to test setup/reset/dev against disposable local state without touching the default `.wrangler/state`. Script `--state` values are normalized from the repo root; prefer absolute paths in audit notes.
 - Admin production uses `env.API`; local dev should hit HTTP fallback whenever `PUBLIC_API_BASE_URL` points at localhost. Verify both server functions and `/api/v1/admin/*` browser proxy routes after transport changes.
 - `scripts/dev.sh` kills only Scalius dev ports by default. Set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only when aggressive cleanup is needed.
@@ -163,6 +165,7 @@ pnpm dev:reset --state /tmp/scalius-commerce-state \
   --admin-name 'Disposable Admin'
 
 SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:admin
+SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:doctor --require-running
 ```
 
 Expected result:

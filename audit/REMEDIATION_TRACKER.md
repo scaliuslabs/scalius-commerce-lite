@@ -129,6 +129,7 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 - `pnpm dev:admin:create --help`, `pnpm dev:setup --help`, and `pnpm dev:reset --help` print the new local admin options.
 - `pnpm dev:setup` now reuses existing shared local secrets when filling missing `.dev.vars` files, writes API `PURGE_TOKEN`/`PURGE_URL`, and fails loudly on existing secret drift instead of silently creating a broken local environment.
 - `pnpm dev:admin:create/reset/status` apply local migrations before starting a temporary API worker unless `--skip-migrations` is passed. `--api` custom origins now require `--no-start`, and `--state` paths resolve from the repo root.
+- `pnpm dev:doctor` added as a non-mutating readiness check for repo shape, tooling, env files, shared secrets, Wrangler state, ports, and API/admin/storefront responses. On this machine it correctly reports the current ignored local env as incomplete without modifying secrets.
 - Empty dashboard chart warning is fixed by rendering a stable empty state until daily activity data exists.
 
 ## Tracker Update Template
