@@ -18,6 +18,7 @@ import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { validateTransition } from "../orders/order-state-machine";
 import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
+import { assertNoActiveShipmentClaim, hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 
@@ -50,6 +51,18 @@ export async function processPaymentConfirmed(
   params: ProcessPaymentParams
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const shipmentClaim = await db
+      .select({
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+      })
+      .from(orders)
+      .where(eq(orders.id, params.orderId))
+      .get();
+    if (shipmentClaim && hasActiveShipmentClaim(shipmentClaim)) {
+      return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
+    }
+
     // ── 0. Claim or resume the gateway payment record ──
     // Unique partial indexes on the gateway IDs are the primary idempotency
     // guarantee. We store a pending local claim first, then mark it succeeded
@@ -311,12 +324,18 @@ export async function processPaymentFailed(
     }
 
     const order = await db
-      .select({ paidAmount: orders.paidAmount, paymentStatus: orders.paymentStatus })
+      .select({
+        paidAmount: orders.paidAmount,
+        paymentStatus: orders.paymentStatus,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+      })
       .from(orders)
       .where(eq(orders.id, orderId))
       .get();
 
     if (!order) return;
+    assertNoActiveShipmentClaim(order);
 
     const currencyConfig = await getCurrencyConfig(db);
     try {
@@ -364,6 +383,15 @@ export async function releaseOrderInventory(
   orderId: string
 ): Promise<void> {
   try {
+    const order = await db
+      .select({
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+      })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .get();
+    if (order) assertNoActiveShipmentClaim(order);
     await applyInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED);
   } catch (err: unknown) {
     console.error(`[process-payment] Inventory release error for order ${orderId}:`, err);

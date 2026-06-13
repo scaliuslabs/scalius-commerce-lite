@@ -267,6 +267,13 @@
       "when": 1778918400000,
       "tag": "0037_widget_js_content",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1781366400000,
+      "tag": "0038_order_shipment_claim",
+      "breakpoints": true
     }
   ]
 }

@@ -48,6 +48,8 @@ export const orders = sqliteTable("orders", {
     /** Valid: regular | preorder | backorder (see InventoryPool enum) */
     inventoryPool: text("inventory_pool").notNull().default(InventoryPool.REGULAR),
     inventoryAction: text("inventory_action").notNull().default("none"),
+    shipmentClaimId: text("shipment_claim_id"),
+    shipmentClaimExpiresAt: integer("shipment_claim_expires_at", { mode: "timestamp" }),
     expectedDelivery: text("expected_delivery"),
     version: integer("version").notNull().default(1),
     customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
@@ -67,6 +69,7 @@ export const orders = sqliteTable("orders", {
     index("orders_deleted_at_idx").on(table.deletedAt),
     index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
     index("orders_customer_phone_idx").on(table.customerPhone),
+    index("orders_shipment_claim_idx").on(table.shipmentClaimId, table.shipmentClaimExpiresAt),
 ]);
 
 export const orderItems = sqliteTable("order_items", {

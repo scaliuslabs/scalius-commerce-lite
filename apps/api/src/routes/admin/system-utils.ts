@@ -7,6 +7,7 @@ import { sql, inArray, desc, asc, and, count, eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { abandonedCheckouts, orders, OrderStatus, adminFcmTokens } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "@scalius/core/modules/inventory";
+import { hasActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
 import { ftsMatch } from "@scalius/core/search";
 
 import { ok, noContent } from "../../utils/api-response";
@@ -57,6 +58,10 @@ export async function archiveStaleIncompleteOrders(
 
     for (const order of incompleteOrders) {
         try {
+            if (hasActiveShipmentClaim(order)) {
+                continue;
+            }
+
             if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
                 await applyInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED);
             }

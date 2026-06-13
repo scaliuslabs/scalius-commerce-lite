@@ -162,12 +162,7 @@ async function runAuthHandlerWithRetry(
   }
 
   if (!isRetryableAuthRequest(request)) {
-    try {
-      const response = await handler(request);
-      return response;
-    } catch (error) {
-      throw error;
-    }
+    return handler(request);
   }
 
   const attempts = Array.from(

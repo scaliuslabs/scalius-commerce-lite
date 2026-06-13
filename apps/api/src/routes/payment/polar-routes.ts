@@ -7,6 +7,7 @@ import { orders, paymentPlans, PaymentMethod, PaymentStatus, OrderStatus } from 
 import { eq, sql } from "drizzle-orm";
 import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
+import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
 import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -79,13 +80,16 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
             paymentMethod: orders.paymentMethod,
             paymentStatus: orders.paymentStatus,
             paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue
+            balanceDue: orders.balanceDue,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt
         })
         .from(orders)
         .where(eq(orders.id, orderId))
         .get();
 
     if (!order) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(order);
     if (order.paymentStatus === PaymentStatus.PAID) {
         throw new ValidationError("Order is already fully paid");
     }

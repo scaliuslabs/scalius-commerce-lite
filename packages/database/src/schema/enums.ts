@@ -169,6 +169,7 @@ export const ShipmentStatus = {
     RETURNED: "returned",
     CANCELLED: "cancelled",
     PROCESSING: "processing",
+    RECONCILE_REQUIRED: "reconcile_required",
     UNKNOWN: "unknown",
 } as const;
 

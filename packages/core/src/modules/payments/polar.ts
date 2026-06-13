@@ -20,6 +20,7 @@ import type {
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { canTransitionTo } from "../orders/order-state-machine";
+import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 
@@ -264,6 +265,8 @@ export async function processPolarWebhookRefund(
                 status: orders.status,
                 inventoryAction: orders.inventoryAction,
                 version: orders.version,
+                shipmentClaimId: orders.shipmentClaimId,
+                shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             })
             .from(orders)
             .where(eq(orders.id, params.orderId))
@@ -271,6 +274,9 @@ export async function processPolarWebhookRefund(
 
         if (!order) {
             return { success: false, error: `Order ${params.orderId} not found` };
+        }
+        if (hasActiveShipmentClaim(order)) {
+            return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
         }
 
         const isFullRefund = params.polarStatus === "refunded";

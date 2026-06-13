@@ -1,12 +1,71 @@
-import { deliveryProviders, deliveryShipments, orders, orderItems, products } from "@scalius/database/schema";
+import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus } from "@scalius/database/schema";
 import { createProvider } from "./factory";
-import { encryptCredentials, decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
 import type { ShipmentOptions, ShipmentResult } from "./types";
 import { eq, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError } from "@scalius/core/errors";
+import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
+
+type ShipmentInternalOptions = {
+  shipmentId?: string;
+};
+
+function mergeShipmentMetadata(
+  existing: string | null | undefined,
+  next: Record<string, unknown>,
+): string {
+  let parsed: Record<string, unknown> = {};
+  if (existing) {
+    try {
+      const value = JSON.parse(existing);
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        parsed = value as Record<string, unknown>;
+      }
+    } catch {
+      parsed = {};
+    }
+  }
+
+  return JSON.stringify({ ...parsed, ...next });
+}
+
+export async function markShipmentReconciliationRequired(
+  db: Database,
+  shipmentId: string,
+  reason: string,
+  data?: ShipmentResult["data"],
+  error?: unknown,
+): Promise<void> {
+  const existing = await db
+    .select({ metadata: deliveryShipments.metadata })
+    .from(deliveryShipments)
+    .where(eq(deliveryShipments.id, shipmentId))
+    .get();
+
+  const errorMessage = error instanceof Error ? error.message : error ? String(error) : undefined;
+  await db
+    .update(deliveryShipments)
+    .set({
+      ...(data?.externalId !== undefined ? { externalId: data.externalId } : {}),
+      ...(data?.trackingId !== undefined ? { trackingId: data.trackingId } : {}),
+      status: ShipmentStatus.RECONCILE_REQUIRED,
+      rawStatus: reason,
+      metadata: mergeShipmentMetadata(existing?.metadata, {
+        ...(data?.metadata ?? {}),
+        reconciliation: {
+          required: true,
+          reason,
+          error: errorMessage,
+          detectedAt: new Date().toISOString(),
+        },
+      }),
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(eq(deliveryShipments.id, shipmentId));
+}
 
 /**
  * Get all providers from the database
@@ -150,6 +209,7 @@ export async function createShipment(
   providerId: string,
   options?: ShipmentOptions,
   encryptionKey?: string,
+  internalOptions?: ShipmentInternalOptions,
 ): Promise<ShipmentResult> {
   // Get order
   const [order] = await db
@@ -196,7 +256,7 @@ export async function createShipment(
   };
 
   // 1. Insert a "creating" placeholder shipment FIRST
-  const shipmentId = nanoid();
+  const shipmentId = internalOptions?.shipmentId ?? nanoid();
 
   await db.insert(deliveryShipments).values({
     id: shipmentId,
@@ -220,22 +280,39 @@ export async function createShipment(
 
     if (shipmentResult.success && shipmentResult.data) {
       // 3. On success: update the record with external tracking info
-      await db
-        .update(deliveryShipments)
-        .set({
-          externalId: shipmentResult.data.externalId,
-          trackingId: shipmentResult.data.trackingId,
-          status: shipmentResult.data.status || "pending",
-          rawStatus:
-            (shipmentResult.data.metadata?.order_status as string) ||
-            (shipmentResult.data.metadata?.status as string) ||
-            "pending",
-          metadata: JSON.stringify(shipmentResult.data.metadata || {}),
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(deliveryShipments.id, shipmentId));
+      try {
+        await db
+          .update(deliveryShipments)
+          .set({
+            externalId: shipmentResult.data.externalId,
+            trackingId: shipmentResult.data.trackingId,
+            status: shipmentResult.data.status || "pending",
+            rawStatus:
+              (shipmentResult.data.metadata?.order_status as string) ||
+              (shipmentResult.data.metadata?.status as string) ||
+              "pending",
+            metadata: JSON.stringify(shipmentResult.data.metadata || {}),
+            updatedAt: sql`unixepoch()`,
+          })
+          .where(eq(deliveryShipments.id, shipmentId));
 
-      return shipmentResult;
+        return { ...shipmentResult, shipmentId };
+      } catch (error: unknown) {
+        await markShipmentReconciliationRequired(
+          db,
+          shipmentId,
+          "shipment_success_persist_failed",
+          shipmentResult.data,
+          error,
+        );
+
+        return {
+          ...shipmentResult,
+          shipmentId,
+          reconciliationRequired: true,
+          message: `${shipmentResult.message} Local shipment reconciliation is required.`,
+        };
+      }
     }
 
     // 4. Provider returned a non-success response
@@ -249,7 +326,7 @@ export async function createShipment(
       })
       .where(eq(deliveryShipments.id, shipmentId));
 
-    return shipmentResult;
+    return { ...shipmentResult, shipmentId };
   } catch (error: unknown) {
     // 5. Exception during provider call — mark record as failed
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -267,6 +344,7 @@ export async function createShipment(
     return {
       success: false,
       message: `Failed to create shipment: ${errorMsg}`,
+      shipmentId,
     };
   }
 }
@@ -321,6 +399,15 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
   if (!shipment) {
     throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
   }
+  const orderClaim = await db
+    .select({
+      shipmentClaimId: orders.shipmentClaimId,
+      shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    })
+    .from(orders)
+    .where(eq(orders.id, shipment.orderId))
+    .get();
+  if (orderClaim) assertNoActiveShipmentClaim(orderClaim);
 
   // Get provider
   if (!shipment.providerId) {
@@ -378,6 +465,14 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
  * Delete a shipment
  */
 export async function deleteShipmentRecord(db: Database, id: string) {
+  const shipment = await db
+    .select({ status: deliveryShipments.status })
+    .from(deliveryShipments)
+    .where(eq(deliveryShipments.id, id))
+    .get();
+  if (shipment?.status === ShipmentStatus.CREATING) {
+    throw new ValidationError("Cannot delete a shipment while provider creation is in progress");
+  }
   await db.delete(deliveryShipments).where(eq(deliveryShipments.id, id));
 
   return true;

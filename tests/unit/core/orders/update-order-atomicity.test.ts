@@ -169,6 +169,31 @@ function updateData(overrides: Partial<Parameters<UpdateOrder>[2]> = {}): Parame
 }
 
 describe("updateOrder inventory atomicity", () => {
+  it("rejects active shipment claims before inventory pre-writes", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: {
+        ...existingOrder({ inventoryAction: "reserved" }),
+        shipmentClaimId: "shp_active",
+        shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
+      } as ReturnType<typeof seedOrder>,
+      existingItems: [item(1)],
+    });
+
+    await expect(updateOrder(db as never, ORDER_ID, updateData())).rejects.toMatchObject({
+      name: "ConflictError",
+      code: "CONFLICT",
+      message: "Order has an active shipment creation in progress. Please retry shortly.",
+    });
+
+    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
   it("fails reserved quantity increases before order/customer/item writes when stock validation fails", async () => {
     const db = createUpdateOrderDb({
       existingOrder: existingOrder({ inventoryAction: "reserved" }),

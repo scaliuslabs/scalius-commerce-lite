@@ -6,6 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { orders, paymentPlans, PaymentMethod, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
+import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
@@ -73,13 +74,16 @@ app.openapi(createIntentRoute, async (c) => {
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue
+      balanceDue: orders.balanceDue,
+      shipmentClaimId: orders.shipmentClaimId,
+      shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt
     })
     .from(orders)
     .where(eq(orders.id, body.orderId))
     .get();
 
   if (!order) throw new NotFoundError("Order not found");
+  assertNoActiveShipmentClaim(order);
 
   if (order.paymentStatus === PaymentStatus.PAID) {
     throw new ValidationError("Order is already fully paid");

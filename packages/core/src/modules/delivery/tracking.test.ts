@@ -14,10 +14,12 @@ import { updateOrderStatusFromShipment } from "./tracking";
 function createDbMock({
   shipmentStatus,
   orderStatus,
+  orderOverrides = {},
   updateRows = [{ id: "order_1" }],
 }: {
   shipmentStatus: string;
   orderStatus: string;
+  orderOverrides?: Record<string, unknown>;
   updateRows?: Array<{ id: string }>;
 }) {
   const updates: Array<Record<string, unknown>> = [];
@@ -29,6 +31,7 @@ function createDbMock({
       version: 5,
       customerPhone: "01700000000",
       customerEmail: "customer@example.com",
+      ...orderOverrides,
     }],
   ];
 
@@ -150,6 +153,22 @@ describe("delivery shipment to order status mapping", () => {
     const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery");
 
     expect(result).toBeNull();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("throws during an active shipment claim so delivery webhooks can retry", async () => {
+    const { db } = createDbMock({
+      shipmentStatus: "out_for_delivery",
+      orderStatus: OrderStatus.CONFIRMED,
+      orderOverrides: {
+        shipmentClaimId: "shp_active",
+        shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    await expect(updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery"))
+      .rejects.toThrow("active shipment creation");
+
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
