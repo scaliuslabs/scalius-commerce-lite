@@ -226,9 +226,9 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 | GET | `/status/:token` | KV lookup | Poll checkout processing status |
 | POST | `/` | `createStorefrontOrder()` + queue | Async order placement (returns 202) |
 
-## Known Gaps
+## Admin Full Edit Inventory Safety
 
-1. **`updateOrder()` item replacement is non-atomic**: The order update uses CAS on the `version` column, but the subsequent `DELETE` + `INSERT` of order items is done in separate queries outside the CAS-protected batch.
+`updateOrder()` keeps the existing `order_items` rows as the retry snapshot until inventory deltas are safe. Positive quantity deltas are reserved or deducted before the order CAS. Removed/reduced reserved or deducted deltas, plus terminal cancellation/return/refund release or restore, are applied before replacing item rows and now fail closed instead of logging and succeeding. The final item replacement uses a single D1 batch for delete plus insert, so item insert failure does not leave old rows deleted; pre-write inventory compensation runs if a later write fails.
 
 ## Dependencies
 
