@@ -47,10 +47,13 @@ import {
   getWidgets,
   getWidget,
   getWidgetHistory,
-  // Attributes
+} from "./api.functions";
+import {
   getAttributes,
   getAttributeValues,
-} from "./api.functions";
+  type AttributesQueryInput,
+  type AttributeValuesQueryInput,
+} from "./api-functions/attributes";
 import { getDashboardData } from "./api-functions/dashboard";
 import {
   get2faInfo,
@@ -448,28 +451,14 @@ export const widgetHistoryQueryOptions = (widgetId: string) =>
 //  ATTRIBUTES
 // ═══════════════════════════════════════════════════════════════════
 
-export const attributesQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-  order?: string;
-  trashed?: boolean;
-}) =>
+export const attributesQueryOptions = (params: AttributesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.attributes.list(params),
     queryFn: () => getAttributes({ data: params }),
     staleTime: STALE.LOOKUP,
   });
 
-export const attributeValuesQueryOptions = (params: {
-  attributeId?: string;
-  id?: string;
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-}) =>
+export const attributeValuesQueryOptions = (params: AttributeValuesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.attributes.values(params),
     queryFn: () => getAttributeValues({ data: params }),

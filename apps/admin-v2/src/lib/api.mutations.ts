@@ -83,15 +83,6 @@ import {
   reorderCollections,
   bulkDeleteCollections,
   bulkRestoreCollections,
-  // Attributes
-  createAttribute,
-  updateAttribute,
-  deleteAttribute,
-  deleteAttributePermanent,
-  restoreAttribute,
-  updateAttributeValues,
-  bulkDeleteAttributes,
-  bulkRestoreAttributes,
   // Product Variants
   createProductVariant,
   updateProductVariant,
@@ -116,6 +107,17 @@ import {
   deleteAnalyticsScript,
   updateAnalyticsScript,
 } from "./api-functions/analytics";
+import {
+  bulkDeleteAttributes,
+  bulkRestoreAttributes,
+  createAttribute,
+  deleteAttribute,
+  deleteAttributePermanent,
+  restoreAttribute,
+  updateAttribute,
+  type CreateAttributeInput,
+  type UpdateAttributeInput,
+} from "./api-functions/attributes";
 import {
   createMediaFolder,
   deleteMedia,
@@ -1461,7 +1463,7 @@ export function useBulkRestoreCollections() {
 export function useCreateAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createAttribute({ data }),
+    mutationFn: (data: CreateAttributeInput) => createAttribute({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       toast.success("Attribute created");
@@ -1474,8 +1476,7 @@ export function useCreateAttribute() {
 export function useUpdateAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateAttribute({ data }),
+    mutationFn: (data: UpdateAttributeInput) => updateAttribute({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       queryClient.invalidateQueries({
@@ -1540,28 +1541,6 @@ export function useRestoreAttribute() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to restore attribute")),
-  });
-}
-
-export function useUpdateAttributeValues() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: {
-      attributeId: string;
-      values: { name: string; slug: string }[];
-    }) => updateAttributeValues({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.attributes.values(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.attributes.detail(variables.attributeId),
-      });
-      toast.success("Attribute values updated");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update attribute values")),
   });
 }
 

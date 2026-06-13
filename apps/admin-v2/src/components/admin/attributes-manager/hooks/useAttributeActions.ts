@@ -9,7 +9,7 @@ import {
   deleteAttribute,
   deleteAttributePermanent,
   restoreAttribute,
-} from "~/lib/api.functions";
+} from "~/lib/api-functions/attributes";
 import type { Attribute, NewAttribute } from "../types";
 
 export function useAttributeActions(
@@ -40,7 +40,7 @@ export function useAttributeActions(
 
   const createMutation = useMutation({
     mutationFn: (newAttribute: NewAttribute) =>
-      createAttribute({ data: newAttribute as unknown as Record<string, unknown> }),
+      createAttribute({ data: newAttribute }),
     onSuccess: (_data, newAttribute) => {
       toast.success(`Attribute "${newAttribute.name}" created successfully.`);
       onRefresh();
