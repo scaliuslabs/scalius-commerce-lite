@@ -21,6 +21,7 @@ Use this checklist when auditing and rewriting one part of the codebase. The tar
 
 - Request schema: where is it validated, and is it the same contract used by the UI or SDK?
 - Response schema: does the API use `{ success: true, data }` or a documented exception?
+- For admin server functions, compare the wrapper type to the API route's unwrapped `data` payload and remove caller-side casts that were compensating for the old broad type.
 - Error behavior: which errors are expected user errors, retryable infrastructure errors, and fatal bugs?
 - Auth/RBAC: who can call it, and is the check enforced at the final API boundary?
 - Idempotency: what happens if the same request/webhook/queue message runs twice?
@@ -30,6 +31,7 @@ Use this checklist when auditing and rewriting one part of the codebase. The tar
 
 - Replace duplicate local interfaces with generated SDK types or a shared schema when that reduces drift.
 - Split huge files only along real domain boundaries.
+- Treat `as unknown as` near API calls as a smoke alarm: it may be hiding a response-envelope mismatch or a stale request payload.
 - Replace copy-pasted transport/error/query/mutation code with a small helper after the third repeated pattern.
 - Keep provider definitions separate from runtime provider implementations when UI only needs labels/options/types.
 - Prefer one state-transition helper over separate "single", "bulk", "webhook", and "manual" implementations with different semantics.

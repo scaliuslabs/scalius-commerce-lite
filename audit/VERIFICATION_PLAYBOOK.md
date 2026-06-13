@@ -62,6 +62,18 @@ pnpm exec vitest run apps/admin-v2/src/lib/admin-access.test.ts apps/admin-v2/sr
 pnpm --filter @scalius/admin-v2 typecheck
 ```
 
+Admin API wrapper extraction:
+
+```bash
+pnpm --filter @scalius/admin-v2 typecheck
+pnpm --filter @scalius/admin-v2 lint
+git diff --check
+rg -n "\b(exportNameOne|exportNameTwo)\b" apps/admin-v2/src --glob '!routeTree.gen.ts'
+rg -n "as unknown as|legacyPayloadName" touched/file/one.ts touched/file/two.ts
+```
+
+For server-function slices, check the API route request schema and remember that `apps/admin-v2/src/lib/api.server.ts` unwraps `{ success, data }`; type the returned inner `data` shape, not the whole envelope.
+
 Storefront tests:
 
 ```bash

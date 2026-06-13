@@ -58,9 +58,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  // RBAC
-  getRbacRoles,
-  getRbacPermissions,
   // Auth / Admin Users
   getAdminUsers,
   getAccountSecurity,
@@ -100,6 +97,7 @@ import {
   // Firebase
   getFirebaseConfig,
 } from "./api.functions";
+import { getRbacPermissions, getRbacRoles } from "./api-functions/rbac";
 import {
   getAnalyticsScript,
   getAnalyticsScripts,
