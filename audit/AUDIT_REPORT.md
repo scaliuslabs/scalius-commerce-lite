@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, `ORDER-010`, and `ORDER-011` are now verified. The currently open high-risk finding is `DEL-002`.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, `ORDER-010`, `ORDER-011`, and `OPS-003` are now verified. The currently open high-risk finding is `DEL-002`.
 
 ## Validation Performed
 
@@ -180,6 +180,12 @@ The full deploy script typechecks, builds, migrates remote D1, then deploys. Roo
 Fix direction: create target-aware deploy scripts with focused typecheck and explicit migration gates.
 
 Status: Verified on 2026-06-13. Root targeted deploy scripts now use `scripts/deploy.mjs --only ...`; targeted deploys typecheck first, build the selected app, and the API target applies remote D1 migrations before deploying.
+
+### OPS-003: Deploy dry-run mode still mutates production
+
+`pnpm deploy:api --dry-run` reached the API workspace build dry-run but then continued through remote D1 migration checks and the final Worker deploy because `scripts/deploy.mjs` did not parse dry-run as a top-level mode.
+
+Status: Verified on 2026-06-13. `scripts/deploy.mjs --dry-run` now runs typecheck, build, and dist-secret checks, then skips D1 migrations and Worker deploys for full and targeted deploys. `--migrate-only --dry-run` reports the intended migration target without applying migrations.
 
 ### TEST-001: Root test suite failed widget script extraction
 

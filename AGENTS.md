@@ -55,6 +55,7 @@ packages/
 | `pnpm deploy:api` | Typecheck, build API, migrate remote D1, deploy API |
 | `pnpm deploy:admin` | Typecheck, build admin, deploy admin |
 | `pnpm deploy:storefront` | Typecheck, build storefront, deploy storefront |
+| `pnpm deploy:api --dry-run` | Typecheck, build, and dist-check API without applying D1 migrations or deploying |
 
 ## Architecture
 
