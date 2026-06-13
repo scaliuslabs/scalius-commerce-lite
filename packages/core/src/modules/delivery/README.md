@@ -33,7 +33,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
 | `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
 | `checkShipmentStatus` | `(db, shipmentId, encryptionKey?)` | Polls provider API, updates DB record |
-| `deleteShipmentRecord` | `(db, id)` | Hard delete shipment. Open audit item `DEL-002` tracks that this must reject active order shipment claims and `reconcile_required` rows before it is considered safe for claimed shipment reconciliation. |
+| `deleteShipmentRecord` | `(db, id)` | Hard delete shipment only after claim/reconciliation safety checks. Rejects active order shipment claims, `reconcile_required`, and unresolved expired claimed rows; clears stale failed/cancelled claims before deletion. |
 
 ## Tracking Functions (`tracking.ts`)
 
@@ -72,7 +72,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 6. On provider rejection: UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
 7. On exception: UPDATE to `status: "failed"`, `rawStatus: "exception"`
 
-Provider shipment creation is coordinated by order-level shipment claims in the orders module. Until `DEL-002` is fixed, do not delete claimed or `reconcile_required` shipment rows through `deleteShipmentRecord()` without first clearing or reconciling the linked order claim.
+Provider shipment creation is coordinated by order-level shipment claims in the orders module. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution.
 
 ## Status Mapping
 

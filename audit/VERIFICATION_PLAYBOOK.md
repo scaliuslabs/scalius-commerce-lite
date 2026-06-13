@@ -168,6 +168,11 @@ pnpm exec vitest run tests/unit/core/inventory/reserve-deduct-release.test.ts
 pnpm --filter @scalius/core typecheck
 pnpm --filter @scalius/core lint
 
+# DEL-002 coverage
+pnpm --filter @scalius/core exec vitest run src/modules/delivery/delivery.service.test.ts
+pnpm --filter @scalius/core typecheck
+pnpm --filter @scalius/core lint
+
 # ORDER-005 coverage
 pnpm --filter @scalius/api test -- src/routes/admin/abandoned-checkouts.test.ts
 pnpm --filter @scalius/api typecheck

@@ -4,14 +4,19 @@ import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
 import type { ShipmentOptions, ShipmentResult } from "./types";
-import { eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { NotFoundError, ValidationError, ServiceUnavailableError } from "@scalius/core/errors";
-import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
+import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
+import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "../orders/shipment-claim";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
 };
+
+const EXPIRED_CLAIM_DELETABLE_STATUSES = new Set<string>([
+  ShipmentStatus.FAILED,
+  ShipmentStatus.CANCELLED,
+]);
 
 function mergeShipmentMetadata(
   existing: string | null | undefined,
@@ -466,13 +471,53 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
  */
 export async function deleteShipmentRecord(db: Database, id: string) {
   const shipment = await db
-    .select({ status: deliveryShipments.status })
+    .select({
+      id: deliveryShipments.id,
+      orderId: deliveryShipments.orderId,
+      status: deliveryShipments.status,
+    })
     .from(deliveryShipments)
     .where(eq(deliveryShipments.id, id))
     .get();
+  if (!shipment) return true;
+
   if (shipment?.status === ShipmentStatus.CREATING) {
     throw new ValidationError("Cannot delete a shipment while provider creation is in progress");
   }
+  if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED) {
+    throw new ConflictError("Cannot delete a shipment that requires reconciliation");
+  }
+
+  const orderClaim = await db
+    .select({
+      shipmentClaimId: orders.shipmentClaimId,
+      shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    })
+    .from(orders)
+    .where(eq(orders.id, shipment.orderId))
+    .get();
+
+  if (orderClaim) {
+    if (hasActiveShipmentClaim(orderClaim)) {
+      throw new ConflictError("Cannot delete a shipment while order shipment creation is in progress");
+    }
+
+    if (orderClaim.shipmentClaimId === shipment.id) {
+      if (!EXPIRED_CLAIM_DELETABLE_STATUSES.has(shipment.status)) {
+        throw new ConflictError("Cannot delete a shipment linked to an unresolved expired shipment claim");
+      }
+
+      await db
+        .update(orders)
+        .set({
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(and(eq(orders.id, shipment.orderId), eq(orders.shipmentClaimId, shipment.id)));
+    }
+  }
+
   await db.delete(deliveryShipments).where(eq(deliveryShipments.id, id));
 
   return true;
