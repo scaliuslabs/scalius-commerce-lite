@@ -44,56 +44,17 @@ import { cn } from "@scalius/shared/utils";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import { StatCard } from "@/components/admin/shared/StatCard";
 import { inventoryQueryOptions } from "@/lib/api.queries";
-import { adjustInventory } from "@/lib/api.functions";
+import {
+  adjustInventory,
+  type InventoryMovement,
+  type InventoryPagination,
+  type InventoryStats,
+  type InventoryVariant,
+  type InventoryAdjustmentReason,
+} from "@/lib/api-functions/inventory";
 import { useDebounce } from "@/hooks/use-debounce";
 
 // ---------- Types ----------
-
-interface InventoryVariant {
-  id: string;
-  productId: string;
-  productName: string | null;
-  sku: string;
-  size: string | null;
-  color: string | null;
-  price: number;
-  stock: number;
-  reservedStock: number;
-  available: number;
-  lowStockThreshold: number | null;
-  version: number;
-}
-
-interface InventoryStats {
-  totalVariants: number;
-  totalOnHand: number;
-  totalReserved: number;
-  totalAvailable: number;
-  outOfStockCount: number;
-  lowStockCount: number;
-}
-
-interface InventoryMovement {
-  id: string;
-  variantId: string;
-  orderId: string | null;
-  type: string;
-  quantity: number;
-  previousStock: number;
-  newStock: number;
-  notes: string | null;
-  createdBy: string | null;
-  createdAt: string;
-  variantSku: string | null;
-  productName: string | null;
-}
-
-interface Pagination {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
 
 type Tab = "variants" | "movements";
 type StockFilter = "all" | "low" | "out" | "reserved";
@@ -120,7 +81,9 @@ function getMovementBadge(type: string) {
   return map[type] ?? { label: type, className: "bg-gray-50 text-gray-700 border-gray-200" };
 }
 
-function timeAgo(dateStr: string) {
+function timeAgo(dateValue: string | number) {
+  const dateStr =
+    typeof dateValue === "number" ? dateValue * 1000 : dateValue;
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -179,21 +142,21 @@ export function InventoryManager() {
 
   // Extract typed data from query results
   const variantsData = useMemo(() => {
-    const raw = variantsQuery.data as Record<string, unknown> | undefined;
-    if (!raw) return { variants: [] as InventoryVariant[], stats: null as InventoryStats | null, pagination: null as Pagination | null };
+    const raw = variantsQuery.data;
+    if (!raw) return { variants: [] as InventoryVariant[], stats: null as InventoryStats | null, pagination: null as InventoryPagination | null };
     return {
-      variants: (raw.variants || []) as InventoryVariant[],
-      stats: (raw.stats as InventoryStats) || null,
-      pagination: (raw.pagination as Pagination) || null,
+      variants: raw.variants || [],
+      stats: raw.stats || null,
+      pagination: raw.pagination || null,
     };
   }, [variantsQuery.data]);
 
   const movementsData = useMemo(() => {
-    const raw = movementsQuery.data as Record<string, unknown> | undefined;
-    if (!raw) return { movements: [] as InventoryMovement[], pagination: null as Pagination | null };
+    const raw = movementsQuery.data;
+    if (!raw) return { movements: [] as InventoryMovement[], pagination: null as InventoryPagination | null };
     return {
-      movements: (raw.movements || []) as InventoryMovement[],
-      pagination: (raw.pagination as Pagination) || null,
+      movements: raw.movements || [],
+      pagination: raw.pagination || null,
     };
   }, [movementsQuery.data]);
 
@@ -490,7 +453,7 @@ function PaginationControls({
   onLimitChange,
   itemName
 }: {
-  pagination: Pagination | null;
+  pagination: InventoryPagination | null;
   onPageChange: (p: number) => void;
   onLimitChange: (l: number) => void;
   itemName: string;
@@ -510,7 +473,8 @@ function PaginationControls({
 
 function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVariant | null; onClose: () => void; onSubmit: () => void }) {
   const [delta, setDelta] = useState(0);
-  const [reason, setReason] = useState<string>("received");
+  const [reason, setReason] =
+    useState<InventoryAdjustmentReason>("received");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -596,7 +560,12 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-foreground">Reason</label>
-              <Select value={reason} onValueChange={setReason}>
+              <Select
+                value={reason}
+                onValueChange={(value) =>
+                  setReason(value as InventoryAdjustmentReason)
+                }
+              >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
