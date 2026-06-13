@@ -145,6 +145,21 @@ describe("triggerStorefrontPurgeForGroups", () => {
     );
   });
 
+  it("maps payment settings writes to the checkout cache group", () => {
+    expect(getGroupsForPath("/api/v1/admin/settings/payment-methods")).toEqual([
+      "checkout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/stripe")).toEqual([
+      "checkout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/sslcommerz")).toEqual([
+      "checkout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/polar")).toEqual([
+      "checkout",
+    ]);
+  });
+
   it("sends checkout prefixes without marking the purge as HTML-affecting", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

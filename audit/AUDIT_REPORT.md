@@ -471,6 +471,14 @@ Fix direction: keep browser-default CAPI data to non-PII attribution signals, re
 
 Status: Verified on 2026-06-14. Cart no longer writes standalone `scalius_user_*` analytics keys, `sendServerEvent()` defaults to `_fbp`, `_fbc`, and user agent plus explicit caller-provided `userData`, and `clearCheckoutSession()` removes both checkout transfer keys and legacy PII keys. SSLCommerz and Polar external redirects now clear raw checkout transfer state after order/session creation while preserving cart contents for cancel/failure recovery. Verification included focused Meta CAPI/session/redirect tests, storefront typecheck/build/lint, root `pnpm test`, deployed asset scans, live HTTP checks, browser smoke with no console errors, and storefront deploy version `4391b4cd-7a08-438c-be2e-193d8df7a79e`.
 
+### CACHE-001: Payment settings saves leave checkout caches stale
+
+Payment-method, Stripe, SSLCommerz, and Polar settings writes invalidated gateway credential caches but not the public checkout config cache or storefront checkout cache prefixes. Public checkout config also ignored the aggregate `payment_methods.enabled_methods` allowlist, so admin method toggles could be stale or ineffective for the storefront until unrelated changes rebuilt config.
+
+Fix direction: route payment settings writes through the checkout cache group, purge storefront checkout prefixes, and make checkout config treat `payment_methods.enabled_methods` as the outer allowlist while still validating each gateway's own enabled/configured state.
+
+Status: Verified on 2026-06-14. The API payment settings routes now invalidate `["checkout"]` in API KV and call the storefront purge helper after successful payment-method, Stripe, SSLCommerz, and Polar saves. The checkout invalidation group includes `api:checkout:config:` and `/api/v1/admin/settings/polar`; the dormant core helper copy is aligned. Public checkout config now filters registered gateways through `payment_methods.enabled_methods` before applying individual gateway and checkout-mode rules. Verification included focused API route/cache tests, focused core checkout-config tests, API/core typechecks and lints, root `pnpm test`, env/dist-secret checks, API deploy version `22831cca-fe5d-4df0-a6d7-96bf3237a0ab`, live API checkout-config smoke, and storefront browser smoke with no console errors.
+
 ### CONTENT-001: Scheduled publishing is not enforced publicly
 
 Pages store and validate `publishedAt`, but public page queries and sitemap generation only check `isPublished`/`deletedAt`.

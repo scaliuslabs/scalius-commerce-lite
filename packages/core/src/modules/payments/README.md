@@ -248,14 +248,14 @@ All gateway credentials are stored in the `settings` DB table with a `category` 
 | `polar` | `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` |
 | `payment_methods` | `enabled_methods` (JSON array), `default_method` |
 
-Settings are cached in KV with 5-minute TTL (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods`). Admin save operations invalidate both the specific gateway cache and the payment methods cache.
+Settings are cached in memory/KV-compatible helpers (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods`). Admin save operations invalidate the specific gateway cache, the payment methods cache, API checkout config cache (`api:checkout:config:`), and storefront checkout prefixes.
 
 ### Gateway Registry
 
 `gateway-settings.ts` side-effect registers all 4 gateways on import:
 
 - Each registration includes: `id`, `name`, `settingsCategory`, `getSettings()` (async DB lookup), `getPublicConfig()` (safe fields to expose), `getCurrencies()` (supported currencies)
-- `checkout.ts` route imports `gateway-settings.ts` for the side-effect, then calls `getRegisteredGateways()` to dynamically build the checkout config response
+- `checkout.ts` route imports `gateway-settings.ts` for the side-effect, reads `payment_methods.enabled_methods` as the outer allowlist, then calls `getRegisteredGateways()` to dynamically build the checkout config response
 - `checkoutMode` controls gateway visibility: `all` (show everything), `gateways_only` (hide COD), `guest_cod_only` (hide online gateways)
 
 ### Checkout Config Response

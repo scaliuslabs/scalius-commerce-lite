@@ -199,6 +199,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/payment-methods": ["checkout"],
   "/api/v1/admin/settings/stripe": ["checkout"],
   "/api/v1/admin/settings/sslcommerz": ["checkout"],
+  "/api/v1/admin/settings/polar": ["checkout"],
   "/api/v1/admin/settings/shipping-methods": ["checkout"],
   "/api/v1/admin/settings/checkout-languages": ["checkout"],
   "/api/v1/admin/settings/meta-conversions": ["layout"],

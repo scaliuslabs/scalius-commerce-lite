@@ -114,6 +114,17 @@ pnpm --filter @scalius/storefront typecheck
 
 For `PRIV-002`, broad Meta CAPI events must not inherit checkout/customer PII from `sessionStorage`; legacy `scalius_user_*` keys must be removed by checkout cleanup; SSLCommerz/Polar external redirects should clear raw checkout transfer state after gateway session creation without clearing the cart.
 
+Payment settings and checkout-cache checks:
+
+```bash
+pnpm --filter @scalius/api exec vitest run src/routes/admin/settings/payments.test.ts src/utils/cache-invalidation.test.ts
+pnpm --filter @scalius/core exec vitest run src/modules/settings/checkout-config.service.test.ts
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/core typecheck
+```
+
+For `CACHE-001`, payment-method, Stripe, SSLCommerz, and Polar settings writes must invalidate the API `checkout` cache group and purge storefront checkout prefixes. Public checkout config must treat `payment_methods.enabled_methods` as the outer allowlist while still filtering disabled/unconfigured gateways.
+
 Storefront API contract checks:
 
 ```bash

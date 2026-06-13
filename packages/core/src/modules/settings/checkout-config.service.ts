@@ -6,6 +6,7 @@ import { siteSettings, settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getRegisteredGateways } from "../payments/gateway-registry";
+import { getActivePaymentMethods } from "../payments/gateway-settings";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
@@ -75,6 +76,12 @@ export async function getCheckoutConfig(
 
     const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
 
+    const activePaymentMethods = await getActivePaymentMethods(db, kv, encryptionKey).catch(() => ({
+        enabledMethods: ["cod"] as Array<"stripe" | "sslcommerz" | "polar" | "cod">,
+        defaultMethod: "cod" as const,
+    }));
+    const allowedGatewayIds = new Set(activePaymentMethods.enabledMethods);
+
     // Dynamically resolve enabled gateways from the registry
     const registeredGateways = getRegisteredGateways();
     const gatewaySettingsPromises = registeredGateways.map((gw) =>
@@ -87,6 +94,7 @@ export async function getCheckoutConfig(
     for (let i = 0; i < registeredGateways.length; i++) {
         const gw = registeredGateways[i];
         if (!gw) continue;
+        if (!allowedGatewayIds.has(gw.id as "stripe" | "sslcommerz" | "polar" | "cod")) continue;
         const gwSettings = settingsResults[i];
         if (!gwSettings?.enabled) continue;
         if (gw.id === "cod" && checkoutMode === "gateways_only") continue;
