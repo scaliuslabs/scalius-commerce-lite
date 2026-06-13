@@ -591,6 +591,14 @@ Fix direction: declare the dependency directly and fail prebuild when required f
 
 Status: Verified on 2026-06-13. `country-flag-icons` is a direct root dev dependency, and `scripts/copy-flags.mjs` now fails the build if the package, source SVG set, or required copied flags are missing.
 
+### BUILD-005: Turbo build cache omits app env inputs
+
+Turbo build hashes did not include app-local `.dev.vars`/`.env*` files or build-time env variables read by Vite/Astro/TanStack Start configuration. That could let admin/storefront/API builds reuse stale cached output after changing API URLs, CDN/media URLs, Better Auth URL, or Firebase public build config.
+
+Fix direction: keep app-local env files in Turbo global file inputs and declare build-time env names in Turbo global env inputs. Do not add secret-only variable names to `globalEnv`.
+
+Status: Verified on 2026-06-14. `turbo.json` now includes the app env file globs in `globalDependencies` and the build-time env names in `globalEnv`; `scripts/turbo-config.test.mjs` guards the config. Turbo dry-run JSON shows app env files under `globalCacheInputs.files` and declared env names under `globalCacheInputs.environmentVariables.specified.env`; env values set for the dry run appear in `configured`.
+
 ### TEST-002: Storefront focused tests are blocked by missing `happy-dom`
 
 Storefront Vitest config requires `happy-dom`, but the storefront package does not declare it.

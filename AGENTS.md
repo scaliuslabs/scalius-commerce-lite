@@ -358,6 +358,7 @@ When working as part of an agent team on this codebase:
 - **Run focused tests**: use `pnpm test` or direct Vitest filters for touched areas.
 - **Run dependency audit**: use `pnpm audit --audit-level moderate` after dependency or lockfile changes.
 - **Do not touch env files**: `.dev.vars` and `.env.development` can contain secrets.
+- **Keep Turbo env cache inputs current**: app-local `.dev.vars`/`.env*` files belong in `turbo.json` `globalDependencies`, and build-time env names belong in `globalEnv`. Do not add secret-only names to `globalEnv`. Run `pnpm exec vitest run scripts/turbo-config.test.mjs` and a Turbo dry run after changing build env/config.
 - **Schema changes need migrations**: after modifying `packages/database/src/schema/`, run `pnpm db:generate`.
 - **API surface changes need SDK regeneration**: after changing OpenAPI route schemas, run `pnpm generate:sdk`.
 - **Package changes need manifests**: when adding imports from a new package, update the consuming workspace `package.json`.

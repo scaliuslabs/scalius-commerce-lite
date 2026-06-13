@@ -316,11 +316,52 @@ pnpm exec turbo run deploy --filter=@scalius/admin-v2 --dry=json
 pnpm exec turbo run deploy --filter=@scalius/storefront --dry=json
 ```
 
+Verify Turbo's global cache inputs for env-sensitive builds:
+
+```bash
+pnpm exec vitest run scripts/turbo-config.test.mjs
+PUBLIC_API_URL=https://api.example.test/api/v1 \
+PUBLIC_API_BASE_URL=https://api.example.test \
+STOREFRONT_URL=https://storefront.example.test \
+CDN_DOMAIN_URL=cdn.example.test \
+R2_PUBLIC_URL=https://cdn.example.test \
+VITE_FIREBASE_API_KEY=test-key \
+pnpm exec turbo run build --dry=json \
+  --filter=@scalius/admin-v2 \
+  --filter=@scalius/storefront \
+  --filter=@scalius/api > /tmp/scalius-turbo-build-dry-env.json
+node - <<'NODE'
+const fs = require("node:fs");
+const data = JSON.parse(fs.readFileSync("/tmp/scalius-turbo-build-dry-env.json", "utf8"));
+const files = Object.keys(data.globalCacheInputs.files);
+const specified = data.globalCacheInputs.environmentVariables.specified.env;
+const configured = data.globalCacheInputs.environmentVariables.configured;
+for (const required of [
+  "apps/api/.dev.vars",
+  "apps/admin-v2/.dev.vars",
+  "apps/storefront/.dev.vars",
+  "PUBLIC_API_URL",
+  "PUBLIC_API_BASE_URL",
+  "STOREFRONT_URL",
+  "CDN_DOMAIN_URL",
+  "R2_PUBLIC_URL",
+  "VITE_FIREBASE_API_KEY",
+]) {
+  const present = required.includes("/") ? files.includes(required) : specified.includes(required);
+  if (!present) throw new Error(`Missing Turbo cache input: ${required}`);
+  if (!required.includes("/") && !configured.some((entry) => entry.startsWith(`${required}=`))) {
+    throw new Error(`Missing Turbo configured env hash: ${required}`);
+  }
+}
+NODE
+```
+
 Use these checks to verify:
 
 - Deploy targets include typecheck and migration gates where required.
 - Lint tasks actually exist for the seven code workspaces; `@scalius/tsconfig` is intentionally filtered from root lint.
 - Build inputs include relevant `src/**`, `public/**`, scripts, configs, and generated asset inputs.
+- Build global cache inputs include app-local env files and declared build-time env names.
 - Build outputs exclude local env files such as `.dev.vars`, `.env*`, and `*.vars`.
 - Storefront build cache does not preserve stale build IDs.
 - Root and package-local `deploy` shortcuts route through `scripts/deploy.mjs --only ...` and keep typecheck, dist-secret checks, and migration gates.
