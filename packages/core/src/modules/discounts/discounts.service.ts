@@ -13,8 +13,8 @@ import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError } from "@scalius/core/errors";
 import type { CreateDiscountInput, UpdateDiscountInput } from "./discounts.validation";
 
-export async function listDiscounts(db: Database, options: { page: number; limit: number; search: string; showTrashed: boolean; sort: string; order: "asc" | "desc" }) {
-    const { page, limit: rawLimit, search, showTrashed, sort, order } = options;
+export async function listDiscounts(db: Database, options: { page: number; limit: number; search: string; showTrashed: boolean; sort: string; order: "asc" | "desc"; type?: DiscountType }) {
+    const { page, limit: rawLimit, search, showTrashed, sort, order, type } = options;
     const limit = Math.min(Math.max(rawLimit || 10, 1), 100);
     const offset = (page - 1) * limit;
 
@@ -27,6 +27,9 @@ export async function listDiscounts(db: Database, options: { page: number; limit
         conditions.push(isNotNull(discounts.deletedAt));
     } else {
         conditions.push(isNull(discounts.deletedAt));
+    }
+    if (type) {
+        conditions.push(eq(discounts.type, type));
     }
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

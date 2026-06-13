@@ -106,8 +106,8 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
 
     const payload = {
       ...ensuredValues,
-      type: "free_shipping",
-      valueType: "free",
+      type: "free_shipping" as const,
+      valueType: "free" as const,
       discountValue: 100,
       startDate: ensuredValues.startDate.toISOString(),
       endDate: values.endDate ? values.endDate.toISOString() : null,

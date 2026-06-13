@@ -37,12 +37,6 @@ import {
   getCustomers,
   getCustomer,
   getCustomerHistory,
-  // Discounts
-  getDiscounts,
-  getDiscount,
-  // Pages
-  getPages,
-  getPage,
   // Widgets
   getWidgets,
   getWidget,
@@ -55,6 +49,11 @@ import {
   type AttributeValuesQueryInput,
 } from "./api-functions/attributes";
 import { getDashboardData } from "./api-functions/dashboard";
+import {
+  getDiscount,
+  getDiscounts,
+  type DiscountsQueryInput,
+} from "./api-functions/discounts";
 import {
   get2faInfo,
   getAccountSecurity,
@@ -76,6 +75,7 @@ import {
   getNavigationPreviewProducts,
   type NavigationPreviewProductsInput,
 } from "./api-functions/navigation";
+import { getPage, getPages, type PagesQueryInput } from "./api-functions/pages";
 import { getFraudCheckerProviders } from "./api-functions/fraud-checker";
 import { getAiPrompts } from "./api-functions/ai";
 import {
@@ -372,14 +372,7 @@ export const customerHistoryQueryOptions = (id: string) =>
 //  DISCOUNTS
 // ═══════════════════════════════════════════════════════════════════
 
-export const discountsQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-  order?: string;
-  showTrashed?: boolean;
-}) =>
+export const discountsQueryOptions = (params: DiscountsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.discounts.list(params),
     queryFn: () => getDiscounts({ data: params }),
@@ -397,15 +390,7 @@ export const discountQueryOptions = (id: string) =>
 //  PAGES
 // ═══════════════════════════════════════════════════════════════════
 
-export const pagesQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-  order?: string;
-  showTrashed?: boolean;
-  trashed?: boolean;
-}) =>
+export const pagesQueryOptions = (params: PagesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.pages.list(params),
     queryFn: () => getPages({ data: params }),

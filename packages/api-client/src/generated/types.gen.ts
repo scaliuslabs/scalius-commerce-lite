@@ -9711,6 +9711,10 @@ export type GetApiV1AdminDiscountsData = {
          */
         search?: string;
         /**
+         * Filter by discount type
+         */
+        type?: 'amount_off_products' | 'amount_off_order' | 'free_shipping';
+        /**
          * Show trashed items
          */
         trashed?: string;
