@@ -162,6 +162,12 @@ pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts
 pnpm exec vitest run tests/unit/core/orders/order-ingest-queue.test.ts
 pnpm --filter @scalius/core typecheck
 
+# ORDER-011 coverage
+pnpm exec vitest run tests/unit/core/orders/update-order-atomicity.test.ts
+pnpm exec vitest run tests/unit/core/inventory/reserve-deduct-release.test.ts
+pnpm --filter @scalius/core typecheck
+pnpm --filter @scalius/core lint
+
 # ORDER-005 coverage
 pnpm --filter @scalius/api test -- src/routes/admin/abandoned-checkouts.test.ts
 pnpm --filter @scalius/api typecheck

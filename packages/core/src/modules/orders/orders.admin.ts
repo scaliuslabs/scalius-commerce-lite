@@ -14,10 +14,12 @@ import {
     deliveryShipments,
     deliveryProviders,
     deliveryLocations,
+    OrderStatus,
 } from "@scalius/database/schema";
 import {
     applyInventoryForStatusChange,
     isStockDeductStatus,
+    isStockReservableStatus,
     isStockRestoreStatus,
 } from "../inventory/inventory-transitions";
 import {
@@ -29,7 +31,7 @@ import {
 } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 
-import { sql, desc, eq, inArray, isNull, and, type SQL } from "drizzle-orm";
+import { sql, desc, eq, inArray, isNull, isNotNull, and, type SQL } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
@@ -45,6 +47,28 @@ import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-
 // ─────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────
+
+const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
+    OrderStatus.PENDING,
+    OrderStatus.PROCESSING,
+    OrderStatus.CONFIRMED,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED,
+    OrderStatus.COMPLETED,
+    OrderStatus.REFUNDED,
+    OrderStatus.PARTIALLY_REFUNDED,
+]);
+
+function assertTrashRestoreInventoryActionAllowed(status: string, inventoryAction: string): void {
+    if (inventoryAction === "reserved" && isStockReservableStatus(status)) return;
+    if (inventoryAction === "deducted" && TRASH_RESTORE_DEDUCTED_STATUSES.has(status)) return;
+    if (inventoryAction === "restored" && isStockRestoreStatus(status)) return;
+    if (inventoryAction === "none") return;
+
+    throw new ValidationError(
+        `Cannot restore order with status "${status}" and inventory action "${inventoryAction}". Reconcile inventory or move the order to a compatible status first.`,
+    );
+}
 
 function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
     if (searchTerms.length === 0) return undefined;
@@ -1138,9 +1162,11 @@ export async function restoreOrder(db: Database, id: string) {
     const order = await db
         .select({
             id: orders.id,
+            status: orders.status,
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
             deletedAt: orders.deletedAt,
+            version: orders.version,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
@@ -1152,44 +1178,63 @@ export async function restoreOrder(db: Database, id: string) {
     assertNoActiveShipmentClaim(order);
     if (!order.deletedAt) throw new ValidationError("Order is not deleted");
 
-    // If inventory was released during deletion (inventoryAction = "restored"),
-    // we must re-reserve stock before restoring the order.
+    let nextInventoryAction = order.inventoryAction as "none" | "reserved" | "deducted" | "restored";
+    let reservedEntries: ReservationEntry[] = [];
+
     if (order.inventoryAction === "restored") {
-        const items = await db
-            .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
-            .from(orderItems)
-            .where(eq(orderItems.orderId, id));
+        if (isStockReservableStatus(order.status)) {
+            const items = await db
+                .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+                .from(orderItems)
+                .where(eq(orderItems.orderId, id));
 
-        const pool = (order.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
-        const entries: ReservationEntry[] = items
-            .filter((i): i is typeof i & { variantId: string } => i.variantId !== null)
-            .map((i) => ({
-                variantId: i.variantId,
-                quantity: i.quantity,
-                pool,
-            }));
+            const pool = (order.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
+            const entries: ReservationEntry[] = items
+                .filter((i): i is typeof i & { variantId: string } => i.variantId !== null)
+                .map((i) => ({
+                    variantId: i.variantId,
+                    quantity: i.quantity,
+                    pool,
+                }));
 
-        if (entries.length > 0) {
-            const batchItems = entries.map(e => ({
-                variantId: e.variantId,
-                quantity: e.quantity,
-                orderId: id,
-            }));
-            const reserveResult = await reserveStockBatch(db, batchItems, pool);
-            if (!reserveResult.success) {
-                throw new ValidationError(
-                    `Cannot restore order: ${reserveResult.error ?? "insufficient stock to re-reserve inventory"}`,
-                );
+            if (entries.length > 0) {
+                const batchItems = entries.map(e => ({
+                    variantId: e.variantId,
+                    quantity: e.quantity,
+                    orderId: id,
+                }));
+                const reserveResult = await reserveStockBatch(db, batchItems, pool);
+                if (!reserveResult.success) {
+                    throw new ValidationError(
+                        `Cannot restore order: ${reserveResult.error ?? "insufficient stock to re-reserve inventory"}`,
+                    );
+                }
+                reservedEntries = entries;
+                nextInventoryAction = "reserved";
+            } else {
+                nextInventoryAction = "none";
+            }
+        } else {
+            assertTrashRestoreInventoryActionAllowed(order.status, order.inventoryAction);
+            nextInventoryAction = "restored";
+        }
+    } else {
+        assertTrashRestoreInventoryActionAllowed(order.status, order.inventoryAction);
+    }
+
+    const restoreResult = await db.update(orders)
+        .set({ deletedAt: null, inventoryAction: nextInventoryAction, version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
+        .where(and(eq(orders.id, id), eq(orders.version, order.version), isNotNull(orders.deletedAt)))
+        .returning({ id: orders.id });
+
+    if (restoreResult.length === 0) {
+        if (reservedEntries.length > 0) {
+            const releaseResult = await releaseMultiple(db, reservedEntries, id);
+            if (!releaseResult.success) {
+                console.error(`[orders.admin] Failed to compensate restore reservation for ${id}:`, releaseResult.error);
             }
         }
-
-        await db.update(orders)
-            .set({ deletedAt: null, inventoryAction: "reserved", version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
-            .where(eq(orders.id, id));
-    } else {
-        await db.update(orders)
-            .set({ deletedAt: null, version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
-            .where(eq(orders.id, id));
+        throw new ConflictError("Order was modified by another request. Please reload and try again.");
     }
 }
 

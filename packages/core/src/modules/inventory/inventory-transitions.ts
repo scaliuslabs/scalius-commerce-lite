@@ -24,6 +24,7 @@ const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
 // reserved stock when needed.
 // Pre-ship statuses (pending, processing, confirmed) keep stock as "reserved".
 const STOCK_DEDUCT_STATUSES = new Set(["shipped", "delivered"]);
+const STOCK_RESERVABLE_STATUSES = new Set(["incomplete", "pending", "processing", "confirmed"]);
 
 export function isStockRestoreStatus(status: string): boolean {
     return STOCK_RESTORE_STATUSES.has(status);
@@ -31,6 +32,10 @@ export function isStockRestoreStatus(status: string): boolean {
 
 export function isStockDeductStatus(status: string): boolean {
     return STOCK_DEDUCT_STATUSES.has(status);
+}
+
+export function isStockReservableStatus(status: string): boolean {
+    return STOCK_RESERVABLE_STATUSES.has(status);
 }
 
 /**
@@ -129,7 +134,7 @@ export async function buildInventoryStatements(
     // Re-reservation: when an admin reactivates a cancelled order (restored → pending/confirmed),
     // inventory was already released during cancellation. We need to re-reserve stock so that the
     // order items are accounted for again. This mirrors the initial storefront checkout reservation.
-    const needsReReserve = !needsRestore && !needsDeduct && currentAction === "restored";
+    const needsReReserve = isStockReservableStatus(newStatus) && currentAction === "restored";
     if (needsReReserve) {
         await reserveOrderItems(db, orderId, order.inventoryPool);
         return {
