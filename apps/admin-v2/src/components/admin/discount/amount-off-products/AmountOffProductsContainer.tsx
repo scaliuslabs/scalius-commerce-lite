@@ -109,10 +109,10 @@ export function AmountOffProductsContainer({
           : new Date(),
     };
 
-    const { appliesTo, ...restOfValues } = ensuredValues;
+    const { appliesTo: _appliesTo, ...restOfValues } = ensuredValues;
     const payload = {
       ...restOfValues,
-      type: "amount_off_products",
+      type: "amount_off_products" as const,
       appliesToProducts: selectedProducts.map((p) => p.id),
       appliesToCollections: selectedCollections.map((c) => c.id),
       startDate: ensuredValues.startDate,

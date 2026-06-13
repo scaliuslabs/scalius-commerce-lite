@@ -29,7 +29,12 @@ import { CharacterCounter } from "@/components/ui/character-counter";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
-import { createPage, updatePage } from "@/lib/api.functions";
+import {
+  createPage,
+  updatePage,
+  type CreatePageInput,
+  type PageFeaturedImageDto,
+} from "@/lib/api-functions/pages";
 import { LoadingFallback } from "./shared/LoadingFallback";
 import { pageFormSchema, type PageFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
@@ -38,6 +43,38 @@ import { queryKeys } from "@/lib/query-keys";
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
   isEdit?: boolean;
+}
+
+function serializeDate(value: Date | string | number | undefined): string | number | undefined {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function serializeFeaturedImage(
+  image: PageFormValues["featuredImage"],
+): PageFeaturedImageDto | null {
+  if (!image) return null;
+  return {
+    ...image,
+    createdAt: serializeDate(image.createdAt),
+    updatedAt: serializeDate(image.updatedAt),
+  };
+}
+
+function toPageInput(values: PageFormValues): CreatePageInput {
+  return {
+    title: values.title,
+    slug: values.slug,
+    content: values.content,
+    metaTitle: values.metaTitle,
+    metaDescription: values.metaDescription,
+    isPublished: values.isPublished,
+    publishedAt: values.publishedAt ? values.publishedAt.toISOString() : null,
+    sortOrder: values.sortOrder,
+    hideHeader: values.hideHeader,
+    hideFooter: values.hideFooter,
+    hideTitle: values.hideTitle,
+    featuredImage: serializeFeaturedImage(values.featuredImage),
+  };
 }
 
 export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
@@ -71,8 +108,8 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
     entityName: "Page",
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => createPage({ data: data as unknown as Record<string, unknown> }),
-    updateFn: (data) => updatePage({ data: data as Record<string, unknown> & { id: string } }),
+    createFn: (data) => createPage({ data: toPageInput(data) }),
+    updateFn: (data) => updatePage({ data: { id: data.id, ...toPageInput(data) } }),
     invalidateKeys: [
       queryKeys.pages.list(),
       ...(isEdit && defaultValues?.id ? [queryKeys.pages.detail(defaultValues.id)] : []),

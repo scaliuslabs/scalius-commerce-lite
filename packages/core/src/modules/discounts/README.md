@@ -33,7 +33,7 @@ Three types defined in `@scalius/database/schema`:
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `listDiscounts` | `(db, { page, limit, search, showTrashed, sort, order })` | Paginated with FTS5 search. Joins `discountProducts`, `discountCollections`, `discountUsage` to return `relatedProducts`, `relatedCollections`, `usageCount`, `totalDiscountAmount` per discount. Sortable by code/type/value/startDate/endDate/createdAt/updatedAt. |
+| `listDiscounts` | `(db, { page, limit, search, showTrashed, sort, order, type? })` | Paginated with FTS5 search and optional discount-type filtering. Joins `discountProducts`, `discountCollections`, `discountUsage` to return `relatedProducts`, `relatedCollections`, `usageCount`, `totalDiscountAmount` per discount. Sortable by code/type/value/startDate/endDate/createdAt/updatedAt. |
 | `getDiscountById` | `(db, id)` | Single discount with `relatedProducts` and `relatedCollections` (each `{ buy: string[], get: string[] }`). Returns null if not found. |
 | `createDiscount` | `(db, data)` | Validates unique code among non-deleted. Uses `db.batch()` to atomically insert discount + product/collection associations. Only creates associations for `amount_off_products` type. ID format: `disc_{nanoid}`. Returns `{ id }`. |
 | `updateDiscount` | `(db, id, data)` | Validates existence and unique code (excluding self). Uses `db.batch()` to atomically update discount, delete old associations, insert new ones. Handles date parsing (Date/string/number). Returns `{ id }`. Throws `NotFoundError`. |

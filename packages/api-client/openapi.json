@@ -30726,6 +30726,21 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "amount_off_products",
+                "amount_off_order",
+                "free_shipping"
+              ],
+              "description": "Filter by discount type"
+            },
+            "required": false,
+            "description": "Filter by discount type",
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Show trashed items"
             },
             "required": false,

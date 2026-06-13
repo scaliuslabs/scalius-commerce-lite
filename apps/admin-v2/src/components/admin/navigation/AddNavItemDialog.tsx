@@ -38,7 +38,7 @@ import {
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import type { NavigationItem, NavigationSource } from "./types";
-import { getCategories, getPages } from "~/lib/api.functions";
+import { getCategories } from "~/lib/api.functions";
 import {
   getAttributes,
   getAttributeValues,
@@ -48,6 +48,7 @@ import {
   getNavigationPreviewProducts,
   type NavigationPreviewProductsInput,
 } from "~/lib/api-functions/navigation";
+import { getPages } from "~/lib/api-functions/pages";
 
 type NavItemType = "category" | "page" | "dynamic" | "custom" | "label";
 
@@ -196,28 +197,23 @@ export function AddNavItemDialog({
       }
 
       try {
-        const data = (await getPages({
+        const data = await getPages({
           data: { page, limit: PAGE_SIZE, search: search || undefined },
-        })) as {
-          pages?: Array<{ id: string; title?: string; name?: string; slug: string; [key: string]: unknown }>;
-          pagination?: { total: number; totalPages: number; page: number };
-        };
+        });
 
-        const pgs: NavigationSource[] = (data.pages || []).map((p) => ({
+        const pgs: NavigationSource[] = data.pages.map((p) => ({
           id: p.id,
-          name: p.title || p.name || p.slug,
+          name: p.title || p.slug,
           slug: p.slug,
           type: "page",
           url: `/pages/${p.slug}`,
         }));
 
-        const pagination = data.pagination || { total: 0, totalPages: 1, page: 1 };
-
         setPageState((prev) => ({
           items: append ? [...prev.items, ...pgs] : pgs,
-          total: pagination.total,
-          page: pagination.page,
-          hasMore: pagination.page < pagination.totalPages,
+          total: data.pagination.total,
+          page: data.pagination.page,
+          hasMore: data.pagination.page < data.pagination.totalPages,
           isLoading: false,
           isLoadingMore: false,
           search,

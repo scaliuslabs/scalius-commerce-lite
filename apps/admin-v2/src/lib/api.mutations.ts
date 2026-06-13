@@ -49,23 +49,6 @@ import {
   permanentDeleteCustomer,
   restoreCustomer,
   bulkDeleteCustomers,
-  // Discounts
-  createDiscount,
-  updateDiscount,
-  deleteDiscount,
-  permanentDeleteDiscount,
-  restoreDiscount,
-  toggleDiscountStatus,
-  bulkDeleteDiscounts,
-  bulkRestoreDiscounts,
-  // Pages
-  createPage,
-  updatePage,
-  deletePage,
-  permanentDeletePage,
-  restorePage,
-  bulkDeletePages,
-  bulkRestorePages,
   // Widgets
   createWidget,
   updateWidget,
@@ -119,6 +102,19 @@ import {
   type UpdateAttributeInput,
 } from "./api-functions/attributes";
 import {
+  bulkDeleteDiscounts,
+  bulkRestoreDiscounts,
+  createDiscount,
+  deleteDiscount,
+  permanentDeleteDiscount,
+  restoreDiscount,
+  toggleDiscountStatus,
+  updateDiscount,
+  type CreateDiscountInput,
+  type DiscountDto,
+  type UpdateDiscountInput,
+} from "./api-functions/discounts";
+import {
   createMediaFolder,
   deleteMedia,
   deleteMediaFolder,
@@ -130,6 +126,17 @@ import {
   type RenameMediaFolderInput,
   type UpdateMediaInput,
 } from "./api-functions/media";
+import {
+  bulkDeletePages,
+  bulkRestorePages,
+  createPage,
+  deletePage,
+  permanentDeletePage,
+  restorePage,
+  updatePage,
+  type CreatePageInput,
+  type UpdatePageInput,
+} from "./api-functions/pages";
 import {
   type SettingsPayload,
   updateAuthSettings,
@@ -169,6 +176,48 @@ import {
   type ShippingMethodWriteInput,
   updateShippingMethod,
 } from "./api-functions/shipping-methods";
+
+type DateTransportValue = string | number | Date;
+
+type DiscountMutationInput = Omit<
+  CreateDiscountInput,
+  "startDate" | "endDate"
+> & {
+  startDate: DateTransportValue;
+  endDate?: DateTransportValue | null;
+};
+
+type UpdateDiscountMutationInput = { id: string } & DiscountMutationInput;
+
+function serializeDateTransport(value: DateTransportValue): string | number {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function serializeOptionalDateTransport(
+  value: DateTransportValue | null | undefined,
+): string | number | null {
+  return value == null ? null : serializeDateTransport(value);
+}
+
+function serializeCreateDiscountInput(
+  data: DiscountMutationInput,
+): CreateDiscountInput {
+  return {
+    ...data,
+    startDate: serializeDateTransport(data.startDate),
+    endDate: serializeOptionalDateTransport(data.endDate),
+  };
+}
+
+function serializeUpdateDiscountInput(
+  data: UpdateDiscountMutationInput,
+): UpdateDiscountInput {
+  return {
+    ...data,
+    startDate: serializeDateTransport(data.startDate),
+    endDate: serializeOptionalDateTransport(data.endDate),
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  PRODUCTS
@@ -905,7 +954,8 @@ export function useBulkDeleteCustomers() {
 export function useCreateDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createDiscount({ data }),
+    mutationFn: (data: DiscountMutationInput) =>
+      createDiscount({ data: serializeCreateDiscountInput(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discount created");
@@ -918,8 +968,8 @@ export function useCreateDiscount() {
 export function useUpdateDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updateDiscount({ data }),
+    mutationFn: (data: UpdateDiscountMutationInput) =>
+      updateDiscount({ data: serializeUpdateDiscountInput(data) }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       queryClient.invalidateQueries({
@@ -981,7 +1031,7 @@ export function useRestoreDiscount() {
 export function useToggleDiscountStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; isActive?: boolean }) =>
+    mutationFn: (data: { id: string; isActive: boolean }) =>
       toggleDiscountStatus({ data }),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({
@@ -990,9 +1040,9 @@ export function useToggleDiscountStatus() {
       const previous = queryClient.getQueryData(
         queryKeys.discounts.detail(variables.id),
       );
-      queryClient.setQueryData(
+      queryClient.setQueryData<DiscountDto | undefined>(
         queryKeys.discounts.detail(variables.id),
-        (old: any) => (old ? { ...old, isActive: variables.isActive } : old),
+        (old) => (old ? { ...old, isActive: variables.isActive } : old),
       );
       return { previous };
     },
@@ -1024,7 +1074,13 @@ export function useBulkDeleteDiscounts() {
       discountIds?: string[];
       ids?: string[];
       permanent?: boolean;
-    }) => bulkDeleteDiscounts({ data }),
+    }) =>
+      bulkDeleteDiscounts({
+        data: {
+          discountIds: data.discountIds ?? data.ids ?? [],
+          permanent: data.permanent,
+        },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discounts deleted");
@@ -1038,7 +1094,9 @@ export function useBulkRestoreDiscounts() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { discountIds?: string[]; ids?: string[] }) =>
-      bulkRestoreDiscounts({ data }),
+      bulkRestoreDiscounts({
+        data: { discountIds: data.discountIds ?? data.ids ?? [] },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discounts restored");
@@ -1055,7 +1113,7 @@ export function useBulkRestoreDiscounts() {
 export function useCreatePage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createPage({ data }),
+    mutationFn: (data: CreatePageInput) => createPage({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success("Page created");
@@ -1068,8 +1126,7 @@ export function useCreatePage() {
 export function useUpdatePage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string } & Record<string, unknown>) =>
-      updatePage({ data }),
+    mutationFn: (data: UpdatePageInput) => updatePage({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       queryClient.invalidateQueries({

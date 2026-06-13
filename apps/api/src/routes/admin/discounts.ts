@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { listDiscounts, getDiscountById, createDiscount, updateDiscount, deleteDiscount, bulkDeleteDiscounts, restoreDiscounts, permanentlyDeleteDiscount, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
-import { discounts } from "@scalius/database/schema";
+import { DiscountType, discounts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -25,6 +25,11 @@ const listRoute = createRoute({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
+            type: z.enum([
+                DiscountType.AMOUNT_OFF_PRODUCTS,
+                DiscountType.AMOUNT_OFF_ORDER,
+                DiscountType.FREE_SHIPPING,
+            ]).optional().openapi({ description: "Filter by discount type" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
             order: z.string().optional().default("desc").openapi({ description: "Sort order" })
@@ -44,6 +49,7 @@ app.openapi(listRoute, async (c) => {
         limit: query.limit,
         search: query.search || "",
         showTrashed: query.trashed === "true",
+        type: query.type,
         sort: query.sort || "updatedAt",
         order: (query.order || "desc") as "asc" | "desc"
     });

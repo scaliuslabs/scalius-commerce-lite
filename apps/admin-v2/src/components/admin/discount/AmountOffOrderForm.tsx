@@ -188,7 +188,7 @@ export function AmountOffOrderForm({
 
     const payload = {
       ...values,
-      type: "amount_off_order",
+      type: "amount_off_order" as const,
       minPurchaseAmount: values.minPurchaseAmount || null,
       maxUsesPerOrder: values.maxUsesPerOrder || null,
       maxUses: values.maxUses || null,
