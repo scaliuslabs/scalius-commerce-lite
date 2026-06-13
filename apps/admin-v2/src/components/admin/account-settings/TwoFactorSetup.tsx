@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  mark2faVerified,
+  complete2faVerification,
   set2faMethod,
 } from "~/lib/api-functions/auth-management";
 import type { User } from "./AccountSettingsContainer";
@@ -97,15 +97,22 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
         return;
       }
 
+      const sessionToken = result.data?.token;
+      if (!sessionToken) {
+        setError("Verification succeeded, but no session proof was returned.");
+        return;
+      }
+
+      await complete2faVerification({ data: { sessionToken } });
+
       await set2faMethod({ data: { method: selectedMethod } });
-      await mark2faVerified();
 
       setStep("backup");
       setIsEnabled(true);
       setCurrentMethod(selectedMethod);
       toast.success("Two-factor authentication enabled");
-    } catch {
-      setError("Verification failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setIsLoading(false);
     }
@@ -147,14 +154,21 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
         return;
       }
 
+      const sessionToken = result.data?.token;
+      if (!sessionToken) {
+        setError("Verification succeeded, but no session proof was returned.");
+        return;
+      }
+
+      await complete2faVerification({ data: { sessionToken } });
+
       await set2faMethod({ data: { method: "totp" } });
-      await mark2faVerified();
 
       setCurrentMethod("totp");
       setStep("backup");
       toast.success("Authenticator app configured successfully");
-    } catch {
-      setError("Verification failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setIsLoading(false);
     }

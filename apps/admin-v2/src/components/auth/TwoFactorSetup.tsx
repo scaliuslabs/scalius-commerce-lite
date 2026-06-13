@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import {
-  mark2faVerified,
+  complete2faVerification,
   set2faMethod,
 } from "@/lib/api-functions/auth-management";
 import { Button } from "@/components/ui/button";
@@ -73,15 +73,21 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
         return;
       }
 
+      const sessionToken = result.data?.token;
+      if (!sessionToken) {
+        setError("Verification succeeded, but no session proof was returned.");
+        setIsLoading(false);
+        return;
+      }
+
+      await complete2faVerification({ data: { sessionToken } });
+
       // Set email as the default 2FA method
       await set2faMethod({ data: { method: "email" } });
 
-      // Mark session as 2FA verified
-      await mark2faVerified();
-
       setStep("backup");
-    } catch {
-      setError("Verification failed. Please try again.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
     } finally {
       setIsLoading(false);
     }

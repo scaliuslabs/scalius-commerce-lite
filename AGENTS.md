@@ -68,7 +68,7 @@ packages/
 ### Packages
 
 - **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 351 operations. Has runtime dependency `@hey-api/client-fetch`. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
-- **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 38 SQL migrations (`0000` through `0037`).
+- **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 39 SQL migrations (`0000` through `0038`).
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.
 - **`@scalius/tsconfig`**: Exports `base.json`, `worker.json`, and `astro.json`. Some apps use local framework configs instead of extending it directly.
@@ -320,7 +320,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 
 - Monorepo migration is complete: three Workers apps plus five shared packages.
 - API standardization is mostly in place: normal routes use `ok()`/`created()`/`ApiError`; edge routes have documented exceptions.
-- Schema is at 38 migrations with 53 table declarations.
+- Schema is at 39 migrations with 53 table declarations.
 - SDK generation is integrated into admin/storefront and should be regenerated after API surface changes.
 - Payments include durable webhook idempotency, gateway-payment CAS/atomic updates, refund validation, COD handling, SSLCommerz redirect validation, and Polar refund webhook processing.
 - Orders use status state-machine validation, CAS on status/fulfillment paths, queue ingest, and notification enqueueing for status transitions.
@@ -332,7 +332,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 
 ## Known Backlog / Limitations
 
-- **Active audit backlog**: No P0/P1 remediation items are currently marked `Not Started` in `audit/REMEDIATION_TRACKER.md`; re-audit before adding new backlog claims.
+- **Active audit backlog**: `audit/REMEDIATION_TRACKER.md` currently has fresh open P1/P2 findings from the 2026-06-14 re-audit. Check that tracker before choosing the next remediation slice.
 - **Mixed provider systems**: Universal provider registry currently has Stripe payment + Resend email adapters. SMS still uses the legacy integrations registry with smsnetbd, bdbulksms, mimsms, and gennet. Delivery uses legacy factory/provider files; universal delivery provider exports are type-only.
 - **In-memory state**: Storefront L1 caches and shared layout cache are in-memory and reset on Worker isolate restart. Shared rate limiting is KV-based now.
 - **Delivery notification helper**: `notifyShipmentStatusChange()` in `packages/core/src/modules/delivery/tracking.ts` is still a log-only placeholder. Active Pathao/Steadfast/admin shipment paths enqueue notifications directly.
@@ -350,6 +350,7 @@ When working as part of an agent team on this codebase:
 - **Run type checks**: use `pnpm typecheck` for meaningful validation. `pnpm build` bundles Workers/apps and can miss type errors that `tsc`/`astro check` catch.
 - **Run lint honestly**: root `pnpm lint` intentionally filters out `@scalius/tsconfig` and runs real `lint` scripts for API, admin, storefront, api-client, core, database, and shared.
 - **Run focused tests**: use `pnpm test` or direct Vitest filters for touched areas.
+- **Run dependency audit**: use `pnpm audit --audit-level moderate` after dependency or lockfile changes.
 - **Do not touch env files**: `.dev.vars` and `.env.development` can contain secrets.
 - **Schema changes need migrations**: after modifying `packages/database/src/schema/`, run `pnpm db:generate`.
 - **API surface changes need SDK regeneration**: after changing OpenAPI route schemas, run `pnpm generate:sdk`.

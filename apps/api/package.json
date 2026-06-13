@@ -33,7 +33,7 @@
     "drizzle-orm": "^0.45.2",
     "fast-xml-parser": "^5.8.0",
     "firebase": "^12.13.0",
-    "hono": "^4.12.18",
+    "hono": "^4.12.25",
     "jsonwebtoken": "^9.0.3",
     "mimetext": "^3.0.28",
     "nanoid": "^5.1.6",
