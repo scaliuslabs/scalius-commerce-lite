@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertLocalSecretSync,
+  collectLocalUrlConfigIssues,
   collectLocalSecretSyncIssues,
   getArgValue,
   parseEnvFileContent,
@@ -75,5 +76,33 @@ describe("local dev script helpers", () => {
       adminVars: { JWT_SECRET: "admin-jwt" },
       storefrontVars: { JWT_SECRET: "api-jwt" },
     })).toThrow(/pnpm dev:setup --force --env-only/);
+  });
+
+  it("accepts expected localhost URL config variants", () => {
+    expect(collectLocalUrlConfigIssues([
+      { label: "apps/api/.dev.vars", key: "PUBLIC_API_BASE_URL", value: "http://localhost:8787", port: 8787, pathname: "" },
+      { label: "apps/storefront/.env.development", key: "PUBLIC_API_URL", value: "http://127.0.0.1:8787/api/v1", port: 8787, pathname: "/api/v1" },
+      { label: "apps/storefront/.dev.vars", key: "STOREFRONT_URL", value: "http://[::1]:4322/", port: 4322, pathname: "" },
+    ])).toEqual([]);
+  });
+
+  it("reports non-local or wrong-port URLs without leaking values", () => {
+    const issues = collectLocalUrlConfigIssues([
+      { label: "apps/admin-v2/.env.development", key: "PUBLIC_API_BASE_URL", value: "https://api.example.com/api/v1", port: 8787, pathname: "" },
+      { label: "apps/api/.dev.vars", key: "BETTER_AUTH_URL", value: "http://localhost:9999", port: 4323, pathname: "" },
+    ]);
+
+    expect(issues).toContain("apps/admin-v2/.env.development:PUBLIC_API_BASE_URL must use http for local dev.");
+    expect(issues).toContain("apps/admin-v2/.env.development:PUBLIC_API_BASE_URL must point to localhost, 127.0.0.1, or ::1.");
+    expect(issues).toContain("apps/api/.dev.vars:BETTER_AUTH_URL must use port 4323.");
+    expect(issues.join("\n")).not.toContain("api.example.com");
+    expect(issues.join("\n")).not.toContain("9999");
+  });
+
+  it("leaves missing URL values to the existing env completeness checks", () => {
+    expect(collectLocalUrlConfigIssues([
+      { label: "apps/storefront/.env.development", key: "PUBLIC_API_URL", value: "", port: 8787, pathname: "/api/v1" },
+      { label: "apps/storefront/.env.development", key: "PUBLIC_API_BASE_URL", value: undefined, port: 8787, pathname: "" },
+    ])).toEqual([]);
   });
 });
