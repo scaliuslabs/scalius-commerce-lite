@@ -119,9 +119,9 @@ Status: Verified on 2026-06-14. SSLCommerz sessions now create scoped attempt `t
 
 The abandoned cleanup path can release inventory and then later mark/archive/delete by id while a payment confirmation interleaves. That can overwrite a now-paid order or leave an incomplete/restored order in a half-cleaned state.
 
-Fix direction: claim cancellation with status/version/payment guards before release, and make final archive/delete conditional on the expected claimed state.
+Fix direction: claim cancellation with status/version/payment/payment-record guards before release, make final archive/delete conditional on the expected claimed state, roll back the claim if inventory release fails, and write the abandoned-checkout archive only after final soft-delete succeeds.
 
-Status: Not Started. Add an interleaving test where payment CAS wins between cleanup phases.
+Status: Verified on 2026-06-14. `archiveStaleIncompleteOrders()` now guards the cleanup claim with expected order version/status/payment state, stale cutoff, no active shipment claim, and no pending/succeeded payment record. Cleanup releases inventory only after the claim wins, rolls the claim back if inventory release fails, finalizes soft-delete with another guard, and inserts the abandoned-checkout archive only after finalization succeeds. Focused tests cover release-before-finalize/archive ordering, release-failure rollback, claim loss to concurrent payment, and finalization guard loss. The admin abandoned-checkouts route also skips server-side prefetch for its browser-proxy-only relative fetch, fixing the live SSR 500 on `/admin/abandoned-checkouts`. Verification: focused API abandoned-checkout tests, API typecheck/lint/build, admin typecheck/lint/build, root `pnpm test`, env/dist-secret checks, API deploy version `1ab100f5-5e2b-4d8a-9fb3-c7ad0a4a3a07`, admin deploy version `af228559-8956-434c-bda7-88ae511cf4c9`, live API health/auth/session/admin route/proxy/storefront HTTP smoke, browser dashboard `/admin/abandoned-checkouts` smoke with no console errors, and storefront browser smoke.
 
 ### ORDER-013: Manual fulfillment can persist order status without shipment/items
 

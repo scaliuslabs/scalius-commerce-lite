@@ -3,11 +3,11 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
-import { sql, inArray, desc, asc, and, count, eq } from "drizzle-orm";
+import { sql, inArray, desc, asc, and, count, eq, isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { abandonedCheckouts, orders, OrderStatus, adminFcmTokens } from "@scalius/database/schema";
+import { abandonedCheckouts, orderPayments, orders, OrderStatus, PaymentRecordStatus, PaymentStatus, adminFcmTokens } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "@scalius/core/modules/inventory";
-import { hasActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
+import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "@scalius/core/modules/orders/shipment-claim";
 import { ftsMatch } from "@scalius/core/search";
 
 import { ok, noContent } from "../../utils/api-response";
@@ -38,6 +38,32 @@ const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string
     }
 };
 
+const noActivePaymentClaimCondition = sql`NOT EXISTS (
+    SELECT 1 FROM ${orderPayments}
+    WHERE ${orderPayments.orderId} = ${orders.id}
+      AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.SUCCEEDED})
+)`;
+
+async function rollbackStaleIncompleteCleanupClaim(
+    db: Database,
+    orderId: string,
+    claimedVersion: number,
+): Promise<void> {
+    await db.update(orders)
+        .set({
+            status: OrderStatus.INCOMPLETE,
+            version: sql`${orders.version} + 1`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(orders.id, orderId),
+            eq(orders.version, claimedVersion),
+            eq(orders.status, OrderStatus.CANCELLED),
+            eq(orders.paymentStatus, PaymentStatus.UNPAID),
+            isNull(orders.deletedAt),
+        ));
+}
+
 export async function archiveStaleIncompleteOrders(
     db: Database,
     cutoffTimestamp: number,
@@ -52,7 +78,7 @@ export async function archiveStaleIncompleteOrders(
         and(
             eq(orders.status, OrderStatus.INCOMPLETE),
             sql`${orders.createdAt} <= ${cutoffTimestamp}`,
-            sql`${orders.deletedAt} IS NULL`,
+            isNull(orders.deletedAt),
         ),
     );
 
@@ -62,8 +88,58 @@ export async function archiveStaleIncompleteOrders(
                 continue;
             }
 
+            const claimedVersion = order.version + 1;
+            const claim = await db.update(orders)
+                .set({
+                    status: OrderStatus.CANCELLED,
+                    version: claimedVersion,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    eq(orders.id, order.id),
+                    eq(orders.version, order.version),
+                    eq(orders.status, OrderStatus.INCOMPLETE),
+                    eq(orders.paymentStatus, PaymentStatus.UNPAID),
+                    sql`${orders.paidAmount} <= 0`,
+                    isNull(orders.deletedAt),
+                    sql`${orders.createdAt} <= ${cutoffTimestamp}`,
+                    noActiveShipmentClaimCondition(),
+                    noActivePaymentClaimCondition,
+                ))
+                .returning({ id: orders.id });
+
+            if (claim.length === 0) {
+                continue;
+            }
+
             if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
-                await applyInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED);
+                try {
+                    await applyInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED);
+                } catch (error) {
+                    await rollbackStaleIncompleteCleanupClaim(db, order.id, claimedVersion);
+                    throw error;
+                }
+            }
+
+            const finalized = await db.update(orders)
+                .set({
+                    deletedAt: sql`unixepoch()`,
+                    inventoryAction: "restored",
+                    version: sql`${orders.version} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    eq(orders.id, order.id),
+                    eq(orders.version, claimedVersion),
+                    eq(orders.status, OrderStatus.CANCELLED),
+                    eq(orders.paymentStatus, PaymentStatus.UNPAID),
+                    isNull(orders.deletedAt),
+                    noActivePaymentClaimCondition,
+                ))
+                .returning({ id: orders.id });
+
+            if (finalized.length === 0) {
+                throw new Error("Stale order cleanup changed concurrently before final archive");
             }
 
             await db.insert(abandonedCheckouts).values({
@@ -74,16 +150,6 @@ export async function archiveStaleIncompleteOrders(
                 createdAt: order.createdAt || new Date(),
                 updatedAt: order.updatedAt || new Date()
             }).onConflictDoNothing();
-
-            await db.update(orders)
-                .set({
-                    status: OrderStatus.CANCELLED,
-                    deletedAt: sql`unixepoch()`,
-                    inventoryAction: "restored",
-                    version: sql`${orders.version} + 1`,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(eq(orders.id, order.id));
 
             result.archived++;
         } catch (error) {

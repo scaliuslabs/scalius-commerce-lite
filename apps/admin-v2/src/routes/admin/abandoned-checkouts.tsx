@@ -5,6 +5,7 @@ import { RouteErrorComponent } from "~/lib/list-helpers";
 
 export const Route = createFileRoute("/admin/abandoned-checkouts")({
   loader: async ({ context: { queryClient } }) => {
+    if (typeof window === "undefined") return;
     await queryClient.ensureQueryData(
       abandonedCheckoutsQueryOptions({ page: 1, limit: 20, sort: "updatedAt", order: "desc" }),
     );
