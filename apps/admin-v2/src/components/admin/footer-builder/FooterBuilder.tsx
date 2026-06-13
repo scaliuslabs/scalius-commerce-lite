@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
-import { saveFooterConfig } from "~/lib/api.functions";
+import { saveFooterConfig } from "~/lib/api-functions/settings";
 
 import { BrandingSection } from "./BrandingSection";
 import { ContentSection } from "./ContentSection";

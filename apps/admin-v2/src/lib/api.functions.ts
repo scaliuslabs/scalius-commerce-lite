@@ -1287,44 +1287,6 @@ export const deleteMediaFolder = createServerFn({ method: "POST" })
     return apiDelete(`/media/folders/${data.folderId}`);
   });
 
-// ─── Header/Footer Config ────────────────────────────────────────
-
-export const saveHeaderConfig = createServerFn({ method: "POST" })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  .inputValidator((data: any) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/settings/header", data as Record<string, unknown>);
-  });
-
-export const saveFooterConfig = createServerFn({ method: "POST" })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  .inputValidator((data: any) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/settings/footer", data as Record<string, unknown>);
-  });
-
-// ─── Hero Sliders ────────────────────────────────────────────────
-
-export const getHeroSliders = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<unknown[]>("/settings/hero-sliders");
-  },
-);
-
-export const createHeroSlider = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/settings/hero-sliders", data);
-  });
-
-export const updateHeroSlider = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { id: string; update: Record<string, unknown> }) => data,
-  )
-  .handler(async ({ data }) => {
-    return apiPut(`/settings/hero-sliders/${data.id}`, data.update);
-  });
-
 // ═══════════════════════════════════════════════════════════════════
 //  AI (OpenRouter / Prompts / Context)
 // ═══════════════════════════════════════════════════════════════════

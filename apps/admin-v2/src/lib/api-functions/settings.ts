@@ -5,10 +5,64 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type SettingsPayload = { [key: string]: JsonValue };
 export type MessagePayload = { message?: string };
+export type EmptyPayload = Record<string, never>;
 export type SettingsByCategoryInput = { category: string };
 export type UpdateSettingsByCategoryInput = SettingsByCategoryInput & {
   settings: SettingsPayload;
 };
+
+export interface SocialLinkConfig {
+  id: string;
+  label: string;
+  url: string;
+  iconUrl?: string;
+}
+
+export interface LogoConfig {
+  src: string;
+  alt: string;
+}
+
+export interface FaviconConfig {
+  src: string;
+  alt: string;
+}
+
+export interface NavigationItemConfig {
+  id: string;
+  title: string;
+  href?: string;
+  subMenu?: NavigationItemConfig[];
+}
+
+export interface HeaderConfigInput {
+  topBar: {
+    text: string;
+    isEnabled: boolean;
+  };
+  logo: LogoConfig;
+  favicon: FaviconConfig;
+  contact: {
+    phone: string;
+    text: string;
+    isEnabled: boolean;
+  };
+  social: SocialLinkConfig[];
+  navigation: NavigationItemConfig[];
+}
+
+export interface FooterConfigInput {
+  logo: LogoConfig;
+  tagline: string;
+  description: string;
+  copyrightText: string;
+  menus: Array<{
+    id: string;
+    title: string;
+    links: NavigationItemConfig[];
+  }>;
+  social: SocialLinkConfig[];
+}
 
 export interface GeneralSettingsPayload {
   headerConfig: SettingsPayload;
@@ -131,6 +185,18 @@ export const getGeneralSettings = createServerFn({ method: "GET" }).handler(
     return apiGet<GeneralSettingsPayload>("/settings/general");
   },
 );
+
+export const saveHeaderConfig = createServerFn({ method: "POST" })
+  .inputValidator((data: HeaderConfigInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<EmptyPayload>("/settings/header", data);
+  });
+
+export const saveFooterConfig = createServerFn({ method: "POST" })
+  .inputValidator((data: FooterConfigInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<EmptyPayload>("/settings/footer", data);
+  });
 
 export const getStorefrontUrl = createServerFn({ method: "GET" }).handler(
   async () => {

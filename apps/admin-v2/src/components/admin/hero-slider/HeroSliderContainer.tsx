@@ -10,7 +10,7 @@ import {
   getHeroSliders,
   createHeroSlider,
   updateHeroSlider,
-} from "~/lib/api.functions";
+} from "~/lib/api-functions/hero-sliders";
 
 export function HeroSliderContainer() {
   const [desktopSlider, setDesktopSlider] = useState<HeroSlider | null>(null);
@@ -23,7 +23,7 @@ export function HeroSliderContainer() {
   const fetchSliders = async () => {
     try {
       const data = await getHeroSliders();
-      const items = (Array.isArray(data) ? data : []) as HeroSlider[];
+      const items = Array.isArray(data) ? data : [];
       const desktop = items.find((s) => s.type === "desktop");
       const mobile = items.find((s) => s.type === "mobile");
       setDesktopSlider(desktop ?? null);
@@ -51,7 +51,9 @@ export function HeroSliderContainer() {
     else setMobileSlider({ ...slider, ...updates });
 
     try {
-      const updatedSlider = await updateHeroSlider({ data: { id: slider.id, update: updates } }) as HeroSlider;
+      const updatedSlider = await updateHeroSlider({
+        data: { id: slider.id, update: updates },
+      });
       if (type === "desktop") setDesktopSlider(updatedSlider);
       else setMobileSlider(updatedSlider);
 
@@ -90,7 +92,7 @@ export function HeroSliderContainer() {
     try {
       const slider = await createHeroSlider({
         data: { type, images: [], isActive: true },
-      }) as HeroSlider;
+      });
       if (type === "desktop") setDesktopSlider(slider);
       else setMobileSlider(slider);
 

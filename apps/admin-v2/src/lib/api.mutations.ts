@@ -92,8 +92,6 @@ import {
   updateAttributeValues,
   bulkDeleteAttributes,
   bulkRestoreAttributes,
-  saveHeaderConfig,
-  saveFooterConfig,
   // Product Variants
   createProductVariant,
   updateProductVariant,
@@ -114,6 +112,12 @@ import {
   deleteWidgetHistory,
   restoreWidgetHistory,
 } from "./api.functions";
+import {
+  saveFooterConfig,
+  saveHeaderConfig,
+  type FooterConfigInput,
+  type HeaderConfigInput,
+} from "./api-functions/settings";
 import {
   createAnalyticsScript,
   deleteAnalyticsScript,
@@ -605,7 +609,7 @@ export function useUpdateSettings(category: string) {
 export function useSaveHeaderConfig() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => saveHeaderConfig({ data }),
+    mutationFn: (data: HeaderConfigInput) => saveHeaderConfig({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.general() });
       toast.success("Header config saved");
@@ -618,7 +622,7 @@ export function useSaveHeaderConfig() {
 export function useSaveFooterConfig() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => saveFooterConfig({ data }),
+    mutationFn: (data: FooterConfigInput) => saveFooterConfig({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.general() });
       toast.success("Footer config saved");

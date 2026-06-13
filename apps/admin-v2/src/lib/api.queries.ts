@@ -58,7 +58,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  getHeroSliders,
   // AI
   getAiPrompts,
   // Firebase
@@ -90,6 +89,7 @@ import {
   getCheckoutLanguages,
   type CheckoutLanguagesQueryInput,
 } from "./api-functions/checkout-languages";
+import { getHeroSliders } from "./api-functions/hero-sliders";
 import {
   getAllDeliveryLocations,
   getDeliveryLocations,
