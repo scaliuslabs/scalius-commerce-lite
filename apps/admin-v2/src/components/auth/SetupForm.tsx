@@ -2,8 +2,7 @@
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { authClient } from "@/lib/auth-client";
-import { runSetup } from "@/lib/api-functions/auth-management";
-import { markFirstUserAsSuperAdmin } from "@/lib/auth.fns";
+import { complete2faVerification, runSetup } from "@/lib/api-functions/auth-management";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,9 +68,6 @@ export function SetupForm() {
         // User might already exist in local DB — that's OK, proceed to sign in
       }
 
-      // Mark the first user as super admin in admin-v2's local D1
-      await markFirstUserAsSuperAdmin({ data: { email } });
-
       // Sign in after account creation
       const signInResult = await authClient.signIn.email({
         email,
@@ -117,7 +113,7 @@ export function SetupForm() {
       }
 
       setIsLoading(false);
-    } catch (err: unknown) {
+    } catch {
       setError("Failed to enable 2FA. Please try again.");
       setIsLoading(false);
     }
@@ -139,9 +135,18 @@ export function SetupForm() {
         return;
       }
 
+      const sessionToken = result.data?.token;
+      if (!sessionToken) {
+        setError("Verification succeeded, but no session proof was returned.");
+        setIsLoading(false);
+        return;
+      }
+
+      await complete2faVerification({ data: { sessionToken } });
+
       setStep("complete");
       setIsLoading(false);
-    } catch (err: unknown) {
+    } catch {
       setError("Verification failed. Please try again.");
       setIsLoading(false);
     }

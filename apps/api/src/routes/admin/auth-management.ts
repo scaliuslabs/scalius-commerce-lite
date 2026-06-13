@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq, count } from "drizzle-orm";
+import { and, eq, count } from "drizzle-orm";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
 import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
@@ -375,29 +375,60 @@ app.openapi(get2faInfoRoute, async (c) => {
     });
 });
 
-const mark2faVerifiedRoute = createRoute({
+const complete2faVerificationRoute = createRoute({
     method: "post",
-    path: "/2fa/mark-verified",
+    path: "/2fa/complete-verification",
     tags: ["Admin - Auth Management"],
-    summary: "Mark session as 2FA verified",
+    summary: "Complete 2FA verification for a proven session",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ sessionToken: z.string().min(32) })
+                }
+            }
+        }
+    },
     responses: {
-        200: { description: "Session marked as verified", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "2FA verification completed", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
     }
 });
 
-app.openapi(mark2faVerifiedRoute, async (c) => {
+app.openapi(complete2faVerificationRoute, async (c) => {
     const db = c.get("db");
     const sessionUser = c.get("user");
     const session = c.get("session");
+    const { sessionToken } = c.req.valid("json");
+
+    if (!session) {
+        throw new UnauthorizedError("No active session found");
+    }
 
     if (!sessionUser.twoFactorEnabled) {
         throw new ForbiddenError("Two-factor authentication is not enabled for this account");
     }
 
-    await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
+    const matchingSession = await db
+        .select({ id: sessionTable.id })
+        .from(sessionTable)
+        .where(and(
+            eq(sessionTable.id, session.id),
+            eq(sessionTable.userId, sessionUser.id),
+            eq(sessionTable.token, sessionToken),
+        ))
+        .get();
 
-    return ok(c, { message: "Session marked as 2FA verified" });
+    if (!matchingSession) {
+        throw new UnauthorizedError("Two-factor verification proof is invalid");
+    }
+
+    await db
+        .update(sessionTable)
+        .set({ twoFactorVerified: true })
+        .where(eq(sessionTable.id, matchingSession.id));
+
+    return ok(c, { message: "Two-factor authentication verified" });
 });
 
 const update2faMethodRoute = createRoute({
@@ -436,7 +467,7 @@ const verify2faRoute = createRoute({
                     schema: z.object({
                         code: z.string(),
                         trustDevice: z.boolean().optional(),
-                        type: z.string().optional().default("totp")
+                        type: z.enum(["totp", "email", "backup"]).optional().default("totp")
                     })
                 }
             }
@@ -458,6 +489,8 @@ app.openapi(verify2faRoute, async (c) => {
         let verifyResult: { token?: string; user?: { id: string } } | null = null;
         if (type === "backup") {
             verifyResult = await auth.api.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
+        } else if (type === "email") {
+            verifyResult = await auth.api.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
         } else {
             verifyResult = await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
         }

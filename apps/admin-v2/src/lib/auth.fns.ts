@@ -174,28 +174,6 @@ export const adminRouteGuard = createServerFn().handler(async () => {
 });
 
 /**
- * Mark the first user as super admin in admin-v2's local D1.
- * Called after setup to ensure the first user has full access.
- */
-export const markFirstUserAsSuperAdmin = createServerFn({ method: "POST" })
-  .inputValidator((data: { email: string }) => data)
-  .handler(async ({ data }) => {
-    const { initBindings } = await import("~/lib/auth.server");
-    const { env } = await import("cloudflare:workers");
-    initBindings();
-    try {
-      await env.DB.prepare(
-        "UPDATE user SET role = 'admin', is_super_admin = 1 WHERE email = ?",
-      )
-        .bind(data.email)
-        .run();
-      return { success: true };
-    } catch {
-      return { success: false };
-    }
-  });
-
-/**
  * Simple redirect if user has ANY valid session.
  * Used in beforeLoad of forgot-password page.
  */

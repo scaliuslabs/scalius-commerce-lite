@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, `ORDER-010`, `ORDER-011`, `OPS-003`, and `DEL-002` are now verified. No high-risk tracked findings are currently open in this audit set.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-14 found new auth, payment/order, storefront, and platform risks. `AUTH-002`, `AUTH-003`, and `SUPPLY-001` are now verified locally and deployed. Active high-priority follow-up remains open for late payment confirmations on terminal orders, SSLCommerz deposit/balance idempotency, abandoned-cleanup/payment races, manual fulfillment atomicity, COD ledger correctness, and a storefront test file bundled as a public Astro route. See `audit/REMEDIATION_TRACKER.md` for the live queue.
 
 ## Validation Performed
 
@@ -24,7 +24,7 @@ Current tracked remediation state: the original tracker items are marked `Verifi
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 95 test files and 568 tests.
+- `pnpm test`: passed 101 test files and 655 tests after the 2026-06-14 auth/dependency slice.
 - Full `pnpm run deploy`: passed and redeployed API, admin, and storefront Workers.
 - Live HTTP and browser checks: API health, admin `/admin`, and storefront `/` returned successfully after redeploy.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
@@ -45,7 +45,23 @@ Current tracked remediation state: the original tracker items are marked `Verifi
 
 Fix direction: enforce the 2FA-verified session state in the API admin middleware, then add route tests for unverified 2FA sessions.
 
-Status: Verified on 2026-06-13. Admin API middleware now rejects unverified 2FA sessions before RBAC except exact 2FA info/verify/mark-verified endpoints, with focused API middleware tests. See `SEC-001` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13 and tightened again on 2026-06-14. Admin API middleware now rejects unverified 2FA sessions before RBAC except exact 2FA info/verify/complete-verification endpoints, with focused API middleware tests. See `SEC-001` in `REMEDIATION_TRACKER.md`.
+
+### AUTH-002: Direct 2FA mark endpoint can bypass the second factor
+
+The re-audit found that `/api/v1/admin/auth/2fa/mark-verified` was exempted from the 2FA middleware gate and then blindly set `session.twoFactorVerified = true`. Any password-authenticated admin account with 2FA enabled could call that endpoint directly and unlock the admin API surface without proving possession of the second factor.
+
+Fix direction: remove the blind mark endpoint. Complete 2FA only after Better Auth verifies a TOTP, email OTP, or backup code, and require a proof that is bound to the current session before setting the custom `twoFactorVerified` field.
+
+Status: Verified on 2026-06-14. The old mark endpoint is no longer routed or exempted. The replacement `/2fa/complete-verification` endpoint requires the session token returned by successful Better Auth verification and checks it against the current session id and user id before setting `twoFactorVerified`. Focused API route/middleware tests, API/admin typechecks, root validation, full deploy, and live admin smoke checks pass.
+
+### AUTH-003: Browser-callable setup helper can promote arbitrary emails to super-admin
+
+The re-audit found `markFirstUserAsSuperAdmin` in the admin app as a browser-callable TanStack server function. It accepted only `{ email }` and updated `user.role = 'admin', is_super_admin = 1` without a session check, setup lock check, no-admin check, or proof that the email belonged to the guarded setup-created user.
+
+Fix direction: delete the helper and keep first-admin promotion inside the guarded `/api/v1/setup` route, which already checks for existing admins and uses the shared D1 binding.
+
+Status: Verified on 2026-06-14. The helper and setup-form call site are removed. Focused stale-reference scan, admin typecheck, root validation, full deploy, and live admin smoke checks pass.
 
 ### SEC-002: Scanner token minting bypasses inventory RBAC
 
@@ -80,6 +96,54 @@ Fix direction: render summary data with DOM APIs/text nodes, or sanitize through
 Status: Verified on 2026-06-13. Checkout summary customer fields render through DOM text nodes instead of `innerHTML`, with an injection regression test. See `SEC-004` in `REMEDIATION_TRACKER.md`.
 
 ## P1 Findings
+
+### PAY-006: Late gateway success can pay terminal orders
+
+Fresh payment/order audits independently found that already-created gateway sessions or late webhooks can still mark cancelled, deleted, returned, or refunded orders as paid. This can create paid terminal orders without re-reserving inventory or moving the order through an explicit recovery transition.
+
+Fix direction: add a shared payable-state guard for payment-session routes and `processPaymentConfirmed()`. Late successful captures for terminal orders should be recorded for reconciliation/manual review without mutating order totals/status, then acknowledged so gateway retries stop.
+
+Status: Not Started. Add focused tests around terminal/refunded states in payment-session routes and `processPaymentConfirmed()`.
+
+### PAY-007: SSLCommerz deposit/balance attempts collide on `tran_id`
+
+SSLCommerz currently sends `tran_id` as the order id. Deposit and balance attempts for the same order can therefore share the local idempotency key/index even though they are distinct captured payments.
+
+Fix direction: generate a unique SSLCommerz transaction id per payment attempt/payment type and dedupe confirmed SSL payments by gateway validation id or local attempt id rather than order id alone.
+
+Status: Not Started. Add a deposit-then-balance processor test that proves both legitimate payments can apply exactly once.
+
+### ORDER-012: Abandoned cleanup can race with payment confirmation
+
+The abandoned cleanup path can release inventory and then later mark/archive/delete by id while a payment confirmation interleaves. That can overwrite a now-paid order or leave an incomplete/restored order in a half-cleaned state.
+
+Fix direction: claim cancellation with status/version/payment guards before release, and make final archive/delete conditional on the expected claimed state.
+
+Status: Not Started. Add an interleaving test where payment CAS wins between cleanup phases.
+
+### ORDER-013: Manual fulfillment can persist order status without shipment/items
+
+Manual fulfillment updates order status/fulfillment before the shipment insert and item updates are batched. A later failure can leave shipped/complete order status without durable shipment rows or shipped items.
+
+Fix direction: batch order update, shipment insert, and item updates together; make retry idempotently repair inventory when shipment/items already committed.
+
+Status: Not Started. Add batch-failure and retry-reconciliation tests.
+
+### ORDER-014: COD delivered/completed status can mark paid without ledger rows
+
+Generic order status updates can set COD orders to `paymentStatus: paid` on delivered/completed transitions without creating `order_payments`, updating `paidAmount`/`balanceDue`, or updating `cod_tracking`.
+
+Fix direction: route COD collection through `recordCODCollection()` or require collection details before marking COD paid.
+
+Status: Not Started. Add COD delivered transition tests that reject ledgerless paid status or assert complete ledger/tracking creation.
+
+### BUILD-004: Storefront test file is bundled as a public Astro route
+
+`apps/storefront/src/pages/seo-regressions.test.ts` lives under Astro pages and can be emitted as a public route/chunk.
+
+Fix direction: move the test outside `src/pages`, then verify storefront build output has no `seo-regressions.test` route or chunk.
+
+Status: Not Started.
 
 ### ORDER-001: Expiry cron can release live order reservations
 

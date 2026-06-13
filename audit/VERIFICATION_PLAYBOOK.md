@@ -12,6 +12,7 @@ pnpm typecheck
 pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts
 pnpm --filter @scalius/database check:migrations
 pnpm check:env
+pnpm audit --audit-level moderate
 pnpm test
 ```
 
@@ -21,6 +22,7 @@ Current expected result:
 - Drizzle check passes.
 - Database migration metadata guard passes.
 - Worker Env declaration guard passes.
+- Dependency audit reports no known moderate-or-higher vulnerabilities.
 - Root tests currently pass with `pnpm test`.
 
 ## Focused Typecheck Commands
@@ -61,6 +63,17 @@ Admin shell/list routing:
 pnpm exec vitest run apps/admin-v2/src/lib/admin-access.test.ts apps/admin-v2/src/routes/api/scanner-token.test.tsx
 pnpm --filter @scalius/admin-v2 typecheck
 ```
+
+Admin 2FA/setup auth boundary:
+
+```bash
+pnpm --filter @scalius/api test -- src/middleware/admin-auth.test.ts src/routes/admin/auth-management.test.ts
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/admin-v2 typecheck
+rg -n 'mark2faVerified|mark-verified|markFirstUserAsSuperAdmin' apps/admin-v2/src apps/api/src packages/core/src
+```
+
+For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`.
 
 Admin server-function slice changes:
 

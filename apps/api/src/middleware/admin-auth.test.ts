@@ -145,12 +145,31 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     for (const [pathname, method] of [
       ["/api/v1/admin/auth/2fa/info", "GET"],
       ["/api/v1/admin/auth/2fa/verify", "POST"],
-      ["/api/v1/admin/auth/2fa/mark-verified", "POST"],
+      ["/api/v1/admin/auth/2fa/complete-verification", "POST"],
     ] as const) {
       const next = vi.fn().mockResolvedValue(undefined);
       await adminAuthMiddleware(createContext(pathname, method) as never, next);
       expect(next).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it("does not allow direct 2FA mark-verified requests before proof verification", async () => {
+    mockBetterAuthSession({
+      user: { twoFactorEnabled: true },
+      session: { twoFactorVerified: false },
+    });
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(createContext("/api/v1/admin/auth/2fa/mark-verified", "POST") as never, next),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Two-factor verification required",
+    });
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("does not allow broader 2FA management endpoints before verification", async () => {

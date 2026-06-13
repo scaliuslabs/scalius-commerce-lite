@@ -16,8 +16,8 @@ import {
 import { Loader2, AlertCircle, KeyRound, Mail, Smartphone, Shield, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import {
+  complete2faVerification,
   get2faInfo,
-  mark2faVerified,
 } from "@/lib/api-functions/auth-management";
 
 type VerifyMethod = "totp" | "email" | "backup";
@@ -90,14 +90,11 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
     setIsLoading(true);
 
     try {
-      let verifyResult;
-      if (method === "backup") {
-        verifyResult = await authClient.twoFactor.verifyBackupCode({ code });
-      } else if (method === "email") {
-        verifyResult = await authClient.twoFactor.verifyOtp({ code, trustDevice: true });
-      } else {
-        verifyResult = await authClient.twoFactor.verifyTotp({ code, trustDevice: true });
-      }
+      const verifyResult = method === "backup"
+        ? await authClient.twoFactor.verifyBackupCode({ code, trustDevice: true })
+        : method === "email"
+          ? await authClient.twoFactor.verifyOtp({ code, trustDevice: true })
+          : await authClient.twoFactor.verifyTotp({ code, trustDevice: true });
 
       if (verifyResult.error) {
         setError(verifyResult.error.message || "Invalid verification code");
@@ -105,12 +102,18 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
         return;
       }
 
-      // Mark the session as 2FA verified in our database
-      await mark2faVerified();
+      const sessionToken = verifyResult.data?.token;
+      if (!sessionToken) {
+        setError("Verification succeeded, but no session proof was returned.");
+        setIsLoading(false);
+        return;
+      }
+
+      await complete2faVerification({ data: { sessionToken } });
 
       window.location.href = "/admin";
-    } catch {
-      setError("Verification failed. Please try again.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
       setIsLoading(false);
     }
   };

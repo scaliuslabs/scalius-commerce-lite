@@ -9,10 +9,13 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 | ID | Severity | Status | Owner | Summary | Primary Verification |
 | --- | --- | --- | --- | --- | --- |
 | SEC-001 | P0 | Verified | API/Auth | Enforce 2FA verification in admin API middleware. | API route tests for unverified 2FA session. |
+| AUTH-002 | P0 | Verified | API/Admin Auth | Remove direct 2FA `mark-verified` bypass; require Better Auth session-token proof before setting `session.twoFactorVerified`. | Focused API auth tests, API/admin typechecks, root gates, deploy, and live admin smoke. |
+| AUTH-003 | P0 | Verified | Admin/Auth Setup | Delete browser-callable first-user super-admin promotion helper and rely on guarded `/api/v1/setup`. | Stale-reference scan, admin typecheck, deploy, and live admin smoke. |
 | SEC-002 | P0 | Verified | Admin/Auth/RBAC | Require inventory permission before scanner token minting. | Low-permission admin cannot mint scanner session. |
 | SEC-003 | P0 | Verified | API/Settings | Split public checkout-language reads from admin mutations. | Public mutation returns 404; admin mutation remains registered. |
 | PRIV-001 | P0 | Verified | Storefront/Orders | Protect order receipt PII with receipt token/minimal DTO. | Private browser cannot view PII by order ID alone. |
 | SEC-004 | P0 | Verified | Storefront/Checkout | Remove `innerHTML` rendering of checkout user data. | Injection string renders safely as text. |
+| SUPPLY-001 | P1 | Verified | Platform/Dependencies | Clear open `pnpm audit` advisories for Hono/Turbo/esbuild/shell-quote/devalue/grpc/ws/qs. | `pnpm audit --audit-level moderate` returns no known vulnerabilities. |
 | ORDER-001 | P1 | Verified | Inventory/Orders | Reservation expiry can release live order reservations. | Expiry test with live reserved order. |
 | ORDER-002 | P1 | Verified | Orders/Fulfillment | Inventory/COD/provider side effects can precede local CAS/commit. | CAS/provider failure-ordering tests. |
 | ORDER-003 | P1 | Verified | Orders/Queue | Batch stock/discount failure can poison unrelated messages. | Mixed batch failure isolation tests. |
@@ -38,6 +41,12 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 | ORDER-008 | P1 | Verified | Orders/Fulfillment | Bulk shipment claim is only a version bump before provider side effects. | Exclusive claim/state prevents concurrent updates during provider shipment. |
 | ORDER-011 | P1 | Verified | Admin/Orders/Inventory | Restoring soft-deleted orders can revive invalid status/inventory combinations. | Restore matrix and central reservable-status guard prevent impossible pairs. |
 | DEL-002 | P1 | Verified | Delivery/Orders | Shipment deletion can remove reconciliation evidence while an order claim remains active. | Claimed/reconcile-required shipments cannot be deleted; stale failed/cancelled claims are cleared before deletion. |
+| PAY-006 | P1 | Not Started | Payments/Orders | Late gateway success can mark cancelled/deleted/returned/refunded orders paid. | Add payable-state guard tests for session routes and `processPaymentConfirmed()`. |
+| PAY-007 | P1 | Not Started | Payments/SSLCommerz | SSLCommerz deposit/balance attempts reuse `tran_id` and collide with local idempotency. | Deposit then balance webhook processor test. |
+| ORDER-012 | P1 | Not Started | Admin/Orders/Inventory | Abandoned cleanup can race with late payment and overwrite a now-paid order. | Simulated payment CAS between cleanup claim/release/final update. |
+| ORDER-013 | P1 | Not Started | Orders/Fulfillment | Manual fulfillment can persist order status before shipment/items commit. | Batch-failure and idempotent retry tests. |
+| ORDER-014 | P1 | Not Started | Orders/COD | Generic delivered/completed status update can mark COD paid without ledger/tracking updates. | COD delivered transition test must require collection path or create full ledger rows. |
+| BUILD-004 | P1 | Not Started | Storefront/Build | `src/pages/seo-regressions.test.ts` is bundled as a public Astro route/chunk. | Move test out of `src/pages`; storefront build/dist scan has no test route. |
 
 ## Secondary Queue
 
@@ -72,6 +81,12 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 | TEST-002 | P2 | Verified | Storefront/Tests | Storefront focused tests blocked by missing `happy-dom`. | Focused storefront test starts and runs. |
 | ORDER-009 | P2 | Verified | Admin/Orders/Inventory | Full order edits can commit item changes before inventory deltas are safely applied. | Inventory delta failures abort without losing old item context. |
 | ORDER-010 | P2 | Verified | Orders/Queue | Order-ingest fallback can double-reserve after uncertain rollback. | Fallback reuses held reservations and retries only after confirmed release. |
+| STORE-005 | P2 | Not Started | Storefront/Checkout | Inline checkout config serialization allows stored XSS through gateway config values. | Script-safe serializer/inert JSON test with `</script>` payload. |
+| STORE-006 | P2 | Not Started | Storefront/Cart | Empty-cart language strings render through `innerHTML`. | Happy-dom test with malicious language strings. |
+| PRIV-002 | P2 | Not Started | Storefront/Tracking | Raw checkout PII persists in `sessionStorage` and enriches broad Meta CAPI events. | Order-success cleanup and event-payload interception tests. |
+| CACHE-001 | P2 | Not Started | API/Settings/Cache | Payment settings saves do not invalidate checkout config/storefront checkout caches. | Payment settings route tests assert checkout invalidation and purge. |
+| BUILD-005 | P2 | Not Started | Platform/Turbo | Turbo build cache ignores app-local env inputs and public build env vars. | Turbo dry-run includes app `.env*` inputs and declared public env keys. |
+| SDK-001 | P2 | Not Started | API Client | Generated SDK runtime `@hey-api/client-fetch` is deprecated/outdated. | Update compatible Hey API packages, regenerate SDK, app typechecks. |
 
 ## Cleanup Queue
 
@@ -85,16 +100,22 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 
 - Root `pnpm typecheck`: passed.
 - Drizzle schema check: passed.
-- Root test suite: passes with `pnpm test` (95 files, 568 tests).
+- Root test suite: passes with `pnpm test` (101 files, 655 tests).
 - Storefront focused Vitest: passes after adding the missing `happy-dom` test dependency.
 
 ## Remediation Notes
+
+2026-06-14:
+
+- `SUPPLY-001` fixed by moving the API Hono dependency out of the advisory range, updating Turbo, and pinning patched transitive advisory packages through `pnpm.overrides` (`esbuild`, `devalue`, `shell-quote`, `@grpc/grpc-js`, `ws`, and `qs`). Verification: `pnpm audit --audit-level moderate` reports no known vulnerabilities. Remaining dependency freshness work is tracked separately as `BUILD-005` and `SDK-001`.
+- `AUTH-002` fixed by removing the unauthenticated trust boundary around `/api/v1/admin/auth/2fa/mark-verified`. Admin login/setup/account flows now verify the 2FA code through Better Auth first, then call `/api/v1/admin/auth/2fa/complete-verification` with the session token returned by successful Better Auth verification. The API only sets `session.twoFactorVerified = true` when that token matches the current session id and user id. Verification: focused API auth tests, API/admin/root typechecks, root tests, root lint, full `pnpm run deploy`, direct sign-in endpoint smoke, and browser smoke for `/admin/orders`.
+- `AUTH-003` fixed by deleting the browser-callable `markFirstUserAsSuperAdmin` server function and removing the setup-form call site. First-admin promotion remains owned by the guarded `/api/v1/setup` route, and API/admin workers share the same D1 binding. Verification: stale-reference scan for `markFirstUserAsSuperAdmin`, admin typecheck, full `pnpm run deploy`, direct sign-in endpoint smoke, and browser smoke for `/admin/orders`.
 
 2026-06-13:
 
 - `SEC-003` fixed by splitting `apps/api/src/routes/checkout-languages.ts` into public active-read and admin CRUD routers, then mounting the public router only at `/api/v1/checkout-languages`. Regenerated `@scalius/api-client` from a live local API server. Verification: `pnpm --filter @scalius/api test -- src/routes/checkout-languages.test.ts`, `pnpm --filter @scalius/api typecheck`, `pnpm --filter @scalius/api-client typecheck`, and `git diff --check`.
 - `SEC-002` fixed by requiring `products.view` plus `products.edit`, or super-admin, before `apps/admin-v2/src/routes/api/scanner-token.tsx` writes a QR scanner token. Verification: `pnpm exec vitest run apps/admin-v2/src/routes/api/scanner-token.test.tsx --passWithNoTests` and `pnpm --filter @scalius/admin-v2 typecheck`.
-- `SEC-001` fixed by exposing `session.twoFactorVerified` through Better Auth, storing the Better Auth session in Hono context, and rejecting unverified 2FA sessions before admin RBAC except exact 2FA info/verify/mark-verified endpoints. Verification: `pnpm --filter @scalius/api test -- src/middleware/admin-auth.test.ts`, `pnpm --filter @scalius/api typecheck`, and `pnpm --filter @scalius/core typecheck`.
+- `SEC-001` fixed by exposing `session.twoFactorVerified` through Better Auth, storing the Better Auth session in Hono context, and rejecting unverified 2FA sessions before admin RBAC except exact 2FA info/verify/complete-verification endpoints. Verification: `pnpm --filter @scalius/api test -- src/middleware/admin-auth.test.ts`, `pnpm --filter @scalius/api typecheck`, and `pnpm --filter @scalius/core typecheck`.
 - `SEC-004` fixed by rendering checkout summary customer name/address with DOM `textContent` instead of `innerHTML`. Added `happy-dom` to storefront dev dependencies, resolving `TEST-002`. Verification: `pnpm --filter @scalius/storefront exec vitest run src/lib/checkout/render-summary.test.ts --passWithNoTests` and `pnpm --filter @scalius/storefront typecheck`.
 - `PRIV-001` fixed by creating a KV-backed receipt token from the checkout token, adding `GET /api/v1/orders/receipt/{id}?token=...`, switching `/order-success` to require `orderId` plus `token`, and rendering a minimal receipt DTO that omits phone, email, customer ID, shipments, delivery providers, and notes. Regenerated `@scalius/api-client`; current OpenAPI surface is 253 paths / 351 operations. Verification: `pnpm --filter @scalius/api test -- src/routes/orders-receipt.test.ts`, the combined P0 API test run, and the focused typecheck chain through API, admin, storefront, core, and api-client.
 - `ORDER-001` fixed by constraining `releaseExpiredReservations()` to orphaned inventory movements whose order row no longer exists, with a second per-candidate order-existence guard before stock release. Active pending/confirmed/incomplete orders now keep their reservations until explicit order transition logic releases or deducts them. Verification: `pnpm --filter @scalius/core test -- src/modules/inventory/expiry.test.ts` and `pnpm --filter @scalius/core typecheck`.
