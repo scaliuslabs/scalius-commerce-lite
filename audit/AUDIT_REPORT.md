@@ -22,7 +22,7 @@ The highest current risks are not "wrong stack" problems. They are boundary and 
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 87 test files and 531 tests.
+- `pnpm test`: passed 91 test files and 545 tests.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
@@ -155,11 +155,11 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 ### ADMIN-001: Admin API wrapper layer is too large and partially outside TypeScript
 
-`apps/admin-v2/src/lib/api.functions.ts` is still 255 lines, has `@ts-nocheck`, and contains 25 server functions after the current extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 226 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
+`apps/admin-v2/src/lib/api.functions.ts` is still 170 lines, has `@ts-nocheck`, and contains 16 server functions after the current extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 235 typed server functions. The remaining legacy barrel still uses identity validators and loose payload shapes for the widget domain.
 
 Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
 
-Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, auth/admin-users/2FA/setup, settings, shipping methods, checkout languages, delivery, hero sliders, AI/Firebase, dashboard, inventory, media, attributes, pages, discounts, categories, collections, products/variants, and orders/shipments were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs customers and widgets extracted domain by domain.
+Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, auth/admin-users/2FA/setup, settings, shipping methods, checkout languages, delivery, hero sliders, AI/Firebase, dashboard, inventory, media, attributes, pages, discounts, categories, collections, products/variants, orders/shipments, and customers were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs widgets extracted.
 
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 

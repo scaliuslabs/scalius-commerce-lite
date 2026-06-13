@@ -19,13 +19,12 @@ export const Route = createFileRoute("/admin/customers/$customerId/history")({
 function CustomerHistoryPage() {
   const { customerId } = Route.useParams();
   const { data } = useSuspenseQuery(customerHistoryQueryOptions(customerId));
-  const r = data as Record<string, unknown>;
 
   return (
     <CustomerHistoryView
-      customer={r.customer as Parameters<typeof CustomerHistoryView>[0]["customer"]}
-      history={(r.history || []) as Parameters<typeof CustomerHistoryView>[0]["history"]}
-      orders={(r.orders || []) as Parameters<typeof CustomerHistoryView>[0]["orders"]}
+      customer={data.customer}
+      history={data.history}
+      orders={data.orders}
     />
   );
 }

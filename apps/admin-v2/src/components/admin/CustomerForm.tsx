@@ -22,7 +22,12 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
-import { createCustomer, updateCustomer } from "@/lib/api.functions";
+import {
+  createCustomer,
+  updateCustomer,
+  type CreateCustomerInput,
+  type UpdateCustomerInput,
+} from "@/lib/api-functions/customers";
 import { getAllowedCountries } from "@/lib/api-functions/settings";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
@@ -31,6 +36,27 @@ import { queryKeys } from "@/lib/query-keys";
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
   isEdit?: boolean;
+}
+
+function toCreateCustomerInput(values: CustomerFormValues): CreateCustomerInput {
+  return {
+    name: values.name,
+    email: values.email,
+    phone: values.phone,
+    address: values.address,
+    city: values.city,
+    zone: values.zone,
+    area: values.area,
+  };
+}
+
+function toUpdateCustomerInput(
+  values: CustomerFormValues & { id: string },
+): UpdateCustomerInput {
+  return {
+    id: values.id,
+    ...toCreateCustomerInput(values),
+  };
 }
 
 export function CustomerForm({
@@ -135,8 +161,14 @@ export function CustomerForm({
     entityName: "Customer",
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => createCustomer({ data: data as Record<string, unknown> }),
-    updateFn: (data) => updateCustomer({ data: data as { id: string } & Record<string, unknown> }),
+    createFn: (data) => createCustomer({ data: toCreateCustomerInput(data) }),
+    updateFn: (data) => {
+      if (!data.id) throw new Error("Customer ID is required for updates");
+      const updateData = { ...data, id: data.id };
+      return updateCustomer({
+        data: toUpdateCustomerInput(updateData),
+      });
+    },
     invalidateKeys: [
       queryKeys.customers.list(),
       ...(isEdit && defaultValues?.id ? [queryKeys.customers.detail(defaultValues.id)] : []),

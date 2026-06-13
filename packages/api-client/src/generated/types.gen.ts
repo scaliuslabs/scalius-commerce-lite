@@ -6651,18 +6651,6 @@ export type PostApiV1AdminCustomersResponses = {
         success: true;
         data: {
             id: string;
-            name: string;
-            email: string | null;
-            phone: string;
-            address: string | null;
-            city: string | null;
-            zone: string | null;
-            area: string | null;
-            cityName: string | null;
-            zoneName: string | null;
-            areaName: string | null;
-            totalOrders: number;
-            totalSpent: number;
         };
     };
 };
@@ -6795,6 +6783,10 @@ export type GetApiV1AdminCustomersByIdResponses = {
             areaName: string | null;
             totalOrders: number;
             totalSpent: number;
+            lastOrderAt: string | number | null;
+            createdAt: string | number;
+            updatedAt: string | number;
+            deletedAt: string | number | null;
         };
     };
 };
@@ -7018,6 +7010,10 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 areaName: string | null;
                 totalOrders: number;
                 totalSpent: number;
+                lastOrderAt: string | number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt?: string | number | null;
             };
             history: Array<{
                 id: string;
@@ -7033,14 +7029,12 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 areaName: string | null;
                 changeType: string;
                 createdAt: string | number;
-                [key: string]: unknown;
             }>;
             orders: Array<{
                 id: string;
                 totalAmount: number;
                 status: string;
                 createdAt: string | number;
-                [key: string]: unknown;
             }>;
         };
     };

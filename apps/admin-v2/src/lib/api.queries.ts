@@ -11,15 +11,17 @@
 import { queryOptions } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
 import {
-  // Customers
-  getCustomers,
-  getCustomer,
-  getCustomerHistory,
   // Widgets
   getWidgets,
   getWidget,
   getWidgetHistory,
 } from "./api.functions";
+import {
+  getCustomer,
+  getCustomerHistory,
+  getCustomers,
+  type CustomersQueryInput,
+} from "./api-functions/customers";
 import {
   getProduct,
   getProducts,
@@ -310,15 +312,7 @@ export const orderShipmentsQueryOptions = (orderId: string) =>
 //  CUSTOMERS
 // ═══════════════════════════════════════════════════════════════════
 
-export const customersQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sort?: string;
-  order?: string;
-  showTrashed?: boolean;
-  trashed?: boolean;
-}) =>
+export const customersQueryOptions = (params: CustomersQueryInput) =>
   queryOptions({
     queryKey: queryKeys.customers.list(params),
     queryFn: () => getCustomers({ data: params }),

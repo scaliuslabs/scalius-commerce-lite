@@ -7,7 +7,7 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 | File | Purpose |
 |------|---------|
 | `index.ts` | Barrel export -- re-exports `customers.service` only (not customer-auth) |
-| `customers.service.ts` | Admin CRUD: `listCustomers`, `createCustomer`, `updateCustomer`, `deleteCustomer`, `permanentDeleteCustomer`, `restoreCustomer`, `bulkDeleteCustomers`, `getCustomerById`. Re-exports schemas from `customers.validation.ts`. |
+| `customers.service.ts` | Admin CRUD: `listCustomers`, `createCustomer`, `updateCustomer`, `deleteCustomer`, `permanentlyDeleteCustomer`, `restoreCustomer`, `bulkDeleteCustomers`, `getCustomerById`. Re-exports schemas from `customers.validation.ts`. |
 | `customers.validation.ts` | Canonical Zod schemas: `createCustomerSchema` (uses `phoneNumberSchema` from `@scalius/shared/customer-utils`), `updateCustomerSchema` (partial). Imported by both service and API routes. |
 | `customer-auth.service.ts` | Storefront auth: `sendOtp()`, `verifyOtp()`, `getCustomerBySession()`, `deleteCustomerSession()`, `updateCustomerProfile()`. Cookie/session helpers. Imported directly by path (not through `index.ts`) |
 | `otp-transport.ts` | `OtpTransport` interface + three implementations: `EmailOtpTransport`, `SmsOtpTransport`, `WhatsAppOtpTransport`. Factory: `getOtpTransport()` |
@@ -87,7 +87,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 | GET | `/{id}` | `getCustomerById` | Single customer by ID |
 | PUT | `/{id}` | `updateCustomer` | Update with phone uniqueness + history |
 | DELETE | `/{id}` | `deleteCustomer` | Soft delete with history record |
-| DELETE | `/{id}/permanent` | `permanentDeleteCustomer` | Hard delete + cascade history |
+| DELETE | `/{id}/permanent` | `permanentlyDeleteCustomer` | Hard delete + cascade history |
 | POST | `/{id}/restore` | `restoreCustomer` | Restore soft-deleted |
 | GET | `/{id}/history` | (inline in route) | Customer + history records + orders (batched query) |
 
