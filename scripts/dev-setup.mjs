@@ -117,7 +117,12 @@ Options:
 }
 
 if (!skipAdmin && !envOnly) {
-  assertPassword(localAdminPassword);
+  try {
+    assertPassword(localAdminPassword);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }
 
 function run(cmd, label) {

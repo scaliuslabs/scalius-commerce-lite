@@ -27,9 +27,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
 const args = process.argv.slice(2);
+const validCommands = new Set(["create", "reset", "status", "help"]);
 
-const command = args.find((arg) => !arg.startsWith("-")) || "create";
-const options = parseOptions(args.filter((arg) => arg !== command));
+const positionalCommand = args[0] && !args[0].startsWith("--") ? args[0] : undefined;
+const command = positionalCommand || "create";
+const options = parseOptions(positionalCommand ? args.slice(1) : args);
 
 const defaults = {
   apiBaseUrl: process.env.LOCAL_API_BASE_URL || "http://localhost:8787",
@@ -44,6 +46,12 @@ if (options.help || command === "help") {
   process.exit(0);
 }
 
+if (!validCommands.has(command)) {
+  console.error(`Unknown command: ${command}`);
+  printHelp();
+  process.exit(1);
+}
+
 const config = {
   apiBaseUrl: trimTrailingSlash(options.api || defaults.apiBaseUrl),
   email: options.email || defaults.email,
@@ -54,8 +62,15 @@ const config = {
   wranglerState: resolveLocalStatePath(root, options.state || defaults.wranglerState),
 };
 
-assertLocalUrl(config.apiBaseUrl);
-assertPassword(config.password);
+try {
+  assertLocalUrl(config.apiBaseUrl);
+  if (command !== "status") {
+    assertPassword(config.password);
+  }
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
 
 let migrationsApplied = false;
 
