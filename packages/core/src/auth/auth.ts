@@ -111,7 +111,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
       additionalFields: {
         twoFactorVerified: {
           type: "boolean",
-          fieldName: "two_factor_verified",
+          fieldName: "twoFactorVerified",
           required: false,
           returned: true,
           input: false,

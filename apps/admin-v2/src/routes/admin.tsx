@@ -11,8 +11,6 @@ import { useFirebaseInit } from "~/hooks/use-firebase-init";
 import { ADMIN_ACCESS_DENIED_PATH, shouldAllowAdminPath } from "~/lib/admin-access";
 
 export const Route = createFileRoute("/admin")({
-  // Admin is behind auth, never crawled — skip SSR for faster client navigation
-  ssr: false,
   beforeLoad: async ({ location }) => {
     // Auth + RBAC guard: redirects to /auth/setup, /auth/login, or /auth/two-factor as needed
     const authContext = await adminRouteGuard();
