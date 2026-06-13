@@ -74,9 +74,9 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 3. **Queue consumer** -- `handleOrderIngestBatch()` processes the batch:
    - Phase 1: Accumulate DB write statements (customer, order, items, discount usage) and reservation entries
    - Phase 1b: Re-check discount usage limits to narrow race window
-   - Phase 2: `reserveStockBatch()` per pool -- if any fail, retry all messages
+   - Phase 2: `reserveStockBatch()` per order/pool -- if one order cannot reserve, retry only that message
    - Phase 3: `db.batch()` atomic write -- if succeeds, init COD tracking for COD orders, write "completed" to KV, ack messages
-   - Phase 4: On DB failure, rollback inventory via `releaseMultiple()`, retry all messages
+   - Phase 4: On shared DB failure, re-check each order for ambiguous commit, then replay isolated writes with the reservation already held. If isolated writes fail, release only that order's original reservation and retry only after `releaseMultiple()` confirms success; uncertain release fails the checkout closed for manual reconciliation.
 4. **Storefront polls** -- `GET /orders/status/:token` reads KV until "completed" or "failed"
 
 ### Admin Order Creation (synchronous, reserve then deduct)
@@ -91,8 +91,8 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 ### Admin Order Update
 
 1. `updateOrder()` validates status transition via state machine
-2. If `inventoryAction === "reserved"`: releases old reservations, reserves new quantities (rollback on failure)
-3. If `inventoryAction === "deducted"`: adjusts stock deltas directly on `productVariants` -- restores stock for removed/changed variants, deducts for new/increased variants (validates stock availability before deducting)
+2. If `inventoryAction === "reserved"`: reserves positive deltas and releases removed/reduced quantities before replacing item rows
+3. If `inventoryAction === "deducted"`: deducts positive deltas and restores removed/reduced quantities before replacing item rows
 4. Calls `applyInventoryForStatusChange()` after item writes unless an explicit item-delta/status branch already handled inventory; this also repairs same-status retries whose status was persisted before inventory completed
 5. Optimistic locking via `version` column -- throws `ConflictError` if version mismatch
 6. Deletes all existing items and re-inserts (full replacement)
@@ -152,7 +152,7 @@ All 9 statuses that trigger notifications are covered. Each dispatches to enable
 
 - **Soft delete**: Releases inventory via `applyInventoryForStatusChange(db, id, "cancelled")` if reserved or deducted, sets `deletedAt`, sets `inventoryAction` to `"restored"`
 - **Permanent delete**: Releases inventory, deletes order items first (FK ordering), then deletes order
-- **Restore**: If `inventoryAction === "restored"`, re-reserves stock via `reserveMultiple()`. Throws `ValidationError` if insufficient stock to re-reserve. Sets `inventoryAction` to `"reserved"`. If inventory was not previously tracked, simply clears `deletedAt`.
+- **Restore**: If `inventoryAction === "restored"`, re-reserves stock via `reserveMultiple()`. Throws `ValidationError` if insufficient stock to re-reserve. Sets `inventoryAction` to `"reserved"`. If inventory was not previously tracked, simply clears `deletedAt`. Open audit item `ORDER-011` tracks that restore still needs a terminal-status guard/reconciliation rule so it cannot revive invalid pairs such as `delivered + reserved` or `cancelled + reserved`.
 - **Bulk delete**: Iterates and applies inventory release per order. For permanent: deletes items first, then orders (FK ordering fixed).
 
 ## Queue Processing
@@ -172,8 +172,8 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 - **Optimistic locking on orders**: `version` column, CAS update in `updateOrder()` and `updateOrderStatus()`
 - **Optimistic locking on inventory**: `stockVersion` column on `productVariants`, separate from general `version`
-- **Reservation rollback**: `reserveMultiple()` rolls back all successful reservations if any fail
-- **Batch atomicity**: Queue handler uses `db.batch()` for atomic multi-row writes; rolls back inventory on DB failure
+- **Reservation rollback**: `reserveMultiple()` rolls back all successful reservations if any fail; queue ingest uses checked `releaseMultiple()` results before retrying messages after an isolated DB-write failure
+- **Batch atomicity**: Queue handler uses `db.batch()` for atomic multi-row writes; on DB failure it treats the outcome as ambiguous, checks whether each order committed, and never reserves the same queue message twice
 - **Discount race narrowing**: Queue handler re-checks discount usage before DB write to narrow the window between HTTP validation and queue processing
 
 ## API Endpoints

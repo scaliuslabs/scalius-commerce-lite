@@ -114,6 +114,7 @@ function createDbMock(options: {
   batchOutcomes?: Array<"resolve" | "reject">;
   discount?: { maxUses: number | null; limitOnePerCustomer: boolean | null };
   totalDiscountUsage?: number;
+  orderLookupResults?: Array<{ id: string; inventoryAction: string | null } | null>;
 } = {}) {
   const db = {
     select(projection?: Record<string, unknown>) {
@@ -123,7 +124,11 @@ function createDbMock(options: {
             where() {
               return {
                 get: async () => {
-                  if (projection && "inventoryAction" in projection) return null;
+                  if (projection && "inventoryAction" in projection) {
+                    return options.orderLookupResults?.length
+                      ? options.orderLookupResults.shift() ?? null
+                      : null;
+                  }
                   if (projection && "maxUses" in projection) return options.discount ?? null;
                   if (projection && "count" in projection) return { count: options.totalDiscountUsage ?? 0 };
                   return null;
@@ -260,5 +265,100 @@ describe("handleOrderIngestBatch isolation", () => {
     expect(good.retry).not.toHaveBeenCalled();
     expect(poison.ack).not.toHaveBeenCalled();
     expect(poison.retry).toHaveBeenCalledWith({ delaySeconds: 15 });
+    expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(2);
+    expect(mocks.releaseMultiple).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseMultiple).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        {
+          orderId: "order_poison",
+          variantId: "variant_order_poison",
+          quantity: 1,
+          pool: "regular",
+        },
+      ],
+      "order_poison",
+    );
+  });
+
+  it("replays an isolated order with its existing reservation instead of reserving twice", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+
+    const msg = createMessage(createPayload("order_replay"));
+    const { env } = createEnvMock();
+
+    await handleOrderIngestBatch(
+      createBatch([msg]) as never,
+      createDbMock({
+        batchOutcomes: [
+          "reject", // shared batch fails after reservation
+          "resolve", // isolated replay succeeds with the original reservation
+        ],
+      }) as never,
+      env as never,
+    );
+
+    expect(msg.ack).toHaveBeenCalledTimes(1);
+    expect(msg.retry).not.toHaveBeenCalled();
+    expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseMultiple).not.toHaveBeenCalled();
+  });
+
+  it("acks an ambiguous shared batch commit without releasing or reserving again", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+
+    const msg = createMessage(createPayload("order_committed"));
+    const { env } = createEnvMock();
+    const db = createDbMock({
+      batchOutcomes: ["reject"],
+      orderLookupResults: [
+        null, // Phase 1b redelivery guard
+        { id: "order_committed", inventoryAction: "reserved" }, // After shared batch failure
+      ],
+    });
+
+    await handleOrderIngestBatch(
+      createBatch([msg]) as never,
+      db as never,
+      env as never,
+    );
+
+    expect(msg.ack).toHaveBeenCalledTimes(1);
+    expect(msg.retry).not.toHaveBeenCalled();
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseMultiple).not.toHaveBeenCalled();
+  });
+
+  it("does not retry isolated failures unless the original reservation was released", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+    mocks.releaseMultiple.mockResolvedValue({
+      success: false,
+      results: [],
+      error: "release failed",
+    });
+
+    const msg = createMessage(createPayload("order_release_failed"));
+    const { env, writes } = createEnvMock();
+
+    await handleOrderIngestBatch(
+      createBatch([msg]) as never,
+      createDbMock({
+        batchOutcomes: [
+          "reject", // shared batch fails
+          "reject", // isolated replay also fails
+        ],
+      }) as never,
+      env as never,
+    );
+
+    expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseMultiple).toHaveBeenCalledTimes(1);
+    expect(msg.retry).not.toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(writes.at(-1)!.value)).toMatchObject({
+      status: "failed",
+      error: "Order ingestion needs manual inventory reconciliation before retry.",
+    });
   });
 });

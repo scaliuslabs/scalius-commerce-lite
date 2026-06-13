@@ -35,6 +35,7 @@ type CheckoutStatusDetails = {
     lastError?: string;
     nextRetryAt?: number;
 };
+type ReservationReleaseResult = { success: true } | { success: false; error: string };
 
 const CHECKOUT_RETRY_DATABASE_ERROR = "Database write error during heavy traffic. Retrying.";
 const CHECKOUT_RETRY_RESERVATION_ERROR = "Insufficient stock preventing batch ingestion.";
@@ -103,19 +104,30 @@ export async function setCheckoutRetryStatus(
 async function releaseReservationsByOrder(
     db: ReturnType<typeof getDb>,
     entries: QueuedReservationEntry[],
-): Promise<void> {
+): Promise<ReservationReleaseResult> {
     const byOrder = groupReservationEntriesByOrder(entries);
+    const errors: string[] = [];
 
     for (const [orderId, orderEntries] of byOrder) {
-        await releaseMultiple(db, orderEntries, orderId);
+        const result = await releaseMultiple(db, orderEntries, orderId);
+        if (!result.success) {
+            errors.push(result.error ?? `Failed to release reservations for order ${orderId}`);
+        }
     }
+
+    return errors.length > 0
+        ? { success: false, error: errors.join("; ") }
+        : { success: true };
 }
 
 async function reserveQueuedEntriesForOrder(
     db: ReturnType<typeof getDb>,
     orderId: string,
     entries: QueuedReservationEntry[],
-): Promise<{ success: true; reservedEntries: QueuedReservationEntry[] } | { success: false; error: string }> {
+): Promise<
+    | { success: true; reservedEntries: QueuedReservationEntry[] }
+    | { success: false; error: string; retryable: boolean }
+> {
     const reservedEntries: QueuedReservationEntry[] = [];
     const byPool = new Map<"regular" | "preorder" | "backorder", QueuedReservationEntry[]>();
     for (const entry of entries) {
@@ -134,13 +146,29 @@ async function reserveQueuedEntriesForOrder(
         if (!reserveResult.success) {
             console.error(`[Queue] reserveStockBatch failed for order ${orderId}, pool ${pool}:`, reserveResult.results);
             if (reservedEntries.length > 0) {
-                await releaseReservationsByOrder(db, reservedEntries).catch((releaseErr) =>
-                    console.error("[Queue] Order reservation rollback failed:", releaseErr),
-                );
+                try {
+                    const releaseResult = await releaseReservationsByOrder(db, reservedEntries);
+                    if (!releaseResult.success) {
+                        console.error("[Queue] Order reservation rollback failed:", releaseResult.error);
+                        return {
+                            success: false,
+                            error: releaseResult.error,
+                            retryable: false,
+                        };
+                    }
+                } catch (releaseErr) {
+                    console.error("[Queue] Order reservation rollback failed:", releaseErr);
+                    return {
+                        success: false,
+                        error: releaseErr instanceof Error ? releaseErr.message : String(releaseErr),
+                        retryable: false,
+                    };
+                }
             }
             return {
                 success: false,
                 error: reserveResult.error ?? "Insufficient stock preventing order ingestion.",
+                retryable: true,
             };
         }
         reservedEntries.push(...poolEntries);
@@ -161,6 +189,91 @@ export function groupReservationEntriesByOrder(
     }
 
     return byOrder;
+}
+
+async function loadExistingIngestedOrder(
+    db: ReturnType<typeof getDb>,
+    orderId: string,
+): Promise<{ id: string; inventoryAction: string | null } | undefined> {
+    return await db
+        .select({
+            id: orders.id,
+            inventoryAction: orders.inventoryAction,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get();
+}
+
+async function completeQueuedOrder(
+    db: ReturnType<typeof getDb>,
+    env: Env,
+    msg: Message<OrderIngestQueueMessage>,
+    logMessage: string,
+): Promise<void> {
+    const payload = msg.body;
+
+    if (payload.orderData.paymentMethod === "cod") {
+        await initCODTracking(db, { orderId: payload.orderData.id }).catch((err: unknown) =>
+            console.error("[Queue] COD tracking init failed for order", payload.orderData.id, err),
+        );
+    }
+
+    await setCheckoutStatus(env, payload.checkoutToken, "completed");
+    msg.ack();
+    console.log(logMessage);
+
+    if (env.ORDER_NOTIFICATIONS_QUEUE) {
+        try {
+            await env.ORDER_NOTIFICATIONS_QUEUE.send({
+                type: "order.notification",
+                orderId: payload.orderData.id,
+                customerEmail: payload.orderData.customerEmail ?? undefined,
+                customerName: payload.orderData.customerName,
+                notificationType: "order_created",
+            });
+        } catch (notifErr) {
+            console.error(`[Queue] Failed to enqueue order_created notification for ${payload.orderData.id}:`, notifErr);
+        }
+    }
+}
+
+async function retryAfterConfirmedReservationRelease(
+    db: ReturnType<typeof getDb>,
+    env: Env,
+    msg: Message<OrderIngestQueueMessage>,
+    reservedEntries: QueuedReservationEntry[],
+    delaySeconds: number,
+): Promise<void> {
+    if (reservedEntries.length > 0) {
+        try {
+            const releaseResult = await releaseReservationsByOrder(db, reservedEntries);
+            if (!releaseResult.success) {
+                console.error("[Queue] Isolated rollback release failed:", releaseResult.error);
+                await setCheckoutStatus(
+                    env,
+                    msg.body.checkoutToken,
+                    "failed",
+                    "Order ingestion needs manual inventory reconciliation before retry.",
+                );
+                msg.ack();
+                return;
+            }
+        } catch (releaseErr) {
+            console.error("[Queue] Isolated rollback release failed:", releaseErr);
+            await setCheckoutStatus(
+                env,
+                msg.body.checkoutToken,
+                "failed",
+                "Order ingestion needs manual inventory reconciliation before retry.",
+            );
+            msg.ack();
+            return;
+        }
+    }
+
+    await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_DATABASE_ERROR, delaySeconds);
+    msg.retry({ delaySeconds });
 }
 
 // ── Batch order ingest handler ──────────────────────────────────────────────
@@ -362,14 +475,7 @@ export async function handleOrderIngestBatch(
         if (!msg) continue;
 
         const orderId = msg.body.orderData.id;
-        const existingOrder = await db
-            .select({
-                id: orders.id,
-                inventoryAction: orders.inventoryAction,
-            })
-            .from(orders)
-            .where(eq(orders.id, orderId))
-            .get();
+        const existingOrder = await loadExistingIngestedOrder(db, orderId);
 
         if (existingOrder) {
             const range = orderWriteRanges.get(orderId);
@@ -500,9 +606,19 @@ export async function handleOrderIngestBatch(
                 const range = orderWriteRanges.get(orderId);
                 if (range) for (let j = range.start; j < range.end; j++) rejectedWriteIndices.add(j);
                 successMessages.splice(i, 1);
-                const delaySeconds = 15;
-                await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_RESERVATION_ERROR, delaySeconds);
-                msg.retry({ delaySeconds });
+                if (reserveResult.retryable) {
+                    const delaySeconds = 15;
+                    await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_RESERVATION_ERROR, delaySeconds);
+                    msg.retry({ delaySeconds });
+                } else {
+                    await setCheckoutStatus(
+                        env,
+                        msg.body.checkoutToken,
+                        "failed",
+                        "Order ingestion needs manual inventory reconciliation before retry.",
+                    );
+                    msg.ack();
+                }
                 continue;
             }
 
@@ -530,35 +646,13 @@ export async function handleOrderIngestBatch(
         }
         console.log(`[Queue] db.batch() completed successfully`);
 
-        // Ack successful messages and run post-write side effects
         for (const msg of successMessages) {
-            const payload = msg.body;
-
-            // Initialize COD tracking record for cash-on-delivery orders
-            if (payload.orderData.paymentMethod === "cod") {
-                await initCODTracking(db, { orderId: payload.orderData.id }).catch((err: unknown) =>
-                    console.error("[Queue] COD tracking init failed for order", payload.orderData.id, err),
-                );
-            }
-
-            await setCheckoutStatus(env, payload.checkoutToken, "completed");
-            msg.ack();
-            console.log(`[Queue] Acked order ${payload.orderData.id}`);
-
-            // Enqueue order_created notification for the customer
-            if (env.ORDER_NOTIFICATIONS_QUEUE) {
-                try {
-                    await env.ORDER_NOTIFICATIONS_QUEUE.send({
-                        type: "order.notification",
-                        orderId: payload.orderData.id,
-                        customerEmail: payload.orderData.customerEmail ?? undefined,
-                        customerName: payload.orderData.customerName,
-                        notificationType: "order_created",
-                    });
-                } catch (notifErr) {
-                    console.error(`[Queue] Failed to enqueue order_created notification for ${payload.orderData.id}:`, notifErr);
-                }
-            }
+            await completeQueuedOrder(
+                db,
+                env,
+                msg,
+                `[Queue] Acked order ${msg.body.orderData.id}`,
+            );
         }
 
         // Handle messages that failed during preparation (pre-DB)
@@ -574,30 +668,22 @@ export async function handleOrderIngestBatch(
         // ── Phase 4: Rollback on DB failure ───────────────────────────────────
         console.error("[Queue] Order ingest DB batch failed WITH EXCEPTION:", batchError);
 
-        if (reservedEntries.length > 0) {
-            console.log(`[Queue] Rolling back inventory...`);
-            await releaseReservationsByOrder(db, reservedEntries).catch((releaseErr) =>
-                console.error("[Queue] Rollback release failed:", releaseErr),
-            );
-        }
-
-        const activeReservationsByOrder = groupReservationEntriesByOrder(activeReservationEntries);
+        const reservedEntriesByOrder = groupReservationEntriesByOrder(reservedEntries);
         for (const msg of successMessages) {
             const payload = msg.body;
             const orderId = payload.orderData.id;
-            const orderReservations = activeReservationsByOrder.get(orderId) ?? [];
-            let orderReservedEntries: QueuedReservationEntry[] = [];
+            const orderReservedEntries = reservedEntriesByOrder.get(orderId) ?? [];
 
             try {
-                if (orderReservations.length > 0) {
-                    const reserveResult = await reserveQueuedEntriesForOrder(db, orderId, orderReservations);
-                    if (!reserveResult.success) {
-                        const delaySeconds = 15;
-                        await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_RESERVATION_ERROR, delaySeconds);
-                        msg.retry({ delaySeconds });
-                        continue;
-                    }
-                    orderReservedEntries = reserveResult.reservedEntries;
+                const existingOrder = await loadExistingIngestedOrder(db, orderId);
+                if (existingOrder) {
+                    await completeQueuedOrder(
+                        db,
+                        env,
+                        msg,
+                        `[Queue] Acked order ${orderId} after ambiguous shared batch commit`,
+                    );
+                    continue;
                 }
 
                 const orderWrites = orderWriteStatements.get(orderId) ?? [];
@@ -606,39 +692,22 @@ export async function handleOrderIngestBatch(
                     await db.batch(orderWrites as any);
                 }
 
-                if (payload.orderData.paymentMethod === "cod") {
-                    await initCODTracking(db, { orderId }).catch((err: unknown) =>
-                        console.error("[Queue] COD tracking init failed for order", orderId, err),
-                    );
-                }
-
-                await setCheckoutStatus(env, payload.checkoutToken, "completed");
-                msg.ack();
-                console.log(`[Queue] Acked isolated order ${orderId} after shared batch failure`);
-
-                if (env.ORDER_NOTIFICATIONS_QUEUE) {
-                    try {
-                        await env.ORDER_NOTIFICATIONS_QUEUE.send({
-                            type: "order.notification",
-                            orderId,
-                            customerEmail: payload.orderData.customerEmail ?? undefined,
-                            customerName: payload.orderData.customerName,
-                            notificationType: "order_created",
-                        });
-                    } catch (notifErr) {
-                        console.error(`[Queue] Failed to enqueue order_created notification for ${orderId}:`, notifErr);
-                    }
-                }
+                await completeQueuedOrder(
+                    db,
+                    env,
+                    msg,
+                    `[Queue] Acked isolated order ${orderId} after shared batch failure`,
+                );
             } catch (isolatedError: unknown) {
-                if (orderReservedEntries.length > 0) {
-                    await releaseReservationsByOrder(db, orderReservedEntries).catch((releaseErr) =>
-                        console.error("[Queue] Isolated rollback release failed:", releaseErr),
-                    );
-                }
                 const delaySeconds = 15;
                 console.error(`[Queue] Isolated order ingest failed for ${msg.body.orderData.id}:`, isolatedError);
-                await setCheckoutRetryStatus(env, msg, CHECKOUT_RETRY_DATABASE_ERROR, delaySeconds);
-                msg.retry({ delaySeconds });
+                await retryAfterConfirmedReservationRelease(
+                    db,
+                    env,
+                    msg,
+                    orderReservedEntries,
+                    delaySeconds,
+                );
             }
         }
 

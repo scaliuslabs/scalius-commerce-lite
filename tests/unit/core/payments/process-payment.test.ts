@@ -288,6 +288,7 @@ function createUpdateQuery(label: string) {
 }
 
 function createPaymentDb(options: {
+  shipmentClaim?: { shipmentClaimId: string | null; shipmentClaimExpiresAt: number | null } | null;
   existingPayment?: { id: string; amount: number; status: string } | null;
   orders: Array<{
     id: string;
@@ -301,7 +302,11 @@ function createPaymentDb(options: {
   }>;
   batchResults: unknown[];
 }) {
-  const selectValues: unknown[] = [options.existingPayment ?? null, ...options.orders];
+  const selectValues: unknown[] = [
+    options.shipmentClaim ?? null,
+    options.existingPayment ?? null,
+    ...options.orders,
+  ];
   let updateCount = 0;
   return {
     select: vi.fn(() => createSelectQuery(selectValues.shift() ?? null)),

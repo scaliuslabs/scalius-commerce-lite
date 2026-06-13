@@ -33,7 +33,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
 | `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
 | `checkShipmentStatus` | `(db, shipmentId, encryptionKey?)` | Polls provider API, updates DB record |
-| `deleteShipmentRecord` | `(db, id)` | Hard delete shipment |
+| `deleteShipmentRecord` | `(db, id)` | Hard delete shipment. Open audit item `DEL-002` tracks that this must reject active order shipment claims and `reconcile_required` rows before it is considered safe for claimed shipment reconciliation. |
 
 ## Tracking Functions (`tracking.ts`)
 
@@ -71,6 +71,8 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 5. On success: UPDATE with `externalId`, `trackingId`, normalized `status`, raw metadata
 6. On provider rejection: UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
 7. On exception: UPDATE to `status: "failed"`, `rawStatus: "exception"`
+
+Provider shipment creation is coordinated by order-level shipment claims in the orders module. Until `DEL-002` is fixed, do not delete claimed or `reconcile_required` shipment rows through `deleteShipmentRecord()` without first clearing or reconciling the linked order claim.
 
 ## Status Mapping
 
