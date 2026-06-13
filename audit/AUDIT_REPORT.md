@@ -155,11 +155,11 @@ Fix direction: fix parser behavior or update the test only if the intended contr
 
 ### ADMIN-001: Admin API wrapper layer is too large and partially outside TypeScript
 
-`apps/admin-v2/src/lib/api.functions.ts` is still about 1,944 lines, has `@ts-nocheck`, and contains 224 server functions after the current extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 29 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
+`apps/admin-v2/src/lib/api.functions.ts` is still about 1,863 lines, has `@ts-nocheck`, and contains 214 server functions after the current extraction slices. The extracted `apps/admin-v2/src/lib/api-functions/` modules now contain 47 typed server functions. The remaining legacy barrel still uses many identity validators and loose payload shapes.
 
 Fix direction: extract one admin domain at a time into domain-specific functions/queries/mutations with Zod or generated SDK request types.
 
-Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, and RBAC role/permission server functions were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
+Status: In progress as of 2026-06-13. Cache, analytics-script, navigation item/preview, fraud-checker, abandoned-checkout delete, RBAC role/permission, and auth/admin-users/2FA/setup server functions were extracted to `apps/admin-v2/src/lib/api-functions/` without file-level `@ts-nocheck`; the legacy barrel still needs additional domain-by-domain extraction.
 
 ### ADMIN-002: Admin UI RBAC can disagree with API RBAC
 
@@ -188,6 +188,24 @@ Fix direction: create one shared transport policy and document intentional excep
 The admin dynamic navigation dialog called `/admin/navigation/preview-products`, but the API did not register that route. Preview counts for category/filter links therefore failed even though the UI path existed.
 
 Status: Remediated 2026-06-13. `GET /api/v1/admin/navigation/preview-products` now validates `categoryId`, ignores reserved list params when building attribute filters, delegates count logic to storefront product filtering through `getNavigationPreviewProductCount()`, enforces `products.view` via API RBAC, and is included in the regenerated SDK.
+
+### ADMIN-006: RBAC permission override payload drift
+
+The admin user permission editor sent `{ permissionId }` to `/admin/rbac/user-permissions`, while the API requires `{ permission, granted }` for writes and `{ permission }` for deletes. Type casts in the admin RBAC wrappers hid the mismatch.
+
+Status: Remediated 2026-06-13. RBAC server functions are typed in `apps/admin-v2/src/lib/api-functions/rbac.ts`, and the UI sends the API contract directly.
+
+### ADMIN-007: Account settings nested permission provider used the permission catalog
+
+`/admin/settings/account` fetched all RBAC permission definitions and passed their names into a nested `PermissionProvider`. Inside the account settings subtree, this could make a non-superadmin appear to have every permission.
+
+Status: Remediated 2026-06-13. Account settings now uses the parent `/admin` route's effective user/permission context and only overlays account-security fields that are not present in that context.
+
+### ADMIN-008: Admin invite email failure was hidden in the UI
+
+The API can create an admin user while returning `emailFailed: true` when the invite email provider fails. The admin UI ignored that response and always showed that the email was sent.
+
+Status: Remediated 2026-06-13. The typed auth-management wrapper exposes `emailFailed`, and the team-member hook shows the API message as a warning when invite delivery fails.
 
 ### STORE-002: Storefront browser `/api/v1` fallback is not a real proxy
 

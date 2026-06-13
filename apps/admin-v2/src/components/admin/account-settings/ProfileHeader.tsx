@@ -8,7 +8,7 @@ import { MediaManager, type MediaFile } from "../media-manager";
 import type { User } from "./AccountSettingsContainer";
 import { useRouter } from "@tanstack/react-router";
 import { getServerFnError } from "~/lib/api-helpers";
-import { updateProfile } from "~/lib/api.functions";
+import { updateProfile } from "~/lib/api-functions/auth-management";
 
 function getInitials(nameStr: string): string {
   return nameStr

@@ -15,12 +15,20 @@ import {
 } from "@/components/ui/card";
 import { Loader2, AlertCircle, KeyRound, Mail, Smartphone, Shield, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { get2faInfo, mark2faVerified } from "@/lib/api.functions";
+import {
+  get2faInfo,
+  mark2faVerified,
+} from "@/lib/api-functions/auth-management";
 
 type VerifyMethod = "totp" | "email" | "backup";
+type PreferredVerifyMethod = Exclude<VerifyMethod, "backup">;
 
 interface TwoFactorFormProps {
   defaultMethod?: "totp" | "email";
+}
+
+function getPreferredMethod(method: string): PreferredVerifyMethod {
+  return method === "totp" ? "totp" : "email";
 }
 
 export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
@@ -43,11 +51,12 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
 
     async function fetchTwoFactorInfo() {
       try {
-        const data = await get2faInfo() as Record<string, unknown>;
+        const data = await get2faInfo();
         if (data.method) {
-          setMethod(data.method as VerifyMethod);
-          setUserEmail((data.email || "") as string);
-          if (data.method === "email") {
+          const preferredMethod = getPreferredMethod(data.method);
+          setMethod(preferredMethod);
+          setUserEmail(data.email || "");
+          if (preferredMethod === "email") {
             await sendEmailOtp();
           }
         }

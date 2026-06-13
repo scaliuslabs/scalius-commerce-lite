@@ -23,7 +23,10 @@ import {
   Mail,
 } from "lucide-react";
 import { toast } from "sonner";
-import { set2faMethod, mark2faVerified } from "~/lib/api.functions";
+import {
+  mark2faVerified,
+  set2faMethod,
+} from "~/lib/api-functions/auth-management";
 import type { User } from "./AccountSettingsContainer";
 
 type TwoFactorStep = "method" | "password" | "qr" | "verify" | "backup";

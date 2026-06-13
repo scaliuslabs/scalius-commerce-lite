@@ -53,7 +53,7 @@ packages/
 
 ### Apps
 
-- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is roughly 224 server functions remaining in the legacy `api.functions.ts` barrel, plus 29 extracted functions under `src/lib/api-functions/`, 78 query option wrappers, 115 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
+- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is roughly 214 server functions remaining in the legacy `api.functions.ts` barrel, plus 47 extracted functions under `src/lib/api-functions/`, 78 query option wrappers, 115 exported mutation hooks, and 60+ non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
 - **API (`apps/api/`)**: Standalone Hono `OpenAPIHono` app mounted at `/api/v1`. Exports a `WorkerEntrypoint` with `fetch`, `queue`, and scheduled inventory-expiry cron handlers. Owns public/admin API routes, webhook ingestion, OpenAPI spec, queue consumer, and `WidgetDesignAgent` Durable Object for widget AI generation.
 - **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer storefront. Owns product, category, cart, checkout, search, customer auth proxy, SEO, sitemaps, error pages, and L1/L2 caching. Uses `env.BACKEND_API` service binding in production; intentionally skips service binding in local dev because separate Miniflare processes cannot reliably share the Fetcher.
 
@@ -121,6 +121,7 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - `@/` and `~/` both alias to `apps/admin-v2/src`.
 - Most data access flows through the legacy `api.functions.ts` barrel, extracted slices in `api-functions/`, `api.queries.ts`, and `api.mutations.ts`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
 - When touching admin server functions, prefer extracting a domain slice under `apps/admin-v2/src/lib/api-functions/` with normal typechecking instead of adding to the legacy `api.functions.ts` barrel.
+- Account settings must use the parent `/admin` route's effective permission context. Do not feed the full RBAC permission catalog into a nested `PermissionProvider`.
 - URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
 - `api.functions.ts` currently has `@ts-nocheck` because the legacy barrel still exposes broad `unknown` API shapes that TanStack Start rejects as non-serializable. Treat it as a migration target, not an invitation to weaken adjacent files.
 

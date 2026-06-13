@@ -2,24 +2,14 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getAdminUsers as getAdminUsersFn,
   createAdminUser,
   deleteAdminUser,
-} from "~/lib/api.functions";
+  getAdminUsers,
+  type AdminUser,
+} from "~/lib/api-functions/auth-management";
 import { getRbacRoles } from "~/lib/api-functions/rbac";
 
-export interface AdminUser {
-  id: string;
-  name: string;
-  email: string;
-  emailVerified: boolean;
-  image?: string | null;
-  twoFactorEnabled?: boolean | null;
-  isSuperAdmin?: boolean | null;
-  createdAt: string;
-  roles: { id: string; name: string; displayName: string }[];
-  overrides: { grants: string[]; denials: string[] };
-}
+export type { AdminUser } from "~/lib/api-functions/auth-management";
 
 export interface Role {
   id: string;
@@ -36,7 +26,7 @@ export function useAdminUsers() {
 
   const fetchAdminUsers = async () => {
     try {
-      const result = await getAdminUsersFn() as unknown as { users: AdminUser[] };
+      const result = await getAdminUsers();
       setAdminUsers(result.users);
     } catch {
       if (import.meta.env.DEV) console.error("Failed to fetch admin users");
@@ -61,7 +51,7 @@ export function useAdminUsers() {
 
   const addUser = async (name: string, email: string, roleId: string): Promise<boolean> => {
     try {
-      await createAdminUser({
+      const result = await createAdminUser({
         data: {
           name,
           email,
@@ -69,7 +59,11 @@ export function useAdminUsers() {
         },
       });
 
-      toast.success("Admin user created. An email has been sent with login instructions.");
+      if (result.emailFailed) {
+        toast.warning(result.message);
+      } else {
+        toast.success(result.message);
+      }
       fetchAdminUsers();
       return true;
     } catch (err: unknown) {
