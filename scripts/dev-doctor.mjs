@@ -5,6 +5,7 @@
  * Usage:
  *   pnpm dev:doctor
  *   pnpm dev:doctor --require-running
+ *   pnpm dev:doctor --profile admin --require-running
  *   pnpm dev:doctor --json
  */
 
@@ -28,15 +29,27 @@ const __dirname = dirname(__filename);
 const root = resolve(__dirname, "..");
 
 const CHECK_ORDER = { fail: 0, warn: 1, skip: 2, pass: 3 };
+const SERVICE_PROFILES = {
+  all: ["api", "admin", "storefront"],
+  api: ["api"],
+  admin: ["api", "admin"],
+  storefront: ["api", "storefront"],
+};
+
+export function getServiceIdsForProfile(profile = "all") {
+  return [...(SERVICE_PROFILES[profile] ?? SERVICE_PROFILES.all)];
+}
 
 export function getDoctorConfig(rawArgs = process.argv.slice(2), env = process.env) {
   const options = parseOptions(rawArgs);
-  assertStringOptions(options, ["api", "admin", "storefront", "state"]);
+  assertStringOptions(options, ["api", "admin", "storefront", "state", "profile"]);
+  const serviceProfile = normalizeServiceProfile(options.profile);
   return {
     help: Boolean(options.help || rawArgs.includes("-h")),
     json: Boolean(options.json),
     requireRunning: Boolean(options["require-running"]),
     strict: Boolean(options.strict),
+    serviceProfile,
     apiBaseUrl: trimTrailingSlash(String(options.api || env.LOCAL_API_BASE_URL || "http://localhost:8787")),
     adminBaseUrl: trimTrailingSlash(String(options.admin || "http://localhost:4323")),
     storefrontBaseUrl: trimTrailingSlash(String(options.storefront || "http://localhost:4322")),
@@ -63,6 +76,7 @@ export async function runDoctor(config = getDoctorConfig()) {
       adminBaseUrl: config.adminBaseUrl,
       storefrontBaseUrl: config.storefrontBaseUrl,
       wranglerState: config.wranglerState,
+      serviceProfile: config.serviceProfile,
       requireRunning: config.requireRunning,
       strict: config.strict,
     },
@@ -171,6 +185,10 @@ function checkPackageScripts(checks) {
     "dev:admin:reset",
     "dev:admin:status",
     "dev:doctor",
+    "dev:doctor:api",
+    "dev:doctor:admin",
+    "dev:doctor:storefront",
+    "dev:doctor:all",
   ];
   const missing = requiredScripts.filter((script) => !scripts[script]);
   if (missing.length === 0) {
@@ -318,6 +336,7 @@ function checkWranglerState(checks, wranglerState) {
 async function checkServices(checks, config) {
   const services = [
     {
+      id: "api",
       title: "API worker",
       url: `${config.apiBaseUrl}/api/v1/setup`,
       downAction: "Start it with pnpm dev:api, pnpm dev:admin, pnpm dev:storefront, or pnpm dev.",
@@ -331,6 +350,7 @@ async function checkServices(checks, config) {
       },
     },
     {
+      id: "admin",
       title: "Admin dashboard",
       url: `${config.adminBaseUrl}/admin`,
       downAction: "Start it with pnpm dev:admin or pnpm dev.",
@@ -340,6 +360,7 @@ async function checkServices(checks, config) {
       },
     },
     {
+      id: "storefront",
       title: "Storefront",
       url: `${config.storefrontBaseUrl}/`,
       downAction: "Start it with pnpm dev:storefront or pnpm dev.",
@@ -349,8 +370,13 @@ async function checkServices(checks, config) {
       },
     },
   ];
+  const selected = new Set(getServiceIdsForProfile(config.serviceProfile));
 
-  await Promise.all(services.map((service) => checkService(checks, service, config.requireRunning)));
+  await Promise.all(
+    services
+      .filter((service) => selected.has(service.id))
+      .map((service) => checkService(checks, service, config.requireRunning)),
+  );
 }
 
 async function checkService(checks, service, requireRunning) {
@@ -467,6 +493,13 @@ function statusLabel(status) {
   }
 }
 
+function normalizeServiceProfile(value) {
+  if (value === undefined) return "all";
+  const profile = String(value).trim().toLowerCase();
+  if (profile in SERVICE_PROFILES) return profile;
+  throw new Error(`Unknown --profile "${value}". Use one of: ${Object.keys(SERVICE_PROFILES).join(", ")}.`);
+}
+
 function printHelp() {
   console.log(`
 Usage: pnpm dev:doctor [options]
@@ -476,7 +509,8 @@ Non-mutating local development diagnostics.
 Options:
   --json                 Print machine-readable JSON
   --strict               Exit non-zero on warnings as well as failures
-  --require-running      Treat API/admin/storefront not running as failures
+  --require-running      Treat selected profile services not running as failures
+  --profile <name>       Service profile to check: all, api, admin, storefront
   --api <url>            API origin (default: http://localhost:8787)
   --admin <url>          Admin origin (default: http://localhost:4323)
   --storefront <url>     Storefront origin (default: http://localhost:4322)

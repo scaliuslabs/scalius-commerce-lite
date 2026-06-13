@@ -3,6 +3,7 @@ import {
   formatTextReport,
   getDoctorConfig,
   getExitCode,
+  getServiceIdsForProfile,
   summarizeChecks,
 } from "./dev-doctor.mjs";
 
@@ -27,6 +28,8 @@ describe("dev doctor helpers", () => {
     const config = getDoctorConfig([
       "--json",
       "--require-running",
+      "--profile",
+      "admin",
       "--api",
       "http://localhost:9876/",
       "--state",
@@ -35,8 +38,24 @@ describe("dev doctor helpers", () => {
 
     expect(config.json).toBe(true);
     expect(config.requireRunning).toBe(true);
+    expect(config.serviceProfile).toBe("admin");
     expect(config.apiBaseUrl).toBe("http://localhost:9876");
     expect(config.wranglerState).toMatch(/\/tmp\/state$/);
+  });
+
+  it("defaults to the full service profile", () => {
+    expect(getDoctorConfig([], {}).serviceProfile).toBe("all");
+    expect(getServiceIdsForProfile("all")).toEqual(["api", "admin", "storefront"]);
+  });
+
+  it("maps partial service profiles to their expected services", () => {
+    expect(getServiceIdsForProfile("api")).toEqual(["api"]);
+    expect(getServiceIdsForProfile("admin")).toEqual(["api", "admin"]);
+    expect(getServiceIdsForProfile("storefront")).toEqual(["api", "storefront"]);
+  });
+
+  it("rejects unknown service profiles", () => {
+    expect(() => getDoctorConfig(["--profile", "checkout"], {})).toThrow(/Unknown --profile/);
   });
 
   it("supports short help", () => {

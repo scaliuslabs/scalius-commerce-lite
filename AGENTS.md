@@ -39,6 +39,10 @@ packages/
 | `pnpm dev:admin:reset` | Reset local auth/admin credentials without wiping catalog/order data |
 | `pnpm dev:admin:status` | Check whether a local admin exists |
 | `pnpm dev:doctor` | Non-mutating local readiness check for env files, shared secrets, ports, services, and Wrangler state |
+| `pnpm dev:doctor:api` | Require local API to be live |
+| `pnpm dev:doctor:admin` | Require local API + admin to be live |
+| `pnpm dev:doctor:storefront` | Require local API + storefront to be live |
+| `pnpm dev:doctor:all` | Require API + admin + storefront to be live |
 | `pnpm db:generate` | Generate Drizzle migrations via the API workspace |
 | `pnpm db:migrate:local` | Apply D1 migrations to local Wrangler state |
 | `pnpm db:migrate:remote` | Apply D1 migrations to remote D1 |
@@ -293,7 +297,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 ## Dev Server Notes
 
 - Dev commands use `scripts/dev.sh`.
-- Run `pnpm dev:doctor` before debugging vague local failures. It checks env-file presence, shared-secret drift, and local URL values for the expected API/admin/storefront localhost ports. Use `pnpm dev:doctor --require-running` after starting dev servers when you need API/admin/storefront to be live.
+- Run `pnpm dev:doctor` before debugging vague local failures. It checks env-file presence, shared-secret drift, and local URL values for the expected API/admin/storefront localhost ports. Use `pnpm dev:doctor:api`, `pnpm dev:doctor:admin`, `pnpm dev:doctor:storefront`, or `pnpm dev:doctor:all` after starting the matching local stack.
 - The wrapper applies pending local D1 migrations before starting API unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
 - The wrapper kills stale processes on app ports `8787`, `4322`, `4323`, and inspector ports `9229-9233`.
 - Full `pnpm dev` starts API, waits for `/api/v1/setup`, then starts admin and storefront with a small stagger to avoid inspector port conflicts.
