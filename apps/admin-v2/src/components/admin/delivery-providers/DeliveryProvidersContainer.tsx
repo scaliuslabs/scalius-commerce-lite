@@ -12,7 +12,7 @@ import {
   deleteDeliveryProvider,
   testDeliveryProvider,
   testDeliveryCredentials,
-} from "~/lib/api.functions";
+} from "~/lib/api-functions/delivery";
 
 // Default credentials structure per provider type
 const DEFAULT_CREDENTIALS = {
@@ -159,7 +159,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
     setIsSaving(true);
     try {
       const savedProvider = await saveDeliveryProvider({
-        data: { provider: formData as unknown as Record<string, unknown> },
+        data: { provider: formData },
       }) as DeliveryProviderRecord;
       if (isCreating) {
         setProviders((prev) => [...prev, savedProvider]);

@@ -58,10 +58,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  getDeliveryProviders,
-  getDeliveryLocations,
-  getAllDeliveryLocations,
-  getImportPathaoStatus,
   getHeroSliders,
   // AI
   getAiPrompts,
@@ -94,6 +90,13 @@ import {
   getCheckoutLanguages,
   type CheckoutLanguagesQueryInput,
 } from "./api-functions/checkout-languages";
+import {
+  getAllDeliveryLocations,
+  getDeliveryLocations,
+  getDeliveryProviders,
+  getImportPathaoStatus,
+  type DeliveryLocationsQueryInput,
+} from "./api-functions/delivery";
 import {
   getAdminNotificationChannels,
   getAllowedCountries,
@@ -804,7 +807,7 @@ export const deliveryProvidersQueryOptions = () =>
   });
 
 export const deliveryLocationsQueryOptions = (
-  params: Record<string, string | number | boolean | undefined>,
+  params: DeliveryLocationsQueryInput,
 ) =>
   queryOptions({
     queryKey: queryKeys.settings.deliveryLocations(params),
@@ -812,7 +815,9 @@ export const deliveryLocationsQueryOptions = (
     staleTime: STALE.LOOKUP,
   });
 
-export const allDeliveryLocationsQueryOptions = (params: { type?: string }) =>
+export const allDeliveryLocationsQueryOptions = (
+  params: { type?: string },
+) =>
   queryOptions({
     queryKey: queryKeys.settings.deliveryLocationsAll(params),
     queryFn: () => getAllDeliveryLocations({ data: params }),

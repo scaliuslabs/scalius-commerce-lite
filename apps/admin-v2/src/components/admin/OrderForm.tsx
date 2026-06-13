@@ -15,7 +15,7 @@ import {
   updateShippingCharge,
   updateDiscountAmount,
 } from "@/store/orderStore";
-import { getDeliveryLocations } from "@/lib/api.functions";
+import { getDeliveryLocations } from "@/lib/api-functions/delivery";
 import { useCreateOrder, useUpdateOrder } from "@/lib/api.mutations";
 
 // Imports for our new, refactored components and types
@@ -106,8 +106,8 @@ export function OrderForm({
 
   const loadCities = async () => {
     try {
-      const data = await getDeliveryLocations({ data: { type: "city" } }) as Record<string, unknown>;
-      setLocations((prev) => ({ ...prev, cities: (data.locations || []) as DeliveryLocation[] }));
+      const data = await getDeliveryLocations({ data: { type: "city" } });
+      setLocations((prev) => ({ ...prev, cities: data.locations as DeliveryLocation[] }));
     } catch (error: unknown) {
       console.error("Error loading cities:", error);
       toast.error("Could not load city list. Please refresh the page.");
@@ -123,8 +123,8 @@ export function OrderForm({
     }
     setIsLoading((prev) => ({ ...prev, zones: true }));
     try {
-      const data = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } }) as Record<string, unknown>;
-      setLocations((prev) => ({ ...prev, zones: (data.locations || []) as DeliveryLocation[], areas: [] }));
+      const data = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } });
+      setLocations((prev) => ({ ...prev, zones: data.locations as DeliveryLocation[], areas: [] }));
       form.setValue("area", null);
     } catch (error: unknown) {
       console.error("Error loading zones:", error);
@@ -142,8 +142,8 @@ export function OrderForm({
     }
     setIsLoading((prev) => ({ ...prev, areas: true }));
     try {
-      const data = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } }) as Record<string, unknown>;
-      setLocations((prev) => ({ ...prev, areas: (data.locations || []) as DeliveryLocation[] }));
+      const data = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } });
+      setLocations((prev) => ({ ...prev, areas: data.locations as DeliveryLocation[] }));
     } catch (error: unknown) {
       console.error("Error loading areas:", error);
       toast.error("Could not load area list. Please refresh the page.");

@@ -102,12 +102,6 @@ import {
   bulkUpdateProductVariants,
   bulkDeleteProductVariants,
   duplicateProductVariant,
-  // Delivery Locations
-  createDeliveryLocation,
-  updateDeliveryLocation,
-  deleteDeliveryLocation,
-  bulkDeleteDeliveryLocations,
-  cleanAllDeliveryLocations,
   // Media
   deleteMedia,
   updateMedia,
@@ -148,6 +142,14 @@ import {
   type CheckoutLanguageWriteInput,
   updateCheckoutLanguage,
 } from "./api-functions/checkout-languages";
+import {
+  bulkDeleteDeliveryLocations,
+  cleanAllDeliveryLocations,
+  createDeliveryLocation,
+  deleteDeliveryLocation,
+  type DeliveryLocationWriteInput,
+  updateDeliveryLocation,
+} from "./api-functions/delivery";
 import {
   createShippingMethod,
   deleteShippingMethod,
@@ -2051,7 +2053,7 @@ export function useRestoreShippingMethod() {
 export function useCreateDeliveryLocation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: DeliveryLocationWriteInput) =>
       createDeliveryLocation({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -2070,7 +2072,7 @@ export function useCreateDeliveryLocation() {
 export function useUpdateDeliveryLocation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
+    mutationFn: (data: { id: string; update: Partial<DeliveryLocationWriteInput> }) =>
       updateDeliveryLocation({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({

@@ -15,7 +15,7 @@ import {
 } from "../ui/select";
 import { useFormContext } from "react-hook-form";
 import { Loader2 } from "lucide-react";
-import { getDeliveryLocations } from "@/lib/api.functions";
+import { getDeliveryLocations } from "@/lib/api-functions/delivery";
 
 interface Location {
   id: string;
@@ -51,21 +51,21 @@ export function LocationSelector() {
 
       try {
         // Load cities
-        const result = await getDeliveryLocations({ data: { type: "city" } }) as Record<string, unknown>;
+        const result = await getDeliveryLocations({ data: { type: "city" } });
         setCities(result.locations as Location[]);
 
         // If we have a city value, proceed to load zones
         if (initialCity) {
           setLoadingZones(true);
           try {
-            const zoneResult = await getDeliveryLocations({ data: { type: "zone", parentId: initialCity } }) as Record<string, unknown>;
+            const zoneResult = await getDeliveryLocations({ data: { type: "zone", parentId: initialCity } });
             setZones(zoneResult.locations as Location[]);
 
             // If we have a zone value, proceed to load areas
             if (initialZone) {
               setLoadingAreas(true);
               try {
-                const areaResult = await getDeliveryLocations({ data: { type: "area", parentId: initialZone } }) as Record<string, unknown>;
+                const areaResult = await getDeliveryLocations({ data: { type: "area", parentId: initialZone } });
                 setAreas(areaResult.locations as Location[]);
               } catch (error: unknown) {
                 if (import.meta.env.DEV) console.error("Error loading initial areas:", error);
@@ -173,7 +173,7 @@ export function LocationSelector() {
   const loadZones = async (cityId: string) => {
     try {
       setLoadingZones(true);
-      const result = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } }) as Record<string, unknown>;
+      const result = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } });
       setZones(result.locations as Location[]);
     } catch (error: unknown) {
       if (import.meta.env.DEV) console.error("Error loading zones:", error);
@@ -185,7 +185,7 @@ export function LocationSelector() {
   const loadAreas = async (zoneId: string) => {
     try {
       setLoadingAreas(true);
-      const result = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } }) as Record<string, unknown>;
+      const result = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } });
       setAreas(result.locations as Location[]);
     } catch (error: unknown) {
       if (import.meta.env.DEV) console.error("Error loading areas:", error);

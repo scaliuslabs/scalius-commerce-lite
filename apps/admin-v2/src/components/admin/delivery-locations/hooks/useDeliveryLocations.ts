@@ -16,37 +16,15 @@ import {
   useCleanAllDeliveryLocations,
 } from "~/lib/api.mutations";
 import {
+  type DeliveryLocation,
   importPathaoLocations,
+  type PathaoImportProgress,
   resetImportPathao,
-} from "~/lib/api.functions";
+  type DeliveryLocationsQueryInput,
+} from "~/lib/api-functions/delivery";
 
-export interface Location {
-  id: string;
-  name: string;
-  type: "city" | "zone" | "area";
-  parentId: string | null;
-  externalIds: Record<string, string | number>;
-  metadata: Record<string, unknown>;
-  isActive: boolean;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PathaoImportProgress {
-  status: "importing" | "complete" | "error";
-  phase: "cities" | "zones" | "areas" | "done";
-  progress: { current: number; total: number; label: string };
-  stats: {
-    citiesCreated: number;
-    citiesUpdated: number;
-    zonesCreated: number;
-    zonesUpdated: number;
-    areasCreated: number;
-    areasUpdated: number;
-  };
-  error?: string;
-}
+export type Location = DeliveryLocation;
+export type { PathaoImportProgress } from "~/lib/api-functions/delivery";
 
 export interface PaginationState {
   page: number;
@@ -114,7 +92,7 @@ export function useDeliveryLocations() {
 
   // Build location query params
   const locationParams = (() => {
-    const params: Record<string, string | number | boolean | undefined> = {
+    const params: DeliveryLocationsQueryInput = {
       type: activeTab,
       page,
       limit,
@@ -133,11 +111,8 @@ export function useDeliveryLocations() {
     placeholderData: (prev) => prev,
   });
 
-  const rawLocations = locationsData as
-    | { locations?: Location[]; pagination?: PaginationState }
-    | undefined;
-  const filteredLocations = rawLocations?.locations ?? [];
-  const pagination = rawLocations?.pagination ?? DEFAULT_PAGINATION;
+  const filteredLocations = locationsData?.locations ?? [];
+  const pagination = locationsData?.pagination ?? DEFAULT_PAGINATION;
 
   // Parent locations for zone/area tabs
   const parentType = activeTab === "zone" ? "city" : "zone";
@@ -148,20 +123,12 @@ export function useDeliveryLocations() {
     enabled: parentQueryEnabled,
   });
 
-  const parentLocations =
-    (
-      parentData as
-        | { locations?: Location[] }
-        | undefined
-    )?.locations ?? [];
+  const parentLocations = parentData?.locations ?? [];
 
   // Pathao provider check
   const { data: providersData } = useQuery(deliveryProvidersQueryOptions());
   const hasPathaoProvider = (() => {
-    const providers = (Array.isArray(providersData) ? providersData : []) as Array<{
-      type: string;
-      isActive: boolean;
-    }>;
+    const providers = Array.isArray(providersData) ? providersData : [];
     return providers.some((p) => p.type === "pathao" && p.isActive);
   })();
 
@@ -173,9 +140,8 @@ export function useDeliveryLocations() {
   });
 
   useEffect(() => {
-    const statusData = importStatusData as PathaoImportProgress | undefined;
-    if (statusData?.status === "importing" && !importing) {
-      setImportProgress(statusData);
+    if (importStatusData?.status === "importing" && !importing) {
+      setImportProgress(importStatusData);
       setImporting(true);
       resumeImport();
     }
@@ -196,9 +162,9 @@ export function useDeliveryLocations() {
     setImporting(true);
     try {
       while (!importAbortRef.current) {
-        const data = (await importPathaoLocations({
+        const data = await importPathaoLocations({
           data: {},
-        })) as PathaoImportProgress;
+        });
         setImportProgress(data);
 
         if (data.status === "complete") {
