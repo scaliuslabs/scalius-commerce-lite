@@ -102,12 +102,6 @@ import {
   bulkUpdateProductVariants,
   bulkDeleteProductVariants,
   duplicateProductVariant,
-  // Checkout Languages
-  createCheckoutLanguage,
-  updateCheckoutLanguage,
-  softDeleteCheckoutLanguage,
-  deleteCheckoutLanguage,
-  restoreCheckoutLanguage,
   // Delivery Locations
   createDeliveryLocation,
   updateDeliveryLocation,
@@ -146,6 +140,14 @@ import {
   updateStorefrontUrl,
   updateThemeSettings,
 } from "./api-functions/settings";
+import {
+  createCheckoutLanguage,
+  deleteCheckoutLanguage,
+  restoreCheckoutLanguage,
+  softDeleteCheckoutLanguage,
+  type CheckoutLanguageWriteInput,
+  updateCheckoutLanguage,
+} from "./api-functions/checkout-languages";
 import {
   createShippingMethod,
   deleteShippingMethod,
@@ -1886,7 +1888,7 @@ export function useRestoreWidgetHistory() {
 export function useCreateCheckoutLanguage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: CheckoutLanguageWriteInput) =>
       createCheckoutLanguage({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -1902,7 +1904,7 @@ export function useCreateCheckoutLanguage() {
 export function useUpdateCheckoutLanguage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; update: Record<string, unknown> }) =>
+    mutationFn: (data: { id: string; update: CheckoutLanguageWriteInput }) =>
       updateCheckoutLanguage({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({

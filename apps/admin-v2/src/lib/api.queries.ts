@@ -62,7 +62,6 @@ import {
   getDeliveryLocations,
   getAllDeliveryLocations,
   getImportPathaoStatus,
-  getCheckoutLanguages,
   getHeroSliders,
   // AI
   getAiPrompts,
@@ -91,6 +90,10 @@ import {
   type NavigationPreviewProductsInput,
 } from "./api-functions/navigation";
 import { getFraudCheckerProviders } from "./api-functions/fraud-checker";
+import {
+  getCheckoutLanguages,
+  type CheckoutLanguagesQueryInput,
+} from "./api-functions/checkout-languages";
 import {
   getAdminNotificationChannels,
   getAllowedCountries,
@@ -824,7 +827,7 @@ export const importPathaoStatusQueryOptions = () =>
   });
 
 export const checkoutLanguagesQueryOptions = (
-  params: Record<string, string | number | boolean | undefined>,
+  params: CheckoutLanguagesQueryInput,
 ) =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutLanguages(params),

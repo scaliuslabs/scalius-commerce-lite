@@ -18,7 +18,6 @@ import {
   apiGetText,
   apiPost,
   apiPut,
-  apiPatch,
   apiDelete,
   apiBaseGet,
 } from "./api.server";
@@ -1419,52 +1418,6 @@ export const saveDeliveryProvider = createServerFn({ method: "POST" })
       return apiPut("/settings/delivery-providers", provider);
     }
     return apiPost("/settings/delivery-providers", provider);
-  });
-
-// ─── Checkout Languages ─────────────────────────────────────────
-
-export const getCheckoutLanguages = createServerFn({ method: "GET" })
-  .inputValidator(
-    (data: Record<string, string | number | boolean | undefined>) => data,
-  )
-  .handler(async ({ data }) => {
-    const params: Record<string, string> = {};
-    for (const [k, v] of Object.entries(data)) {
-      if (v !== undefined && v !== "") params[k] = String(v);
-    }
-    return apiGet<unknown>("/settings/checkout-languages", params);
-  });
-
-export const createCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/settings/checkout-languages", data);
-  });
-
-export const updateCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: { id: string; update: Record<string, unknown> }) => data,
-  )
-  .handler(async ({ data }) => {
-    return apiPut(`/settings/checkout-languages/${data.id}`, data.update);
-  });
-
-export const softDeleteCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiPatch(`/settings/checkout-languages/${data.id}`);
-  });
-
-export const deleteCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/settings/checkout-languages/${data.id}`);
-  });
-
-export const restoreCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    return apiPost(`/settings/checkout-languages/${data.id}/restore`);
   });
 
 // ─── Header/Footer Config ────────────────────────────────────────
