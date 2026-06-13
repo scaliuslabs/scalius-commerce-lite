@@ -20,6 +20,7 @@
     "dev:admin:create": "node scripts/dev-admin.mjs create",
     "dev:admin:reset": "node scripts/dev-admin.mjs reset",
     "dev:admin:status": "node scripts/dev-admin.mjs status",
+    "dev:doctor": "node scripts/dev-doctor.mjs",
     "db:generate": "turbo run db:generate --filter=@scalius/api",
     "db:migrate:local": "turbo run db:migrate:local --filter=@scalius/api",
     "db:migrate:remote": "turbo run db:migrate:remote --filter=@scalius/api",

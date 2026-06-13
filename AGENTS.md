@@ -37,6 +37,7 @@ packages/
 | `pnpm dev:admin:create` | Create default local admin if none exists |
 | `pnpm dev:admin:reset` | Reset local auth/admin credentials without wiping catalog/order data |
 | `pnpm dev:admin:status` | Check whether a local admin exists |
+| `pnpm dev:doctor` | Non-mutating local readiness check for env files, shared secrets, ports, services, and Wrangler state |
 | `pnpm db:generate` | Generate Drizzle migrations via the API workspace |
 | `pnpm db:migrate:local` | Apply D1 migrations to local Wrangler state |
 | `pnpm db:migrate:remote` | Apply D1 migrations to remote D1 |
@@ -289,6 +290,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 ## Dev Server Notes
 
 - Dev commands use `scripts/dev.sh`.
+- Run `pnpm dev:doctor` before debugging vague local failures. Use `pnpm dev:doctor --require-running` after starting dev servers when you need API/admin/storefront to be live.
 - The wrapper applies pending local D1 migrations before starting API unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
 - The wrapper kills stale processes on app ports `8787`, `4322`, `4323`, and inspector ports `9229-9233`.
 - Full `pnpm dev` starts API, admin, then storefront with staggered delays to avoid inspector port conflicts.

@@ -371,6 +371,7 @@ pnpm dev:reset          # Wipe local state, migrate, recreate local admin
 pnpm dev:admin:create   # Create local admin if none exists
 pnpm dev:admin:reset    # Reset local auth/admin credentials only
 pnpm dev:admin:status   # Check whether a local admin exists
+pnpm dev:doctor         # Diagnose local env, state, ports, and service readiness
 ```
 
 ---
@@ -380,10 +381,11 @@ pnpm dev:admin:status   # Check whether a local admin exists
 ### 1) First-time setup
 
 ```bash
+pnpm dev:doctor
 pnpm dev:setup
 ```
 
-Generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
+`pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
 Default local admin:
 
@@ -409,9 +411,12 @@ pnpm dev:setup
 pnpm dev              # API + admin-v2 + storefront
 pnpm dev:admin        # API + admin-v2 only
 pnpm dev:storefront   # API + storefront only
+pnpm dev:doctor --require-running
 ```
 
 The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, staggers startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
+
+Use `pnpm dev:doctor --require-running` after the dev servers are up to verify API, admin, and storefront are reachable.
 
 API local dev uses `apps/api/wrangler.local.jsonc`, which intentionally omits the remote Workers AI binding. Normal local admin/storefront/API work should not require Cloudflare remote proxy access. Production build/deploy still use `apps/api/wrangler.jsonc`.
 
