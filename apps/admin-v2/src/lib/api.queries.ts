@@ -50,9 +50,6 @@ import {
   // Attributes
   getAttributes,
   getAttributeValues,
-  // Media
-  getMediaList,
-  getMediaFolders,
 } from "./api.functions";
 import { getDashboardData } from "./api-functions/dashboard";
 import {
@@ -87,6 +84,11 @@ import {
   getInventory,
   type InventoryQueryInput,
 } from "./api-functions/inventory";
+import {
+  getMediaFolders,
+  getMediaList,
+  type MediaListQueryInput,
+} from "./api-functions/media";
 import { getHeroSliders } from "./api-functions/hero-sliders";
 import {
   getAllDeliveryLocations,
@@ -507,16 +509,7 @@ export const inventoryQueryOptions = (params: InventoryQueryInput) =>
 //  MEDIA
 // ═══════════════════════════════════════════════════════════════════
 
-export const mediaListQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  folderId?: string;
-  mimeType?: string;
-  type?: string;
-  sortBy?: string;
-  sortOrder?: string;
-}) =>
+export const mediaListQueryOptions = (params: MediaListQueryInput) =>
   queryOptions({
     queryKey: queryKeys.media.list(params),
     queryFn: () => getMediaList({ data: params }),
