@@ -52,7 +52,14 @@ Options:
   process.exit(0);
 }
 
-assertPassword(localAdminPassword);
+if (!skipAdmin) {
+  try {
+    assertPassword(localAdminPassword);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
 
 function run(cmd, label) {
   console.log(`\n▶ ${label}`);

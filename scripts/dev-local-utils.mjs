@@ -190,7 +190,7 @@ export function assertLocalSecretSync(envFiles) {
       "Local .dev.vars shared secrets are out of sync.",
       ...issues.map((issue) => `- ${issue}`),
       "",
-      "Run pnpm dev:setup --force to regenerate all local env files, or manually align the shared values.",
+      "Run pnpm dev:setup --force --env-only to regenerate local env files without touching the database, or manually align the shared values.",
     ].join("\n"),
   );
 }

@@ -540,7 +540,7 @@ deploy.
 |---------|----------|
 | Port conflicts on startup | `lsof -tiTCP:8787 -iTCP:4322 -iTCP:4323 -iTCP:9229 -iTCP:9230 -iTCP:9231 -iTCP:9232 -iTCP:9233 -sTCP:LISTEN \| xargs kill -9` |
 | Forgot local admin credentials | Run `pnpm dev:admin:reset` |
-| Auth sign-in loops | Run `pnpm dev:admin:reset`, or `pnpm dev:setup --force` to regenerate env files |
+| Auth sign-in loops | Run `pnpm dev:admin:reset`, or `pnpm dev:setup --force --env-only` to regenerate local env files |
 | D1 errors in dev | Run `pnpm dev:reset` for a clean database |
 | "Using default JWT secret" | Set `JWT_SECRET` in `.dev.vars` |
 | Stale OpenAPI types | Run `pnpm generate:sdk` with API running |
