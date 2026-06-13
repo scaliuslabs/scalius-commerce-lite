@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later re-audit opened new active P1/P2 items (`PAY-004`, `PAY-005`, `ORDER-006` through `ORDER-010`, and `WEBHOOK-001`) that are not covered by the older verified tracker rows.
 
 ## Validation Performed
 
@@ -197,7 +197,79 @@ Fix direction: detect known recoverable dynamic-import/chunk load errors, perfor
 
 Status: Verified on 2026-06-13. The admin router now recognizes stale route-load/chunk failures and reloads once, with focused tests. Dashboard analytics filters also compare Unix timestamps against Unix timestamp columns. Verification included focused admin tests, admin/core typechecks, admin build, root `pnpm test`, root `pnpm lint`, full `pnpm run deploy`, live API/admin/storefront HTTP checks, browser checks, and `wrangler tail` confirmation that `/admin`, `_serverFn`, and `/api/auth/get-session` served without exceptions after redeploy. See `DEPLOY-001` in `REMEDIATION_TRACKER.md`.
 
+### BUILD-003: Local env files can remain in app `dist/` outputs
+
+Admin and storefront framework builds can leave local env files such as `.dev.vars` under `dist/server`. Wrangler dry-run packaging showed these files were not uploaded by the current redirected configs, but keeping local secret files in deploy output or Turbo cache scope is a fragile invariant and makes accidental packaging/archive leaks easier.
+
+Fix direction: remove local env files after framework builds and fail deploy if any app `dist/` output still contains `.dev.vars`, `.env*`, or `*.vars`.
+
+Status: Verified on 2026-06-13. Admin/storefront build scripts now clean dist env files, Turbo build outputs exclude local env files, package-local deploy scripts route through the root safety wrapper, `scripts/deploy.mjs` checks all target dist outputs before deploy, and `pnpm check:dist-secrets` exposes the guard directly. Verification covered script syntax, cleanup, check mode, focused Vitest for the cleanup script, admin/storefront builds, direct dist-secret checks, and a Turbo build dry-run showing secret-like files excluded from outputs. See `BUILD-003` in `REMEDIATION_TRACKER.md`.
+
+### PAY-004: Public payment sessions still trust caller-selected deposit/manual-capture fields
+
+The prior `PAY-003` fix proved receipt-token ownership and trusted redirect URLs, but the public Stripe, SSLCommerz, and Polar session routes still accept caller-selected `paymentType` and `depositAmount`; Stripe also accepts `manualCapture`. A receipt token proves access to an order, not the right to choose a lower-than-policy deposit or capture mode.
+
+Fix direction: derive payment mode, deposit amount, and capture behavior server-side from checkout/order/payment settings; reject deposit requests when partial payment is disabled or the amount does not match policy.
+
+Status: Not Started. See `PAY-004` in `REMEDIATION_TRACKER.md`.
+
+### PAY-005: SSLCommerz webhook uses form transaction metadata after validation
+
+The SSLCommerz webhook validates `val_id`, then enqueues payment using form `tran_id` and `value_a`. If validation succeeds for one transaction but the form contains another order ID, the event can be applied to the wrong order.
+
+Fix direction: use canonical validated transaction/order metadata after validation, require it to match the expected order/session, and do not trust form `value_a` for payment type.
+
+Status: Not Started. See `PAY-005` in `REMEDIATION_TRACKER.md`.
+
+### ORDER-006: Checkout shipping can be zeroed by missing or bogus shipping method
+
+Storefront order creation accepts browser-provided shipping charge and optional `shippingMethodId`. Core order creation derives shipping from a method only when the ID resolves; otherwise it can fall back to the request body shipping charge.
+
+Fix direction: when shipping applies, require a valid active non-deleted shipping method and derive the charge on the backend.
+
+Status: Not Started. See `ORDER-006` in `REMEDIATION_TRACKER.md`.
+
+### ORDER-007: Status changes are not resumable when inventory fails after order CAS
+
+Some transitions persist order/payment status before applying inventory transitions. If inventory transition or `inventoryAction` persistence fails afterward, a retry can no-op because the order already has the target status.
+
+Fix direction: make inventory reconciliation resumable even when status is already changed, or persist a durable transition/outbox state that retries until inventory state matches the order state.
+
+Status: Not Started. See `ORDER-007` in `REMEDIATION_TRACKER.md`.
+
+### WEBHOOK-001: Durable webhook `processing` claims can black-hole events
+
+Webhook claims insert as `processing`. If an isolate crashes before queue send or side effects complete, provider retry can be treated as a duplicate because only `failed` claims are reclaimable.
+
+Fix direction: add processing leases/expiry or a durable outbox so stale processing events can be reclaimed and retried.
+
+Status: Not Started. See `WEBHOOK-001` in `REMEDIATION_TRACKER.md`.
+
+### ORDER-008: Bulk shipment claim is only a version bump before provider side effects
+
+Bulk shipment creation bumps order version before calling the carrier, but concurrent admin updates can still use the new version before the final shipped CAS. If the carrier succeeds and final local CAS fails, an external shipment can exist for an order not marked shipped.
+
+Fix direction: introduce an exclusive fulfillment claim or explicit in-progress state that all order mutations respect until shipment finalization or reconciliation.
+
+Status: Not Started. See `ORDER-008` in `REMEDIATION_TRACKER.md`.
+
 ## P2 Findings
+
+### ORDER-009: Admin full order edits can lose inventory-delta retry context
+
+Admin full order edits can replace order/item rows before inventory deltas are fully and durably applied. If release/restore fails or only logs an error after item replacement, the old item context needed for safe retry can be lost.
+
+Fix direction: fail closed on inventory delta failures, apply deltas before replacing item rows or through a transaction/outbox, and preserve enough old item state for retry.
+
+Status: Not Started. See `ORDER-009` in `REMEDIATION_TRACKER.md`.
+
+### ORDER-010: Order-ingest fallback can double-reserve after uncertain rollback
+
+When a shared order-ingest DB batch fails after reservations, rollback release is best-effort. The isolated fallback can then reserve the same order again even if the first reservation was not fully released.
+
+Fix direction: track rollback success per order and only isolated-retry orders whose previous reservations were fully released; longer term, make reserve/release idempotent by order movement identity.
+
+Status: Not Started. See `ORDER-010` in `REMEDIATION_TRACKER.md`.
 
 ### ADMIN-001: Admin API wrapper layer was too large and partially outside TypeScript
 

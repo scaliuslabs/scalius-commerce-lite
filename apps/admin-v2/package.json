@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && node ../../scripts/clean-dist-env-files.mjs apps/admin-v2",
     "preview": "vite preview",
-    "deploy": "pnpm run build && pnpm exec wrangler deploy",
+    "deploy": "node ../../scripts/deploy.mjs --only admin",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "cf-typegen": "pnpm exec wrangler types"

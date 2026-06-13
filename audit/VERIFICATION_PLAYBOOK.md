@@ -228,6 +228,7 @@ Inspect the actual task graph before trusting root scripts:
 
 ```bash
 node --check scripts/deploy.mjs
+pnpm check:dist-secrets
 pnpm exec turbo run build --dry=json
 pnpm exec turbo run lint --filter='!@scalius/tsconfig' --dry=json
 pnpm exec turbo run deploy --filter=@scalius/api --dry=json
@@ -240,8 +241,9 @@ Use these checks to verify:
 - Deploy targets include typecheck and migration gates where required.
 - Lint tasks actually exist for the seven code workspaces; `@scalius/tsconfig` is intentionally filtered from root lint.
 - Build inputs include relevant `src/**`, `public/**`, scripts, configs, and generated asset inputs.
+- Build outputs exclude local env files such as `.dev.vars`, `.env*`, and `*.vars`.
 - Storefront build cache does not preserve stale build IDs.
-- Root `deploy:*` shortcuts route through `scripts/deploy.mjs --only ...` and keep typecheck/migration gates.
+- Root and package-local `deploy` shortcuts route through `scripts/deploy.mjs --only ...` and keep typecheck, dist-secret checks, and migration gates.
 - `scripts/copy-flags.mjs` fails if `country-flag-icons` or required copied flags are missing.
 
 ## Generated Contract Checks
