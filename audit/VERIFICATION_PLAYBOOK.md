@@ -146,9 +146,10 @@ Expected ports:
 Known local-dev risks:
 
 - `dev:setup` and `dev:reset` create `admin@local.scalius.test` / `ScaliusLocal123!` by default. Override with `--admin-email`, `--admin-password`, `--admin-name`, or `LOCAL_ADMIN_*`.
+- `dev:setup` reuses existing shared secrets when only some local `.dev.vars` files exist, and fails if existing API/admin/storefront shared secrets disagree. Use `pnpm dev:setup --force` when intentionally regenerating all local env files.
 - API local dev uses `apps/api/wrangler.local.jsonc`, which omits the remote Workers AI binding so setup/admin/storefront can boot without a Cloudflare remote proxy session.
 - Dev startup applies pending local D1 migrations before API starts unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
-- Use `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state` to test setup/reset/dev against disposable local state without touching the default `.wrangler/state`.
+- Use `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state` or `--state /tmp/scalius-commerce-state` to test setup/reset/dev against disposable local state without touching the default `.wrangler/state`. Script `--state` values are normalized from the repo root; prefer absolute paths in audit notes.
 - Admin production uses `env.API`; local dev should hit HTTP fallback whenever `PUBLIC_API_BASE_URL` points at localhost. Verify both server functions and `/api/v1/admin/*` browser proxy routes after transport changes.
 - `scripts/dev.sh` kills only Scalius dev ports by default. Set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only when aggressive cleanup is needed.
 
@@ -156,7 +157,7 @@ Disposable reset smoke test:
 
 ```bash
 rm -rf /tmp/scalius-commerce-state
-SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state pnpm dev:reset \
+pnpm dev:reset --state /tmp/scalius-commerce-state \
   --admin-email disposable@local.test \
   --admin-password 'Disposable123!' \
   --admin-name 'Disposable Admin'

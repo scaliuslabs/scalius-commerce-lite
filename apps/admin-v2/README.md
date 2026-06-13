@@ -19,11 +19,11 @@ Modern admin dashboard built with **TanStack Start** (full-stack React framework
 ## Data Flow Pattern
 
 ```
-createServerFn (252 functions)
+createServerFn (214 legacy functions + 47 extracted typed functions)
   → queryOptions (78 wrappers, 7 staleTime tiers)
     → ensureQueryData in route loader (prefetch)
       → useSuspenseQuery in component (render)
-        → useMutation (126 hooks, cache invalidation + toasts)
+        → useMutation (115 exported hooks, cache invalidation + toasts)
 ```
 
 **Stale-While-Revalidate**: Detail queries use `staleTime: 0` in queryOptions + `staleTime: Infinity` in route loaders. Result: instant navigation (serves cache), background refetch (fresh data within ms).
@@ -65,9 +65,10 @@ createServerFn (252 functions)
 | `src/router.tsx` | Router config + QueryClient + SSR integration |
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
 | `src/routes/admin.tsx` | Admin layout (sidebar, auth guard, RBAC context) |
-| `src/lib/api.functions.ts` | 252 server functions (createServerFn) |
+| `src/lib/api.functions.ts` | Legacy createServerFn barrel; 214 functions remain |
+| `src/lib/api-functions/` | Extracted typed server-function slices; 47 functions |
 | `src/lib/api.queries.ts` | 78 queryOptions with staleTime tiers |
-| `src/lib/api.mutations.ts` | 126 mutation hooks with cache invalidation |
+| `src/lib/api.mutations.ts` | 115 exported mutation hooks with cache invalidation |
 | `src/lib/api.server.ts` | HTTP transport layer (service binding / fetch) |
 | `src/lib/query-keys.ts` | Centralized query key factory (20 domains) |
 | `src/lib/list-helpers.tsx` | Shared search schema, data selector, error component |
@@ -89,10 +90,10 @@ createServerFn (252 functions)
 ## Development
 
 ```bash
-cd apps/admin-v2 && pnpm dev     # Start on :4323
+pnpm dev:admin     # From repo root: start API :8787 + admin :4323
 ```
 
-Requires the API worker running on :8787. From repo root: `pnpm dev` starts both.
+Run `pnpm dev:setup` first to create local env files, apply D1 migrations, and create the default local admin. Use `pnpm dev` from the repo root when you also want the storefront.
 
 ## Cloudflare Bindings
 
