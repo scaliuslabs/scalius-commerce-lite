@@ -17,7 +17,8 @@ vi.mock("@scalius/core/modules/payments/stripe", () => ({
   createPaymentIntent: mocks.createPaymentIntent,
 }));
 
-vi.mock("@scalius/core/modules/payments/sslcommerz", () => ({
+vi.mock("@scalius/core/modules/payments/sslcommerz", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments/sslcommerz")>()),
   initSSLCommerzSession: mocks.initSSLCommerzSession,
 }));
 
@@ -475,11 +476,71 @@ describe("payment session receipt-token proof", () => {
       "password",
       true,
       expect.objectContaining({
+        orderId: "order_1",
+        transactionId: expect.stringMatching(/^order_1_deposit_[A-F0-9]{8}$/),
         totalAmount: 60,
         currency: "BDT",
         paymentType: "deposit",
       }),
     );
+  });
+
+  it("redirects scoped SSLCommerz transaction IDs back to the canonical order ID", async () => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/success?tran_id=order_1_deposit_ABC12345&receipt_token=chk_valid",
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=sslcommerz",
+    );
+  });
+
+  it("creates SSLCommerz balance sessions from stored balance without inserting a new payment plan", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.PARTIAL,
+        paidAmount: 60,
+        balanceDue: 65,
+      },
+      paymentPlan: {
+        balanceDue: 65,
+        status: "deposit_paid",
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          paymentType: "balance",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
+      "store",
+      "password",
+      true,
+      expect.objectContaining({
+        orderId: "order_1",
+        transactionId: expect.stringMatching(/^order_1_balance_[A-F0-9]{8}$/),
+        totalAmount: 65,
+        paymentType: "balance",
+      }),
+    );
+    expect(db.__insertedValues).toHaveLength(0);
   });
 
   it("creates Polar deposit sessions with original store-currency metadata", async () => {
@@ -546,9 +607,9 @@ describe("payment session receipt-token proof", () => {
       "password",
       true,
       expect.objectContaining({
-        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?receipt_token=chk_valid",
-        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail",
-        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel",
+        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid",
+        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1",
+        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1",
         ipnUrl: "https://api.example.test/api/v1/webhooks/sslcommerz",
       }),
     );

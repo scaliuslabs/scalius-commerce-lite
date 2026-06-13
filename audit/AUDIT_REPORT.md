@@ -111,9 +111,9 @@ Status: Verified on 2026-06-14. A shared payable-order policy now blocks soft-de
 
 SSLCommerz currently sends `tran_id` as the order id. Deposit and balance attempts for the same order can therefore share the local idempotency key/index even though they are distinct captured payments.
 
-Fix direction: generate a unique SSLCommerz transaction id per payment attempt/payment type and dedupe confirmed SSL payments by gateway validation id or local attempt id rather than order id alone.
+Fix direction: generate a unique SSLCommerz transaction id per payment attempt/payment type and dedupe confirmed SSL payments by gateway validation id rather than order id alone.
 
-Status: Not Started. Add a deposit-then-balance processor test that proves both legitimate payments can apply exactly once.
+Status: Verified on 2026-06-14. SSLCommerz sessions now create scoped attempt `tran_id` values while carrying the canonical order id separately, callbacks resolve trusted `order_id` with scoped-transaction fallback, IPN queueing uses canonical order id plus full attempt id, and confirmed SSLCommerz payment idempotency uses `sslcommerz_val_id`. Migration `0039_sslcommerz_val_id_idempotency.sql` moves the unique index to `(order_id, sslcommerz_val_id)` and normalizes old `payment_plans.status='fully_paid'` rows to `completed`. Verification: focused session/webhook/processor tests, API/core/database typechecks and lints, migration metadata check, root `pnpm test`, env/dist-secret checks, API deploy version `9a25a484-b501-4f84-88f5-f3bf4a0b0eba`, live API/OpenAPI/auth checks, authenticated dashboard `/admin` and `/admin/orders` browser smoke, and storefront browser smoke.
 
 ### ORDER-012: Abandoned cleanup can race with payment confirmation
 

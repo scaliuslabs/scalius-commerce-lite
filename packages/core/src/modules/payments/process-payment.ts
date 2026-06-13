@@ -11,6 +11,7 @@ import {
   PaymentStatus,
   OrderStatus,
   PaymentRecordStatus,
+  PaymentPlanStatus,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
@@ -90,13 +91,16 @@ export async function processPaymentConfirmed(
         paymentId = existing.id;
       }
     }
-    if (!paymentId && params.sslcommerzTranId) {
+    if (!paymentId && (params.sslcommerzValId || params.sslcommerzTranId)) {
+      const sslIdCondition = params.sslcommerzValId
+        ? eq(orderPayments.sslcommerzValId, params.sslcommerzValId)
+        : eq(orderPayments.sslcommerzTranId, params.sslcommerzTranId!);
       const existing = await db
         .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
         .from(orderPayments)
         .where(and(
           eq(orderPayments.orderId, params.orderId),
-          eq(orderPayments.sslcommerzTranId, params.sslcommerzTranId),
+          sslIdCondition,
         ))
         .get();
       if (existing) {
@@ -271,7 +275,7 @@ export async function processPaymentConfirmed(
           db
             .update(paymentPlans)
             .set({
-              status: "deposit_paid",
+              status: PaymentPlanStatus.DEPOSIT_PAID,
               depositPaidAt: sql`unixepoch()`,
               updatedAt: sql`unixepoch()`,
             })
@@ -282,7 +286,7 @@ export async function processPaymentConfirmed(
           db
             .update(paymentPlans)
             .set({
-              status: "fully_paid",
+              status: PaymentPlanStatus.COMPLETED,
               balancePaidAt: sql`unixepoch()`,
               updatedAt: sql`unixepoch()`,
             })

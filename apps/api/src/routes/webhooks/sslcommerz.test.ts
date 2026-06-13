@@ -14,7 +14,8 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
 }));
 
-vi.mock("@scalius/core/modules/payments/sslcommerz", () => ({
+vi.mock("@scalius/core/modules/payments/sslcommerz", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments/sslcommerz")>()),
   validateSSLCommerzIPN: mocks.validateSSLCommerzIPN,
 }));
 
@@ -257,6 +258,48 @@ describe("SSLCommerz webhook route", () => {
     expect(response.status).toBe(200);
     expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
       type: "payment.sslcommerz.confirmed",
+      paymentType: "deposit",
+      amount: 25,
+    }));
+  });
+
+  it("uses scoped SSLCommerz transaction IDs for idempotency while applying payment to the canonical order", async () => {
+    mocks.validateSSLCommerzIPN.mockResolvedValue({
+      status: "VALID",
+      tran_id: "ord_1_deposit_ABC12345",
+      val_id: "val_1",
+      amount: "25.00",
+      store_amount: "25.00",
+      bank_tran_id: "bank_1",
+      currency_type: "BDT",
+      currency_amount: "25.00",
+      card_type: "VISA",
+      card_brand: "VISA",
+      value_a: "deposit",
+      value_b: "ord_1",
+    });
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp(createDb({
+      plan: {
+        depositAmount: 25,
+        balanceDue: 75.5,
+      },
+    }));
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(200);
+    expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      expect.objectContaining({
+        id: "sslcommerz:ipn:ord_1_deposit_abc12345:val_1",
+        orderId: "ord_1",
+      }),
+    );
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "payment.sslcommerz.confirmed",
+      orderId: "ord_1",
+      tranId: "ord_1_deposit_ABC12345",
       paymentType: "deposit",
       amount: 25,
     }));
