@@ -5,35 +5,12 @@
 import type { Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc } from "drizzle-orm";
+import { retryTransientD1 } from "../../utils/transient-d1";
 
 const DASHBOARD_QUERY_RETRY_DELAYS_MS = [150, 350, 750] as const;
 
-function isTransientD1Error(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return message.includes("D1 DB is overloaded") ||
-        message.includes("Requests queued for too long") ||
-        message.includes("code: 7429");
-}
-
-async function wait(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function runDashboardQuery<T>(operation: () => Promise<T> | T): Promise<T> {
-    let lastError: unknown;
-
-    for (let attempt = 0; attempt <= DASHBOARD_QUERY_RETRY_DELAYS_MS.length; attempt += 1) {
-        try {
-            return await operation();
-        } catch (error) {
-            lastError = error;
-            const delay = DASHBOARD_QUERY_RETRY_DELAYS_MS[attempt];
-            if (!isTransientD1Error(error) || delay === undefined) break;
-            await wait(delay);
-        }
-    }
-
-    throw lastError;
+    return retryTransientD1(operation, { delaysMs: DASHBOARD_QUERY_RETRY_DELAYS_MS });
 }
 
 /** Aggregated dashboard metrics for the admin home page. */

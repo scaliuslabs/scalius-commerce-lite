@@ -6,10 +6,13 @@
  */
 
 import { createAuth } from "@scalius/core/auth";
+import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
 import { initKv } from "@scalius/core/utils/kv-cache";
 import { initStorage } from "@scalius/core/integrations/storage";
 import { env as cfEnv } from "cloudflare:workers";
+
+const AUTH_RETRY_DELAYS_MS = [200, 500, 1000] as const;
 
 /**
  * Access Cloudflare env bindings.
@@ -54,7 +57,19 @@ export async function getAuthSession(
   const auth = createAuth(env);
 
   try {
-    const result = await auth.api.getSession({ headers });
+    const result = await retryTransientD1(
+      () => auth.api.getSession({ headers }),
+      {
+        delaysMs: AUTH_RETRY_DELAYS_MS,
+        onRetry: (error, attempt, delayMs) => {
+          console.warn("Auth session lookup hit transient D1 error; retrying", {
+            attempt: attempt + 1,
+            delayMs,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        },
+      },
+    );
     if (result?.session && result?.user) {
       return {
         user: result.user as BetterAuthUser,
@@ -68,6 +83,98 @@ export async function getAuthSession(
   return null;
 }
 
+function isRetryableAuthRequest(request: Request): boolean {
+  const method = request.method.toUpperCase();
+  return method === "GET" || method === "HEAD";
+}
+
+function isSignInEmailRequest(request: Request): boolean {
+  return (
+    request.method.toUpperCase() === "POST" &&
+    new URL(request.url).pathname.endsWith("/api/auth/sign-in/email")
+  );
+}
+
+function temporaryAuthFailureResponse(): Response {
+  return Response.json(
+    {
+      code: "TEMPORARY_AUTH_BACKEND_UNAVAILABLE",
+      message: "Authentication is temporarily unavailable. Please retry in a moment.",
+    },
+    {
+      status: 503,
+      headers: {
+        "Retry-After": "2",
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
+async function runAuthHandlerWithRetry(
+  handler: (request: Request) => Promise<Response>,
+  request: Request,
+): Promise<Response> {
+  if (!isRetryableAuthRequest(request)) {
+    try {
+      const response = await handler(request);
+      if (isSignInEmailRequest(request) && response.status >= 500) {
+        console.warn("Auth sign-in returned server error; surfacing retryable failure", {
+          status: response.status,
+          pathname: new URL(request.url).pathname,
+        });
+        return temporaryAuthFailureResponse();
+      }
+      return response;
+    } catch (error) {
+      if (isSignInEmailRequest(request) && isTransientD1Error(error)) {
+        console.warn("Auth sign-in hit transient D1 error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return temporaryAuthFailureResponse();
+      }
+      throw error;
+    }
+  }
+
+  const attempts = Array.from(
+    { length: AUTH_RETRY_DELAYS_MS.length + 1 },
+    () => request.clone(),
+  );
+  let lastResponse: Response | null = null;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts.length; attempt += 1) {
+    try {
+      const response = await handler(attempts[attempt] ?? request.clone());
+      if (response.status < 500 || attempt === attempts.length - 1) {
+        return response;
+      }
+      lastResponse = response;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientD1Error(error) || attempt === attempts.length - 1) {
+        throw error;
+      }
+    }
+
+    const delayMs = AUTH_RETRY_DELAYS_MS[attempt];
+    if (delayMs === undefined) break;
+    console.warn("Auth handler hit a retryable transient failure; retrying", {
+      method: request.method,
+      pathname: new URL(request.url).pathname,
+      status: lastResponse?.status,
+      attempt: attempt + 1,
+      delayMs,
+      error: lastError instanceof Error ? lastError.message : lastError ? String(lastError) : undefined,
+    });
+    await wait(delayMs);
+  }
+
+  if (lastResponse) return lastResponse;
+  throw lastError;
+}
+
 /**
  * Create a Better Auth handler for the catch-all API route.
  * Returns the auth.handler function bound to the current env.
@@ -75,5 +182,6 @@ export async function getAuthSession(
 export function createAuthHandler(): (request: Request) => Promise<Response> {
   const env = getCfEnv();
   const auth = createAuth(env);
-  return (request: Request) => auth.handler(request);
+  return (request: Request) =>
+    runAuthHandlerWithRetry((retryRequest) => auth.handler(retryRequest), request);
 }

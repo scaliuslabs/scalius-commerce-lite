@@ -7,6 +7,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
 
+type AdminDb = Pick<D1Database, "prepare">;
+
+async function queryAdminExists(db: AdminDb): Promise<boolean> {
+  const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
+  const result = await retryTransientD1(() =>
+    db.prepare("SELECT COUNT(*) as count FROM user").first<{ count: number }>(),
+  );
+  return (result?.count ?? 0) > 0;
+}
+
 /**
  * Get current auth session. Returns { user, session } or null.
  * Used by auth pages to redirect already-logged-in users.
@@ -48,8 +58,7 @@ export const checkAdminExists = createServerFn().handler(async () => {
   const { env } = await import("cloudflare:workers");
   initBindings();
   try {
-    const result = await env.DB.prepare("SELECT COUNT(*) as count FROM user").first<{ count: number }>();
-    return (result?.count ?? 0) > 0;
+    return await queryAdminExists(env.DB);
   } catch {
     return false;
   }
@@ -64,15 +73,13 @@ export const checkAdminExists = createServerFn().handler(async () => {
 export const loginPageGuard = createServerFn().handler(async () => {
   const { getAuthSession, initBindings } = await import("~/lib/auth.server");
   const { getRequestHeader } = await import("@tanstack/react-start/server");
-  const { apiBaseGet } = await import("~/lib/api.server");
   initBindings();
 
   // Check if any admin exists in local Better Auth DB
   const { env } = await import("cloudflare:workers");
   let adminExists = true; // fail-closed: assume admin exists unless proven otherwise
   try {
-    const result = await env.DB.prepare("SELECT COUNT(*) as count FROM user").first<{ count: number }>();
-    adminExists = (result?.count ?? 0) > 0;
+    adminExists = await queryAdminExists(env.DB);
   } catch (e: unknown) {
     // "no such table" = fresh DB after reset → no admin
     // Any other DB error = fail-closed, show login (safe for production)
@@ -117,8 +124,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   // Check if any admin exists in local Better Auth DB
   let adminExists = true; // fail-closed
   try {
-    const result = await env.DB.prepare("SELECT COUNT(*) as count FROM user").first<{ count: number }>();
-    adminExists = (result?.count ?? 0) > 0;
+    adminExists = await queryAdminExists(env.DB);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("no such table")) adminExists = false;

@@ -7,6 +7,7 @@ import { WelcomeBanner } from "~/components/admin/WelcomeBanner";
 import { dashboardQueryOptions } from "~/lib/api.queries";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 import type { DashboardData } from "~/lib/api-functions/dashboard";
+import { isTransientD1Error } from "@scalius/core/utils/transient-d1";
 
 const EMPTY_DASHBOARD_DATA: DashboardData = {
   stats: {
@@ -34,19 +35,12 @@ const EMPTY_DASHBOARD_DATA: DashboardData = {
   dailyActivityData: [],
 };
 
-function isTransientDashboardError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes("D1 DB is overloaded") ||
-    message.includes("Requests queued for too long") ||
-    message.includes("code: 7429");
-}
-
 export const Route = createFileRoute("/admin/")({
   loader: async ({ context: { queryClient } }) => {
     try {
       await queryClient.ensureQueryData(dashboardQueryOptions());
     } catch (error) {
-      if (!isTransientDashboardError(error)) throw error;
+      if (!isTransientD1Error(error)) throw error;
       console.warn("Dashboard prefetch skipped after transient D1 overload", error);
     }
   },
@@ -58,7 +52,7 @@ export const Route = createFileRoute("/admin/")({
 function DashboardPage() {
   const dashboardQuery = useQuery({
     ...dashboardQueryOptions(),
-    retry: (failureCount, error) => failureCount < 3 && isTransientDashboardError(error),
+    retry: (failureCount, error) => failureCount < 3 && isTransientD1Error(error),
   });
   const data = dashboardQuery.data ?? EMPTY_DASHBOARD_DATA;
 
