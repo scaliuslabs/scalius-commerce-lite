@@ -6,8 +6,11 @@ import { Textarea } from "../ui/textarea";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { CharacterCounter } from "@/components/ui/character-counter";
-import { getServerFnError } from "@/lib/api-helpers";
-import { getSeoSettings, updateSeoSettings } from "@/lib/api.functions";
+import {
+  getSeoSettings,
+  type SettingsPayload,
+  updateSeoSettings,
+} from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -39,7 +42,7 @@ const fetchSeo = async (): Promise<SeoConfig> => {
 
 const saveSeo = async (values: SeoConfig) => {
   await updateSeoSettings({
-    data: values as unknown as Record<string, unknown>,
+    data: values as unknown as SettingsPayload,
   });
 };
 

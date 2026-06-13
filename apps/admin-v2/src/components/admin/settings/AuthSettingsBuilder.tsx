@@ -25,7 +25,7 @@ import {
     updateAuthSettings,
     getSmsSettings,
     updateSmsSettings,
-} from "@/lib/api.functions";
+} from "@/lib/api-functions/settings";
 
 const MASKED_VALUE = "••••••••••••";
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { getMetaConversionsLogs, clearMetaConversionsLogs, cleanupMetaConversionsLogs } from "~/lib/api.functions";
+import { getMetaConversionsLogs, clearMetaConversionsLogs, cleanupMetaConversionsLogs } from "~/lib/api-functions/settings";
 import { getServerFnError } from "@/lib/api-helpers";
 
 // Local type replacing @scalius/database/schema import

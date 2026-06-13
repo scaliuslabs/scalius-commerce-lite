@@ -14,7 +14,11 @@ import { Loader2, Save, CheckCircle2, ExternalLink, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
-import { getEmailSettings, updateEmailSettings } from "@/lib/api.functions";
+import {
+  getEmailSettings,
+  type SettingsPayload,
+  updateEmailSettings,
+} from "@/lib/api-functions/settings";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -46,7 +50,7 @@ export default function EmailSettingsForm() {
   const { values, setValue, isLoading, isSaving, handleSubmit } = useSettingsForm<EmailSettings>({
     queryKey: queryKeys.settings.email(),
     fetchFn: () => getEmailSettings() as Promise<Partial<EmailSettings>>,
-    saveFn: (v) => updateEmailSettings({ data: v as unknown as Record<string, unknown> }),
+    saveFn: (v) => updateEmailSettings({ data: v as unknown as SettingsPayload }),
     defaultValues: { apiKey: "", sender: "" },
     successMessage: "Email settings saved successfully!",
     errorMessage: "Failed to save email settings",

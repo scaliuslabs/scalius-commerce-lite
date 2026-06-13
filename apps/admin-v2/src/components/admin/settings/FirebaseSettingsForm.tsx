@@ -21,7 +21,11 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
-import { getFirebaseSettings, updateFirebaseSettings } from "@/lib/api.functions";
+import {
+  getFirebaseSettings,
+  type SettingsPayload,
+  updateFirebaseSettings,
+} from "@/lib/api-functions/settings";
 
 interface FirebasePublicConfig {
   apiKey?: string;
@@ -74,7 +78,7 @@ export default function FirebaseSettingsForm() {
       if (v.serviceAccount && !v.serviceAccount.includes("••••")) {
         payload.serviceAccount = v.serviceAccount;
       }
-      return updateFirebaseSettings({ data: payload as unknown as Record<string, unknown> });
+      return updateFirebaseSettings({ data: payload as unknown as SettingsPayload });
     },
     defaultValues,
     successMessage: "Settings saved successfully!",

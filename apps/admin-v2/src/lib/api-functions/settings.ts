@@ -1,0 +1,383 @@
+import { createServerFn } from "@tanstack/react-start";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type SettingsPayload = { [key: string]: JsonValue };
+export type MessagePayload = { message?: string };
+export type SettingsByCategoryInput = { category: string };
+export type UpdateSettingsByCategoryInput = SettingsByCategoryInput & {
+  settings: SettingsPayload;
+};
+
+export interface GeneralSettingsPayload {
+  headerConfig: SettingsPayload;
+  footerConfig: SettingsPayload;
+}
+export interface StorefrontUrlPayload {
+  storefrontUrl: string;
+}
+export interface UpdateStorefrontUrlInput {
+  storefrontUrl?: string;
+}
+export interface CurrencySettingsPayload {
+  currencyCode: string;
+  currencySymbol: string;
+  usdExchangeRate: string;
+}
+export type UpdateCurrencySettingsInput = SettingsPayload;
+export type SeoSettingsPayload = SettingsPayload;
+export type UpdateSeoSettingsInput = SettingsPayload;
+export type SecuritySettingsPayload = SettingsPayload;
+export type UpdateSecuritySettingsInput = SettingsPayload;
+export type AuthVerificationMethod = "email" | "phone" | "both" | "whatsapp_otp" | "sms_otp";
+export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
+export interface AuthSettingsPayload extends SettingsPayload {
+  authVerificationMethod: AuthVerificationMethod | string;
+  guestCheckoutEnabled: boolean;
+  whatsappAccessToken: string;
+  whatsappPhoneNumberId: string;
+  whatsappTemplateName: string;
+  checkoutMode: CheckoutMode | string;
+  partialPaymentEnabled: boolean;
+  partialPaymentAmount: number | null;
+}
+export type UpdateAuthSettingsInput = SettingsPayload;
+export interface EmailSettingsPayload extends SettingsPayload {
+  apiKey: string;
+  sender: string;
+}
+export type UpdateEmailSettingsInput = SettingsPayload;
+export interface FirebaseSettingsPayload extends SettingsPayload {
+  serviceAccount: string;
+  publicConfig: SettingsPayload;
+}
+export type UpdateFirebaseSettingsInput = SettingsPayload;
+export type BusinessSettingsPayload = SettingsPayload;
+export type UpdateBusinessSettingsInput = SettingsPayload;
+export interface ThemeSettingsPayload extends SettingsPayload {
+  colors: SettingsPayload;
+}
+export type UpdateThemeSettingsInput = SettingsPayload;
+export type MediaSettingsPayload = SettingsPayload;
+export type UpdateMediaSettingsInput = SettingsPayload;
+export type WidgetAiSettingsPayload = SettingsPayload;
+export type UpdateWidgetAiSettingsInput = SettingsPayload;
+export type SmsProvider = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet";
+export interface SmsSettingsPayload {
+  activeProvider?: SmsProvider | string;
+  smsnetbdApiKey?: string;
+  smsnetbdSenderId?: string;
+  bdbulksmsToken?: string;
+  mimsmsUsername?: string;
+  mimsmsApiKey?: string;
+  mimsmsSenderName?: string;
+  gennetApiToken?: string;
+  gennetBaseUrl?: string;
+  gennetSid?: string;
+}
+export type UpdateSmsSettingsInput = SettingsPayload;
+export type MetaConversionsSettingsPayload = SettingsPayload;
+export type UpdateMetaConversionsSettingsInput = SettingsPayload;
+export type MetaConversionsLogsInput = { page?: number; limit?: number };
+export type MetaConversionsLogsPayload = SettingsPayload;
+export interface AllowedCountriesPayload extends SettingsPayload {
+  allowedCountries: string[];
+  allowedCountriesMode: string;
+}
+export interface UpdateAllowedCountriesInput {
+  allowedCountries: string[];
+  mode?: "include" | "exclude";
+}
+export type PaymentMethodKey = "stripe" | "sslcommerz" | "polar" | "cod";
+export interface PaymentGatewayStatus {
+  configured: boolean;
+  enabled: boolean;
+}
+export interface PaymentMethodsPayload {
+  enabledMethods: string[];
+  defaultMethod: string;
+  gatewayStatus: Record<PaymentMethodKey, PaymentGatewayStatus>;
+}
+export interface UpdatePaymentMethodsInput {
+  enabledMethods: PaymentMethodKey[];
+  defaultMethod: PaymentMethodKey;
+}
+export type PaymentGatewaySettingsInput = { gateway: string };
+export type UpdatePaymentGatewaySettingsInput = PaymentGatewaySettingsInput & {
+  settings: SettingsPayload;
+};
+export interface NotificationChannelsPayload {
+  channels: Record<string, string[]>;
+}
+export type UpdateNotificationChannelsInput = NotificationChannelsPayload;
+export type AdminNotificationChannelsPayload = NotificationChannelsPayload;
+export type UpdateAdminNotificationChannelsInput = NotificationChannelsPayload;
+
+export const getSettingsByCategory = createServerFn({ method: "GET" })
+  .inputValidator((data: SettingsByCategoryInput) => data)
+  .handler(async ({ data }) => {
+    return apiGet<SettingsPayload>(`/settings/${data.category}`);
+  });
+
+export const updateSettingsByCategory = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateSettingsByCategoryInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>(`/settings/${data.category}`, data.settings);
+  });
+
+export const getGeneralSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<GeneralSettingsPayload>("/settings/general");
+  },
+);
+
+export const getStorefrontUrl = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<StorefrontUrlPayload>("/settings/storefront-url");
+  },
+);
+
+export const updateStorefrontUrl = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateStorefrontUrlInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/storefront-url", data);
+  });
+
+export const getCurrencySettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<CurrencySettingsPayload>("/settings/currency");
+  },
+);
+
+export const updateCurrencySettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateCurrencySettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/currency", data);
+  });
+
+export const getSeoSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<SeoSettingsPayload>("/settings/seo");
+  },
+);
+
+export const updateSeoSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateSeoSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/seo", data);
+  });
+
+export const getSecuritySettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<SecuritySettingsPayload>("/settings/security");
+  },
+);
+
+export const updateSecuritySettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateSecuritySettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/security", data);
+  });
+
+export const getAuthSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<AuthSettingsPayload>("/settings/auth");
+  },
+);
+
+export const updateAuthSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateAuthSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/auth", data);
+  });
+
+export const getEmailSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<EmailSettingsPayload>("/settings/email");
+  },
+);
+
+export const updateEmailSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateEmailSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/email", data);
+  });
+
+export const getFirebaseSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<FirebaseSettingsPayload>("/settings/firebase");
+  },
+);
+
+export const updateFirebaseSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateFirebaseSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/firebase", data);
+  });
+
+export const getBusinessSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<BusinessSettingsPayload>("/settings/business");
+  },
+);
+
+export const updateBusinessSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateBusinessSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/business", data);
+  });
+
+export const getThemeSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<ThemeSettingsPayload>("/settings/theme");
+  },
+);
+
+export const updateThemeSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateThemeSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/theme", data);
+  });
+
+export const getMediaSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<MediaSettingsPayload>("/settings/media");
+  },
+);
+
+export const updateMediaSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateMediaSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/media", data);
+  });
+
+export const getWidgetAiSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<WidgetAiSettingsPayload>("/settings/widget-ai");
+  },
+);
+
+export const updateWidgetAiSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateWidgetAiSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/widget-ai", data);
+  });
+
+export const getSmsSettings = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<SmsSettingsPayload>("/settings/sms");
+  },
+);
+
+export const updateSmsSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateSmsSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/sms", data);
+  });
+
+export const getMetaConversionsSettings = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  return apiGet<MetaConversionsSettingsPayload>("/settings/meta-conversions");
+});
+
+export const updateMetaConversionsSettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateMetaConversionsSettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<SettingsPayload>("/settings/meta-conversions", data);
+  });
+
+export const getMetaConversionsLogs = createServerFn({ method: "GET" })
+  .inputValidator((data: MetaConversionsLogsInput) => data)
+  .handler(async ({ data }) => {
+    const params: Record<string, string> = {};
+    if (data.page) params.page = String(data.page);
+    if (data.limit) params.limit = String(data.limit);
+    return apiGet<MetaConversionsLogsPayload>(
+      "/settings/meta-conversions/logs",
+      params,
+    );
+  });
+
+export const clearMetaConversionsLogs = createServerFn({
+  method: "POST",
+}).handler(async () => {
+  return apiDelete<MessagePayload>("/settings/meta-conversions/logs");
+});
+
+export const cleanupMetaConversionsLogs = createServerFn({
+  method: "POST",
+}).handler(async () => {
+  return apiPost<MessagePayload>("/settings/meta-conversions/logs");
+});
+
+export const getAllowedCountries = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<AllowedCountriesPayload>("/settings/allowed-countries");
+  },
+);
+
+export const updateAllowedCountries = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateAllowedCountriesInput) => data)
+  .handler(async ({ data }) => {
+    return apiPut<MessagePayload>("/settings/allowed-countries", data);
+  });
+
+export const getPaymentMethods = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<PaymentMethodsPayload>("/settings/payment-methods");
+  },
+);
+
+export const updatePaymentMethods = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdatePaymentMethodsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>("/settings/payment-methods", data);
+  });
+
+export const getPaymentGatewaySettings = createServerFn({ method: "GET" })
+  .inputValidator((data: PaymentGatewaySettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiGet<SettingsPayload>(`/settings/${data.gateway}`);
+  });
+
+export const updatePaymentGatewaySettings = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdatePaymentGatewaySettingsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessagePayload>(`/settings/${data.gateway}`, data.settings);
+  });
+
+export const getNotificationChannels = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  return apiGet<NotificationChannelsPayload>("/settings/notification-channels");
+});
+
+export const updateNotificationChannels = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateNotificationChannelsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPut<NotificationChannelsPayload>(
+      "/settings/notification-channels",
+      data,
+    );
+  });
+
+export const getAdminNotificationChannels = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  return apiGet<AdminNotificationChannelsPayload>(
+    "/settings/notification-channels/admin-channels",
+  );
+});
+
+export const updateAdminNotificationChannels = createServerFn({
+  method: "POST",
+})
+  .inputValidator((data: UpdateAdminNotificationChannelsInput) => data)
+  .handler(async ({ data }) => {
+    return apiPut<AdminNotificationChannelsPayload>(
+      "/settings/notification-channels/admin-channels",
+      data,
+    );
+  });

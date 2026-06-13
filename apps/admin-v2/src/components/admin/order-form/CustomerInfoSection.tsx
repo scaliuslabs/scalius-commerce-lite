@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useOrderForm } from "./OrderFormContext";
-import { getAllowedCountries } from "@/lib/api.functions";
+import { getAllowedCountries } from "@/lib/api-functions/settings";
 
 export function CustomerInfoSection() {
   const { form, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =

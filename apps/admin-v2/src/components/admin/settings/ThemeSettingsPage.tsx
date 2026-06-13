@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, RotateCcw, Save, Palette } from "lucide-react";
-import { getServerFnError } from "@/lib/api-helpers";
-import { getThemeSettings, updateThemeSettings } from "@/lib/api.functions";
+import { getThemeSettings, updateThemeSettings } from "@/lib/api-functions/settings";
 
 // ---------------------------------------------------------------------------
 // Default storefront colors (must match global.css :root vars in storefront).

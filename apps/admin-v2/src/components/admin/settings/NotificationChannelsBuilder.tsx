@@ -10,13 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Save, Bell, ShieldCheck } from "lucide-react";
-import { getServerFnError } from "@/lib/api-helpers";
 import {
   getNotificationChannels,
   updateNotificationChannels,
   getAdminNotificationChannels,
   updateAdminNotificationChannels,
-} from "@/lib/api.functions";
+} from "@/lib/api-functions/settings";
 import {
   ORDER_NOTIFICATION_LABELS,
   ORDER_NOTIFICATION_TYPES,

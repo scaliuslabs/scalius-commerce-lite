@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { Loader2, Save, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getAuthSettings, updateAuthSettings } from "@/lib/api.functions";
+import { getAuthSettings, updateAuthSettings } from "@/lib/api-functions/settings";
 
 export default function CheckoutFlowSettings() {
     const [loading, setLoading] = useState(true);

@@ -12,7 +12,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettingsForm } from "@/hooks/use-settings-form";
-import { getWidgetAiSettings, updateWidgetAiSettings } from "@/lib/api.functions";
+import { getWidgetAiSettings, updateWidgetAiSettings } from "@/lib/api-functions/settings";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
 import { CheckCircle2, KeyRound, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";

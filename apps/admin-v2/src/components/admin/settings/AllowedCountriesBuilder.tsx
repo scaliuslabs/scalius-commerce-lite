@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2, Save, X, Search } from "lucide-react";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getAllowedCountries, updateAllowedCountries } from "@/lib/api.functions";
+import { getAllowedCountries, updateAllowedCountries } from "@/lib/api-functions/settings";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";

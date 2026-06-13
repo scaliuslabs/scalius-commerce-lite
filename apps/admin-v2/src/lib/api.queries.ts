@@ -58,27 +58,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  // Settings
-  getSettingsByCategory,
-  getGeneralSettings,
-  getStorefrontUrl,
-  getCurrencySettings,
-  getSeoSettings,
-  getSecuritySettings,
-  getAuthSettings,
-  getEmailSettings,
-  getFirebaseSettings,
-  getBusinessSettings,
-  getThemeSettings,
-  getMediaSettings,
-  getSmsSettings,
-  getMetaConversionsSettings,
-  getMetaConversionsLogs,
-  getAllowedCountries,
-  getPaymentMethods,
-  getPaymentGatewaySettings,
-  getNotificationChannels,
-  getAdminNotificationChannels,
   getDeliveryProviders,
   getDeliveryLocations,
   getAllDeliveryLocations,
@@ -113,6 +92,28 @@ import {
   type NavigationPreviewProductsInput,
 } from "./api-functions/navigation";
 import { getFraudCheckerProviders } from "./api-functions/fraud-checker";
+import {
+  getAdminNotificationChannels,
+  getAllowedCountries,
+  getAuthSettings,
+  getBusinessSettings,
+  getCurrencySettings,
+  getEmailSettings,
+  getFirebaseSettings,
+  getGeneralSettings,
+  getMediaSettings,
+  getMetaConversionsLogs,
+  getMetaConversionsSettings,
+  getNotificationChannels,
+  getPaymentGatewaySettings,
+  getPaymentMethods,
+  getSecuritySettings,
+  getSeoSettings,
+  getSettingsByCategory,
+  getSmsSettings,
+  getStorefrontUrl,
+  getThemeSettings,
+} from "./api-functions/settings";
 
 // Query staleTime constants (how long data is considered fresh)
 const STALE = {
