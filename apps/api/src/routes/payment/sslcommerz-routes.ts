@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
-import { orders, paymentPlans, PaymentMethod, PaymentStatus, OrderStatus } from "@scalius/database/schema";
+import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import { initSSLCommerzSession } from "@scalius/core/modules/payments/sslcommerz";
 import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
@@ -12,7 +12,7 @@ import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } fro
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
-import { resolvePaymentSessionPolicy } from "./payment-session-policy";
+import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -75,6 +75,7 @@ app.openapi(createSessionRoute, async (c) => {
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
       balanceDue: orders.balanceDue,
+      deletedAt: orders.deletedAt,
       shipmentClaimId: orders.shipmentClaimId,
       shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt
     })
@@ -84,13 +85,7 @@ app.openapi(createSessionRoute, async (c) => {
 
   if (!order) throw new NotFoundError("Order not found");
   assertNoActiveShipmentClaim(order);
-
-  if (order.paymentStatus === PaymentStatus.PAID) {
-    throw new ValidationError("Order is already fully paid");
-  }
-  if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
-    throw new ValidationError("Cannot pay a cancelled/returned order");
-  }
+  assertPaymentSessionOrderPayable(order);
   if (order.paymentMethod !== PaymentMethod.SSLCOMMERZ) {
     throw new ValidationError("Order is not configured for SSLCommerz payment");
   }

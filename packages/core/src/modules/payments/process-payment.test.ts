@@ -78,6 +78,21 @@ function createDbMock({
   return { db, operations, inserts, updates, batch };
 }
 
+function createPaymentOrder(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "order_1",
+    totalAmount: 100,
+    paidAmount: 0,
+    balanceDue: 100,
+    paymentStatus: PaymentStatus.UNPAID,
+    status: OrderStatus.PENDING,
+    inventoryPool: "regular",
+    version: 7,
+    deletedAt: null,
+    ...overrides,
+  };
+}
+
 describe("payment processing idempotency", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -206,6 +221,89 @@ describe("payment processing idempotency", () => {
     expect(result).toEqual({
       success: false,
       error: "Order has an active shipment creation in progress. Please retry shortly.",
+    });
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "cancelled order",
+      order: createPaymentOrder({ status: OrderStatus.CANCELLED }),
+      error: "Cannot pay a cancelled order",
+    },
+    {
+      label: "returned order",
+      order: createPaymentOrder({ status: OrderStatus.RETURNED }),
+      error: "Cannot pay a returned order",
+    },
+    {
+      label: "refunded order",
+      order: createPaymentOrder({ status: OrderStatus.REFUNDED }),
+      error: "Cannot pay a refunded order",
+    },
+    {
+      label: "partially refunded order",
+      order: createPaymentOrder({ status: OrderStatus.PARTIALLY_REFUNDED }),
+      error: "Cannot pay a partially refunded order",
+    },
+    {
+      label: "soft-deleted order",
+      order: createPaymentOrder({ deletedAt: new Date("2026-01-01T00:00:00Z") }),
+      error: "Cannot pay a deleted order",
+    },
+    {
+      label: "refunded payment status",
+      order: createPaymentOrder({ paymentStatus: PaymentStatus.REFUNDED }),
+      error: "Cannot pay an order whose payment has already been refunded",
+    },
+  ])("rejects confirmed payment for $label before claiming the payment", async ({ order, error }) => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        null,
+        order,
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "stripe",
+      paymentType: "full",
+      stripePaymentIntentId: "pi_late",
+      amount: 100,
+    });
+
+    expect(result).toEqual({ success: false, error, retryable: false });
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+  });
+
+  it("does not promote a pending gateway record after an order becomes terminal", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        { id: "pay_1", amount: 100, status: PaymentRecordStatus.PENDING },
+        createPaymentOrder({ status: OrderStatus.CANCELLED }),
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "stripe",
+      paymentType: "full",
+      stripePaymentIntentId: "pi_late",
+      amount: 100,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Cannot pay a cancelled order",
+      retryable: false,
     });
     expect(inserts).toHaveLength(0);
     expect(updates).toHaveLength(0);

@@ -38,7 +38,13 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
 import { polarPaymentRoutes } from "./polar-routes";
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
-import { orders as ordersTable, paymentPlans as paymentPlansTable, siteSettings as siteSettingsTable } from "@scalius/database/schema";
+import {
+  OrderStatus,
+  PaymentStatus,
+  orders as ordersTable,
+  paymentPlans as paymentPlansTable,
+  siteSettings as siteSettingsTable,
+} from "@scalius/database/schema";
 
 const orderRow = {
   id: "order_1",
@@ -48,11 +54,12 @@ const orderRow = {
   customerEmail: "buyer@example.com",
   shippingAddress: "1 Payment Street",
   cityName: "Dhaka",
-  status: "pending",
+  status: OrderStatus.PENDING as string,
   paymentMethod: "stripe",
-  paymentStatus: "unpaid",
+  paymentStatus: PaymentStatus.UNPAID as string,
   paidAmount: 0,
   balanceDue: 125,
+  deletedAt: null as Date | null,
   shipmentClaimId: null as string | null,
   shipmentClaimExpiresAt: null as Date | null,
 };
@@ -290,6 +297,87 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(409);
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "Stripe intent",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      settings: mocks.getStripeSettings,
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz session",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      settings: mocks.getSSLCommerzSettings,
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar session",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      settings: mocks.getPolarSettings,
+      gateway: mocks.createPolarCheckout,
+    },
+  ].flatMap((gateway) => [
+    {
+      ...gateway,
+      blockedState: "cancelled order",
+      order: { status: OrderStatus.CANCELLED },
+    },
+    {
+      ...gateway,
+      blockedState: "returned order",
+      order: { status: OrderStatus.RETURNED },
+    },
+    {
+      ...gateway,
+      blockedState: "refunded order",
+      order: { status: OrderStatus.REFUNDED },
+    },
+    {
+      ...gateway,
+      blockedState: "partially refunded order",
+      order: { status: OrderStatus.PARTIALLY_REFUNDED },
+    },
+    {
+      ...gateway,
+      blockedState: "soft-deleted order",
+      order: { deletedAt: new Date("2026-01-01T00:00:00Z") },
+    },
+    {
+      ...gateway,
+      blockedState: "refunded payment status",
+      order: { paymentStatus: PaymentStatus.REFUNDED },
+    },
+  ]))("rejects $label creation for a $blockedState before gateway calls", async ({
+    paymentMethod,
+    path,
+    order,
+    settings,
+    gateway,
+  }) => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod,
+      order,
+    });
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(settings).not.toHaveBeenCalled();
     expect(gateway).not.toHaveBeenCalled();
   });
 

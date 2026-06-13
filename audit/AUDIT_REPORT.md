@@ -103,9 +103,9 @@ Status: Verified on 2026-06-13. Checkout summary customer fields render through 
 
 Fresh payment/order audits independently found that already-created gateway sessions or late webhooks can still mark cancelled, deleted, returned, or refunded orders as paid. This can create paid terminal orders without re-reserving inventory or moving the order through an explicit recovery transition.
 
-Fix direction: add a shared payable-state guard for payment-session routes and `processPaymentConfirmed()`. Late successful captures for terminal orders should be recorded for reconciliation/manual review without mutating order totals/status, then acknowledged so gateway retries stop.
+Fix direction: add a shared payable-state guard for payment-session routes and `processPaymentConfirmed()`. Late successful captures for terminal orders should be surfaced for reconciliation/manual review without mutating order totals/status, then acknowledged so gateway retries stop.
 
-Status: Not Started. Add focused tests around terminal/refunded states in payment-session routes and `processPaymentConfirmed()`.
+Status: Verified on 2026-06-14. A shared payable-order policy now blocks soft-deleted, cancelled, returned, refunded, partially-refunded, fully-paid, and payment-refunded orders before public gateway-session calls and before confirmed gateway events can create/promote payment claims. The final order CAS also enforces the same payable-state predicate, and non-payable late-success queue outcomes are acknowledged as manual-reconciliation events instead of retried. Verification: focused core/API tests, core/API typechecks and lints, API dry-run build, dist/env checks, API deploy version `8253ac1e-0053-436e-a20d-d98503c96832`, live API health/OpenAPI checks, authenticated dashboard orders smoke, and storefront browser smoke.
 
 ### PAY-007: SSLCommerz deposit/balance attempts collide on `tran_id`
 
