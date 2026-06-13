@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, and `ORDER-006` are now verified; `ORDER-007` through `ORDER-010` and `WEBHOOK-001` remain open.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, and `WEBHOOK-001` are now verified; `ORDER-007` through `ORDER-010` remain open.
 
 ## Validation Performed
 
@@ -251,7 +251,7 @@ Webhook claims insert as `processing`. If an isolate crashes before queue send o
 
 Fix direction: add processing leases/expiry or a durable outbox so stale processing events can be reclaimed and retried.
 
-Status: Not Started. See `WEBHOOK-001` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13. Webhook `processing` claims now have a five-minute lease. Stale processing claims are atomically reclaimable by exactly one retry, fresh processing claims remain deduped, failed claims remain reclaimable, queued/processed claims remain terminal, and non-duplicate insert failures throw so providers retry instead of getting false duplicate acknowledgements. Focused helper and route tests cover the behavior. See `WEBHOOK-001` in `REMEDIATION_TRACKER.md`.
 
 ### ORDER-008: Bulk shipment claim is only a version bump before provider side effects
 
