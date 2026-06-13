@@ -98,10 +98,12 @@ Focused storefront Vitest now starts after adding the missing `happy-dom` dev de
 Storefront checkout/content/SEO regression checks:
 
 ```bash
-pnpm --filter @scalius/storefront exec vitest run src/lib/checkout/render-summary.test.ts src/pages/seo-regressions.test.ts src/components/LocationSelector.test.ts
+pnpm --filter @scalius/storefront exec vitest run src/lib/checkout/render-summary.test.ts src/lib/safe-json.test.ts src/lib/cart/client.test.ts src/lib/seo-regressions.test.ts src/components/LocationSelector.test.ts
 pnpm --filter @scalius/core test -- src/modules/pages/pages.service.test.ts
 pnpm --filter @scalius/storefront typecheck
 ```
+
+For `STORE-005`, executable inline JSON must use `serializeJsonForInlineScript()` and include a DOM-parser test with a `</script>` payload. For `STORE-006`, localized/admin-configured empty-cart strings must render through text nodes, and the test must assert malicious language strings do not create `img` or `script` nodes.
 
 Storefront API contract checks:
 
