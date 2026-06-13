@@ -70838,6 +70838,19 @@
                           "type": "number",
                           "nullable": true
                         },
+                        "discountType": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "percentage",
+                            "flat",
+                            null
+                          ]
+                        },
+                        "discountAmount": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "freeDelivery": {
                           "type": "boolean"
                         },
@@ -71132,6 +71145,8 @@
                         "metaDescription",
                         "isActive",
                         "discountPercentage",
+                        "discountType",
+                        "discountAmount",
                         "freeDelivery",
                         "createdAt",
                         "updatedAt",

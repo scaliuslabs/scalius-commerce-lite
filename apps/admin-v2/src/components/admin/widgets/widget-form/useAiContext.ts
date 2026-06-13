@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { Category } from '@/types/api-responses';
 import type { MediaFile, ProductSearchResult } from './types';
-import { getProducts } from "@/lib/api.functions";
+import { getProducts } from "@/lib/api-functions/products";
 import {
   getCategories,
   type CategoryListItemDto,
@@ -123,16 +123,15 @@ export const useAiContext = (
     try {
       const data = await getProducts({
         data: { page: pageToFetch, limit: PAGE_SIZE, sort: "updatedAt", order: "desc" },
-      }) as Record<string, unknown>;
+      });
       if (requestId !== productBrowseRequestId.current) return;
 
       const newProducts = toSelectableProducts(
-        (data.products || []) as RawProduct[],
+        data.products as RawProduct[],
       );
       setLatestProducts((prev) => pageToFetch === 1 ? newProducts : [...prev, ...newProducts]);
       setProductPage(pageToFetch);
-      const pagination = data.pagination as Record<string, unknown>;
-      setHasMoreProducts((pagination.totalPages as number) > pageToFetch);
+      setHasMoreProducts(data.pagination.totalPages > pageToFetch);
     } catch (error: unknown) {
       if (import.meta.env.DEV) console.error("Failed to fetch latest products:", error);
       toast.error("Could not load products.");
@@ -149,16 +148,15 @@ export const useAiContext = (
     try {
       const data = await getProducts({
         data: { search: normalizedQuery, page: pageToFetch, limit: PAGE_SIZE },
-      }) as Record<string, unknown>;
+      });
       if (requestId !== productSearchRequestId.current) return;
 
       const newProducts = toSelectableProducts(
-        (data.products || []) as RawProduct[],
+        data.products as RawProduct[],
       );
       setProductSearchResults((prev) => pageToFetch === 1 ? newProducts : [...prev, ...newProducts]);
       setProductSearchPage(pageToFetch);
-      const pagination = data.pagination as Record<string, unknown>;
-      setHasMoreSearchProducts((pagination.totalPages as number) > pageToFetch);
+      setHasMoreSearchProducts(data.pagination.totalPages > pageToFetch);
     } catch (error) {
       if (import.meta.env.DEV) console.error("Failed to search products:", error);
     } finally {

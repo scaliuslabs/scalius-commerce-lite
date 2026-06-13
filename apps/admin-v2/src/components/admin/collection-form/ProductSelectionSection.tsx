@@ -35,7 +35,7 @@ import {
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Badge } from "../../ui/badge";
 import { Trash2, Layers, Package, Search, Loader2, Info } from "lucide-react";
-import { getProducts } from "~/lib/api.functions";
+import { getProducts } from "~/lib/api-functions/products";
 import type { CollectionFormValues, Category, Product } from "./types";
 
 const PAGE_SIZE = 10;
@@ -95,14 +95,14 @@ export const ProductSelectionSection = React.memo(
             const allProducts = new Map<string, Product>();
             await Promise.all(
               selectedCategoryIds.map(async (catId) => {
-                const data = (await getProducts({
+                const data = await getProducts({
                   data: {
                     limit: 50,
                     page: 1,
                     search: search?.trim() || undefined,
                     categoryId: catId,
                   },
-                })) as { products?: Product[] };
+                });
                 for (const p of data.products || []) {
                   allProducts.set(p.id, p);
                 }
@@ -121,17 +121,14 @@ export const ProductSelectionSection = React.memo(
                 : undefined;
             lastCategoryFilterRef.current = categoryId;
 
-            const data = (await getProducts({
+            const data = await getProducts({
               data: {
                 limit: PAGE_SIZE,
                 page,
                 search: search?.trim() || undefined,
                 categoryId,
               },
-            })) as {
-              products?: Product[];
-              pagination?: { totalPages: number; total: number };
-            };
+            });
 
             if (data.products) {
               if (page === 1) {
@@ -180,7 +177,7 @@ export const ProductSelectionSection = React.memo(
           clearTimeout(searchTimeoutRef.current);
         }
       };
-    }, [productSearchTerm]);
+    }, [productSearchTerm, productSearchOpen, loadProducts]);
 
     // Reload when category selection changes while popover is open
     useEffect(() => {
@@ -193,7 +190,7 @@ export const ProductSelectionSection = React.memo(
       if (currentCategoryId !== lastCategoryFilterRef.current) {
         loadProducts(1, productSearchTerm);
       }
-    }, [selectedCategoryIds, productSearchOpen]);
+    }, [selectedCategoryIds, productSearchOpen, productSearchTerm, loadProducts]);
 
     const loadMoreProducts = () => {
       if (currentPage < totalPages && !isLoadingMore) {

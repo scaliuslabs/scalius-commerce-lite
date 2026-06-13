@@ -122,9 +122,9 @@ export interface Product {
   slug: string;
   metaTitle: string | null;
   metaDescription: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
+  createdAt: Date | string | number;
+  updatedAt: Date | string | number;
+  deletedAt: Date | string | number | null;
   isActive: boolean;
   discountPercentage: number | null;
   discountType: "percentage" | "flat" | null;
@@ -187,8 +187,8 @@ export interface ProductVariant {
   discountType: string | null;
   discountPercentage: number | null;
   discountAmount: number | null;
-  isDefault: boolean;
-  isActive: boolean;
+  isDefault?: boolean;
+  isActive?: boolean;
   version: number;
   stockVersion: number;
   createdAt: Date | string | number;
@@ -200,7 +200,8 @@ export interface ProductImageDetail {
   id: string;
   productId: string;
   url: string;
-  altText: string | null;
+  alt: string | null;
+  altText?: string | null;
   isPrimary: boolean;
   sortOrder: number;
   createdAt: string | number;

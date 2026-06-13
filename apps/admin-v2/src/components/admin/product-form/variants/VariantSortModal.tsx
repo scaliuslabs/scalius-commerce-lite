@@ -1,6 +1,6 @@
 // src/components/admin/ProductForm/variants/VariantSortModal.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +32,10 @@ import { GripVertical, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getVariantSortOrder, updateVariantSortOrder } from "@/lib/api.functions";
+import {
+  getVariantSortOrder,
+  updateVariantSortOrder,
+} from "@/lib/api-functions/products";
 
 interface VariantSortModalProps {
   productId: string;
@@ -112,26 +115,26 @@ export function VariantSortModal({
     }),
   );
 
-  // Fetch current sort order
-  useEffect(() => {
-    if (isOpen) {
-      fetchSortOrder();
-    }
-  }, [isOpen, productId]);
-
-  const fetchSortOrder = async () => {
+  const fetchSortOrder = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await getVariantSortOrder({ data: { productId } }) as Record<string, unknown>;
-      setColors((data.colors || []) as SortItem[]);
-      setSizes((data.sizes || []) as SortItem[]);
+      const data = await getVariantSortOrder({ data: { productId } });
+      setColors(data.colors);
+      setSizes(data.sizes);
     } catch (error: unknown) {
       console.error("Failed to fetch sort order:", error);
       toast.error("Error", { description: "Failed to load variant sort order" });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [productId]);
+
+  // Fetch current sort order
+  useEffect(() => {
+    if (isOpen) {
+      fetchSortOrder();
+    }
+  }, [isOpen, fetchSortOrder]);
 
   const handleColorDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;

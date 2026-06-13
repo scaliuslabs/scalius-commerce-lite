@@ -112,6 +112,8 @@ export const productDetailSchema = z
     metaDescription: z.string().nullable(),
     isActive: z.boolean(),
     discountPercentage: z.number().nullable(),
+    discountType: z.enum(["percentage", "flat"]).nullable(),
+    discountAmount: z.number().nullable(),
     freeDelivery: z.boolean(),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,

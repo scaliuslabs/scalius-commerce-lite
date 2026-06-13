@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
-import { createProduct, updateProduct } from "~/lib/api.functions";
+import { createProduct, updateProduct } from "~/lib/api-functions/products";
 import { getServerFnError } from "@/lib/api-helpers";
 
 interface UseProductSubmitOptions {
@@ -46,11 +46,11 @@ export function useProductSubmit({
       if (isEdit) {
         const entityId = productId || values.id;
         if (!entityId) throw new Error("Product ID is required for update");
-        return updateProduct({ data: { ...formattedValues, id: entityId } }) as Promise<Record<string, unknown>>;
+        return updateProduct({ data: { ...formattedValues, id: entityId } });
       }
-      return createProduct({ data: formattedValues as Record<string, unknown> }) as Promise<Record<string, unknown>>;
+      return createProduct({ data: formattedValues });
     },
-    onSuccess: (result, values) => {
+    onSuccess: (result) => {
       toast.success("Success", {
         description: isEdit
           ? "Product updated successfully."
@@ -69,9 +69,17 @@ export function useProductSubmit({
       if (onSuccess) {
         onSuccess();
       } else if (!isEdit) {
+        const createdProductId =
+          "id" in result && typeof result.id === "string" ? result.id : null;
+        if (!createdProductId) {
+          toast.error("Error", {
+            description: "Product was created but no product ID was returned.",
+          });
+          return;
+        }
         void navigate({
           to: "/admin/products/$productId/edit",
-          params: { productId: result.id as string },
+          params: { productId: createdProductId },
         });
       }
     },

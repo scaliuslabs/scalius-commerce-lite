@@ -1,10 +1,13 @@
 // src/components/admin/product-form/utils.ts
 import type { ProductFormValues } from "./types";
+import type { CreateProductInput } from "@/lib/api-functions/products";
 
 /**
  * Extract unique color options from variants, sorted by colorSortOrder
  */
-export const extractUniqueColors = (variants: Array<{ color?: string | null; colorSortOrder?: number }>): string[] => {
+export const extractUniqueColors = (
+  variants: Array<{ color?: string | null; colorSortOrder?: number | null }>,
+): string[] => {
   // Create a map of color to its sort order
   const colorMap = new Map<string, number>();
 
@@ -63,24 +66,36 @@ export const addVariantImagesMarker = (
 export const formatFormValuesForSubmission = (
   values: ProductFormValues,
   enableVariantImages: boolean,
-) => {
+): CreateProductInput => {
   const metaDescription = addVariantImagesMarker(
     values.metaDescription,
     enableVariantImages,
   );
 
   // Ensure only ONE discount type is active by clearing the unused field
-  const discountPercentage = values.discountType === "percentage" ? values.discountPercentage : 0;
-  const discountAmount = values.discountType === "flat" ? values.discountAmount : 0;
+  const discountPercentage =
+    values.discountType === "percentage" ? values.discountPercentage : 0;
+  const discountAmount =
+    values.discountType === "flat" ? values.discountAmount : 0;
 
   return {
-    ...values,
+    name: values.name,
+    description: values.description,
+    price: values.price,
+    categoryId: values.categoryId,
+    isActive: values.isActive,
+    discountType: values.discountType,
+    freeDelivery: values.freeDelivery,
+    metaTitle: values.metaTitle,
     metaDescription,
-    // Explicitly set discount values based on type
     discountPercentage,
     discountAmount,
+    slug: values.slug,
     images: values.images.map((img) => ({
-      ...img,
+      id: img.id,
+      url: img.url,
+      filename: img.filename,
+      size: img.size,
       createdAt:
         img.createdAt instanceof Date
           ? img.createdAt.toISOString()
@@ -94,7 +109,7 @@ export const formatFormValuesForSubmission = (
     additionalInfo: values.additionalInfo?.map((item, index) => ({
       ...item,
       sortOrder: index,
-    })),
+    })) || [],
   };
 };
 

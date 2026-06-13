@@ -1,5 +1,5 @@
 //src/components/admin/discount/ProductSelector.tsx
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Command,
   CommandEmpty,
@@ -14,7 +14,7 @@ import { Check, ChevronsUpDown, Loader2, Tag, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
-import { getProducts } from "~/lib/api.functions";
+import { getProducts } from "~/lib/api-functions/products";
 
 // Product interface based on what's used in OrderForm
 interface Product {
@@ -59,39 +59,8 @@ export function ProductSelector({
   const [totalProducts, setTotalProducts] = useState(0);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load initial products when dropdown opens
-  useEffect(() => {
-    if (open) {
-      loadProducts();
-    }
-  }, [open]);
-
-  // Handle search input changes
-  useEffect(() => {
-    if (!open) return;
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    // Reset to first page when search term changes
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      loadProducts();
-    }, 300);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, open]);
-
   // Main function to load products
-  const loadProducts = async (page = 1) => {
+  const loadProducts = useCallback(async (page = 1, search = "") => {
     try {
       if (page === 1) {
         setIsSearching(true);
@@ -103,9 +72,9 @@ export function ProductSelector({
         data: {
           limit: 10,
           page,
-          search: searchTerm.trim() || undefined,
+          search: search.trim() || undefined,
         },
-      }) as { products?: Product[]; pagination?: { totalPages: number; total: number } };
+      });
 
       if (data.products) {
         if (page === 1) {
@@ -126,12 +95,41 @@ export function ProductSelector({
       setIsSearching(false);
       setIsLoadingMore(false);
     }
-  };
+  }, []);
+
+  // Load initial products when dropdown opens
+  useEffect(() => {
+    if (open) {
+      loadProducts(1, "");
+    }
+  }, [open, loadProducts]);
+
+  // Handle search input changes
+  useEffect(() => {
+    if (!open) return;
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Reset to first page when search term changes
+    setCurrentPage(1);
+
+    searchTimeoutRef.current = setTimeout(() => {
+      loadProducts(1, searchTerm);
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm, open, loadProducts]);
 
   // Load more products for pagination
   const loadMoreProducts = () => {
     if (currentPage < totalPages && !isLoadingMore) {
-      loadProducts(currentPage + 1);
+      loadProducts(currentPage + 1, searchTerm);
     }
   };
 

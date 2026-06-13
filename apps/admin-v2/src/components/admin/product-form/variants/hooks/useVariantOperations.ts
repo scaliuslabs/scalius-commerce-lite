@@ -78,7 +78,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     try {
       const result = await createMutation.mutateAsync({
         productId,
-        variant: values as unknown as Record<string, unknown>,
+        variant: values,
       });
       return toProductVariant(result);
     } catch {
@@ -96,7 +96,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       const result = await updateMutation.mutateAsync({
         productId,
         variantId,
-        variant: values as unknown as Record<string, unknown>,
+        variant: values,
       });
       return toProductVariant(result);
     } catch {
@@ -140,7 +140,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     try {
       await bulkUpdateMutation.mutateAsync({
         productId,
-        updates: updates as Record<string, unknown>[],
+        updates,
       });
       return true;
     } catch {
@@ -155,11 +155,10 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     try {
       const result = await bulkCreateMutation.mutateAsync({
         productId,
-        variants: variants as unknown as Record<string, unknown>[],
+        variants,
       });
-      const r = result as Record<string, unknown>;
-      const savedVariants: ProductVariant[] = (r.variants as Record<string, unknown>[]).map(
-        (v) => toProductVariant(v)
+      const savedVariants = result.variants.map((variant) =>
+        toProductVariant(variant),
       );
       return savedVariants;
     } catch {
