@@ -447,6 +447,22 @@ Fix direction: drive location state through the component API or hidden inputs c
 
 Status: Verified on 2026-06-13. Cart prefill now dispatches a `location-prefill` event that `LocationSelector` handles through React state, resolving saved IDs or display names against the real city/zone/area options.
 
+### STORE-005: Checkout config inline script allows stored script breakout
+
+`checkout.astro` serialized gateway/runtime checkout config directly into an executable inline script with raw `JSON.stringify()`. Admin/provider-controlled values containing `</script>` could terminate the script block and inject HTML.
+
+Fix direction: use a script-safe JSON serializer for executable inline-script assignments and prove the serialized output stays inert when parsed as HTML.
+
+Status: Verified on 2026-06-14. Checkout config now uses `serializeJsonForInlineScript()`, which escapes script-breaking characters while preserving JSON round-trip behavior. The regression test parses the inline assignment inside a `<script>` element and confirms a malicious `</script><img ...>` payload leaves exactly one script and no injected element. Deployed to storefront version `3215e5be-1237-47bd-a2b1-ac92c3805a58`; live `/checkout` HTML contains the expected `window.__CHECKOUT_CONFIG__` assignment, and browser/Worker-tail smoke was clean.
+
+### STORE-006: Empty-cart language strings render through `innerHTML`
+
+The storefront cart empty state interpolated active checkout-language strings into an `innerHTML` template. A malicious or compromised language/config value could inject markup when the cart was empty.
+
+Fix direction: render localized/admin-configured text with DOM text nodes or framework text interpolation, not HTML string concatenation.
+
+Status: Verified on 2026-06-14. The empty-cart renderer is isolated in `apps/storefront/src/lib/cart/empty-state.ts` and assigns `emptyCartText`/`continueShoppingText` with `textContent`/text nodes. A happy-dom regression test feeds malicious language strings and confirms no `img`/`script` nodes are created. Deployed to storefront version `3215e5be-1237-47bd-a2b1-ac92c3805a58`; live browser inspection of `#cartItems` showed the empty-cart renderer with no `img` or `script` nodes and no console errors.
+
 ### CONTENT-001: Scheduled publishing is not enforced publicly
 
 Pages store and validate `publishedAt`, but public page queries and sitemap generation only check `isPublished`/`deletedAt`.

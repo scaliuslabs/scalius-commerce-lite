@@ -12,11 +12,13 @@
 
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData, getCheckoutConfig } from "@/lib/api";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
 const [layoutData, checkoutConfig] = await Promise.all([
   getLayoutData(),
   getCheckoutConfig(),
 ]);
+const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 ---
 
 <Layout title="Payment" layoutData={layoutData}>
@@ -107,7 +109,7 @@ const [layoutData, checkoutConfig] = await Promise.all([
   .space-y-3 > div { position: relative; }
 </style>
 
-<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${JSON.stringify(checkoutConfig)};`}></script>
+<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};`}></script>
 <script>
   import { initCheckoutPage } from "@/lib/checkout";
   document.addEventListener("DOMContentLoaded", initCheckoutPage);
