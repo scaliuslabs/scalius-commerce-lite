@@ -7,6 +7,7 @@
  *   node scripts/deploy.mjs --only api       # typecheck + build/deploy API and migrate D1
  *   node scripts/deploy.mjs --only admin     # typecheck + build/deploy admin
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
+ *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
  *
@@ -29,6 +30,7 @@ const apiDir = resolve(root, "apps", "api");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
+const dryRun = args.includes("--dry-run");
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 const onlyArgIndex = args.indexOf("--only");
 const onlyTarget = onlyArgIndex >= 0 ? args[onlyArgIndex + 1] : null;
@@ -145,6 +147,12 @@ function checkDistEnvFiles(targets = deployTargets) {
 
   if (migrateOnly) {
     console.log(`\n🗄  Applying D1 migrations → "${dbName}" (${target})\n`);
+    if (dryRun) {
+      console.log(`DRY RUN: would apply D1 migrations to ${dbName} (${target}).`);
+      console.log("\n✓ Migration dry run complete.");
+      return;
+    }
+
     try {
       runWithRetry(
         `pnpm exec wrangler d1 migrations apply ${dbName} --${target}${persistFlag}`,
@@ -159,7 +167,7 @@ function checkDistEnvFiles(targets = deployTargets) {
     return;
   }
 
-  console.log(`\n🚀 Deploying "${config.name}"${requestedTarget ? ` (${requestedTarget} only)` : ""} → D1: "${dbName}"\n`);
+  console.log(`\n🚀 ${dryRun ? "Validating deploy for" : "Deploying"} "${config.name}"${requestedTarget ? ` (${requestedTarget} only)` : ""} → D1: "${dbName}"\n`);
   console.log("=".repeat(60));
 
   try {
@@ -169,6 +177,12 @@ function checkDistEnvFiles(targets = deployTargets) {
     if (requestedTarget) {
       buildTarget(requestedTarget);
       checkDistEnvFiles([requestedTarget]);
+
+      if (dryRun) {
+        console.log("\nDRY RUN: skipping D1 migrations and Worker deploy.");
+        console.log(`\n✓ Deploy dry run complete (${requestedTarget}).`);
+        return;
+      }
 
       if (requestedTarget === "api") {
         runWithRetry(
@@ -186,6 +200,12 @@ function checkDistEnvFiles(targets = deployTargets) {
     // 2. Build: all workspaces via Turbo
     run("pnpm build", "Build all workspaces");
     checkDistEnvFiles();
+
+    if (dryRun) {
+      console.log("\nDRY RUN: skipping D1 migrations and Worker deploys.");
+      console.log("\n✓ Deploy dry run complete (API + Admin V2 + Storefront).");
+      return;
+    }
 
     // 3. Apply all pending D1 migrations (no-op if schema is up to date)
     runWithRetry(

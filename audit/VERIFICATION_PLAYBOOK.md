@@ -268,6 +268,7 @@ Inspect the actual task graph before trusting root scripts:
 ```bash
 node --check scripts/deploy.mjs
 pnpm check:dist-secrets
+pnpm deploy:api --dry-run
 pnpm exec turbo run build --dry=json
 pnpm exec turbo run lint --filter='!@scalius/tsconfig' --dry=json
 pnpm exec turbo run deploy --filter=@scalius/api --dry=json
@@ -283,6 +284,7 @@ Use these checks to verify:
 - Build outputs exclude local env files such as `.dev.vars`, `.env*`, and `*.vars`.
 - Storefront build cache does not preserve stale build IDs.
 - Root and package-local `deploy` shortcuts route through `scripts/deploy.mjs --only ...` and keep typecheck, dist-secret checks, and migration gates.
+- Deploy dry runs validate typecheck/build/dist output but do not apply D1 migrations or deploy Workers.
 - `scripts/copy-flags.mjs` fails if `country-flag-icons` or required copied flags are missing.
 
 ## Generated Contract Checks
