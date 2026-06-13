@@ -25,6 +25,14 @@ const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
 // Pre-ship statuses (pending, processing, confirmed) keep stock as "reserved".
 const STOCK_DEDUCT_STATUSES = new Set(["shipped", "delivered"]);
 
+export function isStockRestoreStatus(status: string): boolean {
+    return STOCK_RESTORE_STATUSES.has(status);
+}
+
+export function isStockDeductStatus(status: string): boolean {
+    return STOCK_DEDUCT_STATUSES.has(status);
+}
+
 /**
  * Inventory action values tracked on each order:
  *

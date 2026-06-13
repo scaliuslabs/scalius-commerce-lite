@@ -23,6 +23,8 @@ vi.mock("../../../../packages/core/src/modules/inventory", () => ({
 
 vi.mock("../../../../packages/core/src/modules/inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: inventoryMocks.applyInventoryForStatusChange,
+  isStockRestoreStatus: (status: string) => ["cancelled", "returned", "refunded"].includes(status),
+  isStockDeductStatus: (status: string) => ["shipped", "delivered"].includes(status),
 }));
 
 type UpdateOrder = typeof import("../../../../packages/core/src/modules/orders/orders.admin").updateOrder;
@@ -54,6 +56,32 @@ const validationFailure = {
     },
   ],
   error: "Insufficient stock for variant var_existing. Available: 1, Requested: 2",
+};
+const releaseFailure = {
+  success: false,
+  results: [
+    {
+      success: false,
+      variantId: EXISTING_VARIANT_ID,
+      previousStock: 5,
+      newStock: 5,
+      error: "release failed",
+    },
+  ],
+  error: "release failed",
+};
+const restoreFailure = {
+  success: false,
+  results: [
+    {
+      success: false,
+      variantId: EXISTING_VARIANT_ID,
+      previousStock: 5,
+      newStock: 5,
+      error: "restore failed",
+    },
+  ],
+  error: "restore failed",
 };
 
 let updateOrder: UpdateOrder;
@@ -107,6 +135,7 @@ function createUpdateOrderDb(options: {
   existingOrder: ReturnType<typeof seedOrder>;
   existingItems: ReturnType<typeof seedOrderItem>[];
   orderUpdateResult?: unknown[];
+  itemReplacementError?: Error;
 }) {
   let selectIndex = 0;
   const selectResults = [
@@ -123,6 +152,13 @@ function createUpdateOrderDb(options: {
     }),
     insert: vi.fn(() => createChain([{ id: "inserted" }])),
     delete: vi.fn(() => createChain(undefined)),
+    batch: vi.fn(async () => {
+      events.push("item-replacement-batch");
+      if (options.itemReplacementError) {
+        throw options.itemReplacementError;
+      }
+      return [];
+    }),
   };
 }
 
@@ -312,6 +348,172 @@ describe("updateOrder inventory atomicity", () => {
     expect(db.delete).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
     expect(events).toEqual(["reserve", "order-cas-update", "release"]);
+  });
+
+  it("fails reserved quantity decreases before item replacement when reservation release fails", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ inventoryAction: "reserved" }),
+      existingItems: [item(3)],
+    });
+    inventoryMocks.releaseMultiple.mockImplementation(async () => {
+      events.push("release");
+      return releaseFailure;
+    });
+
+    await expect(
+      updateOrder(db as never, ORDER_ID, updateData({ items: [item(1)] })),
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: releaseFailure.error,
+    });
+
+    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(
+      db,
+      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }],
+      ORDER_ID,
+    );
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(events).toEqual(["release"]);
+  });
+
+  it("compensates released reserved deltas when the order CAS fails", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ inventoryAction: "reserved", version: 11 }),
+      existingItems: [item(3)],
+      orderUpdateResult: [],
+    });
+
+    await expect(
+      updateOrder(db as never, ORDER_ID, updateData({ items: [item(1)] })),
+    ).rejects.toMatchObject({
+      name: "ConflictError",
+      code: "CONFLICT",
+    });
+
+    const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
+    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, releasedEntries, ORDER_ID);
+    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
+      db,
+      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
+      "regular",
+    );
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(events).toEqual(["release", "order-cas-update", "reserve"]);
+  });
+
+  it("fails deducted quantity decreases before item replacement when deducted restore fails", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ status: "shipped", inventoryAction: "deducted" }),
+      existingItems: [item(3)],
+    });
+    inventoryMocks.restoreDeductedMultiple.mockImplementation(async () => {
+      events.push("restore-deducted");
+      return restoreFailure;
+    });
+
+    await expect(
+      updateOrder(
+        db as never,
+        ORDER_ID,
+        updateData({ status: "shipped", items: [item(1)] }),
+      ),
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: restoreFailure.error,
+    });
+
+    expect(inventoryMocks.restoreDeductedMultiple).toHaveBeenCalledWith(
+      db,
+      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }],
+      ORDER_ID,
+    );
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(events).toEqual(["restore-deducted"]);
+  });
+
+  it("compensates restored deducted deltas when the order CAS fails", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ status: "shipped", inventoryAction: "deducted", version: 12 }),
+      existingItems: [item(3)],
+      orderUpdateResult: [],
+    });
+
+    await expect(
+      updateOrder(
+        db as never,
+        ORDER_ID,
+        updateData({ status: "shipped", items: [item(1)] }),
+      ),
+    ).rejects.toMatchObject({
+      name: "ConflictError",
+      code: "CONFLICT",
+    });
+
+    const restoredEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
+    expect(inventoryMocks.restoreDeductedMultiple).toHaveBeenCalledWith(db, restoredEntries, ORDER_ID);
+    expect(inventoryMocks.deductMultiple).toHaveBeenCalledWith(db, restoredEntries, ORDER_ID);
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(events).toEqual(["restore-deducted", "order-cas-update", "deduct"]);
+  });
+
+  it("compensates full reserved-order cancellation release when the order CAS fails", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ inventoryAction: "reserved", version: 13 }),
+      existingItems: [item(2)],
+      orderUpdateResult: [],
+    });
+
+    await expect(
+      updateOrder(
+        db as never,
+        ORDER_ID,
+        updateData({ status: "cancelled", items: [] }),
+      ),
+    ).rejects.toMatchObject({
+      name: "ConflictError",
+      code: "CONFLICT",
+    });
+
+    const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
+    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, releasedEntries, ORDER_ID);
+    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
+      db,
+      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
+      "regular",
+    );
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(events).toEqual(["release", "order-cas-update", "reserve"]);
+  });
+
+  it("compensates inventory if atomic item replacement fails after the order CAS", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ inventoryAction: "reserved", version: 14 }),
+      existingItems: [item(3)],
+      itemReplacementError: new Error("item batch failed"),
+    });
+
+    await expect(
+      updateOrder(db as never, ORDER_ID, updateData({ items: [item(1)] })),
+    ).rejects.toThrow("item batch failed");
+
+    const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
+    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, releasedEntries, ORDER_ID);
+    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
+      db,
+      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
+      "regular",
+    );
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["release", "order-cas-update", "item-replacement-batch", "reserve"]);
   });
 
   it("reconciles inventory when retrying an edit after status already reached shipped", async () => {

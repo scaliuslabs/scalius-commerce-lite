@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, and `ORDER-008` are now verified; `ORDER-009` and `ORDER-010` remain open.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, and `ORDER-009` are now verified; `ORDER-010` remains open.
 
 ## Validation Performed
 
@@ -269,7 +269,7 @@ Admin full order edits can replace order/item rows before inventory deltas are f
 
 Fix direction: fail closed on inventory delta failures, apply deltas before replacing item rows or through a transaction/outbox, and preserve enough old item state for retry.
 
-Status: Not Started. See `ORDER-009` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13. Admin full order edits now apply reserved/deducted negative deltas and terminal release/restore before item replacement, reject instead of logging through failed deltas, use the central shipped/delivered inventory predicate, batch item delete+insert so insert failure preserves old rows, and compensate pre-write inventory deltas when later writes fail. Focused `updateOrder()` tests cover release/restore failures, CAS failures, item replacement failure, shipment-claim blocking, and same-status shipped reconciliation. See `ORDER-009` in `REMEDIATION_TRACKER.md`.
 
 ### ORDER-010: Order-ingest fallback can double-reserve after uncertain rollback
 

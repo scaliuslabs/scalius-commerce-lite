@@ -15,7 +15,11 @@ import {
     deliveryProviders,
     deliveryLocations,
 } from "@scalius/database/schema";
-import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import {
+    applyInventoryForStatusChange,
+    isStockDeductStatus,
+    isStockRestoreStatus,
+} from "../inventory/inventory-transitions";
 import {
     reserveStockBatch,
     deductMultiple,
@@ -658,9 +662,6 @@ interface UpdateOrderData {
     status: string;
 }
 
-const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
-const STOCK_DEDUCT_STATUSES = new Set(["shipped"]);
-
 function buildInventoryEntries(
     items: { variantId: string | null; quantity: number }[],
     pool: NonNullable<ReservationEntry["pool"]>,
@@ -707,12 +708,140 @@ function toReservationBatchItems(entries: ReservationEntry[], orderId: string) {
     }));
 }
 
+type InventoryBatchResult = {
+    success: boolean;
+    results: { success: boolean }[];
+    error?: string;
+};
+
+function successfulEntries(entries: ReservationEntry[], result: InventoryBatchResult): ReservationEntry[] {
+    return entries.filter((_, index) => result.results[index]?.success);
+}
+
+function groupEntriesByPool(entries: ReservationEntry[]) {
+    const groups = new Map<NonNullable<ReservationEntry["pool"]>, ReservationEntry[]>();
+    for (const entry of entries) {
+        const pool = entry.pool ?? "regular";
+        const group = groups.get(pool) ?? [];
+        group.push({ ...entry, pool });
+        groups.set(pool, group);
+    }
+    return groups;
+}
+
+async function reserveEntriesForCompensation(
+    db: Database,
+    orderId: string,
+    entries: ReservationEntry[],
+): Promise<{ success: boolean; error?: string }> {
+    const reserved: ReservationEntry[] = [];
+    for (const [pool, group] of groupEntriesByPool(entries)) {
+        const result = await reserveStockBatch(db, toReservationBatchItems(group, orderId), pool);
+        if (!result.success) {
+            if (reserved.length > 0) {
+                await releaseMultiple(db, reserved, orderId);
+            }
+            return { success: false, error: result.error };
+        }
+        reserved.push(...group);
+    }
+    return { success: true };
+}
+
+async function redeductRestoredEntriesForCompensation(
+    db: Database,
+    orderId: string,
+    entries: ReservationEntry[],
+): Promise<{ success: boolean; error?: string }> {
+    const preorderEntries = entries.filter((entry) => (entry.pool ?? "regular") === "preorder");
+    const directEntries = entries.filter((entry) => (entry.pool ?? "regular") === "regular");
+
+    if (preorderEntries.length > 0) {
+        const reserveResult = await reserveEntriesForCompensation(db, orderId, preorderEntries);
+        if (!reserveResult.success) {
+            return reserveResult;
+        }
+        const deductResult = await deductMultiple(db, preorderEntries, orderId);
+        if (!deductResult.success) {
+            await releaseMultiple(db, preorderEntries, orderId);
+            return { success: false, error: deductResult.error };
+        }
+    }
+
+    if (directEntries.length > 0) {
+        const deductResult = await deductMultiple(db, directEntries, orderId);
+        if (!deductResult.success) {
+            return { success: false, error: deductResult.error };
+        }
+    }
+
+    return { success: true };
+}
+
+async function releaseReservationsForOrderEdit(
+    db: Database,
+    orderId: string,
+    entries: ReservationEntry[],
+    errorMessage: string,
+): Promise<void> {
+    if (entries.length === 0) return;
+    const result = await releaseMultiple(db, entries, orderId);
+    if (!result.success) {
+        const releasedEntries = successfulEntries(entries, result);
+        if (releasedEntries.length > 0) {
+            const compensation = await reserveEntriesForCompensation(db, orderId, releasedEntries);
+            if (!compensation.success) {
+                console.error(
+                    `[orders.admin] Failed to compensate released reservations for order ${orderId}: ${compensation.error}`,
+                );
+            }
+        }
+        throw new ValidationError(result.error ?? errorMessage);
+    }
+}
+
+async function restoreDeductedForOrderEdit(
+    db: Database,
+    orderId: string,
+    entries: ReservationEntry[],
+    errorMessage: string,
+): Promise<void> {
+    if (entries.length === 0) return;
+    const result = await restoreDeductedMultiple(db, entries, orderId);
+    if (!result.success) {
+        const restoredEntries = successfulEntries(entries, result);
+        if (restoredEntries.length > 0) {
+            const compensation = await redeductRestoredEntriesForCompensation(db, orderId, restoredEntries);
+            if (!compensation.success) {
+                console.error(
+                    `[orders.admin] Failed to compensate restored deducted stock for order ${orderId}: ${compensation.error}`,
+                );
+            }
+        }
+        throw new ValidationError(result.error ?? errorMessage);
+    }
+}
+
 async function compensatePreWriteInventory(
     db: Database,
     orderId: string,
     acquiredReservations: ReservationEntry[],
     deductedEntries: ReservationEntry[],
+    releasedReservations: ReservationEntry[],
+    restoredDeductedEntries: ReservationEntry[],
 ) {
+    if (restoredDeductedEntries.length > 0) {
+        const redeductResult = await redeductRestoredEntriesForCompensation(db, orderId, restoredDeductedEntries);
+        if (!redeductResult.success) {
+            console.error(`[orders.admin] Failed to compensate restored deducted stock for order ${orderId}: ${redeductResult.error}`);
+        }
+    }
+    if (releasedReservations.length > 0) {
+        const reserveResult = await reserveEntriesForCompensation(db, orderId, releasedReservations);
+        if (!reserveResult.success) {
+            console.error(`[orders.admin] Failed to compensate released reservations for order ${orderId}: ${reserveResult.error}`);
+        }
+    }
     if (deductedEntries.length > 0) {
         const restoreResult = await restoreDeductedMultiple(db, deductedEntries, orderId);
         if (!restoreResult.success) {
@@ -772,8 +901,8 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
     const existingInventoryAction = existingOrder.inventoryAction as string;
-    const targetRestoresStock = STOCK_RESTORE_STATUSES.has(data.status);
-    const targetDeductsStock = STOCK_DEDUCT_STATUSES.has(data.status);
+    const targetRestoresStock = isStockRestoreStatus(data.status);
+    const targetDeductsStock = isStockDeductStatus(data.status);
     const oldEntries = buildInventoryEntries(existingItems, pool);
     const newEntries = buildInventoryEntries(data.items, pool);
     const { positiveEntries, negativeEntries } = computeInventoryDeltas(oldEntries, newEntries, pool);
@@ -785,6 +914,10 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     let customerId = existingOrder.customerId;
     let acquiredReservations: ReservationEntry[] = [];
     let deductedEntries: ReservationEntry[] = [];
+    let releasedReservations: ReservationEntry[] = [];
+    let restoredDeductedEntries: ReservationEntry[] = [];
+    let inventoryActionOverride: string | null = null;
+    let statusTransitionHandled = false;
     let writesCommitted = false;
 
     try {
@@ -810,7 +943,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
 
             const deductResult = await deductMultiple(db, positiveEntries, id);
             if (!deductResult.success) {
-                await compensatePreWriteInventory(db, id, acquiredReservations, []);
+                await compensatePreWriteInventory(db, id, acquiredReservations, [], [], []);
                 acquiredReservations = [];
                 throw new ValidationError(deductResult.error ?? "Failed to deduct additional stock for updated items");
             }
@@ -824,6 +957,51 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock to reactivate order");
             }
             acquiredReservations = newEntries;
+        }
+
+        if (existingInventoryAction === "reserved") {
+            if (targetRestoresStock) {
+                await releaseReservationsForOrderEdit(
+                    db,
+                    id,
+                    oldEntries,
+                    "Failed to release order reservations",
+                );
+                releasedReservations = oldEntries;
+                inventoryActionOverride = "restored";
+                statusTransitionHandled = true;
+            } else if (negativeEntries.length > 0) {
+                await releaseReservationsForOrderEdit(
+                    db,
+                    id,
+                    negativeEntries,
+                    "Failed to release removed reservations",
+                );
+                releasedReservations = negativeEntries;
+            }
+        } else if (existingInventoryAction === "deducted") {
+            if (targetRestoresStock) {
+                await restoreDeductedForOrderEdit(
+                    db,
+                    id,
+                    oldEntries,
+                    "Failed to restore deducted stock",
+                );
+                restoredDeductedEntries = oldEntries;
+                inventoryActionOverride = "restored";
+                statusTransitionHandled = true;
+            } else if (negativeEntries.length > 0) {
+                await restoreDeductedForOrderEdit(
+                    db,
+                    id,
+                    negativeEntries,
+                    "Failed to restore removed deducted stock",
+                );
+                restoredDeductedEntries = negativeEntries;
+            }
+        } else if (existingInventoryAction === "restored" && !targetRestoresStock && !targetDeductsStock && newEntries.length > 0) {
+            inventoryActionOverride = "reserved";
+            statusTransitionHandled = true;
         }
 
         if (data.customerPhone !== existingOrder.customerPhone) {
@@ -869,72 +1047,27 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             customerId,
             version: existingOrder.version + 1,
             updatedAt: sql`unixepoch()`,
-        }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning();
+        }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning({ id: orders.id });
 
         if (updateResult.length === 0) {
             throw new ConflictError("Order was modified by another request. Please reload and try again.");
         }
-        const order = updateResult[0];
-        if (!order) {
-            throw new ConflictError("Order update failed unexpectedly.");
-        }
 
-        await db.delete(orderItems).where(eq(orderItems.orderId, id));
-
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing cannot express mixed delete/insert statements.
+        const itemReplacementStatements: any[] = [db.delete(orderItems).where(eq(orderItems.orderId, id))];
         if (data.items.length > 0) {
-            await db.insert(orderItems).values(data.items.map((item) => ({
+            itemReplacementStatements.push(db.insert(orderItems).values(data.items.map((item) => ({
                 id: "item_" + nanoid(),
-                orderId: order.id,
+                orderId: id,
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,
                 price: item.price,
                 createdAt: sql`unixepoch()`,
-            })));
+            }))));
         }
+        await db.batch(itemReplacementStatements as any);
         writesCommitted = true;
-
-        let inventoryActionOverride: string | null = null;
-        let statusTransitionHandled = false;
-
-        if (existingInventoryAction === "reserved") {
-            if (targetRestoresStock) {
-                if (oldEntries.length > 0) {
-                    const releaseResult = await releaseMultiple(db, oldEntries, id);
-                    if (!releaseResult.success) {
-                        throw new ValidationError(releaseResult.error ?? "Failed to release order reservations");
-                    }
-                }
-                inventoryActionOverride = "restored";
-                statusTransitionHandled = true;
-            } else {
-                if (negativeEntries.length > 0) {
-                    const releaseResult = await releaseMultiple(db, negativeEntries, id);
-                    if (!releaseResult.success) {
-                        console.error(`[orders.admin] Failed to release removed reservations for order ${id}: ${releaseResult.error}`);
-                    }
-                }
-            }
-        } else if (existingInventoryAction === "deducted") {
-            if (targetRestoresStock) {
-                if (oldEntries.length > 0) {
-                    const restoreResult = await restoreDeductedMultiple(db, oldEntries, id);
-                    if (!restoreResult.success) {
-                        throw new ValidationError(restoreResult.error ?? "Failed to restore deducted stock");
-                    }
-                }
-                inventoryActionOverride = "restored";
-                statusTransitionHandled = true;
-            } else if (negativeEntries.length > 0) {
-                const restoreResult = await restoreDeductedMultiple(db, negativeEntries, id);
-                if (!restoreResult.success) {
-                    console.error(`[orders.admin] Failed to restore removed deducted stock for order ${id}: ${restoreResult.error}`);
-                }
-            }
-        } else if (existingInventoryAction === "restored" && !targetRestoresStock && !targetDeductsStock && newEntries.length > 0) {
-            inventoryActionOverride = "reserved";
-            statusTransitionHandled = true;
-        }
 
         if (!statusTransitionHandled) {
             inventoryActionOverride = await applyInventoryForStatusChange(db, id, data.status);
@@ -953,11 +1086,18 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             await updateCustomerStatsService(db, customerId);
         }
 
-        return { id: order.id };
+        return { id };
     } catch (error) {
         if (!writesCommitted) {
             try {
-                await compensatePreWriteInventory(db, id, acquiredReservations, deductedEntries);
+                await compensatePreWriteInventory(
+                    db,
+                    id,
+                    acquiredReservations,
+                    deductedEntries,
+                    releasedReservations,
+                    restoredDeductedEntries,
+                );
             } catch (compensationError) {
                 console.error(`[orders.admin] Inventory compensation failed after order update error for ${id}:`, compensationError);
             }
