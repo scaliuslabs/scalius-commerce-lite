@@ -1,7 +1,23 @@
+const CHECKOUT_SESSION_KEYS = [
+  "scalius_checkout_data",
+  "scalius_checkout_gateways",
+] as const;
+
+const LEGACY_ANALYTICS_PII_KEYS = [
+  "scalius_user_phone",
+  "scalius_user_email",
+  "scalius_user_name",
+  "scalius_user_city",
+] as const;
+
 export function clearCheckoutSession(): void {
   try {
-    sessionStorage.removeItem("scalius_checkout_data");
-    sessionStorage.removeItem("scalius_checkout_gateways");
+    for (const key of CHECKOUT_SESSION_KEYS) {
+      sessionStorage.removeItem(key);
+    }
+    for (const key of LEGACY_ANALYTICS_PII_KEYS) {
+      sessionStorage.removeItem(key);
+    }
   } catch {
     // ignore storage access errors
   }

@@ -2,7 +2,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { renderOrderSummaryDetails, shouldClearCheckoutBeforeRedirect } from "./index";
+import {
+  renderOrderSummaryDetails,
+  shouldClearCheckoutBeforeRedirect,
+  shouldClearCheckoutSessionBeforeRedirect,
+} from "./index";
 import type { CheckoutConfig } from "./types";
 
 const baseConfig: CheckoutConfig = {
@@ -40,9 +44,15 @@ describe("renderOrderSummaryDetails", () => {
 });
 
 describe("checkout redirect cleanup", () => {
-  it("preserves checkout state for gateway redirects unless completion is explicit", () => {
+  it("distinguishes cart cleanup from checkout transfer cleanup", () => {
     expect(
       shouldClearCheckoutBeforeRedirect({
+        success: true,
+        redirectUrl: "https://gateway.example/checkout",
+      }),
+    ).toBe(false);
+    expect(
+      shouldClearCheckoutSessionBeforeRedirect({
         success: true,
         redirectUrl: "https://gateway.example/checkout",
       }),
@@ -53,6 +63,28 @@ describe("checkout redirect cleanup", () => {
         success: true,
         redirectUrl: "/order-success?orderId=1&token=receipt",
         clearCartOnRedirect: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldClearCheckoutSessionBeforeRedirect({
+        success: true,
+        redirectUrl: "/order-success?orderId=1&token=receipt",
+        clearCartOnRedirect: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldClearCheckoutBeforeRedirect({
+        success: true,
+        redirectUrl: "https://gateway.example/checkout",
+        clearCheckoutSessionOnRedirect: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldClearCheckoutSessionBeforeRedirect({
+        success: true,
+        redirectUrl: "https://gateway.example/checkout",
+        clearCheckoutSessionOnRedirect: true,
       }),
     ).toBe(true);
   });

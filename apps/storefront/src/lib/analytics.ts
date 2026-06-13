@@ -175,8 +175,6 @@ export function trackFbAddToCart(data: {
 
 /**
  * Tracks an InitiateCheckout event for Facebook Pixel.
- * CAPI: This function no longer accepts userData directly.
- * It relies on the centralized `sendServerEvent` to automatically include it from sessionStorage.
  */
 export function trackFbInitiateCheckout(data: {
   content_ids?: string[];
@@ -193,7 +191,6 @@ export function trackFbInitiateCheckout(data: {
   }
 
   // CAPI: Server-side Event
-  // The `sendServerEvent` function will now automatically add user data.
   sendServerEvent({
     eventName: "InitiateCheckout",
     customData: {

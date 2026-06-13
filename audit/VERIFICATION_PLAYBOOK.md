@@ -105,6 +105,15 @@ pnpm --filter @scalius/storefront typecheck
 
 For `STORE-005`, executable inline JSON must use `serializeJsonForInlineScript()` and include a DOM-parser test with a `</script>` payload. For `STORE-006`, localized/admin-configured empty-cart strings must render through text nodes, and the test must assert malicious language strings do not create `img` or `script` nodes.
 
+Storefront checkout/privacy regression checks:
+
+```bash
+pnpm --filter @scalius/storefront exec vitest run src/lib/tracking/meta-capi.test.ts src/lib/checkout/session-state.test.ts src/lib/checkout/render-summary.test.ts --passWithNoTests
+pnpm --filter @scalius/storefront typecheck
+```
+
+For `PRIV-002`, broad Meta CAPI events must not inherit checkout/customer PII from `sessionStorage`; legacy `scalius_user_*` keys must be removed by checkout cleanup; SSLCommerz/Polar external redirects should clear raw checkout transfer state after gateway session creation without clearing the cart.
+
 Storefront API contract checks:
 
 ```bash

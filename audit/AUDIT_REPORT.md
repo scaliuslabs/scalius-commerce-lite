@@ -463,6 +463,14 @@ Fix direction: render localized/admin-configured text with DOM text nodes or fra
 
 Status: Verified on 2026-06-14. The empty-cart renderer is isolated in `apps/storefront/src/lib/cart/empty-state.ts` and assigns `emptyCartText`/`continueShoppingText` with `textContent`/text nodes. A happy-dom regression test feeds malicious language strings and confirms no `img`/`script` nodes are created. Deployed to storefront version `3215e5be-1237-47bd-a2b1-ac92c3805a58`; live browser inspection of `#cartItems` showed the empty-cart renderer with no `img` or `script` nodes and no console errors.
 
+### PRIV-002: Checkout PII persisted and enriched broad Meta CAPI events
+
+Cart saved standalone `scalius_user_*` sessionStorage keys for Meta CAPI matching, and the Meta CAPI dispatcher merged those keys into every server-side event. That expanded checkout/customer PII processing to product, search, cart, checkout-initiation, and payment-info events.
+
+Fix direction: keep browser-default CAPI data to non-PII attribution signals, remove standalone PII capture, clear legacy keys, and scope any CAPI PII to explicit narrow conversion events.
+
+Status: Verified on 2026-06-14. Cart no longer writes standalone `scalius_user_*` analytics keys, `sendServerEvent()` defaults to `_fbp`, `_fbc`, and user agent plus explicit caller-provided `userData`, and `clearCheckoutSession()` removes both checkout transfer keys and legacy PII keys. SSLCommerz and Polar external redirects now clear raw checkout transfer state after order/session creation while preserving cart contents for cancel/failure recovery. Verification included focused Meta CAPI/session/redirect tests, storefront typecheck/build/lint, root `pnpm test`, deployed asset scans, live HTTP checks, browser smoke with no console errors, and storefront deploy version `4391b4cd-7a08-438c-be2e-193d8df7a79e`.
+
 ### CONTENT-001: Scheduled publishing is not enforced publicly
 
 Pages store and validate `publishedAt`, but public page queries and sitemap generation only check `isPublished`/`deletedAt`.

@@ -268,6 +268,10 @@ export function shouldClearCheckoutBeforeRedirect(result: PaymentResult): boolea
   return result.clearCartOnRedirect === true;
 }
 
+export function shouldClearCheckoutSessionBeforeRedirect(result: PaymentResult): boolean {
+  return result.clearCartOnRedirect === true || result.clearCheckoutSessionOnRedirect === true;
+}
+
 async function processPayment(): Promise<void> {
   if (!selectedMethod || isProcessing || !checkoutData || !checkoutConfig) return;
   isProcessing = true;
@@ -336,6 +340,8 @@ async function processPayment(): Promise<void> {
     if (result.success && result.redirectUrl) {
       if (shouldClearCheckoutBeforeRedirect(result)) {
         clearCheckoutAndCart();
+      } else if (shouldClearCheckoutSessionBeforeRedirect(result)) {
+        clearCheckoutSession();
       }
       window.location.href = result.redirectUrl;
       return;
