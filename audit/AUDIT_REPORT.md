@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, `ORDER-010`, `ORDER-011`, and `OPS-003` are now verified. The currently open high-risk finding is `DEL-002`.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, `ORDER-010`, `ORDER-011`, `OPS-003`, and `DEL-002` are now verified. No high-risk tracked findings are currently open in this audit set.
 
 ## Validation Performed
 
@@ -299,7 +299,7 @@ Status: Verified on 2026-06-13 and deployed to API version `c36bc4ca-bccf-4276-9
 
 Fix direction: shipment deletion should load the linked order claim and block active claimed shipments, especially `reconcile_required`. Only non-claimed terminal/failed shipment rows should be deletable.
 
-Status: Not Started. See `DEL-002` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13 and deployed to API version `5a206ef1-adf4-42f3-bcab-ffe13c7d1e40`. `deleteShipmentRecord()` now loads the linked order claim before deletion, rejects active claims, rejects `reconcile_required`, rejects unresolved expired matching claims for nonterminal shipments, and clears stale failed/cancelled matching claims before deleting. Focused tests cover creating/reconciliation rows, future and indefinite active claims, expired matching nonterminal claims, unclaimed failed deletion, stale failed claim cleanup, and unrelated expired claims; root `pnpm test` passed 100 files / 651 tests. Live checks passed for API health, dashboard login/admin/orders, demo email sign-in, and storefront with no browser console errors. See `DEL-002` in `REMEDIATION_TRACKER.md`.
 
 ### ADMIN-001: Admin API wrapper layer was too large and partially outside TypeScript
 
