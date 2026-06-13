@@ -1,21 +1,7 @@
 import { toast } from "sonner";
+import type { AiContextBatchDetails } from "@/lib/api-functions/ai";
 
-export interface AiContextBatchDetails {
-  products?: unknown[];
-  categories?: unknown[];
-  collections?: unknown[];
-  warnings?: {
-    productsTruncated?: boolean;
-    categoriesTruncated?: boolean;
-    collectionsTruncated?: boolean;
-    productsUnavailable?: number;
-    categoriesUnavailable?: number;
-    collectionsUnavailable?: number;
-    maxProducts?: number;
-    maxCategories?: number;
-    maxCollections?: number;
-  };
-}
+export type { AiContextBatchDetails };
 
 export function notifyAiContextWarnings(contextData: AiContextBatchDetails) {
   const warnings = contextData.warnings;

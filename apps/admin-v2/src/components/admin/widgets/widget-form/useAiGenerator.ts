@@ -13,13 +13,9 @@ import { AI_CONTEXT_LIMITS, limitImagesForModel } from './ai-context-limits';
 import type { useAiContext } from './useAiContext';
 import type { ProductSearchResult, Category } from './types';
 import type { Widget } from '@/types/api-responses';
-import { getAiPrompts, getAiContextBatchDetails } from '@/lib/api.functions';
+import { getAiPrompts, getAiContextBatchDetails } from '@/lib/api-functions/ai';
 import { runWidgetGeneration, type WidgetGenerationRunEvent } from './widget-generation-run-stream';
 
-type StructuredPromptParams = Parameters<typeof generateCompletePrompt>[0];
-type AiProductData = StructuredPromptParams['selectedProducts'][number];
-type AiCategoryData = StructuredPromptParams['selectedCategories'][number];
-type AiCollectionData = NonNullable<StructuredPromptParams['selectedCollections']>[number];
 type GenerationRun = { id: number; controller: AbortController; signal: AbortSignal };
 const SERVER_GENERATION_TIMEOUT_MS = 150_000;
 const GENERATION_STEP_LABELS: Record<string, string> = {
@@ -490,7 +486,7 @@ export const useAiGenerator = (
     try {
       const promptPromise = getAiPrompts({
         data: { type: effectivePromptType },
-      }) as Promise<string>;
+      });
       const contextPromise = getAiContextBatchDetails({
         data: {
           productIds: getMergedProductIds(),
@@ -499,7 +495,7 @@ export const useAiGenerator = (
           anchorCollectionIds: getMergedAnchorCollectionIds(),
           allCategories: aiContext.allCategoriesSelected,
         },
-      }) as Promise<AiContextBatchDetails>;
+      });
       const [systemPrompt, contextData] = await Promise.all([promptPromise, contextPromise]);
       if (!systemPrompt) throw new Error('Could not fetch system prompt.');
       notifyAiContextWarnings(contextData);
@@ -509,9 +505,9 @@ export const useAiGenerator = (
         systemPrompt,
         userPrompt: getPlacementAwarePrompt(),
         selectedImages,
-        selectedProducts: (contextData.products || []) as AiProductData[],
-        selectedCategories: (contextData.categories || []) as AiCategoryData[],
-        selectedCollections: (contextData.collections || []) as AiCollectionData[],
+        selectedProducts: contextData.products || [],
+        selectedCategories: contextData.categories || [],
+        selectedCollections: contextData.collections || [],
         allCategoriesSelected: aiContext.allCategoriesSelected,
         promptType: effectivePromptType,
       });

@@ -58,10 +58,6 @@ import {
   // Media
   getMediaList,
   getMediaFolders,
-  // AI
-  getAiPrompts,
-  // Firebase
-  getFirebaseConfig,
 } from "./api.functions";
 import {
   get2faInfo,
@@ -85,10 +81,12 @@ import {
   type NavigationPreviewProductsInput,
 } from "./api-functions/navigation";
 import { getFraudCheckerProviders } from "./api-functions/fraud-checker";
+import { getAiPrompts } from "./api-functions/ai";
 import {
   getCheckoutLanguages,
   type CheckoutLanguagesQueryInput,
 } from "./api-functions/checkout-languages";
+import { getFirebaseConfig } from "./api-functions/firebase";
 import { getHeroSliders } from "./api-functions/hero-sliders";
 import {
   getAllDeliveryLocations,

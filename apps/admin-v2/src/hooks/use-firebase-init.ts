@@ -24,8 +24,7 @@ export function useFirebaseInit(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId || !config || initRef.current) return;
-    const firebaseConfig = config as Record<string, string>;
-    if (!firebaseConfig.apiKey) return;
+    if (!config.apiKey) return;
 
     initRef.current = true;
 
@@ -36,7 +35,7 @@ export function useFirebaseInit(userId: string | undefined) {
           "firebase/messaging"
         );
 
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp(config);
         const messaging = getMessaging(app);
 
         // Request notification permission
@@ -44,7 +43,7 @@ export function useFirebaseInit(userId: string | undefined) {
         if (permission !== "granted") return;
 
         // Get FCM token
-        const vapidKey = firebaseConfig.vapidKey;
+        const vapidKey = config.vapidKey;
         if (!vapidKey) return;
 
         const token = await getToken(messaging, { vapidKey });
