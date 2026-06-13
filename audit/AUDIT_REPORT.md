@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-14 found new auth, payment/order, storefront, and platform risks. `AUTH-002`, `AUTH-003`, and `SUPPLY-001` are now verified locally and deployed. Active high-priority follow-up remains open for late payment confirmations on terminal orders, SSLCommerz deposit/balance idempotency, abandoned-cleanup/payment races, manual fulfillment atomicity, COD ledger correctness, and a storefront test file bundled as a public Astro route. See `audit/REMEDIATION_TRACKER.md` for the live queue.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-14 found new auth, payment/order, storefront, and platform risks. `AUTH-002`, `AUTH-003`, `SUPPLY-001`, and `BUILD-004` are now verified locally and deployed. Active high-priority follow-up remains open for late payment confirmations on terminal orders, SSLCommerz deposit/balance idempotency, abandoned-cleanup/payment races, manual fulfillment atomicity, and COD ledger correctness. See `audit/REMEDIATION_TRACKER.md` for the live queue.
 
 ## Validation Performed
 
@@ -27,6 +27,8 @@ Current tracked remediation state: the original tracker items are marked `Verifi
 - `pnpm test`: passed 101 test files and 655 tests after the 2026-06-14 auth/dependency slice.
 - Full `pnpm run deploy`: passed and redeployed API, admin, and storefront Workers.
 - Live HTTP and browser checks: API health, admin `/admin`, and storefront `/` returned successfully after redeploy.
+- Storefront-only `pnpm --filter @scalius/storefront run deploy`: passed after `BUILD-004`, deploying storefront version `decaeaeb-7319-4cf1-965a-d390e8c32759`.
+- Live `BUILD-004` checks: `/seo-regressions.test` returns 404, storefront `/` returns the new build id `src-1640a2a1cb69bdc0`, and browser storefront smoke has no captured console errors.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
@@ -143,7 +145,7 @@ Status: Not Started. Add COD delivered transition tests that reject ledgerless p
 
 Fix direction: move the test outside `src/pages`, then verify storefront build output has no `seo-regressions.test` route or chunk.
 
-Status: Not Started.
+Status: Verified on 2026-06-14. The regression test now lives outside `src/pages`, focused Vitest passes, storefront typecheck/build pass, the rebuilt `dist` output has no `seo-regressions` route/chunk references, storefront-only deploy completed, and the live old route returns 404.
 
 ### ORDER-001: Expiry cron can release live order reservations
 
