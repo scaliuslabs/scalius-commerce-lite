@@ -24,16 +24,6 @@ import {
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════════════════
 
-export const getDashboardData = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<{
-      stats: Record<string, unknown>;
-      recentOrders: unknown[];
-      dailyActivityData: unknown[];
-    }>("/dashboard");
-  },
-);
-
 // ═══════════════════════════════════════════════════════════════════
 //  PRODUCTS
 // ═══════════════════════════════════════════════════════════════════
@@ -1147,62 +1137,6 @@ export const removeAttributeValue = createServerFn({ method: "POST" })
     return apiDelete(`/attributes/${data.attributeId}/values`, {
       value: data.value,
     });
-  });
-
-// ═══════════════════════════════════════════════════════════════════
-//  INVENTORY
-// ═══════════════════════════════════════════════════════════════════
-
-export const getInventory = createServerFn({ method: "GET" })
-  .inputValidator(
-    (data: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      lowStock?: boolean;
-      section?: string;
-      status?: string;
-      sort?: string;
-      order?: string;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const params: Record<string, string> = {};
-    if (data.page) params.page = String(data.page);
-    if (data.limit) params.limit = String(data.limit);
-    if (data.search) params.search = data.search;
-    if (data.lowStock) params.lowStock = "true";
-    if (data.section) params.section = data.section;
-    if (data.status) params.status = data.status;
-    if (data.sort) params.sort = data.sort;
-    if (data.order) params.order = data.order;
-    return apiGet<unknown>("/inventory", params);
-  });
-
-export const adjustInventory = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      variantId: string;
-      delta: number;
-      reason?: string;
-      notes?: string;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const { variantId, ...body } = data;
-    return apiPost(`/inventory/${variantId}/adjust`, body);
-  });
-
-export const stockAdjust = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/inventory/stock-adjust", data);
-  });
-
-export const stockSet = createServerFn({ method: "POST" })
-  .inputValidator((data: Record<string, unknown>) => data)
-  .handler(async ({ data }) => {
-    return apiPost("/inventory/stock-set", data);
   });
 
 // ═══════════════════════════════════════════════════════════════════

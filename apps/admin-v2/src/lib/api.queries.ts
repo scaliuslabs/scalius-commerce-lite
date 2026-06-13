@@ -9,11 +9,8 @@
  */
 
 import { queryOptions } from "@tanstack/react-query";
-import type { DashboardData } from "~/types/api-responses";
 import { queryKeys } from "./query-keys";
 import {
-  // Dashboard
-  getDashboardData,
   // Products
   getProducts,
   getProduct,
@@ -53,12 +50,11 @@ import {
   // Attributes
   getAttributes,
   getAttributeValues,
-  // Inventory
-  getInventory,
   // Media
   getMediaList,
   getMediaFolders,
 } from "./api.functions";
+import { getDashboardData } from "./api-functions/dashboard";
 import {
   get2faInfo,
   getAccountSecurity,
@@ -87,6 +83,10 @@ import {
   type CheckoutLanguagesQueryInput,
 } from "./api-functions/checkout-languages";
 import { getFirebaseConfig } from "./api-functions/firebase";
+import {
+  getInventory,
+  type InventoryQueryInput,
+} from "./api-functions/inventory";
 import { getHeroSliders } from "./api-functions/hero-sliders";
 import {
   getAllDeliveryLocations,
@@ -147,7 +147,7 @@ const STALE = {
 export const dashboardQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.dashboard.all,
-    queryFn: () => getDashboardData() as Promise<DashboardData>,
+    queryFn: () => getDashboardData(),
     staleTime: STALE.MODERATE,
   });
 
@@ -496,16 +496,7 @@ export const analyticsScriptQueryOptions = (id: string) =>
 //  INVENTORY
 // ═══════════════════════════════════════════════════════════════════
 
-export const inventoryQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  lowStock?: boolean;
-  section?: string;
-  status?: string;
-  sort?: string;
-  order?: string;
-}) =>
+export const inventoryQueryOptions = (params: InventoryQueryInput) =>
   queryOptions({
     queryKey: queryKeys.inventory.list(params),
     queryFn: () => getInventory({ data: params }),
