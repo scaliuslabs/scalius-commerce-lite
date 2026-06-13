@@ -28,10 +28,21 @@ const root = resolve(__dirname, "..");
 const args = process.argv.slice(2);
 const skipAdmin = args.includes("--skip-admin");
 const showHelp = args.includes("--help") || args.includes("-h");
-const localAdminEmail = getArgValue(args, "--admin-email") || process.env.LOCAL_ADMIN_EMAIL || "admin@local.scalius.test";
-const localAdminPassword = getArgValue(args, "--admin-password") || process.env.LOCAL_ADMIN_PASSWORD || "ScaliusLocal123!";
-const localAdminName = getArgValue(args, "--admin-name") || process.env.LOCAL_ADMIN_NAME || "Local Admin";
-const wranglerStateOverride = getArgValue(args, "--state") || process.env.SCALIUS_WRANGLER_STATE;
+
+let localAdminEmail;
+let localAdminPassword;
+let localAdminName;
+let wranglerStateOverride;
+try {
+  localAdminEmail = getArgValue(args, "--admin-email") || process.env.LOCAL_ADMIN_EMAIL || "admin@local.scalius.test";
+  localAdminPassword = getArgValue(args, "--admin-password") || process.env.LOCAL_ADMIN_PASSWORD || "ScaliusLocal123!";
+  localAdminName = getArgValue(args, "--admin-name") || process.env.LOCAL_ADMIN_NAME || "Local Admin";
+  wranglerStateOverride = getArgValue(args, "--state") || process.env.SCALIUS_WRANGLER_STATE;
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
+
 const resolvedWranglerStateOverride = wranglerStateOverride ? resolveLocalStatePath(root, wranglerStateOverride) : null;
 
 if (resolvedWranglerStateOverride) {

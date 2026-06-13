@@ -36,6 +36,34 @@ describe("local admin CLI", () => {
     expect(result.stderr).not.toContain("ModuleJob.run");
   });
 
+  it("rejects valueless password flags before API work", () => {
+    const result = runAdminCli([
+      "create",
+      "--no-start",
+      "--api",
+      closedLocalApi,
+      "--password",
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Option --password requires a value");
+    expect(result.stderr).not.toContain("API is not running");
+  });
+
+  it("checks API reachability before resetting auth tables", () => {
+    const result = runAdminCli([
+      "reset",
+      "--skip-migrations",
+      "--no-start",
+      "--api",
+      closedLocalApi,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("API is not running");
+    expect(result.stdout).not.toContain("Resetting local auth tables");
+  });
+
   it("rejects unknown positional commands", () => {
     const result = runAdminCli(["bogus"]);
 

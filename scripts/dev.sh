@@ -38,6 +38,8 @@ apply_local_migrations() {
 }
 
 cleanup() {
+  local status=$?
+  trap - EXIT SIGINT SIGTERM
   echo ""
   echo "Shutting down dev servers..."
   kill_dev_ports
@@ -45,10 +47,12 @@ cleanup() {
   # Second pass for stubborn processes
   kill_dev_ports
   echo "Done."
-  exit 0
+  exit "$status"
 }
 
-trap cleanup SIGINT SIGTERM EXIT
+trap cleanup EXIT
+trap 'exit 130' SIGINT
+trap 'exit 143' SIGTERM
 
 # Clean up stale processes from previous runs
 STALE=$(lsof_dev_ports)

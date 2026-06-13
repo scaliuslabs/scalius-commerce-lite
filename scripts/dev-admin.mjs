@@ -18,6 +18,7 @@ import { fileURLToPath } from "url";
 import {
   assertLocalUrl,
   assertPassword,
+  assertStringOptions,
   parseOptions,
   resolveLocalStatePath,
   trimTrailingSlash,
@@ -49,6 +50,13 @@ if (options.help || command === "help") {
 if (!validCommands.has(command)) {
   console.error(`Unknown command: ${command}`);
   printHelp();
+  process.exit(1);
+}
+
+try {
+  assertStringOptions(options, ["api", "email", "password", "name", "state"]);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
 
@@ -86,8 +94,8 @@ try {
     });
   } else if (command === "reset") {
     ensureLocalMigrations();
-    resetLocalAuthTables();
     await withApi(async () => {
+      resetLocalAuthTables();
       await createAdmin({ allowExisting: false });
     });
   } else {

@@ -4,7 +4,7 @@ This repo is hard to run end to end locally. Use this playbook to prove one slic
 
 ## Baseline Commands
 
-Run these before broad remediation work:
+Run these before broad future remediation work or re-audits:
 
 ```bash
 git status --short
@@ -62,7 +62,7 @@ pnpm exec vitest run apps/admin-v2/src/lib/admin-access.test.ts apps/admin-v2/sr
 pnpm --filter @scalius/admin-v2 typecheck
 ```
 
-Admin API wrapper extraction:
+Admin server-function slice changes:
 
 ```bash
 pnpm --filter @scalius/admin-v2 typecheck
@@ -121,6 +121,20 @@ pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/admin-v2 typecheck
 ```
 
+Payment-session and abandoned-checkout remediation checks:
+
+```bash
+# Expected future PAY-003 coverage
+pnpm --filter @scalius/api test -- src/routes/payments/payment-session.test.ts
+pnpm --filter @scalius/core test -- src/modules/payments/payment-session.test.ts
+
+# Expected future ORDER-005 coverage
+pnpm --filter @scalius/api test -- src/routes/admin/abandoned-checkouts.test.ts
+pnpm --filter @scalius/core test -- src/modules/inventory/expiry.test.ts src/modules/orders/orders.queue.test.ts
+```
+
+Use these checks after adding the missing tests to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls, gateway URLs come from trusted config, and abandoned-checkout cleanup releases reserved inventory before deleting or anonymizing incomplete orders.
+
 ## Local Dev Commands
 
 ```bash
@@ -154,6 +168,26 @@ Known local-dev risks:
 - Use `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state` or `--state /tmp/scalius-commerce-state` to test setup/reset/dev against disposable local state without touching the default `.wrangler/state`. Script `--state` values are normalized from the repo root; prefer absolute paths in audit notes.
 - Admin production uses `env.API`; local dev should hit HTTP fallback whenever `PUBLIC_API_BASE_URL` points at localhost. Verify both server functions and `/api/v1/admin/*` browser proxy routes after transport changes.
 - `scripts/dev.sh` kills only Scalius dev ports by default. Set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only when aggressive cleanup is needed.
+
+Local helper regression checks:
+
+```bash
+bash -n scripts/dev.sh
+node --check scripts/dev-local-utils.mjs
+node --check scripts/dev-admin.mjs
+node --check scripts/dev-setup.mjs
+node --check scripts/dev-reset.mjs
+node --check scripts/dev-doctor.mjs
+pnpm exec vitest run scripts/dev-admin-cli.test.mjs scripts/dev-local-utils.test.mjs scripts/dev-doctor.test.mjs --passWithNoTests
+pnpm dev:doctor
+```
+
+Expected result:
+
+- Valueless flags such as `--password`, `--state`, or `--admin-password` fail before side effects.
+- `dev:admin:reset` proves API reachability before clearing local auth tables.
+- `dev:setup --env-only` repairs missing or blank runtime and build-time env keys without migrations/admin creation.
+- `scripts/dev.sh` preserves the failing child process exit code after cleanup.
 
 Disposable reset smoke test:
 
@@ -232,7 +266,7 @@ Use `pnpm check:env` as the routine drift guard. Use generated Wrangler output o
 1. Create or use an admin with 2FA enabled.
 2. Start a session that has not completed 2FA.
 3. Call an admin API route directly.
-4. Expected after fix: API rejects the request until 2FA is verified.
+4. Expected current verified behavior: API rejects the request until 2FA is verified.
 
 Scanner RBAC:
 
@@ -240,7 +274,7 @@ Scanner RBAC:
 2. `POST /api/scanner-token`.
 3. Exchange the token for scanner session.
 4. Attempt `POST /api/v1/admin/inventory/stock-adjust`.
-5. Expected after fix: token minting or scanner mutation is denied.
+5. Expected current verified behavior: token minting or scanner mutation is denied.
 
 Public order receipt:
 
@@ -256,7 +290,7 @@ Checkout DOM injection:
 
 1. Before visiting `/checkout`, set checkout session data with a customer name such as `<img src=x onerror=alert(1)>`.
 2. Load checkout.
-3. Expected after fix: the string renders as text or is rejected.
+3. Expected current verified behavior: the string renders as text or is rejected.
 
 Public checkout-language mutations:
 
@@ -266,7 +300,7 @@ curl -i -X POST http://localhost:8787/api/v1/checkout-languages \
   --data '{"name":"Test","code":"xx"}'
 ```
 
-Expected after fix: public mutation returns 401/403/404/405, while admin-authenticated mutation still works through the admin route.
+Expected current verified behavior: public mutation returns 401/403/404/405, while admin-authenticated mutation still works through the admin route.
 
 ## Order, Inventory, Payment, Delivery Verification
 

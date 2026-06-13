@@ -17,7 +17,7 @@ This folder is the working audit system for slice-by-slice remediation. It repla
 
 - `pnpm typecheck` passes at the repo root.
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts` passes.
-- `pnpm test` currently passes: 91 test files and 545 tests.
+- `pnpm test` currently passes: 91 test files and 549 tests.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 - Several hard-to-run flows require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
 

@@ -315,13 +315,14 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 
 ## Known Backlog / Limitations
 
+- **Active audit backlog**: `PAY-003` and `ORDER-005` in `audit/REMEDIATION_TRACKER.md` are currently `Not Started`. Payment-session creation needs receipt-token/session proof and trusted callback URLs; abandoned-checkout cleanup needs explicit reserved-inventory release before deleting or anonymizing incomplete orders.
 - **Mixed provider systems**: Universal provider registry currently has Stripe payment + Resend email adapters. SMS still uses the legacy integrations registry with smsnetbd, bdbulksms, mimsms, and gennet. Delivery uses legacy factory/provider files; universal delivery provider exports are type-only.
 - **In-memory state**: Storefront L1 caches and shared layout cache are in-memory and reset on Worker isolate restart. Shared rate limiting is KV-based now.
 - **Delivery notification helper**: `notifyShipmentStatusChange()` in `packages/core/src/modules/delivery/tracking.ts` is still a log-only placeholder. Active Pathao/Steadfast/admin shipment paths enqueue notifications directly.
 - **Scanner app**: Standalone `/scanner` route exists with QR-token auth; still needs focused testing/polish.
 - **Type safety**: Admin still has notable `any` usage in some UI edges and broad DTO adapters. Improve locally when touching relevant code, but do not broad-refactor casually.
 - **Test coverage**: There are dozens of Vitest files across apps/packages, not a comprehensive suite. Add focused tests for risky service, queue, payment, inventory, response-envelope, AI, or storefront cache changes.
-- **Generated docs drift**: `packages/api-client/README.md` may lag generated SDK counts; trust `packages/api-client/openapi.json` and generated files over prose.
+- **Generated docs are non-authoritative**: Trust `packages/api-client/openapi.json`, generated SDK files, Drizzle schema, and migration metadata over prose counts.
 
 ## Agent Team Guidelines
 
