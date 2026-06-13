@@ -49,6 +49,7 @@ packages/
 | `pnpm db:studio` | Drizzle Studio DB browser |
 | `pnpm --filter @scalius/database check:migrations` | Verify migration SQL/journal/snapshot metadata and the manual snapshot-gap allowlist |
 | `pnpm check:env` | Verify Wrangler binding/var names match Worker `Env` declarations |
+| `pnpm check:dist-secrets` | Fail if app `dist/` outputs contain local env files such as `.dev.vars` or `.env*` |
 | `pnpm generate:sdk` | Regenerate API client from the API OpenAPI spec |
 | `pnpm deploy` | Typecheck, build, migrate remote D1, deploy API + admin + storefront |
 | `pnpm deploy:api` | Typecheck, build API, migrate remote D1, deploy API |
@@ -347,4 +348,4 @@ When working as part of an agent team on this codebase:
 - **Storefront shared imports only**: do not add `@scalius/core` or `@scalius/database` imports to storefront without coordination.
 - **Generated files are off-limits**: do not hand-edit `routeTree.gen.ts` or `packages/api-client/src/generated/**`.
 - **Cloudflare bindings must stay synchronized**: update Wrangler config and Env declarations together.
-- **Deploy shortcuts stay safety-gated**: root `deploy:*` shortcuts route through `scripts/deploy.mjs --only ...`; keep typecheck and required migration gates when changing deploy scripts.
+- **Deploy shortcuts stay safety-gated**: root and package-local `deploy` shortcuts route through `scripts/deploy.mjs --only ...`; keep typecheck, dist-secret checks, and required migration gates when changing deploy scripts.

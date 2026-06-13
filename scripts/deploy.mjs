@@ -33,6 +33,11 @@ const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/
 const onlyArgIndex = args.indexOf("--only");
 const onlyTarget = onlyArgIndex >= 0 ? args[onlyArgIndex + 1] : null;
 const deployTargets = ["api", "admin", "storefront"];
+const appDirsByTarget = {
+  api: "apps/api",
+  admin: "apps/admin-v2",
+  storefront: "apps/storefront",
+};
 
 // Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
 process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
@@ -106,6 +111,14 @@ function deployTarget(target) {
   }
 }
 
+function checkDistEnvFiles(targets = deployTargets) {
+  const appDirs = targets.map((target) => appDirsByTarget[target]).join(" ");
+  run(
+    `node scripts/clean-dist-env-files.mjs --check ${appDirs}`,
+    "Verify app dist outputs do not contain local env files",
+  );
+}
+
 // ── Main
 (async () => {
   let config;
@@ -155,6 +168,7 @@ function deployTarget(target) {
 
     if (requestedTarget) {
       buildTarget(requestedTarget);
+      checkDistEnvFiles([requestedTarget]);
 
       if (requestedTarget === "api") {
         runWithRetry(
@@ -171,6 +185,7 @@ function deployTarget(target) {
 
     // 2. Build: all workspaces via Turbo
     run("pnpm build", "Build all workspaces");
+    checkDistEnvFiles();
 
     // 3. Apply all pending D1 migrations (no-op if schema is up to date)
     runWithRetry(

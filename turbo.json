@@ -4,8 +4,27 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "public/**", "scripts/**", "package.json", "tsconfig.json", "wrangler.jsonc", "wrangler.local.jsonc", "astro.config.mjs", "*.config.*"],
-      "outputs": ["dist/**", ".astro/**"]
+      "inputs": [
+        "src/**",
+        "public/**",
+        "scripts/**",
+        "package.json",
+        "tsconfig.json",
+        "wrangler.jsonc",
+        "wrangler.local.jsonc",
+        "astro.config.mjs",
+        "*.config.*",
+        "!**/.DS_Store",
+        "!src/config/build-id.ts"
+      ],
+      "outputs": [
+        "dist/**",
+        "!dist/**/.dev.vars",
+        "!dist/**/.env",
+        "!dist/**/.env.*",
+        "!dist/**/*.vars",
+        ".astro/**"
+      ]
     },
     "dev": {
       "dependsOn": ["^build"],
@@ -18,12 +37,28 @@
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "scripts/**", "tsconfig.json", "*.config.*"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "tsconfig.json",
+        "*.config.*",
+        "!**/.DS_Store",
+        "!src/config/build-id.ts"
+      ],
       "outputs": []
     },
     "lint": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "scripts/**", "eslint.config.js", "package.json", "tsconfig.json", "*.config.*"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "eslint.config.js",
+        "package.json",
+        "tsconfig.json",
+        "*.config.*",
+        "!**/.DS_Store",
+        "!src/config/build-id.ts"
+      ],
       "cache": true
     },
     "test": {
