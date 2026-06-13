@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, and `ORDER-010` are now verified. The currently open high-risk findings are `ORDER-011` and `DEL-002`.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified. A live admin availability incident on 2026-06-13 opened `DEPLOY-001`; it is now verified after code changes, redeploy, browser checks, and Worker-tail checks. A later admin-login/setup failure opened `AUTH-001`; it is now verified locally, redeployed, and live-checked on dashboard/storefront. A later re-audit opened new active P1/P2 items: `PAY-004`, `PAY-005`, `ORDER-006`, `WEBHOOK-001`, `ORDER-007`, `ORDER-008`, `ORDER-009`, `ORDER-010`, and `ORDER-011` are now verified. The currently open high-risk finding is `DEL-002`.
 
 ## Validation Performed
 
@@ -285,7 +285,7 @@ Status: Verified on 2026-06-13 and deployed to API version `b361f707-6450-42f0-9
 
 Fix direction: make restore either reject unsafe terminal/deducted/restored statuses or atomically choose a valid status/inventory pair. Add focused tests for restored `delivered/deducted` and `cancelled/restored` orders so no order can end as `delivered + reserved` or `cancelled + reserved`.
 
-Status: Not Started. See `ORDER-011` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13 and deployed to API version `c36bc4ca-bccf-4276-9be9-5c0f86e562ea`. Trash restore now applies an explicit inventory/status policy: incomplete/pending/processing/confirmed restored orders re-reserve variant stock or become `none` when no variant inventory exists, cancelled/returned/refunded remain restored, invalid existing reserved/deducted pairs reject, and shipped/delivered/completed/partially-refunded restored orders reject until reconciled. Successful re-reservations are compensated if the final restore CAS fails. The central inventory transition helper also re-reserves only `isStockReservableStatus()` statuses. Focused tests cover the restore matrix, CAS compensation, reservation failure preserving `deletedAt`, and non-reservable central transition behavior; root `pnpm test` passed 99 files / 643 tests. Live checks passed for API health, dashboard login/admin/orders, demo email sign-in, and storefront with no browser console errors. See `ORDER-011` in `REMEDIATION_TRACKER.md`.
 
 ### DEL-002: Shipment deletion can erase reconciliation evidence while a claim remains active
 

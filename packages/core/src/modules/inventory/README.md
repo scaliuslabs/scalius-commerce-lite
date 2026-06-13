@@ -79,7 +79,7 @@ Handled by `inventory-transitions.ts` -- the **single source of truth** for how 
 | Any -> `cancelled`  | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
 | Any -> `returned`   | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
 | Any -> `refunded`   | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
-| `cancelled` -> active status | Must be `restored` | `reserveMultiple()` -- re-reserves stock                       | `reserved`     |
+| `restored` -> `incomplete`/`pending`/`processing`/`confirmed` | Must be `restored` | `reserveMultiple()` -- re-reserves stock | `reserved` |
 
 All transitions are **idempotent**: calling `applyInventoryForStatusChange()` multiple times with the same status produces no duplicate adjustments because it checks `inventoryAction` before acting.
 

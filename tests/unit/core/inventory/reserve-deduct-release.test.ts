@@ -714,6 +714,20 @@ describe("inventory status transition hardening", () => {
     expect(db.batch).not.toHaveBeenCalled();
   });
 
+  it("does not re-reserve restored inventory for non-reservable statuses", async () => {
+    const db = createTransitionDb([
+      { ...orderWithInventoryAction("restored"), status: "completed" },
+    ]);
+
+    await expect(
+      applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "completed"),
+    ).resolves.toBe("restored");
+
+    expect(inventoryTransitionMocks.reserveMultiple).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.select).toHaveBeenCalledTimes(1);
+  });
+
   it("throws and skips the inventoryAction batch when deducted-stock restore fails", async () => {
     const db = createTransitionDb([
       orderWithInventoryAction("deducted"),

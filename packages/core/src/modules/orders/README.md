@@ -152,7 +152,7 @@ All 9 statuses that trigger notifications are covered. Each dispatches to enable
 
 - **Soft delete**: Releases inventory via `applyInventoryForStatusChange(db, id, "cancelled")` if reserved or deducted, sets `deletedAt`, sets `inventoryAction` to `"restored"`
 - **Permanent delete**: Releases inventory, deletes order items first (FK ordering), then deletes order
-- **Restore**: If `inventoryAction === "restored"`, re-reserves stock via `reserveMultiple()`. Throws `ValidationError` if insufficient stock to re-reserve. Sets `inventoryAction` to `"reserved"`. If inventory was not previously tracked, simply clears `deletedAt`. Open audit item `ORDER-011` tracks that restore still needs a terminal-status guard/reconciliation rule so it cannot revive invalid pairs such as `delivered + reserved` or `cancelled + reserved`.
+- **Restore**: Clears `deletedAt`, but does not secretly change order status. `incomplete`, `pending`, `processing`, and `confirmed` orders with `inventoryAction = "restored"` re-reserve variant inventory and become `reserved`; if there are no variant items they become `none`. `cancelled`, `returned`, and `refunded` restored orders remain `restored`. Shipped/delivered/completed/partially-refunded restored orders reject until inventory/status are explicitly reconciled. Existing `reserved` or `deducted` actions are accepted only for compatible statuses, and re-reservations are compensated if the final restore CAS fails.
 - **Bulk delete**: Iterates and applies inventory release per order. For permanent: deletes items first, then orders (FK ordering fixed).
 
 ## Queue Processing
@@ -187,7 +187,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
 | PUT | `/:id` | `updateOrder()` | Full order update with inventory adjustment |
 | DELETE | `/:id` | `deleteOrder()` | Soft delete |
-| POST | `/:id/restore` | `restoreOrder()` | Restore soft-deleted order (re-reserves inventory) |
+| POST | `/:id/restore` | `restoreOrder()` | Restore soft-deleted order with status/inventory safety checks |
 | DELETE | `/:id/permanent` | `permanentlyDeleteOrder()` | Hard delete |
 | POST | `/bulk-delete` | `bulkDeleteOrders()` | Bulk soft/permanent delete |
 | POST | `/bulk-ship` | `bulkShipOrders()` | Bulk shipment creation |
