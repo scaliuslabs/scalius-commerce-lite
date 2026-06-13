@@ -204,7 +204,7 @@ function checkLocalEnvFiles(checks) {
       checks,
       "Runtime env files",
       `Missing ${missingRuntime.map(([label]) => label).join(", ")}.`,
-      "Run pnpm dev:setup.",
+      "Run pnpm dev:setup --env-only.",
     );
   }
 
@@ -219,7 +219,7 @@ function checkLocalEnvFiles(checks) {
       checks,
       "Build-time env files",
       `Missing ${missingBuild.map(([label]) => label).join(", ")}.`,
-      "Run pnpm dev:setup.",
+      "Run pnpm dev:setup --env-only.",
     );
   }
 
@@ -230,19 +230,19 @@ function checkLocalEnvFiles(checks) {
   if (drift.length === 0 && missingRuntime.length === 0) {
     pass(checks, "Shared local secrets", "API/admin/storefront shared secrets are present and aligned.");
   } else if (drift.length > 0) {
-    fail(checks, "Shared local secrets", drift.join("; "), "Run pnpm dev:setup --skip-install --skip-admin to repair missing keys, or pnpm dev:setup --force to regenerate all local env files.");
+    fail(checks, "Shared local secrets", drift.join("; "), "Run pnpm dev:setup --env-only to repair missing keys, or pnpm dev:setup --force --env-only to regenerate all local env files.");
   } else {
-    skip(checks, "Shared local secrets", "Skipped because runtime env files are missing.", "Run pnpm dev:setup.");
+    skip(checks, "Shared local secrets", "Skipped because runtime env files are missing.", "Run pnpm dev:setup --env-only.");
   }
 
   const apiRequired = ["CREDENTIAL_ENCRYPTION_KEY", "PURGE_TOKEN", "PURGE_URL"];
   const missingApi = apiRequired.filter((key) => !apiVars?.[key]);
   if (!apiVars) {
-    skip(checks, "API local env completeness", "Skipped because apps/api/.dev.vars is missing.", "Run pnpm dev:setup.");
+    skip(checks, "API local env completeness", "Skipped because apps/api/.dev.vars is missing.", "Run pnpm dev:setup --env-only.");
   } else if (missingApi.length === 0) {
     pass(checks, "API local env completeness", "API has credential encryption and purge config.");
   } else {
-    fail(checks, "API local env completeness", `Missing ${missingApi.join(", ")}.`, "Run pnpm dev:setup --skip-install --skip-admin to append missing local keys.");
+    fail(checks, "API local env completeness", `Missing ${missingApi.join(", ")}.`, "Run pnpm dev:setup --env-only to append missing local keys.");
   }
 }
 

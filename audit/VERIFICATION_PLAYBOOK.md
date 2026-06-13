@@ -147,7 +147,7 @@ Expected ports:
 Known local-dev risks:
 
 - `dev:setup` and `dev:reset` create `admin@local.scalius.test` / `ScaliusLocal123!` by default. Override with `--admin-email`, `--admin-password`, `--admin-name`, or `LOCAL_ADMIN_*`.
-- `dev:setup` reuses existing shared secrets when only some local `.dev.vars` files exist, and fails if existing API/admin/storefront shared secrets disagree. Use `pnpm dev:setup --force` when intentionally regenerating all local env files.
+- `dev:setup` reuses existing shared secrets when only some local `.dev.vars` files exist, and fails if existing API/admin/storefront shared secrets disagree. Use `pnpm dev:setup --env-only` for env-file repair without migrations/admin creation, and `pnpm dev:setup --force --env-only` when intentionally regenerating all local env files.
 - API local dev uses `apps/api/wrangler.local.jsonc`, which omits the remote Workers AI binding so setup/admin/storefront can boot without a Cloudflare remote proxy session.
 - Dev startup applies pending local D1 migrations before API starts unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`.
 - `pnpm dev:doctor` is non-mutating. Plain mode reports missing env/state and warns when servers are not running; `pnpm dev:doctor --require-running` treats API/admin/storefront downtime as a failure after you start the stack.
