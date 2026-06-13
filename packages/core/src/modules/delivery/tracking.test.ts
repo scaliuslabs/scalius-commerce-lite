@@ -152,4 +152,21 @@ describe("delivery shipment to order status mapping", () => {
     expect(result).toBeNull();
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
+
+  it("reconciles inventory when shipment status maps to the current order status", async () => {
+    const { db, updates } = createDbMock({
+      shipmentStatus: "out_for_delivery",
+      orderStatus: OrderStatus.SHIPPED,
+    });
+
+    const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery");
+
+    expect(result).toBeNull();
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
+      db,
+      "order_1",
+      OrderStatus.SHIPPED,
+    );
+    expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
+  });
 });

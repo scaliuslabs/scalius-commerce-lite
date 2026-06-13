@@ -182,4 +182,59 @@ describe("Polar webhook refund processing", () => {
       OrderStatus.CANCELLED,
     );
   });
+
+  it("reconciles inventory when retry sees a pre-fulfillment refund already cancelled", async () => {
+    const { db, updates } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 0,
+        paymentStatus: PaymentStatus.REFUNDED,
+        totalAmount: 100,
+        status: OrderStatus.CANCELLED,
+        version: 4,
+      },
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      amountRefunded: 10_000,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "refunded",
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(updates).toHaveLength(0);
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
+      db,
+      "order_1",
+      OrderStatus.CANCELLED,
+    );
+  });
+
+  it("does not auto-restore deducted inventory for an already-cancelled fulfilled refund retry", async () => {
+    const { db, updates } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 0,
+        paymentStatus: PaymentStatus.REFUNDED,
+        totalAmount: 100,
+        status: OrderStatus.CANCELLED,
+        inventoryAction: "deducted",
+        version: 4,
+      },
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      amountRefunded: 10_000,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "refunded",
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(updates).toHaveLength(0);
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
 });

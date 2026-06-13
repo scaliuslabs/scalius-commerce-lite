@@ -93,7 +93,7 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 1. `updateOrder()` validates status transition via state machine
 2. If `inventoryAction === "reserved"`: releases old reservations, reserves new quantities (rollback on failure)
 3. If `inventoryAction === "deducted"`: adjusts stock deltas directly on `productVariants` -- restores stock for removed/changed variants, deducts for new/increased variants (validates stock availability before deducting)
-4. If status is changing: calls `applyInventoryForStatusChange()` to handle status-driven inventory transitions
+4. Calls `applyInventoryForStatusChange()` after item writes unless an explicit item-delta/status branch already handled inventory; this also repairs same-status retries whose status was persisted before inventory completed
 5. Optimistic locking via `version` column -- throws `ConflictError` if version mismatch
 6. Deletes all existing items and re-inserts (full replacement)
 7. Updates customer stats for both old and new customer (if customer changed)
@@ -104,8 +104,8 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 2. Validates transition via `validateTransition()`
 3. **COD auto-sync**: If order is COD and new status is DELIVERED or COMPLETED, auto-updates `paymentStatus` to `paid`
 4. CAS update on `version` column FIRST (prevents race between admin + webhook)
-5. On CAS success: applies inventory side effects via `applyInventoryForStatusChange()`
-6. Persists new `inventoryAction`
+5. On CAS success, or when retry sees the requested status already persisted, applies inventory side effects via `applyInventoryForStatusChange()`
+6. Persists/reconfirms the resulting `inventoryAction`
 7. Returns `StatusUpdateResult` with optional notification payload
 8. API route enqueues notification to `ORDER_NOTIFICATIONS_QUEUE` if present
 
@@ -129,23 +129,23 @@ All 9 statuses that trigger notifications are covered. Each dispatches to enable
 
 1. `createFulfillmentShipment()` checks order is not cancelled/returned
 2. Validates no items are already shipped/delivered (throws `ConflictError` if so)
-3. Creates `deliveryShipments` row, updates item fulfillment statuses to `shipped`
-4. If final shipment: updates order `fulfillmentStatus` to `complete`, order status to `shipped`
-5. Applies inventory deduction for the shipped status
+3. Claims the order with a version/status/fulfillment check, then creates `deliveryShipments` row and updates item fulfillment statuses to `shipped`
+4. If final shipment: updates order `fulfillmentStatus` to `complete`, and order status to `shipped` when it was still confirmed
+5. Applies inventory deduction for final shipments, including retries where the order was already marked shipped or delivered before inventory completed
 
 ### COD Actions
 
 `processCodAction()` handles three actions with CAS protection on the order version:
 - `collected`: CAS update first, then records collection via `recordCODCollection()`, sets order to `delivered`
 - `failed`: Records failure via `recordCODFailure()`
-- `returned`: CAS update first, then marks COD returned, applies inventory restoration, sets order to `returned`
+- `returned`: CAS update first unless already returned on retry, then marks COD returned and applies inventory restoration
 
 ### Bulk Ship Orders
 
 `bulkShipOrders()` applies CAS protection per order:
 1. Reads order status and version
-2. For unshipped orders: CAS-updates status to `shipped`, then deducts inventory
-3. For shipped orders needing delivery: CAS-updates to `delivered`, applies inventory for delivered status
+2. If the order is already `shipped`, treats the call as a retry and reconciles inventory without calling the provider again
+3. For unshipped orders: claims by version, calls the provider, CAS-updates status to `shipped`, then deducts inventory
 4. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
 
 ### Delete Flow

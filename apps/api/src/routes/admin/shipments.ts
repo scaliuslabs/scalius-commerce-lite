@@ -131,45 +131,45 @@ app.openapi(checkStatusRoute, (async (c: any) => {
         .set({ lastChecked: now })
         .where(eq(deliveryShipments.id, shipmentId));
 
-    if (result.status !== previousStatus) {
-        const orderStatusUpdate = await updateOrderStatusFromShipment(
-            db,
-            shipmentId,
-            result.status,
-        );
+    const orderStatusUpdate = await updateOrderStatusFromShipment(
+        db,
+        shipmentId,
+        result.status,
+    );
 
-        // Enqueue customer notification for shipment status changes
-        if (orderStatusUpdate && orderStatusUpdate.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
-            const DELIVERY_NOTIFICATION_MAP: Record<string, string> = {
-                shipped: "order_shipped",
-                delivered: "order_delivered",
-                returned: "order_returned",
-                cancelled: "order_cancelled",
-            };
-            const notifType = DELIVERY_NOTIFICATION_MAP[orderStatusUpdate.newStatus];
-            if (notifType) {
-                try {
-                    const order = await db.select({
-                        customerEmail: orders.customerEmail,
-                        customerName: orders.customerName,
-                    }).from(orders).where(eq(orders.id, orderStatusUpdate.orderId)).get();
+    // Enqueue customer notification only for actual order status changes.
+    if (orderStatusUpdate && orderStatusUpdate.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
+        const DELIVERY_NOTIFICATION_MAP: Record<string, string> = {
+            shipped: "order_shipped",
+            delivered: "order_delivered",
+            returned: "order_returned",
+            cancelled: "order_cancelled",
+        };
+        const notifType = DELIVERY_NOTIFICATION_MAP[orderStatusUpdate.newStatus];
+        if (notifType) {
+            try {
+                const order = await db.select({
+                    customerEmail: orders.customerEmail,
+                    customerName: orders.customerName,
+                }).from(orders).where(eq(orders.id, orderStatusUpdate.orderId)).get();
 
-                    if (order) {
-                        await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
-                            type: "order.notification",
-                            orderId: orderStatusUpdate.orderId,
-                            customerEmail: order.customerEmail ?? undefined,
-                            customerName: order.customerName,
-                            notificationType: notifType,
-                            data: currentShipment.trackingId ? { trackingId: currentShipment.trackingId } : undefined,
-                        });
-                    }
-                } catch (notifErr) {
-                    console.error(`[shipments] Failed to enqueue notification:`, notifErr);
+                if (order) {
+                    await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+                        type: "order.notification",
+                        orderId: orderStatusUpdate.orderId,
+                        customerEmail: order.customerEmail ?? undefined,
+                        customerName: order.customerName,
+                        notificationType: notifType,
+                        data: currentShipment.trackingId ? { trackingId: currentShipment.trackingId } : undefined,
+                    });
                 }
+            } catch (notifErr) {
+                console.error(`[shipments] Failed to enqueue notification:`, notifErr);
             }
         }
+    }
 
+    if (result.status !== previousStatus) {
         return ok(c, {
             message: `Shipment status updated from ${previousStatus} to ${result.status}`,
             statusCheck: {

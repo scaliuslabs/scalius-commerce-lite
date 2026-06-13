@@ -22,6 +22,15 @@ import { validateTransition } from "./order-state-machine";
 import type { StatusUpdateResult } from "./orders.types";
 import type { OrderNotificationType } from "../notifications/notification-types";
 
+async function reconcileInventoryForStatus(
+    db: Database,
+    orderId: string,
+    status: string,
+): Promise<void> {
+    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
+    await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+}
+
 export async function bulkShipOrders(
     db: Database,
     orderIds: string[],
@@ -34,6 +43,11 @@ export async function bulkShipOrders(
         try {
             const order = await db.select({ status: orders.status, version: orders.version }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
+            if (order.status === OrderStatus.SHIPPED) {
+                await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
+                results.push({ orderId, success: true, message: "Order already shipped; inventory reconciled" });
+                continue;
+            }
             validateTransition("order", order.status, OrderStatus.SHIPPED);
 
             const claimResult = await db.update(orders).set({
@@ -65,8 +79,7 @@ export async function bulkShipOrders(
                     continue;
                 }
 
-                const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
-                await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+                await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
             }
             results.push({ orderId, success: shipment.success, shipment: shipment.success ? shipment : undefined, error: shipment.success ? undefined : shipment.message });
         } catch (error: unknown) {
@@ -96,19 +109,20 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             // Validate transition to DELIVERED. If current status is CONFIRMED,
             // transition through SHIPPED first (COD collection implies delivery).
             let currentVersion = order.version;
+            let currentStatus = order.status;
             if (order.status === OrderStatus.CONFIRMED) {
                 validateTransition("order", order.status, OrderStatus.SHIPPED);
                 const shipResult = await db.update(orders).set({ status: OrderStatus.SHIPPED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
                 if (shipResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
                 currentVersion += 1;
-                const shipInventory = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
-                await db.update(orders).set({ inventoryAction: shipInventory }).where(eq(orders.id, orderId));
+                currentStatus = OrderStatus.SHIPPED;
             }
-            const currentStatus = order.status === OrderStatus.CONFIRMED ? OrderStatus.SHIPPED : order.status;
-            validateTransition("order", currentStatus, OrderStatus.DELIVERED);
-
-            const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
-            if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+            if (currentStatus !== OrderStatus.DELIVERED) {
+                validateTransition("order", currentStatus, OrderStatus.DELIVERED);
+                const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
+                if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+            }
+            await reconcileInventoryForStatus(db, orderId, OrderStatus.DELIVERED);
             const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
             if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
             return { message: "COD collection recorded" };
@@ -119,13 +133,14 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return { message: "COD failure recorded" };
         }
         case "returned": {
-            validateTransition("order", order.status, OrderStatus.RETURNED);
-            const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))).returning({ id: orders.id });
-            if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+            if (order.status !== OrderStatus.RETURNED) {
+                validateTransition("order", order.status, OrderStatus.RETURNED);
+                const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))).returning({ id: orders.id });
+                if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+            }
             const retResult = await markCODReturned(db, orderId);
             if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
-            await applyInventoryForStatusChange(db, orderId, OrderStatus.RETURNED);
-            await db.update(orders).set({ inventoryAction: "restored" }).where(eq(orders.id, orderId));
+            await reconcileInventoryForStatus(db, orderId, OrderStatus.RETURNED);
             return { message: "Order marked as returned" };
         }
         default:
@@ -195,9 +210,16 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(writes as any);
 
-    if (shouldShipOrder) {
-        const newInventoryAction = await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
-        await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+    const shouldReconcileShipmentInventory =
+        isFinalShipment &&
+        (shouldShipOrder || order.status === OrderStatus.SHIPPED || order.status === OrderStatus.DELIVERED);
+
+    if (shouldReconcileShipmentInventory) {
+        await reconcileInventoryForStatus(
+            db,
+            orderId,
+            order.status === OrderStatus.DELIVERED ? OrderStatus.DELIVERED : OrderStatus.SHIPPED,
+        );
     }
 
     return { shipmentId, isFinalShipment, fulfillmentStatus: newFulfillmentStatus };
@@ -227,7 +249,10 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         paymentStatus: orders.paymentStatus,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
-    if (existingOrder.status === status) return { message: "Status unchanged" };
+    if (existingOrder.status === status) {
+        await reconcileInventoryForStatus(db, orderId, status);
+        return { message: "Status unchanged; inventory reconciled" };
+    }
 
     // Validate the status transition before applying any side effects
     validateTransition("order", existingOrder.status, status);
@@ -256,12 +281,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     }
 
     // CAS succeeded — we own this transition. Now apply inventory side effects.
-    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
-
-    // Persist the new inventory action (version was already bumped above)
-    await db.update(orders).set({
-        inventoryAction: newInventoryAction,
-    }).where(eq(orders.id, orderId));
+    await reconcileInventoryForStatus(db, orderId, status);
 
     // Build notification payload if the new status warrants one
     const notificationType = NOTIFICATION_STATUSES[status];

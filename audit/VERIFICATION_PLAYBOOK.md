@@ -137,13 +137,20 @@ pnpm --filter @scalius/api-client typecheck
 pnpm --filter @scalius/core test -- src/modules/orders/orders.storefront.test.ts
 pnpm --filter @scalius/core typecheck
 
+# ORDER-007 coverage
+pnpm --filter @scalius/core exec vitest run src/modules/orders/orders.fulfillment.test.ts src/modules/delivery/tracking.test.ts src/modules/payments/polar.test.ts src/modules/payments/process-payment.test.ts
+pnpm exec vitest run tests/unit/core/orders/update-order-atomicity.test.ts tests/unit/core/payments/refund-validation.test.ts
+pnpm --filter @scalius/api exec vitest run src/routes/webhooks/steadfast.test.ts src/routes/admin/abandoned-checkouts.test.ts
+pnpm --filter @scalius/core typecheck
+pnpm --filter @scalius/api typecheck
+
 # ORDER-005 coverage
 pnpm --filter @scalius/api test -- src/routes/admin/abandoned-checkouts.test.ts
 pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/api lint
 ```
 
-Use the PAY-003/PAY-004 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls, derive gateway URLs from trusted config, reject disabled or mismatched deposit attempts, ignore caller currency for session creation, and force public Stripe manual capture off. Use the PAY-005 SSLCommerz webhook checks to prove canonical validated transaction data is used instead of form metadata. Use the webhook-idempotency checks to prove fresh `processing` claims dedupe, stale `processing` claims are leased/reclaimable by only one retry, `failed` claims are reclaimable, `queued`/`processed` claims stay terminal, and non-duplicate insert failures throw for provider retry. Use the ORDER-006 checks to prove storefront order creation rejects bogus shipping methods and derives shipping from active backend methods. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
+Use the PAY-003/PAY-004 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls, derive gateway URLs from trusted config, reject disabled or mismatched deposit attempts, ignore caller currency for session creation, and force public Stripe manual capture off. Use the PAY-005 SSLCommerz webhook checks to prove canonical validated transaction data is used instead of form metadata. Use the webhook-idempotency checks to prove fresh `processing` claims dedupe, stale `processing` claims are leased/reclaimable by only one retry, `failed` claims are reclaimable, `queued`/`processed` claims stay terminal, and non-duplicate insert failures throw for provider retry. Use the ORDER-006 checks to prove storefront order creation rejects bogus shipping methods and derives shipping from active backend methods. Use the ORDER-007 checks to prove same-status retries repair stale inventory across admin status changes, fulfillment, COD, delivery webhook/refresh, admin full edits, refunds, and returns while fulfilled refunds do not auto-restock deducted inventory. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
 
 ## Local Dev Commands
 

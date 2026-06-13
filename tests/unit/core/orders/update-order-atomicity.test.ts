@@ -288,4 +288,29 @@ describe("updateOrder inventory atomicity", () => {
     expect(db.insert).not.toHaveBeenCalled();
     expect(events).toEqual(["reserve", "order-cas-update", "release"]);
   });
+
+  it("reconciles inventory when retrying an edit after status already reached shipped", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({
+        status: "shipped",
+        inventoryAction: "reserved",
+        version: 8,
+      }),
+      existingItems: [item(2)],
+    });
+
+    await expect(
+      updateOrder(
+        db as never,
+        ORDER_ID,
+        updateData({ status: "shipped", items: [item(2)] }),
+      ),
+    ).resolves.toEqual({ id: ORDER_ID });
+
+    expect(inventoryMocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
+      db,
+      ORDER_ID,
+      "shipped",
+    );
+  });
 });

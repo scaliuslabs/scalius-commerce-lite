@@ -39,7 +39,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `updateOrderStatusFromShipment` | `(db, shipmentId, newStatus)` | Maps shipment status to order status, CAS update on `orders.version` first, then applies inventory side-effects via `applyInventoryForStatusChange()`. Concurrent admin changes take priority (CAS conflict is logged and skipped). |
+| `updateOrderStatusFromShipment` | `(db, shipmentId, newStatus)` | Maps shipment status to order status, CAS update on `orders.version` first when status changes, then applies inventory side-effects via `applyInventoryForStatusChange()`. Same-status retries still reconcile stale inventory. Concurrent admin changes take priority (CAS conflict is logged and skipped). |
 | `notifyShipmentStatusChange` | `(db, shipmentId, previousStatus, newStatus)` | Placeholder -- logs to console |
 | `getTrackingUrl` | `(providerType, trackingId)` | Returns tracking URL for Pathao or Steadfast, null for others |
 
@@ -103,7 +103,7 @@ Single format: 11 mappings including `_approval_pending` suffixes. Normalized to
 | `cancelled` | `confirmed` or `cancelled` | If shipped -> confirmed; if pending/processing -> cancelled |
 | `pending`, `on_hold`, `unknown` | No order change | Shipment-only state |
 
-Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects.
+Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries can repair stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
 
 ### Tracking URLs
 - Pathao: `https://merchant.pathao.com/tracking?consignment_id={trackingId}`

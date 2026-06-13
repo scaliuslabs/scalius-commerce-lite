@@ -233,9 +233,9 @@ Payment types: `full`, `deposit`, `balance`.
 4. Dispatches to gateway-specific refund API (Stripe: by charge ID with `Math.round(refundAmount * 100)`; SSLCommerz: by bank_tran_id; Polar: by checkout ID with `Math.round(refundAmount * 100)`; COD: marker ID only)
 5. Updates `orders.paidAmount` (subtracts refund) and `orders.paymentStatus` (REFUNDED for full, PARTIAL for partial)
 6. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
-7. On full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Partial refunds do NOT restore inventory.
+7. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
 
-`processReturn()`: Sets order status to `RETURNED`, restores inventory via `applyInventoryForStatusChange()`, optionally triggers auto-refund. Only orders in `delivered`, `completed`, or `shipped` status can be returned.
+`processReturn()`: Sets order status to `RETURNED`, restores inventory via `applyInventoryForStatusChange()`, optionally triggers auto-refund. Orders in `delivered`, `completed`, or `shipped` status can be returned; an already-`returned` retry is accepted only to resume inventory reconciliation and optional auto-refund.
 
 ### Gateway Settings Storage
 

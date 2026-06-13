@@ -262,6 +262,7 @@ export async function processPolarWebhookRefund(
                 paymentStatus: orders.paymentStatus,
                 totalAmount: orders.totalAmount,
                 status: orders.status,
+                inventoryAction: orders.inventoryAction,
                 version: orders.version,
             })
             .from(orders)
@@ -277,6 +278,17 @@ export async function processPolarWebhookRefund(
         const shouldChangeOrderStatus = Boolean(nextOrderStatus && nextOrderStatus !== order.status);
 
         // Already fully refunded and any allowed order-status transition is complete.
+        if (
+            isFullRefund &&
+            order.paymentStatus === PaymentStatus.REFUNDED &&
+            order.status === OrderStatus.CANCELLED &&
+            order.inventoryAction !== "deducted" &&
+            !shouldChangeOrderStatus
+        ) {
+            await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
+            return { success: true };
+        }
+
         if (
             isFullRefund &&
             order.paymentStatus === PaymentStatus.REFUNDED &&

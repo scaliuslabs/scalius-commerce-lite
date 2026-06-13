@@ -311,6 +311,7 @@ export async function processRefund(
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             status: orders.status,
+            inventoryAction: orders.inventoryAction,
             version: orders.version,
         })
         .from(orders)
@@ -323,6 +324,20 @@ export async function processRefund(
 
     if (order.paymentStatus === PaymentStatus.UNPAID || order.paymentStatus === PaymentStatus.FAILED) {
         throw new ValidationError("Order has no payments to refund");
+    }
+
+    if (
+        order.paymentStatus === PaymentStatus.REFUNDED &&
+        order.status === OrderStatus.CANCELLED &&
+        order.inventoryAction !== "deducted"
+    ) {
+        await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
+        return {
+            success: true,
+            gateway: params.gateway ?? order.paymentMethod,
+            amount: 0,
+            isFullRefund: true,
+        };
     }
 
     if (order.paymentStatus === PaymentStatus.REFUNDED) {
@@ -531,7 +546,7 @@ export async function processReturn(
     }
 
     const returnableStatuses: string[] = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
-    if (!returnableStatuses.includes(order.status)) {
+    if (order.status !== OrderStatus.RETURNED && !returnableStatuses.includes(order.status)) {
         throw new ValidationError(
             `Cannot return an order in '${order.status}' status. Order must be delivered, completed, or shipped.`
         );
@@ -540,11 +555,13 @@ export async function processReturn(
     // CAS update first: only apply inventory if this request actually owns the
     // RETURNED transition. This prevents orphan stock restoration when a
     // concurrent status change wins the order version race.
-    const orderStatusChanged = await updateOrderStatusIfVersionMatches(db, {
-        orderId: params.orderId,
-        nextStatus: OrderStatus.RETURNED,
-        expectedVersion: order.version,
-    });
+    const orderStatusChanged = order.status === OrderStatus.RETURNED
+        ? true
+        : await updateOrderStatusIfVersionMatches(db, {
+            orderId: params.orderId,
+            nextStatus: OrderStatus.RETURNED,
+            expectedVersion: order.version,
+        });
 
     if (!orderStatusChanged) {
         throw new ConflictError("Order was modified by another request. Please reload and try again.");
