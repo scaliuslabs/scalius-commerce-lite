@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; `PAY-003` is now verified, and `ORDER-005` remains the next high-risk remediation target.
+Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-13 opened `PAY-003` and `ORDER-005`; both are now verified.
 
 ## Validation Performed
 
@@ -24,7 +24,7 @@ Current tracked remediation state: the original tracker items are marked `Verifi
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 92 test files and 553 tests.
+- `pnpm test`: passed 93 test files and 556 tests.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
@@ -117,11 +117,11 @@ Status: Verified on 2026-06-13. Order creation writes checkout polling and recei
 
 ### ORDER-005: Abandoned-checkout cleanup can strand reserved inventory
 
-The admin abandoned-checkout cleanup path can delete old incomplete orders directly while their reserved inventory movements still exist. Because movement rows can lose their order reference on delete, the orphan-expiry sweeper may no longer have enough state to release stock or write a matching release movement.
+At re-audit time, the admin abandoned-checkout cleanup path could delete old incomplete orders directly while their reserved inventory movements still existed. Because movement rows can lose their order reference on delete, the orphan-expiry sweeper could then lack enough state to release stock or write a matching release movement.
 
 Fix direction: route cleanup through the same explicit order/inventory transition used for cancellations, or make the cleanup path claim and release reserved inventory before deleting or anonymizing the incomplete order.
 
-Status: Not Started as of 2026-06-13. Add a regression test that creates an old incomplete order with reserved inventory, runs abandoned-checkout cleanup, and verifies stock, movement logs, and later expiry behavior cannot strand the reservation.
+Status: Verified on 2026-06-13. Stale incomplete-order cleanup now calls the canonical inventory transition before archiving, leaves orders/items present until release succeeds, soft-deletes cancelled cleanup orders instead of hard-deleting them, and skips archive/delete when release fails. Focused API tests cover release-before-archive ordering, failure safety, and no-inventory cleanup.
 
 ### PAY-001: Stripe/SSL webhook idempotency is KV-only and recorded after queue send
 

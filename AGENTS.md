@@ -106,6 +106,7 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - **RBAC auto-seed**: Permissions/roles auto-seed on first admin access via `apps/admin-v2/src/middleware/rbac.server.ts`.
 - **FTS5**: Text search uses SQLite FTS5 helpers in `packages/core/src/search/fts5.ts`.
 - **Inventory expiry**: `releaseExpiredReservations()` is for orphaned reservation movements whose order row is missing. Do not use the cron sweeper to cancel stale existing orders; existing orders must move inventory through explicit order transition logic so `orders.inventoryAction`, `productVariants`, and movement logs stay consistent.
+- **Abandoned-checkout cleanup**: Old incomplete orders with `inventoryAction` `reserved` or `deducted` must release/restore through `applyInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED)` before archiving or soft deletion. Do not hard-delete stale incomplete orders before inventory release succeeds; keep order/items available for retry if release fails.
 - **Shipment creation**: Route-facing provider shipment creation must go through `@scalius/core/modules/orders` fulfillment helpers. `packages/core/src/modules/delivery/delivery.service.ts#createShipment()` is a low-level primitive and assumes the caller has already performed the durable order claim/transition.
 - **Order ingest queue isolation**: `handleOrderIngestBatch()` may batch DB writes for throughput, but stock reservation, DB-write fallback, checkout status, ack/retry, and rollback decisions must remain per order. A rejected/acked message must not be retried because another message in the same queue batch failed.
 - **Order creation queue handoff**: Storefront order creation must write checkout polling and receipt-token KV before sending to `ORDER_INGEST_QUEUE`. If queue send fails after KV creation, rewrite checkout status to terminal `failed` so storefront polling does not hang.
@@ -316,7 +317,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 
 ## Known Backlog / Limitations
 
-- **Active audit backlog**: `ORDER-005` in `audit/REMEDIATION_TRACKER.md` is currently `Not Started`. Abandoned-checkout cleanup needs explicit reserved-inventory release before deleting or anonymizing incomplete orders.
+- **Active audit backlog**: No P0/P1 remediation items are currently marked `Not Started` in `audit/REMEDIATION_TRACKER.md`; re-audit before adding new backlog claims.
 - **Mixed provider systems**: Universal provider registry currently has Stripe payment + Resend email adapters. SMS still uses the legacy integrations registry with smsnetbd, bdbulksms, mimsms, and gennet. Delivery uses legacy factory/provider files; universal delivery provider exports are type-only.
 - **In-memory state**: Storefront L1 caches and shared layout cache are in-memory and reset on Worker isolate restart. Shared rate limiting is KV-based now.
 - **Delivery notification helper**: `notifyShipmentStatusChange()` in `packages/core/src/modules/delivery/tracking.ts` is still a log-only placeholder. Active Pathao/Steadfast/admin shipment paths enqueue notifications directly.

@@ -131,12 +131,13 @@ pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/storefront typecheck
 pnpm --filter @scalius/api-client typecheck
 
-# Expected future ORDER-005 coverage
+# ORDER-005 coverage
 pnpm --filter @scalius/api test -- src/routes/admin/abandoned-checkouts.test.ts
-pnpm --filter @scalius/core test -- src/modules/inventory/expiry.test.ts src/modules/orders/orders.queue.test.ts
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/api lint
 ```
 
-Use the PAY-003 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls and gateway URLs come from trusted config. Use the ORDER-005 checks after adding the missing cleanup tests to prove abandoned-checkout cleanup releases reserved inventory before deleting or anonymizing incomplete orders.
+Use the PAY-003 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls and gateway URLs come from trusted config. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
 
 ## Local Dev Commands
 

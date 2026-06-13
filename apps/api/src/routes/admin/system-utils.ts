@@ -4,15 +4,23 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count, eq } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { abandonedCheckouts, orders, OrderStatus, adminFcmTokens } from "@scalius/database/schema";
+import { applyInventoryForStatusChange } from "@scalius/core/modules/inventory";
 import { ftsMatch } from "@scalius/core/search";
 
 import { ok, noContent } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError } from "../../utils/api-error";
-import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, messageResponse, noContentResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // --- Abandoned Checkouts ---
+type AbandonedCheckoutCleanupResult = {
+    archived: number;
+    failed: number;
+    errors: Array<{ orderId: string; error: string }>;
+};
+
 const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string | null }): boolean => {
     if (checkout.customerPhone) return false;
     try {
@@ -28,6 +36,61 @@ const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string
         return true;
     }
 };
+
+export async function archiveStaleIncompleteOrders(
+    db: Database,
+    cutoffTimestamp: number,
+): Promise<AbandonedCheckoutCleanupResult> {
+    const result: AbandonedCheckoutCleanupResult = {
+        archived: 0,
+        failed: 0,
+        errors: [],
+    };
+
+    const incompleteOrders = await db.select().from(orders).where(
+        and(
+            eq(orders.status, OrderStatus.INCOMPLETE),
+            sql`${orders.createdAt} <= ${cutoffTimestamp}`,
+            sql`${orders.deletedAt} IS NULL`,
+        ),
+    );
+
+    for (const order of incompleteOrders) {
+        try {
+            if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
+                await applyInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED);
+            }
+
+            await db.insert(abandonedCheckouts).values({
+                id: `ab_ch_sys_${order.id}`,
+                checkoutId: order.id,
+                customerPhone: order.customerPhone,
+                checkoutData: JSON.stringify(order),
+                createdAt: order.createdAt || new Date(),
+                updatedAt: order.updatedAt || new Date()
+            }).onConflictDoNothing();
+
+            await db.update(orders)
+                .set({
+                    status: OrderStatus.CANCELLED,
+                    deletedAt: sql`unixepoch()`,
+                    inventoryAction: "restored",
+                    version: sql`${orders.version} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(eq(orders.id, order.id));
+
+            result.archived++;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            result.failed++;
+            result.errors.push({ orderId: order.id, error: message });
+            console.error(`Failed to archive stale incomplete order ${order.id}:`, error);
+        }
+    }
+
+    return result;
+}
 
 // ── List Abandoned Checkouts ──
 
@@ -60,28 +123,9 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         await db.delete(abandonedCheckouts).where(sql`${abandonedCheckouts.createdAt} <= ${thirtyDaysAgoTimestamp}`);
 
         const oneHourAgoTimestamp = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
-        const incompleteOrders = await db.select().from(orders).where(
-            and(
-                eq(orders.status, OrderStatus.INCOMPLETE),
-                sql`${orders.createdAt} <= ${oneHourAgoTimestamp}`
-            )
-        );
-
-        if (incompleteOrders.length > 0) {
-            for (const io of incompleteOrders) {
-                await db.insert(abandonedCheckouts).values({
-                    id: `ab_ch_sys_${io.id}`,
-                    checkoutId: io.id,
-                    customerPhone: io.customerPhone,
-                    checkoutData: JSON.stringify(io),
-                    createdAt: io.createdAt || new Date(),
-                    updatedAt: io.updatedAt || new Date()
-                }).onConflictDoNothing();
-            }
-
-            await db.delete(orders).where(
-                inArray(orders.id, incompleteOrders.map((o) => o.id))
-            );
+        const staleOrderCleanup = await archiveStaleIncompleteOrders(db, oneHourAgoTimestamp);
+        if (staleOrderCleanup.failed > 0) {
+            console.error("Some stale incomplete orders could not be archived:", staleOrderCleanup.errors);
         }
 
         const candidatesForDeletion = await db.select().from(abandonedCheckouts).where(sql`${abandonedCheckouts.updatedAt} <= ${oneHourAgoTimestamp}`);
