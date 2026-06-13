@@ -37,8 +37,9 @@ import {
     getPaymentMethods,
     updatePaymentMethods,
     getPaymentGatewaySettings,
+    type SettingsPayload,
     updatePaymentGatewaySettings,
-} from "@/lib/api.functions";
+} from "@/lib/api-functions/settings";
 
 // --- Main Component ---
 
@@ -134,7 +135,7 @@ export default function PaymentGatewaysManager() {
     const saveGw = async (gw: MethodKey, body: object, setSaving: (v: boolean) => void) => {
         setSaving(true);
         try {
-            await updatePaymentGatewaySettings({ data: { gateway: gw, settings: body as Record<string, unknown> } });
+            await updatePaymentGatewaySettings({ data: { gateway: gw, settings: body as unknown as SettingsPayload } });
             await saveMethods(true);
             toast.success(`${META[gw].label} settings saved`);
             loadedGateways.current.delete(gw);

@@ -92,21 +92,8 @@ import {
   updateAttributeValues,
   bulkDeleteAttributes,
   bulkRestoreAttributes,
-  // Settings
-  updateSettingsByCategory,
   saveHeaderConfig,
   saveFooterConfig,
-  updateStorefrontUrl,
-  updateCurrencySettings,
-  updateSeoSettings,
-  updateSecuritySettings,
-  updateAuthSettings,
-  updateEmailSettings,
-  updateFirebaseSettings,
-  updateBusinessSettings,
-  updateThemeSettings,
-  updateMediaSettings,
-  updateSmsSettings,
   // Product Variants
   createProductVariant,
   updateProductVariant,
@@ -150,6 +137,21 @@ import {
   deleteAnalyticsScript,
   updateAnalyticsScript,
 } from "./api-functions/analytics";
+import {
+  type SettingsPayload,
+  updateAuthSettings,
+  updateBusinessSettings,
+  updateCurrencySettings,
+  updateEmailSettings,
+  updateFirebaseSettings,
+  updateMediaSettings,
+  updateSecuritySettings,
+  updateSeoSettings,
+  updateSettingsByCategory,
+  updateSmsSettings,
+  updateStorefrontUrl,
+  updateThemeSettings,
+} from "./api-functions/settings";
 
 // ═══════════════════════════════════════════════════════════════════
 //  PRODUCTS
@@ -581,7 +583,7 @@ export function useBulkDeleteOrders() {
 export function useUpdateSettings(category: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: Record<string, unknown>) =>
+    mutationFn: (settings: SettingsPayload) =>
       updateSettingsByCategory({ data: { category, settings } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -639,7 +641,7 @@ export function useUpdateStorefrontUrl() {
 export function useUpdateCurrencySettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: SettingsPayload) =>
       updateCurrencySettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -655,7 +657,7 @@ export function useUpdateCurrencySettings() {
 export function useUpdateSeoSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => updateSeoSettings({ data }),
+    mutationFn: (data: SettingsPayload) => updateSeoSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.seo() });
       toast.success("SEO settings updated");
@@ -668,7 +670,7 @@ export function useUpdateSeoSettings() {
 export function useUpdateSecuritySettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: SettingsPayload) =>
       updateSecuritySettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -684,7 +686,7 @@ export function useUpdateSecuritySettings() {
 export function useUpdateAuthSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => updateAuthSettings({ data }),
+    mutationFn: (data: SettingsPayload) => updateAuthSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.auth() });
       toast.success("Auth settings updated");
@@ -697,7 +699,7 @@ export function useUpdateAuthSettings() {
 export function useUpdateEmailSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: SettingsPayload) =>
       updateEmailSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.email() });
@@ -711,7 +713,7 @@ export function useUpdateEmailSettings() {
 export function useUpdateFirebaseSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: SettingsPayload) =>
       updateFirebaseSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -727,7 +729,7 @@ export function useUpdateFirebaseSettings() {
 export function useUpdateBusinessSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: SettingsPayload) =>
       updateBusinessSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -743,7 +745,7 @@ export function useUpdateBusinessSettings() {
 export function useUpdateThemeSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: SettingsPayload) =>
       updateThemeSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.theme() });
@@ -757,7 +759,7 @@ export function useUpdateThemeSettings() {
 export function useUpdateMediaSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
+    mutationFn: (data: SettingsPayload) =>
       updateMediaSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.media() });
@@ -771,7 +773,7 @@ export function useUpdateMediaSettings() {
 export function useUpdateSmsSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => updateSmsSettings({ data }),
+    mutationFn: (data: SettingsPayload) => updateSmsSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.sms() });
       toast.success("SMS settings updated");

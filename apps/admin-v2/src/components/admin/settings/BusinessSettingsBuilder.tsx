@@ -11,7 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Save } from "lucide-react";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
-import { getBusinessSettings, updateBusinessSettings } from "@/lib/api.functions";
+import {
+  getBusinessSettings,
+  type SettingsPayload,
+  updateBusinessSettings,
+} from "@/lib/api-functions/settings";
 
 interface BusinessSettings {
   companyName: string;
@@ -51,7 +55,7 @@ export default function BusinessSettingsBuilder() {
   const { values, setValue, isLoading, isSaving, handleSubmit } = useSettingsForm<BusinessSettings>({
     queryKey: queryKeys.settings.business(),
     fetchFn: () => getBusinessSettings() as Promise<Partial<BusinessSettings>>,
-    saveFn: (v) => updateBusinessSettings({ data: v as unknown as Record<string, unknown> }),
+    saveFn: (v) => updateBusinessSettings({ data: v as unknown as SettingsPayload }),
     defaultValues,
     successMessage: "Business settings saved successfully!",
     errorMessage: "Failed to save business settings",

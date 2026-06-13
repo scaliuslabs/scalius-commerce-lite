@@ -15,7 +15,11 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@scalius/shared/utils";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
-import { getCurrencySettings, updateCurrencySettings } from "@/lib/api.functions";
+import {
+  getCurrencySettings,
+  type SettingsPayload,
+  updateCurrencySettings,
+} from "@/lib/api-functions/settings";
 
 interface CurrencyEntry {
   code: string;
@@ -224,7 +228,7 @@ export default function CurrencySettingsBuilder() {
   const { values, setValue, setValues, isLoading, isSaving, handleSubmit } = useSettingsForm<CurrencySettings>({
     queryKey: queryKeys.settings.currency(),
     fetchFn: () => getCurrencySettings() as Promise<Partial<CurrencySettings>>,
-    saveFn: (v) => updateCurrencySettings({ data: v as unknown as Record<string, unknown> }),
+    saveFn: (v) => updateCurrencySettings({ data: v as unknown as SettingsPayload }),
     defaultValues: { currencyCode: "BDT", currencySymbol: "\u09F3", usdExchangeRate: "1" },
     successMessage: "Currency settings saved successfully!",
     errorMessage: "Failed to save currency settings",

@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import type { MetaConversionsSettings, FormData } from "../MetaConversionsSettingsForm";
-import { getMetaConversionsSettings, updateMetaConversionsSettings } from "~/lib/api.functions";
+import {
+  getMetaConversionsSettings,
+  type SettingsPayload,
+  updateMetaConversionsSettings,
+} from "~/lib/api-functions/settings";
 import { getServerFnError } from "@/lib/api-helpers";
 
 const DEFAULT_FORM_DATA: FormData = {
@@ -73,8 +77,8 @@ export function useMetaConversionsSettings(initialSettings?: MetaConversionsSett
   const handleSaveSettings = async () => {
     setIsSettingsLoading(true);
     try {
-      const data = await updateMetaConversionsSettings({ data: formData as unknown as Record<string, unknown> });
-      setSettings(data as MetaConversionsSettings);
+      const data = await updateMetaConversionsSettings({ data: formData as unknown as SettingsPayload });
+      setSettings(data as unknown as MetaConversionsSettings);
       setHasUnsavedChanges(false);
       toast.success("Settings saved successfully");
     } catch (error: unknown) {

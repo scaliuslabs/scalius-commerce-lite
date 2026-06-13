@@ -29,7 +29,10 @@ export const Route = createFileRoute("/admin/settings/")({
 
 function SettingsPage() {
   const { data } = useSuspenseQuery(generalSettingsQueryOptions());
-  const result = data as { headerConfig?: HeaderConfig | null; footerConfig?: FooterConfig | null };
+  const result = data as unknown as {
+    headerConfig?: HeaderConfig | null;
+    footerConfig?: FooterConfig | null;
+  };
 
   return (
     <GeneralSettingsPage
