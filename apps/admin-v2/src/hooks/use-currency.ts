@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { currencySettingsQueryOptions } from "~/lib/api.queries";
+import { currencySettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { formatPrice } from "@scalius/shared/currency";
 
 const DEFAULT_SYMBOL = "\u09F3";

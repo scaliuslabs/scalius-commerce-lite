@@ -64,6 +64,23 @@ pnpm exec vitest run apps/admin-v2/src/lib/admin-access.test.ts apps/admin-v2/sr
 pnpm --filter @scalius/admin-v2 typecheck
 ```
 
+Admin performance hot-path checks:
+
+```bash
+pnpm exec vitest run apps/admin-v2/src/routes/admin/settings/-checkout-loader.test.ts
+! rg "api\\.queries" \
+  apps/admin-v2/src/routes/admin/settings/checkout.tsx \
+  apps/admin-v2/src/components/admin/settings/CheckoutFlowSettings.tsx \
+  apps/admin-v2/src/components/admin/layout/AppSidebar.tsx \
+  apps/admin-v2/src/hooks/use-currency.ts \
+  apps/admin-v2/src/hooks/use-storefront-url.ts \
+  apps/admin-v2/src/hooks/use-firebase-init.ts
+pnpm --filter @scalius/admin-v2 typecheck
+pnpm --filter @scalius/admin-v2 lint
+```
+
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel.
+
 Admin 2FA/setup auth boundary:
 
 ```bash
@@ -320,6 +337,7 @@ Expected result:
 - API worker logs show `GET /api/v1/admin/dashboard/summary 200 OK` and `GET /api/v1/admin/dashboard/activity 200 OK`; the legacy `GET /api/v1/admin/dashboard` endpoint should remain available for compatibility.
 - The admin proxy route can be checked with a cookie jar; `GET http://localhost:4323/api/v1/admin/dashboard` should return `200 OK` and `x-proxy-base-url: http://localhost:8787/api/v1`.
 - Admin order detail should render without a payment-card waterfall: visit an order detail page such as `http://localhost:4323/admin/orders/{id}` and confirm the initial route load warms `/orders/{id}/payments`; COD orders should also warm `/orders/{id}/cod`. Optional payment/COD prefetch failures should log a warning and keep the order detail page loadable.
+- Admin checkout settings should render the checkout-flow tab after preloading only auth settings; payment gateway and shipping method API calls should not happen until their tabs are opened.
 
 ## Turbo And Deploy Checks
 

@@ -149,8 +149,10 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - `@/` and `~/` both alias to `apps/admin-v2/src`.
 - Admin server functions live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, with route-facing wrappers in `api.queries.ts` and `api.mutations.ts`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
 - Add new admin server functions to a domain slice under `apps/admin-v2/src/lib/api-functions/` with normal typechecking; do not recreate a broad legacy barrel.
+- Hot admin shell/default-tab query options may live in narrow modules under `apps/admin-v2/src/lib/api-query-options/`; use those instead of importing the broad `api.queries.ts` barrel when a route or always-mounted shell component needs only one small settings/dashboard/Firebase query.
 - Account settings must use the parent `/admin` route's effective permission context. Do not feed the full RBAC permission catalog into a nested `PermissionProvider`.
 - URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
+- Checkout settings should preload only the default checkout-flow auth settings. Payment gateway and shipping tab data should lazy-load from their tab components unless the tab mounting behavior changes.
 - Order detail routes must use `prefetchOrderDetailQueries()` from `apps/admin-v2/src/lib/order-detail-prefetch.ts` so order, shipments, delivery providers, payment history, currency settings, and COD tracking for COD orders are warmed before render. Payment/COD/currency prefetch is optional and should log/continue on failure instead of redirecting away from an otherwise valid order.
 - Keep server-function payloads route-shaped and JSON-serializable. If generated SDK responses include index signatures, strip them with local DTO helpers instead of adding file-level `@ts-nocheck`.
 
