@@ -132,7 +132,7 @@ pnpm --filter @scalius/api exec vitest run src/utils/cache-invalidation.test.ts 
 pnpm --filter @scalius/api typecheck
 ```
 
-For `CACHE-003`, non-widget admin writes for shipping methods, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
+For `CACHE-003`, non-widget admin writes for shipping methods, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Hero slider create/update/delete must purge homepage caches; hero slider reads must not purge. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
 
 Widget cache invalidation checks:
 
@@ -319,6 +319,7 @@ Expected result:
 - Browser login at `http://localhost:4323/auth/login` reaches `/admin`.
 - API worker logs show `GET /api/v1/admin/dashboard/summary 200 OK` and `GET /api/v1/admin/dashboard/activity 200 OK`; the legacy `GET /api/v1/admin/dashboard` endpoint should remain available for compatibility.
 - The admin proxy route can be checked with a cookie jar; `GET http://localhost:4323/api/v1/admin/dashboard` should return `200 OK` and `x-proxy-base-url: http://localhost:8787/api/v1`.
+- Admin order detail should render without a payment-card waterfall: visit an order detail page such as `http://localhost:4323/admin/orders/{id}` and confirm the initial route load warms `/orders/{id}/payments`; COD orders should also warm `/orders/{id}/cod`. Optional payment/COD prefetch failures should log a warning and keep the order detail page loadable.
 
 ## Turbo And Deploy Checks
 

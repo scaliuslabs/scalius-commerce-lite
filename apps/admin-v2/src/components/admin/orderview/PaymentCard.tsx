@@ -43,6 +43,8 @@ import {
 import type { Order } from "./types";
 import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orderPaymentsQueryOptions, orderCodQueryOptions } from "@/lib/api.queries";
+import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
+import { queryKeys } from "@/lib/query-keys";
 import { useUpdateOrderCod, useRefundOrder } from "@/lib/api.mutations";
 import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
 import { usePermissions } from "@/contexts/PermissionContext";
@@ -142,7 +144,10 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const isCOD = order.paymentMethod === "cod";
 
   // Use TanStack Query for payment data
-  const { data: paymentsData } = useSuspenseQuery(orderPaymentsQueryOptions(order.id));
+  const { data: paymentsData } = useSuspenseQuery({
+    ...orderPaymentsQueryOptions(order.id),
+    staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
+  });
   const paymentsResult = paymentsData as { payments: OrderPayment[]; plan: PaymentPlan | null } | null;
   const payments = paymentsResult?.payments ?? [];
   const plan = paymentsResult?.plan ?? null;
@@ -151,6 +156,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const { data: codData } = useQuery({
     ...orderCodQueryOptions(order.id),
     enabled: isCOD,
+    staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
   const codTracking = isCOD ? ((codData as { tracking: CODTracking | null } | null)?.tracking ?? null) : null;
 
@@ -223,7 +229,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           toast.success("Refund Issued", { description: `Successfully initiated refund of ${symbol}${amount}.` });
           setIsRefundDialogOpen(false);
           // Invalidate order detail to refresh payment status
-          queryClient.invalidateQueries({ queryKey: ["orders", "detail", order.id] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
         },
       },
     );

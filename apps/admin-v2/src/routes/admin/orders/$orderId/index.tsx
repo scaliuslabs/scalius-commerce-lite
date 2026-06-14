@@ -9,6 +9,10 @@ import {
   orderShipmentsQueryOptions,
   deliveryProvidersQueryOptions,
 } from "~/lib/api.queries";
+import {
+  ORDER_DETAIL_PREFETCH_STALE_MS,
+  prefetchOrderDetailQueries,
+} from "~/lib/order-detail-prefetch";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 import type {
   OrderDetailDto,
@@ -100,11 +104,7 @@ function toOrderViewModel(
 export const Route = createFileRoute("/admin/orders/$orderId/")({
   loader: async ({ context: { queryClient }, params }) => {
     try {
-      await Promise.all([
-        queryClient.ensureQueryData({ ...orderQueryOptions(params.orderId), staleTime: Infinity }),
-        queryClient.ensureQueryData({ ...orderShipmentsQueryOptions(params.orderId), staleTime: Infinity }),
-        queryClient.ensureQueryData(deliveryProvidersQueryOptions()),
-      ]);
+      await prefetchOrderDetailQueries(queryClient, params.orderId);
     } catch {
       throw redirect({ to: "/admin/orders" });
     }
@@ -121,13 +121,18 @@ function OrderViewPage() {
   // Poll for webhook-driven updates (shipment status, payment confirmation)
   const { data: order } = useSuspenseQuery({
     ...orderQueryOptions(orderId),
+    staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
   const { data: shipments } = useSuspenseQuery({
     ...orderShipmentsQueryOptions(orderId),
+    staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
-  const { data: providers } = useSuspenseQuery(deliveryProvidersQueryOptions());
+  const { data: providers } = useSuspenseQuery({
+    ...deliveryProvidersQueryOptions(),
+    staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
+  });
 
   const fullOrder = useMemo(() => {
     if (!order) return null;
