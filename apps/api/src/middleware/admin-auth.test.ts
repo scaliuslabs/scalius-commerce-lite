@@ -146,6 +146,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ["/api/v1/admin/auth/2fa/info", "GET"],
       ["/api/v1/admin/auth/2fa/verify", "POST"],
       ["/api/v1/admin/auth/2fa/complete-verification", "POST"],
+      ["/api/v1/admin/auth/2fa/method", "POST"],
     ] as const) {
       const next = vi.fn().mockResolvedValue(undefined);
       await adminAuthMiddleware(createContext(pathname, method) as never, next);
@@ -181,7 +182,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      adminAuthMiddleware(createContext("/api/v1/admin/auth/2fa/method", "POST") as never, next),
+      adminAuthMiddleware(createContext("/api/v1/admin/auth/account-security", "GET") as never, next),
     ).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",

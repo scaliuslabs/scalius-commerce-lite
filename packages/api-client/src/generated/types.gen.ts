@@ -24349,7 +24349,8 @@ export type PostApiV1AdminAuth2FaCompleteVerificationResponse = PostApiV1AdminAu
 export type PostApiV1AdminAuth2FaMethodData = {
     body?: {
         method: 'totp' | 'email';
-        code: string;
+        code?: string;
+        sessionToken?: string;
     };
     path?: never;
     query?: never;

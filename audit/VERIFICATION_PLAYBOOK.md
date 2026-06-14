@@ -67,13 +67,13 @@ pnpm --filter @scalius/admin-v2 typecheck
 Admin 2FA/setup auth boundary:
 
 ```bash
-pnpm --filter @scalius/api test -- src/middleware/admin-auth.test.ts src/routes/admin/auth-management.test.ts
+pnpm exec vitest run apps/admin-v2/src/lib/api.server.test.ts apps/api/src/middleware/admin-auth.test.ts apps/api/src/routes/admin/auth-management.test.ts
 pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/admin-v2 typecheck
 rg -n 'mark2faVerified|mark-verified|markFirstUserAsSuperAdmin' apps/admin-v2/src apps/api/src packages/core/src
 ```
 
-For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`. For `AUTH-006`, `/2fa/method` must verify a code for the target method inside the API route before updating `user.twoFactorMethod`; a browser-only prior verification is not enough.
+For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`. For `AUTH-006`/`AUTH-010`, `/2fa/method` must either verify a code for the target method inside the API route or accept a same-origin Better Auth `sessionToken` proof matching the current session id, user id, and token. Session-rotating Better Auth calls must forward replacement `Set-Cookie` headers through both the API worker and admin server-function response. A browser-only prior verification without API proof is not enough.
 
 Admin server-function slice changes:
 
@@ -435,6 +435,8 @@ Use `pnpm check:env` as the routine drift guard. Use generated Wrangler output o
 3. Call an admin API route directly.
 4. Expected current verified behavior: API rejects the request until 2FA is verified.
 5. Method-change regression: submit `/api/v1/admin/auth/2fa/method` with an invalid target-method code and verify the preferred method is not changed.
+6. Session-rotation regression: password change and first-time TOTP setup must preserve the replacement Better Auth cookie on the dashboard domain; the JSON response must not expose the replacement token.
+7. Open `AUTH-011` before changing trusted-device behavior: prove TOTP-preferred login, email-preferred login, backup-code login, stale trusted-device cookies, and post-login admin API access in a browser.
 
 Scanner RBAC:
 

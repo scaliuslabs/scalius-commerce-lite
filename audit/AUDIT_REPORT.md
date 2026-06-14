@@ -24,10 +24,10 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 117 files and 754 tests after the auth/cache hardening slice.
+- `pnpm test`: passed 118 files and 761 tests after the auth/session-cookie hardening slice.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm deploy`: previously redeployed API, admin, and storefront Workers at API `4e191a10-8a56-4f60-83c7-ebdd9e431e5e`, admin `1fa6e70f-df67-4282-be0a-dd5abb2aecfa`, storefront `6f5c4744-9fba-4185-8571-9c37140289eb`. The latest targeted auth/cache deploy updated API to `76dee35f-507c-4654-a049-d8feb66d63ae` and storefront to `e5765834-61cf-4d8a-80ec-eb70a0c9ad3b`.
-- Live HTTP and browser checks: API setup/OpenAPI, storefront home/cart/checkout, dashboard demo login, authenticated `/admin`, and authenticated `/admin/orders` returned successfully after redeploy with no captured browser console errors.
+- Full `pnpm deploy`: latest auth/session-cookie slice redeployed API `89316428-fc7f-4148-8f56-bb93c6b25c1b`, admin `c144655a-5f96-4741-b001-46926bdb7e2a`, and storefront `4ab260a7-39ff-4489-9ef8-3f0370222d00`.
+- Live HTTP and browser checks: API health, storefront home/cart/checkout, dashboard demo login, authenticated `/admin`, authenticated `/admin/orders`, authenticated account settings, and the admin auth account-security proxy returned successfully after redeploy with no captured browser console errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
@@ -47,7 +47,7 @@ Original finding: `apps/api/src/middleware/admin-auth.ts` accepted a Better Auth
 
 Fix direction: enforce the 2FA-verified session state in the API admin middleware, then add route tests for unverified 2FA sessions.
 
-Status: Verified on 2026-06-13 and tightened again on 2026-06-14. Admin API middleware now rejects unverified 2FA sessions before RBAC except exact 2FA info/verify/complete-verification endpoints, with focused API middleware tests. See `SEC-001` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13 and tightened again on 2026-06-14. Admin API middleware now rejects unverified 2FA sessions before RBAC except exact 2FA info, verify, complete-verification, and method-completion endpoints, with focused API middleware tests. See `SEC-001` in `REMEDIATION_TRACKER.md`.
 
 ### AUTH-002: Direct 2FA mark endpoint could bypass the second factor
 
@@ -111,9 +111,17 @@ Status: Verified on 2026-06-14. The route now requires an active session, conver
 
 Read-only auth re-audit found that password change and first-time 2FA setup can call Better Auth through the API worker while the browser is on the dashboard/admin worker. When Better Auth rotates or replaces the current session and returns `Set-Cookie` from the API worker, the TanStack server-function API helper unwraps JSON and does not propagate that cookie back to the browser.
 
-Fix direction: redesign these flows so session-rotating Better Auth calls happen same-origin on the admin worker/browser, or explicitly preserve the current session while revoking only intended other sessions. Prove the behavior with a two-browser password-change test and first-time email/TOTP setup tests.
+Fix direction: redesign these flows so session-rotating Better Auth calls happen same-origin on the admin worker/browser, or forward replacement cookies through every worker boundary. Prove the behavior with focused cookie-relay tests plus first-time email/TOTP setup tests.
 
-Status: Not Started as of 2026-06-14. Do not treat the live demo account smoke as coverage for this; the demo account currently has 2FA disabled and the smoke did not submit a password change.
+Status: Verified on 2026-06-14. Password change now calls Better Auth with `returnHeaders: true`, forwards returned `Set-Cookie` headers from the API response, and does not leak replacement tokens in JSON. Admin server functions append API `Set-Cookie` values to the dashboard response before unwrapping envelopes. First-time email setup now proves the same-origin Better Auth `sessionToken` to `/2fa/method`; first-time TOTP and method-code changes verify the target-method code inside the API route, prefer the rotated cookie token when Better Auth returns a stale token, and forward the rotated cookie. Focused API/admin tests cover cookie propagation, code proof, same-origin session-token proof, stale-token rejection, password-change cookie forwarding, and the exact `/2fa/method` middleware exemption. Root tests/typechecks/lint/builds, local HTTP/browser smoke, full deploy to API `89316428-fc7f-4148-8f56-bb93c6b25c1b`, admin `c144655a-5f96-4741-b001-46926bdb7e2a`, storefront `4ab260a7-39ff-4489-9ef8-3f0370222d00`, and live admin/storefront smoke passed.
+
+### AUTH-011: Preferred-login 2FA UX and trusted-device policy still need a focused pass
+
+The auth re-audit found that after the security fixes, some convenience behavior remains deliberately conservative. Login 2FA uses `trustDevice: false` because Better Auth's trusted-device cookie is not yet synchronized with the custom `session.twoFactorVerified` API gate. The login method-selection UX can also still default to email in cases where a user prefers TOTP, because the pending-2FA login state is not the same as a fully verified admin session.
+
+Fix direction: define the intended trusted-device policy against the API middleware, then add a full browser/UI regression covering TOTP-preferred login, email-preferred login, backup codes, old trusted-device cookies, and post-login API access.
+
+Status: Not Started as of 2026-06-14. The safer current behavior is that remembered-device login bypass is disabled, so users must complete 2FA each login until this policy is deliberately implemented.
 
 ### CACHE-005: Settings and no-cache routes had stale or misleading cache behavior
 

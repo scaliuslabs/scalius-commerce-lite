@@ -3,6 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { and, eq, count, or } from "drizzle-orm";
+import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import type { Database } from "@scalius/database/client";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
@@ -13,6 +14,48 @@ import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError, ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type BetterAuthHeaders = Headers & { getSetCookie?: () => string[] };
+type BetterAuthHeadersResult<T> = { response: T; headers?: Headers };
+
+function getSetCookieValues(headers?: Headers): string[] {
+    if (!headers) return [];
+    const headersWithCookies = headers as BetterAuthHeaders;
+    if (typeof headersWithCookies.getSetCookie === "function") {
+        return headersWithCookies.getSetCookie();
+    }
+    return splitSetCookieHeader(headers.get("set-cookie") ?? "");
+}
+
+function appendBetterAuthSetCookies(c: Parameters<typeof ok>[0], headers?: Headers): void {
+    for (const cookie of getSetCookieValues(headers)) {
+        c.header("Set-Cookie", cookie, { append: true });
+    }
+}
+
+function getAuthSessionCookieName(auth: unknown): string {
+    const options = (auth as { options?: Parameters<typeof getCookies>[0] }).options;
+    if (!options) return "better-auth.session_token";
+    return getCookies(options).sessionToken.name;
+}
+
+function getSessionTokenFromSetCookie(headers: Headers | undefined, auth: unknown): string | undefined {
+    const cookieNames = new Set([
+        getAuthSessionCookieName(auth),
+        "better-auth.session_token",
+        "__Secure-better-auth.session_token",
+    ]);
+
+    for (const cookie of getSetCookieValues(headers)) {
+        const parsed = parseSetCookieHeader(cookie);
+        for (const name of cookieNames) {
+            const rawValue = parsed.get(name)?.value;
+            const token = rawValue?.split(".")[0];
+            if (token) return token;
+        }
+    }
+    return undefined;
+}
 
 // Generate a secure random password
 function generateTempPassword(length = 16): string {
@@ -277,16 +320,24 @@ const changePasswordRoute = createRoute({
 
 app.openapi(changePasswordRoute, async (c) => {
     try {
+        const session = c.get("session");
         const env = c.env;
         const auth = createAuth(env);
         const { currentPassword, newPassword } = c.req.valid("json");
 
+        if (!session) {
+            throw new UnauthorizedError("No active session found");
+        }
+
         const result = await auth.api.changePassword({
             headers: c.req.raw.headers,
-            body: { currentPassword, newPassword, revokeOtherSessions: true }
-        });
+            body: { currentPassword, newPassword, revokeOtherSessions: true },
+            returnHeaders: true,
+        }) as BetterAuthHeadersResult<unknown>;
 
-        if (!result) throw new ValidationError("Unable to change password. Please check your current password.");
+        appendBetterAuthSetCookies(c, result.headers);
+
+        if (!result.response) throw new ValidationError("Unable to change password. Please check your current password.");
 
         return ok(c, { message: "Password changed successfully" });
     } catch (error: unknown) {
@@ -432,6 +483,15 @@ app.openapi(complete2faVerificationRoute, async (c) => {
     return ok(c, { message: "Two-factor authentication verified" });
 });
 
+const update2faMethodSchema = z.object({
+    method: z.enum(["totp", "email"]),
+    code: z.string().min(1).optional(),
+    sessionToken: z.string().min(32).optional(),
+}).refine((data) => Boolean(data.code) !== Boolean(data.sessionToken), {
+    message: "Provide either a verification code or a session proof",
+    path: ["code"],
+});
+
 const update2faMethodRoute = createRoute({
     method: "post",
     path: "/2fa/method",
@@ -441,10 +501,7 @@ const update2faMethodRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({
-                        method: z.enum(["totp", "email"]),
-                        code: z.string().min(1),
-                    }),
+                    schema: update2faMethodSchema,
                 },
             },
         },
@@ -457,30 +514,22 @@ const update2faMethodRoute = createRoute({
 
 app.openapi(update2faMethodRoute, async (c) => {
     const db = c.get("db");
-    const auth = createAuth(c.env);
     const sessionUser = c.get("user");
     const session = c.get("session");
-    const { method, code } = c.req.valid("json");
+    const { method, code, sessionToken: provenSessionToken } = c.req.valid("json");
 
     if (!session) {
         throw new UnauthorizedError("No active session found");
     }
 
-    let verifyResult: { token?: string } | undefined;
-    try {
-        verifyResult = method === "email"
-            ? await auth.api.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: false } })
-            : await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: false } });
-    } catch {
-        throw new ValidationError("The verification code is invalid or expired");
-    }
-
-    const sessionToken = verifyResult?.token;
+    let verifiedSessionId = session.id;
+    const sessionToken = provenSessionToken;
     if (sessionToken) {
         const sessionByToken = await db
             .select({ id: sessionTable.id })
             .from(sessionTable)
             .where(and(
+                eq(sessionTable.id, session.id),
                 eq(sessionTable.token, sessionToken),
                 eq(sessionTable.userId, sessionUser.id),
             ))
@@ -488,11 +537,59 @@ app.openapi(update2faMethodRoute, async (c) => {
         if (!sessionByToken) {
             throw new UnauthorizedError("Two-factor method proof is invalid");
         }
-        await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
-    } else {
-        await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
+        verifiedSessionId = sessionByToken.id;
+    } else if (code) {
+        const auth = createAuth(c.env);
+        const verifiedProof = await (async () => {
+            try {
+                const betterAuthResult = method === "email"
+                    ? await auth.api.verifyTwoFactorOTP({
+                        headers: c.req.raw.headers,
+                        body: { code, trustDevice: false },
+                        returnHeaders: true,
+                    }) as BetterAuthHeadersResult<{ token?: string }>
+                    : await auth.api.verifyTOTP({
+                        headers: c.req.raw.headers,
+                        body: { code, trustDevice: false },
+                        returnHeaders: true,
+                    }) as BetterAuthHeadersResult<{ token?: string }>;
+                appendBetterAuthSetCookies(c, betterAuthResult.headers);
+                const cookieSessionToken = getSessionTokenFromSetCookie(betterAuthResult.headers, auth);
+                return {
+                    token: cookieSessionToken ?? betterAuthResult.response?.token,
+                    allowRotatedCookieSession: Boolean(cookieSessionToken),
+                };
+            } catch {
+                throw new ValidationError("The verification code is invalid or expired");
+            }
+        })();
+
+        const verifiedToken = verifiedProof.token;
+        if (verifiedToken) {
+            const sessionByToken = await db
+                .select({ id: sessionTable.id })
+                .from(sessionTable)
+                .where(
+                    verifiedProof.allowRotatedCookieSession
+                        ? and(
+                            eq(sessionTable.token, verifiedToken),
+                            eq(sessionTable.userId, sessionUser.id),
+                        )
+                        : and(
+                            eq(sessionTable.id, session.id),
+                            eq(sessionTable.token, verifiedToken),
+                            eq(sessionTable.userId, sessionUser.id),
+                        )
+                )
+                .get();
+            if (!sessionByToken) {
+                throw new UnauthorizedError("Two-factor method proof is invalid");
+            }
+            verifiedSessionId = sessionByToken.id;
+        }
     }
 
+    await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, verifiedSessionId));
     await db.update(user).set({ twoFactorMethod: method }).where(eq(user.id, sessionUser.id));
 
     return ok(c, {});
@@ -533,18 +630,19 @@ app.openapi(verify2faRoute, async (c) => {
         throw new UnauthorizedError("No active session found");
     }
 
-    let verifyResult: { token?: string; user?: { id: string } } | null = null;
-    try {
-        if (type === "backup") {
-            verifyResult = await auth.api.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
-        } else if (type === "email") {
-            verifyResult = await auth.api.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
-        } else {
-            verifyResult = await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
+    const verifyResult = await (async () => {
+        try {
+            if (type === "backup") {
+                return await auth.api.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
+            }
+            if (type === "email") {
+                return await auth.api.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
+            }
+            return await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
+        } catch {
+            throw new ValidationError("The verification code is invalid or expired");
         }
-    } catch {
-        throw new ValidationError("The verification code is invalid or expired");
-    }
+    })() as { token?: string; user?: { id: string } } | null;
 
     const sessionToken = verifyResult?.token;
     if (sessionToken) {

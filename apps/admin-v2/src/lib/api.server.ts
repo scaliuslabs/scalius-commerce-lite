@@ -16,8 +16,9 @@
  * or other .server.ts files.
  */
 
-import { getRequestHeader } from "@tanstack/react-start/server";
+import { getRequestHeader, getResponseHeaders } from "@tanstack/react-start/server";
 import { env as cfEnv } from "cloudflare:workers";
+import { splitSetCookieHeader } from "better-auth/cookies";
 
 // Admin API prefix -- all admin endpoints live under this path
 const API_PATH_PREFIX = "/api/v1/admin";
@@ -38,6 +39,8 @@ interface ApiEnvelope {
   error?: { code?: string; message?: string } | string;
   [key: string]: unknown;
 }
+
+type HeadersWithGetSetCookie = Headers & { getSetCookie?: () => string[] };
 
 function isLocalApiBase(apiBase?: string): boolean {
   if (!apiBase) return false;
@@ -69,11 +72,35 @@ function getForwardHeaders(): Record<string, string> {
   return forwarded;
 }
 
+function getSetCookieValues(headers: Headers): string[] {
+  const headersWithCookies = headers as HeadersWithGetSetCookie;
+  if (typeof headersWithCookies.getSetCookie === "function") {
+    return headersWithCookies.getSetCookie();
+  }
+  return splitSetCookieHeader(headers.get("set-cookie") ?? "");
+}
+
+function propagateResponseSetCookies(response: Response): void {
+  const setCookies = getSetCookieValues(response.headers);
+  if (setCookies.length === 0) return;
+
+  try {
+    const responseHeaders = getResponseHeaders();
+    for (const cookie of setCookies) {
+      responseHeaders.append("set-cookie", cookie);
+    }
+  } catch {
+    // Outside a TanStack request context (build/tests) -- no response to mutate.
+  }
+}
+
 /**
  * Parse API response envelope. The API returns { success, data: T }.
  * Returns T directly. Throws on error.
  */
 async function handleResponse<T>(response: Response): Promise<T> {
+  propagateResponseSetCookies(response);
+
   if (!response.ok) {
     let message = `API error: ${response.status} ${response.statusText}`;
     try {

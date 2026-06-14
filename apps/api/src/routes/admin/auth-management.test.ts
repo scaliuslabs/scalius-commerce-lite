@@ -24,13 +24,16 @@ beforeEach(() => {
 function createDbMock(options: { matchingSession?: boolean } = {}) {
   const updateWhere = vi.fn(async () => undefined);
   const updateSet = vi.fn(() => ({ where: updateWhere }));
+  const deleteWhere = vi.fn(async () => undefined);
   const get = vi.fn(async () =>
     options.matchingSession === false ? null : { id: "session_1" },
   );
 
   return {
+    __deleteWhere: deleteWhere,
     __updateSet: updateSet,
     __updateWhere: updateWhere,
+    delete: vi.fn(() => ({ where: deleteWhere })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({ get })),
@@ -171,9 +174,56 @@ describe("admin auth management 2FA completion", () => {
 });
 
 describe("admin auth management 2FA method changes", () => {
+  it("accepts a same-origin session-token proof before updating the preferred 2FA method", async () => {
+    const db = createDbMock();
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/2fa/method", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "email",
+        sessionToken: "same_origin_verified_session_token_123456789",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.createAuth).not.toHaveBeenCalled();
+    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
+    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorMethod: "email" });
+  });
+
+  it("rejects a preferred method update when the same-origin proof does not match the current session", async () => {
+    const db = createDbMock({ matchingSession: false });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/2fa/method", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "email",
+        sessionToken: "another_session_token_123456789012345",
+      }),
+    });
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(db.__updateSet).not.toHaveBeenCalled();
+  });
+
   it("verifies the target method code before updating the preferred 2FA method", async () => {
     const db = createDbMock();
-    const verifyTwoFactorOTP = vi.fn().mockResolvedValue({ token: "verified_session_token" });
+    const verifyTwoFactorOTP = vi.fn().mockResolvedValue({
+      response: { token: "verified_session_token" },
+      headers: new Headers(),
+    });
     mocks.createAuth.mockReturnValue({
       api: {
         verifyTwoFactorOTP,
@@ -194,9 +244,41 @@ describe("admin auth management 2FA method changes", () => {
     expect(verifyTwoFactorOTP).toHaveBeenCalledWith({
       headers: expect.any(Headers),
       body: { code: "123456", trustDevice: false },
+      returnHeaders: true,
     });
     expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
     expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorMethod: "email" });
+  });
+
+  it("uses the rotated session cookie when first-time TOTP verification returns a stale token", async () => {
+    const db = createDbMock();
+    const verifyTOTP = vi.fn().mockResolvedValue({
+      response: { token: "old_session_token" },
+      headers: new Headers({
+        "Set-Cookie": "better-auth.session_token=new_session_token.signature; Path=/; HttpOnly; SameSite=Lax",
+      }),
+    });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        verifyTOTP,
+      },
+      options: {},
+    });
+    const app = createTestApp(db, {
+      twoFactorEnabled: false,
+      session: { id: "session_1", twoFactorVerified: false },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/2fa/method", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "totp", code: "123456" }),
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=new_session_token.signature");
+    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
+    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorMethod: "totp" });
   });
 
   it("rejects a preferred method update when the target method code is invalid", async () => {
@@ -221,6 +303,75 @@ describe("admin auth management 2FA method changes", () => {
     expect(response.status).toBe(400);
     expect(body.error?.code).toBe("VALIDATION_ERROR");
     expect(db.__updateSet).not.toHaveBeenCalledWith({ twoFactorMethod: "totp" });
+  });
+});
+
+describe("admin auth management password changes", () => {
+  it("changes the password and forwards Better Auth's rotated session cookie", async () => {
+    const db = createDbMock();
+    const changePassword = vi.fn().mockResolvedValue({
+      response: { token: "new_session_token", user: { id: "user_1" } },
+      headers: new Headers({
+        "Set-Cookie": "better-auth.session_token=new_session_token.signature; Path=/; HttpOnly; SameSite=Lax",
+      }),
+    });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        changePassword,
+      },
+    });
+    const app = createTestApp(db, {
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword: "OldPassword123!",
+        newPassword: "NewPassword123!",
+      }),
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(changePassword).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      body: {
+        currentPassword: "OldPassword123!",
+        newPassword: "NewPassword123!",
+        revokeOtherSessions: true,
+      },
+      returnHeaders: true,
+    });
+    expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=new_session_token.signature");
+    const body = await response.json() as { data?: Record<string, unknown> };
+    expect(body.data?.message).toBe("Password changed successfully");
+    expect(JSON.stringify(body)).not.toContain("new_session_token");
+  });
+
+  it("rejects password changes without an active session", async () => {
+    const db = createDbMock();
+    const changePassword = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: {
+        changePassword,
+      },
+    });
+    const app = createTestApp(db, { session: null });
+
+    const response = await app.request("/api/v1/admin/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword: "OldPassword123!",
+        newPassword: "NewPassword123!",
+      }),
+    });
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(changePassword).not.toHaveBeenCalled();
   });
 });
 

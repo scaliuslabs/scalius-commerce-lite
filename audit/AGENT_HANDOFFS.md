@@ -6,7 +6,7 @@ Use these slices when launching future agents. Each slice should be owned end to
 
 Tracker IDs: `SEC-001`, `SEC-002`, `ADMIN-002`.
 
-Current state: verified. The API admin middleware now enforces completed 2FA for 2FA-enabled sessions except exact 2FA info/verify/complete-verification endpoints, scanner access uses a scanner session cookie limited by `packages/shared/src/scanner-auth.ts`, and scanner token minting has focused RBAC coverage. Future work should be a fresh regression audit, not a repeat of the old open findings.
+Current state: verified. The API admin middleware now enforces completed 2FA for 2FA-enabled sessions except exact 2FA info, verify, complete-verification, and method-completion endpoints, scanner access uses a scanner session cookie limited by `packages/shared/src/scanner-auth.ts`, and scanner token minting has focused RBAC coverage. Future work should be a fresh regression audit, not a repeat of the old open findings.
 
 Scope:
 

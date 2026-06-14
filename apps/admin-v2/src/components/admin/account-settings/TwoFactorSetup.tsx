@@ -52,6 +52,29 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<TwoFactorStep>("method");
 
+  const setVerifiedMethod = async (method: TwoFactorMethod, code: string) => {
+    if (method === "totp") {
+      await set2faMethod({ data: { method, code } });
+      return;
+    }
+
+    const result = await authClient.twoFactor.verifyOtp({
+      code,
+      trustDevice: false,
+    });
+
+    if (result.error) {
+      throw new Error(result.error.message || "Invalid verification code");
+    }
+
+    const sessionToken = result.data?.token;
+    if (!sessionToken) {
+      throw new Error("Verification succeeded, but no session proof was returned.");
+    }
+
+    await set2faMethod({ data: { method, sessionToken } });
+  };
+
   const handleEnable2FA = async () => {
     setError(null);
     setIsLoading(true);
@@ -91,7 +114,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      await set2faMethod({ data: { method: selectedMethod, code: verificationCode } });
+      await setVerifiedMethod(selectedMethod, verificationCode);
 
       setStep("backup");
       setIsEnabled(true);
@@ -137,7 +160,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      await set2faMethod({ data: { method: "totp", code: verificationCode } });
+      await setVerifiedMethod("totp", verificationCode);
 
       setCurrentMethod("totp");
       setStep("backup");
