@@ -86,8 +86,15 @@ app.openapi(getFooterRoute, async (c) => {
   }
 
   // Parse footer config
-  let footerConfig: Partial<FooterData> | null = null;
-  try { footerConfig = settings.footerConfig ? JSON.parse(settings.footerConfig) as Partial<FooterData> : null; } catch { footerConfig = null; }
+  const footerConfig: Partial<FooterData> | null = (() => {
+    try {
+      return settings.footerConfig
+        ? (JSON.parse(settings.footerConfig) as Partial<FooterData>)
+        : null;
+    } catch {
+      return null;
+    }
+  })();
 
   if (!footerConfig) {
     throw new ValidationError("Invalid footer configuration");

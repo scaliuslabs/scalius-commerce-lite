@@ -25,12 +25,16 @@ import {
   ArrowRight,
   ChevronDown,
 } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 import { getProductImageUrl } from "@/lib/product-media";
 
 export const cartOpenState = atom<boolean>(false);
+
+type AddToCartEventDetail = Parameters<typeof addToCart>[0] & {
+  redirectToCart?: boolean;
+};
 
 export function setCartOpen(value: boolean) {
   if (typeof window !== "undefined") {
@@ -55,17 +59,17 @@ export default function CartFlyout() {
   const dragStartY = useRef(0);
   const dragCurrentY = useRef(0);
 
-  const clearAutoCloseTimer = () => {
+  const clearAutoCloseTimer = useCallback(() => {
     if (autoCloseTimer.current) {
       clearTimeout(autoCloseTimer.current);
       autoCloseTimer.current = null;
     }
-  };
+  }, []);
 
-  const disableAutoClose = () => {
+  const disableAutoClose = useCallback(() => {
     clearAutoCloseTimer();
     isAutoCloseEnabled.current = false;
-  };
+  }, [clearAutoCloseTimer]);
 
   const handleMeaningfulInteraction = () => {
     const now = Date.now();
@@ -73,14 +77,14 @@ export default function CartFlyout() {
     lastInteractionTime.current = now;
   };
 
-  const startAutoCloseTimer = () => {
+  const startAutoCloseTimer = useCallback(() => {
     clearAutoCloseTimer();
     isAutoCloseEnabled.current = true;
     lastInteractionTime.current = Date.now();
     autoCloseTimer.current = setTimeout(() => {
       if (isAutoCloseEnabled.current) setCartOpen(false);
     }, 5000);
-  };
+  }, [clearAutoCloseTimer]);
 
   // Mobile Swipe Down Logic
   const handleDragStart = (e: React.TouchEvent) => {
@@ -101,24 +105,24 @@ export default function CartFlyout() {
     dragCurrentY.current = 0;
   };
 
-  const checkScroll = () => {
+  const checkScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
     const hasMoreBelow = scrollHeight - scrollTop - clientHeight > 10;
     setCanScrollMore(hasMoreBelow);
-  };
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(checkScroll, 100);
       setTimeout(checkScroll, 500);
     }
-  }, [isOpen, cart.items]);
+  }, [isOpen, cart.items, checkScroll]);
 
   useEffect(() => {
     hydrateCartFromStorage();
 
-    const handleAddToCartEvent = (event: CustomEvent) => {
+    const handleAddToCartEvent = (event: CustomEvent<AddToCartEventDetail>) => {
       if (!event.detail) return;
       addToCart(event.detail);
       if (event.detail.redirectToCart) {
@@ -150,7 +154,7 @@ export default function CartFlyout() {
       window.removeEventListener("resize", checkScroll);
       clearAutoCloseTimer();
     };
-  }, []);
+  }, [checkScroll, clearAutoCloseTimer, disableAutoClose, startAutoCloseTimer]);
 
   const handleCheckout = () => {
     window.location.href = "/cart";

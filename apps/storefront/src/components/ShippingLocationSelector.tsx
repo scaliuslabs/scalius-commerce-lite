@@ -31,7 +31,7 @@ export default function ShippingLocationSelector({
           shippingMethods.find((sm) => sm.id === selectedLocation)?.fee || 0,
       };
       // Set directly on window to eliminate race condition with event listeners
-      (window as any).lastShippingEventDetail = detail;
+      window.lastShippingEventDetail = detail;
       const event = new CustomEvent("shippingLocationChange", { detail });
       window.dispatchEvent(event);
     }

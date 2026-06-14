@@ -167,10 +167,6 @@ export async function releaseExpiredReservations(
         })
         .where(eq(productVariants.id, variantId));
 
-      // Record the release movement
-      const previousReserved = variant.reservedStock;
-      const newReserved = Math.max(0, previousReserved - totalQuantity);
-
       await recordMovement(db, {
         variantId,
         orderId: orderId ?? undefined,

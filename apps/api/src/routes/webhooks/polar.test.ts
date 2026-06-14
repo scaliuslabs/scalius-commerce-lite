@@ -51,7 +51,7 @@ vi.mock("../../utils/webhook-idempotency", async (importOriginal) => {
 
 import { polarWebhookRoutes, getPolarSourceEventId } from "./polar";
 
-function createApp(db: unknown, queue: { send: ReturnType<typeof vi.fn> } | null) {
+function createApp(db: unknown, _queue: { send: ReturnType<typeof vi.fn> } | null) {
   const app = new Hono<{ Bindings: Env; Variables: { db: unknown } }>();
   app.use("*", async (c, next) => {
     c.set("db", db);

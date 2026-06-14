@@ -343,11 +343,11 @@ const layoutData = await getLayoutData();
     authState.classList.remove("hidden");
 
     // Pre-fill profile fields: prefer customer DB profile, fallback to latest order
-    let fName = document.getElementById("fieldName") as HTMLInputElement;
-    let fPhone = document.getElementById("fieldPhone") as HTMLInputElement;
-    let fAddress = document.getElementById("fieldAddress") as HTMLInputElement;
-    let fCity = document.getElementById("fieldCity") as unknown as HTMLSelectElement;
-    let fZone = document.getElementById("fieldZone") as unknown as HTMLSelectElement;
+    const fName = document.getElementById("fieldName") as HTMLInputElement;
+    const fPhone = document.getElementById("fieldPhone") as HTMLInputElement;
+    const fAddress = document.getElementById("fieldAddress") as HTMLInputElement;
+    const fCity = document.getElementById("fieldCity") as unknown as HTMLSelectElement;
+    const fZone = document.getElementById("fieldZone") as unknown as HTMLSelectElement;
 
     const dbCustomer = result.customer && Object.keys(result.customer).length > 0 ? result.customer : null;
     const latestOrder = orders.length > 0 ? orders[0] : null;

@@ -54,6 +54,9 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 | ORDER-014 | P1 | Verified | Orders/COD | Generic delivered/completed status update can mark COD paid without ledger/tracking updates. | Generic COD status path requires collection ledger/tracking evidence; deploy and live smoke verified. |
 | BUILD-004 | P1 | Verified | Storefront/Build | `src/pages/seo-regressions.test.ts` is bundled as a public Astro route/chunk. | Test moved out of `src/pages`; storefront build/dist scan has no test route; live old route returns 404. |
 | CACHE-005 | P1 | Verified | API/Storefront Cache | Auth/checkout and CSP/security settings missed public cache purges; `CACHE_TTLS.NONE` still wrote cache; warm logs counted HTTP failures as successes. | Focused cache/auth route tests, root tests/lint/typecheck/builds, API/storefront deploy, and live API/browser smoke. |
+| ADMIN-009 | P1 | Verified | Admin/RBAC | Admin deep links allowed any permission-bearing admin into mapped pages; `/admin` could land users without `dashboard.view` on an unauthorized dashboard. | Focused `admin-access` tests, root warning-free lint/typecheck/test/build/safety gates, deploy, and live dashboard route smoke. |
+| RBAC-001 | P1 | Verified | Core/API RBAC | Permission revocations could remain stale in another isolate because local RBAC memory cache was trusted before KV and mutation routes did not consistently clear KV-backed user caches. | Focused RBAC helper/API middleware tests, root gates, API deploy `822d3968-ffc0-4280-9286-f161a4096525`, live auth/API/dashboard smoke. |
+| STORE-007 | P1 | Verified | Storefront/CSP Cache | Storefront CSP middleware read the storefront CSP endpoint as a top-level object even though the API returns the standard `{ success, data }` envelope. | Focused CSP middleware test, root gates, API/storefront deploy, live CSP endpoint and storefront browser smoke. |
 
 ## Secondary Queue
 
@@ -104,6 +107,9 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 | PERF-001 | P2 | Verified | Admin/Performance | Admin shell and scanner load browser-only/expensive work too early. | Admin build chunk scan, local dashboard/scanner checks, deploy, and live dashboard browser smoke. |
 | PERF-002 | P2 | Verified | Admin/Dashboard | Dashboard first load performs avoidable serial API/DB work and mounts Recharts for all-zero data. | Dashboard data tests, admin/API typechecks, local/live dashboard smoke. |
 | PERF-003 | P2 | In Progress | Admin/Performance | Dashboard activity is split from first paint/indexed, order-detail payment/COD data is prefetched, checkout inactive-tab prefetching is trimmed, hot shell query options are split, list navigation avoids blocking cold client loads, `api.queries.ts` lazy-loads domain server-function modules, and mutation freshness now invalidates dashboard/product aggregate keys. Broader route/component bundle slimming remains. | Dashboard/order-detail/checkout/auth focused tests, query/cache hot-path scans, root gates, local/live browser dashboard/list/storefront smoke, remote D1 index check, and live split endpoint checks. |
+| PERF-004 | P2 | Verified | Admin/Storefront Performance | Admin data tables forced refetch on every remount, media route blocked on unused React Query prefetches, admin query cache GC was short for real editing sessions, product pages eagerly requested hidden 1400px zoom assets, and storefront Cache API metadata advertised unsupported SWR directives. | Root warning-free lint/typecheck/test/build/safety gates, deploy, and live admin/storefront browser smoke. |
+| ADMIN-010 | P2 | Verified | Admin/Hydration | Product list SSR could hydrate against a different query-cache shape because category/stats prefetches were fire-and-forget while route UI consumed their results; localized date cells could also differ across SSR/client. | Product loader now awaits first-render query data and shared date cells suppress known timestamp text drift; root gates, admin deploy, and live `/admin/products` console sweep pass. |
+| STORE-008 | P2 | Verified | Storefront/Widgets | Stored/generated widget HTML linked to nonexistent `/collections` and `/collections/all` routes on the storefront homepage. | Shared widget-rendering test, root gates, storefront deploy, and live storefront route smoke prove links rewrite to `/search` with no bad collection links. |
 
 ## Cleanup Queue
 
@@ -117,10 +123,10 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 
 - Root `pnpm typecheck`: passed.
 - Drizzle schema check: passed.
-- Root test suite: passes with `pnpm test` (121 files, 773 tests).
+- Root test suite: passes with `pnpm test` (123 files, 783 tests).
 - Root `pnpm build`, `pnpm lint`, `pnpm check:env`, `pnpm check:dist-secrets`, and frozen install pass.
 - Database migration metadata guard passes with 42 SQL files / 42 journal entries / 27 snapshots / 15 allowed manual snapshot gaps.
-- Full `pnpm run deploy` succeeded after the latest admin navigation/freshness, cache-invalidation, and 2FA boundary slice: API version `6c8a5df3-1956-4a98-ade0-abc6cacf021f`, admin version `be596a08-09c6-49db-841f-140772fa34e0`, storefront version `8eb6cf3a-d57b-4dd4-bc6d-6486a370f3e5`.
+- Full `pnpm deploy` succeeded after the 2026-06-15 admin/RBAC/CSP/performance/widget-link/lint-clean slice: API version `822d3968-ffc0-4280-9286-f161a4096525`, admin version `a6701970-d938-4250-a483-3c6155ab0f89`, storefront version `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`.
 - Local dev smoke passed after `pnpm dev`: local migrations reported no pending changes; local admin sign-in with `admin@local.scalius.test` succeeded; API health, admin `/admin`, `/admin/orders`, `/admin/settings/account`, admin account-security proxy, storefront `/`, `/cart`, and empty-cart `/checkout` returned 200 with no error-boundary text; browser checks for dashboard, orders, account settings, storefront home/cart/checkout had no captured console errors.
 - Live dashboard login with `demo@scalius.com` succeeded through `POST /api/auth/sign-in/email`; authenticated HTTP/browser checks for `/admin`, `/admin/products`, `/admin/orders`, and `/admin/customers` returned successfully with no error-boundary page, stuck loading state, or captured console errors.
 - Live storefront `/`, `/cart`, and `/checkout` returned 200; browser smoke on dashboard, orders, account settings, storefront home, cart, and empty-cart checkout redirect had no captured console errors.
@@ -128,6 +134,11 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 - Storefront focused Vitest: passes after adding the missing `happy-dom` test dependency.
 
 ## Remediation Notes
+
+2026-06-15:
+
+- `ADMIN-009`, `ADMIN-010`, `RBAC-001`, `STORE-007`, `PERF-004`, and `STORE-008` are verified and deployed. The slice centralizes admin page access on `@scalius/core/auth/rbac/page-permissions`, denies unmapped admin pages for non-super-admins, redirects `/admin` users without `dashboard.view` to their first accessible admin page, allows own-account/self-service API endpoints for any verified admin principal, passes KV through API RBAC checks, makes KV misses bypass stale local RBAC memory cache, clears KV permission caches for users assigned to edited roles, stops data tables from forcing refetch on every remount, removes the unused blocking media route loader, extends admin query-cache retention to 30 minutes, makes product-list SSR hydration deterministic, unwraps enveloped storefront CSP settings, avoids eager hidden 1400px product zoom image requests, removes unsupported SWR directives from storefront Cache API writes, rewrites storefront widget links from nonexistent collection-list routes to `/search`, and eliminates all ESLint warnings in the root lint task. Verification: focused `admin-access`, API admin-auth, core RBAC cache, storefront CSP, and shared widget-rendering tests; root `pnpm typecheck`, warning-free `pnpm lint`, `pnpm test` (`123` files / `783` tests), `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, migration metadata check, `pnpm audit --audit-level moderate`, `git diff --check`; full deploy to API `822d3968-ffc0-4280-9286-f161a4096525`, admin `a6701970-d938-4250-a483-3c6155ab0f89`, storefront `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`; live API health/setup/CSP/auth checks; and live Chrome/CDP smoke for dashboard `/admin`, `/admin/products`, `/admin/orders`, `/admin/media`, `/admin/settings/account`, plus storefront `/`, `/search`, `/categories/men-clothing`, and `/products/monster-energy-drink` with no console/runtime errors or error-boundary pages.
+- The stale `docs/codex/audits/` tree was removed because `/audit` is now the maintained audit source and the old tree contained fixed security/dependency/widget/cache claims that conflicted with current code.
 
 2026-06-14:
 

@@ -10,7 +10,6 @@ export async function fetchWidgetAi(
   timeoutMs = WIDGET_GENERATION_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   const abortFromParent = () => controller.abort(init.signal?.reason);
   if (init.signal?.aborted) {
@@ -19,7 +18,7 @@ export async function fetchWidgetAi(
     init.signal?.addEventListener('abort', abortFromParent, { once: true });
   }
 
-  timeoutId = setTimeout(() => {
+  const timeoutId = setTimeout(() => {
     controller.abort(createTimeoutError());
   }, timeoutMs);
 

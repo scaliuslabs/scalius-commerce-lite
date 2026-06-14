@@ -358,7 +358,7 @@ export async function listAttributeValues(
 
     // Batch fetch sample product names for all values on this page
     const pageValues = dbValues.map((v) => v.value);
-    let sampleProductMap = new Map<string, string[]>();
+    const sampleProductMap = new Map<string, string[]>();
     if (pageValues.length > 0) {
         const allSamples = await db
             .select({

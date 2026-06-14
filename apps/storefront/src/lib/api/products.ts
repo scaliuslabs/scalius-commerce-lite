@@ -125,7 +125,18 @@ export interface ProductListOptions {
   freeDelivery?: boolean;
   hasDiscount?: boolean;
   ids?: string[];
-  [key: string]: any;
+  [key: string]: string | number | boolean | string[] | undefined;
+}
+
+function emptyProductPagination(
+  options: ProductListOptions = {},
+): PaginatedResponse<Product>["pagination"] {
+  return {
+    page: Number(options.page ?? 1),
+    limit: Number(options.limit ?? 20),
+    total: 0,
+    totalPages: 0,
+  };
 }
 
 /**
@@ -166,17 +177,14 @@ export async function getProductsByCategory(
         if (error) {
           return {
             data: [],
-            pagination: {
-              page: 1,
-              limit: options.limit || 20,
-              total: 0,
-              totalPages: 0,
-            },
+            pagination: emptyProductPagination(options),
           };
         }
 
-        const d = unwrapData<{ products: Product[]; pagination: any }>(data);
-        return { data: d?.products ?? [], pagination: d?.pagination };
+        const d = unwrapData<{ products: Product[]; pagination: PaginatedResponse<Product>["pagination"] }>(data);
+        return d
+          ? { data: d.products, pagination: d.pagination }
+          : { data: [], pagination: emptyProductPagination(options) };
       } catch (error: unknown) {
         console.error(
           `Error fetching products for category "${categorySlug}":`,
@@ -215,8 +223,10 @@ export async function getAllProducts(
           client: getConfiguredSdkClient(),
           query: options as Record<string, unknown>,
         });
-        const d = unwrapData<{ products: Product[]; pagination: any }>(data);
-        return { data: d?.products ?? [], pagination: d?.pagination };
+        const d = unwrapData<{ products: Product[]; pagination: PaginatedResponse<Product>["pagination"] }>(data);
+        return d
+          ? { data: d.products, pagination: d.pagination }
+          : { data: [], pagination: emptyProductPagination(options) };
       } catch (error: unknown) {
         console.error("Error fetching all products:", error);
         return null;

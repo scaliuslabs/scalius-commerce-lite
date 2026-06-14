@@ -209,7 +209,7 @@ const collectionJsonLd = category
   <Fragment slot="head">
     {
       collectionJsonLd && (
-        <script type="application/ld+json" set:html={collectionJsonLd} />
+        <script is:inline type="application/ld+json" set:html={collectionJsonLd} />
       )
     }
   </Fragment>

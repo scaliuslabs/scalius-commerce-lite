@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from "react";
+import { useState, useEffect, useCallback, type FC } from "react";
 import { ShipmentStatusBadge } from "./shared/StatusBadges";
 import { ShipmentMetadataDisplay } from "../ui/ShipmentMetadataDisplay";
 import { toast } from "sonner";
@@ -22,6 +22,20 @@ type Shipment = ShipmentApiPayload & {
   updatedAt: ShipmentTimestamp;
   lastChecked: ShipmentTimestamp | null;
 };
+
+function normalizeShipment(shipment: ShipmentApiPayload): Shipment {
+  const raw = shipment as Record<string, unknown>;
+  const createdAt = toTimestamp(raw.createdAt) ?? new Date().toISOString();
+  const updatedAt = toTimestamp(raw.updatedAt) ?? createdAt;
+  const lastChecked = shipment.lastChecked ?? updatedAt;
+  return {
+    ...shipment,
+    metadata: toMetadata(raw.metadata),
+    createdAt,
+    updatedAt,
+    lastChecked,
+  };
+}
 
 function toTimestamp(value: unknown): ShipmentTimestamp | null {
   return typeof value === "string" || typeof value === "number" ? value : null;
@@ -50,22 +64,8 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
   );
   const [showMetadata, setShowMetadata] = useState<boolean>(false);
 
-  const normalizeShipment = (shipment: ShipmentApiPayload): Shipment => {
-    const raw = shipment as Record<string, unknown>;
-    const createdAt = toTimestamp(raw.createdAt) ?? new Date().toISOString();
-    const updatedAt = toTimestamp(raw.updatedAt) ?? createdAt;
-    const lastChecked = shipment.lastChecked ?? updatedAt;
-    return {
-      ...shipment,
-      metadata: toMetadata(raw.metadata),
-      createdAt,
-      updatedAt,
-      lastChecked,
-    };
-  };
-
   // Load shipments
-  const fetchShipments = async () => {
+  const fetchShipments = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getOrderShipments({ data: { orderId } });
@@ -76,12 +76,12 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [orderId]);
 
   // Load shipments on component mount
   useEffect(() => {
-    fetchShipments();
-  }, [orderId]);
+    void fetchShipments();
+  }, [fetchShipments]);
 
   // Refresh shipment status
   const handleRefreshStatus = async (shipment: Shipment) => {

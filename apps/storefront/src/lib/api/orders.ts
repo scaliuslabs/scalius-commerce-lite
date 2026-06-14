@@ -6,6 +6,24 @@ import { unwrapData } from "./unwrap";
 import { getApiV1OrdersById } from "@scalius/api-client/sdk";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 
+type CreateOrderResult = {
+  success: boolean;
+  orderId?: string;
+  receiptToken?: string;
+  error?: string;
+};
+
+type OrderStatusData = {
+  status?: string;
+  orderId?: string;
+  receiptToken?: string;
+  error?: string;
+};
+
+type OrderStatusPayload = OrderStatusData & {
+  data?: OrderStatusData;
+};
+
 /**
  * Submits a new order to the backend.
  * This is an authenticated request.
@@ -15,7 +33,7 @@ import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
  */
 export async function createOrder(
   payload: CreateOrderPayload,
-): Promise<{ success: boolean; orderId?: string; receiptToken?: string; error?: any }> {
+): Promise<CreateOrderResult> {
   try {
     // Use fetchWithRetry directly for orders because:
     // 1. We need retries=0 to prevent double ingestion
@@ -70,10 +88,10 @@ export async function createOrder(
         const statusRes = await fetchWithRetry(createApiUrl(`/orders/status/${checkoutToken}`), {}, 2, 5000, true);
 
         if (statusRes.ok) {
-          const statusJson = await statusRes.json() as Record<string, any>;
+          const statusJson = (await statusRes.json()) as OrderStatusPayload;
           // Status endpoint uses ok() wrapper: { success: true, data: { status, orderId } }
           // But 202 responses use raw c.json(): { status: "processing" }
-          const statusData: Record<string, any> = statusJson.data ?? statusJson;
+          const statusData = statusJson.data ?? statusJson;
           if (statusData.status === "completed") {
             return {
               success: true,

@@ -10,13 +10,23 @@ import {
   getAdminRouteContext,
   primeAdminRouteContextCache,
 } from "~/lib/admin-route-context";
-import { ADMIN_ACCESS_DENIED_PATH, shouldAllowAdminPath } from "~/lib/admin-access";
+import {
+  ADMIN_ACCESS_DENIED_PATH,
+  getDefaultAdminPath,
+  shouldAllowAdminPath,
+} from "~/lib/admin-access";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
     // Auth + RBAC guard: redirects to /auth/setup, /auth/login, or /auth/two-factor as needed
     const authContext = await getAdminRouteContext();
-    if (!shouldAllowAdminPath(location.pathname, authContext.hasAdminAccess)) {
+    if (!shouldAllowAdminPath(location.pathname, authContext)) {
+      if (location.pathname === "/admin") {
+        const defaultPath = getDefaultAdminPath(authContext);
+        if (defaultPath !== ADMIN_ACCESS_DENIED_PATH) {
+          throw redirect({ href: defaultPath });
+        }
+      }
       throw redirect({ to: ADMIN_ACCESS_DENIED_PATH });
     }
     return authContext;

@@ -12,6 +12,14 @@ import { CACHE_TTLS } from "../utils/cache-ttls";
 const heroImageSchema = z.object({ url: z.string(), alt: z.string().nullable(), sortOrder: z.number() }).passthrough();
 type HeroImage = z.infer<typeof heroImageSchema>;
 
+const parseHeroImages = (imagesJson: string | null | undefined): HeroImage[] => {
+  try {
+    return imagesJson ? (JSON.parse(imagesJson) as HeroImage[]) : [];
+  } catch {
+    return [];
+  }
+};
+
 // Create an OpenAPIHono app for hero routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -108,10 +116,8 @@ app.openapi(listSlidersRoute, async (c) => {
   const mobileSlider = sliders.find((slider) => slider.type === "mobile");
 
   // Parse the JSON strings into arrays
-  let desktopImages: HeroImage[] = [];
-  try { desktopImages = desktopSlider ? JSON.parse(desktopSlider.images) : []; } catch { desktopImages = []; }
-  let mobileImages: HeroImage[] = [];
-  try { mobileImages = mobileSlider ? JSON.parse(mobileSlider.images) : []; } catch { mobileImages = []; }
+  const desktopImages = parseHeroImages(desktopSlider?.images);
+  const mobileImages = parseHeroImages(mobileSlider?.images);
 
   // Format dates
   const formatSlider = (slider: (typeof sliders)[0] | undefined) => {
@@ -120,7 +126,7 @@ app.openapi(listSlidersRoute, async (c) => {
     return {
       id: slider.id,
       type: slider.type,
-      images: (() => { try { return JSON.parse(slider.images) as HeroImage[]; } catch { return [] as HeroImage[]; } })(),
+      images: parseHeroImages(slider.images),
       isActive: slider.isActive,
       createdAt: slider.createdAt instanceof Date ? slider.createdAt.toISOString() : null,
       updatedAt: slider.updatedAt instanceof Date ? slider.updatedAt.toISOString() : null,
@@ -204,8 +210,7 @@ app.openapi(getSliderByIdRoute, async (c) => {
   }
 
   // Parse the images JSON
-  let images: HeroImage[] = [];
-  try { images = JSON.parse(slider.images); } catch { images = []; }
+  const images = parseHeroImages(slider.images);
 
   // Format the response
   return ok(c, {

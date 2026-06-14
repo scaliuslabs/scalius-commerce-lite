@@ -60,19 +60,6 @@ interface OrderColumnOptions {
   }) => void;
 }
 
-function getRowBorderClass(status: string): string {
-  switch (status.toLowerCase()) {
-    case "delivered":
-      return "border-l-3 border-l-emerald-500";
-    case "shipped":
-      return "border-l-3 border-l-violet-500";
-    case "processing":
-      return "border-l-3 border-l-blue-500";
-    default:
-      return "";
-  }
-}
-
 // PaymentStatusBadge imported from shared StatusBadges registry
 
 function PaymentMethodLabel({ method }: { method: string }) {

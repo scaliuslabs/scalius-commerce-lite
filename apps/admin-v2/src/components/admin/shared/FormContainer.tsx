@@ -8,7 +8,7 @@ import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 interface FormContainerProps<T extends FieldValues> {
   /** The section name shown as breadcrumb link (e.g., "Categories") */
   title: string;
-  /** The entity name (e.g., category name being edited). Falls back to "New"/"Edit" */
+  /** Accepted for older form call sites; the current bottom action bar no longer displays it. */
   entityName?: string;
   isEdit: boolean;
   isSubmitting: boolean;
@@ -37,7 +37,6 @@ interface FormContainerProps<T extends FieldValues> {
  */
 export function FormContainer<T extends FieldValues>({
   title,
-  entityName,
   isEdit,
   isSubmitting,
   backUrl,

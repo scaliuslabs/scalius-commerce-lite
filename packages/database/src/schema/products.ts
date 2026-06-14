@@ -2,7 +2,7 @@
 // Product domain tables: products, images, variants, categories, collections,
 // attributes, attribute values, rich content, and media.
 
-import { sqliteTable, text, integer, real, unique, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
@@ -200,7 +200,7 @@ export const productRichContent = sqliteTable("product_rich_content", {
 export const mediaFolders = sqliteTable("media_folders", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    parentId: text("parent_id").references((): any => mediaFolders.id, { onDelete: "set null" }),
+    parentId: text("parent_id").references((): AnySQLiteColumn => mediaFolders.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

@@ -351,7 +351,7 @@ export async function processOrder(formData: FormData) {
           console.log(
             `Successfully deleted abandoned checkout record: ${checkoutId}`,
           );
-        } catch (err: unknown) {
+        } catch {
           // The try/catch ensures that even if this cleanup fails, the user journey is not interrupted.
           // The error is already logged inside the deleteAbandonedCheckout function.
           console.warn(

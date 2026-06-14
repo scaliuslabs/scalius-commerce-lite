@@ -278,8 +278,10 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
   >
     <img
       id="fullscreen-image"
-      src={primaryImage.zoomUrl}
+      data-zoom-src={primaryImage.zoomUrl}
       alt={`${product.name} — zoomed view`}
+      loading="lazy"
+      decoding="async"
       class="max-w-full max-h-full object-contain transition-transform duration-100 ease-out origin-center will-change-transform"
     />
   </div>
@@ -325,6 +327,22 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
 </style>
 
 <script>
+  type NetworkConnectionInfo = {
+    saveData?: boolean;
+    effectiveType?: string;
+  };
+
+  type BrowserNavigator = Navigator & {
+    connection?: NetworkConnectionInfo;
+  };
+
+  type BrowserWindow = Window & {
+    requestIdleCallback?: (
+      callback: () => void,
+      options?: { timeout?: number },
+    ) => number;
+  };
+
   const imageCache = new Map<string, HTMLImageElement>();
 
   function preloadImage(url: string): Promise<void> {
@@ -341,7 +359,7 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
   }
 
   function canPreloadHeavyImages() {
-    const connection = (navigator as any).connection;
+    const connection = (navigator as BrowserNavigator).connection;
     return (
       !connection?.saveData &&
       (!connection || connection.effectiveType === "4g")
@@ -371,8 +389,9 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
     if (thumbs.length > 0) {
       updateActiveRing(thumbs[0] as HTMLElement);
 
-      if ("requestIdleCallback" in window) {
-        (window as any).requestIdleCallback(preloadInitialGalleryImages, {
+      const requestIdleCallback = (window as BrowserWindow).requestIdleCallback;
+      if (requestIdleCallback) {
+        requestIdleCallback(preloadInitialGalleryImages, {
           timeout: 2000,
         });
       } else {
@@ -566,8 +585,9 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
       const activeThumb = document
         .querySelector(".thumbnail-btn .thumb-ring.\\!border-black")
         ?.closest(".thumbnail-btn") as HTMLElement;
-      let srcToUse =
+      const srcToUse =
         activeThumb?.dataset.zoomUrl ||
+        img.dataset.zoomSrc ||
         (document.getElementById("mobile-main-image") as HTMLImageElement)
           ?.src ||
         "";

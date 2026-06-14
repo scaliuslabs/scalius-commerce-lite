@@ -131,7 +131,9 @@ export function getRootDomainAttr(url?: string): string {
         if (parts.length >= 2 && parts[parts.length - 1] !== "localhost") {
             return `; Domain=.${parts.slice(-2).join(".")}`;
         }
-    } catch { }
+    } catch {
+        return "";
+    }
     return "";
 }
 

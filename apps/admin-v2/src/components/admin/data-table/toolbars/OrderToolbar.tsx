@@ -44,7 +44,6 @@ interface OrderToolbarProps {
   onBulkShip: () => void;
   // Export & refresh
   onExportCSV: () => void;
-  onRefresh: () => void;
   // Auto-refresh
   autoRefreshEnabled: boolean;
   onToggleAutoRefresh: () => void;
@@ -63,7 +62,6 @@ export function OrderToolbar({
   onBulkDelete,
   onBulkShip,
   onExportCSV,
-  onRefresh,
   autoRefreshEnabled,
   onToggleAutoRefresh,
   countdown,

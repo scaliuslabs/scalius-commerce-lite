@@ -1,5 +1,5 @@
 // src/components/admin/OrderForm.tsx
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
@@ -101,43 +101,9 @@ export function OrderForm({
     areas: false,
   });
 
-  // --- DATA LOADING AND SIDE EFFECTS ---
-
-  useEffect(() => {
-    // Sync default values with nanostore on initial load
-    if (defaultValues) {
-      updateOrderItems(defaultValues.items || []);
-      updateShippingCharge(defaultValues.shippingCharge || 0);
-      updateDiscountAmount(defaultValues.discountAmount || null);
-    }
-
-    // Load initial data
-    loadCities();
-    if (isEdit && defaultValues?.city) {
-      loadZones(defaultValues.city);
-    }
-    if (isEdit && defaultValues?.zone) {
-      loadAreas(defaultValues.zone);
-    }
-  }, [isEdit, defaultValues]);
-
-  // Effect to handle Ctrl+Enter for form submission
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (!isSubmitting && form.getValues("items").length > 0) {
-          e.preventDefault();
-          form.handleSubmit(handleSubmit)();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [isSubmitting, form]);
-
   // --- API CALLS ---
 
-  const loadCities = async () => {
+  const loadCities = useCallback(async () => {
     try {
       const data = await getDeliveryLocations({ data: { type: "city" } });
       setLocations((prev) => ({ ...prev, cities: data.locations as DeliveryLocation[] }));
@@ -145,9 +111,9 @@ export function OrderForm({
       console.error("Error loading cities:", error);
       toast.error("Could not load city list. Please refresh the page.");
     }
-  };
+  }, []);
 
-  const loadZones = async (cityId: string) => {
+  const loadZones = useCallback(async (cityId: string) => {
     if (!cityId) {
       setLocations((prev) => ({ ...prev, zones: [], areas: [] }));
       form.setValue("zone", "");
@@ -165,9 +131,9 @@ export function OrderForm({
     } finally {
       setIsLoading((prev) => ({ ...prev, zones: false }));
     }
-  };
+  }, [form]);
 
-  const loadAreas = async (zoneId: string) => {
+  const loadAreas = useCallback(async (zoneId: string) => {
     if (!zoneId) {
       setLocations((prev) => ({ ...prev, areas: [] }));
       form.setValue("area", null);
@@ -183,11 +149,11 @@ export function OrderForm({
     } finally {
       setIsLoading((prev) => ({ ...prev, areas: false }));
     }
-  };
+  }, [form]);
 
   // --- FORM SUBMISSION ---
 
-  const handleSubmit: SubmitHandler<OrderFormValues> = (values) => {
+  const handleSubmit = useCallback<SubmitHandler<OrderFormValues>>((values) => {
     // Find the location objects from state based on the selected IDs
     const city = locations.cities.find((c) => c.id === values.city);
     const zone = locations.zones.find((z) => z.id === values.zone);
@@ -218,7 +184,41 @@ export function OrderForm({
     } else {
       createMutation.mutate(toCreateOrderInput(enrichedValues), { onSuccess });
     }
-  };
+  }, [createMutation, defaultValues?.id, isEdit, locations, navigate, updateMutation]);
+
+  // --- DATA LOADING AND SIDE EFFECTS ---
+
+  useEffect(() => {
+    // Sync default values with nanostore on initial load
+    if (defaultValues) {
+      updateOrderItems(defaultValues.items || []);
+      updateShippingCharge(defaultValues.shippingCharge || 0);
+      updateDiscountAmount(defaultValues.discountAmount || null);
+    }
+
+    // Load initial data
+    void loadCities();
+    if (isEdit && defaultValues?.city) {
+      void loadZones(defaultValues.city);
+    }
+    if (isEdit && defaultValues?.zone) {
+      void loadAreas(defaultValues.zone);
+    }
+  }, [defaultValues, isEdit, loadAreas, loadCities, loadZones]);
+
+  // Effect to handle Ctrl+Enter for form submission
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (!isSubmitting && form.getValues("items").length > 0) {
+          e.preventDefault();
+          void form.handleSubmit(handleSubmit)();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [form, handleSubmit, isSubmitting]);
 
   return (
     <>

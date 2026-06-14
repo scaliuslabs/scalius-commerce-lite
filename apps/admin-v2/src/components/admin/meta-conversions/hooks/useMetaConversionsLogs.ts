@@ -59,8 +59,8 @@ export function useMetaConversionsLogs() {
   }, [logsPagination.page, logsPagination.limit]);
 
   useEffect(() => {
-    fetchLogs();
-  }, [logsPagination.page, logsPagination.limit]);
+    void fetchLogs();
+  }, [fetchLogs]);
 
   const handleClearLogs = async () => {
     setLogsLoading(true);

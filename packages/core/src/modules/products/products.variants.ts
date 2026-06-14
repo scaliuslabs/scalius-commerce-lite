@@ -6,7 +6,7 @@ import {
     products,
     productVariants,
 } from "@scalius/database/schema";
-import { and, sql, eq, asc, isNull } from "drizzle-orm";
+import { and, sql, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";

@@ -4,7 +4,7 @@ import { getSeoSettings } from "@/lib/api";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ locals }) => {
+export const GET: APIRoute = async () => {
   const seoSettings = await getSeoSettings();
 
   let robotsContent = "User-agent: *\nAllow: /"; // Default robots.txt

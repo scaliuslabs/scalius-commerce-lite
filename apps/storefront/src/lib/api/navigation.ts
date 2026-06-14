@@ -5,6 +5,12 @@ import type { NavigationItem } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { unwrapData } from "./unwrap";
 import { getApiV1Navigation } from "@scalius/api-client/sdk";
+import type { GetApiV1NavigationData } from "@scalius/api-client/types";
+
+type StorefrontNavigationQuery = {
+  type: "header" | "footer" | "mobile_menu";
+  format: "nested";
+};
 
 /**
  * Fetches navigation data for specified areas of the site.
@@ -19,9 +25,10 @@ export async function getNavigationData(
     `global_navigation_${type}`,
     async () => {
       try {
+        const query: StorefrontNavigationQuery = { type, format: "nested" };
         const { data } = await getApiV1Navigation({
           client: getConfiguredSdkClient(),
-          query: { type, format: "nested" } as any,
+          query: query as unknown as GetApiV1NavigationData["query"],
         });
         const d = unwrapData<{ navigation: Record<string, NavigationItem[]> }>(data);
         if (d?.navigation) {

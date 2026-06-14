@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, and `MEDIA-001` are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
+Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `RBAC-001`, `STORE-007`, `PERF-004`, and `STORE-008` slice are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
 
 ## Validation Performed
 
@@ -23,11 +23,11 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 - `pnpm --filter @scalius/storefront typecheck`: passed.
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
-- `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 121 files and 773 tests after the admin navigation/freshness, cache-invalidation, and 2FA trust-device boundary slice.
+- `pnpm lint`: passed with no ESLint warnings across API, admin, storefront, api-client, core, database, and shared.
+- `pnpm test`: passed 123 files and 783 tests after the admin/RBAC/CSP/performance/widget-link slice.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm run deploy`: latest admin navigation/freshness, cache-invalidation, and 2FA boundary slice redeployed API `6c8a5df3-1956-4a98-ade0-abc6cacf021f`, admin `be596a08-09c6-49db-841f-140772fa34e0`, and storefront `8eb6cf3a-d57b-4dd4-bc6d-6486a370f3e5`.
-- Live HTTP and browser checks: API health, storefront home, dashboard demo login, authenticated `/admin`, `/admin/products`, `/admin/orders`, and `/admin/customers` returned successfully after redeploy with no error-boundary page, stuck loading state, or captured console errors.
+- Full `pnpm deploy`: latest admin/RBAC/CSP/performance/widget-link/lint-clean slice redeployed API `822d3968-ffc0-4280-9286-f161a4096525`, admin `a6701970-d938-4250-a483-3c6155ab0f89`, and storefront `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`.
+- Live HTTP and browser checks: API health/setup/CSP/auth, storefront home/search/category/product, dashboard demo login, authenticated `/admin`, `/admin/products`, `/admin/orders`, `/admin/media`, and `/admin/settings/account` returned successfully after redeploy with no error-boundary page, stuck loading state, or captured console/runtime errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
@@ -130,6 +130,14 @@ The cache audit found that auth/checkout settings writes updated checkout behavi
 Fix direction: route settings writes through the existing cache invalidation groups, make zero/negative TTL bypass cache reads and writes, and count only fulfilled `true` warm responses.
 
 Status: Verified on 2026-06-14. Auth settings now invalidate the `checkout` group, CSP/security settings invalidate the `layout` group, `cacheMiddleware({ ttl: 0 })` bypasses cache entirely, and purge warm logs count only successful responses. Verification included focused API cache/auth tests, API/storefront typechecks and builds, root tests/lint/env/dist-secret checks, API deploy `76dee35f-507c-4654-a049-d8feb66d63ae`, storefront deploy `e5765834-61cf-4d8a-80ec-eb70a0c9ad3b`, live API analytics no-cache header check, live CSP/API health checks, and live admin/storefront browser smoke.
+
+### STORE-007: Storefront CSP middleware ignored enveloped settings responses
+
+The storefront CSP middleware fetched `/api/v1/storefront/csp` but read the response as a top-level `{ cspAllowedDomains }` object. The API returns the standard success envelope, so refreshed security settings could be cached as empty even after the `layout` cache group was invalidated.
+
+Fix direction: unwrap `data.cspAllowedDomains` while retaining compatibility with the legacy top-level shape, then prove the rendered CSP header includes the configured domains.
+
+Status: Verified on 2026-06-15. `setPageCspHeader()` now accepts both response shapes, and a focused storefront test proves an enveloped CSP response is included in the header. Root warning-free lint/typecheck/test/build/safety gates passed, then full deploy completed to API `822d3968-ffc0-4280-9286-f161a4096525`, admin `a6701970-d938-4250-a483-3c6155ab0f89`, and storefront `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`. Live CSP endpoint and storefront browser smoke passed.
 
 ### PAY-006: Late gateway success can pay terminal orders
 
@@ -375,6 +383,14 @@ Fix direction: split this into small, measured slices. Dashboard activity separa
 
 Status: In Progress as of 2026-06-15. First slice split `/api/v1/admin/dashboard/summary` from `/api/v1/admin/dashboard/activity`, changed the admin home loader to await only summary data while prefetching activity in the background, kept the legacy combined endpoint, added `customers_dashboard_activity_idx` in migration `0041`, regenerated the production-aligned SDK to 254 paths / 352 operations, and added route tests proving summary does not execute the activity query. Second slice moved admin order-detail payment history, currency, and COD tracking warming into `prefetchOrderDetailQueries()` while keeping optional payment/COD/currency prefetch failures non-fatal. Third slice made checkout settings preload only auth settings, moved the default checkout-flow tab to the shared TanStack Query auth-settings cache, and moved always-mounted admin shell settings/Firebase query options into narrow `api-query-options/*` modules. Fourth slice reduced blocking list navigation by caching the admin route context for 15 seconds on the client, priming it after SSR/hydration, switching common list loaders to non-blocking `warmRouteQuery()` client prefetches, rendering cached table rows while `refetchOnMount: "always"` refreshes them, and changing `api.queries.ts` to lazy-load domain server-function modules instead of importing them all at module load. Fifth slice tightened freshness after mutation: profile and 2FA changes clear the admin route-context cache before route invalidation, product/customer/order mutations invalidate dashboard aggregate keys, category mutations invalidate product stats, and bulk shipment from the orders list now invalidates the same list/detail/shipment/dashboard keys as the central mutation hook. Verification: focused dashboard API tests, focused order-detail prefetch tests, focused checkout loader test, broad-barrel/import invalidation scans, focused auth-management tests, affected workspace typechecks/lints, root `pnpm test`, root `pnpm typecheck`, root `pnpm lint`, root `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, local/browser smoke, full deploy to API `6c8a5df3-1956-4a98-ade0-abc6cacf021f`, admin `be596a08-09c6-49db-841f-140772fa34e0`, storefront `8eb6cf3a-d57b-4dd4-bc6d-6486a370f3e5`, live API/storefront/dashboard HTTP checks, live sign-in API check, and live browser `/admin`, `/admin/products`, `/admin/orders`, `/admin/customers` smoke. Remaining slices are broader route/component bundle splitting, heavy chart/editor/export/widget chunks, and orders chunk slimming.
 
+### PERF-004: Admin list/media navigation and storefront product media had avoidable waits
+
+The latest performance pass found that data tables forced a refetch on every remount, `/admin/media` blocked navigation on React Query prefetches that the media manager did not consume, query cache entries were collected after five minutes even during ordinary editing workflows, hidden product zoom modals requested 1400px images on initial product page load, and storefront Cache API metadata advertised SWR directives Cloudflare's Cache API does not honor for `cache.put()`.
+
+Fix direction: let query `staleTime` drive data-table remount behavior, remove unused blocking media prefetches, retain admin caches longer without changing freshness, assign product zoom image `src` only when the modal opens, and keep L2 cache headers to supported max-age semantics.
+
+Status: Verified on 2026-06-15. The changes are implemented, root warning-free lint/typecheck/test/build/env/migration/audit/diff gates passed, and full deploy completed to API `822d3968-ffc0-4280-9286-f161a4096525`, admin `a6701970-d938-4250-a483-3c6155ab0f89`, and storefront `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`. Live Chrome/CDP smoke covered dashboard `/admin`, `/admin/products`, `/admin/orders`, `/admin/media`, `/admin/settings/account`, and storefront `/`, `/search`, `/categories/men-clothing`, `/products/monster-energy-drink` with no console/runtime errors or error-boundary pages.
+
 ### ORDER-009: Admin full order edits can lose inventory-delta retry context
 
 Admin full order edits can replace order/item rows before inventory deltas are fully and durably applied. If release/restore fails or only logs an error after item replacement, the old item context needed for safe retry can be lost.
@@ -409,7 +425,7 @@ Status: Verified on 2026-06-13 and deployed to API version `5a206ef1-adf4-42f3-b
 
 ### ADMIN-001: Admin API wrapper layer was too large and partially outside TypeScript
 
-The legacy `apps/admin-v2/src/lib/api.functions.ts` barrel has been removed. Admin server functions now live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, currently 252 createServerFn() calls. The final widget extraction also moved widget history/placement-target calls to generated SDK request/response types, stripped widget update path IDs from JSON bodies, and tightened widget OpenAPI schemas before regenerating the SDK.
+The legacy `apps/admin-v2/src/lib/api.functions.ts` barrel has been removed. Admin server functions now live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`. Use fresh `rg` scans for volatile function/query counts instead of copying old audit numbers. The final widget extraction also moved widget history/placement-target calls to generated SDK request/response types, stripped widget update path IDs from JSON bodies, and tightened widget OpenAPI schemas before regenerating the SDK.
 
 Fix direction: keep new admin data access in domain-specific server-function slices with generated SDK request types or shared schemas. Do not reintroduce a broad barrel or file-level `@ts-nocheck`.
 
@@ -421,7 +437,39 @@ The admin shell allows users with `role: "admin"` even when they lack RBAC permi
 
 Fix direction: align admin route guard behavior with API RBAC, or enforce role assignment during user creation.
 
-Status: Verified on 2026-06-13. Admin shell access now uses pure permission-based helpers, no longer grants access from legacy `role="admin"` alone, and redirects permissionless users to `/admin/access-denied` while keeping that page reachable.
+Status: Verified on 2026-06-13, with a 2026-06-15 hardening slice verified on deploy/live smoke. Admin shell access now uses pure permission-based helpers, no longer grants access from legacy `role="admin"` alone, and redirects permissionless users to `/admin/access-denied` while keeping that page reachable. The hardening slice now uses the shared page-permission map for deep-link checks, denies unmapped admin pages for non-super-admins, and redirects `/admin` users without `dashboard.view` to their first accessible page.
+
+### ADMIN-009: Admin page deep links can bypass page-level RBAC
+
+The admin shell previously checked only whether the user had any admin permission before rendering `/admin/*` children. Sidebar links were filtered, but direct deep links such as create/edit pages could still mount for a user with an unrelated permission until an API call failed.
+
+Fix direction: enforce the shared admin page-permission map in the TanStack `/admin` route guard, keep `/admin/access-denied` and own account settings reachable, fail closed for unmapped pages, and route `/admin` to the first accessible page when the user lacks `dashboard.view`.
+
+Status: Verified on 2026-06-15. Focused `admin-access` tests cover product view/create/edit, own account, `/admin` fallback, unmapped paths, and super-admin mapped access. Root warning-free lint/typecheck/test/build/env/migration/audit/diff gates passed, full deploy completed to API `822d3968-ffc0-4280-9286-f161a4096525`, admin `a6701970-d938-4250-a483-3c6155ab0f89`, and storefront `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`, and live dashboard route smoke passed.
+
+### ADMIN-010: Product list SSR hydration could mismatch on first render
+
+The product list loader fired category-form and product-stats prefetches without awaiting them even though the route UI could consume those query results during first render. On a fresh deployment this could produce a different dehydrated query cache between SSR and hydration. Shared date cells also render localized timestamp text that can differ across the server/client boundary.
+
+Fix direction: await query data that the first render can consume, avoid fire-and-forget prefetches for hydration-visible data, and suppress hydration warnings only for known timestamp text drift.
+
+Status: Verified on 2026-06-15. `/admin/products` now awaits product list, category form options, and product stats together before SSR hydration, while shared date-cell text uses `suppressHydrationWarning`. Admin typecheck/lint passed, full root gates passed, admin deployed as `a6701970-d938-4250-a483-3c6155ab0f89`, and live `/admin/products` Chrome/CDP smoke had a 200 document response with no console/runtime errors or error-boundary page.
+
+### RBAC-001: Permission revocations can stay stale across isolates
+
+RBAC permission reads used a five-minute in-memory cache before checking KV. If a role or override was changed in another isolate, the local memory cache could continue authorizing revoked access. Some RBAC mutation routes also cleared only local memory or omitted the KV namespace when calling helper invalidators.
+
+Fix direction: treat KV as the cross-isolate permission-cache source of truth when available, force a DB refresh on KV misses, pass KV through API RBAC reads/mutations, and clear every assigned user's cache after role permission edits.
+
+Status: Verified on 2026-06-15. Focused core and API middleware tests cover KV-backed permission resolution and stale local memory after KV invalidation. Root warning-free lint/typecheck/test/build/env/migration/audit/diff gates passed, API deployed as `822d3968-ffc0-4280-9286-f161a4096525`, and live auth/API/dashboard smoke passed.
+
+### STORE-008: Widget homepage content links to nonexistent collection routes
+
+Local storefront smoke found stored/generated widget HTML linking to `/collections` and `/collections/all`, but the storefront does not currently expose those collection-list routes. The links caused user-visible 404 navigation from the homepage.
+
+Fix direction: keep stored widget content portable, but normalize known storefront-only link targets at render time so generated/stored widgets do not need to be rewritten in the database.
+
+Status: Verified on 2026-06-15. Storefront widget content now rewrites internal `/collections` and `/collections/all` hrefs to `/search`, preserving query strings and hashes while leaving product and external links alone. A shared widget-rendering test covers the rewrite, root gates passed, storefront deployed as `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`, and live storefront route smoke confirmed no bad collection links on the checked pages.
 
 ### ADMIN-003: Admin list loaders do not track search params
 

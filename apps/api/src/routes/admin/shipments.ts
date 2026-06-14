@@ -1,5 +1,5 @@
 // src/server/routes/admin/shipments.ts
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { getShipment, deleteShipmentRecord, checkShipmentStatus } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
 import { deliveryShipments, orders } from "@scalius/database/schema";
@@ -12,6 +12,9 @@ import { successEnvelope, messageResponse, errorResponses } from "../../schemas/
 import { deliveryShipmentSchema } from "../../schemas/entities";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
 // ─── Inline schemas ──
 
@@ -108,7 +111,7 @@ const checkStatusRoute = createRoute({
     }
 });
 
-app.openapi(checkStatusRoute, (async (c: any) => {
+app.openapi(checkStatusRoute, (async (c: AdminRouteContext<typeof checkStatusRoute>) => {
     const db = c.get("db");
     const shipmentId = c.req.valid("param").id;
 
@@ -189,6 +192,6 @@ app.openapi(checkStatusRoute, (async (c: any) => {
             lastChecked: now.toISOString()
         }
     });
-}) as any);
+}) as unknown as AdminRouteHandler<typeof checkStatusRoute>);
 
 export { app as adminShipmentRoutes };

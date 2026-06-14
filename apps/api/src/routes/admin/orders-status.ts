@@ -1,4 +1,4 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
 import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
@@ -14,6 +14,9 @@ import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
 // ─── Inline response schemas ────────────────────────────────────────────────
 
@@ -119,11 +122,11 @@ const getCodRoute = createRoute({
     }
 });
 
-app.openapi(getCodRoute, (async (c: any) => {
+app.openapi(getCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const tracking = await c.get("db").select().from(codTracking).where(eq(codTracking.orderId, orderId)).get();
     return ok(c, { tracking: tracking ?? null });
-}) as any);
+});
 
 // ─── POST /:id/cod ───────────────────────────────────────────────────────────
 
@@ -482,7 +485,7 @@ const checkShipmentStatusRoute = createRoute({
     }
 });
 
-app.openapi(checkShipmentStatusRoute, (async (c: any) => {
+app.openapi(checkShipmentStatusRoute, (async (c: AdminRouteContext<typeof checkShipmentStatusRoute>) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
     const db = c.get("db");
 
@@ -493,7 +496,7 @@ app.openapi(checkShipmentStatusRoute, (async (c: any) => {
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const updatedShipment = await checkShipmentStatus(db, shipmentId, encryptionKey);
     return ok(c, updatedShipment);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof checkShipmentStatusRoute>);
 
 // ─── POST /:id/shipments/{shipmentId}/refresh ─────────────────────────────────
 

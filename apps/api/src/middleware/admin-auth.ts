@@ -155,7 +155,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     const db = c.get("db");
     // getUserPermissions already checks isSuperAdmin internally and returns ALL
     // permissions for super admins — no need for a separate isSuperAdmin() query.
-    const userPerms = await getUserPermissions(db, user.id);
+    const userPerms = await getUserPermissions(db, user.id, c.env.CACHE);
 
     // Gate: must have at least one RBAC permission (super admins get all).
     // Do NOT fall back to legacy user.role check — RBAC is the source of truth.
@@ -176,7 +176,9 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     let hasRequiredPermission = false;
 
-    if (routePermission.permission) {
+    if (routePermission.allowAnyAdmin) {
+        hasRequiredPermission = true;
+    } else if (routePermission.permission) {
         hasRequiredPermission = userPerms.has(routePermission.permission);
     } else if (routePermission.anyOf) {
         hasRequiredPermission = routePermission.anyOf.some((p: string) => userPerms.has(p));

@@ -26,20 +26,6 @@ export function useMetaConversionsSettings(initialSettings?: MetaConversionsSett
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
-    if (initialSettings) {
-      setFormData({
-        pixelId: initialSettings.pixelId || "",
-        accessToken: initialSettings.accessToken || "",
-        testEventCode: initialSettings.testEventCode || "",
-        isEnabled: initialSettings.isEnabled || false,
-        logRetentionDays: initialSettings.logRetentionDays || 30,
-      });
-    } else {
-      fetchSettings();
-    }
-  }, [initialSettings]);
-
-  useEffect(() => {
     const currentValues = settings || DEFAULT_FORM_DATA;
     const hasChanges = Object.keys(formData).some(
       (key) =>
@@ -73,6 +59,20 @@ export function useMetaConversionsSettings(initialSettings?: MetaConversionsSett
       setIsSettingsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (initialSettings) {
+      setFormData({
+        pixelId: initialSettings.pixelId || "",
+        accessToken: initialSettings.accessToken || "",
+        testEventCode: initialSettings.testEventCode || "",
+        isEnabled: initialSettings.isEnabled || false,
+        logRetentionDays: initialSettings.logRetentionDays || 30,
+      });
+    } else {
+      void fetchSettings();
+    }
+  }, [fetchSettings, initialSettings]);
 
   const handleSaveSettings = async () => {
     setIsSettingsLoading(true);

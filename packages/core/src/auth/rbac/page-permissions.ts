@@ -9,12 +9,17 @@ export interface PagePermissionConfig {
   anyOf?: string[];
   // All of these permissions are required
   allOf?: string[];
+  // Authenticated users with any admin access may open this page.
+  allowAnyAdmin?: boolean;
 }
 
 // Admin page route to permission mapping.
 // Routes are matched from most specific to least specific.
-// Routes not listed here are accessible to any authenticated admin.
+// Routes not listed here should be treated as unmapped and denied by the admin shell.
 const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
+  // Explicit permissionless admin utility pages
+  "/admin/access-denied": { allowAnyAdmin: true },
+
   // Dashboard
   "/admin": { permission: PERMISSIONS.DASHBOARD_VIEW },
 
@@ -48,6 +53,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Widgets
   "/admin/widgets": { permission: PERMISSIONS.WIDGETS_VIEW },
   "/admin/widgets/create": { permission: PERMISSIONS.WIDGETS_CREATE },
+  "/admin/widgets/new": { permission: PERMISSIONS.WIDGETS_CREATE },
   "/admin/widgets/trash": { permission: PERMISSIONS.WIDGETS_VIEW },
 
   // Orders
@@ -70,7 +76,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/customers/new": { permission: PERMISSIONS.CUSTOMERS_CREATE },
 
   // Settings - Account is always accessible (own account management)
-  // "/admin/settings/account" is intentionally NOT listed here
+  "/admin/settings/account": { allowAnyAdmin: true },
   "/admin/settings": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/notifications": { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
@@ -119,6 +125,19 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     { pattern: /^\/admin\/widgets\/[^/]+$/, config: { permission: PERMISSIONS.WIDGETS_EDIT } },
   ];
 
+const DEFAULT_ADMIN_PAGE_CANDIDATES = [
+  "/admin",
+  "/admin/products",
+  "/admin/orders",
+  "/admin/customers",
+  "/admin/categories",
+  "/admin/collections",
+  "/admin/pages",
+  "/admin/widgets",
+  "/admin/media",
+  "/admin/settings/account",
+] as const;
+
 /**
  * Get the permission config for a given admin page route.
  * Returns undefined if no specific permission is required (e.g., /admin/settings/account).
@@ -157,7 +176,8 @@ export function hasPageAccess(
   if (isSuperAdmin) return true;
 
   const config = getPagePermission(pathname);
-  if (!config) return true; // No specific permission required
+  if (!config) return false;
+  if (config.allowAnyAdmin) return true;
 
   if (config.permission) {
     return permissions.has(config.permission);
@@ -172,4 +192,15 @@ export function hasPageAccess(
   }
 
   return true;
+}
+
+export function getDefaultAdminPage(
+  permissions: Set<string>,
+  isSuperAdmin: boolean
+): string | null {
+  return (
+    DEFAULT_ADMIN_PAGE_CANDIDATES.find((path) =>
+      hasPageAccess(permissions, isSuperAdmin, path)
+    ) ?? null
+  );
 }

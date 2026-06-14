@@ -19,10 +19,28 @@ interface DeliveryShipmentManagerProps {
 
 declare global {
   interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- window bridge interface between Astro page script and React component
     shipmentActions: {
-      createShipment: (orderId: string, providerId: string, options?: Record<string, unknown>) => Promise<any>;
-      checkShipmentStatus: (shipmentId: string) => Promise<any>;
+      createShipment: (
+        orderId: string,
+        providerId: string,
+        options?: Record<string, unknown>,
+      ) => Promise<{
+        success: boolean;
+        message?: string;
+        data: ExtendedDeliveryShipment;
+      }>;
+      checkShipmentStatus: (shipmentId: string) => Promise<{
+        success: boolean;
+        message?: string;
+        data: {
+          status: string;
+          rawStatus?: string | null;
+          metadata?: string | null;
+          lastChecked?: string | null;
+          statusChanged?: boolean;
+          orderStatusUpdate?: boolean;
+        };
+      }>;
       deleteShipment: (shipmentId: string) => Promise<boolean>;
     };
   }
@@ -149,10 +167,12 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
             ? {
               ...s,
               status: result.data.status,
-              rawStatus: result.data.rawStatus,
-              metadata: result.data.metadata,
+              rawStatus: result.data.rawStatus ?? null,
+              metadata: result.data.metadata ?? null,
               lastChecked:
-                result.data.lastChecked || new Date().toISOString(),
+                result.data.lastChecked
+                  ? new Date(result.data.lastChecked)
+                  : new Date(),
             }
             : s,
         ),
@@ -209,7 +229,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       return Object.entries(data)
         .map(([key, value]) => `${key}: ${value}`)
         .join(", ");
-    } catch (error: unknown) {
+    } catch {
       return metadata;
     }
   };

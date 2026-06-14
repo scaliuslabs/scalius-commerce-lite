@@ -1,7 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "~/components/ui/badge";
 import { Image as ImageIcon, Copy } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { toast } from "sonner";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";

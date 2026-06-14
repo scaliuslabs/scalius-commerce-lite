@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { heroSliders } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 import { sql, and, eq, isNull } from "drizzle-orm";
@@ -10,6 +11,7 @@ import { nullableTimestampSchema } from "../../../schemas/timestamps";
 import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
+type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 
 const sliderImageSchema = z.object({
     id: z.string(),
@@ -17,6 +19,7 @@ const sliderImageSchema = z.object({
     title: z.string(),
     link: z.string()
 });
+type SliderImage = z.infer<typeof sliderImageSchema>;
 
 const createHeroSliderSchema = z.object({
     type: z.enum(["desktop", "mobile"]),
@@ -30,9 +33,9 @@ const updateHeroSliderSchema = z.object({
     isActive: z.boolean().optional()
 });
 
-const parseSliderImages = (images: string): unknown[] => {
+const parseSliderImages = (images: string): SliderImage[] => {
     try {
-        return JSON.parse(images);
+        return JSON.parse(images) as SliderImage[];
     } catch {
         return [];
     }
@@ -61,12 +64,12 @@ const listRoute = createRoute({
     }
 });
 
-app.openapi(listRoute, (async (c: any) => {
+app.openapi(listRoute, (async (c) => {
     const db = c.get("db");
     const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
-    const parsedData = data.map((slider: any) => ({ ...slider, images: parseSliderImages(slider.images) }));
+    const parsedData = data.map((slider: typeof heroSliders.$inferSelect) => ({ ...slider, images: parseSliderImages(slider.images) }));
     return ok(c, parsedData);
-}) as any);
+}) as AppRouteHandler<typeof listRoute>);
 
 // ── Create Slider ──
 
@@ -82,7 +85,7 @@ const createSliderRoute = createRoute({
     }
 });
 
-app.openapi(createSliderRoute, (async (c: any) => {
+app.openapi(createSliderRoute, (async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const existingSlider = await db.select().from(heroSliders).where(sql`type = ${data.type} AND deleted_at IS NULL`).get();
@@ -105,7 +108,7 @@ app.openapi(createSliderRoute, (async (c: any) => {
 
     await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return created(c, { ...slider, images: parseSliderImages(slider.images) });
-}) as any);
+}) as AppRouteHandler<typeof createSliderRoute>);
 
 // ── Get Slider ──
 
@@ -123,14 +126,14 @@ const getByIdRoute = createRoute({
     }
 });
 
-app.openapi(getByIdRoute, (async (c: any) => {
+app.openapi(getByIdRoute, (async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
     if (!slider) throw new NotFoundError("Slider not found");
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
-}) as any);
+}) as AppRouteHandler<typeof getByIdRoute>);
 
 // ── Update Slider ──
 
@@ -149,7 +152,7 @@ const updateSliderRoute = createRoute({
     }
 });
 
-app.openapi(updateSliderRoute, (async (c: any) => {
+app.openapi(updateSliderRoute, (async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
@@ -168,7 +171,7 @@ app.openapi(updateSliderRoute, (async (c: any) => {
     if (!slider) throw new NotFoundError("Slider not found");
     await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
-}) as any);
+}) as AppRouteHandler<typeof updateSliderRoute>);
 
 // ── Delete Slider ──
 
@@ -186,7 +189,7 @@ const deleteSliderRoute = createRoute({
     }
 });
 
-app.openapi(deleteSliderRoute, (async (c: any) => {
+app.openapi(deleteSliderRoute, (async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const [slider] = await db.update(heroSliders)
@@ -197,6 +200,6 @@ app.openapi(deleteSliderRoute, (async (c: any) => {
     if (!slider) throw new NotFoundError("Slider not found");
     await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
-}) as any);
+}) as AppRouteHandler<typeof deleteSliderRoute>);
 
 export { app as heroSlidersRoutes };

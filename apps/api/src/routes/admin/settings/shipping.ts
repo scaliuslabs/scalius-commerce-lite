@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { sql, eq, and, or, isNull, like, asc, desc } from "drizzle-orm";
 import { shippingMethods } from "@scalius/database/schema";
@@ -9,6 +10,8 @@ import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse,
 import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
+type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
 
 const createShippingMethodSchema = z.object({
     name: z.string().min(1, "Name is required").max(100),
@@ -147,7 +150,7 @@ const createRoute_ = createRoute({
     }
 });
 
-app.openapi(createRoute_, (async (c: any) => {
+app.openapi(createRoute_, (async (c: AppRouteContext<typeof createRoute_>) => {
     const db = c.get("db");
     try {
         const data = c.req.valid("json");
@@ -188,7 +191,7 @@ app.openapi(createRoute_, (async (c: any) => {
         }
         throw error;
     }
-}) as any);
+}) as unknown as AppRouteHandler<typeof createRoute_>);
 
 // ── Get Shipping Method ──
 
@@ -206,7 +209,7 @@ const getByIdRoute = createRoute({
     }
 });
 
-app.openapi(getByIdRoute, (async (c: any) => {
+app.openapi(getByIdRoute, (async (c: AppRouteContext<typeof getByIdRoute>) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
 
@@ -223,7 +226,7 @@ app.openapi(getByIdRoute, (async (c: any) => {
         console.error(`Error fetching shipping method ${id}:`, error);
         throw error;
     }
-}) as any);
+}) as unknown as AppRouteHandler<typeof getByIdRoute>);
 
 // ── Update Shipping Method ──
 
@@ -242,7 +245,7 @@ const updateRoute = createRoute({
     }
 });
 
-app.openapi(updateRoute, (async (c: any) => {
+app.openapi(updateRoute, (async (c: AppRouteContext<typeof updateRoute>) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
 
@@ -297,7 +300,7 @@ app.openapi(updateRoute, (async (c: any) => {
         }
         throw error;
     }
-}) as any);
+}) as unknown as AppRouteHandler<typeof updateRoute>);
 
 // ── Delete Shipping Method ──
 

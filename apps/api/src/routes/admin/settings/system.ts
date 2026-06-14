@@ -284,7 +284,7 @@ app.openapi(getFirebaseRoute, async (c) => {
         results.forEach((row) => {
             if (row.key === "service_account") config.serviceAccount = row.value ? MASKED : "";
             if (row.key === "public_config") {
-                try { config.publicConfig = JSON.parse(row.value); } catch (_) { config.publicConfig = {}; }
+                try { config.publicConfig = JSON.parse(row.value); } catch { config.publicConfig = {}; }
             }
         });
 
@@ -321,7 +321,7 @@ app.openapi(saveFirebaseRoute, async (c) => {
                         .values({ id: `set_${nanoid(10)}`, key: "service_account", value: serviceAccount, type: "json", category: "firebase" })
                         .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: serviceAccount, updatedAt: sql`(unixepoch())` } })
                 );
-            } catch (e: unknown) {
+            } catch {
                 throw new ValidationError("Invalid Service Account JSON");
             }
         }

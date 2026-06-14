@@ -48,7 +48,7 @@ Current related issue: none currently tracked; root tests pass.
 
 ### "Root tests pass with 9 files and 143 tests"
 
-This is stale. The latest root test run reported 115 files and 748 tests passing.
+This is stale. Do not quote old suite counts from historical audits; run `pnpm test` for the current file/test count when the count matters.
 
 ### "pnpm dev starts only admin + API"
 

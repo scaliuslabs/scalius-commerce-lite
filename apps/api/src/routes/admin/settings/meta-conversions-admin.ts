@@ -1,13 +1,16 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { sql, eq, desc, count } from "drizzle-orm";
 import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
 
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
-import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
+type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
 
 const metaConversionsSettingsSchema = z.object({
     pixelId: z.string().optional(),
@@ -41,12 +44,12 @@ const getSettingsRoute = createRoute({
     }
 });
 
-app.openapi(getSettingsRoute, (async (c: any) => {
+app.openapi(getSettingsRoute, (async (c) => {
     const db = c.get("db");
     const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
     const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
     return ok(c, { settings: maskedSettings });
-}) as any);
+}) as AppRouteHandler<typeof getSettingsRoute>);
 
 // ── Save Settings ──
 
@@ -63,32 +66,30 @@ const saveSettingsRoute = createRoute({
     }
 });
 
-app.openapi(saveSettingsRoute, (async (c: any) => {
+app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRoute>) => {
     const db = c.get("db");
     const validation = c.req.valid("json");
-    let { pixelId, accessToken, testEventCode, isEnabled, logRetentionDays } = validation;
+    const { pixelId, testEventCode, isEnabled, logRetentionDays } = validation;
+    let { accessToken } = validation;
     const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
 
     if (accessToken === MASKED_VALUE && existingSettings?.accessToken) {
         accessToken = existingSettings.accessToken;
     }
 
-    let resultArr;
-    if (existingSettings) {
-        resultArr = await db.update(metaConversionsSettings)
+    const resultArr = existingSettings
+        ? await db.update(metaConversionsSettings)
             .set({ pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, updatedAt: sql`(cast(strftime('%s','now') as int))` })
-            .where(eq(metaConversionsSettings.id, "singleton")).returning();
-    } else {
-        resultArr = await db.insert(metaConversionsSettings)
+            .where(eq(metaConversionsSettings.id, "singleton")).returning()
+        : await db.insert(metaConversionsSettings)
             .values({ id: "singleton", pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, createdAt: sql`(cast(strftime('%s','now') as int))`, updatedAt: sql`(cast(strftime('%s','now') as int))` })
             .returning();
-    }
     const result = resultArr[0];
 
     if (!result) throw new ValidationError("Failed to save settings");
     const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
     return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
-}) as any);
+}) as unknown as AppRouteHandler<typeof saveSettingsRoute>);
 
 // ── Get Logs ──
 
@@ -123,7 +124,7 @@ const getLogsRoute = createRoute({
     }
 });
 
-app.openapi(getLogsRoute, (async (c: any) => {
+app.openapi(getLogsRoute, (async (c: AppRouteContext<typeof getLogsRoute>) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     const page = query.page;
@@ -142,7 +143,7 @@ app.openapi(getLogsRoute, (async (c: any) => {
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         retention: { days: retentionDays, hours: retentionDays * 24 }
     });
-}) as any);
+}) as unknown as AppRouteHandler<typeof getLogsRoute>);
 
 // ── Clear Logs ──
 

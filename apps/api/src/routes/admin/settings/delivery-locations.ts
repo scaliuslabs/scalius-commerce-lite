@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
@@ -10,6 +11,15 @@ import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } f
 import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
+type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+
+const parseJsonObject = (value: string | null): Record<string, unknown> => {
+    try {
+        return value ? JSON.parse(value) as Record<string, unknown> : {};
+    } catch {
+        return {};
+    }
+};
 
 const locationSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -75,7 +85,7 @@ app.openapi(listRoute, async (c) => {
         const limit = query.limit;
         const offset = (page - 1) * limit;
 
-        let conditions = [isNull(deliveryLocations.deletedAt)];
+        const conditions = [isNull(deliveryLocations.deletedAt)];
 
         if (type) conditions.push(eq(deliveryLocations.type, type));
         if (parentId) conditions.push(eq(deliveryLocations.parentId, parentId));
@@ -99,10 +109,8 @@ app.openapi(listRoute, async (c) => {
         const totalCount = countResult?.count || 0;
 
         const formattedLocations = locations.map((location) => {
-            let externalIds = {};
-            let metadata = {};
-            try { externalIds = location.externalIds ? JSON.parse(location.externalIds) : {}; } catch { externalIds = {}; }
-            try { metadata = location.metadata ? JSON.parse(location.metadata) : {}; } catch { metadata = {}; }
+            const externalIds = parseJsonObject(location.externalIds);
+            const metadata = parseJsonObject(location.metadata);
             return {
                 ...location,
                 externalIds,
@@ -140,7 +148,7 @@ const createLocationRoute = createRoute({
     }
 });
 
-app.openapi(createLocationRoute, (async (c: any) => {
+app.openapi(createLocationRoute, (async (c) => {
     try {
         const db = c.get("db");
         const data = c.req.valid("json");
@@ -151,7 +159,7 @@ app.openapi(createLocationRoute, (async (c: any) => {
         console.error("Error creating delivery location:", error);
         throw error;
     }
-}) as any);
+}) as AppRouteHandler<typeof createLocationRoute>);
 
 // ── Delete All Locations ──
 
@@ -284,10 +292,8 @@ app.openapi(updateLocationRoute, async (c) => {
 
         if (!updatedLocation) throw new NotFoundError("Location not found");
 
-        let externalIds = {};
-        let metadata = {};
-        try { externalIds = updatedLocation.externalIds ? JSON.parse(updatedLocation.externalIds) : {}; } catch { externalIds = {}; }
-        try { metadata = updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {}; } catch { metadata = {}; }
+        const externalIds = parseJsonObject(updatedLocation.externalIds);
+        const metadata = parseJsonObject(updatedLocation.metadata);
         await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return ok(c, {
             ...updatedLocation,

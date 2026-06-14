@@ -1,7 +1,7 @@
 // src/components/ProductShortcode.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { ProductPageData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,10 +44,14 @@ export default function ProductShortcode({
     "<!--variant_images:enabled-->",
   );
 
-  const sizeOptions = [...new Set(variants.map((v) => v.size).filter(Boolean))];
-  const colorOptions = [
-    ...new Set(variants.map((v) => v.color).filter(Boolean)),
-  ];
+  const sizeOptions = useMemo(
+    () => [...new Set(variants.map((v) => v.size).filter(Boolean))],
+    [variants],
+  );
+  const colorOptions = useMemo(
+    () => [...new Set(variants.map((v) => v.color).filter(Boolean))],
+    [variants],
+  );
 
   const matchingVariant = variants.find(
     (v) =>

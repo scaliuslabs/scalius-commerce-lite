@@ -153,7 +153,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         const responseText = await response.text();
         try {
           responseData = JSON.parse(responseText);
-        } catch (jsonError: unknown) {
+        } catch {
           // If it's an HTML error page from Laravel, try to extract the error message
           let errorMessage = "Invalid JSON response";
           if (responseText.includes("<!DOCTYPE html>")) {
@@ -171,7 +171,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
             message: `${errorMessage}`,
           };
         }
-      } catch (parseError: unknown) {
+      } catch {
         return {
           success: false,
           message: `Failed to parse API response: ${response.statusText}`,

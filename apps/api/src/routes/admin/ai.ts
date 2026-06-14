@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
@@ -119,6 +120,7 @@ type GenerationUsage = {
   outputTokens?: number;
   totalTokens?: number;
 };
+type ApiContext = Context<{ Bindings: Env }>;
 
 export interface WidgetGenerationResult {
   text: string;
@@ -267,7 +269,7 @@ function validatePromptPayload(prompt: string, images: Array<{ url: string; mime
   }
 }
 
-export async function enforceAiRateLimit(c: any): Promise<void> {
+export async function enforceAiRateLimit(c: ApiContext): Promise<void> {
   const kv = c.env.CACHE as KVNamespace | undefined;
   if (!kv) return;
 
@@ -896,18 +898,19 @@ export function streamWidgetContent(
       }
 
       const text = await finalizeStreamedWidgetContent(completeRawText, options, capabilities, promptType);
-      let usage: GenerationUsage = {};
-      try {
-        const usageResult = (result as unknown as { totalUsage?: PromiseLike<GenerationUsage> }).totalUsage;
-        const totalUsage = usageResult ? await usageResult : undefined;
-        usage = {
-          inputTokens: totalUsage?.inputTokens,
-          outputTokens: totalUsage?.outputTokens,
-          totalTokens: totalUsage?.totalTokens,
-        };
-      } catch {
-        usage = {};
-      }
+      const usage: GenerationUsage = await (async () => {
+        try {
+          const usageResult = (result as unknown as { totalUsage?: PromiseLike<GenerationUsage> }).totalUsage;
+          const totalUsage = usageResult ? await usageResult : undefined;
+          return {
+            inputTokens: totalUsage?.inputTokens,
+            outputTokens: totalUsage?.outputTokens,
+            totalTokens: totalUsage?.totalTokens,
+          };
+        } catch {
+          return {};
+        }
+      })();
 
       return { text, usage };
     },
@@ -960,7 +963,7 @@ async function generateStagedPlan(
   }
 }
 
-export async function runtimeSettings(c: any) {
+export async function runtimeSettings(c: ApiContext) {
   const db = c.get('db');
   return getWidgetAiRuntimeSettings(db, c.env, getCredentialEncryptionKey(c.env));
 }

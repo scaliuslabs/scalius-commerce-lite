@@ -47,7 +47,8 @@ app.use(
   }),
 );
 
-const filterResponseSchema = successEnvelope(z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), values: z.array(z.string()) }).passthrough()));
+const attributeFilterSchema = z.object({ id: z.string(), name: z.string(), slug: z.string(), values: z.array(z.string()) }).passthrough();
+const filterResponseSchema = successEnvelope(z.object({ filters: z.array(attributeFilterSchema) }));
 
 // GET /attributes/filterable
 const filterableRoute = createRoute({
@@ -64,11 +65,11 @@ const filterableRoute = createRoute({
   }
 });
 
-app.openapi(filterableRoute, (async (c: any) => {
+app.openapi(filterableRoute, async (c) => {
   const db = c.get("db");
   const result = await getPublicFilterableAttributes(db);
   return ok(c, result);
-}) as any);
+});
 
 // GET /attributes/category/:categoryId
 const categoryAttributesRoute = createRoute({
@@ -90,12 +91,12 @@ const categoryAttributesRoute = createRoute({
   }
 });
 
-app.openapi(categoryAttributesRoute, (async (c: any) => {
+app.openapi(categoryAttributesRoute, async (c) => {
   const db = c.get("db");
   const { categoryId } = c.req.valid("param");
   const result = await getPublicAttributesByCategory(db, categoryId);
   return ok(c, result);
-}) as any);
+});
 
 // GET /attributes/category-slug/:categorySlug
 const categorySlugAttributesRoute = createRoute({
@@ -118,7 +119,7 @@ const categorySlugAttributesRoute = createRoute({
   }
 });
 
-app.openapi(categorySlugAttributesRoute, (async (c: any) => {
+app.openapi(categorySlugAttributesRoute, async (c) => {
   const db = c.get("db");
   const { categorySlug } = c.req.valid("param");
 
@@ -133,7 +134,7 @@ app.openapi(categorySlugAttributesRoute, (async (c: any) => {
 
   const result = await getPublicAttributesByCategory(db, category.id);
   return ok(c, result);
-}) as any);
+});
 
 // GET /attributes/search-filters
 const searchFiltersRoute = createRoute({
@@ -156,7 +157,7 @@ const searchFiltersRoute = createRoute({
   }
 });
 
-app.openapi(searchFiltersRoute, (async (c: any) => {
+app.openapi(searchFiltersRoute, async (c) => {
   const db = c.get("db");
   const { q: query, categoryId } = c.req.valid("query");
 
@@ -164,7 +165,7 @@ app.openapi(searchFiltersRoute, (async (c: any) => {
     return ok(c, { filters: [] });
   }
 
-  let searchConditions = [
+  const searchConditions = [
     eq(products.isActive, true),
     isNull(products.deletedAt),
   ];
@@ -189,7 +190,13 @@ app.openapi(searchFiltersRoute, (async (c: any) => {
   }
 
   // 2. Get all categories from matching products
-  const categoryIds: string[] = [...new Set<string>(matchingProducts.map((p: any) => p.categoryId).filter((id: any): id is string => id != null))];
+  const categoryIds = [
+    ...new Set(
+      matchingProducts
+        .map((product) => product.categoryId)
+        .filter((id): id is string => id != null),
+    ),
+  ];
 
   // 3. Get all filterable attributes that have values in products of these categories
   const searchAttributes = await db
@@ -219,17 +226,22 @@ app.openapi(searchFiltersRoute, (async (c: any) => {
     );
 
   // 4. Group by attribute and collect values
-  const attributeMap = new Map();
-  searchAttributes.forEach((item: any) => {
-    if (!attributeMap.has(item.attributeId)) {
-      attributeMap.set(item.attributeId, {
+  const attributeMap = new Map<
+    string,
+    { id: string; name: string; slug: string; values: Set<string> }
+  >();
+  searchAttributes.forEach((item) => {
+    let attribute = attributeMap.get(item.attributeId);
+    if (!attribute) {
+      attribute = {
         id: item.attributeId,
         name: item.attributeName,
         slug: item.attributeSlug,
         values: new Set()
-      });
+      };
+      attributeMap.set(item.attributeId, attribute);
     }
-    attributeMap.get(item.attributeId).values.add(item.value);
+    attribute.values.add(item.value);
   });
 
   // 5. Convert to final format
@@ -241,6 +253,6 @@ app.openapi(searchFiltersRoute, (async (c: any) => {
   }));
 
   return ok(c, { filters });
-}) as any);
+});
 
 export { app as attributeRoutes };

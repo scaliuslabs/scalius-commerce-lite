@@ -89,6 +89,36 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("passes the runtime KV binding into permission resolution", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
+
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/products", "GET", { env: { CACHE: cache } }) as never,
+      next,
+    );
+
+    expect(mocks.getUserPermissions).toHaveBeenCalledWith(
+      { id: "db" },
+      "admin_1",
+      cache,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows own-account endpoints for any verified admin with admin access", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/auth/account-security", "GET") as never,
+      next,
+    );
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("stores the Better Auth session on the Hono context", async () => {
     mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
     const next = vi.fn().mockResolvedValue(undefined);

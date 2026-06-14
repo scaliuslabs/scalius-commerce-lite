@@ -134,7 +134,7 @@ app.openapi(getGeneralRoute, async (c) => {
     const db = c.get("db");
     const result = await getGeneralSettings(db);
     return ok(c, result);
-  } catch (error: unknown) {
+  } catch {
     return ok(c, { headerConfig: {}, footerConfig: {} });
   }
 });
@@ -445,7 +445,7 @@ app.openapi(getSeoRoute, async (c) => {
     const db = c.get("db");
     const result = await getSeoSettings(db);
     return ok(c, result);
-  } catch (error: unknown) {
+  } catch {
     return ok(c, {
       siteTitle: "",
       homepageTitle: "",
@@ -515,7 +515,7 @@ app.openapi(getStorefrontUrlRoute, async (c) => {
     const db = c.get("db");
     const result = await getStorefrontUrlSetting(db);
     return ok(c, result);
-  } catch (error: unknown) {
+  } catch {
     return ok(c, { storefrontUrl: "/" });
   }
 });

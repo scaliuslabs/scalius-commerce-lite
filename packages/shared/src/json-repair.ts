@@ -111,18 +111,18 @@ export function parseJSONSafely(text: string): {
   try {
     const data = JSON.parse(text);
     return { success: true, data };
-  } catch (e1: unknown) {
+  } catch {
     // Strategy 2: Extract and parse
     try {
       const data = extractAndParseJSON(text);
       return { success: true, data };
-    } catch (e2: unknown) {
+    } catch {
       // Strategy 3: Repair and parse
       try {
         const repaired = repairJSON(text);
         const data = JSON.parse(repaired);
         return { success: true, data };
-      } catch (e3: unknown) {
+      } catch {
         // Strategy 4: Aggressive repair
         try {
           const repaired = aggressiveRepairJSON(text);

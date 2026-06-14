@@ -13,7 +13,8 @@ import {
   PaymentRecordStatus,
   PaymentPlanStatus,
 } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
 import { getCurrencyConfig } from "../settings/settings.service";
@@ -27,6 +28,7 @@ import {
 } from "./payable-order";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
+type SQLiteBatchItem = BatchItem<"sqlite">;
 
 function isConstraintError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -222,8 +224,7 @@ export async function processPaymentConfirmed(
       validateTransition("payment", order.paymentStatus, newPaymentStatus);
 
       const nextVersion = order.version + 1;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch statements are heterogeneous.
-      const batchStatements: any[] = [
+      const batchStatements: SQLiteBatchItem[] = [
         db.update(orders).set({
           status: newStatus,
           paidAmount: newPaidAmount,
@@ -294,7 +295,7 @@ export async function processPaymentConfirmed(
         );
       }
 
-      const batchResult = await db.batch(batchStatements as any) as unknown[];
+      const batchResult = await safeBatch(db, batchStatements) as unknown[];
       const orderUpdate = batchResult[0] as Array<{ id: string }> | undefined;
       const paymentUpdate = batchResult[1] as Array<{ id: string }> | undefined;
 

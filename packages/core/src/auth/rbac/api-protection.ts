@@ -52,13 +52,14 @@ export function forbiddenResponse(message = "Permission denied"): Response {
 export async function checkPermissionForApi(
   db: Database,
   userId: string | undefined,
-  permission: PermissionName | string
+  permission: PermissionName | string,
+  kv?: KVNamespace
 ): Promise<Response | null> {
   if (!userId) {
     return unauthorizedResponse();
   }
 
-  const allowed = await hasPermission(db, userId, permission);
+  const allowed = await hasPermission(db, userId, permission, kv);
   if (!allowed) {
     return forbiddenResponse(`Required permission: ${permission}`);
   }
@@ -73,13 +74,14 @@ export async function checkPermissionForApi(
 export async function checkAnyPermissionForApi(
   db: Database,
   userId: string | undefined,
-  permissions: (PermissionName | string)[]
+  permissions: (PermissionName | string)[],
+  kv?: KVNamespace
 ): Promise<Response | null> {
   if (!userId) {
     return unauthorizedResponse();
   }
 
-  const allowed = await hasAnyPermission(db, userId, permissions);
+  const allowed = await hasAnyPermission(db, userId, permissions, kv);
   if (!allowed) {
     return forbiddenResponse(`Required any permission: ${permissions.join(", ")}`);
   }
@@ -94,13 +96,14 @@ export async function checkAnyPermissionForApi(
 export async function checkAllPermissionsForApi(
   db: Database,
   userId: string | undefined,
-  permissions: (PermissionName | string)[]
+  permissions: (PermissionName | string)[],
+  kv?: KVNamespace
 ): Promise<Response | null> {
   if (!userId) {
     return unauthorizedResponse();
   }
 
-  const allowed = await hasAllPermissions(db, userId, permissions);
+  const allowed = await hasAllPermissions(db, userId, permissions, kv);
   if (!allowed) {
     return forbiddenResponse(`Required all permissions: ${permissions.join(", ")}`);
   }
@@ -122,10 +125,12 @@ export function withPermission(
 ): GenericAPIRoute {
   return async (context: GenericAPIContext) => {
     const { getDb } = await import("@scalius/database/client");
-    const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
+    const env = (context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env;
+    const db = getDb(env);
     const userId = context.locals.user?.id;
+    const kv = env?.CACHE as KVNamespace | undefined;
 
-    const error = await checkPermissionForApi(db, userId, permission);
+    const error = await checkPermissionForApi(db, userId, permission, kv);
     if (error) return error;
 
     return handler(context);
@@ -149,10 +154,12 @@ export function withAnyPermission(
 ): GenericAPIRoute {
   return async (context: GenericAPIContext) => {
     const { getDb } = await import("@scalius/database/client");
-    const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
+    const env = (context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env;
+    const db = getDb(env);
     const userId = context.locals.user?.id;
+    const kv = env?.CACHE as KVNamespace | undefined;
 
-    const error = await checkAnyPermissionForApi(db, userId, permissions);
+    const error = await checkAnyPermissionForApi(db, userId, permissions, kv);
     if (error) return error;
 
     return handler(context);
@@ -176,10 +183,12 @@ export function withAllPermissions(
 ): GenericAPIRoute {
   return async (context: GenericAPIContext) => {
     const { getDb } = await import("@scalius/database/client");
-    const db = getDb((context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env);
+    const env = (context.locals as { cfContext?: { env?: Record<string, unknown> } }).cfContext?.env;
+    const db = getDb(env);
     const userId = context.locals.user?.id;
+    const kv = env?.CACHE as KVNamespace | undefined;
 
-    const error = await checkAllPermissionsForApi(db, userId, permissions);
+    const error = await checkAllPermissionsForApi(db, userId, permissions, kv);
     if (error) return error;
 
     return handler(context);

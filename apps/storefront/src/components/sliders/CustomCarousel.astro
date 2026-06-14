@@ -379,14 +379,19 @@ if (images.length === 0) return;
       }
     }
 
+    type CarouselElement = HTMLElement & {
+      __carouselController?: CarouselController;
+    };
+
     // Initialize carousels immediately
     const initCarousels = () => {
       const carousels = document.querySelectorAll("[data-carousel-type]");
       carousels.forEach((carousel) => {
         if (carousel instanceof HTMLElement) {
+          const carouselElement = carousel as CarouselElement;
           // Prevent re-initialization
-          if (!(carousel as any).__carouselController) {
-            (carousel as any).__carouselController = new CarouselController(carousel);
+          if (!carouselElement.__carouselController) {
+            carouselElement.__carouselController = new CarouselController(carousel);
           }
         }
       });

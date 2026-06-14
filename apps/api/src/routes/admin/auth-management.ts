@@ -216,7 +216,7 @@ app.openapi(createUserRoute, async (c) => {
             .where(eq(user.id, signUpResult.user.id));
 
         if (roleId) {
-            await assignRoleToUser(db, signUpResult.user.id, roleId, sessionUser.id);
+            await assignRoleToUser(db, signUpResult.user.id, roleId, sessionUser.id, env.CACHE as KVNamespace | undefined);
         }
 
         const baseUrl = env.BETTER_AUTH_URL || env.PUBLIC_API_BASE_URL;

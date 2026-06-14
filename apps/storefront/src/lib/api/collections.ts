@@ -60,7 +60,7 @@ export async function getCollectionById(
         });
         if (error) return null;
 
-        const d = unwrapData<{ collection: any; categories?: CategorySummary[]; products?: Product[]; featuredProduct?: Product | null }>(data);
+        const d = unwrapData<{ collection: Collection; categories?: CategorySummary[]; products?: Product[]; featuredProduct?: Product | null }>(data);
         if (d?.collection) {
           return {
             ...d.collection,

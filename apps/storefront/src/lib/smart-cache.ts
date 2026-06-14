@@ -7,7 +7,7 @@ interface CacheEntry<T> {
 }
 
 const MAX_ENTRIES = 1000;
-const cacheStorage = new Map<string, CacheEntry<any>>();
+const cacheStorage = new Map<string, CacheEntry<unknown>>();
 
 /**
  * A shared storage for in-memory caching of high-traffic global data.
@@ -28,7 +28,7 @@ export const smartCache = {
     cacheStorage.delete(key);
     cacheStorage.set(key, entry);
 
-    return entry.data;
+    return entry.data as T;
   },
 
   set<T>(key: string, data: T, ttlSeconds: number = 60): T {
@@ -79,4 +79,3 @@ export const smartCache = {
     cacheStorage.clear();
   },
 };
-

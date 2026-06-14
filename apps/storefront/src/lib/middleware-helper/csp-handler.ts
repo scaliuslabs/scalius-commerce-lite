@@ -45,8 +45,14 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
               // and we don't re-fetch on every single request
               return EMPTY_CSP_DATA;
             }
-            const json = await response.json() as { cspAllowedDomains?: string };
-            return { cspAllowedDomains: json.cspAllowedDomains };
+            const json = await response.json() as {
+              cspAllowedDomains?: string;
+              data?: { cspAllowedDomains?: string };
+            };
+            return {
+              cspAllowedDomains:
+                json.data?.cspAllowedDomains ?? json.cspAllowedDomains ?? "",
+            };
           } catch {
             // Return empty sentinel so failure is cached too
             return EMPTY_CSP_DATA;

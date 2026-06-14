@@ -38,7 +38,7 @@ export async function getFilterableAttributes(
     async () => {
       try {
         const client = getConfiguredSdkClient();
-        let result: any;
+        let result: { data?: unknown };
 
         if (options.categorySlug) {
           result = await getApiV1AttributesCategorySlugByCategorySlug({

@@ -1,15 +1,18 @@
 // src/server/routes/admin/analytics.ts
 // Admin OpenAPI routes for analytics scripts.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { listAnalyticsScripts, getAnalyticsScript, createAnalyticsScript, updateAnalyticsScript, deleteAnalyticsScript, toggleAnalyticsScript, createAnalyticsSchema, updateAnalyticsSchema, toggleAnalyticsSchema } from "@scalius/core/modules/analytics";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
-import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, errorResponses } from "../../schemas/responses";
 import { invalidateApiAndStorefrontGroups } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
+
+type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
 // ── List Analytics Scripts ──
 
@@ -24,11 +27,11 @@ const listRoute = createRoute({
     }
 });
 
-app.openapi(listRoute, (async (c: any) => {
+app.openapi(listRoute, (async (c: AdminRouteContext<typeof listRoute>) => {
     const db = c.get("db");
     const scripts = await listAnalyticsScripts(db);
     return ok(c, scripts);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof listRoute>);
 
 // ── Create Analytics Script ──
 
@@ -46,13 +49,13 @@ const createScriptRoute = createRoute({
     }
 });
 
-app.openapi(createScriptRoute, (async (c: any) => {
+app.openapi(createScriptRoute, (async (c: AdminRouteContext<typeof createScriptRoute>) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createAnalyticsScript(db, data);
     await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
     return created(c, result);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof createScriptRoute>);
 
 // ── Get Analytics Script ──
 

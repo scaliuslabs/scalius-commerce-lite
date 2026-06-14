@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   FormControl,
   FormField,
@@ -38,6 +38,34 @@ export function LocationSelector() {
   const [loadingCities, setLoadingCities] = useState(false);
   const [loadingZones, setLoadingZones] = useState(false);
   const [loadingAreas, setLoadingAreas] = useState(false);
+
+  const cityValue = form.watch("city");
+  const zoneValue = form.watch("zone");
+  const areaValue = form.watch("area");
+
+  const loadZones = useCallback(async (cityId: string) => {
+    try {
+      setLoadingZones(true);
+      const result = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } });
+      setZones(result.locations as Location[]);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Error loading zones:", error);
+    } finally {
+      setLoadingZones(false);
+    }
+  }, []);
+
+  const loadAreas = useCallback(async (zoneId: string) => {
+    try {
+      setLoadingAreas(true);
+      const result = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } });
+      setAreas(result.locations as Location[]);
+    } catch (error: unknown) {
+      if (import.meta.env.DEV) console.error("Error loading areas:", error);
+    } finally {
+      setLoadingAreas(false);
+    }
+  }, []);
 
   // Load cities on initial mount and handle initial values
   useEffect(() => {
@@ -87,11 +115,11 @@ export function LocationSelector() {
     };
 
     loadInitialData();
-  }, []);
+  }, [form, loadAreas, loadZones]);
 
   // Load zones when city changes
   useEffect(() => {
-    const city = form.getValues("city");
+    const city = cityValue;
     if (city) {
       // Set the city name in the form
       const selectedCity = cities.find((c) => c.id === city);
@@ -109,11 +137,11 @@ export function LocationSelector() {
       form.setValue("zoneName", "");
       form.setValue("areaName", "");
     }
-  }, [form.watch("city"), cities]);
+  }, [cities, cityValue, form, loadZones]);
 
   // Load areas when zone changes
   useEffect(() => {
-    const zone = form.getValues("zone");
+    const zone = zoneValue;
     if (zone) {
       // Set the zone name in the form
       const selectedZone = zones.find((z) => z.id === zone);
@@ -128,11 +156,11 @@ export function LocationSelector() {
       form.setValue("zoneName", "");
       form.setValue("areaName", "");
     }
-  }, [form.watch("zone"), zones]);
+  }, [form, loadAreas, zones, zoneValue]);
 
   // Update the area name when area changes
   useEffect(() => {
-    const area = form.getValues("area");
+    const area = areaValue;
     if (area) {
       // Set the area name in the form
       const selectedArea = areas.find((a) => a.id === area);
@@ -142,7 +170,7 @@ export function LocationSelector() {
     } else {
       form.setValue("areaName", "");
     }
-  }, [form.watch("area"), areas]);
+  }, [areaValue, areas, form]);
 
   // Check for value updates that might come from outside
   useEffect(() => {
@@ -167,32 +195,7 @@ export function LocationSelector() {
     ) {
       loadAreas(currentZone);
     }
-  }, []);
-
-
-  const loadZones = async (cityId: string) => {
-    try {
-      setLoadingZones(true);
-      const result = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } });
-      setZones(result.locations as Location[]);
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error loading zones:", error);
-    } finally {
-      setLoadingZones(false);
-    }
-  };
-
-  const loadAreas = async (zoneId: string) => {
-    try {
-      setLoadingAreas(true);
-      const result = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } });
-      setAreas(result.locations as Location[]);
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error loading areas:", error);
-    } finally {
-      setLoadingAreas(false);
-    }
-  };
+  }, [cities, form, loadAreas, loadZones, zones]);
 
   return (
     <div className="grid gap-4 md:grid-cols-3">

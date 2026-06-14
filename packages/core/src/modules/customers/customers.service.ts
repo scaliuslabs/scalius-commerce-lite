@@ -2,7 +2,7 @@
 // All DB queries and business logic for the customers domain.
 
 import { customers, customerHistory, deliveryLocations, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
-import { sql, and, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm";
+import { sql, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
@@ -113,12 +113,11 @@ export async function listCustomers(
         .from(deliveryLocations)
         .where(isNull(deliveryLocations.deletedAt));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     const [countArr, results, locationResults] = await db.batch([
         countQuery,
         resultsQuery,
         locationQuery,
-    ] as any) as [
+    ] as Parameters<Database["batch"]>[0]) as [
         { count: number }[],
         { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; totalOrders: number; totalSpent: number; lastOrderAt: number; createdAt: number; updatedAt: number }[],
         { id: string; name: string }[],
@@ -213,7 +212,7 @@ export async function createCustomer(
             changeType: "created",
             createdAt: sql`unixepoch()`,
         }),
-    ] as any);
+    ] as Parameters<Database["batch"]>[0]);
 
     return { id: customerId };
 }
@@ -279,7 +278,7 @@ export async function updateCustomer(
             changeType: "updated",
             createdAt: sql`unixepoch()`,
         }),
-    ] as any);
+    ] as Parameters<Database["batch"]>[0]);
 
 }
 
@@ -306,14 +305,14 @@ export async function deleteCustomer(db: Database, id: string): Promise<void> {
             changeType: "deleted",
             createdAt: sql`unixepoch()`,
         }),
-    ] as any);
+    ] as Parameters<Database["batch"]>[0]);
 }
 
 export async function permanentlyDeleteCustomer(db: Database, id: string): Promise<void> {
     await db.batch([
         db.delete(customerHistory).where(eq(customerHistory.customerId, id)),
         db.delete(customers).where(eq(customers.id, id)),
-    ] as any);
+    ] as Parameters<Database["batch"]>[0]);
 }
 
 export async function restoreCustomer(db: Database, id: string): Promise<void> {
@@ -382,7 +381,7 @@ export async function getCustomerOrders(
 
     // Fetch items for all orders in one batch
     const orderIds = customerOrders.map((o) => o.id);
-    let itemsByOrder = new Map<string, Array<Record<string, unknown>>>();
+    const itemsByOrder = new Map<string, Array<Record<string, unknown>>>();
 
     if (orderIds.length > 0) {
         const allItems = await db

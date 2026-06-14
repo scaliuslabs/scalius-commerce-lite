@@ -11,7 +11,7 @@
  * - Total time: ~60-90 seconds for all of Bangladesh.
  */
 
-import { eq, and, isNull, sql, inArray } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { deliveryLocations } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { createId } from "@paralleldrive/cuid2";
@@ -140,17 +140,6 @@ async function loadExistingByPathaoId(
     } catch { /* skip malformed */ }
   }
   return map;
-}
-
-/** Also build a name-based lookup for matching manually created locations */
-function buildNameIndex(rows: Map<string, LocationRow>): Map<string, LocationRow> {
-  const nameMap = new Map<string, LocationRow>();
-  for (const row of rows.values()) {
-    const key = `${row.name}|${row.parentId || ""}`.toLowerCase();
-    nameMap.set(key, row);
-  }
-  // Also load ones without pathao ID
-  return nameMap;
 }
 
 /** Bulk upsert locations — fast path with pre-loaded existing data */

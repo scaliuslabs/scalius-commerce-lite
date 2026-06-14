@@ -87,6 +87,7 @@ export function useDeliveryLocations() {
   const [importProgress, setImportProgress] =
     useState<PathaoImportProgress | null>(null);
   const importAbortRef = useRef(false);
+  const hasResumedImportRef = useRef(false);
 
   // ── Queries ──────────────────────────────────────────────────────
 
@@ -138,14 +139,6 @@ export function useDeliveryLocations() {
     refetchOnMount: true,
     retry: false,
   });
-
-  useEffect(() => {
-    if (importStatusData?.status === "importing" && !importing) {
-      setImportProgress(importStatusData);
-      setImporting(true);
-      resumeImport();
-    }
-  }, [importStatusData]);
 
   // ── Mutations ────────────────────────────────────────────────────
 
@@ -202,6 +195,19 @@ export function useDeliveryLocations() {
       setImporting(false);
     }
   }, [queryClient]);
+
+  useEffect(() => {
+    if (
+      importStatusData?.status === "importing" &&
+      !importing &&
+      !hasResumedImportRef.current
+    ) {
+      hasResumedImportRef.current = true;
+      setImportProgress(importStatusData);
+      setImporting(true);
+      void resumeImport();
+    }
+  }, [importStatusData, importing, resumeImport]);
 
   const startImport = () => {
     setShowImportConfirm(false);

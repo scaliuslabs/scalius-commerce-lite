@@ -103,7 +103,7 @@ export function FolderBrowser({
       await onFolderCreate(newFolderName.trim(), currentFolderId);
       setNewFolderName("");
       setShowCreateDialog(false);
-    } catch (error: unknown) {
+    } catch {
       // Error is handled in the hook
     } finally {
       setIsCreating(false);
@@ -116,7 +116,7 @@ export function FolderBrowser({
     try {
       await onFolderDelete(deleteDialogFolderId);
       setDeleteDialogFolderId(null);
-    } catch (error: unknown) {
+    } catch {
       // Error is handled in the hook
     }
   };

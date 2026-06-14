@@ -64,6 +64,11 @@ const storefrontCategorySchema = z.object({
   metaDescription: z.string().nullable(),
 }).passthrough();
 
+type AppliedFilterValue =
+  | string
+  | number
+  | Array<{ slug: string; value: string }>;
+
 // GET /categories — list all categories
 const listCategoriesRoute = createRoute({
   method: "get",
@@ -146,7 +151,7 @@ const getCategoryProductsRoute = createRoute({
           discountedPrice: z.number(),
         }).passthrough()),
         pagination: paginationSchema,
-        appliedFilters: z.record(z.string(), z.unknown()),
+        appliedFilters: z.record(z.string(), z.any()),
       })) } },
     },
     404: errorResponses[404],
@@ -154,7 +159,7 @@ const getCategoryProductsRoute = createRoute({
   }
 });
 
-app.openapi(getCategoryProductsRoute, (async (c: any) => {
+app.openapi(getCategoryProductsRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
@@ -193,7 +198,7 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
   const allAttributes = await db
     .select({ slug: productAttributes.slug })
     .from(productAttributes);
-  const validAttributeSlugs = new Set(allAttributes.map((a: any) => a.slug));
+  const validAttributeSlugs = new Set(allAttributes.map((attribute) => attribute.slug));
   const attributeFilters: { slug: string; value: string }[] = [];
 
   for (const key in queryParams) {
@@ -329,10 +334,10 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
     .all();
 
   // Get primary images for products
-  const productIds = productsList.map((p: any) => p.id);
+  const productIds = productsList.map((product) => product.id);
 
   // Only fetch images if we have products
-  let imageMap = new Map();
+  let imageMap = new Map<string, string>();
   if (productIds.length > 0) {
     const images = await db
       .select({
@@ -349,11 +354,11 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
       .all();
 
     // Create a map of product ID to image URL
-    imageMap = new Map(images.map((img: any) => [img.productId, img.url]));
+    imageMap = new Map(images.map((image) => [image.productId, image.url]));
   }
 
   // Combine products with their images and add category info
-  const productsWithImages = productsList.map((product: any) => ({
+  const productsWithImages = productsList.map((product) => ({
     ...product,
     imageUrl: imageMap.get(product.id) || null,
     discountedPrice: calculateDiscountedPrice(
@@ -413,6 +418,16 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
 
   const totalCount = await countQuery.get();
 
+  const appliedFilters: Record<string, AppliedFilterValue> = {
+    attributes: attributeFilters,
+    sort,
+  };
+  if (search !== undefined) appliedFilters.search = search;
+  if (minPrice !== undefined) appliedFilters.minPrice = minPrice;
+  if (maxPrice !== undefined) appliedFilters.maxPrice = maxPrice;
+  if (freeDelivery !== undefined) appliedFilters.freeDelivery = freeDelivery;
+  if (hasDiscount !== undefined) appliedFilters.hasDiscount = hasDiscount;
+
   return ok(c, {
     category,
     products: productsWithImages,
@@ -422,17 +437,9 @@ app.openapi(getCategoryProductsRoute, (async (c: any) => {
       total: totalCount?.count || 0,
       totalPages: Math.ceil((totalCount?.count || 0) / limit)
     },
-    appliedFilters: {
-      attributes: attributeFilters,
-      search,
-      minPrice,
-      maxPrice,
-      freeDelivery,
-      hasDiscount,
-      sort
-    }
+    appliedFilters
   });
-}) as any);
+});
 
 // Export the category routes
 export { app as categoryRoutes };
