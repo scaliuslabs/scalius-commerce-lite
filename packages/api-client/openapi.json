@@ -10293,42 +10293,6 @@
         }
       }
     },
-    "/api/v1/media/{key}": {
-      "get": {
-        "tags": [
-          "Media Server"
-        ],
-        "summary": "Serve R2 objects in local development",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "key",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Media file",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "nullable": true
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "500": {
-            "description": "R2 bucket not available"
-          }
-        }
-      }
-    },
     "/api/v1/__ptproxy": {
       "get": {
         "tags": [
@@ -41734,12 +41698,242 @@
         }
       }
     },
+    "/api/v1/admin/dashboard/summary": {
+      "get": {
+        "tags": [
+          "Admin - Dashboard"
+        ],
+        "summary": "Get dashboard summary metrics and recent orders",
+        "responses": {
+          "200": {
+            "description": "Dashboard summary data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stats": {
+                          "type": "object",
+                          "properties": {
+                            "totalProducts": {
+                              "type": "number"
+                            },
+                            "totalCustomers": {
+                              "type": "number"
+                            },
+                            "totalRevenue": {
+                              "type": "number"
+                            },
+                            "currentMonth": {
+                              "type": "object",
+                              "properties": {
+                                "orders": {
+                                  "type": "number"
+                                },
+                                "revenue": {
+                                  "type": "number"
+                                },
+                                "orderGrowth": {
+                                  "type": "number"
+                                },
+                                "revenueGrowth": {
+                                  "type": "number"
+                                },
+                                "orderStatus": {
+                                  "type": "object",
+                                  "properties": {
+                                    "delivered": {
+                                      "type": "number"
+                                    },
+                                    "processing": {
+                                      "type": "number"
+                                    },
+                                    "shipping": {
+                                      "type": "number"
+                                    },
+                                    "cancelled": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "delivered",
+                                    "processing",
+                                    "shipping",
+                                    "cancelled"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "orders",
+                                "revenue",
+                                "orderGrowth",
+                                "revenueGrowth",
+                                "orderStatus"
+                              ]
+                            },
+                            "lastMonth": {
+                              "type": "object",
+                              "properties": {
+                                "orders": {
+                                  "type": "number"
+                                },
+                                "revenue": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "orders",
+                                "revenue"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "totalProducts",
+                            "totalCustomers",
+                            "totalRevenue",
+                            "currentMonth",
+                            "lastMonth"
+                          ]
+                        },
+                        "recentOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "customerName": {
+                                "type": "string"
+                              },
+                              "totalAmount": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "customerName",
+                              "totalAmount",
+                              "status",
+                              "createdAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "stats",
+                        "recentOrders"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/dashboard/activity": {
+      "get": {
+        "tags": [
+          "Admin - Dashboard"
+        ],
+        "summary": "Get dashboard daily activity chart data",
+        "responses": {
+          "200": {
+            "description": "Dashboard daily activity data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "dailyActivityData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "date": {
+                                "type": "string"
+                              },
+                              "orders": {
+                                "type": "number"
+                              },
+                              "revenue": {
+                                "type": "number"
+                              },
+                              "newCustomers": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "date",
+                              "orders",
+                              "revenue",
+                              "newCustomers"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "dailyActivityData"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/dashboard": {
       "get": {
         "tags": [
           "Admin - Dashboard"
         ],
-        "summary": "Get dashboard summary (stats, recent orders, daily activity)",
+        "summary": "Get dashboard summary, recent orders, and daily activity",
         "responses": {
           "200": {
             "description": "Dashboard data",

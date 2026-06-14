@@ -67,8 +67,8 @@ packages/
 
 ### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 351 operations. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
-- **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 41 SQL migrations (`0000` through `0040`).
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 254 paths / 352 operations. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. The generator removes the development-only `/api/v1/media/{key}` passthrough so the generated contract matches production OpenAPI. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
+- **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 42 SQL migrations (`0000` through `0041`).
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.
 - **`@scalius/tsconfig`**: Exports `base.json`, `worker.json`, and `astro.json`. Some apps use local framework configs instead of extending it directly.
@@ -99,6 +99,7 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - **Response envelope contract**: Normal success JSON endpoints return `{ success: true, data: T }`. The `T` passed to `ok(c, T)` is the final payload; do not nest another `{ success, data }` inside it. Explicit exceptions: root/health/OpenAPI/docs, webhooks, proxies, redirects, text responses, and `204` no-content responses.
 - **202 Accepted responses**: Must include top-level `success: true`; use `c.json({ success: true, data: {...} }, 202)` because `ok()` forces 200.
 - **Admin API behavior**: Admin server functions in `apps/admin-v2/src/lib/api.server.ts` unwrap API envelopes and return `data` to components. The browser proxy route `apps/admin-v2/src/routes/api/v1/admin/$.ts` passes API responses through unchanged.
+- **Admin dashboard data loading**: The admin home loader blocks only on `/api/v1/admin/dashboard/summary` (`stats` + `recentOrders`) and starts `/api/v1/admin/dashboard/activity` as a background query for the 90-day chart. Keep `/api/v1/admin/dashboard` backward-compatible, but do not make first paint wait on daily activity data again.
 - **Admin shell RBAC**: The admin shell uses permission-based RBAC, not legacy `user.role === "admin"`. `apps/admin-v2/src/lib/admin-access.ts` is the pure guard helper; only `/admin/access-denied` remains reachable for authenticated users with no admin permissions.
 - **Transient D1 overloads**: Use `@scalius/core/utils/transient-d1` for known Cloudflare D1 overload/queue-timeout detection and short read-path retries. Do not duplicate string checks or blindly replay auth/payment/order write paths where the first attempt may have committed.
 - **Storefront checkout proxies**: Payment session proxy endpoints unwrap `.data` because the checkout handlers read top-level gateway fields. `apps/storefront/src/pages/api/checkout/create-order.ts` intentionally returns `{ success: true, data: { id } }`, and the browser helper accepts either enveloped or legacy top-level IDs.

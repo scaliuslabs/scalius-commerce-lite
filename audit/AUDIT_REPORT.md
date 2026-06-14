@@ -24,10 +24,10 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 118 files and 761 tests after the auth/session-cookie hardening slice.
+- `pnpm test`: passed 119 files and 764 tests after the dashboard split/index slice.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm deploy`: latest auth/session-cookie slice redeployed API `89316428-fc7f-4148-8f56-bb93c6b25c1b`, admin `c144655a-5f96-4741-b001-46926bdb7e2a`, and storefront `4ab260a7-39ff-4489-9ef8-3f0370222d00`.
-- Live HTTP and browser checks: API health, storefront home/cart/checkout, dashboard demo login, authenticated `/admin`, authenticated `/admin/orders`, authenticated account settings, and the admin auth account-security proxy returned successfully after redeploy with no captured browser console errors.
+- Full `pnpm deploy`: latest dashboard split/index slice redeployed API `d25ebe15-971e-409e-bcfd-b5d15c6702e6`, admin `3af1362d-cfe5-4722-94f6-0a3c44a5f6ae`, and storefront `8976c406-b367-40d8-a39c-a795bd5d6862`.
+- Live HTTP and browser checks: API setup/OpenAPI, remote D1 index presence, storefront home, dashboard demo login, authenticated `/admin`, authenticated `/admin/orders`, and authenticated dashboard summary/activity/legacy API endpoints returned successfully after redeploy with no captured browser console errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
@@ -371,9 +371,9 @@ Status: Verified on 2026-06-13. Bulk provider shipment creation now acquires a d
 
 Read-only performance audit found several remaining admin hot-path costs: route code splitting is effectively off because generated route modules are statically imported, `api.queries.ts` imports query options for many domains, dashboard first paint blocks on daily activity chart data that renders later, customer daily activity lacks a matching `createdAt` index, the admin guard does repeated sequential work before child loaders, checkout settings prefetches inactive tabs and duplicates default-tab fetches, orders pays for DnD/date-picker code on initial render, and order detail has a post-render payments waterfall.
 
-Fix direction: split this into small, measured slices. Start with route/query splitting and dashboard activity separation, then index the customer activity query, reduce repeated guard work, slim checkout settings and orders chunks, and prefetch order payments in the order-detail loader.
+Fix direction: split this into small, measured slices. Dashboard activity separation and the matching customer activity index are now done; remaining slices are route/query bundle splitting, repeated guard work, checkout settings prefetch trimming, orders chunk slimming, and order-detail payment prefetching.
 
-Status: Not Started as of 2026-06-14. Verification should include before/after bundle/module graphs, dashboard loader timing, and browser smoke for dashboard, orders, and settings checkout.
+Status: In Progress as of 2026-06-14. First slice split `/api/v1/admin/dashboard/summary` from `/api/v1/admin/dashboard/activity`, changed the admin home loader to await only summary data while prefetching activity in the background, kept the legacy combined endpoint, added `customers_dashboard_activity_idx` in migration `0041`, regenerated the production-aligned SDK to 254 paths / 352 operations, and added route tests proving summary does not execute the activity query. Verification: focused dashboard API tests, migration metadata check, affected workspace typechecks/lints, root `pnpm test`, root `pnpm typecheck`, root `pnpm build`, local API/admin/storefront browser smoke, `pnpm dev:doctor:all`, full deploy, remote D1 index check, live OpenAPI count check, live authenticated dashboard endpoint checks, and live browser `/admin`, `/admin/orders`, and storefront smoke.
 
 ### ORDER-009: Admin full order edits can lose inventory-delta retry context
 
@@ -663,7 +663,7 @@ Status: Verified on 2026-06-13. `happy-dom` is now declared in the storefront pa
 
 Fix direction: remove volatile counts from prose or generate them automatically.
 
-Status: Verified on 2026-06-14. The API-client README points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and documents the bundled generated Fetch client instead of the deprecated `@hey-api/client-fetch` runtime package. The database README avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0040`, and removes a stale singleton-constraint limitation.
+Status: Verified on 2026-06-14. The API-client README points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and documents the bundled generated Fetch client instead of the deprecated `@hey-api/client-fetch` runtime package. The database README avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0041`, and removes a stale singleton-constraint limitation.
 
 ### CLEAN-001: Route directory contains `.DS_Store`
 

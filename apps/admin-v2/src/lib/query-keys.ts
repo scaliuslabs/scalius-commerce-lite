@@ -27,6 +27,8 @@ export const queryKeys = {
   // ── Dashboard ────────────────────────────────────────────────────
   dashboard: {
     all: ["dashboard"] as const,
+    summary: () => ["dashboard", "summary"] as const,
+    activity: () => ["dashboard", "activity"] as const,
   },
 
   // ── Products ─────────────────────────────────────────────────────

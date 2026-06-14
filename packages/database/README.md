@@ -288,6 +288,7 @@ Notable migrations:
 - `0038` -- Order shipment claim fields for provider/manual fulfillment coordination
 - `0039` -- SSLCommerz `val_id` payment idempotency and payment plan status normalization
 - `0040` -- Better Auth `twoFactor.verified` column
+- `0041` -- Dashboard customer activity index on `(deleted_at, created_at)`
 
 Validate migration metadata after schema or migration edits:
 

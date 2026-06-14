@@ -5,6 +5,11 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = resolve(__dirname, "../../..");
 
+type OpenApiDocument = {
+  paths?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 async function generateSpec() {
   // Strategy 1: Try importing the Hono app directly (works when all deps resolve)
   try {
@@ -46,12 +51,21 @@ async function generateSpec() {
   process.exit(1);
 }
 
-function writeSpec(spec: any) {
+function writeSpec(spec: OpenApiDocument) {
+  removeLocalOnlyRoutes(spec);
   normalizeNullableAnyOf(spec);
   const outputPath = resolve(__dirname, "../openapi.json");
   writeFileSync(outputPath, JSON.stringify(spec, null, 2));
   console.log(`OpenAPI spec written to ${outputPath}`);
   console.log(`Routes documented: ${Object.keys(spec.paths || {}).length}`);
+}
+
+function removeLocalOnlyRoutes(spec: OpenApiDocument) {
+  if (!spec || typeof spec !== "object" || !spec.paths) return;
+
+  // The local API worker mounts an R2 media passthrough only in development so
+  // storefront images can use localhost. Production serves media through the CDN.
+  delete spec.paths["/api/v1/media/{key}"];
 }
 
 function normalizeNullableAnyOf(value: unknown): void {

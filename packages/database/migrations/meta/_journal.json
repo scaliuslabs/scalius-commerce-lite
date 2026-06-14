@@ -288,6 +288,13 @@
       "when": 1781452801000,
       "tag": "0040_two_factor_verified",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1781459275229,
+      "tag": "0041_fixed_whistler",
+      "breakpoints": true
     }
   ]
 }

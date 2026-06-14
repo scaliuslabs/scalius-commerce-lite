@@ -59,7 +59,11 @@ import {
   type AttributesQueryInput,
   type AttributeValuesQueryInput,
 } from "./api-functions/attributes";
-import { getDashboardData } from "./api-functions/dashboard";
+import {
+  getDashboardActivity,
+  getDashboardData,
+  getDashboardSummary,
+} from "./api-functions/dashboard";
 import {
   getDiscount,
   getDiscounts,
@@ -164,6 +168,20 @@ export const dashboardQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.dashboard.all,
     queryFn: () => getDashboardData(),
+    staleTime: STALE.MODERATE,
+  });
+
+export const dashboardSummaryQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.dashboard.summary(),
+    queryFn: () => getDashboardSummary(),
+    staleTime: STALE.MODERATE,
+  });
+
+export const dashboardActivityQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.dashboard.activity(),
+    queryFn: () => getDashboardActivity(),
     staleTime: STALE.MODERATE,
   });
 

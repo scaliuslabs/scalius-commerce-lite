@@ -1,5 +1,5 @@
 // src/server/routes/admin/dashboard.ts
-// Admin OpenAPI route for the dashboard summary (stats, recent orders, activity).
+// Admin OpenAPI routes for dashboard summary and activity data.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDashboardStats, getRecentOrders, getDailyActivityData } from "@scalius/core/modules/analytics";
@@ -55,13 +55,71 @@ const dashboardResponseSchema = successEnvelope(z.object({
     dailyActivityData: z.array(dailyActivitySchema),
 }));
 
+const dashboardSummaryResponseSchema = successEnvelope(z.object({
+    stats: dashboardStatsSchema,
+    recentOrders: z.array(recentOrderSchema),
+}));
+
+const dashboardActivityResponseSchema = successEnvelope(z.object({
+    dailyActivityData: z.array(dailyActivitySchema),
+}));
+
 // ── Dashboard Summary ──
+
+const dashboardSummaryRoute = createRoute({
+    method: "get",
+    path: "/summary",
+    tags: ["Admin - Dashboard"],
+    summary: "Get dashboard summary metrics and recent orders",
+    responses: {
+        200: {
+            description: "Dashboard summary data",
+            content: { "application/json": { schema: dashboardSummaryResponseSchema } },
+        },
+    },
+});
+
+app.openapi(dashboardSummaryRoute, async (c) => {
+    const db = c.get("db");
+
+    const [stats, recentOrders] = await Promise.all([
+        getDashboardStats(db),
+        getRecentOrders(db, 11),
+    ]);
+
+    return ok(c, { stats, recentOrders });
+});
+
+// ── Dashboard Activity ──
+
+const dashboardActivityRoute = createRoute({
+    method: "get",
+    path: "/activity",
+    tags: ["Admin - Dashboard"],
+    summary: "Get dashboard daily activity chart data",
+    responses: {
+        200: {
+            description: "Dashboard daily activity data",
+            content: { "application/json": { schema: dashboardActivityResponseSchema } },
+        },
+    },
+});
+
+app.openapi(dashboardActivityRoute, async (c) => {
+    const db = c.get("db");
+
+    const dailyActivityData = await getDailyActivityData(db, 90);
+
+    return ok(c, { dailyActivityData });
+});
+
+// ── Legacy Combined Dashboard ──
 
 const dashboardRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Dashboard"],
-    summary: "Get dashboard summary (stats, recent orders, daily activity)",
+    summary: "Get dashboard summary, recent orders, and daily activity",
     responses: {
         200: {
             description: "Dashboard data",

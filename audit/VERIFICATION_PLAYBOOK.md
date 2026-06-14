@@ -317,7 +317,7 @@ Expected result:
 - `/api/v1/setup` creates the admin.
 - If setup previously inserted a Better Auth user but failed before admin promotion, rerunning `pnpm dev:admin:create` should recover the partial first-admin state instead of returning a 500.
 - Browser login at `http://localhost:4323/auth/login` reaches `/admin`.
-- API worker logs show `GET /api/v1/admin/dashboard 200 OK`.
+- API worker logs show `GET /api/v1/admin/dashboard/summary 200 OK` and `GET /api/v1/admin/dashboard/activity 200 OK`; the legacy `GET /api/v1/admin/dashboard` endpoint should remain available for compatibility.
 - The admin proxy route can be checked with a cookie jar; `GET http://localhost:4323/api/v1/admin/dashboard` should return `200 OK` and `x-proxy-base-url: http://localhost:8787/api/v1`.
 
 ## Turbo And Deploy Checks
