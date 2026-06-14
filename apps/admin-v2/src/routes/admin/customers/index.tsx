@@ -17,6 +17,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { useCurrency } from "~/hooks/use-currency";
 import { customersQueryOptions } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteCustomer,
   usePermanentDeleteCustomer,
@@ -50,9 +51,9 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(customersQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, customersQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

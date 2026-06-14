@@ -17,6 +17,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { categoriesQueryOptions } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteCategory,
   usePermanentDeleteCategory,
@@ -52,9 +53,9 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(categoriesQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, categoriesQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

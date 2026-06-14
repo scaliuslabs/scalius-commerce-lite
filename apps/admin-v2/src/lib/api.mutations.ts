@@ -11,7 +11,11 @@
  * domains should be added here as routes are converted.
  */
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "./query-keys";
@@ -250,6 +254,14 @@ function serializeUpdateDiscountInput(
   };
 }
 
+function invalidateDashboardQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+}
+
+function invalidateProductStatsQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  PRODUCTS
 // ═══════════════════════════════════════════════════════════════════
@@ -260,7 +272,8 @@ export function useCreateProduct() {
     mutationFn: (data: CreateProductInput) => createProduct({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
+      invalidateProductStatsQueries(queryClient);
+      invalidateDashboardQueries(queryClient);
       toast.success("Product created");
     },
     onError: (err) =>
@@ -274,6 +287,8 @@ export function useUpdateProduct() {
     mutationFn: (data: UpdateProductInput) => updateProduct({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      invalidateProductStatsQueries(queryClient);
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.detail(variables.id),
       });
@@ -290,7 +305,8 @@ export function useDeleteProduct() {
     mutationFn: (id: string) => deleteProduct({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
+      invalidateProductStatsQueries(queryClient);
+      invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(id) });
       toast.success("Product moved to trash");
     },
@@ -305,7 +321,8 @@ export function usePermanentDeleteProduct() {
     mutationFn: (id: string) => permanentDeleteProduct({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
+      invalidateProductStatsQueries(queryClient);
+      invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(id) });
       toast.success("Product permanently deleted");
     },
@@ -322,7 +339,8 @@ export function useRestoreProduct() {
     mutationFn: (id: string) => restoreProduct({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
+      invalidateProductStatsQueries(queryClient);
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.detail(id),
       });
@@ -340,7 +358,8 @@ export function useBulkDeleteProducts() {
       bulkDeleteProducts({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
+      invalidateProductStatsQueries(queryClient);
+      invalidateDashboardQueries(queryClient);
       toast.success(
         variables.permanent
           ? `${variables.productIds.length} products permanently deleted`
@@ -365,6 +384,7 @@ export function useCreateCategory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      invalidateProductStatsQueries(queryClient);
       toast.success("Category created");
     },
     onError: (err) =>
@@ -384,6 +404,7 @@ export function useUpdateCategory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      invalidateProductStatsQueries(queryClient);
       toast.success("Category updated");
     },
     onError: (err) =>
@@ -400,6 +421,7 @@ export function useDeleteCategory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      invalidateProductStatsQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
       toast.success("Category moved to trash");
     },
@@ -417,6 +439,7 @@ export function usePermanentDeleteCategory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      invalidateProductStatsQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
       toast.success("Category permanently deleted");
     },
@@ -436,6 +459,7 @@ export function useRestoreCategory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      invalidateProductStatsQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.detail(id),
       });
@@ -456,6 +480,7 @@ export function useBulkDeleteCategories() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      invalidateProductStatsQueries(queryClient);
       toast.success(
         variables.permanent
           ? `${variables.categoryIds.length} categories permanently deleted`
@@ -477,6 +502,7 @@ export function useBulkRestoreCategories() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      invalidateProductStatsQueries(queryClient);
       toast.success(`${categoryIds.length} categories restored`);
     },
     onError: (err) =>
@@ -494,6 +520,7 @@ export function useCreateOrder() {
     mutationFn: (data: CreateOrderInput) => createOrder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       toast.success("Order created");
     },
     onError: (err) =>
@@ -507,6 +534,7 @@ export function useUpdateOrder() {
     mutationFn: (data: UpdateOrderInput) => updateOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.id),
       });
@@ -523,6 +551,7 @@ export function useUpdateOrderStatus() {
     mutationFn: (data: UpdateOrderStatusInput) => updateOrderStatus({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
@@ -540,6 +569,7 @@ export function useCreateOrderShipment() {
       createOrderShipment({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
@@ -562,6 +592,7 @@ export function useUpdateFulfillmentStatus() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
+      invalidateDashboardQueries(queryClient);
       toast.success("Fulfillment status updated");
     },
     onError: (err) =>
@@ -575,6 +606,7 @@ export function useRefundOrder() {
     mutationFn: (data: RefundOrderInput) => refundOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
@@ -596,6 +628,7 @@ export function useUpdateOrderCod() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.payments(variables.orderId),
       });
@@ -615,6 +648,7 @@ export function useReturnOrder() {
     mutationFn: (data: ReturnOrderInput) => returnOrder({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
@@ -631,6 +665,7 @@ export function useRestoreOrder() {
     mutationFn: (id: string) => restoreOrder({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id) });
       toast.success("Order restored");
     },
@@ -645,6 +680,7 @@ export function useBulkDeleteOrders() {
     mutationFn: (data: BulkDeleteOrdersInput) => bulkDeleteOrders({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
       toast.success(
         variables.permanent
           ? `${variables.orderIds.length} orders permanently deleted`
@@ -873,6 +909,7 @@ export function useCreateCustomer() {
     mutationFn: (data: CreateCustomerInput) => createCustomer({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
+      invalidateDashboardQueries(queryClient);
       toast.success("Customer created");
     },
     onError: (err) =>
@@ -886,6 +923,7 @@ export function useUpdateCustomer() {
     mutationFn: (data: UpdateCustomerInput) => updateCustomer({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.customers.detail(variables.id),
       });
@@ -902,6 +940,7 @@ export function useDeleteCustomer() {
     mutationFn: (id: string) => deleteCustomer({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.customers.detail(id) });
       toast.success("Customer moved to trash");
     },
@@ -916,6 +955,7 @@ export function usePermanentDeleteCustomer() {
     mutationFn: (id: string) => permanentDeleteCustomer({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.customers.detail(id) });
       toast.success("Customer permanently deleted");
     },
@@ -932,6 +972,7 @@ export function useRestoreCustomer() {
     mutationFn: (id: string) => restoreCustomer({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
+      invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.customers.detail(id),
       });
@@ -948,6 +989,7 @@ export function useBulkDeleteCustomers() {
     mutationFn: (data: BulkDeleteCustomersInput) => bulkDeleteCustomers({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
+      invalidateDashboardQueries(queryClient);
       toast.success(
         variables.permanent
           ? `${variables.customerIds.length} customers permanently deleted`

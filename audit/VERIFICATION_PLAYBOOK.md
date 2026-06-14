@@ -75,11 +75,34 @@ pnpm exec vitest run apps/admin-v2/src/routes/admin/settings/-checkout-loader.te
   apps/admin-v2/src/hooks/use-currency.ts \
   apps/admin-v2/src/hooks/use-storefront-url.ts \
   apps/admin-v2/src/hooks/use-firebase-init.ts
+rg -n '^import .*api-functions' apps/admin-v2/src/lib/api.queries.ts
+rg -n 'const .*Api = \\(\\) => import\\("./api-functions/' apps/admin-v2/src/lib/api.queries.ts
+rg -n 'warmRouteQuery' \
+  apps/admin-v2/src/routes/admin/products/index.tsx \
+  apps/admin-v2/src/routes/admin/orders/index.tsx \
+  apps/admin-v2/src/routes/admin/customers/index.tsx \
+  apps/admin-v2/src/routes/admin/categories/index.tsx \
+  apps/admin-v2/src/routes/admin/collections/index.tsx \
+  apps/admin-v2/src/routes/admin/discounts/index.tsx \
+  apps/admin-v2/src/routes/admin/pages/index.tsx \
+  apps/admin-v2/src/routes/admin/widgets/index.tsx
+rg -n 'placeholderData: keepPreviousData|refetchOnMount: "always"' apps/admin-v2/src/components/admin/data-table/useServerTable.ts
+rg -n 'clearAdminRouteContextCache' \
+  apps/admin-v2/src/components/admin/account-settings/ProfileHeader.tsx \
+  apps/admin-v2/src/components/admin/account-settings/TwoFactorSetup.tsx \
+  apps/admin-v2/src/components/auth/UserMenu.tsx
+rg -n 'queryKeys\\.dashboard\\.all|invalidateDashboardQueries' \
+  apps/admin-v2/src/lib/api.mutations.ts \
+  apps/admin-v2/src/routes/admin/orders/index.tsx
+rg -n 'queryKeys\\.products\\.stats\\(\\)|invalidateProductStatsQueries' \
+  apps/admin-v2/src/lib/api.mutations.ts \
+  apps/admin-v2/src/components/admin/CategoryForm.tsx \
+  apps/admin-v2/src/components/admin/product-form/OrganizationCard.tsx
 pnpm --filter @scalius/admin-v2 typecheck
 pnpm --filter @scalius/admin-v2 lint
 ```
 
-Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel.
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats.
 
 Admin 2FA/setup auth boundary:
 
@@ -88,9 +111,10 @@ pnpm exec vitest run apps/admin-v2/src/lib/api.server.test.ts apps/api/src/middl
 pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/admin-v2 typecheck
 rg -n 'mark2faVerified|mark-verified|markFirstUserAsSuperAdmin' apps/admin-v2/src apps/api/src packages/core/src
+rg -n 'trustDevice: true|trustDevice\\?: boolean' apps/api/src/routes/admin/auth-management.ts apps/admin-v2/src/components/auth apps/admin-v2/src/components/admin/account-settings
 ```
 
-For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`. For `AUTH-006`/`AUTH-010`, `/2fa/method` must either verify a code for the target method inside the API route or accept a same-origin Better Auth `sessionToken` proof matching the current session id, user id, and token. Session-rotating Better Auth calls must forward replacement `Set-Cookie` headers through both the API worker and admin server-function response. A browser-only prior verification without API proof is not enough.
+For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`. For `AUTH-006`/`AUTH-010`, `/2fa/method` must either verify a code for the target method inside the API route or accept a same-origin Better Auth `sessionToken` proof matching the current session id, user id, and token. Session-rotating Better Auth calls must forward replacement `Set-Cookie` headers through both the API worker and admin server-function response. A browser-only prior verification without API proof is not enough. For current `AUTH-011`, remembered-device login remains disabled: UI calls should send `trustDevice: false`, and `/api/v1/admin/auth/2fa/verify` must reject `trustDevice: true` before calling Better Auth.
 
 Admin server-function slice changes:
 
@@ -455,7 +479,8 @@ Use `pnpm check:env` as the routine drift guard. Use generated Wrangler output o
 4. Expected current verified behavior: API rejects the request until 2FA is verified.
 5. Method-change regression: submit `/api/v1/admin/auth/2fa/method` with an invalid target-method code and verify the preferred method is not changed.
 6. Session-rotation regression: password change and first-time TOTP setup must preserve the replacement Better Auth cookie on the dashboard domain; the JSON response must not expose the replacement token.
-7. Open `AUTH-011` before changing trusted-device behavior: prove TOTP-preferred login, email-preferred login, backup-code login, stale trusted-device cookies, and post-login admin API access in a browser.
+7. Current trusted-device policy regression: `POST /api/v1/admin/auth/2fa/verify` with `trustDevice: true` should return 400 and should not call Better Auth verification.
+8. Open `AUTH-011` before changing trusted-device behavior: prove TOTP-preferred login, email-preferred login, backup-code login, stale trusted-device cookies, and post-login admin API access in a browser.
 
 Scanner RBAC:
 

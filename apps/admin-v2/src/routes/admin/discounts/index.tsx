@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Plus, Trash2, Tag } from "lucide-react";
 import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import { discountsQueryOptions } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import { useCurrency } from "~/hooks/use-currency";
 import {
   useDeleteDiscount,
@@ -45,9 +46,9 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/discounts/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(discountsQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, discountsQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

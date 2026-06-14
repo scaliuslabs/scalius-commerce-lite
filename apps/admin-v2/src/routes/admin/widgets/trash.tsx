@@ -4,6 +4,7 @@ import { z } from "zod";
 import { LayoutDashboard, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { widgetsQueryOptions } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteWidget,
   usePermanentDeleteWidget,
@@ -28,9 +29,9 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/widgets/trash")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(widgetsQueryOptions({
+    await warmRouteQuery(queryClient, widgetsQueryOptions({
       showTrashed: true,
       search: deps.search || undefined,
     }));

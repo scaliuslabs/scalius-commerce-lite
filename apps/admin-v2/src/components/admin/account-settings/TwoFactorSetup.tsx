@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { authClient } from "~/lib/auth-client";
 import { Button } from "~/components/ui/button";
@@ -26,6 +27,7 @@ import { toast } from "sonner";
 import {
   set2faMethod,
 } from "~/lib/api-functions/auth-management";
+import { clearAdminRouteContextCache } from "~/lib/admin-route-context";
 import type { User } from "./AccountSettingsContainer";
 
 type TwoFactorStep = "method" | "password" | "qr" | "verify" | "backup";
@@ -37,6 +39,7 @@ interface TwoFactorSetupProps {
 }
 
 export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
+  const router = useRouter();
   const [isEnabled, setIsEnabled] = useState(user.twoFactorEnabled ?? false);
   const [currentMethod, setCurrentMethod] = useState<TwoFactorMethod>(
     (user.twoFactorMethod as TwoFactorMethod) || "email"
@@ -73,6 +76,11 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     }
 
     await set2faMethod({ data: { method, sessionToken } });
+  };
+
+  const refreshAdminContext = () => {
+    clearAdminRouteContextCache();
+    router.invalidate();
   };
 
   const handleEnable2FA = async () => {
@@ -119,6 +127,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
       setStep("backup");
       setIsEnabled(true);
       setCurrentMethod(selectedMethod);
+      refreshAdminContext();
       toast.success(
         setupMode === "change"
           ? "Verification method changed successfully"
@@ -164,6 +173,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
 
       setCurrentMethod("totp");
       setStep("backup");
+      refreshAdminContext();
       toast.success("Authenticator app configured successfully");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Verification failed");
@@ -206,6 +216,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
       setIsEnabled(false);
       setShowSetup(false);
       resetState();
+      refreshAdminContext();
       toast.success("Two-factor authentication disabled");
     } catch {
       setError("Failed to disable 2FA");

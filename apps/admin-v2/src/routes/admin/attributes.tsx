@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Tags, Trash2, Plus } from "lucide-react";
 import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import { attributesQueryOptions } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useUpdateAttribute,
   useDeleteAttribute,
@@ -48,9 +49,9 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(attributesQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, attributesQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

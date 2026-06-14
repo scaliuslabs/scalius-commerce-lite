@@ -20,6 +20,7 @@ import {
   categoryFormOptionsQueryOptions,
   productStatsQueryOptions,
 } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteProduct,
   usePermanentDeleteProduct,
@@ -77,9 +78,9 @@ function mapParams(deps: SearchParams) {
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(productsQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, productsQueryOptions(mapParams(deps)));
     void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
     void queryClient.prefetchQuery(productStatsQueryOptions());
   },

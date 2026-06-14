@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
+import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -31,6 +32,7 @@ export function UserMenu({ user }: UserMenuProps) {
   const handleSignOut = async () => {
     setIsLoading(true);
     try {
+      clearAdminRouteContextCache();
       await authClient.signOut();
       window.location.href = "/auth/login";
     } catch (error: unknown) {

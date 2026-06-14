@@ -126,6 +126,7 @@ export function DataTable<TData>({
   const isMobile = useIsMobile();
   const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
+  const showInitialLoading = isLoading && !hasRows;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -213,7 +214,13 @@ export function DataTable<TData>({
               colSpan={table.getAllColumns().length + (sortable ? 1 : 0)}
               className="h-24 text-center"
             >
-              <DataTableEmptyState config={emptyState} />
+              {showInitialLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
+                </div>
+              ) : (
+                <DataTableEmptyState config={emptyState} />
+              )}
             </TableCell>
           </TableRow>
         )}
@@ -235,6 +242,10 @@ export function DataTable<TData>({
               rows.map((row) => (
                 <div key={row.id}>{mobileCardRenderer(row)}</div>
               ))
+            ) : showInitialLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
+              </div>
             ) : (
               <DataTableEmptyState config={emptyState} />
             )}
