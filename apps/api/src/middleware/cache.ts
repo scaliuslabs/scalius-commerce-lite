@@ -46,6 +46,7 @@ export const cacheMiddleware = (
 
   return async (c, next) => {
     if (!methods.includes(c.req.method)) return next();
+    if (ttl <= 0) return next();
     if (cacheCondition && !cacheCondition(c)) return next();
 
     // KV namespace from Cloudflare Workers env binding

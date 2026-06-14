@@ -111,7 +111,9 @@ async function warmCriticalCaches(baseUrl: string): Promise<void> {
     }),
   );
 
-  const successful = results.filter((r) => r.status === "fulfilled").length;
+  const successful = results.filter(
+    (r) => r.status === "fulfilled" && r.value === true,
+  ).length;
   console.log(
     `[CacheWarm] Completed: ${successful}/${criticalEndpoints.length} endpoints warmed`,
   );
@@ -236,7 +238,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     });
   }
 
-  let body: { groups?: string[]; prefixes?: string[]; bumpVersion?: boolean } = {};
+  let body: { groups?: string[]; prefixes?: string[]; bumpVersion?: boolean };
   try {
     body = await request.json();
   } catch {
