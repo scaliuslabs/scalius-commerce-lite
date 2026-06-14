@@ -125,6 +125,25 @@ pnpm --filter @scalius/core typecheck
 
 For `CACHE-001`, payment-method, Stripe, SSLCommerz, and Polar settings writes must invalidate the API `checkout` cache group and purge storefront checkout prefixes. Public checkout config must treat `payment_methods.enabled_methods` as the outer allowlist while still filtering disabled/unconfigured gateways.
 
+Admin/storefront cache invalidation checks:
+
+```bash
+pnpm --filter @scalius/api exec vitest run src/utils/cache-invalidation.test.ts src/routes/admin/settings/site-cache-invalidation.test.ts src/routes/admin/navigation.test.ts src/routes/checkout-languages.test.ts src/routes/admin/attributes-cache-invalidation.test.ts src/routes/admin/settings/shipping-cache-invalidation.test.ts src/routes/admin/settings/hero-sliders-cache-invalidation.test.ts src/routes/admin/settings/delivery-locations-cache-invalidation.test.ts
+pnpm --filter @scalius/api typecheck
+```
+
+For `CACHE-003`, non-widget admin writes for shipping methods, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
+
+Widget cache invalidation checks:
+
+```bash
+pnpm --filter @scalius/api exec vitest run src/utils/cache-invalidation.test.ts src/routes/admin/widgets-cache-invalidation.test.ts
+pnpm --filter @scalius/core typecheck
+pnpm --filter @scalius/api typecheck
+```
+
+For `CACHE-004`, widget writes must derive invalidation from before/after widget placement snapshots. Homepage placements may warm/purge homepage prefixes, page placements with known slugs must purge exact page-render/API page prefixes, product/category/collection placements should purge exact `widgets_scope_*` prefixes, and inactive/draft widgets should not purge public storefront caches.
+
 Storefront API contract checks:
 
 ```bash
@@ -308,7 +327,7 @@ Inspect the actual task graph before trusting root scripts:
 ```bash
 node --check scripts/deploy.mjs
 pnpm check:dist-secrets
-pnpm deploy:api --dry-run
+pnpm run deploy:api -- --dry-run
 pnpm exec turbo run build --dry=json
 pnpm exec turbo run lint --filter='!@scalius/tsconfig' --dry=json
 pnpm exec turbo run deploy --filter=@scalius/api --dry=json
@@ -364,7 +383,7 @@ Use these checks to verify:
 - Build global cache inputs include app-local env files and declared build-time env names.
 - Build outputs exclude local env files such as `.dev.vars`, `.env*`, and `*.vars`.
 - Storefront build cache does not preserve stale build IDs.
-- Root and package-local `deploy` shortcuts route through `scripts/deploy.mjs --only ...` and keep typecheck, dist-secret checks, and migration gates.
+- Root and package-local deploy scripts route through `scripts/deploy.mjs --only ...` and keep typecheck, dist-secret checks, and migration gates. Use `pnpm run deploy*` from the root so pnpm does not route to its built-in `deploy` command.
 - Deploy dry runs validate typecheck/build/dist output but do not apply D1 migrations or deploy Workers.
 - `scripts/copy-flags.mjs` fails if `country-flag-icons` or required copied flags are missing.
 

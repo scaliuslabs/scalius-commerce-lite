@@ -64,7 +64,7 @@ export interface CheckoutLanguageIdInput {
 }
 
 export const getCheckoutLanguages = createServerFn({ method: "GET" })
-  .inputValidator((data: CheckoutLanguagesQueryInput) => data)
+  .validator((data: CheckoutLanguagesQueryInput) => data)
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
     for (const [key, value] of Object.entries(data)) {
@@ -77,7 +77,7 @@ export const getCheckoutLanguages = createServerFn({ method: "GET" })
   });
 
 export const createCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: CheckoutLanguageWriteInput) => data)
+  .validator((data: CheckoutLanguageWriteInput) => data)
   .handler(async ({ data }) => {
     return apiPost<CheckoutLanguagePayload>(
       "/settings/checkout-languages",
@@ -86,7 +86,7 @@ export const createCheckoutLanguage = createServerFn({ method: "POST" })
   });
 
 export const updateCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateCheckoutLanguageInput) => data)
+  .validator((data: UpdateCheckoutLanguageInput) => data)
   .handler(async ({ data }) => {
     return apiPut<CheckoutLanguagePayload>(
       `/settings/checkout-languages/${data.id}`,
@@ -95,7 +95,7 @@ export const updateCheckoutLanguage = createServerFn({ method: "POST" })
   });
 
 export const softDeleteCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: CheckoutLanguageIdInput) => data)
+  .validator((data: CheckoutLanguageIdInput) => data)
   .handler(async ({ data }) => {
     return apiPatch<Record<string, never>>(
       `/settings/checkout-languages/${data.id}`,
@@ -103,13 +103,13 @@ export const softDeleteCheckoutLanguage = createServerFn({ method: "POST" })
   });
 
 export const deleteCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: CheckoutLanguageIdInput) => data)
+  .validator((data: CheckoutLanguageIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/settings/checkout-languages/${data.id}`);
   });
 
 export const restoreCheckoutLanguage = createServerFn({ method: "POST" })
-  .inputValidator((data: CheckoutLanguageIdInput) => data)
+  .validator((data: CheckoutLanguageIdInput) => data)
   .handler(async ({ data }) => {
     return apiPost<Record<string, never>>(
       `/settings/checkout-languages/${data.id}/restore`,

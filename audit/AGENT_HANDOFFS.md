@@ -198,7 +198,7 @@ Scope:
 - `apps/admin-v2/src/lib/api.mutations.ts`
 - one selected admin domain route/component set
 
-Current state: `ADMIN-001` is verified. The legacy admin server-function barrel has been removed, and 251 server functions live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`. Future admin simplification should focus on one domain at a time: remove UI casts, replace broad DTO adapters, keep URL-search loaders aligned with query keys, and reduce direct component calls where a mutation/query wrapper would be clearer.
+Current state: `ADMIN-001` is verified. The legacy admin server-function barrel has been removed, and 252 `createServerFn()` calls live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`. Future admin simplification should focus on one domain at a time: remove UI casts, replace broad DTO adapters, keep URL-search loaders aligned with query keys, and reduce direct component calls where a mutation/query wrapper would be clearer.
 
 Prompt:
 

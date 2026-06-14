@@ -58,7 +58,10 @@ export async function getAuthSession(
 
   try {
     const result = await retryTransientD1(
-      () => auth.api.getSession({ headers }),
+      () => auth.api.getSession({
+        headers,
+        query: { disableCookieCache: true },
+      }),
       {
         delaysMs: AUTH_RETRY_DELAYS_MS,
         onRetry: (error, attempt, delayMs) => {

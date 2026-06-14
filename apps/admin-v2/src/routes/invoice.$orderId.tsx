@@ -4,7 +4,7 @@ import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import type { InvoiceData, OrderItem } from "~/types/api-responses";
 
 const getOrderInvoiceData = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   // @ts-expect-error -- Known TanStack Start handler type issue
   .handler(async ({ data }) => {
     const { apiGet } = await import("~/lib/api.server");

@@ -38,7 +38,7 @@ export function AdminHeader({ user }: AdminHeaderProps) {
           <div className="hidden md:flex items-center">
             <CacheNukeButton />
             <div className="h-5 w-px bg-border mx-2.5" />
-            <NotificationDropdown />
+            <NotificationDropdown userId={user.id} />
             <div className="h-5 w-px bg-border mx-2.5" />
           </div>
           <DarkModeToggle />

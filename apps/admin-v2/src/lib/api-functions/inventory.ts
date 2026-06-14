@@ -134,13 +134,13 @@ function toQueryParams(data: InventoryQueryInput): Record<string, string> {
 }
 
 export const getInventory = createServerFn({ method: "GET" })
-  .inputValidator((data: InventoryQueryInput) => data)
+  .validator((data: InventoryQueryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<InventoryOverviewPayload>("/inventory", toQueryParams(data));
   });
 
 export const adjustInventory = createServerFn({ method: "POST" })
-  .inputValidator((data: AdjustInventoryInput) => data)
+  .validator((data: AdjustInventoryInput) => data)
   .handler(async ({ data }) => {
     const { variantId, ...body } = data;
     return apiPost<AdjustInventoryResult>(
@@ -150,13 +150,13 @@ export const adjustInventory = createServerFn({ method: "POST" })
   });
 
 export const stockAdjust = createServerFn({ method: "POST" })
-  .inputValidator((data: StockAdjustInput) => data)
+  .validator((data: StockAdjustInput) => data)
   .handler(async ({ data }) => {
     return apiPost<AdjustInventoryResult>("/inventory/stock-adjust", data);
   });
 
 export const stockSet = createServerFn({ method: "POST" })
-  .inputValidator((data: StockSetInput) => data)
+  .validator((data: StockSetInput) => data)
   .handler(async ({ data }) => {
     return apiPost<AdjustInventoryResult>("/inventory/stock-set", data);
   });

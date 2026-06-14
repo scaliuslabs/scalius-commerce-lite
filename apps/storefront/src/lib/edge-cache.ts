@@ -26,7 +26,7 @@ interface EdgeCacheOptions {
 
 interface CacheContext {
   cache: Cache | null;
-  kvVersion: string;
+  kvVersion: string | null;
   hostname: string;
   waitUntil: ((promise: Promise<any>) => void) | null;
 }
@@ -57,7 +57,7 @@ export const cacheContextAls: AsyncLocalStorageLike<CacheContext> = _cacheAls;
 /** Default context used when ALS is not yet initialized. */
 const DEFAULT_CONTEXT: CacheContext = {
   cache: null,
-  kvVersion: "1",
+  kvVersion: null,
   hostname: "localhost",
   waitUntil: null,
 };
@@ -80,7 +80,7 @@ function getCacheContext(): CacheContext {
  */
 export function setEdgeCacheContext(
   cache: Cache | null,
-  kvVersion: string,
+  kvVersion: string | null,
   hostname: string,
   waitUntil: ((promise: Promise<any>) => void) | null,
 ): void {
@@ -119,6 +119,9 @@ const inflight = new Map<string, Promise<any>>();
  */
 function buildL2CacheKey(key: string): string {
   const ctx = getCacheContext();
+  if (!ctx.kvVersion) {
+    throw new Error("Cannot build L2 cache key without a cache version");
+  }
   const encodedKey = encodeURIComponent(key);
   // Use actual hostname with a reserved path prefix for API cache
   // This follows Cloudflare's recommendation to avoid hostname mismatches
@@ -126,6 +129,9 @@ function buildL2CacheKey(key: string): string {
 }
 
 function buildScopedMemoryKey(key: string, ctx: CacheContext): string {
+  if (!ctx.kvVersion) {
+    return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v=disabled`;
+  }
   return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v${ctx.kvVersion}`;
 }
 
@@ -135,7 +141,7 @@ function buildScopedMemoryKey(key: string, ctx: CacheContext): string {
  */
 async function getFromL2<T>(key: string): Promise<T | null> {
   const ctx = getCacheContext();
-  if (!ctx.cache) return null;
+  if (!ctx.cache || !ctx.kvVersion) return null;
 
   try {
     const cacheKeyUrl = buildL2CacheKey(key);
@@ -165,7 +171,7 @@ async function getFromL2<T>(key: string): Promise<T | null> {
  */
 function storeInL2<T>(key: string, data: T, ttlSeconds: number): void {
   const ctx = getCacheContext();
-  if (!ctx.cache) return;
+  if (!ctx.cache || !ctx.kvVersion) return;
 
   const cacheKeyUrl = buildL2CacheKey(key);
   const response = new Response(JSON.stringify(data), {
@@ -205,6 +211,10 @@ export async function withEdgeCache<T>(
 ): Promise<T | null> {
   const ttlSeconds = options.ttlSeconds ?? DEFAULT_TTL_SECONDS;
   const ctx = getCacheContext();
+
+  if (!ctx.kvVersion) {
+    return fetcher();
+  }
 
   // Include hostname, build, and KV version in memory keys so warm isolates
   // cannot share data across custom domains or deployed builds.

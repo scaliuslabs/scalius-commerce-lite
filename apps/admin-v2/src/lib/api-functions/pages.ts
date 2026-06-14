@@ -97,68 +97,68 @@ function toPagesParams(input: PagesQueryInput): Record<string, string> {
 }
 
 export const getPages = createServerFn({ method: "GET" })
-  .inputValidator((data: PagesQueryInput) => data)
+  .validator((data: PagesQueryInput) => data)
   .handler(async ({ data }): Promise<PagesListPayload> => {
     return apiGet<PagesListPayload>("/pages", toPagesParams(data));
   });
 
 export const getPage = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<PageDto> => {
     return apiGet<PageDto>(`/pages/${data.id}`);
   });
 
 export const createPage = createServerFn({ method: "POST" })
-  .inputValidator((data: CreatePageInput) => data)
+  .validator((data: CreatePageInput) => data)
   .handler(async ({ data }): Promise<PageIdPayload> => {
     return apiPost<PageIdPayload>("/pages", data);
   });
 
 export const updatePage = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdatePageInput) => data)
+  .validator((data: UpdatePageInput) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     const { id, ...body } = data;
     return apiPut<Record<string, never>>(`/pages/${id}`, body);
   });
 
 export const deletePage = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/pages/${data.id}`);
   });
 
 export const permanentDeletePage = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/pages/${data.id}/permanent`);
   });
 
 export const restorePage = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<MessagePayload> => {
     return apiPost<MessagePayload>(`/pages/${data.id}/restore`);
   });
 
 export const bulkDeletePages = createServerFn({ method: "POST" })
-  .inputValidator((data: { pageIds: string[]; permanent?: boolean }) => data)
+  .validator((data: { pageIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-delete", data);
   });
 
 export const bulkRestorePages = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-restore", data);
   });
 
 export const bulkPublishPages = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-publish", data);
   });
 
 export const bulkUnpublishPages = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-unpublish", data);
   });

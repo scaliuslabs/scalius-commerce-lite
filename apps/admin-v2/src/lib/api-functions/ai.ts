@@ -109,13 +109,13 @@ export interface AiContextBatchDetails {
 }
 
 export const getAiPrompts = createServerFn({ method: "GET" })
-  .inputValidator((data: AiPromptInput) => data)
+  .validator((data: AiPromptInput) => data)
   .handler(async ({ data }) => {
     return apiGetText("/ai-prompts", { type: data.type });
   });
 
 export const getAiContextBatchDetails = createServerFn({ method: "POST" })
-  .inputValidator((data: AiContextBatchDetailsInput) => data)
+  .validator((data: AiContextBatchDetailsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<AiContextBatchDetails>("/ai-context/batch-details", data);
   });

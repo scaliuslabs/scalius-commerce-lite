@@ -64,56 +64,56 @@ function buildCustomersParams(data: CustomersQueryInput): Record<string, string>
 }
 
 export const getCustomers = createServerFn({ method: "GET" })
-  .inputValidator((data: CustomersQueryInput) => data)
+  .validator((data: CustomersQueryInput) => data)
   .handler(async ({ data }): Promise<CustomersListPayload> => {
     return apiGet<CustomersListPayload>("/customers", buildCustomersParams(data));
   });
 
 export const getCustomer = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<CustomerDto> => {
     return apiGet<CustomerDto>(`/customers/${data.id}`);
   });
 
 export const getCustomerHistory = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<CustomerHistoryPayload> => {
     return apiGet<CustomerHistoryPayload>(`/customers/${data.id}/history`);
   });
 
 export const createCustomer = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateCustomerInput) => data)
+  .validator((data: CreateCustomerInput) => data)
   .handler(async ({ data }): Promise<CreateCustomerPayload> => {
     return apiPost<CreateCustomerPayload>("/customers", data);
   });
 
 export const updateCustomer = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateCustomerInput) => data)
+  .validator((data: UpdateCustomerInput) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     const { id, ...body } = data;
     return apiPut<Record<string, never>>(`/customers/${id}`, body);
   });
 
 export const deleteCustomer = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/customers/${data.id}`);
   });
 
 export const permanentDeleteCustomer = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/customers/${data.id}/permanent`);
   });
 
 export const restoreCustomer = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>(`/customers/${data.id}/restore`);
   });
 
 export const bulkDeleteCustomers = createServerFn({ method: "POST" })
-  .inputValidator((data: BulkDeleteCustomersInput) => data)
+  .validator((data: BulkDeleteCustomersInput) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/customers/bulk-delete", data);
   });

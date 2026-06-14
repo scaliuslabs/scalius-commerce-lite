@@ -169,13 +169,13 @@ export type AdminNotificationChannelsPayload = NotificationChannelsPayload;
 export type UpdateAdminNotificationChannelsInput = NotificationChannelsPayload;
 
 export const getSettingsByCategory = createServerFn({ method: "GET" })
-  .inputValidator((data: SettingsByCategoryInput) => data)
+  .validator((data: SettingsByCategoryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<SettingsPayload>(`/settings/${data.category}`);
   });
 
 export const updateSettingsByCategory = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateSettingsByCategoryInput) => data)
+  .validator((data: UpdateSettingsByCategoryInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>(`/settings/${data.category}`, data.settings);
   });
@@ -187,13 +187,13 @@ export const getGeneralSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const saveHeaderConfig = createServerFn({ method: "POST" })
-  .inputValidator((data: HeaderConfigInput) => data)
+  .validator((data: HeaderConfigInput) => data)
   .handler(async ({ data }) => {
     return apiPost<EmptyPayload>("/settings/header", data);
   });
 
 export const saveFooterConfig = createServerFn({ method: "POST" })
-  .inputValidator((data: FooterConfigInput) => data)
+  .validator((data: FooterConfigInput) => data)
   .handler(async ({ data }) => {
     return apiPost<EmptyPayload>("/settings/footer", data);
   });
@@ -205,7 +205,7 @@ export const getStorefrontUrl = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateStorefrontUrl = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateStorefrontUrlInput) => data)
+  .validator((data: UpdateStorefrontUrlInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/storefront-url", data);
   });
@@ -217,7 +217,7 @@ export const getCurrencySettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateCurrencySettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateCurrencySettingsInput) => data)
+  .validator((data: UpdateCurrencySettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/currency", data);
   });
@@ -229,7 +229,7 @@ export const getSeoSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateSeoSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateSeoSettingsInput) => data)
+  .validator((data: UpdateSeoSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/seo", data);
   });
@@ -241,7 +241,7 @@ export const getSecuritySettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateSecuritySettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateSecuritySettingsInput) => data)
+  .validator((data: UpdateSecuritySettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/security", data);
   });
@@ -253,7 +253,7 @@ export const getAuthSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateAuthSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateAuthSettingsInput) => data)
+  .validator((data: UpdateAuthSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/auth", data);
   });
@@ -265,7 +265,7 @@ export const getEmailSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateEmailSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateEmailSettingsInput) => data)
+  .validator((data: UpdateEmailSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/email", data);
   });
@@ -277,7 +277,7 @@ export const getFirebaseSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateFirebaseSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateFirebaseSettingsInput) => data)
+  .validator((data: UpdateFirebaseSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/firebase", data);
   });
@@ -289,7 +289,7 @@ export const getBusinessSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateBusinessSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateBusinessSettingsInput) => data)
+  .validator((data: UpdateBusinessSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/business", data);
   });
@@ -301,7 +301,7 @@ export const getThemeSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateThemeSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateThemeSettingsInput) => data)
+  .validator((data: UpdateThemeSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/theme", data);
   });
@@ -313,7 +313,7 @@ export const getMediaSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateMediaSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateMediaSettingsInput) => data)
+  .validator((data: UpdateMediaSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/media", data);
   });
@@ -325,7 +325,7 @@ export const getWidgetAiSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateWidgetAiSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateWidgetAiSettingsInput) => data)
+  .validator((data: UpdateWidgetAiSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/widget-ai", data);
   });
@@ -337,7 +337,7 @@ export const getSmsSettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateSmsSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateSmsSettingsInput) => data)
+  .validator((data: UpdateSmsSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/sms", data);
   });
@@ -349,13 +349,13 @@ export const getMetaConversionsSettings = createServerFn({
 });
 
 export const updateMetaConversionsSettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateMetaConversionsSettingsInput) => data)
+  .validator((data: UpdateMetaConversionsSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<SettingsPayload>("/settings/meta-conversions", data);
   });
 
 export const getMetaConversionsLogs = createServerFn({ method: "GET" })
-  .inputValidator((data: MetaConversionsLogsInput) => data)
+  .validator((data: MetaConversionsLogsInput) => data)
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
     if (data.page) params.page = String(data.page);
@@ -385,7 +385,7 @@ export const getAllowedCountries = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateAllowedCountries = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateAllowedCountriesInput) => data)
+  .validator((data: UpdateAllowedCountriesInput) => data)
   .handler(async ({ data }) => {
     return apiPut<MessagePayload>("/settings/allowed-countries", data);
   });
@@ -397,19 +397,19 @@ export const getPaymentMethods = createServerFn({ method: "GET" }).handler(
 );
 
 export const updatePaymentMethods = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdatePaymentMethodsInput) => data)
+  .validator((data: UpdatePaymentMethodsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/payment-methods", data);
   });
 
 export const getPaymentGatewaySettings = createServerFn({ method: "GET" })
-  .inputValidator((data: PaymentGatewaySettingsInput) => data)
+  .validator((data: PaymentGatewaySettingsInput) => data)
   .handler(async ({ data }) => {
     return apiGet<SettingsPayload>(`/settings/${data.gateway}`);
   });
 
 export const updatePaymentGatewaySettings = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdatePaymentGatewaySettingsInput) => data)
+  .validator((data: UpdatePaymentGatewaySettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>(`/settings/${data.gateway}`, data.settings);
   });
@@ -421,7 +421,7 @@ export const getNotificationChannels = createServerFn({
 });
 
 export const updateNotificationChannels = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateNotificationChannelsInput) => data)
+  .validator((data: UpdateNotificationChannelsInput) => data)
   .handler(async ({ data }) => {
     return apiPut<NotificationChannelsPayload>(
       "/settings/notification-channels",
@@ -440,7 +440,7 @@ export const getAdminNotificationChannels = createServerFn({
 export const updateAdminNotificationChannels = createServerFn({
   method: "POST",
 })
-  .inputValidator((data: UpdateAdminNotificationChannelsInput) => data)
+  .validator((data: UpdateAdminNotificationChannelsInput) => data)
   .handler(async ({ data }) => {
     return apiPut<AdminNotificationChannelsPayload>(
       "/settings/notification-channels/admin-channels",

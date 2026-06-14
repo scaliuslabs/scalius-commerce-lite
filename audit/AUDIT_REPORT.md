@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items are marked `Verified` as of 2026-06-13. A fresh focused re-audit on 2026-06-14 found new auth, payment/order, storefront, and platform risks. `AUTH-002`, `AUTH-003`, `SUPPLY-001`, and `BUILD-004` are now verified locally and deployed. Active high-priority follow-up remains open for late payment confirmations on terminal orders, SSLCommerz deposit/balance idempotency, abandoned-cleanup/payment races, manual fulfillment atomicity, and COD ledger correctness. See `audit/REMEDIATION_TRACKER.md` for the live queue.
+Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, and `MEDIA-001` are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
 
 ## Validation Performed
 
@@ -24,11 +24,11 @@ Current tracked remediation state: the original tracker items are marked `Verifi
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 101 test files and 655 tests after the 2026-06-14 auth/dependency slice.
-- Full `pnpm run deploy`: passed and redeployed API, admin, and storefront Workers.
-- Live HTTP and browser checks: API health, admin `/admin`, and storefront `/` returned successfully after redeploy.
-- Storefront-only `pnpm --filter @scalius/storefront run deploy`: passed after `BUILD-004`, deploying storefront version `decaeaeb-7319-4cf1-965a-d390e8c32759`.
-- Live `BUILD-004` checks: `/seo-regressions.test` returns 404, storefront `/` returns the new build id `src-1640a2a1cb69bdc0`, and browser storefront smoke has no captured console errors.
+- `pnpm test`: passed 115 files and 740 tests after the widget cache-invalidation slice.
+- `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
+- Full `pnpm deploy`: passed and redeployed API, admin, and storefront Workers. Deploy output versions: API `a6b3e5ff-1730-4748-a288-d99e51c1fb63`, admin `788dbc42-4852-437e-bf85-2b6a1249087a`, storefront `90ab10e1-74a7-4920-a247-18ef89b06d96`.
+- Live HTTP and browser checks: API setup/OpenAPI, storefront home/cart/checkout, dashboard demo login, authenticated `/admin`, and authenticated `/admin/orders` returned successfully after redeploy with no captured browser console errors.
+- The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
 
@@ -249,7 +249,7 @@ Status: Verified on 2026-06-13. Root targeted deploy scripts now use `scripts/de
 
 ### OPS-003: Deploy dry-run mode still mutates production
 
-`pnpm deploy:api --dry-run` reached the API workspace build dry-run but then continued through remote D1 migration checks and the final Worker deploy because `scripts/deploy.mjs` did not parse dry-run as a top-level mode.
+The targeted API deploy dry-run reached the API workspace build dry-run but then continued through remote D1 migration checks and the final Worker deploy because `scripts/deploy.mjs` did not parse dry-run as a top-level mode.
 
 Status: Verified on 2026-06-13. `scripts/deploy.mjs --dry-run` now runs typecheck, build, and dist-secret checks, then skips D1 migrations and Worker deploys for full and targeted deploys. `--migrate-only --dry-run` reports the intended migration target without applying migrations.
 
@@ -357,7 +357,7 @@ Status: Verified on 2026-06-13 and deployed to API version `b361f707-6450-42f0-9
 
 Fix direction: make restore either reject unsafe terminal/deducted/restored statuses or atomically choose a valid status/inventory pair. Add focused tests for restored `delivered/deducted` and `cancelled/restored` orders so no order can end as `delivered + reserved` or `cancelled + reserved`.
 
-Status: Verified on 2026-06-13 and deployed to API version `c36bc4ca-bccf-4276-9be9-5c0f86e562ea`. Trash restore now applies an explicit inventory/status policy: incomplete/pending/processing/confirmed restored orders re-reserve variant stock or become `none` when no variant inventory exists, cancelled/returned/refunded remain restored, invalid existing reserved/deducted pairs reject, and shipped/delivered/completed/partially-refunded restored orders reject until reconciled. Successful re-reservations are compensated if the final restore CAS fails. The central inventory transition helper also re-reserves only `isStockReservableStatus()` statuses. Focused tests cover the restore matrix, CAS compensation, reservation failure preserving `deletedAt`, and non-reservable central transition behavior; root `pnpm test` passed 99 files / 643 tests. Live checks passed for API health, dashboard login/admin/orders, demo email sign-in, and storefront with no browser console errors. See `ORDER-011` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13 and deployed to API version `c36bc4ca-bccf-4276-9be9-5c0f86e562ea`. Trash restore now applies an explicit inventory/status policy: incomplete/pending/processing/confirmed restored orders re-reserve variant stock or become `none` when no variant inventory exists, cancelled/returned/refunded remain restored, invalid existing reserved/deducted pairs reject, and shipped/delivered/completed/partially-refunded restored orders reject until reconciled. Successful re-reservations are compensated if the final restore CAS fails. The central inventory transition helper also re-reserves only `isStockReservableStatus()` statuses. Focused tests cover the restore matrix, CAS compensation, reservation failure preserving `deletedAt`, and non-reservable central transition behavior; root `pnpm test` passed at the then-current suite size. Live checks passed for API health, dashboard login/admin/orders, demo email sign-in, and storefront with no browser console errors. See `ORDER-011` in `REMEDIATION_TRACKER.md`.
 
 ### DEL-002: Shipment deletion can erase reconciliation evidence while a claim remains active
 
@@ -365,11 +365,11 @@ Status: Verified on 2026-06-13 and deployed to API version `c36bc4ca-bccf-4276-9
 
 Fix direction: shipment deletion should load the linked order claim and block active claimed shipments, especially `reconcile_required`. Only non-claimed terminal/failed shipment rows should be deletable.
 
-Status: Verified on 2026-06-13 and deployed to API version `5a206ef1-adf4-42f3-bcab-ffe13c7d1e40`. `deleteShipmentRecord()` now loads the linked order claim before deletion, rejects active claims, rejects `reconcile_required`, rejects unresolved expired matching claims for nonterminal shipments, and clears stale failed/cancelled matching claims before deleting. Focused tests cover creating/reconciliation rows, future and indefinite active claims, expired matching nonterminal claims, unclaimed failed deletion, stale failed claim cleanup, and unrelated expired claims; root `pnpm test` passed 100 files / 651 tests. Live checks passed for API health, dashboard login/admin/orders, demo email sign-in, and storefront with no browser console errors. See `DEL-002` in `REMEDIATION_TRACKER.md`.
+Status: Verified on 2026-06-13 and deployed to API version `5a206ef1-adf4-42f3-bcab-ffe13c7d1e40`. `deleteShipmentRecord()` now loads the linked order claim before deletion, rejects active claims, rejects `reconcile_required`, rejects unresolved expired matching claims for nonterminal shipments, and clears stale failed/cancelled matching claims before deleting. Focused tests cover creating/reconciliation rows, future and indefinite active claims, expired matching nonterminal claims, unclaimed failed deletion, stale failed claim cleanup, and unrelated expired claims; root `pnpm test` passed at the then-current suite size. Live checks passed for API health, dashboard login/admin/orders, demo email sign-in, and storefront with no browser console errors. See `DEL-002` in `REMEDIATION_TRACKER.md`.
 
 ### ADMIN-001: Admin API wrapper layer was too large and partially outside TypeScript
 
-The legacy `apps/admin-v2/src/lib/api.functions.ts` barrel has been removed. Admin server functions now live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, currently 251 exported server functions. The final widget extraction also moved widget history/placement-target calls to generated SDK request/response types, stripped widget update path IDs from JSON bodies, and tightened widget OpenAPI schemas before regenerating the SDK.
+The legacy `apps/admin-v2/src/lib/api.functions.ts` barrel has been removed. Admin server functions now live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, currently 252 createServerFn() calls. The final widget extraction also moved widget history/placement-target calls to generated SDK request/response types, stripped widget update path IDs from JSON bodies, and tightened widget OpenAPI schemas before regenerating the SDK.
 
 Fix direction: keep new admin data access in domain-specific server-function slices with generated SDK request types or shared schemas. Do not reintroduce a broad barrel or file-level `@ts-nocheck`.
 
@@ -623,7 +623,7 @@ Status: Verified on 2026-06-13. `happy-dom` is now declared in the storefront pa
 
 Fix direction: remove volatile counts from prose or generate them automatically.
 
-Status: Verified on 2026-06-14. The API-client README points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and documents the bundled generated Fetch client instead of the deprecated `@hey-api/client-fetch` runtime package. The database README avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0037`, and removes a stale singleton-constraint limitation.
+Status: Verified on 2026-06-14. The API-client README points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and documents the bundled generated Fetch client instead of the deprecated `@hey-api/client-fetch` runtime package. The database README avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0039`, and removes a stale singleton-constraint limitation.
 
 ### CLEAN-001: Route directory contains `.DS_Store`
 
@@ -644,7 +644,7 @@ Status: Verified on 2026-06-13. `DashboardChart` now renders a fixed-height empt
 - API RBAC for unmapped admin routes now appears fail-closed. Do not repeat "RBAC fallback allows unknown admin routes" without new evidence.
 - Raw scanner QR-token bearer bypass and scanner token mint RBAC are remediated. Do not repeat scanner-token claims without checking the current route and tests.
 - D1 migration drift was not confirmed by `drizzle-kit check`; metadata/generation risk remains.
-- Widget sanitizer bypass was not re-confirmed in this pass. The confirmed widget issue is the failing script-extraction test.
+- Widget sanitizer bypass was not re-confirmed in this pass. Previously confirmed widget script-extraction and target-aware cache-invalidation issues are remediated; repeat widget claims should cite fresh evidence and current tests.
 
 ## Simplification Themes
 

@@ -176,7 +176,25 @@ export const DashboardStats = memo(function DashboardStats({
 }: DashboardStatsProps & { currentMonth: { customerGrowth?: number } }) {
 
   const { symbol } = useCurrency();
+  const [shouldLoadChart, setShouldLoadChart] = React.useState(false);
   const chartConfig = React.useMemo(() => getChartConfig(symbol), [symbol]);
+
+  React.useEffect(() => {
+    const win = window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (win.requestIdleCallback) {
+      const idleId = win.requestIdleCallback(() => setShouldLoadChart(true), {
+        timeout: 1200,
+      });
+      return () => win.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = window.setTimeout(() => setShouldLoadChart(true), 800);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   return (
     <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the dashboard. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
@@ -244,13 +262,17 @@ export const DashboardStats = memo(function DashboardStats({
         </motion.div>
       </motion.div>
 
-      <Suspense fallback={<LoadingFallback height="h-[340px]" />}>
-        <DashboardChart
-          initialDailyData={initialDailyData}
-          symbol={symbol}
-          chartConfig={chartConfig}
-        />
-      </Suspense>
+      {shouldLoadChart ? (
+        <Suspense fallback={<LoadingFallback height="h-[340px]" />}>
+          <DashboardChart
+            initialDailyData={initialDailyData}
+            symbol={symbol}
+            chartConfig={chartConfig}
+          />
+        </Suspense>
+      ) : (
+        <LoadingFallback height="h-[340px]" />
+      )}
     </div>
     </ErrorBoundary>
   );

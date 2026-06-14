@@ -1,13 +1,13 @@
 # Scalius Commerce Audit
 
-Audit refresh date: 2026-06-13, workspace timezone.
+Audit refresh date: 2026-06-14, workspace timezone.
 
 This folder is the working audit system for slice-by-slice remediation. It replaces the older broad report set because several prior findings had become stale, partially remediated, or too vague to hand to future agents safely.
 
 ## Files
 
-- [AUDIT_REPORT.md](AUDIT_REPORT.md) - current findings, evidence, stale-claim corrections, and simplification themes.
-- [REMEDIATION_TRACKER.md](REMEDIATION_TRACKER.md) - actionable issue list for future fixing agents.
+- [AUDIT_REPORT.md](AUDIT_REPORT.md) - historical findings, evidence, stale-claim corrections, and simplification themes. Use the tracker for current open work.
+- [REMEDIATION_TRACKER.md](REMEDIATION_TRACKER.md) - current actionable issue list for future fixing agents.
 - [VERIFICATION_PLAYBOOK.md](VERIFICATION_PLAYBOOK.md) - commands and manual flows to verify fixes when full local dev is difficult.
 - [PORTION_REWRITE_CHECKLIST.md](PORTION_REWRITE_CHECKLIST.md) - the checklist to use when rewriting one portion at a time.
 - [AGENT_HANDOFFS.md](AGENT_HANDOFFS.md) - recommended ownership slices and prompts for future agents.
@@ -15,11 +15,15 @@ This folder is the working audit system for slice-by-slice remediation. It repla
 
 ## Current Validation Snapshot
 
-- `pnpm typecheck` passes at the repo root.
-- `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts` passes.
-- `pnpm test` currently passes: 93 test files and 556 tests.
-- Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
-- Several hard-to-run flows require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
+- `CI=true pnpm install --frozen-lockfile` passes with pnpm 11.6.0.
+- `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, and `pnpm check:dist-secrets` pass at the repo root. Lint still reports warnings only.
+- `pnpm test` currently passes: 108 files and 712 tests.
+- `pnpm --filter @scalius/database check:migrations` passes: 40 SQL files, 40 journal entries, 26 snapshots, and 14 allowed manual snapshot gaps.
+- Local stack smoke passed after `pnpm dev`: `pnpm dev:doctor --require-running`, storefront `/`, `/cart`, `/checkout`, admin login, and `/admin/orders`.
+- Full `pnpm run deploy` passed and redeployed API, admin, and storefront Workers; live API/storefront/dashboard health checks returned 200.
+- Live dashboard login with `demo@scalius.com` succeeded and `/admin/orders` loaded.
+- The live storefront missing-image issue was fixed after the smoke pass: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
+- Several hard-to-run flows still require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
 
 ## How To Use This Folder
 

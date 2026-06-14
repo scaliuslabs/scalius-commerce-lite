@@ -32,11 +32,12 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     let fetcher: typeof fetch = fetch;
     let targetUrl: string;
+    const canUseServiceBinding = Boolean(env?.BACKEND_API && !import.meta.env.DEV);
 
-    if (env?.BACKEND_API) {
+    if (canUseServiceBinding) {
       // Production: service binding (zero-latency)
       targetUrl = `http://api.internal${BACKEND_LOGOUT_PATH}`;
-      fetcher = env.BACKEND_API.fetch.bind(env.BACKEND_API);
+      fetcher = env!.BACKEND_API.fetch.bind(env!.BACKEND_API);
     } else {
       const apiBase = env?.PUBLIC_API_BASE_URL as string;
       if (!apiBase) throw new Error("PUBLIC_API_BASE_URL not configured");

@@ -69,25 +69,25 @@ export const getFraudCheckerProviders = createServerFn({
 });
 
 export const createFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: SaveFraudCheckerProviderInput) => data)
+  .validator((data: SaveFraudCheckerProviderInput) => data)
   .handler(async ({ data }) => {
     return apiPost<FraudCheckerProviderPayload>("/fraud-checker", data);
   });
 
 export const updateFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateFraudCheckerProviderInput) => data)
+  .validator((data: UpdateFraudCheckerProviderInput) => data)
   .handler(async ({ data }) => {
     return apiPut<FraudCheckerProviderPayload>("/fraud-checker", data);
   });
 
 export const deleteFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: FraudCheckerProviderIdInput) => data)
+  .validator((data: FraudCheckerProviderIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<Record<string, never>>(`/fraud-checker/${data.id}`);
   });
 
 export const testFraudCheckerProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: FraudCheckerProviderIdInput) => data)
+  .validator((data: FraudCheckerProviderIdInput) => data)
   .handler(async ({ data }) => {
     return apiPost<FraudCheckerTestResult>(
       `/fraud-checker/${data.id}/test`,
@@ -95,7 +95,7 @@ export const testFraudCheckerProvider = createServerFn({ method: "POST" })
   });
 
 export const fraudCheckerLookup = createServerFn({ method: "POST" })
-  .inputValidator((data: FraudLookupInput) => data)
+  .validator((data: FraudLookupInput) => data)
   .handler(async ({ data }) => {
     return apiPost<FraudLookupData>("/fraud-checker/lookup", data);
   });

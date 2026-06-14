@@ -19,6 +19,8 @@ import {
     getWidgetHistory,
     restoreFromHistory,
     deleteHistoryEntry,
+    getWidgetCacheSubjects,
+    type WidgetCacheSubject,
 } from "@scalius/core/modules/widgets";
 import { NotFoundError } from "../../utils/api-error";
 import {
@@ -29,9 +31,8 @@ import {
 } from "../../schemas/responses";
 import { widgetPlacementSchema, widgetSchema } from "../../schemas/entities";
 import {
-    invalidateGroups,
-    purgeStorefrontForGroups,
-    WIDGET_CACHE_GROUPS,
+    invalidateApiCachePatterns,
+    purgeStorefrontForPrefixes,
 } from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -102,9 +103,70 @@ const widgetHistoryEntrySchema = z.object({
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-async function invalidateWidgetCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
-    await invalidateGroups([...WIDGET_CACHE_GROUPS], c.env?.CACHE);
-    await purgeStorefrontForGroups([...WIDGET_CACHE_GROUPS], c.env);
+function isPublicWidgetSubject(subject: WidgetCacheSubject): boolean {
+    return subject.isActive && subject.deletedAt == null;
+}
+
+function isLivePlacement(placement: WidgetCacheSubject["placements"][number]): boolean {
+    return placement.isActive && placement.deletedAt == null;
+}
+
+function collectWidgetCacheInvalidation(subjects: WidgetCacheSubject[]) {
+    const apiPatterns = new Set<string>();
+    const storefrontPrefixes = new Set<string>();
+    let warmHomepage = false;
+
+    for (const subject of subjects) {
+        if (!isPublicWidgetSubject(subject)) continue;
+
+        apiPatterns.add(`api:widgets:single:/api/v1/widgets/${subject.id}*`);
+        storefrontPrefixes.add(`widget_${subject.id}`);
+
+        for (const placement of subject.placements.filter(isLivePlacement)) {
+            if (placement.scope === "homepage") {
+                apiPatterns.add("api:widgets:active-homepage:*");
+                apiPatterns.add("api:storefront:homepage:*");
+                storefrontPrefixes.add("global_homepage_widgets");
+                storefrontPrefixes.add("widgets_scope_homepage_global");
+                storefrontPrefixes.add("storefront_homepage_");
+                warmHomepage = true;
+                continue;
+            }
+
+            if (!placement.scopeId) continue;
+            storefrontPrefixes.add(`widgets_scope_${placement.scope}_${placement.scopeId}`);
+
+            if (placement.scope === "page" && placement.targetSlug) {
+                apiPatterns.add(
+                    `api:storefront:page:/api/v1/storefront/pages/slug/${placement.targetSlug}*`,
+                );
+                storefrontPrefixes.add(`page_render_${placement.targetSlug}_`);
+            }
+        }
+    }
+
+    return {
+        apiPatterns: [...apiPatterns],
+        storefrontPrefixes: [...storefrontPrefixes],
+        warmHomepage,
+    };
+}
+
+async function invalidateWidgetCaches(
+    c: { env: Env },
+    subjects: WidgetCacheSubject[],
+): Promise<void> {
+    const { apiPatterns, storefrontPrefixes, warmHomepage } =
+        collectWidgetCacheInvalidation(subjects);
+    if (apiPatterns.length > 0) {
+        await invalidateApiCachePatterns(apiPatterns, c.env?.CACHE);
+    }
+    if (storefrontPrefixes.length > 0 || warmHomepage) {
+        await purgeStorefrontForPrefixes(storefrontPrefixes, c.env, {
+            groups: ["widgets"],
+            bumpVersion: warmHomepage,
+        });
+    }
 }
 
 // ── List Widgets ──
@@ -212,7 +274,8 @@ const createWidgetRoute = createRoute({
 app.openapi(createWidgetRoute, async (c) => {
     const db = c.get("db");
     const widget = await createWidget(db, c.req.valid("json"));
-    await invalidateWidgetCaches(c);
+    const subjects = await getWidgetCacheSubjects(db, [widget.id]);
+    await invalidateWidgetCaches(c, subjects);
     return created(c, widget);
 });
 
@@ -241,8 +304,9 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { ids, permanent } = c.req.valid("json");
+    const before = await getWidgetCacheSubjects(db, ids, { includeDeleted: true });
     await bulkDeleteWidgets(db, ids, permanent);
-    await invalidateWidgetCaches(c);
+    await invalidateWidgetCaches(c, before);
     return noContent(c);
 });
 
@@ -264,8 +328,10 @@ const bulkActivateRoute = createRoute({
 
 app.openapi(bulkActivateRoute, async (c) => {
     const db = c.get("db");
-    await bulkActivateWidgets(db, c.req.valid("json").ids);
-    await invalidateWidgetCaches(c);
+    const { ids } = c.req.valid("json");
+    await bulkActivateWidgets(db, ids);
+    const after = await getWidgetCacheSubjects(db, ids);
+    await invalidateWidgetCaches(c, after);
     return noContent(c);
 });
 
@@ -287,8 +353,10 @@ const bulkDeactivateRoute = createRoute({
 
 app.openapi(bulkDeactivateRoute, async (c) => {
     const db = c.get("db");
-    await bulkDeactivateWidgets(db, c.req.valid("json").ids);
-    await invalidateWidgetCaches(c);
+    const { ids } = c.req.valid("json");
+    const before = await getWidgetCacheSubjects(db, ids);
+    await bulkDeactivateWidgets(db, ids);
+    await invalidateWidgetCaches(c, before);
     return noContent(c);
 });
 
@@ -310,8 +378,10 @@ const bulkRestoreRoute = createRoute({
 
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
-    await restoreWidgets(db, c.req.valid("json").ids);
-    await invalidateWidgetCaches(c);
+    const { ids } = c.req.valid("json");
+    await restoreWidgets(db, ids);
+    const after = await getWidgetCacheSubjects(db, ids);
+    await invalidateWidgetCaches(c, after);
     return noContent(c);
 });
 
@@ -365,8 +435,10 @@ const updateWidgetRoute = createRoute({
 app.openapi(updateWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const before = await getWidgetCacheSubjects(db, [id], { includeDeleted: true });
     const result = await updateWidget(db, id, c.req.valid("json"));
-    await invalidateWidgetCaches(c);
+    const after = await getWidgetCacheSubjects(db, [id]);
+    await invalidateWidgetCaches(c, [...before, ...after]);
     return ok(c, result);
 });
 
@@ -389,8 +461,9 @@ const deleteWidgetRoute = createRoute({
 app.openapi(deleteWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const before = await getWidgetCacheSubjects(db, [id]);
     await deleteWidget(db, id);
-    await invalidateWidgetCaches(c);
+    await invalidateWidgetCaches(c, before);
     return noContent(c);
 });
 
@@ -413,8 +486,9 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const before = await getWidgetCacheSubjects(db, [id], { includeDeleted: true });
     await bulkDeleteWidgets(db, [id], true);
-    await invalidateWidgetCaches(c);
+    await invalidateWidgetCaches(c, before);
     return noContent(c);
 });
 
@@ -438,7 +512,8 @@ app.openapi(restoreWidgetRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreWidgets(db, [id]);
-    await invalidateWidgetCaches(c);
+    const after = await getWidgetCacheSubjects(db, [id]);
+    await invalidateWidgetCaches(c, after);
     return noContent(c);
 });
 
@@ -464,10 +539,12 @@ const toggleStatusRoute = createRoute({
 app.openapi(toggleStatusRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const before = await getWidgetCacheSubjects(db, [id]);
     const widget = await getWidgetById(db, id);
     if (!widget) throw new NotFoundError("Widget not found");
     const result = await updateWidget(db, id, { isActive: !widget.isActive });
-    await invalidateWidgetCaches(c);
+    const after = await getWidgetCacheSubjects(db, [id]);
+    await invalidateWidgetCaches(c, [...before, ...after]);
     return ok(c, result);
 });
 
@@ -566,8 +643,9 @@ app.openapi(restoreHistoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { historyId } = c.req.valid("json");
+    const before = await getWidgetCacheSubjects(db, [id]);
     const result = await restoreFromHistory(db, id, historyId);
-    await invalidateWidgetCaches(c);
+    await invalidateWidgetCaches(c, before);
     return ok(c, result);
 });
 

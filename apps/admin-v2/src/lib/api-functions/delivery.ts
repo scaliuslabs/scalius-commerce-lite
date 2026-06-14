@@ -152,13 +152,13 @@ export const getDeliveryProviders = createServerFn({ method: "GET" }).handler(
 );
 
 export const createDeliveryProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: DeliveryProviderWriteInput) => data)
+  .validator((data: DeliveryProviderWriteInput) => data)
   .handler(async ({ data }) => {
     return apiPost<DeliveryProviderRecord>("/settings/delivery-providers", data);
   });
 
 export const updateDeliveryProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateDeliveryProviderInput) => data)
+  .validator((data: UpdateDeliveryProviderInput) => data)
   .handler(async ({ data }) => {
     return apiPut<DeliveryProviderRecord>("/settings/delivery-providers", {
       id: data.id,
@@ -167,7 +167,7 @@ export const updateDeliveryProvider = createServerFn({ method: "POST" })
   });
 
 export const deleteDeliveryProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: DeliveryProviderIdInput) => data)
+  .validator((data: DeliveryProviderIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<Record<string, never>>(
       `/settings/delivery-providers/${data.id}`,
@@ -175,7 +175,7 @@ export const deleteDeliveryProvider = createServerFn({ method: "POST" })
   });
 
 export const testDeliveryProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: DeliveryProviderIdInput) => data)
+  .validator((data: DeliveryProviderIdInput) => data)
   .handler(async ({ data }) => {
     return apiPost<DeliveryTestResult>(
       `/settings/delivery-providers/${data.id}`,
@@ -183,7 +183,7 @@ export const testDeliveryProvider = createServerFn({ method: "POST" })
   });
 
 export const testDeliveryCredentials = createServerFn({ method: "POST" })
-  .inputValidator((data: DeliveryTestCredentialsInput) => data)
+  .validator((data: DeliveryTestCredentialsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<DeliveryTestResult>(
       "/settings/delivery-providers/create-test",
@@ -192,7 +192,7 @@ export const testDeliveryCredentials = createServerFn({ method: "POST" })
   });
 
 export const saveDeliveryProvider = createServerFn({ method: "POST" })
-  .inputValidator((data: { provider: DeliveryProviderWriteInput }) => data)
+  .validator((data: { provider: DeliveryProviderWriteInput }) => data)
   .handler(async ({ data }) => {
     const provider = data.provider;
     if (provider.id) {
@@ -208,7 +208,7 @@ export const saveDeliveryProvider = createServerFn({ method: "POST" })
   });
 
 export const getDeliveryLocations = createServerFn({ method: "GET" })
-  .inputValidator((data: DeliveryLocationsQueryInput) => data)
+  .validator((data: DeliveryLocationsQueryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<DeliveryLocationsPayload>(
       "/settings/delivery-locations",
@@ -217,7 +217,7 @@ export const getDeliveryLocations = createServerFn({ method: "GET" })
   });
 
 export const getAllDeliveryLocations = createServerFn({ method: "GET" })
-  .inputValidator((data: { type?: DeliveryLocationType | string }) => data)
+  .validator((data: { type?: DeliveryLocationType | string }) => data)
   .handler(async ({ data }) => {
     const params: DeliveryLocationsQueryInput = { limit: 500, page: 1 };
     if (data.type) params.type = data.type;
@@ -245,13 +245,13 @@ export const getAllDeliveryLocations = createServerFn({ method: "GET" })
   });
 
 export const createDeliveryLocation = createServerFn({ method: "POST" })
-  .inputValidator((data: DeliveryLocationWriteInput) => data)
+  .validator((data: DeliveryLocationWriteInput) => data)
   .handler(async ({ data }) => {
     return apiPost<DeliveryLocationPayload>("/settings/delivery-locations", data);
   });
 
 export const updateDeliveryLocation = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateDeliveryLocationInput) => data)
+  .validator((data: UpdateDeliveryLocationInput) => data)
   .handler(async ({ data }) => {
     return apiPut<DeliveryLocation>(
       `/settings/delivery-locations/${data.id}`,
@@ -260,7 +260,7 @@ export const updateDeliveryLocation = createServerFn({ method: "POST" })
   });
 
 export const deleteDeliveryLocation = createServerFn({ method: "POST" })
-  .inputValidator((data: DeliveryLocationIdInput) => data)
+  .validator((data: DeliveryLocationIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<Record<string, never>>(
       `/settings/delivery-locations/${data.id}`,
@@ -268,7 +268,7 @@ export const deleteDeliveryLocation = createServerFn({ method: "POST" })
   });
 
 export const bulkDeleteDeliveryLocations = createServerFn({ method: "POST" })
-  .inputValidator((data: BulkDeleteDeliveryLocationsInput) => data)
+  .validator((data: BulkDeleteDeliveryLocationsInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<MessagePayload>("/settings/delivery-locations", data);
   });
@@ -282,7 +282,7 @@ export const cleanAllDeliveryLocations = createServerFn({
 });
 
 export const importPathaoLocations = createServerFn({ method: "POST" })
-  .inputValidator((data: JsonRecord) => data)
+  .validator((data: JsonRecord) => data)
   .handler(async ({ data }) => {
     return apiPost<PathaoImportProgress>(
       "/settings/delivery-locations/import-pathao",

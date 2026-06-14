@@ -118,49 +118,49 @@ function toDiscountsParams(input: DiscountsQueryInput): Record<string, string> {
 }
 
 export const getDiscounts = createServerFn({ method: "GET" })
-  .inputValidator((data: DiscountsQueryInput) => data)
+  .validator((data: DiscountsQueryInput) => data)
   .handler(async ({ data }): Promise<DiscountsListPayload> => {
     return apiGet<DiscountsListPayload>("/discounts", toDiscountsParams(data));
   });
 
 export const getDiscount = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<DiscountDto> => {
     return apiGet<DiscountDto>(`/discounts/${data.id}`);
   });
 
 export const createDiscount = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateDiscountInput) => data)
+  .validator((data: CreateDiscountInput) => data)
   .handler(async ({ data }): Promise<DiscountIdPayload> => {
     return apiPost<DiscountIdPayload>("/discounts", data);
   });
 
 export const updateDiscount = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateDiscountInput) => data)
+  .validator((data: UpdateDiscountInput) => data)
   .handler(async ({ data }): Promise<DiscountIdPayload> => {
     return apiPut<DiscountIdPayload>(`/discounts/${data.id}`, data);
   });
 
 export const deleteDiscount = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/discounts/${data.id}`);
   });
 
 export const permanentDeleteDiscount = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/discounts/${data.id}/permanent`);
   });
 
 export const restoreDiscount = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     return apiPost<Record<string, never>>(`/discounts/${data.id}/restore`);
   });
 
 export const toggleDiscountStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: ToggleDiscountStatusInput) => data)
+  .validator((data: ToggleDiscountStatusInput) => data)
   .handler(async ({ data }): Promise<ToggleDiscountStatusPayload> => {
     return apiPost<ToggleDiscountStatusPayload>(
       `/discounts/${data.id}/toggle-status`,
@@ -169,7 +169,7 @@ export const toggleDiscountStatus = createServerFn({ method: "POST" })
   });
 
 export const bulkDeleteDiscounts = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: { discountIds: string[]; permanent?: boolean }) => data,
   )
   .handler(async ({ data }): Promise<void> => {
@@ -177,7 +177,7 @@ export const bulkDeleteDiscounts = createServerFn({ method: "POST" })
   });
 
 export const bulkRestoreDiscounts = createServerFn({ method: "POST" })
-  .inputValidator((data: { discountIds: string[] }) => data)
+  .validator((data: { discountIds: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/discounts/bulk-restore", data);
   });

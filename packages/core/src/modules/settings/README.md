@@ -19,7 +19,7 @@ Central store configuration: site settings (singleton row), key-value settings, 
 | `getCurrencyConfig` | `(db, kv?) => Promise<CurrencyConfig>` | Returns `CurrencyConfig { code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ??? / 1 / 2`. KV-cached at `gw:currency` (300s TTL) |
 | `getSiteSettings` | `(db, kv?) => Promise<row>` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
 | `invalidateSiteSettingsCache` | `(kv?) => Promise<void>` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
-| `getNotificationChannels` | `(db) => Promise<Record<string, string[]>>` | Returns notification channel preferences per order status. Normalizes both string-array format (canonical) and boolean-map format (from UI). Defaults to email-only for all 6 statuses |
+| `getNotificationChannels` | `(db) => Promise<Record<string, string[]>>` | Returns notification channel preferences per order status. Normalizes both string-array format (canonical) and boolean-map format (from UI). Defaults to email-only for all 9 shared order notification types |
 | `updateNotificationChannels` | `(db, input) => Promise<Record<string, string[]>>` | Saves notification channel preferences. Accepts both UI format (boolean maps, possibly wrapped in `{ channels }`) and canonical format (string arrays). Validates channels against known set (`email`, `sms`, `whatsapp`, `push`). Stores via `upsertSetting()` under category `notifications`, key `order_channels` |
 
 ### Default Notification Channels
@@ -31,7 +31,10 @@ Central store configuration: site settings (singleton row), key-value settings, 
     order_processing: ["email"],
     order_shipped: ["email"],
     order_delivered: ["email"],
+    order_completed: ["email"],
     order_cancelled: ["email"],
+    order_returned: ["email"],
+    order_refunded: ["email"],
 }
 ```
 

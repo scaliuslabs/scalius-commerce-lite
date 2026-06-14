@@ -285,6 +285,8 @@ Notable migrations:
 - `0035` -- Scoped `widgetPlacements` table and migration from legacy widget placement fields
 - `0036` -- Atomic discount redemption triggers for max uses and one-per-customer
 - `0037` -- Scoped widget JavaScript content on widgets and widget history
+- `0038` -- Order shipment claim fields for provider/manual fulfillment coordination
+- `0039` -- SSLCommerz `val_id` payment idempotency and payment plan status normalization
 
 Validate migration metadata after schema or migration edits:
 
@@ -302,7 +304,7 @@ Drizzle config (`drizzle.config.ts`):
 | Package | Purpose |
 |---------|---------|
 | `drizzle-orm` ^0.45.2 | ORM, schema definitions, query builder |
-| `drizzle-kit` (dev) ^0.31.9 | Migration generation |
+| `drizzle-kit` (dev) ^0.31.10 | Migration generation |
 | `@cloudflare/workers-types` (dev) | `D1Database` type |
 
 ## Known Gaps

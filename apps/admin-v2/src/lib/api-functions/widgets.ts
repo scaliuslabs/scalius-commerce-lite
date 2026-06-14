@@ -135,13 +135,13 @@ function buildPlacementTargetParams(
 }
 
 export const getWidgets = createServerFn({ method: "GET" })
-  .inputValidator((data: WidgetsQueryInput) => data)
+  .validator((data: WidgetsQueryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<WidgetListPayload>("/widgets", buildWidgetListParams(data));
   });
 
 export const getWidgetPlacementTargets = createServerFn({ method: "GET" })
-  .inputValidator((data: WidgetPlacementTargetsInput) => data)
+  .validator((data: WidgetPlacementTargetsInput) => data)
   .handler(async ({ data }) => {
     return apiGet<WidgetPlacementTargetsPayload>(
       "/widgets/placement-targets",
@@ -150,19 +150,19 @@ export const getWidgetPlacementTargets = createServerFn({ method: "GET" })
   });
 
 export const getWidget = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<WidgetDetailDto>(`/widgets/${data.id}`);
   });
 
 export const createWidget = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateWidgetInput) => data)
+  .validator((data: CreateWidgetInput) => data)
   .handler(async ({ data }) => {
     return apiPost<ApiData<PostApiV1AdminWidgetsResponse>>("/widgets", data);
   });
 
 export const updateWidget = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateWidgetInput) => data)
+  .validator((data: UpdateWidgetInput) => data)
   .handler(async ({ data }) => {
     const { id, ...body } = data;
     return apiPut<ApiData<PutApiV1AdminWidgetsByIdResponse>>(
@@ -172,13 +172,13 @@ export const updateWidget = createServerFn({ method: "POST" })
   });
 
 export const deleteWidget = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete<DeleteWidgetPayload>(`/widgets/${data.id}`);
   });
 
 export const permanentDeleteWidget = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete<PermanentDeleteWidgetPayload>(
       `/widgets/${data.id}/permanent`,
@@ -186,13 +186,13 @@ export const permanentDeleteWidget = createServerFn({ method: "POST" })
   });
 
 export const restoreWidget = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiPost<RestoreWidgetPayload>(`/widgets/${data.id}/restore`);
   });
 
 export const getWidgetHistory = createServerFn({ method: "GET" })
-  .inputValidator((data: { widgetId: string }) => data)
+  .validator((data: { widgetId: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<WidgetHistoryEntryDto[]>(
       `/widgets/${data.widgetId}/history`,
@@ -200,7 +200,7 @@ export const getWidgetHistory = createServerFn({ method: "GET" })
   });
 
 export const createWidgetHistorySnapshot = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateWidgetHistorySnapshotInput) => data)
+  .validator((data: CreateWidgetHistorySnapshotInput) => data)
   .handler(async ({ data }) => {
     return apiPost<CreateWidgetHistorySnapshotPayload>(
       `/widgets/${data.widgetId}/history`,
@@ -209,7 +209,7 @@ export const createWidgetHistorySnapshot = createServerFn({ method: "POST" })
   });
 
 export const restoreWidgetHistory = createServerFn({ method: "POST" })
-  .inputValidator((data: RestoreWidgetHistoryInput) => data)
+  .validator((data: RestoreWidgetHistoryInput) => data)
   .handler(async ({ data }) => {
     return apiPost<RestoreWidgetHistoryPayload>(
       `/widgets/${data.widgetId}/history/restore`,
@@ -218,7 +218,7 @@ export const restoreWidgetHistory = createServerFn({ method: "POST" })
   });
 
 export const deleteWidgetHistory = createServerFn({ method: "POST" })
-  .inputValidator((data: DeleteWidgetHistoryInput) => data)
+  .validator((data: DeleteWidgetHistoryInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<DeleteWidgetHistoryPayload>(
       `/widgets/${data.widgetId}/history/${data.historyId}`,
@@ -226,25 +226,25 @@ export const deleteWidgetHistory = createServerFn({ method: "POST" })
   });
 
 export const bulkDeleteWidgets = createServerFn({ method: "POST" })
-  .inputValidator((data: BulkDeleteWidgetsInput) => data)
+  .validator((data: BulkDeleteWidgetsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<BulkDeleteWidgetsPayload>("/widgets/bulk-delete", data);
   });
 
 export const bulkRestoreWidgets = createServerFn({ method: "POST" })
-  .inputValidator((data: BulkWidgetIdsInput) => data)
+  .validator((data: BulkWidgetIdsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<BulkRestoreWidgetsPayload>("/widgets/bulk-restore", data);
   });
 
 export const bulkActivateWidgets = createServerFn({ method: "POST" })
-  .inputValidator((data: ApiBody<PostApiV1AdminWidgetsBulkActivateData>) => data)
+  .validator((data: ApiBody<PostApiV1AdminWidgetsBulkActivateData>) => data)
   .handler(async ({ data }) => {
     return apiPost<BulkActivateWidgetsPayload>("/widgets/bulk-activate", data);
   });
 
 export const bulkDeactivateWidgets = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: ApiBody<PostApiV1AdminWidgetsBulkDeactivateData>) => data,
   )
   .handler(async ({ data }) => {

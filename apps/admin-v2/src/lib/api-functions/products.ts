@@ -238,13 +238,13 @@ function toProductsParams(input: ProductsQueryInput): Record<string, string> {
 }
 
 export const getProducts = createServerFn({ method: "GET" })
-  .inputValidator((data: ProductsQueryInput) => data)
+  .validator((data: ProductsQueryInput) => data)
   .handler(async ({ data }): Promise<ProductsListPayload> => {
     return apiGet<ProductsListPayload>("/products", toProductsParams(data));
   });
 
 export const getProduct = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<ProductDetailDto> => {
     return apiGet<ProductDetailDto>(`/products/${data.id}`);
   });
@@ -256,49 +256,49 @@ export const getProductStats = createServerFn({ method: "GET" }).handler(
 );
 
 export const createProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateProductInput) => data)
+  .validator((data: CreateProductInput) => data)
   .handler(async ({ data }): Promise<ProductIdPayload> => {
     return apiPost<ProductIdPayload>("/products", data);
   });
 
 export const updateProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateProductInput) => data)
+  .validator((data: UpdateProductInput) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     return apiPut<Record<string, never>>(`/products/${data.id}`, data);
   });
 
 export const deleteProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/products/${data.id}`);
   });
 
 export const permanentDeleteProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/products/${data.id}/permanent`);
   });
 
 export const restoreProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     return apiPost<Record<string, never>>(`/products/${data.id}/restore`);
   });
 
 export const bulkDeleteProducts = createServerFn({ method: "POST" })
-  .inputValidator((data: { productIds: string[]; permanent?: boolean }) => data)
+  .validator((data: { productIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/products/bulk-delete", data);
   });
 
 export const getProductVariants = createServerFn({ method: "GET" })
-  .inputValidator((data: { productId: string }) => data)
+  .validator((data: { productId: string }) => data)
   .handler(async ({ data }): Promise<ProductVariantsPayload> => {
     return apiGet<ProductVariantsPayload>(`/products/${data.productId}/variants`);
   });
 
 export const createProductVariant = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: { productId: string; variant: ProductVariantInput }) => data,
   )
   .handler(async ({ data }): Promise<ProductVariantDto> => {
@@ -309,7 +309,7 @@ export const createProductVariant = createServerFn({ method: "POST" })
   });
 
 export const updateProductVariant = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: {
       productId: string;
       variantId: string;
@@ -324,13 +324,13 @@ export const updateProductVariant = createServerFn({ method: "POST" })
   });
 
 export const deleteProductVariant = createServerFn({ method: "POST" })
-  .inputValidator((data: { productId: string; variantId: string }) => data)
+  .validator((data: { productId: string; variantId: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/products/${data.productId}/variants/${data.variantId}`);
   });
 
 export const bulkCreateProductVariants = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: { productId: string; variants: BulkProductVariantInput[] }) => data,
   )
   .handler(async ({ data }): Promise<BulkProductVariantsPayload> => {
@@ -341,7 +341,7 @@ export const bulkCreateProductVariants = createServerFn({ method: "POST" })
   });
 
 export const bulkUpdateProductVariants = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: { productId: string; updates: ProductVariantUpdateInput[] }) => data,
   )
   .handler(async ({ data }): Promise<Record<string, never>> => {
@@ -352,7 +352,7 @@ export const bulkUpdateProductVariants = createServerFn({ method: "POST" })
   });
 
 export const bulkDeleteProductVariants = createServerFn({ method: "POST" })
-  .inputValidator((data: { productId: string; variantIds: string[] }) => data)
+  .validator((data: { productId: string; variantIds: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>(`/products/${data.productId}/variants/bulk-delete`, {
       variantIds: data.variantIds,
@@ -360,7 +360,7 @@ export const bulkDeleteProductVariants = createServerFn({ method: "POST" })
   });
 
 export const duplicateProductVariant = createServerFn({ method: "POST" })
-  .inputValidator((data: { productId: string; variantId: string }) => data)
+  .validator((data: { productId: string; variantId: string }) => data)
   .handler(async ({ data }): Promise<ProductVariantDto> => {
     return apiPost<ProductVariantDto>(
       `/products/${data.productId}/variants/${data.variantId}/duplicate`,
@@ -368,7 +368,7 @@ export const duplicateProductVariant = createServerFn({ method: "POST" })
   });
 
 export const getVariantSortOrder = createServerFn({ method: "GET" })
-  .inputValidator((data: { productId: string }) => data)
+  .validator((data: { productId: string }) => data)
   .handler(async ({ data }): Promise<VariantSortOrderPayload> => {
     return apiGet<VariantSortOrderPayload>(
       `/products/${data.productId}/variants/sort-order`,
@@ -376,7 +376,7 @@ export const getVariantSortOrder = createServerFn({ method: "GET" })
   });
 
 export const updateVariantSortOrder = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: { productId: string } & VariantSortOrderPayload) => data,
   )
   .handler(async ({ data }): Promise<MessagePayload> => {

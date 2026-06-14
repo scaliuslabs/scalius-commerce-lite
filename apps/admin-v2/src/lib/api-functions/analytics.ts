@@ -33,31 +33,31 @@ export const getAnalyticsScripts = createServerFn({ method: "GET" }).handler(
 );
 
 export const getAnalyticsScript = createServerFn({ method: "GET" })
-  .inputValidator((data: AnalyticsScriptIdInput) => data)
+  .validator((data: AnalyticsScriptIdInput) => data)
   .handler(async ({ data }) => {
     return apiGet<AnalyticsScript>(`/analytics/${data.id}`);
   });
 
 export const createAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateAnalyticsScriptInput) => data)
+  .validator((data: CreateAnalyticsScriptInput) => data)
   .handler(async ({ data }) => {
     return apiPost<CreateAnalyticsScriptPayload>("/analytics", data);
   });
 
 export const updateAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateAnalyticsScriptInput) => data)
+  .validator((data: UpdateAnalyticsScriptInput) => data)
   .handler(async ({ data }) => {
     return apiPut<UpdateAnalyticsScriptPayload>(`/analytics/${data.id}`, data);
   });
 
 export const deleteAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: AnalyticsScriptIdInput) => data)
+  .validator((data: AnalyticsScriptIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<DeleteAnalyticsScriptPayload>(`/analytics/${data.id}`);
   });
 
 export const toggleAnalyticsScript = createServerFn({ method: "POST" })
-  .inputValidator((data: ToggleAnalyticsScriptInput) => data)
+  .validator((data: ToggleAnalyticsScriptInput) => data)
   .handler(async ({ data }) => {
     return apiPost<ToggleAnalyticsScriptPayload>(`/analytics/${data.id}/toggle`, {
       isActive: data.isActive,

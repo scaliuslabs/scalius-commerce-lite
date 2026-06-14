@@ -152,37 +152,37 @@ function buildShipmentBody(
 }
 
 export const getOrders = createServerFn({ method: "GET" })
-  .inputValidator((data: OrdersQueryInput) => data)
+  .validator((data: OrdersQueryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<OrdersListPayload>("/orders", buildOrdersParams(data));
   });
 
 export const getOrder = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderDetailDto>(`/orders/${data.id}`);
   });
 
 export const getOrderFormData = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderFormDataPayload>(`/orders/${data.id}/form-data`);
   });
 
 export const getOrderItems = createServerFn({ method: "GET" })
-  .inputValidator((data: { orderId: string }) => data)
+  .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderItemDto[]>(`/orders/${data.orderId}/items`);
   });
 
 export const createOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateOrderInput) => data)
+  .validator((data: CreateOrderInput) => data)
   .handler(async ({ data }) => {
     return apiPost<OrderIdPayload>("/orders", data);
   });
 
 export const updateOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateOrderInput) => data)
+  .validator((data: UpdateOrderInput) => data)
   .handler(async ({ data }) => {
     const { id, ...body } = data;
     return apiPut<ApiData<PutApiV1AdminOrdersByIdResponse>>(
@@ -192,7 +192,7 @@ export const updateOrder = createServerFn({ method: "POST" })
   });
 
 export const updateOrderStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateOrderStatusInput) => data)
+  .validator((data: UpdateOrderStatusInput) => data)
   .handler(async ({ data }) => {
     return apiPut<MessagePayload>(`/orders/${data.orderId}/status`, {
       status: data.status,
@@ -200,7 +200,7 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
   });
 
 export const returnOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: ReturnOrderInput) => data)
+  .validator((data: ReturnOrderInput) => data)
   .handler(async ({ data }) => {
     return apiPost<ReturnOrderPayload>(`/orders/${data.orderId}/return`, {
       reason: data.reason,
@@ -209,7 +209,7 @@ export const returnOrder = createServerFn({ method: "POST" })
   });
 
 export const restoreOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiPost<PostApiV1AdminOrdersByIdRestoreResponse>(
       `/orders/${data.id}/restore`,
@@ -217,32 +217,32 @@ export const restoreOrder = createServerFn({ method: "POST" })
   });
 
 export const bulkDeleteOrders = createServerFn({ method: "POST" })
-  .inputValidator((data: BulkDeleteOrdersInput) => data)
+  .validator((data: BulkDeleteOrdersInput) => data)
   .handler(async ({ data }) => {
     return apiPost<void>("/orders/bulk-delete", data);
   });
 
 export const getOrderPayments = createServerFn({ method: "GET" })
-  .inputValidator((data: { orderId: string }) => data)
+  .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderPaymentsPayload>(`/orders/${data.orderId}/payments`);
   });
 
 export const getOrderCod = createServerFn({ method: "GET" })
-  .inputValidator((data: { orderId: string }) => data)
+  .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderCodPayload>(`/orders/${data.orderId}/cod`);
   });
 
 export const updateOrderCod = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateOrderCodInput) => data)
+  .validator((data: UpdateOrderCodInput) => data)
   .handler(async ({ data }) => {
     const { orderId, ...body } = data;
     return apiPost<MessagePayload>(`/orders/${orderId}/cod`, body);
   });
 
 export const refundOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: RefundOrderInput) => data)
+  .validator((data: RefundOrderInput) => data)
   .handler(async ({ data }) => {
     return apiPost<RefundOrderPayload>(`/orders/${data.orderId}/refund`, {
       amount: data.amount,
@@ -252,13 +252,13 @@ export const refundOrder = createServerFn({ method: "POST" })
   });
 
 export const getOrderShipments = createServerFn({ method: "GET" })
-  .inputValidator((data: { orderId: string }) => data)
+  .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderShipmentDto[]>(`/orders/${data.orderId}/shipments`);
   });
 
 export const createOrderShipment = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateOrderShipmentInput) => data)
+  .validator((data: CreateOrderShipmentInput) => data)
   .handler(async ({ data }) => {
     return apiPost<CreateOrderShipmentPayload>(
       `/orders/${data.orderId}/shipments`,
@@ -267,7 +267,7 @@ export const createOrderShipment = createServerFn({ method: "POST" })
   });
 
 export const updateFulfillmentStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateFulfillmentStatusInput) => data)
+  .validator((data: UpdateFulfillmentStatusInput) => data)
   .handler(async ({ data }) => {
     return apiPut<MessagePayload>(`/orders/${data.orderId}/fulfillment-status`, {
       status: data.status,
@@ -275,7 +275,7 @@ export const updateFulfillmentStatus = createServerFn({ method: "POST" })
   });
 
 export const refreshShipmentStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: RefreshShipmentStatusInput) => data)
+  .validator((data: RefreshShipmentStatusInput) => data)
   .handler(async ({ data }) => {
     return apiPost<RefreshedShipmentPayload>(
       `/orders/${data.orderId}/shipments/${data.shipmentId}/refresh`,
@@ -284,7 +284,7 @@ export const refreshShipmentStatus = createServerFn({ method: "POST" })
   });
 
 export const deleteShipment = createServerFn({ method: "POST" })
-  .inputValidator((data: DeleteShipmentInput) => data)
+  .validator((data: DeleteShipmentInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<DeleteShipmentPayload>(
       `/orders/${data.orderId}/shipments/${data.shipmentId}`,

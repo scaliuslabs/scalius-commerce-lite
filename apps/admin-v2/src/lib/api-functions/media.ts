@@ -109,19 +109,19 @@ function toMediaListParams(data: MediaListQueryInput): Record<string, string> {
 }
 
 export const getMediaList = createServerFn({ method: "GET" })
-  .inputValidator((data: MediaListQueryInput) => data)
+  .validator((data: MediaListQueryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<MediaListPayload>("/media", toMediaListParams(data));
   });
 
 export const deleteMedia = createServerFn({ method: "POST" })
-  .inputValidator((data: { fileId: string }) => data)
+  .validator((data: { fileId: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/media/${data.fileId}`);
   });
 
 export const updateMedia = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateMediaInput) => data)
+  .validator((data: UpdateMediaInput) => data)
   .handler(async ({ data }) => {
     return apiPut<MediaFilePayload>(`/media/${data.fileId}`, data.update);
   });
@@ -133,13 +133,13 @@ export const getMediaFolders = createServerFn({ method: "GET" }).handler(
 );
 
 export const createMediaFolder = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateMediaFolderInput) => data)
+  .validator((data: CreateMediaFolderInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MediaFolderPayload>("/media/folders", data);
   });
 
 export const renameMediaFolder = createServerFn({ method: "POST" })
-  .inputValidator((data: RenameMediaFolderInput) => data)
+  .validator((data: RenameMediaFolderInput) => data)
   .handler(async ({ data }) => {
     return apiPut<MediaFolderPayload>(`/media/folders/${data.folderId}`, {
       name: data.name,
@@ -147,7 +147,7 @@ export const renameMediaFolder = createServerFn({ method: "POST" })
   });
 
 export const moveMediaFiles = createServerFn({ method: "POST" })
-  .inputValidator((data: MoveMediaFilesInput) => data)
+  .validator((data: MoveMediaFilesInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MoveMediaFilesPayload>("/media/move", {
       fileIds: data.fileIds,
@@ -156,7 +156,7 @@ export const moveMediaFiles = createServerFn({ method: "POST" })
   });
 
 export const deleteMediaFolder = createServerFn({ method: "POST" })
-  .inputValidator((data: { folderId: string }) => data)
+  .validator((data: { folderId: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/media/folders/${data.folderId}`);
   });

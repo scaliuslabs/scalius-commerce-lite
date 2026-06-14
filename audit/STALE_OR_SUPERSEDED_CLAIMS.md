@@ -8,29 +8,29 @@ This file prevents future audit agents from repeating old findings without re-ch
 
 Current evidence indicates the API fails closed when an admin route lacks a mapped permission. `apps/api/src/middleware/admin-auth.ts` logs the missing mapping and throws a forbidden error. There is also a test covering an unmapped route.
 
-Current related issue: admin UI route guarding can still disagree with API RBAC for `role: "admin"` users without RBAC roles.
+Current related issue: none currently tracked; re-check RBAC behavior before reopening.
 
 ### "Scanner raw QR token can be used directly as bearer auth"
 
 Current evidence indicates raw QR-token use has been narrowed. Scanner tokens are exchanged into a scanner session cookie, and scanner sessions are limited to exact allowlisted API endpoints.
 
-Current related issue: scanner token minting appears to require only an authenticated admin session, not inventory/stock RBAC.
+Current related issue: none currently tracked; scanner token minting now has focused RBAC coverage.
 
 ### "D1 migrations are definitely drifted"
 
 Current `drizzle-kit check` passes. Treat this as a generation and metadata risk, not a confirmed runtime schema mismatch, unless a fresh replay/generation check proves otherwise.
 
-Current related issue: migration journal and snapshot metadata appear incomplete for later migrations, so future `db:generate` behavior should be verified.
+Current related issue: migration metadata is guarded by `pnpm --filter @scalius/database check:migrations`; update the explicit snapshot-gap allowlist only for intentional manual SQL migrations.
 
 ### "Widget sanitizer homepage bypass is confirmed"
 
 This pass did not re-confirm the old sanitizer claim. Current widget services appear to sanitize active widget content in core service paths.
 
-Current related issue: the root test suite fails an admin widget-generation parser test where local-safe script tags are not extracted from HTML before preview.
+Current related issue: none currently tracked; root tests pass.
 
 ### "Root tests pass with 9 files and 143 tests"
 
-This is stale. The latest root test run reported 93 files and 559 tests passing.
+This is stale. The latest root test run reported 108 files and 712 tests passing.
 
 ### "pnpm dev starts only admin + API"
 

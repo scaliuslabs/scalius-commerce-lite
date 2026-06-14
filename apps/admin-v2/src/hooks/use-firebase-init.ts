@@ -1,7 +1,16 @@
-import { useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { firebaseConfigQueryOptions } from "~/lib/api.queries";
+
+type PushInitStatus =
+  | "idle"
+  | "loading"
+  | "enabled"
+  | "denied"
+  | "unsupported"
+  | "unconfigured"
+  | "error";
 
 /**
  * Initializes Firebase Cloud Messaging for push notifications.
@@ -16,102 +25,123 @@ import { firebaseConfigQueryOptions } from "~/lib/api.queries";
  */
 export function useFirebaseInit(userId: string | undefined) {
   const initRef = useRef(false);
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState<PushInitStatus>("idle");
 
-  const { data: config } = useQuery({
-    ...firebaseConfigQueryOptions(),
-    enabled: !!userId,
-  });
+  const enablePushNotifications = useCallback(async () => {
+    if (!userId || typeof window === "undefined" || !("Notification" in window)) {
+      setStatus("unsupported");
+      return;
+    }
 
-  useEffect(() => {
-    if (!userId || !config || initRef.current) return;
-    if (!config.apiKey) return;
+    if (initRef.current) {
+      setStatus("enabled");
+      return;
+    }
 
-    initRef.current = true;
+    if (Notification.permission === "denied") {
+      setStatus("denied");
+      return;
+    }
 
-    (async () => {
-      try {
-        const { initializeApp } = await import("firebase/app");
-        const { getMessaging, getToken, onMessage } = await import(
-          "firebase/messaging"
-        );
+    setStatus("loading");
 
-        const app = initializeApp(config);
-        const messaging = getMessaging(app);
-
-        // Request notification permission
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") return;
-
-        // Get FCM token
-        const vapidKey = config.vapidKey;
-        if (!vapidKey) return;
-
-        const token = await getToken(messaging, { vapidKey });
-        if (!token) return;
-
-        // Register token with backend
-        const browser = detectBrowser();
-        await fetch("/api/v1/admin/fcm-token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token,
-            userId,
-            deviceInfo: JSON.stringify({
-              userAgent: navigator.userAgent,
-              timestamp: new Date().toISOString(),
-              url: window.location.href,
-              browser,
-            }),
-          }),
-        }).catch(() => {});
-
-        // Listen for foreground messages
-        onMessage(messaging, (payload) => {
-          const title = payload.data?.customerName
-            ? `${payload.data.customerName} placed a new order`
-            : payload.notification?.title || "New Notification";
-          const body = payload.data?.orderId
-            ? `Order #${payload.data.orderId}`
-            : payload.notification?.body || "";
-          const link = payload.data?.orderId
-            ? `/admin/orders/${payload.data.orderId}`
-            : payload.data?.link;
-
-          // Play notification sound
-          new Audio("/alert.mp3")
-            .play()
-            .catch(() => {});
-
-          // Show professional toast via Sonner
-          showNotificationToast(title, body, link);
-
-          // Dispatch event for NotificationDropdown
-          window.dispatchEvent(
-            new CustomEvent("admin-notification", {
-              detail: {
-                type: payload.data?.type || "new_order",
-                title,
-                message: body,
-                orderId: payload.data?.orderId,
-                link,
-              },
-            }),
-          );
-        });
-
-        // Register service worker for background notifications
-        if ("serviceWorker" in navigator) {
-          navigator.serviceWorker
-            .register("/firebase-messaging-sw.js", { scope: "/" })
-            .catch(() => {});
-        }
-      } catch (err) {
-        // Firebase init failure is non-critical — don't block the dashboard
-        console.warn("Firebase notification init failed:", err);
+    try {
+      const config = await queryClient.fetchQuery(firebaseConfigQueryOptions());
+      if (!config?.apiKey || !config.vapidKey) {
+        setStatus("unconfigured");
+        return;
       }
-    })();
-  }, [userId, config]);
+
+      const permission =
+        Notification.permission === "granted"
+          ? "granted"
+          : await Notification.requestPermission();
+      if (permission !== "granted") {
+        setStatus(permission === "denied" ? "denied" : "idle");
+        return;
+      }
+
+      const { initializeApp, getApps } = await import("firebase/app");
+      const { getMessaging, getToken, onMessage } = await import(
+        "firebase/messaging"
+      );
+
+      const app = getApps().length ? getApps()[0] : initializeApp(config);
+      const messaging = getMessaging(app);
+
+      let serviceWorkerRegistration: ServiceWorkerRegistration | undefined;
+      if ("serviceWorker" in navigator) {
+        serviceWorkerRegistration = await navigator.serviceWorker.register(
+          "/firebase-messaging-sw.js",
+          { scope: "/" },
+        );
+      }
+
+      const token = await getToken(messaging, {
+        vapidKey: config.vapidKey,
+        serviceWorkerRegistration,
+      });
+      if (!token) {
+        setStatus("error");
+        return;
+      }
+
+      const browser = detectBrowser();
+      await fetch("/api/v1/admin/fcm-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          userId,
+          deviceInfo: JSON.stringify({
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toISOString(),
+            url: window.location.href,
+            browser,
+          }),
+        }),
+      }).catch(() => {});
+
+      onMessage(messaging, (payload) => {
+        const title = payload.data?.customerName
+          ? `${payload.data.customerName} placed a new order`
+          : payload.notification?.title || "New Notification";
+        const body = payload.data?.orderId
+          ? `Order #${payload.data.orderId}`
+          : payload.notification?.body || "";
+        const link = payload.data?.orderId
+          ? `/admin/orders/${payload.data.orderId}`
+          : payload.data?.link;
+
+        new Audio("/alert.mp3")
+          .play()
+          .catch(() => {});
+
+        showNotificationToast(title, body, link);
+
+        window.dispatchEvent(
+          new CustomEvent("admin-notification", {
+            detail: {
+              type: payload.data?.type || "new_order",
+              title,
+              message: body,
+              orderId: payload.data?.orderId,
+              link,
+            },
+          }),
+        );
+      });
+
+      initRef.current = true;
+      setStatus("enabled");
+    } catch (err) {
+      setStatus("error");
+      console.warn("Firebase notification init failed:", err);
+    }
+  }, [queryClient, userId]);
+
+  return { status, enablePushNotifications };
 }
 
 function showNotificationToast(

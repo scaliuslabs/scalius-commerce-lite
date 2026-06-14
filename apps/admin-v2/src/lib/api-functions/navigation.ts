@@ -31,7 +31,7 @@ export const getNavigationItems = createServerFn({ method: "GET" }).handler(
 );
 
 export const getNavigationPreviewProducts = createServerFn({ method: "GET" })
-  .inputValidator((data: NavigationPreviewProductsInput) => data)
+  .validator((data: NavigationPreviewProductsInput) => data)
   .handler(async ({ data }) => {
     return apiGet<NavigationPreviewProductsPayload>(
       "/navigation/preview-products",

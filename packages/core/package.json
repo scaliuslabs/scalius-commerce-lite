@@ -49,21 +49,21 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "dependencies": {
-    "@paralleldrive/cuid2": "^2.3.1",
-    "@polar-sh/sdk": "^0.46.4",
+    "@paralleldrive/cuid2": "^3.3.0",
+    "@polar-sh/sdk": "^0.48.1",
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.6.11",
+    "better-auth": "^1.6.18",
     "currency.js": "^2.0.4",
     "drizzle-orm": "^0.45.2",
     "fast-xml-parser": "^5.8.0",
-    "firebase": "^12.13.0",
+    "firebase": "^12.14.0",
     "mimetext": "^3.0.28",
-    "nanoid": "^5.1.6",
+    "nanoid": "^5.1.11",
     "standardwebhooks": "^1.0.0",
-    "stripe": "^20.4.1",
-    "zod": "^4.3.6"
+    "stripe": "^22.2.1",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "lint": "eslint src/",
@@ -71,10 +71,10 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260511.1",
+    "@cloudflare/workers-types": "^4.20260613.1",
     "@scalius/tsconfig": "workspace:*",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.6"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   },
   "license": "UNLICENSED"
 }

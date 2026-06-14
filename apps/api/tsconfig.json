@@ -1,7 +1,6 @@
 {
   "extends": "@scalius/tsconfig/worker.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@scalius/core/*": ["../../packages/core/src/*"],

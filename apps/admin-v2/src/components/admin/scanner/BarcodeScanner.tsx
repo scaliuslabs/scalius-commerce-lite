@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { CameraOff, Flashlight, FlashlightOff, Keyboard, Search, Camera } from "lucide-react";
+import type { Html5Qrcode as Html5QrcodeInstance } from "html5-qrcode";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -15,18 +15,6 @@ interface BarcodeScannerProps {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const SUPPORTED_FORMATS = [
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.QR_CODE,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.ITF,
-  Html5QrcodeSupportedFormats.CODABAR,
-];
 
 const SCAN_CONFIG = {
   fps: 15,
@@ -54,7 +42,7 @@ export function BarcodeScanner({
   const [manualInput, setManualInput] = useState("");
   const [showManual, setShowManual] = useState(false);
 
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5QrcodeInstance | null>(null);
   const lastScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 });
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
@@ -81,27 +69,45 @@ export function BarcodeScanner({
 
   // ---- Camera lifecycle ----
   useEffect(() => {
-    if (!isActive) return;
+    if (import.meta.env.SSR || !isActive) return;
 
     let cancelled = false;
-    const scanner = new Html5Qrcode(READER_ID, {
-      formatsToSupport: SUPPORTED_FORMATS,
-      verbose: false,
-    });
-    scannerRef.current = scanner;
+    let scanner: Html5QrcodeInstance | null = null;
 
-    scanner
-      .start(
-        { facingMode: "environment" },
-        SCAN_CONFIG,
-        (decodedText, result) => {
-          if (!cancelled) handleDecodedText(decodedText, result);
-        },
-        () => {
-          // No code in frame — silent
-        },
-      )
-      .then(() => {
+    async function startScanner() {
+      try {
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import(
+          "html5-qrcode"
+        );
+        if (cancelled) return;
+
+        scanner = new Html5Qrcode(READER_ID, {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+          ],
+          verbose: false,
+        });
+        scannerRef.current = scanner;
+
+        await scanner.start(
+          { facingMode: "environment" },
+          SCAN_CONFIG,
+          (decodedText, result) => {
+            if (!cancelled) handleDecodedText(decodedText, result);
+          },
+          () => {
+            // No code in frame — silent
+          },
+        );
+
         if (cancelled) return;
         setCameraReady(true);
         setCameraError(null);
@@ -113,21 +119,24 @@ export function BarcodeScanner({
         } catch {
           setTorchSupported(false);
         }
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
         setCameraError(message);
         setCameraReady(false);
-      });
+      }
+    }
+
+    void startScanner();
 
     return () => {
       cancelled = true;
       setCameraReady(false);
       setTorchOn(false);
       setTorchSupported(false);
-      if (scanner.isScanning) {
-        scanner.stop().catch(() => {});
+      const currentScanner = scanner ?? scannerRef.current;
+      if (currentScanner?.isScanning) {
+        currentScanner.stop().catch(() => {});
       }
       scannerRef.current = null;
     };

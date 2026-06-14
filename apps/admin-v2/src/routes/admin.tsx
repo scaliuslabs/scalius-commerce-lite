@@ -7,7 +7,6 @@ import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { Toaster } from "@/components/ui/sonner";
 import { adminRouteGuard } from "~/lib/auth.fns";
-import { useFirebaseInit } from "~/hooks/use-firebase-init";
 import { ADMIN_ACCESS_DENIED_PATH, shouldAllowAdminPath } from "~/lib/admin-access";
 
 export const Route = createFileRoute("/admin")({
@@ -24,9 +23,6 @@ export const Route = createFileRoute("/admin")({
 
 function AdminLayout() {
   const { user, permissions, isSuperAdmin } = Route.useRouteContext();
-
-  // Initialize Firebase Cloud Messaging for push notifications
-  useFirebaseInit(user?.id);
 
   // Scroll content area to top on route change
   const scrollRef = useRef<HTMLDivElement>(null);

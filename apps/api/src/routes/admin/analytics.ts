@@ -7,7 +7,9 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import { invalidateApiAndStorefrontGroups } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 
 // ── List Analytics Scripts ──
 
@@ -48,6 +50,7 @@ app.openapi(createScriptRoute, (async (c: any) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createAnalyticsScript(db, data);
+    await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
     return created(c, result);
 }) as any);
 
@@ -103,6 +106,7 @@ app.openapi(updateScriptRoute, async (c) => {
 
     const updated = await updateAnalyticsScript(db, id, data);
     if (!updated) throw new NotFoundError("Analytics script not found");
+    await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
     return ok(c, { script: updated });
 });
 
@@ -127,6 +131,7 @@ app.openapi(deleteScriptRoute, async (c) => {
     const { id } = c.req.valid("param");
     const deleted = await deleteAnalyticsScript(db, id);
     if (!deleted) throw new NotFoundError("Analytics script not found");
+    await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
     return ok(c, { message: "Analytics script deleted", deletedScript: deleted });
 });
 
@@ -153,6 +158,7 @@ app.openapi(toggleScriptRoute, async (c) => {
     const data = c.req.valid("json");
     const toggled = await toggleAnalyticsScript(db, id, data.isActive);
     if (!toggled) throw new NotFoundError("Analytics script not found");
+    await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
     return ok(c, {
         message: `Analytics script ${data.isActive ? "activated" : "deactivated"}`,
         script: toggled

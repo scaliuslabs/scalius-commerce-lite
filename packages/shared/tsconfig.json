@@ -1,7 +1,6 @@
 {
   "extends": "@scalius/tsconfig/base.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/**/*"]

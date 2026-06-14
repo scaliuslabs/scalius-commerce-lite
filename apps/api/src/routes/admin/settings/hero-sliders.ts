@@ -7,7 +7,9 @@ import { NotFoundError, ValidationError, ConflictError } from "../../../utils/ap
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 import { nullableTimestampSchema } from "../../../schemas/timestamps";
+import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
 
 const sliderImageSchema = z.object({
     id: z.string(),
@@ -101,6 +103,7 @@ app.openapi(createSliderRoute, (async (c: any) => {
     const slider = sliderArr[0];
     if (!slider) throw new ValidationError("Failed to create slider");
 
+    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return created(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
@@ -126,6 +129,7 @@ app.openapi(getByIdRoute, (async (c: any) => {
     const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
     if (!slider) throw new NotFoundError("Slider not found");
+    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
@@ -163,6 +167,7 @@ app.openapi(updateSliderRoute, (async (c: any) => {
         .returning();
 
     if (!slider) throw new NotFoundError("Slider not found");
+    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
