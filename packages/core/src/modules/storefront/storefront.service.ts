@@ -16,7 +16,7 @@ import {
   WidgetPlacementScope,
   type Analytics,
 } from "@scalius/database/schema";
-import { eq, isNull, and, asc, sql } from "drizzle-orm";
+import { eq, isNull, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
@@ -75,6 +75,30 @@ interface SocialLink {
   label: string;
   url: string;
   iconUrl?: string;
+}
+
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as JsonRecord
+    : {};
+}
+
+function toOptionalString(value: unknown): string | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  return String(value);
+}
+
+function normalizeSocialLink(value: unknown): SocialLink {
+  const link = asRecord(value);
+  const platform = toOptionalString(link.platform);
+  return {
+    id: toOptionalString(link.id) ?? nanoid(),
+    label: toOptionalString(link.label) ?? platform ?? "",
+    url: toOptionalString(link.url) ?? "",
+    iconUrl: toOptionalString(link.iconUrl) ?? toOptionalString(link.icon),
+  };
 }
 
 // ── Homepage data ─────────────────────────────────────────────────────────────
@@ -160,12 +184,12 @@ export async function getHomepageData(db: Database) {
     type: col.type as string,
     sortOrder: col.sortOrder as number,
     isActive: col.isActive as boolean,
-    parsedConfig: safeJsonParse<Record<string, any>>(col.config as string, {}),
+    parsedConfig: safeJsonParse<Record<string, unknown>>(col.config as string, {}),
   }));
 
   const resolvedMap = await resolveCollectionProductsBatch(
     db,
-    parsedCollections.map((col) => ({ id: col.id, config: col.parsedConfig })),
+    parsedCollections.map((col) => ({ id: col.id, config: col.parsedConfig as Parameters<typeof resolveCollectionProductsBatch>[1][number]["config"] })),
   );
 
   // Build final collections array
@@ -325,15 +349,19 @@ export async function getLayoutData(db: Database) {
   let navigationData: NestedNavigationItem[] = [];
 
   if (siteSettingsData?.headerConfig) {
-    const headerConfig = safeJsonParse<Record<string, any>>(
+    const headerConfig = safeJsonParse<Record<string, unknown>>(
       siteSettingsData.headerConfig,
       {},
     );
+    const topBarConfig = asRecord(headerConfig.topBar);
+    const logoConfig = asRecord(headerConfig.logo);
+    const faviconConfig = asRecord(headerConfig.favicon);
+    const contactConfig = asRecord(headerConfig.contact);
 
     // Normalize social links — supports both array and legacy { facebook: "url" } format
     let socialLinks: SocialLink[] = [];
     if (Array.isArray(headerConfig.social)) {
-      socialLinks = headerConfig.social;
+      socialLinks = headerConfig.social.map(normalizeSocialLink);
     } else if (headerConfig.social && typeof headerConfig.social === "object") {
       Object.entries(headerConfig.social).forEach(([platform, url]) => {
         if (url && typeof url === "string") {
@@ -348,27 +376,27 @@ export async function getLayoutData(db: Database) {
 
     headerData = {
       topBar: {
-        text: headerConfig.topBar?.text || "",
-        isEnabled: headerConfig.topBar?.isEnabled ?? true,
+        text: topBarConfig.text || "",
+        isEnabled: topBarConfig.isEnabled ?? true,
       },
       logo: {
-        src: headerConfig.logo?.src || "",
-        alt: headerConfig.logo?.alt || "",
+        src: logoConfig.src || "",
+        alt: logoConfig.alt || "",
       },
       favicon: {
-        src: headerConfig.favicon?.src || "/favicon.svg",
-        alt: headerConfig.favicon?.alt || "",
+        src: faviconConfig.src || "/favicon.svg",
+        alt: faviconConfig.alt || "",
       },
       contact: {
-        phone: headerConfig.contact?.phone || "",
-        text: headerConfig.contact?.text || "",
-        isEnabled: headerConfig.contact?.isEnabled ?? true,
+        phone: contactConfig.phone || "",
+        text: contactConfig.text || "",
+        isEnabled: contactConfig.isEnabled ?? true,
       },
       social: socialLinks,
     };
 
-    if (headerConfig.navigation) {
-      navigationData = headerConfig.navigation;
+    if (Array.isArray(headerConfig.navigation)) {
+      navigationData = headerConfig.navigation as NestedNavigationItem[];
     } else {
       // Generate default navigation from categories + pages
       navigationData = [{ id: "home", title: "Home", href: "/" }];
@@ -409,24 +437,19 @@ export async function getLayoutData(db: Database) {
   // Process Footer
   let footerData: Record<string, unknown>;
   if (siteSettingsData?.footerConfig) {
-    const footerConfig = safeJsonParse<Record<string, any>>(
+    const footerConfig = safeJsonParse<Record<string, unknown>>(
       siteSettingsData.footerConfig,
       {},
     );
+    const footerLogoConfig = asRecord(footerConfig.logo);
+    const footerFaviconConfig = asRecord(footerConfig.favicon);
 
     let footerSocialLinks: SocialLink[] = [];
     if (Array.isArray(footerConfig.social)) {
-      footerSocialLinks = footerConfig.social.map(
-        (link: Record<string, any>) => ({
-          id: String(link.id || nanoid()),
-          label: String(link.label || link.platform || ""),
-          url: String(link.url || ""),
-          iconUrl: link.iconUrl || link.icon,
-        }),
-      );
+      footerSocialLinks = footerConfig.social.map(normalizeSocialLink);
     }
 
-    const normalizedMenus = (footerConfig.menus || []).map(
+    const normalizedMenus = (Array.isArray(footerConfig.menus) ? footerConfig.menus : []).map(
       (menu: Record<string, unknown>) => ({
         id: menu.id || nanoid(),
         title: menu.title || "",
@@ -436,12 +459,12 @@ export async function getLayoutData(db: Database) {
 
     footerData = {
       logo: {
-        src: footerConfig.logo?.src || "",
-        alt: footerConfig.logo?.alt || "",
+        src: footerLogoConfig.src || "",
+        alt: footerLogoConfig.alt || "",
       },
       favicon: {
-        src: footerConfig.favicon?.src || "/favicon.svg",
-        alt: footerConfig.favicon?.alt || "",
+        src: footerFaviconConfig.src || "/favicon.svg",
+        alt: footerFaviconConfig.alt || "",
       },
       tagline: footerConfig.tagline || "",
       description: footerConfig.description || "",

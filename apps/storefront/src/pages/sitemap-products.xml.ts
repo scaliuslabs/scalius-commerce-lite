@@ -34,7 +34,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     // We need 50 API pages to fulfill 1 sitemap chunk of 5000 products.
     // E.g., sitemapPage=1 needs api pages [1..50]. sitemapPage=2 needs api pages [51..100].
     const startApiPage = ((sitemapPage - 1) * (URLS_PER_SITEMAP / limitParams)) + 1;
-    let requiredApiPages = URLS_PER_SITEMAP / limitParams;
+    const requiredApiPages = URLS_PER_SITEMAP / limitParams;
 
     // We can fetch the first page to figure out totalPages so we don't over-fetch
     const firstResponse = await getAllProducts({

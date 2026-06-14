@@ -118,11 +118,12 @@ export async function getNavigationMenus(db: Database) {
         .from(siteSettings)
         .limit(1);
 
-    let headerConfig: Record<string, unknown> = {};
-    let footerConfig: Record<string, unknown> = {};
-
-    try { headerConfig = row?.headerConfig ? JSON.parse(row.headerConfig) : {}; } catch { headerConfig = {}; }
-    try { footerConfig = row?.footerConfig ? JSON.parse(row.footerConfig) : {}; } catch { footerConfig = {}; }
+    const headerConfig: Record<string, unknown> = (() => {
+        try { return row?.headerConfig ? JSON.parse(row.headerConfig) : {}; } catch { return {}; }
+    })();
+    const footerConfig: Record<string, unknown> = (() => {
+        try { return row?.footerConfig ? JSON.parse(row.footerConfig) : {}; } catch { return {}; }
+    })();
 
     return { headerConfig, footerConfig };
 }

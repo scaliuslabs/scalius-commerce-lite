@@ -15,7 +15,7 @@ import {
     createPageSchema,
     updatePageSchema
 } from "@scalius/core/modules/pages";
-import { NotFoundError, ApiError } from "../../utils/api-error";
+import { NotFoundError } from "../../utils/api-error";
 import {
     successEnvelope,
     paginatedEnvelope,

@@ -17,7 +17,8 @@ import {
 import type { WidgetHistory, WidgetPlacement } from "@scalius/database/schema";
 import { isNull, asc, and, sql, inArray, eq, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     createWidgetSchema,
@@ -39,6 +40,7 @@ import { findDuplicateWidgetPlacementIndexes } from "@scalius/shared/widget-plac
 export { createWidgetSchema, updateWidgetSchema, type CreateWidgetInput, type UpdateWidgetInput };
 
 type WidgetPlacementInsert = typeof widgetPlacements.$inferInsert;
+type SQLiteBatchItem = BatchItem<"sqlite">;
 export type WidgetPlacementTargetType = "page" | "product" | "category" | "collection";
 
 export type WidgetPlacementTargetOption = {
@@ -1162,7 +1164,7 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
     }
     const legacyFields = legacyFieldsFromPlacement(requestedPlacements[0]);
 
-    const batchOps: unknown[] = [
+    const batchOps: SQLiteBatchItem[] = [
         db.insert(widgets).values({
             id: widgetId,
             name: data.name,
@@ -1183,7 +1185,7 @@ export async function createWidget(db: Database, data: CreateWidgetInput) {
         batchOps.push(db.insert(widgetPlacements).values(placementInserts));
     }
 
-    await db.batch(batchOps as any);
+    await safeBatch(db, batchOps);
     const created = await getWidgetById(db, widgetId);
     if (!created) throw new NotFoundError("Widget not found after create");
     return created;
@@ -1239,7 +1241,7 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
         }
     }
 
-    const batchOps: unknown[] = [
+    const batchOps: SQLiteBatchItem[] = [
         db.update(widgets).set(updateData).where(eq(widgets.id, id)),
     ];
 
@@ -1254,7 +1256,7 @@ export async function updateWidget(db: Database, id: string, data: UpdateWidgetI
         }
     }
 
-    await db.batch(batchOps as any);
+    await safeBatch(db, batchOps);
     const updated = await getWidgetById(db, id);
     if (!updated) throw new NotFoundError("Widget not found after update");
     return updated;
@@ -1265,7 +1267,7 @@ export async function deleteWidget(db: Database, id: string): Promise<void> {
     if (!existing) throw new NotFoundError("Widget not found");
 
     const deletedAt = new Date();
-    await db.batch([
+    await safeBatch(db, [
         db
             .update(widgets)
             .set({ deletedAt, updatedAt: deletedAt })
@@ -1274,7 +1276,7 @@ export async function deleteWidget(db: Database, id: string): Promise<void> {
             .update(widgetPlacements)
             .set({ deletedAt, updatedAt: deletedAt })
             .where(and(eq(widgetPlacements.widgetId, id), isNull(widgetPlacements.deletedAt))),
-    ] as any);
+    ]);
 }
 
 export async function bulkDeleteWidgets(db: Database, ids: string[], permanent = false): Promise<void> {
@@ -1283,7 +1285,7 @@ export async function bulkDeleteWidgets(db: Database, ids: string[], permanent =
         await db.delete(widgets).where(inArray(widgets.id, ids));
     } else {
         const deletedAt = new Date();
-        await db.batch([
+        await safeBatch(db, [
             db
                 .update(widgets)
                 .set({ deletedAt, updatedAt: deletedAt })
@@ -1292,7 +1294,7 @@ export async function bulkDeleteWidgets(db: Database, ids: string[], permanent =
                 .update(widgetPlacements)
                 .set({ deletedAt, updatedAt: deletedAt })
                 .where(and(inArray(widgetPlacements.widgetId, ids), isNull(widgetPlacements.deletedAt))),
-        ] as any);
+        ]);
     }
 }
 
@@ -1309,7 +1311,7 @@ export async function bulkDeactivateWidgets(db: Database, ids: string[]): Promis
 
 export async function restoreWidgets(db: Database, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
-    await db.batch([
+    await safeBatch(db, [
         db
             .update(widgetPlacements)
             .set({ deletedAt: null, updatedAt: sql`unixepoch()` })
@@ -1322,7 +1324,7 @@ export async function restoreWidgets(db: Database, ids: string[]): Promise<void>
                 )`,
             )),
         db.update(widgets).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(inArray(widgets.id, ids)),
-    ] as any);
+    ]);
 }
 
 // ─────────────────────────────────────────

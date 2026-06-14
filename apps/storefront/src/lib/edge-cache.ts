@@ -28,7 +28,7 @@ interface CacheContext {
   cache: Cache | null;
   kvVersion: string | null;
   hostname: string;
-  waitUntil: ((promise: Promise<any>) => void) | null;
+  waitUntil: ((promise: Promise<unknown>) => void) | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ export function setEdgeCacheContext(
   cache: Cache | null,
   kvVersion: string | null,
   hostname: string,
-  waitUntil: ((promise: Promise<any>) => void) | null,
+  waitUntil: ((promise: Promise<unknown>) => void) | null,
 ): void {
   // Store context so getEdgeCacheContext() works for callers that
   // don't go through cacheContextAls.run() yet.
@@ -108,7 +108,7 @@ export function getEdgeCacheContext(): CacheContext {
  * on cache miss - without deduplication, this creates 2 API calls.
  * With deduplication, the second call waits for the first to complete.
  */
-const inflight = new Map<string, Promise<any>>();
+const inflight = new Map<string, Promise<unknown>>();
 
 /**
  * Build the L2 cache key URL.
@@ -178,8 +178,7 @@ function storeInL2<T>(key: string, data: T, ttlSeconds: number): void {
     headers: {
       "Content-Type": "application/json",
       // Long TTL for Cache API storage; invalidation via KV version in cache key.
-      // SWR/stale-if-error for consistency with Hono API policy.
-      "Cache-Control": `public, max-age=${ttlSeconds}, stale-while-revalidate=120, stale-if-error=300`,
+      "Cache-Control": `public, max-age=${ttlSeconds}`,
       // Track when this was cached for debugging
       "X-Cached-At": new Date().toISOString(),
       "X-Cache-Key": key,

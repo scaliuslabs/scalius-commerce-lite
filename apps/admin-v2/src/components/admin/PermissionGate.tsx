@@ -57,7 +57,7 @@ export function PermissionGate({
 }: PermissionGateProps) {
   const { hasPermission, hasAnyPermission, hasAllPermissions, isSuperAdmin } = usePermissions();
 
-  let allowed = false;
+  let allowed: boolean;
 
   // Super admin always has access (unless inverted)
   if (isSuperAdmin && !invert) {

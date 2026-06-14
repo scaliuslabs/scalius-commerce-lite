@@ -16,7 +16,7 @@ import type { CreateProductInput, UpdateProductInput } from "./products.validati
 import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "./products.types";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 
 // ─────────────────────────────────────────
 // Admin read queries
@@ -679,13 +679,13 @@ export async function bulkDeleteProducts(db: Database, productIds: string[], per
             throw new ConflictError("Cannot delete products. One or more products are linked to discounts.");
         }
 
-        await db.batch([
+        await safeBatch(db, [
             db.delete(productVariants).where(inArray(productVariants.productId, productIds)),
             db.delete(productImages).where(inArray(productImages.productId, productIds)),
             db.delete(productAttributeValues).where(inArray(productAttributeValues.productId, productIds)),
             db.delete(productRichContent).where(inArray(productRichContent.productId, productIds)),
             db.delete(products).where(inArray(products.id, productIds)),
-        ] as any);
+        ]);
     } else {
         await db
             .update(products)

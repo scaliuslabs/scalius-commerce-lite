@@ -219,6 +219,35 @@ export function stripWidgetRuntimeMarkup(html: string): string {
   return DomUtils.getOuterHTML(children);
 }
 
+export function rewriteWidgetHrefTargets(
+  html: string,
+  rewrites: Record<string, string>,
+): string {
+  if (!html.trim() || Object.keys(rewrites).length === 0) return html;
+
+  const document = parseDocument(html, {
+    decodeEntities: true,
+    lowerCaseAttributeNames: true,
+    lowerCaseTags: true,
+  });
+
+  function visit(nodes: ChildNode[] = []): void {
+    for (const node of nodes) {
+      if (!isTag(node)) continue;
+
+      if (node.name === "a" && node.attribs?.href) {
+        const rewrittenHref = rewriteInternalHref(node.attribs.href, rewrites);
+        if (rewrittenHref) node.attribs.href = rewrittenHref;
+      }
+
+      visit(node.children ?? []);
+    }
+  }
+
+  visit(document.children);
+  return DomUtils.getOuterHTML(document.children);
+}
+
 export function getWidgetScopeClass(widgetId: string): string {
   const normalized = `sw-${widgetId}`
     .toLowerCase()
@@ -227,6 +256,29 @@ export function getWidgetScopeClass(widgetId: string): string {
     .replace(/^-+|-+$/g, "");
 
   return normalized || "sw-widget";
+}
+
+function rewriteInternalHref(
+  href: string,
+  rewrites: Record<string, string>,
+): string | null {
+  const trimmed = href.trim();
+  if (!trimmed.startsWith("/")) return null;
+
+  try {
+    const url = new URL(trimmed, "https://storefront.local");
+    const path = normalizeInternalPath(url.pathname);
+    const replacement = rewrites[path];
+    if (!replacement) return null;
+    return `${replacement}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeInternalPath(pathname: string): string {
+  const normalized = pathname.replace(/\/+$/g, "");
+  return normalized || "/";
 }
 
 export function normalizeWidgetParts(input: {

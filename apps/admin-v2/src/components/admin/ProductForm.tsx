@@ -66,7 +66,7 @@ export function ProductForm({
   );
 
   // Fetch variants and extract unique colors (React Query auto-refetches on invalidation)
-  const { uniqueColorOptions, refreshVariants } = useProductVariants({
+  const { uniqueColorOptions } = useProductVariants({
     productId: defaultValues?.id,
     isEdit,
   });

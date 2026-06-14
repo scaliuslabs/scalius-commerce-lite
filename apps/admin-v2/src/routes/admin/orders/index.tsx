@@ -255,57 +255,6 @@ function OrdersPage() {
   // NOTE: handleBulkDeleteConfirm and handleBulkShipmentSubmit are defined
   // after useServerTable to avoid using selectedIds/clearSelection before declaration.
 
-  // ── Export CSV ─────────────────────────────────────────────────
-
-  const handleExportCSV = useCallback(() => {
-    const rows = table.getRowModel().rows.map((r) => r.original);
-    const csvHeaders = [
-      "Order ID",
-      "Customer Name",
-      "Phone",
-      "Email",
-      "City",
-      "Zone",
-      "Area",
-      "Status",
-      "Total Amount",
-      "Discount",
-      "Items",
-      "Created At",
-    ];
-    const csvRows = rows.map((order) => [
-      order.id,
-      order.customerName,
-      formatPhoneForDisplay(order.customerPhone),
-      order.customerEmail || "",
-      order.cityName || order.city,
-      order.zoneName || order.zone,
-      order.areaName || order.area || "",
-      order.status,
-      order.totalAmount,
-      order.discountAmount || 0,
-      order.itemCount,
-      formatDateShort(order.createdAt),
-    ]);
-    const csvContent = [
-      csvHeaders.join(","),
-      ...csvRows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
-    ].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `orders-${new Date().toISOString().split("T")[0]}.csv`,
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(`${rows.length} orders exported successfully.`);
-  }, []);
-
   // ── Refresh ───────────────────────────────────────────────────
 
   const handleRefresh = useCallback(() => {
@@ -405,6 +354,57 @@ function OrdersPage() {
     onSortingChange,
     defaultPageSize: 10,
   });
+
+  // ── Export CSV ─────────────────────────────────────────────────
+
+  const handleExportCSV = useCallback(() => {
+    const rows = table.getRowModel().rows.map((r) => r.original);
+    const csvHeaders = [
+      "Order ID",
+      "Customer Name",
+      "Phone",
+      "Email",
+      "City",
+      "Zone",
+      "Area",
+      "Status",
+      "Total Amount",
+      "Discount",
+      "Items",
+      "Created At",
+    ];
+    const csvRows = rows.map((order) => [
+      order.id,
+      order.customerName,
+      formatPhoneForDisplay(order.customerPhone),
+      order.customerEmail || "",
+      order.cityName || order.city,
+      order.zoneName || order.zone,
+      order.areaName || order.area || "",
+      order.status,
+      order.totalAmount,
+      order.discountAmount || 0,
+      order.itemCount,
+      formatDateShort(order.createdAt),
+    ]);
+    const csvContent = [
+      csvHeaders.join(","),
+      ...csvRows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `orders-${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`${rows.length} orders exported successfully.`);
+  }, [table]);
 
   // ── Bulk delete handler (after useServerTable for selectedIds/clearSelection) ──
   const handleBulkDeleteConfirm = useCallback(() => {
@@ -539,7 +539,6 @@ function OrdersPage() {
       onBulkDelete={handleBulkDeleteClick}
       onBulkShip={() => setIsShippingDialogOpen(true)}
       onExportCSV={handleExportCSV}
-      onRefresh={handleRefresh}
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}
       countdown={countdown}

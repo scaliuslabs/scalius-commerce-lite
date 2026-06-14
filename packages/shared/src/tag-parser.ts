@@ -197,7 +197,7 @@ export function parseTagBasedResponse(response: string): ParseResult {
         },
       };
     }
-  } catch (e: unknown) {
+  } catch {
     // JSON parsing failed, continue to next strategy
   }
 

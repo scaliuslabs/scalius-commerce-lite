@@ -9,7 +9,7 @@ import {
     productAttributeValues,
     productAttributes,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, isNull, inArray, or, type SQL } from "drizzle-orm";
+import { and, sql, desc, eq, isNull, inArray, or, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";

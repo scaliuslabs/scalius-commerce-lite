@@ -16,14 +16,14 @@ This folder is the working audit system for slice-by-slice remediation. It repla
 ## Current Validation Snapshot
 
 - `CI=true pnpm install --frozen-lockfile` passes with pnpm 11.6.0.
-- `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, and `pnpm check:dist-secrets` pass at the repo root. Lint still reports warnings only.
-- `pnpm test` currently passes: 121 files and 773 tests.
+- `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, and `pnpm check:dist-secrets` pass at the repo root. Root ESLint is warning-free across the seven code workspaces.
+- `pnpm test` currently passes: 123 files and 783 tests.
 - `pnpm --filter @scalius/database check:migrations` passes: 42 SQL files, 42 journal entries, 27 snapshots, and 15 allowed manual snapshot gaps.
 - `pnpm outdated -r` reports only the intentional storefront Vite pin: `vite@7.3.5` versus latest Vite 8 while Astro 6.4.x remains on the Vite 7 line.
 - Current auth/dashboard hardening gates pass: root/admin typechecks, focused API auth-management tests, focused admin route/access/api bridge tests, root tests/lint/build, env checks, dist-secret checks, and live browser smoke.
 - Local stack smoke passed with API/admin/storefront dev servers: local migration `0041`, `pnpm dev:doctor:all`, browser `/admin` using split dashboard summary/activity calls, and browser storefront `/`.
-- Full `pnpm run deploy` passed after the admin navigation/freshness, cache-invalidation, and 2FA trust-device boundary slice and redeployed API `6c8a5df3-1956-4a98-ade0-abc6cacf021f`, admin `be596a08-09c6-49db-841f-140772fa34e0`, and storefront `8eb6cf3a-d57b-4dd4-bc6d-6486a370f3e5`.
-- Live dashboard login with `demo@scalius.com` succeeded. Browser `/admin`, `/admin/products`, `/admin/orders`, `/admin/customers`, and live storefront `/` loaded with no error-boundary page, stuck loading state, or captured console errors.
+- Latest historical full `pnpm run deploy` passed after the admin navigation/freshness, cache-invalidation, and 2FA trust-device boundary slice and redeployed API `6c8a5df3-1956-4a98-ade0-abc6cacf021f`, admin `be596a08-09c6-49db-841f-140772fa34e0`, and storefront `8eb6cf3a-d57b-4dd4-bc6d-6486a370f3e5`.
+- Current 2026-06-15 admin/RBAC/CSP/performance/widget-link/lint-clean slice is deployed and live-smoke verified: API `822d3968-ffc0-4280-9286-f161a4096525`, admin `a6701970-d938-4250-a483-3c6155ab0f89`, storefront `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`. Live checks covered API health/setup/CSP/auth, dashboard `/admin`, `/admin/products`, `/admin/orders`, `/admin/media`, `/admin/settings/account`, and storefront `/`, `/search`, `/categories/men-clothing`, `/products/monster-energy-drink` with no console/runtime errors or error-boundary pages.
 - The live storefront missing-image issue was fixed after the smoke pass: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Several hard-to-run flows still require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
 

@@ -114,7 +114,7 @@ export async function getAllPages(
           client: getConfiguredSdkClient(),
           query: options as Record<string, unknown>,
         });
-        const d = unwrapData<{ pages: Page[]; pagination: any }>(data);
+        const d = unwrapData<{ pages: Page[]; pagination: PaginatedResponse<Page>["pagination"] }>(data);
         if (d) {
           return { data: d.pages as Page[], pagination: d.pagination };
         }

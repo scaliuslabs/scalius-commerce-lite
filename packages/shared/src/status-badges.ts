@@ -6,55 +6,63 @@
  * Returns the Tailwind CSS classes for a given order status badge.
  */
 export const getStatusBadgeClass = (status: string) => {
-  let badgeClass = "";
   switch (status.toLowerCase()) {
     case "pending":
-      badgeClass =
-        "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400";
-      break;
+      return {
+        badgeClass:
+          "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+      };
     case "processing":
-      badgeClass =
-        "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400";
-      break;
+      return {
+        badgeClass:
+          "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400",
+      };
     case "confirmed":
-      badgeClass =
-        "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400";
-      break;
+      return {
+        badgeClass:
+          "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400",
+      };
     case "shipped":
-      badgeClass =
-        "bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-400";
-      break;
+      return {
+        badgeClass:
+          "bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-400",
+      };
     case "delivered":
-      badgeClass =
-        "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400";
-      break;
+      return {
+        badgeClass:
+          "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
+      };
     case "completed":
-      badgeClass =
-        "bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-400";
-      break;
+      return {
+        badgeClass:
+          "bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-400",
+      };
     case "cancelled":
-      badgeClass =
-        "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400";
-      break;
+      return {
+        badgeClass:
+          "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400",
+      };
     case "returned":
-      badgeClass =
-        "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400";
-      break;
+      return {
+        badgeClass:
+          "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400",
+      };
     case "refunded":
-      badgeClass =
-        "bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400";
-      break;
+      return {
+        badgeClass:
+          "bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400",
+      };
     case "partially_refunded":
-      badgeClass =
-        "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400";
-      break;
+      return {
+        badgeClass:
+          "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+      };
     case "incomplete":
-      badgeClass =
-        "bg-slate-50 text-slate-700 dark:bg-slate-950/30 dark:text-slate-400";
-      break;
+      return {
+        badgeClass:
+          "bg-slate-50 text-slate-700 dark:bg-slate-950/30 dark:text-slate-400",
+      };
     default:
-      badgeClass = "bg-muted text-muted-foreground";
-      break;
+      return { badgeClass: "bg-muted text-muted-foreground" };
   }
-  return { badgeClass };
 };

@@ -1,7 +1,7 @@
 // src/server/routes/admin/inventory.ts
 // Admin OpenAPI routes for inventory.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { getInventoryOverview, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku } from "@scalius/core/modules/inventory";
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
@@ -12,6 +12,9 @@ import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
 // ─── Inline response schemas ──
 
@@ -187,7 +190,7 @@ const alertsRoute = createRoute({
     }
 });
 
-app.openapi(alertsRoute, (async (c: any) => {
+app.openapi(alertsRoute, (async (c: AdminRouteContext<typeof alertsRoute>) => {
     const db = c.get("db");
     const { status } = c.req.valid("query");
     const result = await getInventoryOverview(db, {
@@ -199,7 +202,7 @@ app.openapi(alertsRoute, (async (c: any) => {
         alertStatus: status
     });
     return ok(c, result);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof alertsRoute>);
 
 // ── Acknowledge Alert ──
 

@@ -1,7 +1,7 @@
 // src/server/routes/admin/discounts.ts
 // Admin OpenAPI routes for discounts.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { listDiscounts, getDiscountById, createDiscount, updateDiscount, deleteDiscount, bulkDeleteDiscounts, restoreDiscounts, permanentlyDeleteDiscount, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
 import { DiscountType, discounts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
@@ -12,6 +12,9 @@ import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses }
 import { discountSchema } from "../../schemas/entities";
 import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
 // ── List Discounts ──
 
@@ -72,13 +75,13 @@ const createDiscountRoute = createRoute({
     }
 });
 
-app.openapi(createDiscountRoute, (async (c: any) => {
+app.openapi(createDiscountRoute, (async (c: AdminRouteContext<typeof createDiscountRoute>) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createDiscount(db, data);
     await invalidateCatalogCaches("discounts", c);
     return created(c, result);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof createDiscountRoute>);
 
 // ── Bulk Delete Discounts ──
 
@@ -159,13 +162,13 @@ const getByIdRoute = createRoute({
     }
 });
 
-app.openapi(getByIdRoute, (async (c: any) => {
+app.openapi(getByIdRoute, (async (c: AdminRouteContext<typeof getByIdRoute>) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const discount = await getDiscountById(db, id);
     if (!discount) throw new NotFoundError("Discount not found");
     return ok(c, discount);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof getByIdRoute>);
 
 // ── Update Discount ──
 
@@ -184,14 +187,14 @@ const updateDiscountRoute = createRoute({
     }
 });
 
-app.openapi(updateDiscountRoute, (async (c: any) => {
+app.openapi(updateDiscountRoute, (async (c: AdminRouteContext<typeof updateDiscountRoute>) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     const result = await updateDiscount(db, id, data);
     await invalidateCatalogCaches("discounts", c);
     return ok(c, result);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof updateDiscountRoute>);
 
 // ── Delete Discount ──
 

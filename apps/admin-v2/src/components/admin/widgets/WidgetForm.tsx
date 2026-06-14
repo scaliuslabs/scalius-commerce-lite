@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -323,7 +323,8 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
   const [appliedWidgetVersionKey, setAppliedWidgetVersionKey] = useState<string | null>(null);
 
   const aiContext = useAiContext();
-  const watchedPlacements = watch('placements') ?? [];
+  const watchedPlacementsValue = watch('placements');
+  const watchedPlacements = useMemo(() => watchedPlacementsValue ?? [], [watchedPlacementsValue]);
   const aiPlacementContext = useMemo(() => getPlacementAiContext(watchedPlacements), [watchedPlacements]);
   const aiGenerator = useAiGenerator(aiContext, widget, true, aiPlacementContext);
   const aiImprover = useAiImprover({ aiContext, aiGenerator });
@@ -334,22 +335,22 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
   const pendingPreviewContent = getPendingPreviewContent(watchedHtmlContent, watchedCssContent, watchedJsContent);
   const hasPendingPreviewContent = Boolean(pendingPreviewContent);
 
-  function resetHistoryState() {
+  const resetHistoryState = useCallback(() => {
     setHistory([]);
     setSelectedHistoryItem(null);
     setHistoryError(null);
     setIsHistoryLoading(false);
     setDeletingHistoryIds(new Set());
-  }
+  }, []);
 
-  function applyServerWidgetVersion() {
+  const applyServerWidgetVersion = useCallback(() => {
     appliedWidgetVersionRef.current = widgetVersionKey;
     setAppliedWidgetVersionKey(widgetVersionKey);
     aiContextVersionRef.current = null;
     reset(formDefaultValues);
     resetHistoryState();
     setServerVersionAvailable(false);
-  }
+  }, [formDefaultValues, reset, resetHistoryState, widgetVersionKey]);
 
   useEffect(() => {
     const identityChanged = resetIdentityRef.current !== widgetIdentityKey;
@@ -368,7 +369,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     }
 
     setServerVersionAvailable(true);
-  }, [formDefaultValues, hasPendingPreviewContent, isDirty, reset, widgetIdentityKey, widgetVersionKey]);
+  }, [applyServerWidgetVersion, hasPendingPreviewContent, isDirty, widgetIdentityKey, widgetVersionKey]);
 
   // Load saved AI context from widget
   useEffect(() => {
@@ -442,7 +443,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
       setEditorMode('generation-preview');
       setIsEditorOpen(true);
     }
-  }, [aiGenerator.generatedContent]);
+  }, [aiGenerator.generatedContent, isEditorOpen]);
 
   /**
    * Accept generated content from preview
@@ -785,7 +786,6 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
     return [];
   }, [
     aiGenerator.stagedGeneration.sections,
-    aiGenerator.stagedGeneration.sections.length, // Force update when length changes
   ]);
 
   const isActive = watch('isActive');

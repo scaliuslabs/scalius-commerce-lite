@@ -70,7 +70,7 @@ export function createDateColumn<T>(
       ? ({ column }) => <DataTableColumnHeader column={column} title={title} />
       : () => <span className="text-xs">{title}</span>,
     cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">
+      <span className="text-sm text-muted-foreground" suppressHydrationWarning>
         {formatDate((row.original as Record<string, unknown>)[field] as string | Date | null)}
       </span>
     ),

@@ -167,7 +167,7 @@ export async function fetchWithRetry(
       try {
         const { apiContext } = await import("./context");
         backendApi = apiContext.getStore()?.BACKEND_API;
-      } catch (e: unknown) {
+      } catch {
         // Fallback
       }
     }

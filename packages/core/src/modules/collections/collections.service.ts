@@ -5,7 +5,7 @@ import { collections, products, categories } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.validation";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 
@@ -206,12 +206,13 @@ export async function reorderCollections(
 ): Promise<void> {
     if (items.length === 0) return;
 
-    await db.batch(
+    await safeBatch(
+        db,
         items.map((item) =>
             db.update(collections)
                 .set({ sortOrder: item.sortOrder, updatedAt: sql`(unixepoch())` })
                 .where(eq(collections.id, item.id))
-        ) as any
+        )
     );
 }
 

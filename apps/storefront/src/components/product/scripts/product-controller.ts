@@ -7,6 +7,7 @@ import {
   formatDiscountBadge,
   type ProductPricing,
   type VariantPricing,
+  type DiscountType,
 } from "../lib/pricing-engine";
 import {
   createVariantIndex,
@@ -51,6 +52,14 @@ const cache = {
   discountBadge: null as HTMLElement | null,
 };
 
+type ProductImageChangeDetail = {
+  url?: string;
+};
+
+function parseDiscountType(value?: string): DiscountType {
+  return value === "percentage" || value === "flat" ? value : null;
+}
+
 function init() {
   cache.container = document.getElementById("product-container");
   if (!cache.container) return;
@@ -78,15 +87,12 @@ function init() {
 
 // Keep controller state in sync with gallery/zoom changes
 function initImageStateSync() {
-  window.addEventListener(
-    "product-image-change" as any,
-    ((e: CustomEvent) => {
-      const url = e?.detail?.url;
-      if (typeof url === "string" && url) {
-        state.currentDisplayedImage = url;
-      }
-    }) as EventListener,
-  );
+  window.addEventListener("product-image-change", ((e: CustomEvent<ProductImageChangeDetail>) => {
+    const url = e.detail?.url;
+    if (typeof url === "string" && url) {
+      state.currentDisplayedImage = url;
+    }
+  }) as EventListener);
 }
 function switchImage(url: string) {
   if (state.currentDisplayedImage === url) return;
@@ -142,7 +148,7 @@ function initVariantSystem() {
 
   state.productPricing = {
     basePrice: parseInt(cache.container?.dataset.productOriginalPrice || "0"),
-    discountType: (cache.container?.dataset.productDiscountType as any) || null,
+    discountType: parseDiscountType(cache.container?.dataset.productDiscountType),
     discountPercentage:
       parseInt(cache.container?.dataset.productDiscountPercentage || "0") ||
       null,
@@ -404,7 +410,12 @@ function handleAddToCart(redirect: boolean) {
   }
 
   try {
-    addToCart(cartData.data as any);
+    if (!cartData.data) {
+      showToast("Unable to add this product to cart", "error");
+      return;
+    }
+
+    addToCart(cartData.data);
 
     const pData = extractProductDataFromDOM(container);
     if (pData) {

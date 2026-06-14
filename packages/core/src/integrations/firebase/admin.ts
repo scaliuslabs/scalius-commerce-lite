@@ -249,7 +249,7 @@ function initializeFCMService(environment?: Record<string, unknown>, serviceAcco
       try {
         const fixedJson = jsonStr.replace(/\n/g, "\\n");
         serviceAccount = JSON.parse(fixedJson);
-      } catch (e2: unknown) {
+      } catch {
         throw e; // Throw original error if both fail
       }
     }

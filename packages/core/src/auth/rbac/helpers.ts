@@ -46,6 +46,24 @@ export function clearAllPermissionCache(): void {
 }
 
 /**
+ * Clear cached effective permissions for every user assigned to a role.
+ */
+export async function clearPermissionCacheForRole(
+  db: Database,
+  roleId: string,
+  kv?: KVNamespace
+): Promise<void> {
+  const assignedUsers = await db
+    .select({ userId: userRoles.userId })
+    .from(userRoles)
+    .where(eq(userRoles.roleId, roleId));
+
+  await Promise.all(
+    assignedUsers.map(({ userId }) => clearPermissionCache(userId, kv))
+  );
+}
+
+/**
  * Get all effective permissions for a user
  * Resolution order:
  * 1. Super admin -> all permissions
@@ -58,19 +76,19 @@ export async function getUserPermissions(
   userId: string,
   kv?: KVNamespace
 ): Promise<Set<string>> {
-  // Check local memory cache first (fastest, intra-isolate)
-  const cached = permissionCache.get(userId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL * 1000) {
-    return cached.permissions;
-  }
-
-  // Check KV cache next (fast, cross-isolate)
+  // KV is the cross-isolate source of truth. If a mutation deletes the KV
+  // entry, this isolate must not keep serving its stale local memory value.
   if (kv) {
     const kvCached = await kv.get<string[]>(getPermCacheKey(userId), "json");
     if (kvCached) {
       const permSet = new Set(kvCached);
       permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
       return permSet;
+    }
+  } else {
+    const cached = permissionCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL * 1000) {
+      return cached.permissions;
     }
   }
 
@@ -108,7 +126,7 @@ export async function getUserPermissions(
 
     permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
     if (kv) {
-      kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(permSet)), { expirationTtl: CACHE_TTL });
+      await kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(permSet)), { expirationTtl: CACHE_TTL });
     }
     return permSet;
   }
@@ -132,9 +150,9 @@ export async function getUserPermissions(
     timestamp: Date.now(),
   });
 
-  // Cache the result in KV without blocking
+  // Cache the result in KV for other isolates.
   if (kv) {
-    kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(effectivePermissions)), { expirationTtl: CACHE_TTL });
+    await kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(effectivePermissions)), { expirationTtl: CACHE_TTL });
   }
 
   return effectivePermissions;
@@ -146,9 +164,10 @@ export async function getUserPermissions(
 export async function hasPermission(
   db: Database,
   userId: string,
-  permission: PermissionName | string
+  permission: PermissionName | string,
+  kv?: KVNamespace
 ): Promise<boolean> {
-  const permissions = await getUserPermissions(db, userId);
+  const permissions = await getUserPermissions(db, userId, kv);
   return permissions.has(permission);
 }
 
@@ -158,9 +177,10 @@ export async function hasPermission(
 export async function hasAnyPermission(
   db: Database,
   userId: string,
-  permissionList: (PermissionName | string)[]
+  permissionList: (PermissionName | string)[],
+  kv?: KVNamespace
 ): Promise<boolean> {
-  const permissions = await getUserPermissions(db, userId);
+  const permissions = await getUserPermissions(db, userId, kv);
   return permissionList.some((p) => permissions.has(p));
 }
 
@@ -170,9 +190,10 @@ export async function hasAnyPermission(
 export async function hasAllPermissions(
   db: Database,
   userId: string,
-  permissionList: (PermissionName | string)[]
+  permissionList: (PermissionName | string)[],
+  kv?: KVNamespace
 ): Promise<boolean> {
-  const permissions = await getUserPermissions(db, userId);
+  const permissions = await getUserPermissions(db, userId, kv);
   return permissionList.every((p) => permissions.has(p));
 }
 

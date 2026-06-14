@@ -186,9 +186,9 @@ export function AdditionalInfoManager({
     })
   );
 
-  const triggerChange = (newItems: RichContentItem[]) => {
+  const triggerChange = React.useCallback((newItems: RichContentItem[]) => {
     onContentChange(newItems);
-  };
+  }, [onContentChange]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -222,7 +222,7 @@ export function AdditionalInfoManager({
       triggerChange(newItems);
       return newItems;
     });
-  }, [onContentChange]);
+  }, [triggerChange]);
 
   const handleRemoveItem = React.useCallback((id: string) => {
     setItems((currentItems) => {
@@ -230,7 +230,7 @@ export function AdditionalInfoManager({
       triggerChange(newItems);
       return newItems;
     });
-  }, [onContentChange]);
+  }, [triggerChange]);
 
   if (!isClient) {
     return (

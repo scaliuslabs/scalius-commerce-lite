@@ -54,7 +54,7 @@ export function TimePicker({ date, setDate, className }: TimePickerProps) {
     } else if (type === "minute") {
       newDate.setMinutes(parseInt(value));
     } else if (type === "period") {
-      let hour = newDate.getHours();
+      const hour = newDate.getHours();
 
       if (value === "AM" && hour >= 12) {
         newDate.setHours(hour - 12);

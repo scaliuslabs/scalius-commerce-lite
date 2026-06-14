@@ -20,7 +20,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
   }
 
   // Cron: release orphaned reservation movements every 15 minutes
-  async scheduled(controller: ScheduledController): Promise<void> {
+  async scheduled(_controller: ScheduledController): Promise<void> {
     const db = getDb(this.env);
     const result = await releaseExpiredReservations(db, 30);
 

@@ -5,6 +5,7 @@ import type { CartItem } from "@/store/cart";
 import type { DiscountValidationResponse } from "./types";
 import { unwrapData } from "./unwrap";
 import { getApiV1DiscountsValidate } from "@scalius/api-client/sdk";
+import type { GetApiV1DiscountsValidateData } from "@scalius/api-client/types";
 
 /**
  * Validates a discount code against the current cart state.
@@ -28,23 +29,29 @@ export async function validateDiscount(
     return null;
   }
   try {
-    const queryParams: Record<string, unknown> = { code };
-    if (total !== undefined) queryParams.total = String(total);
-    if (shippingCost !== undefined) queryParams.shippingCost = String(shippingCost);
+    const queryParams: GetApiV1DiscountsValidateData["query"] = { code };
+    if (total !== undefined) queryParams.total = total;
+    if (shippingCost !== undefined) queryParams.shippingCost = shippingCost;
     if (customerPhone) queryParams.customerPhone = customerPhone;
     if (items && items.length > 0) {
-      const apiItems = items.map((item: any) => ({
-        id: item.id || item.productId,
+      const apiItems = items.map((item) => {
+        const legacyProductId =
+          "productId" in item && typeof item.productId === "string"
+            ? item.productId
+            : undefined;
+        return {
+        id: item.id || legacyProductId,
         price: Number(item.price),
         quantity: Number(item.quantity),
         ...(item.variantId ? { variantId: item.variantId } : {}),
-      }));
+        };
+      });
       queryParams.items = JSON.stringify(apiItems);
     }
 
     const { data, error } = await getApiV1DiscountsValidate({
       client: getConfiguredSdkClient(),
-      query: queryParams as any,
+      query: queryParams,
     });
 
     if (error) {

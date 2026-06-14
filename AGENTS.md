@@ -61,7 +61,7 @@ packages/
 
 ### Apps
 
-- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is 252 typed server functions under `src/lib/api-functions/`, 78 query option wrappers, 114 exported mutation hooks, and 62 non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
+- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Server functions live in typed domain slices under `src/lib/api-functions/`; query options/mutations are split between the legacy broad files and narrower domain files. Use fresh `rg` scans for volatile counts instead of trusting prose. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
 - **API (`apps/api/`)**: Standalone Hono `OpenAPIHono` app mounted at `/api/v1`. Exports a `WorkerEntrypoint` with `fetch`, `queue`, and scheduled inventory-expiry cron handlers. Owns public/admin API routes, webhook ingestion, OpenAPI spec, queue consumer, and `WidgetDesignAgent` Durable Object for widget AI generation.
 - **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer storefront. Owns product, category, cart, checkout, search, customer auth proxy, SEO, sitemaps, error pages, and L1/L2 caching. Uses `env.BACKEND_API` service binding in production; intentionally skips service binding in local dev because separate Miniflare processes cannot reliably share the Fetcher.
 
@@ -153,6 +153,7 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - Account settings must use the parent `/admin` route's effective permission context. Do not feed the full RBAC permission catalog into a nested `PermissionProvider`.
 - The `/admin` route caches the admin guard context briefly on the client to keep navigation fast. Any UI path that changes the current user's profile, 2FA/security state, session, or effective permissions must call `clearAdminRouteContextCache()` before `router.invalidate()` or navigation that expects fresh shell/header context.
 - URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
+- SSR/admin loaders must await query data that first-render UI consumes. Do not fire-and-forget prefetch query keys that can affect the dehydrated first render; use deterministic `ensureQueryData()`/awaited warming or render a stable placeholder. Timestamp-only text may use a tight `suppressHydrationWarning` on the timestamp node.
 - Mutations that change products, customers, or orders must invalidate `queryKeys.dashboard.all` because the dashboard summary/activity are derived from those domains. Category mutations must invalidate `queryKeys.products.stats()` because product stats include the category count. Keep direct server-function mutation paths aligned with the central hooks in `apps/admin-v2/src/lib/api.mutations.ts`.
 - Checkout settings should preload only the default checkout-flow auth settings. Payment gateway and shipping tab data should lazy-load from their tab components unless the tab mounting behavior changes.
 - Order detail routes must use `prefetchOrderDetailQueries()` from `apps/admin-v2/src/lib/order-detail-prefetch.ts` so order, shipments, delivery providers, payment history, currency settings, and COD tracking for COD orders are warmed before render. Payment/COD/currency prefetch is optional and should log/continue on failure instead of redirecting away from an otherwise valid order.
@@ -336,7 +337,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 
 - Monorepo migration is complete: three Workers apps plus five shared packages.
 - API standardization is mostly in place: normal routes use `ok()`/`created()`/`ApiError`; edge routes have documented exceptions.
-- Schema is at 41 SQL migrations with 53 table declarations.
+- Schema is at 42 SQL migrations with 53 table declarations.
 - SDK generation is integrated into admin/storefront and should be regenerated after API surface changes.
 - Payments include durable webhook idempotency, gateway-payment CAS/atomic updates, refund validation, COD handling, SSLCommerz redirect validation, and Polar refund webhook processing.
 - Orders use status state-machine validation, CAS on status/fulfillment paths, queue ingest, and notification enqueueing for status transitions.
@@ -364,7 +365,7 @@ When working as part of an agent team on this codebase:
 - **Avoid file conflicts**: coordinate so each teammate owns different files/modules.
 - **Domain boundaries**: `packages/core/src/modules/` is organized by domain; each teammate should own a complete domain when possible.
 - **Run type checks**: use `pnpm typecheck` for meaningful validation. `pnpm build` bundles Workers/apps and can miss type errors that `tsc`/`astro check` catch.
-- **Run lint honestly**: root `pnpm lint` intentionally filters out `@scalius/tsconfig` and runs real `lint` scripts for API, admin, storefront, api-client, core, database, and shared.
+- **Run lint honestly**: root `pnpm lint` intentionally filters out `@scalius/tsconfig` and runs real `lint` scripts for API, admin, storefront, api-client, core, database, and shared. Keep it warning-free; if a future warning is truly package/toolchain-dependent, document the exact reason instead of normalizing warning noise.
 - **Run focused tests**: use `pnpm test` or direct Vitest filters for touched areas.
 - **Run dependency audit**: use `pnpm audit --audit-level moderate` after dependency or lockfile changes.
 - **Do not touch env files**: `.dev.vars` and `.env.development` can contain secrets.

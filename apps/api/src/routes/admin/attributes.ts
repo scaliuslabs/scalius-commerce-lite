@@ -29,7 +29,6 @@ import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
     paginatedEnvelope,
-    paginationSchema,
     errorResponses,
     messageResponse,
     noContentResponse,

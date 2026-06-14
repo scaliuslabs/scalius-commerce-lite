@@ -9,6 +9,17 @@ interface ProductImageZoomProps {
   aspectRatio?: string;
 }
 
+type ProductImageChangeDetail = {
+  url?: string;
+  zoomUrl?: string;
+};
+
+declare global {
+  interface WindowEventMap {
+    "product-image-change": CustomEvent<ProductImageChangeDetail>;
+  }
+}
+
 // Global image cache to persist across component updates
 const preloadedImages = new Map<string, boolean>();
 
@@ -115,7 +126,7 @@ export default function ProductImageZoom({
 
   // Listen for external image changes (from thumbnails/variants)
   useEffect(() => {
-    const handleImageChange = (e: CustomEvent) => {
+    const handleImageChange = (e: CustomEvent<ProductImageChangeDetail>) => {
       if (!e.detail?.url) return;
 
       const newUrl = e.detail.url;
@@ -144,12 +155,9 @@ export default function ProductImageZoom({
       }
     };
 
-    window.addEventListener("product-image-change" as any, handleImageChange);
+    window.addEventListener("product-image-change", handleImageChange);
     return () => {
-      window.removeEventListener(
-        "product-image-change" as any,
-        handleImageChange,
-      );
+      window.removeEventListener("product-image-change", handleImageChange);
     };
   }, [getHighResUrl]);
 

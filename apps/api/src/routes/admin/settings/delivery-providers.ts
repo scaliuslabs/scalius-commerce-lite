@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from "@scalius/core/modules/delivery/delivery.service";
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
@@ -11,6 +12,8 @@ import { successEnvelope, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const MASKED_VALUE = "••••••••••••";
+type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
 
 function unmaskedCredentials(
     newCredentials: string,
@@ -109,7 +112,7 @@ const createProviderRoute = createRoute({
     }
 });
 
-app.openapi(createProviderRoute, (async (c: any) => {
+app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProviderRoute>) => {
     const db = c.get("db");
     const validated = c.req.valid("json");
     const credentials = typeof validated.credentials !== "string"
@@ -138,7 +141,7 @@ app.openapi(createProviderRoute, (async (c: any) => {
     };
 
     return created(c, maskedResponse);
-}) as any);
+}) as unknown as AppRouteHandler<typeof createProviderRoute>);
 
 // ── Update Provider ──
 
@@ -165,7 +168,7 @@ const updateProviderRoute = createRoute({
     }
 });
 
-app.openapi(updateProviderRoute, (async (c: any) => {
+app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProviderRoute>) => {
     const db = c.get("db");
     const validated = c.req.valid("json");
     const credentials = validated.credentials && typeof validated.credentials !== "string"
@@ -219,7 +222,7 @@ app.openapi(updateProviderRoute, (async (c: any) => {
     };
 
     return ok(c, maskedResponse);
-}) as any);
+}) as unknown as AppRouteHandler<typeof updateProviderRoute>);
 
 // ── Create Test Provider ──
 

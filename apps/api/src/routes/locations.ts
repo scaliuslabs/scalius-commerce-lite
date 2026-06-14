@@ -3,8 +3,6 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, asc } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
-import { ValidationError } from "../utils/api-error";
-
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { deliveryLocationSchema } from "../schemas/entities";

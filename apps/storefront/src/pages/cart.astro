@@ -35,6 +35,7 @@ const [
 ]);
 const shippingMethods: ShippingMethod[] = shippingMethodsResponse || [];
 const codOnly = isCodOnly(checkoutConfig);
+const allowedCountriesMode = checkoutConfig?.allowedCountriesMode || "include";
 const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   id: "fallback",
   name: "English (Fallback)",
@@ -107,15 +108,23 @@ if (Astro.request.method === "POST" && codOnly) {
 
     const result = await processOrder(formData);
 
-    if (result.success && result.orderId && result.receiptToken) {
+    if (
+      result.success &&
+      "orderId" in result &&
+      "receiptToken" in result &&
+      result.orderId &&
+      result.receiptToken
+    ) {
       successOrderId = result.orderId;
       return Astro.redirect(
         `/order-success?orderId=${encodeURIComponent(result.orderId)}&token=${encodeURIComponent(result.receiptToken)}`,
       );
     } else {
       console.error("Order processing failed:", result.error);
+      const resultError = result.error;
       errorMessage =
-        result.error?.message || "Failed to process order. Please try again.";
+        (typeof resultError === "string" ? resultError : resultError?.message) ||
+        "Failed to process order. Please try again.";
     }
   } catch (error: unknown) {
     console.error("Order creation failed:", error);
@@ -351,7 +360,7 @@ const submitLabel = codOnly
                   helpText={lang.languageData.customerPhoneHelp}
                   required
                   allowedCountries={checkoutConfig.allowedCountries || []}
-                  allowedCountriesMode={(checkoutConfig as any).allowedCountriesMode || "include"}
+                  allowedCountriesMode={allowedCountriesMode}
                 />
               </div>
 
@@ -493,6 +502,23 @@ const submitLabel = codOnly
   import { getCustomerSession } from "@/lib/api/customer-auth";
   import { clearCheckoutSession } from "@/lib/checkout/session-state";
 
+  type CustomerAutofillProfile = {
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    city?: string | null;
+    cityName?: string | null;
+    zone?: string | null;
+    zoneName?: string | null;
+    area?: string | null;
+    areaName?: string | null;
+  };
+
+  type CartItemForShipping = {
+    freeDelivery?: boolean;
+  };
+
   // Initialize cart functionality
   initCartFunctionality();
   clearCheckoutSession();
@@ -506,7 +532,7 @@ const submitLabel = codOnly
   };
 
   // Helper to fill basic fields
-  const fillBasicCustomerFields = (customer: any) => {
+  const fillBasicCustomerFields = (customer: CustomerAutofillProfile) => {
     if (customer?.name) {
       const el = document.getElementById("customerName") as HTMLInputElement;
       if (el && !el.value) el.value = customer.name;
@@ -529,7 +555,7 @@ const submitLabel = codOnly
   };
 
   // Helper to auto-select City/Zone dropdowns through LocationSelector's event API.
-  const fillLocationDropdowns = (customer: any) => {
+  const fillLocationDropdowns = (customer: CustomerAutofillProfile) => {
     try {
       if (!customer?.cityName && !customer?.city) return;
       window.dispatchEvent(new CustomEvent("location-prefill", {
@@ -560,12 +586,12 @@ const submitLabel = codOnly
   });
 
   // 2. Active login intercept (AuthModal)
-  window.addEventListener("customer-login", (e: any) => {
+  window.addEventListener("customer-login", ((e: CustomEvent<CustomerAutofillProfile>) => {
     const customer = e.detail;
     fillBasicCustomerFields(customer);
     // Modal normally resolves quickly, but schedule location fill slightly later to avoid DOM races
     setTimeout(() => fillLocationDropdowns(customer), 300);
-  });
+  }) as EventListener);
 
   // ── Multi-gateway checkout redirect ──
   const meta = document.getElementById("checkout-meta");
@@ -651,15 +677,15 @@ const submitLabel = codOnly
         // Fall back to the first shipping method's fee when no selection has been made
         const defaultShippingFee = parseFloat(meta?.dataset.defaultShippingFee || "0");
         const defaultShippingId = meta?.dataset.defaultShippingId || undefined;
-        let shippingFee = (window as any).lastShippingEventDetail?.fee ?? defaultShippingFee;
-        const shippingMethodId = (window as any).lastShippingEventDetail?.id ?? defaultShippingId;
+        let shippingFee = window.lastShippingEventDetail?.fee ?? defaultShippingFee;
+        const shippingMethodId = window.lastShippingEventDetail?.id ?? defaultShippingId;
 
         // Zero out shipping if any cart item has free delivery
         const cartDataForShipping = JSON.parse(
           (document.getElementById('cartItemsInput') as HTMLInputElement)?.value || '{}'
-        );
+        ) as Record<string, CartItemForShipping>;
         const hasFreeDeliveryItem = Object.values(cartDataForShipping).some(
-          (item: any) => item.freeDelivery
+          (item) => item.freeDelivery
         );
         if (hasFreeDeliveryItem) shippingFee = 0;
 
@@ -720,7 +746,7 @@ const submitLabel = codOnly
     const form = document.getElementById("checkoutForm") as HTMLFormElement;
     if (!form) return;
     form.addEventListener("input", () => {
-      if ((window as any).handleAbandonedCheckout) (window as any).handleAbandonedCheckout();
+      window.handleAbandonedCheckout?.();
     });
   }
 

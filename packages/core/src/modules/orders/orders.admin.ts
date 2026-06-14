@@ -1,7 +1,7 @@
 // src/modules/orders/orders.admin.ts
 // Admin order service: queries and CRUD mutations.
 
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { roundPrice, addPrices, subtractPrice } from "@scalius/shared/price-utils";
 import {
     orders,
@@ -32,6 +32,7 @@ import {
 import type { ReservationEntry } from "../inventory";
 
 import { sql, desc, eq, inArray, isNull, isNotNull, and, type SQL } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
@@ -58,6 +59,7 @@ const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
     OrderStatus.REFUNDED,
     OrderStatus.PARTIALLY_REFUNDED,
 ]);
+type SQLiteBatchItem = BatchItem<"sqlite">;
 
 function assertTrashRestoreInventoryActionAllowed(status: string, inventoryAction: string): void {
     if (inventoryAction === "reserved" && isStockReservableStatus(status)) return;
@@ -523,7 +525,7 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     // ── Atomic batch: customer + order + items ──────────────────────────
     // D1 batch() executes all statements in a single atomic operation.
     // If any statement fails, none are committed.
-    const writeBatch: unknown[] = [];
+    const writeBatch: SQLiteBatchItem[] = [];
 
     if (!existingCustomer) {
         customerId = "cust_" + nanoid();
@@ -629,9 +631,8 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
         );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     try {
-        await db.batch(writeBatch as any);
+        await safeBatch(db, writeBatch);
     } catch (batchError) {
         // DB write failed -- release any reservations we made
         if (reservationEntries.length > 0) {
@@ -1077,8 +1078,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             throw new ConflictError("Order was modified by another request. Please reload and try again.");
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing cannot express mixed delete/insert statements.
-        const itemReplacementStatements: any[] = [db.delete(orderItems).where(eq(orderItems.orderId, id))];
+        const itemReplacementStatements: SQLiteBatchItem[] = [db.delete(orderItems).where(eq(orderItems.orderId, id))];
         if (data.items.length > 0) {
             itemReplacementStatements.push(db.insert(orderItems).values(data.items.map((item) => ({
                 id: "item_" + nanoid(),
@@ -1090,7 +1090,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 createdAt: sql`unixepoch()`,
             }))));
         }
-        await db.batch(itemReplacementStatements as any);
+        await safeBatch(db, itemReplacementStatements);
         writesCommitted = true;
 
         if (!statusTransitionHandled) {
@@ -1284,11 +1284,11 @@ export async function bulkDeleteOrders(db: Database, orderIds: string[], permane
 
     // Batch the final delete/soft-delete statements atomically (Fix atomicity)
     if (permanent) {
-        const deleteStmts: unknown[] = [
+        const deleteStmts: SQLiteBatchItem[] = [
             db.delete(orderItems).where(inArray(orderItems.orderId, orderIds)),
             db.delete(orders).where(inArray(orders.id, orderIds)),
         ];
-        await db.batch(deleteStmts as any);
+        await safeBatch(db, deleteStmts);
     } else {
         await db.update(orders)
             .set({

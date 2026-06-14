@@ -4,6 +4,7 @@ import {
   hasLikelyTruncatedCss,
   normalizeWidgetParts,
   prepareScopedWidgetContent,
+  rewriteWidgetHrefTargets,
   stripWidgetRuntimeMarkup,
 } from "./widget-rendering";
 
@@ -64,6 +65,23 @@ describe("widget rendering helpers", () => {
     expect(parts.html).not.toContain("cms-widget-frame");
     expect(parts.html).not.toContain("data-scalius-widget-root");
     expect(parts.html).not.toContain("data-widget-id");
+  });
+
+  it("rewrites known-bad internal widget links while preserving query and hash", () => {
+    const html = rewriteWidgetHrefTargets(
+      `
+        <section>
+          <a href="/collections/all?sort=new#grid">View all</a>
+          <a href="/products/demo">Product</a>
+          <a href="https://example.com/collections/all">External</a>
+        </section>
+      `,
+      { "/collections/all": "/search" },
+    );
+
+    expect(html).toContain('href="/search?sort=new#grid"');
+    expect(html).toContain('href="/products/demo"');
+    expect(html).toContain('href="https://example.com/collections/all"');
   });
 
   it("keeps non-runtime classes when stripping reserved widget classes", () => {

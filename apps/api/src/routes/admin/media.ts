@@ -1,7 +1,7 @@
 // src/server/routes/admin/media.ts
 // Admin OpenAPI routes for media.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
 import { NotFoundError } from "../../utils/api-error";
 import {
@@ -29,6 +29,10 @@ import {
 } from "@scalius/core/modules/media";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
+type UpdateMediaFileInput = Parameters<typeof updateMediaFile>[2];
 
 const uploadedMediaSchema = mediaSchema.pick({
     id: true,
@@ -112,7 +116,7 @@ const uploadRoute = createRoute({
     }
 });
 
-app.openapi(uploadRoute, (async (c: any) => {
+app.openapi(uploadRoute, (async (c: AdminRouteContext<typeof uploadRoute>) => {
     const db = c.get("db");
     const body = await c.req.parseBody({ all: true });
 
@@ -125,7 +129,7 @@ app.openapi(uploadRoute, (async (c: any) => {
     const validFiles = (files as unknown[]).filter((f): f is File => f instanceof File);
     const result = await uploadMediaFiles(db, validFiles, folderId);
     return result.partialSuccess ? ok(c, result) : created(c, result);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof uploadRoute>);
 
 // ── Update Media (PATCH) ──
 
@@ -147,13 +151,13 @@ const patchMediaRoute = createRoute({
     }
 });
 
-app.openapi(patchMediaRoute, (async (c: any) => {
+app.openapi(patchMediaRoute, (async (c: AdminRouteContext<typeof patchMediaRoute>) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
+    const data = c.req.valid("json") as unknown as UpdateMediaFileInput;
     const file = await updateMediaFile(db, id, data);
     return ok(c, { file });
-}) as any);
+}) as unknown as AdminRouteHandler<typeof patchMediaRoute>);
 
 // ── Update Media (PUT) ──
 
@@ -175,13 +179,13 @@ const putMediaRoute = createRoute({
     }
 });
 
-app.openapi(putMediaRoute, (async (c: any) => {
+app.openapi(putMediaRoute, (async (c: AdminRouteContext<typeof putMediaRoute>) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
+    const data = c.req.valid("json") as unknown as UpdateMediaFileInput;
     const file = await updateMediaFile(db, id, data);
     return ok(c, { file });
-}) as any);
+}) as unknown as AdminRouteHandler<typeof putMediaRoute>);
 
 // ── Move Files ──
 
@@ -284,12 +288,12 @@ const createFolderRoute = createRoute({
     }
 });
 
-app.openapi(createFolderRoute, (async (c: any) => {
+app.openapi(createFolderRoute, (async (c: AdminRouteContext<typeof createFolderRoute>) => {
     const db = c.get("db");
     const { name, parentId } = c.req.valid("json");
     const folder = await createMediaFolder(db, name, parentId);
     return created(c, { folder });
-}) as any);
+}) as unknown as AdminRouteHandler<typeof createFolderRoute>);
 
 // ── Update Folder ──
 

@@ -19,6 +19,31 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 import { pageSchema, publicWidgetSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+const flexibleObjectSchema = z.record(z.string(), z.any());
+const homepageDataSchema = z.object({
+  seo: flexibleObjectSchema,
+  hero: flexibleObjectSchema,
+  widgets: z.array(publicWidgetSchema),
+  collections: z.array(flexibleObjectSchema.nullable()),
+}).passthrough();
+type HomepageData = z.infer<typeof homepageDataSchema>;
+
+const navigationItemSchema = z.object({
+  id: z.string().optional(),
+  title: z.string(),
+  href: z.string().optional(),
+  subMenu: z.array(z.any()).optional(),
+}).passthrough();
+const layoutDataSchema = z.object({
+  analytics: z.any(),
+  header: flexibleObjectSchema,
+  navigation: z.array(navigationItemSchema),
+  footer: flexibleObjectSchema,
+  currency: flexibleObjectSchema,
+  theme: flexibleObjectSchema,
+}).passthrough();
+type LayoutData = z.infer<typeof layoutDataSchema>;
+
 // GET /storefront/homepage — consolidated homepage data
 const homepageRoute = createRoute({
   method: "get",
@@ -28,23 +53,18 @@ const homepageRoute = createRoute({
   responses: {
     200: {
       description: "Homepage data",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        seo: z.record(z.string(), z.unknown()),
-        hero: z.record(z.string(), z.unknown()),
-        widgets: z.array(publicWidgetSchema),
-        collections: z.array(z.record(z.string(), z.unknown())),
-      }).passthrough()) } },
+      content: { "application/json": { schema: successEnvelope(homepageDataSchema) } },
     },
     500: errorResponses[500],
   }
 });
 
-app.openapi(homepageRoute, (async (c: any) => {
+app.openapi(homepageRoute, async (c) => {
   const db = c.get("db");
-  const data = await getHomepageData(db);
+  const data = await getHomepageData(db) as unknown as HomepageData;
   c.header("Cache-Control", "no-store, max-age=0");
   return ok(c, data);
-}) as any);
+});
 
 // GET /storefront/pages/slug/:slug — consolidated CMS page render data
 const pageBySlugRoute = createRoute({
@@ -70,14 +90,14 @@ const pageBySlugRoute = createRoute({
   }
 });
 
-app.openapi(pageBySlugRoute, (async (c: any) => {
+app.openapi(pageBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const data = await getPageRenderData(db, slug);
   if (!data) throw new NotFoundError("Page not found");
   c.header("Cache-Control", "no-store, max-age=0");
   return ok(c, data);
-}) as any);
+});
 
 // GET /storefront/layout — consolidated layout data
 const layoutRoute = createRoute({
@@ -88,14 +108,7 @@ const layoutRoute = createRoute({
   responses: {
     200: {
       description: "Layout data",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        analytics: z.unknown(),
-        header: z.record(z.string(), z.unknown()),
-        navigation: z.record(z.string(), z.unknown()),
-        footer: z.record(z.string(), z.unknown()),
-        currency: z.record(z.string(), z.unknown()),
-        theme: z.record(z.string(), z.unknown()),
-      }).passthrough()) } },
+      content: { "application/json": { schema: successEnvelope(layoutDataSchema) } },
     },
     500: errorResponses[500],
   }
@@ -106,11 +119,11 @@ app.use(
   cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:layout:", varyByQuery: false, methods: ["GET"] }),
 );
 
-app.openapi(layoutRoute, (async (c: any) => {
+app.openapi(layoutRoute, async (c) => {
   const db = c.get("db");
-  const data = await getLayoutData(db);
+  const data = await getLayoutData(db) as unknown as LayoutData;
   return ok(c, data);
-}) as any);
+});
 
 // GET /storefront/csp — returns merchant-configured CSP allowed domains
 const cspRoute = createRoute({

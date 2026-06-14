@@ -76,8 +76,8 @@ export default function PhoneField({
       <input type="hidden" id={name} name={name} value={value} />
       <PhoneInput
         international
-        defaultCountry={effectiveDefaultCountry as any}
-        countries={effectiveCountries as any}
+        defaultCountry={effectiveDefaultCountry}
+        countries={effectiveCountries}
         flagUrl={FLAG_URL}
         value={value}
         onChange={(v) => setValue(v || "")}

@@ -710,7 +710,7 @@ function buildDeterministicSectionArtifact({
 }
 
 function buildDeterministicCompactArtifact({
-  payload,
+  payload: _payload,
   contextData,
 }: {
   payload: WidgetGenerationRunPayload;
@@ -903,7 +903,7 @@ export class WidgetDesignAgent extends Agent<Env, WidgetDesignAgentState> {
 
   private ensureDesignSchema(): void {
     if (this.designSchemaReady) return;
-    this.sql`
+    const _createEventsTableResult = this.sql`
       CREATE TABLE IF NOT EXISTS widget_design_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         run_id TEXT NOT NULL,
@@ -912,14 +912,14 @@ export class WidgetDesignAgent extends Agent<Env, WidgetDesignAgentState> {
         created_at INTEGER NOT NULL
       )
     `;
-    this.sql`CREATE INDEX IF NOT EXISTS widget_design_events_run_idx ON widget_design_events (run_id, id)`;
+    const _createEventsIndexResult = this.sql`CREATE INDEX IF NOT EXISTS widget_design_events_run_idx ON widget_design_events (run_id, id)`;
     this.designSchemaReady = true;
   }
 
   private recordEvent(runId: string, event: WidgetGenerationRunEvent): void {
     if (event.type === "draft.delta") return;
     this.ensureDesignSchema();
-    this.sql`
+    const _insertEventResult = this.sql`
       INSERT INTO widget_design_events (run_id, type, payload, created_at)
       VALUES (${runId}, ${event.type}, ${JSON.stringify(event)}, ${Date.now()})
     `;

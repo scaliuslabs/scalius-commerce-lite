@@ -4,11 +4,20 @@ import {
   postApiV1AbandonedCheckouts,
   postApiV1AbandonedCheckoutsCleanup,
 } from "@scalius/api-client/sdk";
+import type {
+  PostApiV1AbandonedCheckoutsCleanupData,
+  PostApiV1AbandonedCheckoutsData,
+} from "@scalius/api-client/types";
+
+type AbandonedCheckoutBody = NonNullable<PostApiV1AbandonedCheckoutsData["body"]>;
+type AbandonedCheckoutCleanupBody = NonNullable<
+  PostApiV1AbandonedCheckoutsCleanupData["body"]
+>;
 
 export interface AbandonedCheckoutPayload {
   checkoutId: string;
   customerPhone?: string;
-  checkoutData: Record<string, any>;
+  checkoutData: AbandonedCheckoutBody["checkoutData"];
 }
 
 /**
@@ -21,9 +30,10 @@ export interface AbandonedCheckoutPayload {
  */
 export async function saveAbandonedCheckout(payload: AbandonedCheckoutPayload): Promise<void> {
   try {
+    const body: AbandonedCheckoutBody = payload;
     await postApiV1AbandonedCheckouts({
       client: getConfiguredSdkClient(),
-      body: payload as any,
+      body,
     });
   } catch (error: unknown) {
     // The error is logged by fetchWithRetry, so we just swallow it here
@@ -40,9 +50,10 @@ export async function saveAbandonedCheckout(payload: AbandonedCheckoutPayload): 
  */
 export async function deleteAbandonedCheckout(checkoutId: string): Promise<void> {
   try {
+    const body: AbandonedCheckoutCleanupBody = { checkoutId };
     await postApiV1AbandonedCheckoutsCleanup({
       client: getConfiguredSdkAuthClient(),
-      body: { checkoutId } as any,
+      body,
     });
   } catch (error: unknown) {
     // Log a warning but don't let this failure block the user's success flow.

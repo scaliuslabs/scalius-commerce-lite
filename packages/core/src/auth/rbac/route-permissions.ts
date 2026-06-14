@@ -13,6 +13,8 @@ interface RoutePermission {
   anyOf?: PermissionName[];
   // All of these permissions are required
   allOf?: PermissionName[];
+  // Any authenticated user with at least one admin permission is allowed.
+  allowAnyAdmin?: boolean;
 }
 
 type RouteConfig = {
@@ -909,7 +911,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { anyOf: [PERMISSIONS.TEAM_VIEW, PERMISSIONS.TEAM_MANAGE_ROLES] },
   },
   "/api/v1/admin/rbac/my-permissions": {
-    GET: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any authenticated user can view their own permissions
+    GET: { allowAnyAdmin: true },
   },
   "/api/v1/admin/rbac/user-roles": {
     POST: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
@@ -954,7 +956,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // FCM Token API
   // =============================================
   "/api/v1/admin/fcm-token": {
-    POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any admin can register their token
+    POST: { allowAnyAdmin: true },
   },
   "/api/v1/admin/fcm-token-cleanup": {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
@@ -971,17 +973,17 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE },
   },
   "/api/v1/admin/auth/change-password": {
-    POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any authenticated admin
+    POST: { allowAnyAdmin: true },
   },
   "/api/v1/admin/auth/update-profile": {
-    POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Any authenticated admin
+    POST: { allowAnyAdmin: true },
   },
   "/api/v1/admin/auth/2fa/*": {
-    GET: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Own 2FA info
-    POST: { permission: PERMISSIONS.DASHBOARD_VIEW }, // Own 2FA management
+    GET: { allowAnyAdmin: true },
+    POST: { allowAnyAdmin: true },
   },
   "/api/v1/admin/auth/account-security": {
-    GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
+    GET: { allowAnyAdmin: true },
   },
 
   // =============================================

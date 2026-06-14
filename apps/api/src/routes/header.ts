@@ -78,8 +78,15 @@ app.openapi(getHeaderRoute, async (c) => {
   }
 
   // Parse header config
-  let headerConfig: Partial<HeaderData> | null = null;
-  try { headerConfig = settings.headerConfig ? JSON.parse(settings.headerConfig) as Partial<HeaderData> : null; } catch { headerConfig = null; }
+  const headerConfig: Partial<HeaderData> | null = (() => {
+    try {
+      return settings.headerConfig
+        ? (JSON.parse(settings.headerConfig) as Partial<HeaderData>)
+        : null;
+    } catch {
+      return null;
+    }
+  })();
 
   if (!headerConfig) {
     throw new ValidationError("Invalid header configuration");

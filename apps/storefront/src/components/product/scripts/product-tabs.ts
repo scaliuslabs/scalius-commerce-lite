@@ -150,7 +150,7 @@ function initKeyboardNavigation(): void {
       const key = (e as KeyboardEvent).key;
       const buttons = Array.from(elements!.buttons);
 
-      let targetIndex = index;
+      let targetIndex: number;
 
       if (key === "ArrowLeft") {
         e.preventDefault();

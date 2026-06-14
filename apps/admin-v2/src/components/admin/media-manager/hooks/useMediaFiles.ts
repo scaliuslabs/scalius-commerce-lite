@@ -155,7 +155,7 @@ export function useMediaFiles(autoLoad: boolean = false) {
     if (autoLoad) {
       loadFiles(1, {});
     }
-  }, [autoLoad]); // Only run on mount, not when loadFiles changes
+  }, [autoLoad, loadFiles]);
 
   return {
     files,

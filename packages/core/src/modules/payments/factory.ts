@@ -1,7 +1,6 @@
 // src/modules/payments/factory.ts
 // Factory function that returns the correct PaymentProvider for a given gateway type.
 
-import type { PaymentGateway } from "./types";
 import type { PaymentProvider } from "./provider";
 import type { StripeSettings, SSLCommerzSettings, PolarSettings } from "./gateway-settings";
 import type { Database } from "@scalius/database/client";

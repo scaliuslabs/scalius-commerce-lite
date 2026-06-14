@@ -18,7 +18,7 @@ export async function listDiscounts(db: Database, options: { page: number; limit
     const limit = Math.min(Math.max(rawLimit || 10, 1), 100);
     const offset = (page - 1) * limit;
 
-    let conditions = [];
+    const conditions = [];
     if (search) {
         const cond = ftsMatch("discounts_fts", "discounts", search);
         if (cond) conditions.push(cond);
@@ -62,9 +62,9 @@ export async function listDiscounts(db: Database, options: { page: number; limit
         .offset(offset);
 
     const discountIds = results.map((d) => d.id);
-    let relatedProducts: Record<string, { buy: string[]; get: string[] }> = {};
-    let relatedCollections: Record<string, { buy: string[]; get: string[] }> = {};
-    let usageStats: Record<string, { count: number; total: number }> = {};
+    const relatedProducts: Record<string, { buy: string[]; get: string[] }> = {};
+    const relatedCollections: Record<string, { buy: string[]; get: string[] }> = {};
+    const usageStats: Record<string, { count: number; total: number }> = {};
 
     if (discountIds.length > 0) {
         const productsResult = await db

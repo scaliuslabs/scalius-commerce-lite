@@ -1,10 +1,11 @@
 // src/scripts/hydrateProductShortcodes.ts
 import { createRoot } from "react-dom/client";
+import type { Root } from "react-dom/client";
 import ProductShortcode from "@/components/ProductShortcode";
 import React from "react";
 
 interface RootElement extends HTMLElement {
-  _reactRoot?: any;
+  _reactRoot?: Root;
 }
 
 function hydrate() {

@@ -18,6 +18,10 @@ const CACHE_MATCH_TIMEOUT_MS = 500;
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
 
+type CloudflareCacheStorage = CacheStorage & {
+  default: Cache;
+};
+
 const CACHEABLE_PATHS = [
   /^\/$/,
   /^\/products\/[^/]+$/,
@@ -75,7 +79,8 @@ function buildCacheKeyUrl(url: URL): URL {
 // binding (ASSETS is always present for Astro CF adapter).
 function getEnv(): Env | null {
   try {
-    if (cfEnv != null && ((cfEnv as any).ASSETS || (cfEnv as any).CDN_DOMAIN_URL || (cfEnv as any).PUBLIC_API_URL)) {
+    const env = cfEnv as Partial<Env> | null | undefined;
+    if (env != null && (env.ASSETS || env.CDN_DOMAIN_URL || env.PUBLIC_API_URL)) {
       return cfEnv as unknown as Env;
     }
   } catch {
@@ -107,7 +112,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   // This enables L2 caching for API functions on every page
   if (isCloudflareEnv && kvBinding) {
     try {
-      cfCache = (caches as any).default as Cache;
+      cfCache = (caches as CloudflareCacheStorage).default;
       const projectCacheVersionKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
 
       const cacheVersionResult = await resolveStorefrontCacheVersion({
@@ -140,7 +145,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
     cache: resolvedCacheVersion ? cfCache : null,
     kvVersion: resolvedCacheVersion,
     hostname,
-    waitUntil: isCloudflareEnv ? ((promise: Promise<any>) => locals.cfContext.waitUntil(promise)) : null,
+    waitUntil: isCloudflareEnv ? ((promise: Promise<unknown>) => locals.cfContext.waitUntil(promise)) : null,
   };
 
   return cacheContextAls.run(cacheCtx, async () => {
@@ -268,14 +273,18 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   }); // end cacheContextAls.run()
 });
 
-const apiContextMiddleware = defineMiddleware((context, next) => {
+const apiContextMiddleware = defineMiddleware((_context, next) => {
   const env = getEnv();
 
   // Read CDN domain with direct cfEnv fallback in case getEnv() returned null
   // but cfEnv property access still works (proxy object edge case).
   let cdnDomain = env?.CDN_DOMAIN_URL as string | undefined;
   if (!cdnDomain) {
-    try { cdnDomain = (cfEnv as any)?.CDN_DOMAIN_URL as string | undefined; } catch {}
+    try {
+      cdnDomain = (cfEnv as Partial<Env> | null | undefined)?.CDN_DOMAIN_URL;
+    } catch {
+      // cfEnv proxy access can throw in local dev before Wrangler bindings exist.
+    }
   }
 
   // Set on globalThis as a last-resort fallback for media-url.ts

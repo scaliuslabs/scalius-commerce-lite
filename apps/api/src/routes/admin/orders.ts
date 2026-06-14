@@ -1,4 +1,4 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
 import {
     createOrderSchema,
@@ -18,6 +18,16 @@ import { adminOrdersInvoiceRoutes } from "./orders-invoice";
 import { getEncryptionKey } from "../../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
+
+function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
+    return typeof result === "object"
+        && result !== null
+        && (result as Record<string, unknown>).success === true
+        && typeof (result as Record<string, unknown>).orderId === "string";
+}
 
 // Mount sub-routers
 app.route("/", adminOrdersStatusRoutes);
@@ -221,7 +231,7 @@ const bulkShipRoute = createRoute({
     }
 });
 
-app.openapi(bulkShipRoute, (async (c: any) => {
+app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
@@ -230,7 +240,7 @@ app.openapi(bulkShipRoute, (async (c: any) => {
 
     // Enqueue order_shipped notifications for each successfully shipped order
     if (c.env.ORDER_NOTIFICATIONS_QUEUE) {
-        const successfulOrderIds = results.filter((r: any) => r.success).map((r: any) => r.orderId);
+        const successfulOrderIds = results.filter(isSuccessfulOrderResult).map((r) => r.orderId);
         if (successfulOrderIds.length > 0) {
             const orderRows = await db.select({
                 id: orders.id,
@@ -260,7 +270,7 @@ app.openapi(bulkShipRoute, (async (c: any) => {
         failureCount: results.length - successCount,
         results
     });
-}) as any);
+}) as unknown as AdminRouteHandler<typeof bulkShipRoute>);
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
@@ -281,13 +291,13 @@ const getOrderRoute = createRoute({
     }
 });
 
-app.openapi(getOrderRoute, (async (c: any) => {
+app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const result = await OrdersService.getOrderDetails(db, orderId);
     if (!result) throw new NotFoundError("Order not found");
     return ok(c, result);
-}) as any);
+}) as unknown as AdminRouteHandler<typeof getOrderRoute>);
 
 // ─── PUT /:id ────────────────────────────────────────────────────────────────
 
@@ -453,7 +463,7 @@ const getPaymentsRoute = createRoute({
     }
 });
 
-app.openapi(getPaymentsRoute, (async (c: any) => {
+app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRoute>) => {
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
@@ -463,7 +473,7 @@ app.openapi(getPaymentsRoute, (async (c: any) => {
     ]);
 
     return ok(c, { payments, plan: plan ?? null });
-}) as any);
+}) as unknown as AdminRouteHandler<typeof getPaymentsRoute>);
 
 // ─── GET /:id/form-data ──────────────────────────────────────────────────────
 
@@ -495,7 +505,7 @@ const getFormDataRoute = createRoute({
     }
 });
 
-app.openapi(getFormDataRoute, (async (c: any) => {
+app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRoute>) => {
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
@@ -546,7 +556,7 @@ app.openapi(getFormDataRoute, (async (c: any) => {
     ]);
 
     // Fetch all variants in a single batched query instead of N+1
-    const allProductIds = allProducts.map((p: any) => p.id);
+    const allProductIds = allProducts.map((p) => p.id);
     const allVariants = allProductIds.length > 0
         ? await db
             .select()
@@ -564,7 +574,7 @@ app.openapi(getFormDataRoute, (async (c: any) => {
         variantsByProductId.set(variant.productId, existing);
     }
 
-    const productsWithVariants = allProducts.map((product: any) => ({
+    const productsWithVariants = allProducts.map((product) => ({
         ...product,
         variants: variantsByProductId.get(product.id) ?? [],
     }));
@@ -575,7 +585,7 @@ app.openapi(getFormDataRoute, (async (c: any) => {
         defaultValues: {
             ...order,
             discountAmount: order.discountAmount || null,
-            items: items.map((item: any) => ({
+            items: items.map((item) => ({
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,
@@ -583,6 +593,6 @@ app.openapi(getFormDataRoute, (async (c: any) => {
             })),
         },
     });
-}) as any);
+}) as unknown as AdminRouteHandler<typeof getFormDataRoute>);
 
 export { app as adminOrdersRoutes };

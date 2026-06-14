@@ -1,5 +1,5 @@
 import type { DeliveryProviderType, Order } from "@scalius/database/schema";
-import type { ProviderLifecycle, HealthCheckResult } from "@scalius/core/providers/types";
+import type { ProviderLifecycle } from "@scalius/core/providers/types";
 import type { ShipmentResult, ShipmentStatus, ShipmentOptions } from "./types";
 
 /**

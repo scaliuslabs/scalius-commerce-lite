@@ -67,6 +67,16 @@ const storefrontProductSchema = z.object({
   discountedPrice: z.number(),
 }).passthrough();
 
+const productDetailRecordSchema = z.record(z.string(), z.any());
+const productDetailDataSchema = z.object({
+  product: productDetailRecordSchema,
+  category: productDetailRecordSchema.nullable(),
+  images: z.array(productDetailRecordSchema),
+  variants: z.array(productDetailRecordSchema),
+  relatedProducts: z.array(productDetailRecordSchema),
+});
+type ProductDetailData = z.infer<typeof productDetailDataSchema>;
+
 // GET /api/storefront/products
 const listProductsRoute = createRoute({
   method: "get",
@@ -149,26 +159,20 @@ const getProductBySlugRoute = createRoute({
   responses: {
     200: {
       description: "Product details",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        product: z.record(z.string(), z.unknown()),
-        category: z.record(z.string(), z.unknown()).nullable(),
-        images: z.array(z.record(z.string(), z.unknown())),
-        variants: z.array(z.record(z.string(), z.unknown())),
-        relatedProducts: z.array(z.record(z.string(), z.unknown())),
-      })) } },
+      content: { "application/json": { schema: successEnvelope(productDetailDataSchema) } },
     },
     404: errorResponses[404],
     500: errorResponses[500],
   }
 });
 
-app.openapi(getProductBySlugRoute, (async (c: any) => {
+app.openapi(getProductBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const result = await getStorefrontProductBySlug(db, slug);
   if (!result) throw new NotFoundError("Product not found");
-  return ok(c, result);
-}) as any);
+  return ok(c, result as unknown as ProductDetailData);
+});
 
 /** Extracts attribute-based filters from raw query params by checking known attribute slugs. */
 async function getAttributeFilters(

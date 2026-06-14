@@ -125,7 +125,7 @@ export async function refreshTokenIfNeeded(
     if (isTokenExpiringSoon(token, thresholdMinutes)) {
       // Verify signature first — never re-sign an unverified token
       const verified = await verifyToken(token, env);
-      const { iat, exp, nbf, jti, ...payload } = verified as Record<string, unknown>;
+      const { iat: _iat, exp: _exp, nbf: _nbf, jti: _jti, ...payload } = verified as Record<string, unknown>;
       return generateToken(payload, DEFAULT_EXPIRATION, env);
     }
     return token;

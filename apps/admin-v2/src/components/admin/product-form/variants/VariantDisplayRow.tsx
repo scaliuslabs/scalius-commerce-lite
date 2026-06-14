@@ -62,7 +62,7 @@ function printBarcodeLabel(variant: ProductVariant, productName: string) {
   <div class="sku">${variant.sku.replace(/</g, "&lt;")}</div>
   <div class="barcode">${svg}</div>
 </div>
-<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script>
+<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}</script>
 </body>
 </html>`;
 
@@ -227,4 +227,3 @@ export function VariantDisplayRow({
     </TableRow>
   );
 }
-

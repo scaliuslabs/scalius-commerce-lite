@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { ValidationError, ForbiddenError } from "../utils/api-error";
 import { errorResponses } from "../schemas/responses";
 
 async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Promise<string[]> {
@@ -68,7 +67,7 @@ const proxyRoute = createRoute({
   responses: {
     200: {
       description: "Proxied response",
-      content: { "*/*": { schema: z.any() } },
+      content: { "*/*": { schema: z.unknown() } },
     },
     400: errorResponses[400],
     403: errorResponses[403],
@@ -87,7 +86,7 @@ app.openapi(proxyRoute, async (c) => {
   let targetUrl: URL;
   try {
     targetUrl = new URL(urlParam);
-  } catch (e: unknown) {
+  } catch {
     return c.json({ error: "Invalid url parameter" }, 400, {
       "Access-Control-Allow-Origin": "*"
     });
