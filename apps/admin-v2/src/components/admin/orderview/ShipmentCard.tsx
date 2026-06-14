@@ -21,6 +21,7 @@ import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator"
 import type { Order, OrderShipment } from "./types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreateOrderShipment } from "@/lib/api.mutations";
+import { queryKeys } from "@/lib/query-keys";
 
 interface ShipmentCardProps {
   order: Order;
@@ -190,8 +191,8 @@ const ShipmentHistoryItem = ({
 export function ShipmentCard({ order }: ShipmentCardProps) {
   const queryClient = useQueryClient();
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["orders", "detail", order.id] });
-    queryClient.invalidateQueries({ queryKey: ["orders", "shipments", order.id] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
   };
 
   const hasProviders = order.deliveryProviders && order.deliveryProviders.length > 0;

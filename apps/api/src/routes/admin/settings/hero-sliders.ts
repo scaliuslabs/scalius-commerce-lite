@@ -129,7 +129,6 @@ app.openapi(getByIdRoute, (async (c: any) => {
     const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
 
     if (!slider) throw new NotFoundError("Slider not found");
-    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 
@@ -196,6 +195,7 @@ app.openapi(deleteSliderRoute, (async (c: any) => {
         .returning();
 
     if (!slider) throw new NotFoundError("Slider not found");
+    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as any);
 

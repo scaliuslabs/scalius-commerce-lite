@@ -13,32 +13,41 @@ vi.mock("../../../utils/cache-invalidation", () => ({
 
 import { heroSlidersRoutes } from "./hero-sliders";
 
-function createDb() {
+const sliderRecord = {
+  id: "slider_1",
+  type: "desktop",
+  images: JSON.stringify([{ id: "img_1", url: "https://cdn.example.com/hero.jpg", title: "Hero", link: "/" }]),
+  isActive: true,
+  createdAt: 1,
+  updatedAt: 1,
+  deletedAt: null,
+};
+
+function createDb(options: { selectResult?: unknown; updateResult?: unknown } = {}) {
   return {
     select: () => ({
       from: () => ({
         where: () => ({
-          get: async () => null,
+          get: async () => options.selectResult ?? null,
         }),
       }),
     }),
     insert: () => ({
       values: () => ({
-        returning: async () => [{
-          id: "slider_1",
-          type: "desktop",
-          images: JSON.stringify([{ id: "img_1", url: "https://cdn.example.com/hero.jpg", title: "Hero", link: "/" }]),
-          isActive: true,
-          createdAt: 1,
-          updatedAt: 1,
-          deletedAt: null,
-        }],
+        returning: async () => [sliderRecord],
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: () => ({
+          returning: async () => [options.updateResult ?? sliderRecord],
+        }),
       }),
     }),
   };
 }
 
-function createTestApp() {
+function createTestApp(db = createDb()) {
   const env = {
     CACHE: { id: "api-cache-kv" },
     PURGE_URL: "https://storefront.example.com/api/purge-cache",
@@ -52,7 +61,7 @@ function createTestApp() {
     return c.json(body, status);
   });
   app.use("*", async (c, next) => {
-    c.set("db", createDb() as never);
+    c.set("db", db as never);
     await next();
   });
   app.route("/admin/settings/hero-sliders", heroSlidersRoutes);
@@ -82,6 +91,49 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["homepage"], env);
+  });
+
+  it("does not invalidate homepage caches after hero slider reads", async () => {
+    const { app, env } = createTestApp(createDb({ selectResult: sliderRecord }));
+
+    const response = await app.request(
+      "/api/v1/admin/settings/hero-sliders/slider_1",
+      { method: "GET" },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.invalidateApiAndStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("invalidates homepage caches after hero slider updates", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/hero-sliders/slider_1",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: false }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["homepage"], env);
+  });
+
+  it("invalidates homepage caches after hero slider deletes", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/hero-sliders/slider_1",
+      { method: "DELETE" },
+      env,
+    );
+
+    expect(response.status).toBe(200);
     expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["homepage"], env);
   });
 });

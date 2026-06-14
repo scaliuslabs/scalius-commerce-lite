@@ -151,6 +151,7 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - Add new admin server functions to a domain slice under `apps/admin-v2/src/lib/api-functions/` with normal typechecking; do not recreate a broad legacy barrel.
 - Account settings must use the parent `/admin` route's effective permission context. Do not feed the full RBAC permission catalog into a nested `PermissionProvider`.
 - URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
+- Order detail routes must use `prefetchOrderDetailQueries()` from `apps/admin-v2/src/lib/order-detail-prefetch.ts` so order, shipments, delivery providers, payment history, currency settings, and COD tracking for COD orders are warmed before render. Payment/COD/currency prefetch is optional and should log/continue on failure instead of redirecting away from an otherwise valid order.
 - Keep server-function payloads route-shaped and JSON-serializable. If generated SDK responses include index signatures, strip them with local DTO helpers instead of adding file-level `@ts-nocheck`.
 
 ## Storefront Notes
