@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `RBAC-001`, `STORE-007`, `PERF-004`, and `STORE-008` slice are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
+Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `RBAC-001`, `STORE-007`, `PERF-004`, `STORE-008`, `AUTH-011`, and `CACHE-006` slices are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
 
 ## Validation Performed
 
@@ -24,10 +24,10 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with no ESLint warnings across API, admin, storefront, api-client, core, database, and shared.
-- `pnpm test`: passed 123 files and 783 tests after the admin/RBAC/CSP/performance/widget-link slice.
+- `pnpm test`: passed 125 files and 791 tests after the 2FA trusted-device/pending-method and layout-cache slice.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm deploy`: latest admin/RBAC/CSP/performance/widget-link/lint-clean slice redeployed API `822d3968-ffc0-4280-9286-f161a4096525`, admin `a6701970-d938-4250-a483-3c6155ab0f89`, and storefront `9d6a9ea8-6258-487a-85e0-ed4e6f34d72d`.
-- Live HTTP and browser checks: API health/setup/CSP/auth, storefront home/search/category/product, dashboard demo login, authenticated `/admin`, `/admin/products`, `/admin/orders`, `/admin/media`, and `/admin/settings/account` returned successfully after redeploy with no error-boundary page, stuck loading state, or captured console/runtime errors.
+- Full `pnpm deploy`: latest 2FA trusted-device/pending-method and layout-cache slice redeployed API `e6371993-57e5-4cca-8b06-ffa201b5f1a4`, admin `7d9f3990-6c55-4e16-b095-bc5a6adb2538`, and storefront `c6e6eb39-1829-4070-a543-96a1b6e77f13`.
+- Live HTTP and browser checks: API setup, dashboard login page, demo sign-in API, authenticated `/admin`, `/admin/products`, `/admin/orders`, storefront `/`, storefront `/search`, and direct same-origin Better Auth trusted-device rejection paths returned successfully after redeploy with no error-boundary page, stuck loading state, or captured console/runtime errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
@@ -115,13 +115,13 @@ Fix direction: redesign these flows so session-rotating Better Auth calls happen
 
 Status: Verified on 2026-06-14. Password change now calls Better Auth with `returnHeaders: true`, forwards returned `Set-Cookie` headers from the API response, and does not leak replacement tokens in JSON. Admin server functions append API `Set-Cookie` values to the dashboard response before unwrapping envelopes. First-time email setup now proves the same-origin Better Auth `sessionToken` to `/2fa/method`; first-time TOTP and method-code changes verify the target-method code inside the API route, prefer the rotated cookie token when Better Auth returns a stale token, and forward the rotated cookie. Focused API/admin tests cover cookie propagation, code proof, same-origin session-token proof, stale-token rejection, password-change cookie forwarding, and the exact `/2fa/method` middleware exemption. Root tests/typechecks/lint/builds, local HTTP/browser smoke, full deploy to API `89316428-fc7f-4148-8f56-bb93c6b25c1b`, admin `c144655a-5f96-4741-b001-46926bdb7e2a`, storefront `4ab260a7-39ff-4489-9ef8-3f0370222d00`, and live admin/storefront smoke passed.
 
-### AUTH-011: Preferred-login 2FA UX and trusted-device policy still need a focused pass
+### AUTH-011: Preferred-login 2FA UX and trusted-device policy hardening
 
 The auth re-audit found that after the security fixes, some convenience behavior remains deliberately conservative. Login 2FA uses `trustDevice: false` because Better Auth's trusted-device cookie is not yet synchronized with the custom `session.twoFactorVerified` API gate. The login method-selection UX can also still default to email in cases where a user prefers TOTP, because the pending-2FA login state is not the same as a fully verified admin session.
 
-Fix direction: define the intended trusted-device policy against the API middleware, then add a full browser/UI regression covering TOTP-preferred login, email-preferred login, backup codes, old trusted-device cookies, and post-login API access.
+Fix direction: keep the trusted-device bypass disabled until it is deliberately reconciled with the custom API session gate, reject direct trusted-device attempts at both admin/API boundaries, and use Better Auth's pending-login method hints so the login 2FA screen does not guess email while the user is only partially authenticated.
 
-Status: In Progress as of 2026-06-15. The safer current behavior is that remembered-device login bypass is disabled, so users must complete 2FA each login until this policy is deliberately implemented. A first API-boundary slice now rejects caller-supplied `trustDevice: true` on legacy `/api/v1/admin/auth/2fa/verify` before Better Auth verification, preventing clients from creating remembered-device state while the custom `session.twoFactorVerified` policy is not reconciled with Better Auth's trusted-device cookie. Remaining work: preferred-method login UX and a full browser regression for TOTP/email/backup-code login, stale trusted-device cookies, and post-login API access.
+Status: Verified on 2026-06-15 for the current conservative policy. Remembered-device login bypass remains disabled, so users must complete 2FA each login until a future policy intentionally changes that. The legacy `/api/v1/admin/auth/2fa/verify` path and same-origin Better Auth catch-all verification paths now reject caller-supplied `trustDevice: true` before verification. The admin login form stores Better Auth pending method hints in `sessionStorage`, chooses TOTP/email from those hints before falling back to authenticated 2FA info, avoids silent email fallback when that lookup is unavailable, and clears the pending hint after verification or sign-out. Verification: focused admin auth-server and pending-method tests, focused API auth-management tests, root gates, local running-stack smoke, full deploy, live demo sign-in API check, live trusted-device rejection checks for TOTP/email/backup-code, and live dashboard/storefront browser smoke. Future remembered-device support should open a new tracker item and prove TOTP-preferred login, email-preferred login, backup-code login, stale trusted-device cookies, and post-login admin API access before relaxing this behavior.
 
 ### CACHE-005: Settings and no-cache routes had stale or misleading cache behavior
 
@@ -130,6 +130,14 @@ The cache audit found that auth/checkout settings writes updated checkout behavi
 Fix direction: route settings writes through the existing cache invalidation groups, make zero/negative TTL bypass cache reads and writes, and count only fulfilled `true` warm responses.
 
 Status: Verified on 2026-06-14. Auth settings now invalidate the `checkout` group, CSP/security settings invalidate the `layout` group, `cacheMiddleware({ ttl: 0 })` bypasses cache entirely, and purge warm logs count only successful responses. Verification included focused API cache/auth tests, API/storefront typechecks and builds, root tests/lint/env/dist-secret checks, API deploy `76dee35f-507c-4654-a049-d8feb66d63ae`, storefront deploy `e5765834-61cf-4d8a-80ec-eb70a0c9ad3b`, live API analytics no-cache header check, live CSP/API health checks, and live admin/storefront browser smoke.
+
+### CACHE-006: Category and CMS page writes can leave fallback navigation stale
+
+The cache re-audit found that storefront layout fallback navigation derives from public categories and pages when no explicit header navigation config exists, but category and CMS page writes did not invalidate the `layout` group. That could leave header/footer/navigation HTML stale after content edits even when the page/category-specific caches were purged.
+
+Fix direction: include `layout` in category invalidation groups and page write invalidation groups, then prove the storefront purge payload contains both page/category-specific prefixes and layout/navigation prefixes.
+
+Status: Verified on 2026-06-15. `CATALOG_CACHE_GROUPS.categories` and `/api/v1/admin/pages` invalidation now include `layout`; page writes pass both `pages` and `layout` to API KV invalidation and storefront purge. Focused cache-invalidation tests cover category layout prefixes and page-plus-layout purge payloads. Verification included API typecheck/lint, root gates, local running-stack smoke, full deploy to API `e6371993-57e5-4cca-8b06-ffa201b5f1a4`, admin `7d9f3990-6c55-4e16-b095-bc5a6adb2538`, storefront `c6e6eb39-1829-4070-a543-96a1b6e77f13`, and live storefront/dashboard smoke.
 
 ### STORE-007: Storefront CSP middleware ignored enveloped settings responses
 

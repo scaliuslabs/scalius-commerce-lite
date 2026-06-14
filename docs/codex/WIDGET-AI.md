@@ -1,6 +1,6 @@
 # Widget AI Notes
 
-Last updated: 2026-05-13
+Last updated: 2026-06-15
 
 ## Current Shape
 
@@ -12,6 +12,7 @@ Widget generation is provider-neutral and dashboard-configurable.
   - `apps/admin-v2/src/components/admin/widgets/widget-form/useAiImprover.ts`
   - `apps/admin-v2/src/components/admin/widgets/widget-form/useStagedGeneration.ts`
 - API generation route: `apps/api/src/routes/admin/ai.ts`
+- API staged generation runs route: `apps/api/src/routes/admin/widget-generation-runs.ts`
 - API settings route: `apps/api/src/routes/admin/settings/ai.ts`
 - Prompt resolver: `apps/api/src/routes/admin/ai-prompts.ts`
 - Core settings service: `packages/core/src/modules/ai/ai-settings.service.ts`
@@ -52,15 +53,13 @@ Widget generation is provider-neutral and dashboard-configurable.
 - Cloudflare lists Kimi K2.6 as long-context, structured-output-capable, and vision-capable. Cloudflare JSON Mode accepts `response_format: { type: "json_schema", json_schema }`, but JSON Mode is not streaming and can fail with `JSON Mode couldn't be met`; keep a validation/retry/fallback path.
 - Cloudflare Kimi vision is official, but the documented Worker vision payload examples are not the same as the editor's current OpenAI-style `image_url` parts. Keep Cloudflare native image input disabled until a provider-specific image adapter is tested with MIME/size limits.
 
-## Next Hardening Steps
+## Remaining Hardening Steps
 
-1. Move widget generation to a server-owned request contract: `{ operation, promptType, userPrompt, productIds, categoryIds, collectionIds, imageIds, placement }`.
-2. Stop accepting arbitrary client-supplied `system` and `assistant` messages for widget generation once the server contract is in place.
-3. Build a commerce manifest from selected context and validate generated `href`, `src`, and `srcset` against allowed product/category/collection/media URLs and buy-now URLs.
-4. Convert staged generation into a server operation: plan, validate, generate sections, sanitize each section, merge, and return one final artifact plus optional progress events.
-5. Add durable generation telemetry: request id, user id, provider/model, stage, context counts, prompt hash, latency, usage, retry count, validation failure class, and sanitizer mutation counts.
-6. Move from generated HTML/CSS toward a strict widget IR and renderer registry for the highest-assurance path.
-7. Add a dashboard-configurable interactive behavior registry so merchants can safely enable richer client-side widget UX without accepting arbitrary generated scripts.
+1. Continue shrinking client-supplied prompt surface so widget generation is driven by server-owned intent, selected context IDs, and placement metadata.
+2. Build a commerce manifest from selected context and validate generated `href`, `src`, and `srcset` against allowed product/category/collection/media URLs and buy-now URLs.
+3. Add durable generation telemetry: request id, user id, provider/model, stage, context counts, prompt hash, latency, usage, retry count, validation failure class, and sanitizer mutation counts.
+4. Move from generated HTML/CSS toward a strict widget IR and renderer registry for the highest-assurance path.
+5. Add a dashboard-configurable interactive behavior registry so merchants can safely enable richer client-side widget UX without accepting arbitrary generated scripts.
 
 ## Verification Targets
 
@@ -68,6 +67,7 @@ Widget generation is provider-neutral and dashboard-configurable.
 - `/api/v1/admin/ai/models?provider=openrouter|openai|gemini|cloudflare` returns provider model options or configured fallbacks.
 - `/api/v1/admin/ai/generate` returns JSON with `choices[0].message.content`; with `stream: true`, it returns one OpenAI-style SSE content chunk plus `[DONE]`.
 - `/api/v1/admin/ai/generate-staged` returns JSON with `choices[0].message.content`; plans are structured JSON strings, sections are tag-format widget content.
+- `/api/v1/admin/widget-generation-runs/*` manages long-running/staged generation runs.
 - Admin `General Settings > Widget AI` can save provider config, model IDs, prompt overrides, and key replacement/clearing.
 - Admin widget editor can load active provider models and generate/improve content through `/api/v1/admin/ai/*`.
 
@@ -77,4 +77,4 @@ Widget generation is provider-neutral and dashboard-configurable.
 - The old standard path now receives the same composition contract as the former deep-composition path.
 - Generated create artifacts must include usable CSS. Empty-CSS widgets are rejected before preview/save.
 - Widget save normalizes generated content before persistence, extracting embedded `<style>` blocks into `cssContent` so preview and storefront rendering stay consistent.
-- Current next step: promote the server function into a first-class API widget-run route with progress events and an internal tool registry, then expose the registry as MCP once the run contract is stable.
+- Staged generation has a first-class API run route. Future work should focus on telemetry, stricter context manifests, and the long-term renderer/behavior registry.

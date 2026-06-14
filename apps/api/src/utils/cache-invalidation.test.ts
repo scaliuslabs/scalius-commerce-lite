@@ -25,6 +25,7 @@ describe("catalog cache groups", () => {
       "products",
       "search",
       "collections",
+      "layout",
     ]);
     expect(getGroupsForPath("/api/v1/admin/discounts/disc_123")).toEqual([
       "products",
@@ -53,6 +54,13 @@ describe("catalog cache groups", () => {
     );
     expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.collections])).toEqual(
       expect.arrayContaining(["collection_by_id_", "widgets_scope_", "storefront_homepage_"]),
+    );
+    expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.categories])).toEqual(
+      expect.arrayContaining([
+        "category_slug_",
+        "global_navigation_",
+        "storefront_layout_",
+      ]),
     );
     expect(getStorefrontPrefixesForGroups([...WIDGET_CACHE_GROUPS])).toEqual(
       expect.arrayContaining([
@@ -114,6 +122,33 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       groups: ["pages"],
       prefixes: ["page_slug_", "page_render_", "all_pages_"],
+      bumpVersion: true,
+    });
+  });
+
+  it("purges page and layout prefixes when page writes pass both dependent groups", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await purgeStorefrontForGroups(["pages", "layout"], {
+      PURGE_URL: "https://storefront.example.com/api/purge-cache",
+      PURGE_TOKEN: "secret-token",
+    } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      groups: ["pages", "layout"],
+      prefixes: [
+        "page_slug_",
+        "page_render_",
+        "all_pages_",
+        "storefront_layout_",
+        "global_header_data",
+        "global_footer_data",
+        "global_navigation_",
+        "global_analytics_config",
+        "global_security_settings",
+      ],
       bumpVersion: true,
     });
   });
@@ -218,6 +253,10 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "homepage",
     ]);
     expect(getGroupsForPath("/api/v1/admin/settings/seo")).toEqual(["homepage"]);
+    expect(getGroupsForPath("/api/v1/admin/pages/about-us")).toEqual([
+      "pages",
+      "layout",
+    ]);
   });
 
   it("sends checkout prefixes without marking the purge as HTML-affecting", async () => {

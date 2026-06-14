@@ -179,7 +179,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
 
 export const CATALOG_CACHE_GROUPS = {
   products: ["products", "search", "collections"],
-  categories: ["categories", "products", "search", "collections"],
+  categories: ["categories", "products", "search", "collections", "layout"],
   collections: ["collections"],
   discounts: ["products", "search", "collections"],
 } as const;
@@ -196,7 +196,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/inventory": [...CATALOG_CACHE_GROUPS.products],
   "/api/v1/admin/categories": [...CATALOG_CACHE_GROUPS.categories],
   "/api/v1/admin/collections": [...CATALOG_CACHE_GROUPS.collections],
-  "/api/v1/admin/pages": ["pages"],
+  "/api/v1/admin/pages": ["pages", "layout"],
   "/api/v1/admin/widgets": [...WIDGET_CACHE_GROUPS],
   "/api/v1/admin/navigation": ["layout"],
   "/api/v1/admin/analytics": ["layout"],

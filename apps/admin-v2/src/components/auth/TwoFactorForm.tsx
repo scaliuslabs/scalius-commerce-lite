@@ -1,7 +1,7 @@
 // src/components/auth/TwoFactorForm.tsx
 // Two-factor verification form for login - supports TOTP, Email OTP, and backup codes
 // Auto-detects user's preferred 2FA method
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,58 +19,37 @@ import {
   complete2faVerification,
   get2faInfo,
 } from "@/lib/api-functions/auth-management";
-
-type VerifyMethod = "totp" | "email" | "backup";
-type PreferredVerifyMethod = Exclude<VerifyMethod, "backup">;
+import {
+  chooseInitialTwoFactorMethod,
+  clearPendingTwoFactorMethods,
+  getPreferredMethod,
+  readPendingTwoFactorMethods,
+  type VerifyTwoFactorMethod,
+} from "@/lib/two-factor-pending";
 
 interface TwoFactorFormProps {
   defaultMethod?: "totp" | "email";
 }
 
-function getPreferredMethod(method: string): PreferredVerifyMethod {
-  return method === "totp" ? "totp" : "email";
-}
-
 export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
-  const [method, setMethod] = useState<VerifyMethod>(defaultMethod || "email");
+  const [initialPendingMethods] = useState(() => readPendingTwoFactorMethods());
+  const [method, setMethod] = useState<VerifyTwoFactorMethod>(() =>
+    chooseInitialTwoFactorMethod({
+      defaultMethod,
+      pendingMethods: initialPendingMethods,
+    }),
+  );
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(!defaultMethod);
+  const [isInitializing, setIsInitializing] = useState(
+    !defaultMethod && initialPendingMethods.length === 0,
+  );
   const [userEmail, setUserEmail] = useState<string>("");
+  const autoEmailOtpSentRef = useRef(false);
 
-  // Fetch user's preferred 2FA method on mount if not provided
-  useEffect(() => {
-    if (defaultMethod) {
-      if (defaultMethod === "email") {
-        sendEmailOtp();
-      }
-      return;
-    }
-
-    async function fetchTwoFactorInfo() {
-      try {
-        const data = await get2faInfo();
-        if (data.method) {
-          const preferredMethod = getPreferredMethod(data.method);
-          setMethod(preferredMethod);
-          setUserEmail(data.email || "");
-          if (preferredMethod === "email") {
-            await sendEmailOtp();
-          }
-        }
-      } catch {
-        // Fall back to default (email)
-      } finally {
-        setIsInitializing(false);
-      }
-    }
-
-    fetchTwoFactorInfo();
-  }, [defaultMethod]);
-
-  const sendEmailOtp = async () => {
+  const sendEmailOtp = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -86,7 +65,54 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const autoSendEmailOtp = useCallback(() => {
+    if (autoEmailOtpSentRef.current) return;
+    autoEmailOtpSentRef.current = true;
+    void sendEmailOtp();
+  }, [sendEmailOtp]);
+
+  // Fetch user's preferred 2FA method on mount if not provided
+  useEffect(() => {
+    if (defaultMethod) {
+      if (defaultMethod === "email") {
+        autoSendEmailOtp();
+      }
+      return;
+    }
+
+    const pendingMethods = initialPendingMethods;
+    if (pendingMethods.length > 0) {
+      const pendingMethod = chooseInitialTwoFactorMethod({ pendingMethods });
+      setMethod(pendingMethod);
+      setIsInitializing(false);
+      if (pendingMethod === "email") {
+        autoSendEmailOtp();
+      }
+      return;
+    }
+
+    async function fetchTwoFactorInfo() {
+      try {
+        const data = await get2faInfo();
+        if (data.method) {
+          const preferredMethod = getPreferredMethod(data.method);
+          setMethod(preferredMethod);
+          setUserEmail(data.email || "");
+          if (preferredMethod === "email") {
+            autoSendEmailOtp();
+          }
+        }
+      } catch {
+        // Leave the manual email button available if the authenticated lookup is unavailable.
+      } finally {
+        setIsInitializing(false);
+      }
+    }
+
+    void fetchTwoFactorInfo();
+  }, [autoSendEmailOtp, defaultMethod, initialPendingMethods]);
 
   const handleVerify = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -114,6 +140,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
       }
 
       await complete2faVerification({ data: { sessionToken } });
+      clearPendingTwoFactorMethods();
 
       window.location.href = "/admin";
     } catch (err: unknown) {
@@ -123,11 +150,12 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
   };
 
   const handleSignOut = async () => {
+    clearPendingTwoFactorMethods();
     await authClient.signOut();
     window.location.href = "/auth/login";
   };
 
-  const switchMethod = (newMethod: VerifyMethod) => {
+  const switchMethod = (newMethod: VerifyTwoFactorMethod) => {
     setMethod(newMethod);
     setCode("");
     setError(null);

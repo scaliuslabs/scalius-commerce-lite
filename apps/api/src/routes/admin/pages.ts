@@ -33,11 +33,11 @@ import {
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const PAGE_CACHE_GROUPS = ["pages"];
+const PAGE_CACHE_GROUPS = ["pages", "layout"] as const;
 
 async function invalidatePageCaches(c: { env: Env; executionCtx: ExecutionContext }): Promise<void> {
-    await invalidateGroups(PAGE_CACHE_GROUPS, c.env?.CACHE);
-    await purgeStorefrontForGroups(PAGE_CACHE_GROUPS, c.env);
+    await invalidateGroups([...PAGE_CACHE_GROUPS], c.env?.CACHE);
+    await purgeStorefrontForGroups([...PAGE_CACHE_GROUPS], c.env);
 }
 
 // ── List Pages ──
