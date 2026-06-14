@@ -61,6 +61,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         const auth = getAuth(c.env);
         const sessionResult = await auth.api.getSession({
             headers: c.req.raw.headers,
+            query: { disableCookieCache: true },
         });
         if (sessionResult?.user) {
             user = sessionResult.user as User;

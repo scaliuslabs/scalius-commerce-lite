@@ -18,6 +18,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useFirebaseInit } from "@/hooks/use-firebase-init";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -194,9 +195,15 @@ function EmptyState({ message }: { message: string }) {
 // Main Component
 // ---------------------------------------------------------------------------
 
-export function NotificationDropdown() {
+export function NotificationDropdown({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [open, setOpen] = useState(false);
+  const { status: pushStatus, enablePushNotifications } = useFirebaseInit(userId);
+  const showPushSetup =
+    pushStatus === "idle" ||
+    pushStatus === "loading" ||
+    pushStatus === "denied" ||
+    pushStatus === "error";
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -325,6 +332,34 @@ export function NotificationDropdown() {
           </TabsList>
 
           <Separator />
+
+          {showPushSetup && (
+            <>
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground">Push alerts</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {pushStatus === "denied"
+                      ? "Blocked in this browser"
+                      : pushStatus === "error"
+                        ? "Could not enable"
+                        : "Off for this browser"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  disabled={pushStatus === "loading" || pushStatus === "denied"}
+                  onClick={() => void enablePushNotifications()}
+                >
+                  {pushStatus === "loading" ? "Enabling" : "Enable"}
+                </Button>
+              </div>
+              <Separator />
+            </>
+          )}
 
           {/* All tab */}
           <TabsContent value="all" className="mt-0">

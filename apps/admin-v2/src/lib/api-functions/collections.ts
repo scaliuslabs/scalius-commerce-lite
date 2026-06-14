@@ -85,13 +85,13 @@ function toCollectionsParams(input: CollectionsQueryInput): Record<string, strin
 }
 
 export const getCollections = createServerFn({ method: "GET" })
-  .inputValidator((data: CollectionsQueryInput) => data)
+  .validator((data: CollectionsQueryInput) => data)
   .handler(async ({ data }): Promise<CollectionsListPayload> => {
     return apiGet<CollectionsListPayload>("/collections", toCollectionsParams(data));
   });
 
 export const getCollection = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<CollectionDto> => {
     return apiGet<CollectionDto>(`/collections/${data.id}`);
   });
@@ -103,62 +103,62 @@ export const getCollectionFormOptions = createServerFn({
 });
 
 export const createCollection = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateCollectionInput) => data)
+  .validator((data: CreateCollectionInput) => data)
   .handler(async ({ data }): Promise<CollectionDto> => {
     return apiPost<CollectionDto>("/collections", data);
   });
 
 export const updateCollection = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateCollectionInput) => data)
+  .validator((data: UpdateCollectionInput) => data)
   .handler(async ({ data }): Promise<CollectionDto> => {
     const { id, ...body } = data;
     return apiPut<CollectionDto>(`/collections/${id}`, body);
   });
 
 export const deleteCollection = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/collections/${data.id}`);
   });
 
 export const deleteCollectionPermanent = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/collections/${data.id}/permanent`);
   });
 
 export const restoreCollection = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<MessagePayload> => {
     return apiPost<MessagePayload>(`/collections/${data.id}/restore`);
   });
 
 export const reorderCollections = createServerFn({ method: "POST" })
-  .inputValidator((data: { items: { id: string; sortOrder: number }[] }) => data)
+  .validator((data: { items: { id: string; sortOrder: number }[] }) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     return apiPost<Record<string, never>>("/collections/reorder", data);
   });
 
 export const bulkDeleteCollections = createServerFn({ method: "POST" })
-  .inputValidator((data: { collectionIds: string[]; permanent?: boolean }) => data)
+  .validator((data: { collectionIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/collections/bulk-delete", data);
   });
 
 export const bulkRestoreCollections = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/collections/bulk-restore", data);
   });
 
 export const bulkActivateCollections = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/collections/bulk-activate", data);
   });
 
 export const bulkDeactivateCollections = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/collections/bulk-deactivate", data);
   });

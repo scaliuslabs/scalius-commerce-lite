@@ -7,7 +7,9 @@ import { getEncryptionKey } from "../../../utils/encryption-key";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 
 const locationSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -143,6 +145,7 @@ app.openapi(createLocationRoute, (async (c: any) => {
         const db = c.get("db");
         const data = c.req.valid("json");
         const newLocation = await createLocation(db, data);
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return created(c, { location: newLocation });
     } catch (error: unknown) {
         console.error("Error creating delivery location:", error);
@@ -173,6 +176,7 @@ app.openapi(deleteAllRoute, async (c) => {
     }
     const db = c.get("db");
     await db.delete(deliveryLocations);
+    await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
     return ok(c, { message: "All delivery locations have been permanently deleted." });
 });
 
@@ -203,6 +207,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(inArray(deliveryLocations.id, ids), isNull(deliveryLocations.deletedAt)));
 
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return ok(c, { message: `${ids.length} locations deleted successfully.` });
     } catch (error: unknown) {
         console.error("Error bulk deleting delivery locations:", error);
@@ -283,6 +288,7 @@ app.openapi(updateLocationRoute, async (c) => {
         let metadata = {};
         try { externalIds = updatedLocation.externalIds ? JSON.parse(updatedLocation.externalIds) : {}; } catch { externalIds = {}; }
         try { metadata = updatedLocation.metadata ? JSON.parse(updatedLocation.metadata) : {}; } catch { metadata = {}; }
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return ok(c, {
             ...updatedLocation,
             externalIds,
@@ -319,6 +325,7 @@ app.openapi(deleteLocationRoute, async (c) => {
             .update(deliveryLocations)
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return ok(c, {});
     } catch (error: unknown) {
         console.error("Error deleting location:", error);
@@ -374,6 +381,7 @@ app.post("/import-pathao", async (c) => {
     }
 
     const result = await processPathaoImportChunk(db, kv, creds);
+    await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
     return ok(c, result);
 });
 

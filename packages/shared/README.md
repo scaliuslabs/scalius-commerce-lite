@@ -40,31 +40,31 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 
 ## Files
 
-| File | Lines | Purpose | Key Exports |
-|------|-------|---------|-------------|
-| `utils.ts` | 14 | Tailwind class merging (re-exports date/badge utils for backward compat) | `cn()`, re-exports `unixToDate`, `formatDate`, `getStatusBadgeClass` |
-| `status-badges.ts` | 61 | Tailwind CSS badge styling for all 11 order statuses (pending, processing, confirmed, shipped, delivered, completed, cancelled, returned, refunded, partially_refunded, incomplete) | `getStatusBadgeClass()` |
-| `currency.ts` | 101 | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
-| `price-utils.ts` | 46 | Float-safe price arithmetic via `currency.js` | `roundPrice()`, `addPrices()`, `subtractPrice()`, `pricesEqual()`, `calculatePercentageDiscount()` |
-| `image-optimizer.ts` | 319 | Cloudflare Image Resizing URL generation | `getOptimizedImageUrl()`, `getOriginalImageUrl()`, `isR2Image()`, `getOptimizedImageProps()`, `getResponsiveSrcSet()`, `ImagePresets` |
-| `media-url.ts` | 36 | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
-| `cors-helper.ts` | 84 | Dynamic CORS origin validation from env + KV | `getCorsOriginContext()` |
-| `rate-limit.ts` | 74 | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
-| `customer-utils.ts` | 78 | Phone validation (E.164), customer stats | `validateAndFormatPhone()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
-| `order-utils.ts` | 9 | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |
-| `json-repair.ts` | 171 | Multi-strategy JSON parsing for LLM responses | `extractAndParseJSON()`, `repairJSON()`, `aggressiveRepairJSON()`, `parseJSONSafely()`, `validateWidgetJSON()` |
-| `tag-parser.ts` | 272 | XML-like tag extraction for LLM widget responses | `parseTagBasedResponse()`, `validateParsedWidget()`, `StreamingTagParser`, `getTagBasedExampleFormat()` |
-| `html-section-parser.ts` | 331 | DOM-based HTML section extraction for widget editing | `parseHtmlIntoSections()`, `reconstructWidgetFromSections()` |
-| `html-escape.ts` | 22 | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
-| `html-sanitize.ts` | 352 | Defense-in-depth XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` handlers, `javascript:`/`vbscript:`/dangerous `data:` URLs |
-| `css-sanitize.ts` | 209 | Defense-in-depth sanitizer for admin-authored widget stylesheets | `sanitizeCssForStyleElement()` -- prevents style-tag breakout, removes external stylesheet/font at-rules, strips HTML tags, and neutralizes script-capable CSS values/URLs |
-| `css-scope.ts` | 222 | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
-| `widget-placement.ts` | 64 | Canonical widget placement scope/slot rules shared by admin and API validation | `isWidgetPlacementSlotAllowedForScope()`, `normalizeWidgetPlacementSlotForScope()`, `isWidgetCollectionSlot()` |
-| `timestamps.ts` | 82 | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
-| `barcode-utils.ts` | 30 | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
-| `barcode-svg.ts` | 206 | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
-| `storefront-url.ts` | 29 | Storefront URL path construction | `buildStorefrontPath()` |
-| `layout-cache.ts` | 40 | In-memory TTL cache (5 min) for admin layout data | `layoutCache`, `CACHE_KEYS` |
+| File | Purpose | Key Exports |
+|------|---------|-------------|
+| `utils.ts` | Tailwind class merging (re-exports date/badge utils for backward compat) | `cn()`, re-exports `unixToDate`, `formatDate`, `getStatusBadgeClass` |
+| `status-badges.ts` | Tailwind CSS badge styling for all 11 order statuses (pending, processing, confirmed, shipped, delivered, completed, cancelled, returned, refunded, partially_refunded, incomplete) | `getStatusBadgeClass()` |
+| `currency.ts` | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
+| `price-utils.ts` | Float-safe price arithmetic via `currency.js` | `roundPrice()`, `addPrices()`, `subtractPrice()`, `pricesEqual()`, `calculatePercentageDiscount()` |
+| `image-optimizer.ts` | Cloudflare Image Resizing URL generation | `getOptimizedImageUrl()`, `getOriginalImageUrl()`, `isR2Image()`, `getOptimizedImageProps()`, `getResponsiveSrcSet()`, `ImagePresets` |
+| `media-url.ts` | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
+| `cors-helper.ts` | Dynamic CORS origin validation from env + KV | `getCorsOriginContext()` |
+| `rate-limit.ts` | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
+| `customer-utils.ts` | Phone validation (E.164), customer stats | `validateAndFormatPhone()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
+| `order-utils.ts` | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |
+| `json-repair.ts` | Multi-strategy JSON parsing for LLM responses | `extractAndParseJSON()`, `repairJSON()`, `aggressiveRepairJSON()`, `parseJSONSafely()`, `validateWidgetJSON()` |
+| `tag-parser.ts` | XML-like tag extraction for LLM widget responses | `parseTagBasedResponse()`, `validateParsedWidget()`, `StreamingTagParser`, `getTagBasedExampleFormat()` |
+| `html-section-parser.ts` | DOM-based HTML section extraction for widget editing | `parseHtmlIntoSections()`, `reconstructWidgetFromSections()` |
+| `html-escape.ts` | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
+| `html-sanitize.ts` | Defense-in-depth XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` handlers, `javascript:`/`vbscript:`/dangerous `data:` URLs |
+| `css-sanitize.ts` | Defense-in-depth sanitizer for admin-authored widget stylesheets | `sanitizeCssForStyleElement()` -- prevents style-tag breakout, removes external stylesheet/font at-rules, strips HTML tags, and neutralizes script-capable CSS values/URLs |
+| `css-scope.ts` | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
+| `widget-placement.ts` | Canonical widget placement scope/slot rules shared by admin and API validation | `isWidgetPlacementSlotAllowedForScope()`, `normalizeWidgetPlacementSlotForScope()`, `isWidgetCollectionSlot()` |
+| `timestamps.ts` | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
+| `barcode-utils.ts` | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
+| `barcode-svg.ts` | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
+| `storefront-url.ts` | Storefront URL path construction | `buildStorefrontPath()` |
+| `layout-cache.ts` | In-memory TTL cache (5 min) for admin layout data | `layoutCache`, `CACHE_KEYS` |
 
 ## Dependencies
 
@@ -73,7 +73,9 @@ Runtime dependencies (listed in `package.json`):
 | Package | Used By |
 |---------|---------|
 | `clsx` + `tailwind-merge` | `utils.ts` -- `cn()` class merging |
+| `css-tree` | `css-sanitize.ts`, `css-scope.ts`, `css-tree-runtime.ts` -- CSS parsing/sanitization/scoping |
 | `currency.js` | `currency.ts`, `price-utils.ts` -- precision arithmetic |
+| `htmlparser2` + `domhandler` | `html-sanitize.ts`, `widget-rendering.ts` -- HTML parsing and DOM traversal |
 | `libphonenumber-js` | `customer-utils.ts` -- E.164 phone validation |
 | `zod` | `customer-utils.ts` -- `phoneNumberSchema` |
 

@@ -66,7 +66,7 @@ export const clearCache = createServerFn({ method: "POST" }).handler(
 );
 
 export const clearCacheGroup = createServerFn({ method: "POST" })
-  .inputValidator((data: { groupName: string }) => data)
+  .validator((data: { groupName: string }) => data)
   .handler(async ({ data }) => {
     return apiBasePost<ClearCacheGroupPayload>("/cache/clear-group", {
       groups: [data.groupName],

@@ -59,7 +59,7 @@ export interface ShippingMethodIdInput {
 }
 
 export const getShippingMethods = createServerFn({ method: "GET" })
-  .inputValidator((data: ShippingMethodsQueryInput) => data)
+  .validator((data: ShippingMethodsQueryInput) => data)
   .handler(async ({ data }) => {
     const params: Record<string, string> = {};
     if (data.page) params.page = String(data.page);
@@ -72,13 +72,13 @@ export const getShippingMethods = createServerFn({ method: "GET" })
   });
 
 export const createShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: ShippingMethodWriteInput) => data)
+  .validator((data: ShippingMethodWriteInput) => data)
   .handler(async ({ data }) => {
     return apiPost<ShippingMethodPayload>("/settings/shipping-methods", data);
   });
 
 export const updateShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateShippingMethodInput) => data)
+  .validator((data: UpdateShippingMethodInput) => data)
   .handler(async ({ data }) => {
     return apiPut<ShippingMethodPayload>(
       `/settings/shipping-methods/${data.id}`,
@@ -87,19 +87,19 @@ export const updateShippingMethod = createServerFn({ method: "POST" })
   });
 
 export const deleteShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: ShippingMethodIdInput) => data)
+  .validator((data: ShippingMethodIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/settings/shipping-methods/${data.id}`);
   });
 
 export const permanentDeleteShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: ShippingMethodIdInput) => data)
+  .validator((data: ShippingMethodIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/settings/shipping-methods/${data.id}/permanent-delete`);
   });
 
 export const restoreShippingMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: ShippingMethodIdInput) => data)
+  .validator((data: ShippingMethodIdInput) => data)
   .handler(async ({ data }) => {
     return apiPost<{ message?: string }>(
       `/settings/shipping-methods/${data.id}/restore`,

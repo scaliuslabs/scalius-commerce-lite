@@ -51,24 +51,24 @@ packages/
 | `pnpm check:env` | Verify Wrangler binding/var names match Worker `Env` declarations |
 | `pnpm check:dist-secrets` | Fail if app `dist/` outputs contain local env files such as `.dev.vars` or `.env*` |
 | `pnpm generate:sdk` | Regenerate API client from the API OpenAPI spec |
-| `pnpm deploy` | Typecheck, build, migrate remote D1, deploy API + admin + storefront |
-| `pnpm deploy:api` | Typecheck, build API, migrate remote D1, deploy API |
-| `pnpm deploy:admin` | Typecheck, build admin, deploy admin |
-| `pnpm deploy:storefront` | Typecheck, build storefront, deploy storefront |
-| `pnpm deploy:api --dry-run` | Typecheck, build, and dist-check API without applying D1 migrations or deploying |
+| `pnpm run deploy` | Typecheck, build, migrate remote D1, deploy API + admin + storefront |
+| `pnpm run deploy:api` | Typecheck, build API, migrate remote D1, deploy API |
+| `pnpm run deploy:admin` | Typecheck, build admin, deploy admin |
+| `pnpm run deploy:storefront` | Typecheck, build storefront, deploy storefront |
+| `pnpm run deploy:api -- --dry-run` | Typecheck, build, and dist-check API without applying D1 migrations or deploying |
 
 ## Architecture
 
 ### Apps
 
-- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is 251 typed server functions under `src/lib/api-functions/`, 78 query option wrappers, 114 exported mutation hooks, and 62 non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
+- **Admin (`apps/admin-v2/`)**: TanStack Start + React 19 admin dashboard. Current audited scale is 252 typed server functions under `src/lib/api-functions/`, 78 query option wrappers, 114 exported mutation hooks, and 62 non-API UI route files. Uses `env.API` service binding in production and Vite proxy/HTTP to `localhost:8787` in local dev. Also has direct D1/KV/R2 bindings for auth, RBAC, and storage initialization.
 - **API (`apps/api/`)**: Standalone Hono `OpenAPIHono` app mounted at `/api/v1`. Exports a `WorkerEntrypoint` with `fetch`, `queue`, and scheduled inventory-expiry cron handlers. Owns public/admin API routes, webhook ingestion, OpenAPI spec, queue consumer, and `WidgetDesignAgent` Durable Object for widget AI generation.
 - **Storefront (`apps/storefront/`)**: Astro 6 SSR + React 19 customer storefront. Owns product, category, cart, checkout, search, customer auth proxy, SEO, sitemaps, error pages, and L1/L2 caching. Uses `env.BACKEND_API` service binding in production; intentionally skips service binding in local dev because separate Miniflare processes cannot reliably share the Fetcher.
 
 ### Packages
 
 - **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 253 paths / 351 operations. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. Do not hand-edit files in `packages/api-client/src/generated/**`; regenerate with `pnpm generate:sdk`.
-- **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 39 SQL migrations (`0000` through `0038`).
+- **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files, 10 table-defining files, 53 `sqliteTable()` declarations, and 40 SQL migrations (`0000` through `0039`).
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.
 - **`@scalius/tsconfig`**: Exports `base.json`, `worker.json`, and `astro.json`. Some apps use local framework configs instead of extending it directly.
@@ -79,7 +79,7 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 
 - TanStack Start (admin) on Cloudflare Workers
 - Astro 6 SSR (storefront) with Cloudflare adapter
-- Vite 8 + React 19
+- Vite 8 for admin, Vite 7 for the Astro storefront, and React 19
 - Hono + `@hono/zod-openapi` + Swagger UI
 - Cloudflare D1 (SQLite) + Drizzle ORM + FTS5
 - Tailwind CSS v4 + shadcn/ui/Radix-style components
@@ -326,7 +326,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 
 - Monorepo migration is complete: three Workers apps plus five shared packages.
 - API standardization is mostly in place: normal routes use `ok()`/`created()`/`ApiError`; edge routes have documented exceptions.
-- Schema is at 39 migrations with 53 table declarations.
+- Schema is at 40 SQL migrations with 53 table declarations.
 - SDK generation is integrated into admin/storefront and should be regenerated after API surface changes.
 - Payments include durable webhook idempotency, gateway-payment CAS/atomic updates, refund validation, COD handling, SSLCommerz redirect validation, and Polar refund webhook processing.
 - Orders use status state-machine validation, CAS on status/fulfillment paths, queue ingest, and notification enqueueing for status transitions.
@@ -338,7 +338,7 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 
 ## Known Backlog / Limitations
 
-- **Active audit backlog**: `audit/REMEDIATION_TRACKER.md` currently has fresh open P1/P2 findings from the 2026-06-14 re-audit. Check that tracker before choosing the next remediation slice.
+- **Active audit backlog**: Check `audit/REMEDIATION_TRACKER.md` before choosing the next remediation slice. The prior live storefront missing-CDN-object reference was fixed through the admin product update path and verified against API data, D1 rows, CDN response, and storefront HTML.
 - **Mixed provider systems**: Universal provider registry currently has Stripe payment + Resend email adapters. SMS still uses the legacy integrations registry with smsnetbd, bdbulksms, mimsms, and gennet. Delivery uses legacy factory/provider files; universal delivery provider exports are type-only.
 - **In-memory state**: Storefront L1 caches and shared layout cache are in-memory and reset on Worker isolate restart. Shared rate limiting is KV-based now.
 - **Delivery notification helper**: `notifyShipmentStatusChange()` in `packages/core/src/modules/delivery/tracking.ts` is still a log-only placeholder. Active Pathao/Steadfast/admin shipment paths enqueue notifications directly.
@@ -365,4 +365,4 @@ When working as part of an agent team on this codebase:
 - **Storefront shared imports only**: do not add `@scalius/core` or `@scalius/database` imports to storefront without coordination.
 - **Generated files are off-limits**: do not hand-edit `routeTree.gen.ts` or `packages/api-client/src/generated/**`.
 - **Cloudflare bindings must stay synchronized**: update Wrangler config and Env declarations together.
-- **Deploy shortcuts stay safety-gated**: root and package-local `deploy` shortcuts route through `scripts/deploy.mjs --only ...`; keep typecheck, dist-secret checks, and required migration gates when changing deploy scripts.
+- **Deploy shortcuts stay safety-gated**: root and package-local deploy scripts route through `scripts/deploy.mjs --only ...`; use `pnpm run deploy*` from the root to avoid pnpm's built-in `deploy` command, and keep typecheck, dist-secret checks, and required migration gates when changing deploy scripts.

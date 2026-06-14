@@ -12,7 +12,12 @@ type AdminDb = Pick<D1Database, "prepare">;
 async function queryAdminExists(db: AdminDb): Promise<boolean> {
   const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
   const result = await retryTransientD1(() =>
-    db.prepare("SELECT COUNT(*) as count FROM user").first<{ count: number }>(),
+    db
+      .prepare(
+        "SELECT COUNT(*) as count FROM user WHERE role = ? OR is_super_admin = 1",
+      )
+      .bind("admin")
+      .first<{ count: number }>(),
   );
   return (result?.count ?? 0) > 0;
 }

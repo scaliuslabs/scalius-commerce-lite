@@ -110,25 +110,25 @@ export const getAdminUsers = createServerFn({ method: "GET" }).handler(
 );
 
 export const createAdminUser = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateAdminUserInput) => data)
+  .validator((data: CreateAdminUserInput) => data)
   .handler(async ({ data }) => {
     return apiPost<CreateAdminUserResponse>("/auth/users", data);
   });
 
 export const deleteAdminUser = createServerFn({ method: "POST" })
-  .inputValidator((data: DeleteAdminUserInput) => data)
+  .validator((data: DeleteAdminUserInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<MessageResponse>(`/auth/users/${data.userId}`);
   });
 
 export const updateProfile = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateProfileInput) => data)
+  .validator((data: UpdateProfileInput) => data)
   .handler(async ({ data }) => {
     return apiPost<UpdateProfileResponse>("/auth/update-profile", data);
   });
 
 export const changePassword = createServerFn({ method: "POST" })
-  .inputValidator((data: ChangePasswordInput) => data)
+  .validator((data: ChangePasswordInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessageResponse>("/auth/change-password", data);
   });
@@ -140,19 +140,19 @@ export const getAccountSecurity = createServerFn({ method: "GET" }).handler(
 );
 
 export const set2faMethod = createServerFn({ method: "POST" })
-  .inputValidator((data: SetTwoFactorMethodInput) => data)
+  .validator((data: SetTwoFactorMethodInput) => data)
   .handler(async ({ data }) => {
     return apiPost<Record<string, never>>("/auth/2fa/method", data);
   });
 
 export const verify2fa = createServerFn({ method: "POST" })
-  .inputValidator((data: VerifyTwoFactorInput) => data)
+  .validator((data: VerifyTwoFactorInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessageResponse>("/auth/2fa/verify", data);
   });
 
 export const complete2faVerification = createServerFn({ method: "POST" })
-  .inputValidator((data: CompleteTwoFactorVerificationInput) => data)
+  .validator((data: CompleteTwoFactorVerificationInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessageResponse>("/auth/2fa/complete-verification", data);
   });
@@ -170,7 +170,7 @@ export const getSetupStatus = createServerFn({ method: "GET" }).handler(
 );
 
 export const runSetup = createServerFn({ method: "POST" })
-  .inputValidator((data: RunSetupInput) => data)
+  .validator((data: RunSetupInput) => data)
   .handler(async ({ data }) => {
     return apiBasePost<RunSetupResponse>("/setup", data);
   });

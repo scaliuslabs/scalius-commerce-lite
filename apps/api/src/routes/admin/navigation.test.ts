@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
     saveNavigationConfig: vi.fn(),
     updateNavigationConfig: vi.fn(),
     deleteNavigationConfig: vi.fn(),
+    getKv: vi.fn(),
+    invalidateSiteSettingsCache: vi.fn(),
+    invalidateApiAndStorefrontGroups: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/navigation", () => ({
@@ -22,11 +25,34 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     deleteNavigationConfig: mocks.deleteNavigationConfig,
 }));
 
+vi.mock("@scalius/core/modules/settings", () => ({
+    invalidateSiteSettingsCache: mocks.invalidateSiteSettingsCache,
+}));
+
+vi.mock("../../utils/kv-cache", () => ({
+    getKv: mocks.getKv,
+}));
+
+vi.mock("../../utils/cache-invalidation", () => ({
+    invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+}));
+
 import { adminNavigationRoutes } from "./navigation";
 
 function createTestApp() {
     const db = { id: "db" };
+    const env = {
+        CACHE: { id: "api-cache-kv" },
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+    } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+    mocks.getKv.mockReturnValue({ id: "kv" });
+    mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
+    mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+    mocks.saveNavigationConfig.mockResolvedValue(undefined);
+    mocks.updateNavigationConfig.mockResolvedValue(undefined);
+    mocks.deleteNavigationConfig.mockResolvedValue(undefined);
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
         return c.json(body, status);
@@ -36,7 +62,7 @@ function createTestApp() {
         await next();
     });
     app.route("/admin/navigation", adminNavigationRoutes);
-    return { app, db };
+    return { app, db, env };
 }
 
 describe("admin navigation routes", () => {
@@ -94,5 +120,38 @@ describe("admin navigation routes", () => {
         );
 
         expect(response.status).toBe(404);
+    });
+
+    it.each([
+        {
+            method: "POST" as const,
+            path: "/api/v1/admin/navigation",
+            body: { type: "header", config: { items: [] } },
+        },
+        {
+            method: "PUT" as const,
+            path: "/api/v1/admin/navigation/site_settings_id",
+            body: { type: "footer", config: { items: [] } },
+        },
+        {
+            method: "DELETE" as const,
+            path: "/api/v1/admin/navigation/site_settings_id",
+            body: { type: "header" },
+        },
+    ])("invalidates layout caches after $method navigation writes", async ({ method, path, body }) => {
+        const { app, env } = createTestApp();
+
+        const response = await app.request(
+            path,
+            {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(method === "DELETE" ? 204 : 200);
+        expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["layout"], env);
     });
 });

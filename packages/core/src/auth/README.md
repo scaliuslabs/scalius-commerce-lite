@@ -39,11 +39,11 @@ Customer Auth Flow (storefront):
 | File | Purpose |
 |------|---------|
 | `rbac/types.ts` | TypeScript types: `PermissionName`, `UserPermissionContext`, `PermissionCheckResult`, `ProtectedRouteConfig`, `SystemRole`, `PermissionGroup`, `PermissionCategory`, `PermissionMetadata`, `RoleWithPermissions`, `UserPermissionOverride` |
-| `rbac/permissions.ts` | `PERMISSIONS` constant (80 permissions across 14 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `getAllPermissionNames`, `isSensitivePermission`) |
+| `rbac/permissions.ts` | `PERMISSIONS` constant (81 permissions across 14 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `getAllPermissionNames`, `isSensitivePermission`) |
 | `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (L1 Map + L2 KV + D1 batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), `clearPermissionCache()`, `clearAllPermissionCache()` |
 | `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
 | `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. |
-| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds all 80 permissions and 5 system roles on first admin access. Sets first `role=admin` user as super admin. Runs once per isolate lifecycle (in-memory flag). |
+| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds all 81 permissions and 5 system roles on first admin access. Sets first `role=admin` user as super admin. Runs once per isolate lifecycle (in-memory flag). |
 | `rbac/api-protection.ts` | Higher-order functions for wrapping API route handlers: `withPermission()`, `withAnyPermission()`, `withAllPermissions()`, `withSuperAdmin()`. Also `checkPermissionForApi()`, `checkAnyPermissionForApi()`, `checkAllPermissionsForApi()` helpers, and `unauthorizedResponse()` / `forbiddenResponse()` factory functions. These are Astro-style wrappers; the Hono API uses middleware instead. |
 | `rbac/index.ts` | Barrel re-export of all RBAC modules. |
 
@@ -82,14 +82,14 @@ Customer Auth Flow (storefront):
 2. User-level overrides (grant or deny from `user_permissions` table)
 3. Role-based permissions (union of all assigned roles via `user_roles` + `role_permissions`)
 
-### 80 Permissions Across 14 Categories
+### 81 Permissions Across 14 Categories
 
 | Category | Count | Sensitive |
 |----------|-------|-----------|
 | Products | 7 | `permanent_delete` only |
 | Categories | 6 | `permanent_delete` only |
 | Collections | 6 | No |
-| Orders | 7 | No |
+| Orders | 8 | No |
 | Customers | 6 | No |
 | Discounts | 5 | All 5 |
 | Pages | 5 | No |
@@ -105,7 +105,7 @@ Customer Auth Flow (storefront):
 
 | Role | Permissions | Notes |
 |------|-------------|-------|
-| `super_admin` | All 80 | System role, cannot modify permissions |
+| `super_admin` | All 81 | System role, cannot modify permissions |
 | `manager` | All except `permanent_delete`, `delivery_providers.edit`, `fraud_checker.edit`, `team.manage_roles` | System role |
 | `sales_rep` | Dashboard, products/categories/collections (view), orders (full CRUD + shipments), customers (view/create/edit/history), discounts (view) | System role |
 | `content_editor` | Dashboard, pages/widgets (full CRUD), media (full), collections (view/edit/toggle), settings (header/footer/seo) | System role |
@@ -153,7 +153,7 @@ Dual authentication strategy:
 2. **JWT Bearer token** -- fallback (for external/mobile apps)
 
 Then validates:
-- User must have admin role OR super admin OR any RBAC permissions
+- User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.
 - Fine-grained route permission check via `getRoutePermission()`
 - Super admins bypass all permission checks
 
@@ -213,7 +213,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 | POST | `/change-password` | Change current user password (12-char minimum) |
 | POST | `/update-profile` | Update name and avatar |
 | GET | `/2fa/info` | Get current user 2FA status |
-| POST | `/2fa/mark-verified` | Mark session as 2FA verified |
+| POST | `/2fa/complete-verification` | Complete 2FA after Better Auth verification; requires the verification session token bound to the current session/user |
 | POST | `/2fa/method` | Switch between TOTP and email OTP |
 | POST | `/2fa/verify` | Verify TOTP or backup code |
 | GET | `/account-security` | Get 2FA method and super admin status |

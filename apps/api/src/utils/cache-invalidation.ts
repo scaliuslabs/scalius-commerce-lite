@@ -120,6 +120,25 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "storefront_homepage_",
     ],
   },
+  widgets: {
+    label: "Widgets",
+    description:
+      "Widget content, homepage widgets, scoped widget placements, and shortcode rendering",
+    kvPrefixes: [
+      "api:widgets:single:",
+      "api:widgets:active-homepage:",
+      "api:storefront:homepage:",
+      "api:storefront:page:",
+    ],
+    bumpsHtml: true,
+    storefrontPrefixes: [
+      "widget_",
+      "global_homepage_widgets",
+      "widgets_scope_",
+      "storefront_homepage_",
+      "page_render_",
+    ],
+  },
   checkout: {
     label: "Checkout",
     description: "Shipping methods, delivery locations, payment settings",
@@ -168,11 +187,7 @@ export const CATALOG_CACHE_GROUPS = {
 export type CatalogCacheDomain = keyof typeof CATALOG_CACHE_GROUPS;
 
 export const WIDGET_CACHE_GROUPS = [
-  "homepage",
-  "pages",
-  "products",
-  "categories",
-  "collections",
+  "widgets",
 ] as const;
 
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
@@ -187,13 +202,15 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/analytics": ["layout"],
   "/api/v1/admin/settings/header": ["layout"],
   "/api/v1/admin/settings/footer": ["layout"],
+  "/api/v1/admin/settings/storefront-url": ["layout"],
   "/api/v1/admin/settings/hero-sliders": ["homepage"],
   "/api/v1/admin/settings/seo": ["homepage"],
   "/api/v1/admin/settings/security": ["layout"],
   "/api/v1/admin/settings/theme": ["layout"],
   "/api/v1/admin/settings/media": ["media"],
-  "/api/v1/admin/settings/currency": ["layout", "products"],
+  "/api/v1/admin/settings/currency": ["layout", "checkout"],
   "/api/v1/admin/settings/auth": ["checkout"],
+  "/api/v1/admin/settings/allowed-countries": ["checkout"],
   "/api/v1/admin/settings/delivery-locations": ["checkout"],
   "/api/v1/admin/settings/delivery-providers": ["checkout"],
   "/api/v1/admin/settings/payment-methods": ["checkout"],
@@ -203,7 +220,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/shipping-methods": ["checkout"],
   "/api/v1/admin/settings/checkout-languages": ["checkout"],
   "/api/v1/admin/settings/meta-conversions": ["layout"],
-  "/api/v1/admin/attributes": ["attributes", "products", "categories"],
+  "/api/v1/admin/attributes": ["attributes", "products"],
   "/api/v1/admin/discounts": [...CATALOG_CACHE_GROUPS.discounts],
 };
 
@@ -250,7 +267,7 @@ export interface StorefrontPurgeResult {
   attempted: boolean;
   ok: boolean;
   status?: number;
-  skippedReason?: "no-valid-groups" | "missing-config";
+  skippedReason?: "no-valid-groups" | "no-prefixes" | "missing-config";
 }
 
 function storefrontPurgeHeaders(purgeToken: string): HeadersInit {
@@ -311,6 +328,48 @@ export async function purgeStorefrontForGroups(
 }
 
 /**
+ * Execute a storefront purge for already-computed logical cache prefixes.
+ * This is used by writes such as widgets where the affected storefront keys
+ * can be narrower than a whole invalidation group.
+ */
+export async function purgeStorefrontForPrefixes(
+  prefixes: readonly string[],
+  env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+  options: { groups?: readonly string[]; bumpVersion?: boolean } = {},
+): Promise<StorefrontPurgeResult> {
+  const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
+  if (uniquePrefixes.length === 0 && options.bumpVersion !== true) {
+    return { attempted: false, ok: false, skippedReason: "no-prefixes" };
+  }
+
+  const purgeUrl = env?.PURGE_URL;
+  const purgeToken = env?.PURGE_TOKEN;
+  if (!purgeUrl || !purgeToken) {
+    return { attempted: false, ok: false, skippedReason: "missing-config" };
+  }
+
+  const response = await fetch(normalizeStorefrontPurgeUrl(purgeUrl), {
+    method: "POST",
+    headers: storefrontPurgeHeaders(purgeToken),
+    body: JSON.stringify({
+      groups: [...new Set(options.groups ?? [])],
+      prefixes: uniquePrefixes,
+      bumpVersion: options.bumpVersion === true,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error("[Cache] Storefront prefix purge failed:", {
+      status: response.status,
+      groups: options.groups,
+      prefixes: uniquePrefixes,
+    });
+  }
+
+  return { attempted: true, ok: response.ok, status: response.status };
+}
+
+/**
  * Trigger the storefront purge endpoint for the given invalidation groups.
  *
  * This bumps the storefront HTML cache version when any group requires it and
@@ -339,6 +398,20 @@ export function triggerStorefrontPurgeForGroups(
   } else {
     void purgePromise;
   }
+}
+
+/**
+ * Invalidate API KV entries and await the matching storefront purge.
+ * Use this after admin writes whose response should not claim success until the
+ * storefront cache version/prefix purge has been attempted.
+ */
+export async function invalidateApiAndStorefrontGroups(
+  groups: readonly string[],
+  env?: Env,
+): Promise<void> {
+  const normalizedGroups = [...groups];
+  await invalidateGroups(normalizedGroups, env?.CACHE);
+  await purgeStorefrontForGroups(normalizedGroups, env);
 }
 
 /**
@@ -372,6 +445,26 @@ export async function invalidateGroups(
 }
 
 /**
+ * Invalidate exact API KV key patterns that were computed outside the coarse
+ * group map.
+ */
+export async function invalidateApiCachePatterns(
+  patterns: readonly string[],
+  kv?: KVNamespace,
+): Promise<void> {
+  const uniquePatterns = [...new Set(patterns.filter(Boolean))];
+  if (uniquePatterns.length === 0) return;
+
+  console.log(
+    `[Cache] Invalidating ${uniquePatterns.length} targeted API KV pattern(s)`,
+  );
+
+  await Promise.all(
+    uniquePatterns.map((pattern) => deleteCacheByPattern(pattern, kv)),
+  );
+}
+
+/**
  * Invalidate the API KV cache and schedule the storefront purge needed after a
  * catalog write. Product and discount changes also clear collection caches
  * because collection pages render product cards, images, and prices.
@@ -381,8 +474,7 @@ export async function invalidateCatalogCaches(
   c: { env?: Env; executionCtx?: ExecutionContext },
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];
-  await invalidateGroups(groups, c.env?.CACHE);
-  await purgeStorefrontForGroups(groups, c.env);
+  await invalidateApiAndStorefrontGroups(groups, c.env);
 }
 
 /**

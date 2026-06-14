@@ -102,13 +102,13 @@ function toCategoriesParams(input: CategoriesQueryInput): Record<string, string>
 }
 
 export const getCategories = createServerFn({ method: "GET" })
-  .inputValidator((data: CategoriesQueryInput) => data)
+  .validator((data: CategoriesQueryInput) => data)
   .handler(async ({ data }): Promise<CategoriesListPayload> => {
     return apiGet<CategoriesListPayload>("/categories", toCategoriesParams(data));
   });
 
 export const getCategory = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<CategoryDetailDto> => {
     return apiGet<CategoryDetailDto>(`/categories/${data.id}`);
   });
@@ -120,44 +120,44 @@ export const getCategoryFormOptions = createServerFn({
 });
 
 export const createCategory = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateCategoryInput) => data)
+  .validator((data: CreateCategoryInput) => data)
   .handler(async ({ data }): Promise<CategoryIdPayload> => {
     return apiPost<CategoryIdPayload>("/categories", data);
   });
 
 export const updateCategory = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateCategoryInput) => data)
+  .validator((data: UpdateCategoryInput) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     const { id, ...body } = data;
     return apiPut<Record<string, never>>(`/categories/${id}`, body);
   });
 
 export const deleteCategory = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/categories/${data.id}`);
   });
 
 export const deleteCategoryPermanent = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiDelete(`/categories/${data.id}/permanent`);
   });
 
 export const restoreCategory = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<MessagePayload> => {
     return apiPost<MessagePayload>(`/categories/${data.id}/restore`);
   });
 
 export const bulkDeleteCategories = createServerFn({ method: "POST" })
-  .inputValidator((data: { categoryIds: string[]; permanent?: boolean }) => data)
+  .validator((data: { categoryIds: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/categories/bulk-delete", data);
   });
 
 export const bulkRestoreCategories = createServerFn({ method: "POST" })
-  .inputValidator((data: { categoryIds: string[] }) => data)
+  .validator((data: { categoryIds: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/categories/bulk-restore", data);
   });

@@ -19,7 +19,7 @@ Modern admin dashboard built with **TanStack Start** (full-stack React framework
 ## Data Flow Pattern
 
 ```
-createServerFn (251 typed domain functions)
+createServerFn (252 typed domain functions)
   → queryOptions (78 wrappers, 7 staleTime tiers)
     → ensureQueryData in route loader (prefetch)
       → useSuspenseQuery in component (render)
@@ -28,7 +28,7 @@ createServerFn (251 typed domain functions)
 
 **Stale-While-Revalidate**: Detail queries use `staleTime: 0` in queryOptions + `staleTime: Infinity` in route loaders. Result: instant navigation (serves cache), background refetch (fresh data within ms).
 
-**List Pages**: No `loaderDeps` (intentional — prevents full-page spinner on search/filter). Component reads `Route.useSearch()` → `useQuery` with `keepPreviousData` → `DataTableLoadingOverlay` shows only over the table area.
+**List Pages**: URL-search-driven list routes declare `loaderDeps`, map validated deps with `mapParams()`, and prefetch the same query keys rendered by components. Component-level loading overlays should stay scoped to the table area.
 
 ## staleTime Tiers
 
@@ -65,7 +65,7 @@ createServerFn (251 typed domain functions)
 | `src/router.tsx` | Router config + QueryClient + SSR integration |
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
 | `src/routes/admin.tsx` | Admin layout (sidebar, auth guard, RBAC context) |
-| `src/lib/api-functions/` | Typed domain server-function slices; 251 functions |
+| `src/lib/api-functions/` | Typed domain server-function slices; 252 createServerFn calls |
 | `src/lib/api.queries.ts` | 78 queryOptions with staleTime tiers |
 | `src/lib/api.mutations.ts` | 114 exported mutation hooks with cache invalidation |
 | `src/lib/api.server.ts` | HTTP transport layer (service binding / fetch) |

@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { and, eq, count } from "drizzle-orm";
+import { and, eq, count, or } from "drizzle-orm";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
 import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
@@ -570,7 +570,7 @@ const adminExistsRoute = createRoute({
 
 setupApp.openapi(adminExistsRoute, async (c) => {
     const db = c.get("db");
-    const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
+    const adminResult = await db.select({ count: count() }).from(user).where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)));
     const adminExists = (adminResult[0]?.count ?? 0) > 0;
     return ok(c, { adminExists });
 });
@@ -614,7 +614,7 @@ setupApp.openapi(setupRoute, async (c) => {
     const env = c.env as Env;
 
     // Check admin exists FIRST (before rate limiting) — this is the primary guard
-    const adminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
+    const adminResult = await db.select({ count: count() }).from(user).where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)));
     const adminExists = (adminResult[0]?.count ?? 0) > 0;
 
     if (adminExists) {
@@ -679,7 +679,7 @@ setupApp.openapi(setupRoute, async (c) => {
             throw error;
         }
 
-        const currentAdminResult = await db.select({ count: count() }).from(user).where(eq(user.role, "admin"));
+        const currentAdminResult = await db.select({ count: count() }).from(user).where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)));
         const currentAdminExists = (currentAdminResult[0]?.count ?? 0) > 0;
         if (currentAdminExists) {
             throw new ForbiddenError("An admin user already exists. Please use the login page.");

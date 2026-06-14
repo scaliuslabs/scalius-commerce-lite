@@ -16,9 +16,9 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 
 `src/app.ts` creates an `OpenAPIHono` app with base path `/api/v1` and mounts all routes. The file is organized into four sections:
 
-### Storefront Routes (public, no auth)
+### Storefront And Related Routes
 
-26 route groups mounted directly on the app. No authentication required -- these serve the customer-facing storefront.
+26 route groups mounted directly on the app. Most serve the customer-facing storefront without admin auth; `/orders` applies order/customer auth middleware, and `/cache` is admin-protected.
 
 | Mount Point | Route File | Purpose |
 |---|---|---|
@@ -96,6 +96,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/admin/ai-context` | `routes/admin/ai-context.ts` | AI widget context |
 | `/admin/ai-prompts` | `routes/admin/ai-prompts.ts` | Dashboard-configured AI prompts |
 | `/admin/ai` | `routes/admin/ai.ts` | Widget AI generation via AI SDK providers |
+| `/admin/widget-generation-runs` | `routes/admin/widget-generation-runs.ts` | Durable Object widget generation run lifecycle and status APIs |
 | `/admin/attributes` | `routes/admin/attributes.ts` | Attribute CRUD |
 | `/admin` | `routes/admin/system-utils.ts` | System utilities |
 | `/admin/settings/delivery-locations` | `routes/admin/settings/delivery-locations.ts` | Location hierarchy CRUD |

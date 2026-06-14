@@ -53,7 +53,7 @@ It connects to the **Scalius Commerce Lite** backend for data and commerce logic
     pnpm dev:setup
     ```
 
-    This installs dependencies, creates `.dev.vars` and `.env.development` files for all Workers, applies local D1 migrations, and creates the default local admin. The generated API token, JWT secret, and purge token are shared across the API/storefront files automatically.
+    This installs dependencies, creates `.dev.vars` files for API/admin/storefront, creates `.env.development` only for admin and storefront build-time public values, applies local D1 migrations, and creates the default local admin. The generated API token, JWT secret, and purge token are shared across the API/storefront files automatically.
 
 3.  **Run Storefront Development**
     ```bash

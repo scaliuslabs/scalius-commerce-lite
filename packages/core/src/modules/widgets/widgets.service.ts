@@ -104,6 +104,22 @@ export type PublicWidget = PublicWidgetBase & {
     placements: PublicWidgetPlacement[];
 };
 
+export type WidgetCachePlacementSnapshot = Pick<
+    WidgetPlacement,
+    "scope" | "scopeId" | "isActive" | "deletedAt"
+> & {
+    targetSlug: string | null;
+};
+
+type WidgetRow = typeof widgets.$inferSelect;
+
+export type WidgetCacheSubject = {
+    id: string;
+    isActive: boolean;
+    deletedAt: WidgetRow["deletedAt"];
+    placements: WidgetCachePlacementSnapshot[];
+};
+
 // ─────────────────────────────────────────
 // HTML Sanitization
 // ─────────────────────────────────────────
@@ -912,6 +928,107 @@ export async function getWidgetById(db: Database, id: string) {
         .orderBy(asc(widgetPlacements.sortOrder));
 
     return { ...widget, placements };
+}
+
+export async function getWidgetCacheSubjects(
+    db: Database,
+    ids: string[],
+    options: { includeDeleted?: boolean } = {},
+): Promise<WidgetCacheSubject[]> {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (uniqueIds.length === 0) return [];
+
+    const widgetConditions = [inArray(widgets.id, uniqueIds)];
+    if (options.includeDeleted !== true) {
+        widgetConditions.push(isNull(widgets.deletedAt));
+    }
+
+    const [widgetRows, placementRows] = await Promise.all([
+        db
+            .select({
+                id: widgets.id,
+                isActive: widgets.isActive,
+                deletedAt: widgets.deletedAt,
+            })
+            .from(widgets)
+            .where(and(...widgetConditions)),
+        db
+            .select({
+                widgetId: widgetPlacements.widgetId,
+                scope: widgetPlacements.scope,
+                scopeId: widgetPlacements.scopeId,
+                isActive: widgetPlacements.isActive,
+                deletedAt: widgetPlacements.deletedAt,
+            })
+            .from(widgetPlacements)
+            .where(inArray(widgetPlacements.widgetId, uniqueIds)),
+    ]);
+
+    const pageIds = new Set<string>();
+    const productIds = new Set<string>();
+    const categoryIds = new Set<string>();
+    for (const placement of placementRows) {
+        if (!placement.scopeId) continue;
+        if (placement.scope === WidgetPlacementScope.PAGE) pageIds.add(placement.scopeId);
+        if (placement.scope === WidgetPlacementScope.PRODUCT) productIds.add(placement.scopeId);
+        if (placement.scope === WidgetPlacementScope.CATEGORY) categoryIds.add(placement.scopeId);
+    }
+
+    const [pageRows, productRows, categoryRows] = await Promise.all([
+        pageIds.size === 0
+            ? Promise.resolve([])
+            : db
+                .select({ id: pages.id, slug: pages.slug })
+                .from(pages)
+                .where(inArray(pages.id, [...pageIds])),
+        productIds.size === 0
+            ? Promise.resolve([])
+            : db
+                .select({ id: products.id, slug: products.slug })
+                .from(products)
+                .where(inArray(products.id, [...productIds])),
+        categoryIds.size === 0
+            ? Promise.resolve([])
+            : db
+                .select({ id: categories.id, slug: categories.slug })
+                .from(categories)
+                .where(inArray(categories.id, [...categoryIds])),
+    ]);
+
+    const pageSlugs = new Map(pageRows.map((row) => [row.id, row.slug]));
+    const productSlugs = new Map(productRows.map((row) => [row.id, row.slug]));
+    const categorySlugs = new Map(categoryRows.map((row) => [row.id, row.slug]));
+    const placementsByWidget = new Map<string, WidgetCachePlacementSnapshot[]>();
+
+    for (const placement of placementRows) {
+        let targetSlug: string | null = null;
+        if (placement.scopeId) {
+            if (placement.scope === WidgetPlacementScope.PAGE) {
+                targetSlug = pageSlugs.get(placement.scopeId) ?? null;
+            } else if (placement.scope === WidgetPlacementScope.PRODUCT) {
+                targetSlug = productSlugs.get(placement.scopeId) ?? null;
+            } else if (placement.scope === WidgetPlacementScope.CATEGORY) {
+                targetSlug = categorySlugs.get(placement.scopeId) ?? null;
+            }
+        }
+
+        const snapshots = placementsByWidget.get(placement.widgetId) ?? [];
+        snapshots.push({
+            scope: placement.scope,
+            scopeId: placement.scopeId,
+            isActive: placement.isActive,
+            deletedAt: placement.deletedAt,
+            targetSlug,
+        });
+        placementsByWidget.set(placement.widgetId, snapshots);
+    }
+
+    return widgetRows.map((widget) => ({
+        id: widget.id,
+        isActive: widget.isActive,
+        deletedAt: widget.deletedAt,
+        placements: placementsByWidget.get(widget.id) ?? [],
+    }));
 }
 
 /** Get active widget by ID with sanitized HTML for storefront rendering.

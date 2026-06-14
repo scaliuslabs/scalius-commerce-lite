@@ -40,58 +40,15 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@scalius/tsconfig": "workspace:*",
-    "country-flag-icons": "1.6.15",
-    "drizzle-kit": "^0.31.9",
-    "eslint": "^10.3.0",
-    "eslint-plugin-astro": "^1.6.0",
+    "country-flag-icons": "1.6.17",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^10.5.0",
+    "eslint-plugin-astro": "^1.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.4.0",
+    "globals": "^17.6.0",
     "turbo": "^2.9.18",
-    "typescript-eslint": "^8.59.3",
-    "vitest": "^4.1.6"
+    "typescript-eslint": "^8.61.0",
+    "vitest": "^4.1.8"
   },
-  "packageManager": "pnpm@10.26.1",
-  "overrides": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-is": "^19.1.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "sharp",
-      "workerd",
-      "protobufjs",
-      "@firebase/util"
-    ],
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "react": "19",
-        "date-fns": "3 || 4"
-      },
-      "ignoreMissing": [
-        "react-is"
-      ]
-    },
-    "overrides": {
-      "picomatch": ">=2.3.2",
-      "yaml": ">=2.8.3",
-      "dompurify": ">=3.4.0",
-      "postcss": ">=8.5.10",
-      "jws": "^3.2.3",
-      "esbuild": "0.28.1",
-      "mdast-util-to-hast": "^13.2.1",
-      "markdown-it": ">=14.1.1",
-      "devalue": "5.8.1",
-      "h3": ">=1.15.9",
-      "diff": ">=5.2.2",
-      "lodash": ">=4.17.23",
-      "undici": ">=7.24.4",
-      "wrangler": ">=4.100.0",
-      "shell-quote": "1.8.4",
-      "@grpc/grpc-js": "1.14.4",
-      "ws": "8.21.0",
-      "qs": "6.15.2"
-    }
-  }
+  "packageManager": "pnpm@11.6.0"
 }

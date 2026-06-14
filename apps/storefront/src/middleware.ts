@@ -10,6 +10,7 @@ import {
   isCacheableHtmlResponse,
   requestHasPrivateSession,
 } from "@/lib/cache-policy";
+import { resolveStorefrontCacheVersion } from "@/lib/cache-version";
 
 // Timeout constants to prevent hanging on slow/unavailable services
 const KV_TIMEOUT_MS = 1000;
@@ -109,35 +110,26 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       cfCache = (caches as any).default as Cache;
       const projectCacheVersionKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
 
-      // Add timeout to KV lookup to prevent hanging (per CF best practices)
-      let cacheVersion = await Promise.race([
-        kvBinding.get(projectCacheVersionKey),
-        new Promise<string | null>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("KV lookup timeout")),
-            KV_TIMEOUT_MS,
-          ),
-        ),
-      ]).catch((err: unknown) => {
-        console.warn("KV lookup timed out or failed:", err instanceof Error ? err.message : String(err));
-        return null;
+      const cacheVersionResult = await resolveStorefrontCacheVersion({
+        store: kvBinding,
+        key: projectCacheVersionKey,
+        timeoutMs: KV_TIMEOUT_MS,
+        waitUntil: (promise) => locals.cfContext.waitUntil(promise),
       });
 
-      if (!cacheVersion) {
-        cacheVersion = "1";
-        locals.cfContext.waitUntil(
-          kvBinding.put(projectCacheVersionKey, cacheVersion),
-        );
+      if (cacheVersionResult.status === "unavailable") {
+        console.warn("KV lookup timed out or failed:", cacheVersionResult.reason);
+        cfCache = null;
+      } else {
+        resolvedCacheVersion = cacheVersionResult.version;
+
+        // Set context for API functions (L2 caching) — both ALS and fallback
+        const waitUntilFn = (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise);
+        setEdgeCacheContext(cfCache, cacheVersionResult.version, hostname, waitUntilFn);
       }
-
-      // Store for reuse in HTML caching below
-      resolvedCacheVersion = cacheVersion;
-
-      // Set context for API functions (L2 caching) — both ALS and fallback
-      const waitUntilFn = (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise);
-      setEdgeCacheContext(cfCache, cacheVersion, hostname, waitUntilFn);
     } catch (error: unknown) {
       console.warn("Failed to initialize edge cache context:", error);
+      cfCache = null;
       // Continue without L2 caching - L1 still works
     }
   }
@@ -145,8 +137,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   // Wrap remainder in cacheContextAls.run() so all downstream withEdgeCache
   // calls read per-request context instead of module-level state.
   const cacheCtx = {
-    cache: cfCache,
-    kvVersion: resolvedCacheVersion || "1",
+    cache: resolvedCacheVersion ? cfCache : null,
+    kvVersion: resolvedCacheVersion,
     hostname,
     waitUntil: isCloudflareEnv ? ((promise: Promise<any>) => locals.cfContext.waitUntil(promise)) : null,
   };
@@ -160,11 +152,12 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
     !hasPrivateSession &&
     kvBinding &&
     isCloudflareEnv &&
-    cfCache
+    cfCache &&
+    resolvedCacheVersion
   ) {
     try {
       // Reuse cache version from above (no duplicate KV lookup)
-      const cacheVersion = resolvedCacheVersion || "1";
+      const cacheVersion = resolvedCacheVersion;
 
       const cacheUrl = buildCacheKeyUrl(new URL(request.url));
       // IMPORTANT: include BUILD_ID so new deployments never serve stale HTML

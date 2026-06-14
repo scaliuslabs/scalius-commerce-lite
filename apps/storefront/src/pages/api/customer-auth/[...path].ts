@@ -22,7 +22,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
   const subpath = params.path || "";
 
   // Security: reject path traversal and restrict to safe characters
-  if (subpath.includes("..") || !/^[a-zA-Z0-9\-\/]*$/.test(subpath)) {
+  if (subpath.includes("..") || !/^[a-zA-Z0-9/-]*$/.test(subpath)) {
     return new Response("Bad request", { status: 400 });
   }
 
@@ -43,11 +43,12 @@ export const ALL: APIRoute = async ({ request, params }) => {
   // Build the target URL
   let targetUrl: string;
   let fetcher: typeof fetch = fetch;
+  const canUseServiceBinding = Boolean(env?.BACKEND_API && !import.meta.env.DEV);
 
-  if (env?.BACKEND_API) {
+  if (canUseServiceBinding) {
     // Production: service binding (zero-latency internal routing)
     targetUrl = `http://api.internal${apiPath}`;
-    fetcher = env.BACKEND_API.fetch.bind(env.BACKEND_API);
+    fetcher = env!.BACKEND_API.fetch.bind(env!.BACKEND_API);
   } else {
     // Local dev: HTTP to API worker
     const apiBase = env?.PUBLIC_API_BASE_URL as string;
@@ -66,7 +67,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       headers,
       body: request.body,
       // @ts-ignore — needed for streaming request bodies in non-service-binding path
-      ...(env?.BACKEND_API ? {} : { duplex: "half" }),
+      ...(canUseServiceBinding ? {} : { duplex: "half" }),
     });
 
     // Build the response, passing through status, body, and headers

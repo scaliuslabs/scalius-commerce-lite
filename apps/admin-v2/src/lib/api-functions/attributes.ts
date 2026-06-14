@@ -110,56 +110,56 @@ function toAttributeValuesParams(
 }
 
 export const getAttributes = createServerFn({ method: "GET" })
-  .inputValidator((data: AttributesQueryInput) => data)
+  .validator((data: AttributesQueryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<AttributesListPayload>("/attributes", toAttributesParams(data));
   });
 
 export const createAttribute = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateAttributeInput) => data)
+  .validator((data: CreateAttributeInput) => data)
   .handler(async ({ data }) => {
     return apiPost<AttributePayload>("/attributes", data);
   });
 
 export const updateAttribute = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateAttributeInput) => data)
+  .validator((data: UpdateAttributeInput) => data)
   .handler(async ({ data }) => {
     const { id, ...body } = data;
     return apiPut<AttributePayload>(`/attributes/${id}`, body);
   });
 
 export const deleteAttribute = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/attributes/${data.id}`);
   });
 
 export const deleteAttributePermanent = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/attributes/${data.id}/permanent`);
   });
 
 export const restoreAttribute = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>(`/attributes/${data.id}/restore`);
   });
 
 export const bulkDeleteAttributes = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[]; permanent?: boolean }) => data)
+  .validator((data: { ids: string[]; permanent?: boolean }) => data)
   .handler(async ({ data }) => {
     return apiPost<void>("/attributes/bulk-delete", data);
   });
 
 export const bulkRestoreAttributes = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }) => {
     return apiPost<void>("/attributes/bulk-restore", data);
   });
 
 export const getAttributeValues = createServerFn({ method: "GET" })
-  .inputValidator((data: AttributeValuesQueryInput) => data)
+  .validator((data: AttributeValuesQueryInput) => data)
   .handler(async ({ data }) => {
     const attributeId = data.attributeId || data.id;
     if (!attributeId) {
@@ -173,7 +173,7 @@ export const getAttributeValues = createServerFn({ method: "GET" })
   });
 
 export const renameAttributeValue = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (data: { attributeId: string; oldValue: string; newValue: string }) => data,
   )
   .handler(async ({ data }) => {
@@ -184,7 +184,7 @@ export const renameAttributeValue = createServerFn({ method: "POST" })
   });
 
 export const addAttributeValue = createServerFn({ method: "POST" })
-  .inputValidator((data: { attributeId: string; value: string }) => data)
+  .validator((data: { attributeId: string; value: string }) => data)
   .handler(async ({ data }) => {
     return apiPost<Record<string, never>>(`/attributes/${data.attributeId}/values`, {
       value: data.value,
@@ -192,7 +192,7 @@ export const addAttributeValue = createServerFn({ method: "POST" })
   });
 
 export const removeAttributeValue = createServerFn({ method: "POST" })
-  .inputValidator((data: { attributeId: string; value: string }) => data)
+  .validator((data: { attributeId: string; value: string }) => data)
   .handler(async ({ data }) => {
     return apiDelete(`/attributes/${data.attributeId}/values`, {
       value: data.value,

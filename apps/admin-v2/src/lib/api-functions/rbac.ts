@@ -87,43 +87,43 @@ export const getRbacPermissions = createServerFn({ method: "GET" }).handler(
 );
 
 export const createRbacRole = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateRbacRoleInput) => data)
+  .validator((data: CreateRbacRoleInput) => data)
   .handler(async ({ data }) => {
     return apiPost<{ role: RbacRole }>("/rbac/roles", data);
   });
 
 export const updateRbacRole = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateRbacRoleInput) => data)
+  .validator((data: UpdateRbacRoleInput) => data)
   .handler(async ({ data }) => {
     return apiPut<{ role: RbacRole }>(`/rbac/roles/${data.roleId}`, data.update);
   });
 
 export const deleteRbacRole = createServerFn({ method: "POST" })
-  .inputValidator((data: RbacRoleIdInput) => data)
+  .validator((data: RbacRoleIdInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<Record<string, never>>(`/rbac/roles/${data.roleId}`);
   });
 
 export const assignUserRole = createServerFn({ method: "POST" })
-  .inputValidator((data: UserRoleInput) => data)
+  .validator((data: UserRoleInput) => data)
   .handler(async ({ data }) => {
     return apiPost<Record<string, never>>("/rbac/user-roles", data);
   });
 
 export const removeUserRole = createServerFn({ method: "POST" })
-  .inputValidator((data: UserRoleInput) => data)
+  .validator((data: UserRoleInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<Record<string, never>>("/rbac/user-roles", data);
   });
 
 export const assignUserPermission = createServerFn({ method: "POST" })
-  .inputValidator((data: SetUserPermissionOverrideInput) => data)
+  .validator((data: SetUserPermissionOverrideInput) => data)
   .handler(async ({ data }) => {
     return apiPost<Record<string, never>>("/rbac/user-permissions", data);
   });
 
 export const removeUserPermission = createServerFn({ method: "POST" })
-  .inputValidator((data: RemoveUserPermissionOverrideInput) => data)
+  .validator((data: RemoveUserPermissionOverrideInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<Record<string, never>>("/rbac/user-permissions", data);
   });

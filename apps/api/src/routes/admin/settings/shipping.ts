@@ -6,7 +6,9 @@ import { NotFoundError, ConflictError } from "../../../utils/api-error";
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../../schemas/responses";
+import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 
 const createShippingMethodSchema = z.object({
     name: z.string().min(1, "Name is required").max(100),
@@ -177,6 +179,7 @@ app.openapi(createRoute_, (async (c: any) => {
             })
             .returning();
 
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return created(c, { shippingMethod: insertedMethod });
     } catch (error: unknown) {
         console.error("Error creating shipping method:", error);
@@ -285,6 +288,7 @@ app.openapi(updateRoute, (async (c: any) => {
             throw new NotFoundError("Shipping method not found or no changes made");
         }
 
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return ok(c, { shippingMethod: updatedMethod });
     } catch (error: unknown) {
         console.error(`Error updating shipping method ${id}:`, error);
@@ -331,6 +335,7 @@ app.openapi(deleteRoute, async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(eq(shippingMethods.id, id));
 
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return noContent(c);
     } catch (error: unknown) {
         console.error(`Error deleting shipping method ${id}:`, error);
@@ -385,6 +390,7 @@ app.openapi(restoreRoute, async (c) => {
             })
             .where(eq(shippingMethods.id, id));
 
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return ok(c, { message: "Shipping method restored successfully" });
     } catch (error: unknown) {
         console.error(`Error restoring shipping method ${id}:`, error);
@@ -425,6 +431,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 
         await db.delete(shippingMethods).where(eq(shippingMethods.id, id));
 
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return noContent(c);
     } catch (error: unknown) {
         console.error(`Error permanently deleting shipping method ${id}:`, error);

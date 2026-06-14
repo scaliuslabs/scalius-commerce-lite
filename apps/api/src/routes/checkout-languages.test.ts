@@ -1,13 +1,35 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  checkoutLanguageRoutes,
-  publicCheckoutLanguageRoutes,
-} from "./checkout-languages";
+const mocks = vi.hoisted(() => ({
+  invalidateApiAndStorefrontGroups: vi.fn(),
+}));
+
+vi.mock("../utils/cache-invalidation", () => ({
+  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+}));
+
+import { checkoutLanguageRoutes, publicCheckoutLanguageRoutes } from "./checkout-languages";
 
 function createTestApp() {
+  const env = {
+    CACHE: { id: "api-cache-kv" },
+    PURGE_URL: "https://storefront.example.com/api/purge-cache",
+    PURGE_TOKEN: "secret-token",
+  } as unknown as Env;
+  const insertReturning = vi.fn().mockResolvedValue([{
+    id: "cl_1",
+    name: "English",
+    code: "en",
+    languageData: "{}",
+    fieldVisibility: "{}",
+    isActive: true,
+    isDefault: true,
+    createdAt: 1,
+    updatedAt: 1,
+    deletedAt: null,
+  }]);
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.use("*", async (c, next) => {
     const db = {
@@ -18,18 +40,33 @@ function createTestApp() {
           }),
         }),
       }),
+      update: () => ({
+        set: () => ({
+          where: async () => undefined,
+        }),
+      }),
+      insert: () => ({
+        values: () => ({
+          returning: insertReturning,
+        }),
+      }),
     } as unknown as Database;
     c.set("db", db);
     await next();
   });
   app.route("/checkout-languages", publicCheckoutLanguageRoutes);
   app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
-  return app;
+  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+  return { app, env };
 }
 
 describe("checkout language route boundaries", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("keeps public checkout-language mutations unregistered", async () => {
-    const app = createTestApp();
+    const { app } = createTestApp();
 
     const createResponse = await app.request("/api/v1/checkout-languages", {
       method: "POST",
@@ -56,7 +93,7 @@ describe("checkout language route boundaries", () => {
   });
 
   it("leaves admin checkout-language mutations registered", async () => {
-    const app = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/admin/settings/checkout-languages",
@@ -71,7 +108,7 @@ describe("checkout language route boundaries", () => {
   });
 
   it("keeps the active checkout language public read available", async () => {
-    const app = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request("/api/v1/checkout-languages/active");
     const body = await response.json() as {
@@ -82,5 +119,29 @@ describe("checkout language route boundaries", () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.data?.language?.id).toBe("fallback");
+  });
+
+  it("invalidates checkout caches after admin checkout-language saves", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/checkout-languages",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "English",
+          code: "en",
+          languageData: {},
+          fieldVisibility: {},
+          isActive: true,
+          isDefault: true,
+        }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
   });
 });

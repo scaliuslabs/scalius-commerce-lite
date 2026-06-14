@@ -43,13 +43,13 @@ export const getHeroSliders = createServerFn({ method: "GET" }).handler(
 );
 
 export const createHeroSlider = createServerFn({ method: "POST" })
-  .inputValidator((data: HeroSliderWriteInput) => data)
+  .validator((data: HeroSliderWriteInput) => data)
   .handler(async ({ data }) => {
     return apiPost<HeroSliderRecord>("/settings/hero-sliders", data);
   });
 
 export const updateHeroSlider = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateHeroSliderInput) => data)
+  .validator((data: UpdateHeroSliderInput) => data)
   .handler(async ({ data }) => {
     return apiPut<HeroSliderRecord>(
       `/settings/hero-sliders/${data.id}`,

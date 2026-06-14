@@ -90,7 +90,7 @@ flowchart TB
         direction TB
         TSRouter["TanStack Router<br/>(60+ pages)"]
         TSQuery["TanStack Query<br/>(78 queryOptions, 114 mutations)"]
-        ServerFns["251 Typed Server Functions<br/>(domain slices)"]
+        ServerFns["252 Typed Server Functions<br/>(domain slices)"]
     end
 
     subgraph Storefront ["Storefront (Astro 6 SSR)"]
@@ -216,14 +216,14 @@ The admin dashboard is built with **TanStack Start** — a full-stack React fram
 
 ```mermaid
 flowchart LR
-    SF["createServerFn<br/>(251 typed domain functions)"] --> QO["queryOptions<br/>(78 wrappers)"]
+    SF["createServerFn<br/>(252 typed domain functions)"] --> QO["queryOptions<br/>(78 wrappers)"]
     QO --> L["Route Loader<br/>(ensureQueryData)"]
     L --> C["Component<br/>(useSuspenseQuery)"]
     C --> M["useMutation<br/>(114 hooks)"]
     M -->|invalidateQueries| QO
 ```
 
-- **Server Functions**: 251 typed functions live under domain slices in `src/lib/api-functions/`
+- **Server Functions**: 252 typed functions live under domain slices in `src/lib/api-functions/`
 - **Query Options** (`api.queries.ts`): 78 React Query wrappers with 7 staleTime tiers (10s → 1hr)
 - **Mutations** (`api.mutations.ts`): 114 exported hooks with cache invalidation and toast notifications
 - **Stale-While-Revalidate**: Detail queries use `staleTime: 0` + loader `staleTime: Infinity` for instant navigation
@@ -350,10 +350,10 @@ pnpm dev:storefront     # Start storefront :4322 + API :8787
 
 # Build & Deploy
 pnpm build              # Build all workspaces via Turbo
-pnpm deploy             # Typecheck → build → migrate → deploy all workers
-pnpm deploy:api         # Typecheck → build API → migrate remote D1 → deploy API
-pnpm deploy:admin       # Typecheck → build admin-v2 → deploy admin-v2
-pnpm deploy:storefront  # Typecheck → build storefront → deploy storefront
+pnpm run deploy             # Typecheck → build → migrate → deploy all workers
+pnpm run deploy:api         # Typecheck → build API → migrate remote D1 → deploy API
+pnpm run deploy:admin       # Typecheck → build admin-v2 → deploy admin-v2
+pnpm run deploy:storefront  # Typecheck → build storefront → deploy storefront
 
 # Database
 pnpm db:generate        # Generate Drizzle migrations from schema changes
@@ -391,7 +391,7 @@ pnpm dev:doctor
 pnpm dev:setup
 ```
 
-Use Node 22 from `.nvmrc`; `pnpm dev:doctor` warns when your active Node version differs. `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
+Use the current Node 22 LTS line from `.nvmrc` (Node 22.18+ is required by the current toolchain); `pnpm dev:doctor` warns when your active Node version differs. `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
 Use `pnpm dev:setup --env-only` when `dev:doctor` reports missing, incomplete, or non-local env URL values. It appends missing/blank keys in `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin; use `--force --env-only` only when you intentionally want to regenerate local env files.
 
@@ -509,12 +509,12 @@ pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
 ## Deployment
 
 ```bash
-pnpm deploy
+pnpm run deploy
 ```
 
 Pipeline: `typecheck → build → migrate (remote D1) → deploy all workers`
 
-Targeted deploy shortcuts use the same safety wrapper: `pnpm deploy:api`
+Targeted deploy shortcuts use the same safety wrapper: `pnpm run deploy:api`
 typechecks, builds the API, applies remote D1 migrations, then deploys the API
 Worker; admin and storefront shortcuts typecheck before their focused build and
 deploy.
