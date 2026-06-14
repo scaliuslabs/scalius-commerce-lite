@@ -24,7 +24,7 @@ Current related issue: none currently tracked; re-check `apps/api/src/routes/aut
 
 ### "Admin 2FA is mandatory for all admins"
 
-Current evidence indicates 2FA setup remains optional, but enabled 2FA is enforced per session in both the TanStack admin route guard and API admin middleware. The API gate currently exempts only exact 2FA info, verify, and complete-verification endpoints.
+Current evidence indicates 2FA setup remains optional, but enabled 2FA is enforced per session in both the TanStack admin route guard and API admin middleware. The API gate currently exempts only exact 2FA info, verify, complete-verification, and method-completion endpoints needed to finish the second-factor flow.
 
 Current related issue: none currently tracked; re-check `apps/api/src/middleware/admin-auth.ts` and `apps/admin-v2/src/lib/auth.fns.ts` before reopening.
 

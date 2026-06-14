@@ -68,10 +68,9 @@ export interface AccountSecurityResponse {
   isSuperAdmin: boolean;
 }
 
-export interface SetTwoFactorMethodInput {
-  method: TwoFactorMethod;
-  code: string;
-}
+export type SetTwoFactorMethodInput =
+  | { method: TwoFactorMethod; code: string; sessionToken?: never }
+  | { method: TwoFactorMethod; sessionToken: string; code?: never };
 
 export interface VerifyTwoFactorInput {
   code: string;

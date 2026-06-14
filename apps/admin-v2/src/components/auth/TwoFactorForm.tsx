@@ -95,10 +95,10 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
 
     try {
       const verifyResult = method === "backup"
-        ? await authClient.twoFactor.verifyBackupCode({ code, trustDevice: true })
+        ? await authClient.twoFactor.verifyBackupCode({ code, trustDevice: false })
         : method === "email"
-          ? await authClient.twoFactor.verifyOtp({ code, trustDevice: true })
-          : await authClient.twoFactor.verifyTotp({ code, trustDevice: true });
+          ? await authClient.twoFactor.verifyOtp({ code, trustDevice: false })
+          : await authClient.twoFactor.verifyTotp({ code, trustDevice: false });
 
       if (verifyResult.error) {
         setError(verifyResult.error.message || "Invalid verification code");

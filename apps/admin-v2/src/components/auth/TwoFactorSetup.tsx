@@ -67,7 +67,23 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      await set2faMethod({ data: { method: "email", code: verificationCode } });
+      const verifyResult = await authClient.twoFactor.verifyOtp({
+        code: verificationCode,
+        trustDevice: false,
+      });
+
+      if (verifyResult.error) {
+        setError(verifyResult.error.message || "Invalid verification code");
+        return;
+      }
+
+      const sessionToken = verifyResult.data?.token;
+      if (!sessionToken) {
+        setError("Verification succeeded, but no session proof was returned.");
+        return;
+      }
+
+      await set2faMethod({ data: { method: "email", sessionToken } });
 
       setStep("backup");
     } catch (err: unknown) {

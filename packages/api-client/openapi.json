@@ -78025,11 +78025,14 @@
                   "code": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "sessionToken": {
+                    "type": "string",
+                    "minLength": 32
                   }
                 },
                 "required": [
-                  "method",
-                  "code"
+                  "method"
                 ]
               }
             }
