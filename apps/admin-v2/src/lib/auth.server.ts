@@ -98,6 +98,49 @@ function isSignInEmailRequest(request: Request): boolean {
   );
 }
 
+const TWO_FACTOR_VERIFY_PATH_SUFFIXES = [
+  "/api/auth/two-factor/verify-totp",
+  "/api/auth/two-factor/verify-otp",
+  "/api/auth/two-factor/verify-backup-code",
+] as const;
+
+async function readsTrustedDeviceRequest(request: Request): Promise<boolean> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) return false;
+
+  try {
+    const body = (await request.clone().json()) as { trustDevice?: unknown };
+    return body.trustDevice === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function shouldRejectTrustedDeviceVerificationRequest(
+  request: Request,
+): Promise<boolean> {
+  if (request.method.toUpperCase() !== "POST") return false;
+  const pathname = new URL(request.url).pathname;
+  if (!TWO_FACTOR_VERIFY_PATH_SUFFIXES.some((suffix) => pathname.endsWith(suffix))) {
+    return false;
+  }
+
+  return readsTrustedDeviceRequest(request);
+}
+
+function trustedDeviceDisabledResponse(): Response {
+  return Response.json(
+    {
+      code: "TRUSTED_DEVICE_DISABLED",
+      message: "Trusted-device 2FA verification is not enabled.",
+    },
+    {
+      status: 400,
+      headers: { "Cache-Control": "no-store" },
+    },
+  );
+}
+
 function temporaryAuthFailureResponse(): Response {
   return Response.json(
     {
@@ -213,6 +256,11 @@ async function runAuthHandlerWithRetry(
 export function createAuthHandler(): (request: Request) => Promise<Response> {
   const env = getCfEnv();
   const auth = createAuth(env);
-  return (request: Request) =>
-    runAuthHandlerWithRetry((retryRequest) => auth.handler(retryRequest), request);
+  return async (request: Request) => {
+    if (await shouldRejectTrustedDeviceVerificationRequest(request)) {
+      return trustedDeviceDisabledResponse();
+    }
+
+    return runAuthHandlerWithRetry((retryRequest) => auth.handler(retryRequest), request);
+  };
 }

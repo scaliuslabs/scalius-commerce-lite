@@ -1,13 +1,15 @@
 // src/lib/auth-client.ts
 import { createAuthClient } from "better-auth/react";
 import { twoFactorClient, adminClient } from "better-auth/client/plugins";
+import { storePendingTwoFactorMethods } from "./two-factor-pending";
 
 // Create the auth client for use in React components
 // Auth endpoints live on the admin worker (same-origin), not the API worker
 export const authClient = createAuthClient({
   plugins: [
     twoFactorClient({
-      onTwoFactorRedirect: () => {
+      onTwoFactorRedirect: (context) => {
+        storePendingTwoFactorMethods(context?.twoFactorMethods);
         window.location.href = "/auth/two-factor";
       },
     }),

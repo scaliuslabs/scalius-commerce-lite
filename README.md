@@ -52,9 +52,9 @@ apps/
   storefront/     # @scalius/storefront — Astro 6 SSR customer store (Cloudflare Worker)
 packages/
   api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
-  core/           # @scalius/core — 21 domain modules, auth, integrations, FTS5 search
+  core/           # @scalius/core — domain modules, auth, integrations, FTS5 search
   database/       # @scalius/database — Drizzle schema and migrations
-  shared/         # @scalius/shared — 65+ pure utility functions across 21 modules
+  shared/         # @scalius/shared — shared utilities and rendering helpers
   tsconfig/       # @scalius/tsconfig — Shared TypeScript configs (base, astro, worker)
 scripts/          # Dev setup, deploy pipeline, dev server wrapper
 ```
@@ -76,7 +76,7 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Payments | Stripe, SSLCommerz, Polar, COD |
 | Delivery | Pathao, Steadfast (webhook-driven tracking) |
 | Notifications | Email (Resend), SMS (4 providers), Firebase Cloud Messaging |
-| AI | OpenRouter LLM integration for widget/content generation |
+| AI | AI SDK providers for widget/content generation (OpenRouter, OpenAI, Gemini, Cloudflare Workers AI) |
 | CI/CD | GitHub Actions (lint → typecheck → build → test) |
 | Deploy | Cloudflare Workers via Wrangler |
 
@@ -88,9 +88,9 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 flowchart TB
     subgraph AdminV2 ["Admin Dashboard (TanStack Start)"]
         direction TB
-        TSRouter["TanStack Router<br/>(60+ pages)"]
-        TSQuery["TanStack Query<br/>(78 queryOptions, 114 mutations)"]
-        ServerFns["252 Typed Server Functions<br/>(domain slices)"]
+        TSRouter["TanStack Router<br/>(file-based admin routes)"]
+        TSQuery["TanStack Query<br/>(domain query options and mutations)"]
+        ServerFns["Typed Server Functions<br/>(domain slices)"]
     end
 
     subgraph Storefront ["Storefront (Astro 6 SSR)"]
@@ -102,9 +102,9 @@ flowchart TB
 
     subgraph API ["API Worker (Hono)"]
         direction TB
-        HonoApp["160+ Endpoints<br/>(@hono/zod-openapi)"]
+        HonoApp["254 OpenAPI paths / 352 operations<br/>(@hono/zod-openapi)"]
         QueueConsumer["Queue Consumer<br/>(payments, notifications, OTP)"]
-        CoreModules["@scalius/core<br/>(21 domain modules)"]
+        CoreModules["@scalius/core<br/>(domain services)"]
     end
 
     subgraph Infra ["Cloudflare Infrastructure"]
@@ -123,7 +123,7 @@ flowchart TB
         Firebase["Firebase FCM"]
         SMS["SMS Providers (4)"]
         Resend["Resend Email"]
-        OpenRouter["OpenRouter LLM"]
+        AIProviders["AI providers<br/>(OpenRouter, OpenAI, Gemini, Cloudflare)"]
     end
 
     AdminV2 -->|"Service Binding (env.API)"| API
@@ -144,7 +144,7 @@ flowchart TB
     API -.->|Webhooks| Polar
     API -.->|Webhooks| Pathao
     API -.->|Webhooks| Steadfast
-    AdminV2 -.-> OpenRouter
+    API -.-> AIProviders
 ```
 
 ### Service Binding Topology
@@ -183,7 +183,7 @@ In production, service bindings are zero-latency RPC calls (no HTTP overhead). I
 - Navigation builder with drag-and-drop hierarchy
 - CMS pages with Tiptap rich text editor
 - Hero slider management (desktop + mobile variants)
-- Homepage widgets with AI-powered generation (OpenRouter LLM)
+- Homepage widgets with AI-powered generation through dashboard-configured AI providers
 
 ### Operations
 - 2 delivery providers (Pathao, Steadfast) with webhook-driven tracking
@@ -216,16 +216,16 @@ The admin dashboard is built with **TanStack Start** — a full-stack React fram
 
 ```mermaid
 flowchart LR
-    SF["createServerFn<br/>(252 typed domain functions)"] --> QO["queryOptions<br/>(78 wrappers)"]
+    SF["createServerFn<br/>(typed domain functions)"] --> QO["queryOptions<br/>(domain wrappers)"]
     QO --> L["Route Loader<br/>(ensureQueryData)"]
     L --> C["Component<br/>(useSuspenseQuery)"]
     C --> M["useMutation<br/>(114 hooks)"]
     M -->|invalidateQueries| QO
 ```
 
-- **Server Functions**: 252 typed functions live under domain slices in `src/lib/api-functions/`
-- **Query Options** (`api.queries.ts`): 78 React Query wrappers with 7 staleTime tiers (10s → 1hr)
-- **Mutations** (`api.mutations.ts`): 114 exported hooks with cache invalidation and toast notifications
+- **Server Functions**: typed functions live under domain slices in `src/lib/api-functions/`
+- **Query Options**: React Query wrappers are split between the legacy broad file and narrower domain modules with 7 staleTime tiers (10s -> 1hr)
+- **Mutations** (`api.mutations.ts`): exported hooks with cache invalidation and toast notifications
 - **Stale-While-Revalidate**: Detail queries use `staleTime: 0` + loader `staleTime: Infinity` for instant navigation
 
 ### Pages (60+)
@@ -502,7 +502,7 @@ pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
 | Stripe / SSLCommerz / Polar | Settings → Checkout → Payment Gateways |
 | Pathao / Steadfast | Settings → Delivery Providers |
 | SMS Providers | Settings → Notifications / SMS providers |
-| OpenRouter (AI) | Widget editor settings |
+| AI providers | Settings -> Widget AI / widget editor settings |
 
 ---
 

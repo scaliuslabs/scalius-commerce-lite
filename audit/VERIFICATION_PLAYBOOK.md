@@ -114,7 +114,7 @@ rg -n 'mark2faVerified|mark-verified|markFirstUserAsSuperAdmin' apps/admin-v2/sr
 rg -n 'trustDevice: true|trustDevice\\?: boolean' apps/api/src/routes/admin/auth-management.ts apps/admin-v2/src/components/auth apps/admin-v2/src/components/admin/account-settings
 ```
 
-For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`. For `AUTH-006`/`AUTH-010`, `/2fa/method` must either verify a code for the target method inside the API route or accept a same-origin Better Auth `sessionToken` proof matching the current session id, user id, and token. Session-rotating Better Auth calls must forward replacement `Set-Cookie` headers through both the API worker and admin server-function response. A browser-only prior verification without API proof is not enough. For current `AUTH-011`, remembered-device login remains disabled: UI calls should send `trustDevice: false`, and `/api/v1/admin/auth/2fa/verify` must reject `trustDevice: true` before calling Better Auth.
+For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`. For `AUTH-006`/`AUTH-010`, `/2fa/method` must either verify a code for the target method inside the API route or accept a same-origin Better Auth `sessionToken` proof matching the current session id, user id, and token. Session-rotating Better Auth calls must forward replacement `Set-Cookie` headers through both the API worker and admin server-function response. A browser-only prior verification without API proof is not enough. For `AUTH-011`, remembered-device login remains disabled: UI calls should send `trustDevice: false`, `/api/v1/admin/auth/2fa/verify` must reject `trustDevice: true`, and same-origin Better Auth catch-all verification paths must reject direct `trustDevice: true` requests before calling Better Auth.
 
 Admin server-function slice changes:
 
@@ -479,8 +479,8 @@ Use `pnpm check:env` as the routine drift guard. Use generated Wrangler output o
 4. Expected current verified behavior: API rejects the request until 2FA is verified.
 5. Method-change regression: submit `/api/v1/admin/auth/2fa/method` with an invalid target-method code and verify the preferred method is not changed.
 6. Session-rotation regression: password change and first-time TOTP setup must preserve the replacement Better Auth cookie on the dashboard domain; the JSON response must not expose the replacement token.
-7. Current trusted-device policy regression: `POST /api/v1/admin/auth/2fa/verify` with `trustDevice: true` should return 400 and should not call Better Auth verification.
-8. Open `AUTH-011` before changing trusted-device behavior: prove TOTP-preferred login, email-preferred login, backup-code login, stale trusted-device cookies, and post-login admin API access in a browser.
+7. Current trusted-device policy regression: `POST /api/v1/admin/auth/2fa/verify` and direct same-origin Better Auth verification paths with `trustDevice: true` should return 400 and should not call Better Auth verification.
+8. Before changing trusted-device behavior, open or reopen a tracker item and prove TOTP-preferred login, email-preferred login, backup-code login, stale trusted-device cookies, and post-login admin API access in a browser.
 
 Scanner RBAC:
 

@@ -1,13 +1,13 @@
 # Codebase Map
 
-Last reviewed: 2026-06-14
+Last reviewed: 2026-06-15
 
 ## Runtime Shape
 
 Scalius Commerce is a pnpm/Turborepo monorepo with three Cloudflare Worker applications:
 
 - `apps/api` - Hono + `@hono/zod-openapi` API worker. `apps/api/src/worker.ts` exports a `WorkerEntrypoint` with `fetch`, `queue`, and `scheduled`. `apps/api/src/app.ts` mounts routes under `/api/v1`, initializes D1/KV/R2 per request, applies CORS/security headers, exposes Swagger/OpenAPI, and uses JSON error envelopes.
-- `apps/admin-v2` - TanStack Start admin dashboard. Admin data flows through route loaders/components, typed domain server-function slices under `src/lib/api-functions/`, `src/lib/api.queries.ts`, `src/lib/api.mutations.ts`, and `src/lib/api.server.ts`. The former broad `src/lib/api.functions.ts` barrel has been removed. In production it uses the API worker/service binding path and expects API response envelopes unchanged.
+- `apps/admin-v2` - TanStack Start admin dashboard. Admin data flows through route loaders/components, typed domain server-function slices under `src/lib/api-functions/`, `src/lib/api.queries.ts`, `src/lib/api.mutations.ts`, and `src/lib/api.server.ts`. The former broad `src/lib/api.functions.ts` barrel has been removed. Server functions unwrap standard API envelopes through `api.server.ts`; the browser proxy path under `src/routes/api/v1/admin/$.ts` passes API responses through unchanged.
 - `apps/storefront` - Astro SSR storefront with React islands. It calls the API through `env.BACKEND_API` where available, uses edge/L1/L2 caching in `src/lib/*cache*`, and has checkout proxy routes that unwrap API `.data` before returning browser-facing payloads.
 
 ## Package Roles
@@ -39,7 +39,4 @@ Use this loop for each issue:
 5. Verify in Chrome or via production API after the page/API has settled.
 6. Keep `git status --short` clean before moving to the next issue.
 
-Current full-suite baseline:
-
-- `pnpm test` passed on 2026-05-11 after `428dab1`.
-- `pnpm run deploy` succeeded on 2026-05-11 after `428dab1`.
+Current full-suite baseline lives in `audit/README.md` and `audit/REMEDIATION_TRACKER.md`. Use those files for the latest test count, deployment versions, and live-smoke evidence instead of this historical map.
