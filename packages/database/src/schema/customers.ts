@@ -30,6 +30,7 @@ export const customers = sqliteTable("customers", {
 }, (table) => [
     index("customers_email_idx").on(table.email),
     index("customers_phone_idx").on(table.phone),
+    index("customers_dashboard_activity_idx").on(table.deletedAt, table.createdAt),
 ]);
 
 export const customerHistory = sqliteTable("customer_history", {

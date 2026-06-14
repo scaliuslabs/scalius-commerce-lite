@@ -17,12 +17,13 @@ This folder is the working audit system for slice-by-slice remediation. It repla
 
 - `CI=true pnpm install --frozen-lockfile` passes with pnpm 11.6.0.
 - `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, and `pnpm check:dist-secrets` pass at the repo root. Lint still reports warnings only.
-- `pnpm test` currently passes: 115 files and 748 tests.
-- `pnpm --filter @scalius/database check:migrations` passes: 41 SQL files, 41 journal entries, 26 snapshots, and 15 allowed manual snapshot gaps.
+- `pnpm test` currently passes: 119 files and 764 tests.
+- `pnpm --filter @scalius/database check:migrations` passes: 42 SQL files, 42 journal entries, 27 snapshots, and 15 allowed manual snapshot gaps.
+- `pnpm outdated -r` reports only the intentional storefront Vite pin: `vite@7.3.5` versus latest Vite 8 while Astro 6.4.x remains on the Vite 7 line.
 - Current auth/dashboard hardening gates pass: admin/API/api-client/root typechecks, focused API auth-management tests, dashboard chart-data test, root tests/lint/build, migration metadata check, audit, peers, frozen install, and dist-secret checks.
-- Local stack smoke passed after `pnpm dev`: local migration `0040`, `pnpm dev:doctor --require-running`, storefront `/`, `/cart`, `/checkout`, direct local admin sign-in, browser `/admin`, and `/admin/orders`.
-- Full `pnpm deploy` passed and redeployed API `4e191a10-8a56-4f60-83c7-ebdd9e431e5e`, admin `1fa6e70f-df67-4282-be0a-dd5abb2aecfa`, and storefront `6f5c4744-9fba-4185-8571-9c37140289eb`; remote D1 migration `0040` was already applied and the final redeploy reported no pending migrations.
-- Live dashboard login with `demo@scalius.com` succeeded and browser `/admin` plus `/admin/orders` loaded with no captured console errors.
+- Local stack smoke passed with API/admin/storefront dev servers: local migration `0041`, `pnpm dev:doctor:all`, browser `/admin` using split dashboard summary/activity calls, and browser storefront `/`.
+- Full `pnpm deploy` passed after the dashboard split/index slice and redeployed API `d25ebe15-971e-409e-bcfd-b5d15c6702e6`, admin `3af1362d-cfe5-4722-94f6-0a3c44a5f6ae`, and storefront `8976c406-b367-40d8-a39c-a795bd5d6862`; remote D1 migration `0041` is applied and `customers_dashboard_activity_idx` exists remotely.
+- Live dashboard login with `demo@scalius.com` succeeded. Browser `/admin`, browser `/admin/orders`, live storefront `/`, and authenticated dashboard summary/activity/legacy API endpoints all loaded with no captured console errors or 500 pages.
 - The live storefront missing-image issue was fixed after the smoke pass: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Several hard-to-run flows still require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
 

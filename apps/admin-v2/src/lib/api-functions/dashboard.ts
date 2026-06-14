@@ -45,8 +45,29 @@ export interface DashboardData {
   dailyActivityData: DashboardDailyActivity[];
 }
 
+export interface DashboardSummaryData {
+  stats: DashboardStatsPayload;
+  recentOrders: DashboardRecentOrder[];
+}
+
+export interface DashboardActivityData {
+  dailyActivityData: DashboardDailyActivity[];
+}
+
 export const getDashboardData = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<DashboardData>("/dashboard");
+  },
+);
+
+export const getDashboardSummary = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<DashboardSummaryData>("/dashboard/summary");
+  },
+);
+
+export const getDashboardActivity = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<DashboardActivityData>("/dashboard/activity");
   },
 );

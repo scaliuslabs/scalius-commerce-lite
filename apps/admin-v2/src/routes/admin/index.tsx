@@ -4,12 +4,15 @@ import { DashboardStats } from "~/components/admin/DashboardStats";
 import { RecentOrders } from "~/components/admin/RecentOrders";
 import { QuickActions } from "~/components/admin/QuickActions";
 import { WelcomeBanner } from "~/components/admin/WelcomeBanner";
-import { dashboardQueryOptions } from "~/lib/api.queries";
+import {
+  dashboardActivityQueryOptions,
+  dashboardSummaryQueryOptions,
+} from "~/lib/api.queries";
 import { RouteErrorComponent } from "~/lib/list-helpers";
-import type { DashboardData } from "~/lib/api-functions/dashboard";
+import type { DashboardSummaryData } from "~/lib/api-functions/dashboard";
 import { isTransientD1Error } from "@scalius/core/utils/transient-d1";
 
-const EMPTY_DASHBOARD_DATA: DashboardData = {
+const EMPTY_DASHBOARD_SUMMARY: DashboardSummaryData = {
   stats: {
     totalProducts: 0,
     totalCustomers: 0,
@@ -32,16 +35,20 @@ const EMPTY_DASHBOARD_DATA: DashboardData = {
     },
   },
   recentOrders: [],
-  dailyActivityData: [],
 };
 
 export const Route = createFileRoute("/admin/")({
   loader: async ({ context: { queryClient } }) => {
     try {
-      await queryClient.ensureQueryData(dashboardQueryOptions());
+      await queryClient.ensureQueryData(dashboardSummaryQueryOptions());
+      void queryClient.prefetchQuery(dashboardActivityQueryOptions()).catch((error) => {
+        if (!isTransientD1Error(error)) {
+          console.warn("Dashboard activity prefetch skipped", error);
+        }
+      });
     } catch (error) {
       if (!isTransientD1Error(error)) throw error;
-      console.warn("Dashboard prefetch skipped after transient D1 overload", error);
+      console.warn("Dashboard summary prefetch skipped after transient D1 overload", error);
     }
   },
   head: () => ({ meta: [{ title: "Dashboard | Scalius Admin" }] }),
@@ -50,22 +57,36 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function DashboardPage() {
-  const dashboardQuery = useQuery({
-    ...dashboardQueryOptions(),
+  const summaryQuery = useQuery({
+    ...dashboardSummaryQueryOptions(),
     retry: (failureCount, error) => failureCount < 3 && isTransientD1Error(error),
   });
-  const data = dashboardQuery.data ?? EMPTY_DASHBOARD_DATA;
+  const activityQuery = useQuery({
+    ...dashboardActivityQueryOptions(),
+    retry: (failureCount, error) => failureCount < 3 && isTransientD1Error(error),
+  });
+  const data = summaryQuery.data ?? EMPTY_DASHBOARD_SUMMARY;
+  const dailyActivityData = activityQuery.data?.dailyActivityData ?? [];
 
   return (
     <div className="space-y-8">
       <WelcomeBanner />
 
-      {dashboardQuery.isError && (
+      {summaryQuery.isError && (
         <div
           role="alert"
           className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
         >
           Dashboard metrics are temporarily unavailable. You can keep using the admin while the data refreshes.
+        </div>
+      )}
+
+      {activityQuery.isError && !summaryQuery.isError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          Dashboard activity chart data is temporarily unavailable. Summary metrics are still current.
         </div>
       )}
 
@@ -75,7 +96,7 @@ function DashboardPage() {
             totalProducts={data.stats.totalProducts}
             totalCustomers={data.stats.totalCustomers}
             currentMonth={data.stats.currentMonth}
-            initialDailyData={data.dailyActivityData}
+            initialDailyData={dailyActivityData}
           />
         </div>
       </div>

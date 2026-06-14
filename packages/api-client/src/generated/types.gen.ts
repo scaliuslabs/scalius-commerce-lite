@@ -3279,33 +3279,6 @@ export type GetApiV1SeoResponses = {
 
 export type GetApiV1SeoResponse = GetApiV1SeoResponses[keyof GetApiV1SeoResponses];
 
-export type GetApiV1MediaByKeyData = {
-    body?: never;
-    path: {
-        key: string;
-    };
-    query?: never;
-    url: '/api/v1/media/{key}';
-};
-
-export type GetApiV1MediaByKeyErrors = {
-    /**
-     * Not found
-     */
-    404: unknown;
-    /**
-     * R2 bucket not available
-     */
-    500: unknown;
-};
-
-export type GetApiV1MediaByKeyResponses = {
-    /**
-     * Media file
-     */
-    200: unknown;
-};
-
 export type GetApiV1PtproxyData = {
     body?: never;
     path?: never;
@@ -13104,6 +13077,81 @@ export type PostApiV1AdminAnalyticsByIdToggleResponses = {
 };
 
 export type PostApiV1AdminAnalyticsByIdToggleResponse = PostApiV1AdminAnalyticsByIdToggleResponses[keyof PostApiV1AdminAnalyticsByIdToggleResponses];
+
+export type GetApiV1AdminDashboardSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/summary';
+};
+
+export type GetApiV1AdminDashboardSummaryResponses = {
+    /**
+     * Dashboard summary data
+     */
+    200: {
+        success: true;
+        data: {
+            stats: {
+                totalProducts: number;
+                totalCustomers: number;
+                totalRevenue: number;
+                currentMonth: {
+                    orders: number;
+                    revenue: number;
+                    orderGrowth: number;
+                    revenueGrowth: number;
+                    orderStatus: {
+                        delivered: number;
+                        processing: number;
+                        shipping: number;
+                        cancelled: number;
+                    };
+                };
+                lastMonth: {
+                    orders: number;
+                    revenue: number;
+                };
+            };
+            recentOrders: Array<{
+                id: string;
+                customerName: string;
+                totalAmount: number;
+                status: string;
+                createdAt: string | number;
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminDashboardSummaryResponse = GetApiV1AdminDashboardSummaryResponses[keyof GetApiV1AdminDashboardSummaryResponses];
+
+export type GetApiV1AdminDashboardActivityData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/activity';
+};
+
+export type GetApiV1AdminDashboardActivityResponses = {
+    /**
+     * Dashboard daily activity data
+     */
+    200: {
+        success: true;
+        data: {
+            dailyActivityData: Array<{
+                date: string;
+                orders: number;
+                revenue: number;
+                newCustomers: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminDashboardActivityResponse = GetApiV1AdminDashboardActivityResponses[keyof GetApiV1AdminDashboardActivityResponses];
 
 export type GetApiV1AdminDashboardData = {
     body?: never;
