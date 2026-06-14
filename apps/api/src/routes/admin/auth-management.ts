@@ -623,13 +623,17 @@ app.openapi(verify2faRoute, async (c) => {
     const db = c.get("db");
     const sessionUser = c.get("user");
     const session = c.get("session");
-    const auth = createAuth(c.env);
     const { code, trustDevice, type } = c.req.valid("json");
 
     if (!session) {
         throw new UnauthorizedError("No active session found");
     }
 
+    if (trustDevice === true) {
+        throw new ValidationError("Trusted-device 2FA verification is not enabled");
+    }
+
+    const auth = createAuth(c.env);
     const verifyResult = await (async () => {
         try {
             if (type === "backup") {

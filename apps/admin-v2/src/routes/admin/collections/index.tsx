@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { PlusCircle, Trash2, Layers } from "lucide-react";
 import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
 import { collectionsQueryOptions } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useUpdateCollection,
   useDeleteCollection,
@@ -42,9 +43,9 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(collectionsQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, collectionsQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [

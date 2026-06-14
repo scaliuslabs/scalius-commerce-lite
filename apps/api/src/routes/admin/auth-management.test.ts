@@ -400,6 +400,54 @@ describe("admin auth management legacy 2FA verification", () => {
     expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
   });
 
+  it("rejects trusted-device TOTP verification while remembered-device policy is disabled", async () => {
+    const db = createDbMock();
+    const verifyTOTP = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: {
+        verifyTOTP,
+      },
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "totp", code: "123456", trustDevice: true }),
+    });
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(mocks.createAuth).not.toHaveBeenCalled();
+    expect(verifyTOTP).not.toHaveBeenCalled();
+    expect(db.__updateSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects trusted-device email OTP verification while remembered-device policy is disabled", async () => {
+    const db = createDbMock();
+    const verifyTwoFactorOTP = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: {
+        verifyTwoFactorOTP,
+      },
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "email", code: "123456", trustDevice: true }),
+    });
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(mocks.createAuth).not.toHaveBeenCalled();
+    expect(verifyTwoFactorOTP).not.toHaveBeenCalled();
+    expect(db.__updateSet).not.toHaveBeenCalled();
+  });
+
   it("maps expired or invalid Better Auth verification errors to validation errors", async () => {
     const db = createDbMock();
     mocks.createAuth.mockReturnValue({

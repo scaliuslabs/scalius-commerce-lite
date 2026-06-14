@@ -74,7 +74,7 @@ export type SetTwoFactorMethodInput =
 
 export interface VerifyTwoFactorInput {
   code: string;
-  trustDevice?: boolean;
+  trustDevice?: false;
   type?: TwoFactorMethod | "backup";
 }
 

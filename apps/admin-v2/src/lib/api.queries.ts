@@ -10,137 +10,50 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
-import {
-  // Widgets
-  getWidgets,
-  getWidget,
-  getWidgetHistory,
-  type WidgetsQueryInput,
-} from "./api-functions/widgets";
-import {
-  getCustomer,
-  getCustomerHistory,
-  getCustomers,
-  type CustomersQueryInput,
-} from "./api-functions/customers";
-import {
-  getProduct,
-  getProducts,
-  getProductStats,
-  getProductVariants,
-  getVariantSortOrder,
-  type ProductsQueryInput,
-} from "./api-functions/products";
-import {
-  getOrder,
-  getOrderCod,
-  getOrderFormData,
-  getOrderItems,
-  getOrderPayments,
-  getOrders,
-  getOrderShipments,
-  type OrdersQueryInput,
-} from "./api-functions/orders";
-import {
-  getCategories,
-  getCategory,
-  getCategoryFormOptions,
-  type CategoriesQueryInput,
-} from "./api-functions/categories";
-import {
-  getCollection,
-  getCollectionFormOptions,
-  getCollections,
-  type CollectionsQueryInput,
-} from "./api-functions/collections";
-import {
-  getAttributes,
-  getAttributeValues,
-  type AttributesQueryInput,
-  type AttributeValuesQueryInput,
+import type { WidgetsQueryInput } from "./api-functions/widgets";
+import type { CustomersQueryInput } from "./api-functions/customers";
+import type { ProductsQueryInput } from "./api-functions/products";
+import type { OrdersQueryInput } from "./api-functions/orders";
+import type { CategoriesQueryInput } from "./api-functions/categories";
+import type { CollectionsQueryInput } from "./api-functions/collections";
+import type {
+  AttributesQueryInput,
+  AttributeValuesQueryInput,
 } from "./api-functions/attributes";
-import {
-  getDashboardActivity,
-  getDashboardData,
-  getDashboardSummary,
-} from "./api-functions/dashboard";
-import {
-  getDiscount,
-  getDiscounts,
-  type DiscountsQueryInput,
-} from "./api-functions/discounts";
-import {
-  get2faInfo,
-  getAccountSecurity,
-  getAdminUsers,
-  getSetupStatus,
-} from "./api-functions/auth-management";
-import { getRbacPermissions, getRbacRoles } from "./api-functions/rbac";
-import {
-  getAnalyticsScript,
-  getAnalyticsScripts,
-} from "./api-functions/analytics";
-import {
-  getCacheGroups,
-  getCacheLastCleared,
-  getCacheStats,
-} from "./api-functions/cache";
-import {
-  getNavigationItems,
-  getNavigationPreviewProducts,
-  type NavigationPreviewProductsInput,
-} from "./api-functions/navigation";
-import { getPage, getPages, type PagesQueryInput } from "./api-functions/pages";
-import { getFraudCheckerProviders } from "./api-functions/fraud-checker";
-import { getAiPrompts } from "./api-functions/ai";
-import {
-  getCheckoutLanguages,
-  type CheckoutLanguagesQueryInput,
-} from "./api-functions/checkout-languages";
-import { getFirebaseConfig } from "./api-functions/firebase";
-import {
-  getInventory,
-  type InventoryQueryInput,
-} from "./api-functions/inventory";
-import {
-  getMediaFolders,
-  getMediaList,
-  type MediaListQueryInput,
-} from "./api-functions/media";
-import { getHeroSliders } from "./api-functions/hero-sliders";
-import {
-  getAllDeliveryLocations,
-  getDeliveryLocations,
-  getDeliveryProviders,
-  getImportPathaoStatus,
-  type DeliveryLocationsQueryInput,
-} from "./api-functions/delivery";
-import {
-  getAdminNotificationChannels,
-  getAllowedCountries,
-  getAuthSettings,
-  getBusinessSettings,
-  getCurrencySettings,
-  getEmailSettings,
-  getFirebaseSettings,
-  getGeneralSettings,
-  getMediaSettings,
-  getMetaConversionsLogs,
-  getMetaConversionsSettings,
-  getNotificationChannels,
-  getPaymentGatewaySettings,
-  getPaymentMethods,
-  getSecuritySettings,
-  getSeoSettings,
-  getSettingsByCategory,
-  getSmsSettings,
-  getStorefrontUrl,
-  getThemeSettings,
-} from "./api-functions/settings";
-import {
-  getShippingMethods,
-  type ShippingMethodsQueryInput,
-} from "./api-functions/shipping-methods";
+import type { DiscountsQueryInput } from "./api-functions/discounts";
+import type { NavigationPreviewProductsInput } from "./api-functions/navigation";
+import type { PagesQueryInput } from "./api-functions/pages";
+import type { CheckoutLanguagesQueryInput } from "./api-functions/checkout-languages";
+import type { InventoryQueryInput } from "./api-functions/inventory";
+import type { MediaListQueryInput } from "./api-functions/media";
+import type { DeliveryLocationsQueryInput } from "./api-functions/delivery";
+import type { ShippingMethodsQueryInput } from "./api-functions/shipping-methods";
+
+const aiApi = () => import("./api-functions/ai");
+const analyticsApi = () => import("./api-functions/analytics");
+const attributesApi = () => import("./api-functions/attributes");
+const authManagementApi = () => import("./api-functions/auth-management");
+const cacheApi = () => import("./api-functions/cache");
+const categoriesApi = () => import("./api-functions/categories");
+const checkoutLanguagesApi = () => import("./api-functions/checkout-languages");
+const collectionsApi = () => import("./api-functions/collections");
+const customersApi = () => import("./api-functions/customers");
+const dashboardApi = () => import("./api-functions/dashboard");
+const deliveryApi = () => import("./api-functions/delivery");
+const discountsApi = () => import("./api-functions/discounts");
+const firebaseApi = () => import("./api-functions/firebase");
+const fraudCheckerApi = () => import("./api-functions/fraud-checker");
+const heroSlidersApi = () => import("./api-functions/hero-sliders");
+const inventoryApi = () => import("./api-functions/inventory");
+const mediaApi = () => import("./api-functions/media");
+const navigationApi = () => import("./api-functions/navigation");
+const ordersApi = () => import("./api-functions/orders");
+const pagesApi = () => import("./api-functions/pages");
+const productsApi = () => import("./api-functions/products");
+const rbacApi = () => import("./api-functions/rbac");
+const settingsApi = () => import("./api-functions/settings");
+const shippingMethodsApi = () => import("./api-functions/shipping-methods");
+const widgetsApi = () => import("./api-functions/widgets");
 
 // Query staleTime constants (how long data is considered fresh)
 const STALE = {
@@ -167,21 +80,21 @@ const STALE = {
 export const dashboardQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.dashboard.all,
-    queryFn: () => getDashboardData(),
+    queryFn: () => dashboardApi().then((api) => api.getDashboardData()),
     staleTime: STALE.MODERATE,
   });
 
 export const dashboardSummaryQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.dashboard.summary(),
-    queryFn: () => getDashboardSummary(),
+    queryFn: () => dashboardApi().then((api) => api.getDashboardSummary()),
     staleTime: STALE.MODERATE,
   });
 
 export const dashboardActivityQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.dashboard.activity(),
-    queryFn: () => getDashboardActivity(),
+    queryFn: () => dashboardApi().then((api) => api.getDashboardActivity()),
     staleTime: STALE.MODERATE,
   });
 
@@ -192,35 +105,41 @@ export const dashboardActivityQueryOptions = () =>
 export const productsQueryOptions = (params: ProductsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.products.list(params),
-    queryFn: () => getProducts({ data: params }),
+    queryFn: () => productsApi().then((api) => api.getProducts({ data: params })),
     staleTime: STALE.MODERATE,
   });
 
 export const productQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.products.detail(id),
-    queryFn: () => getProduct({ data: { id } }),
+    queryFn: () => productsApi().then((api) => api.getProduct({ data: { id } })),
     staleTime: 0,
   });
 
 export const productStatsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.products.stats(),
-    queryFn: () => getProductStats(),
+    queryFn: () => productsApi().then((api) => api.getProductStats()),
     staleTime: STALE.MODERATE,
   });
 
 export const productVariantsQueryOptions = (productId: string) =>
   queryOptions({
     queryKey: queryKeys.products.variants(productId),
-    queryFn: () => getProductVariants({ data: { productId } }),
+    queryFn: () =>
+      productsApi().then((api) =>
+        api.getProductVariants({ data: { productId } }),
+      ),
     staleTime: STALE.MODERATE,
   });
 
 export const variantSortOrderQueryOptions = (productId: string) =>
   queryOptions({
     queryKey: queryKeys.products.variantSortOrder(productId),
-    queryFn: () => getVariantSortOrder({ data: { productId } }),
+    queryFn: () =>
+      productsApi().then((api) =>
+        api.getVariantSortOrder({ data: { productId } }),
+      ),
     staleTime: STALE.MODERATE,
   });
 
@@ -231,21 +150,23 @@ export const variantSortOrderQueryOptions = (productId: string) =>
 export const categoriesQueryOptions = (params: CategoriesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.categories.list(params),
-    queryFn: () => getCategories({ data: params }),
+    queryFn: () =>
+      categoriesApi().then((api) => api.getCategories({ data: params })),
     staleTime: STALE.MODERATE,
   });
 
 export const categoryQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.categories.detail(id),
-    queryFn: () => getCategory({ data: { id } }),
+    queryFn: () =>
+      categoriesApi().then((api) => api.getCategory({ data: { id } })),
     staleTime: 0,
   });
 
 export const categoryFormOptionsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.categories.formOptions(),
-    queryFn: () => getCategoryFormOptions(),
+    queryFn: () => categoriesApi().then((api) => api.getCategoryFormOptions()),
     staleTime: STALE.LOOKUP,
   });
 
@@ -256,21 +177,24 @@ export const categoryFormOptionsQueryOptions = () =>
 export const collectionsQueryOptions = (params: CollectionsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.collections.list(params),
-    queryFn: () => getCollections({ data: params }),
+    queryFn: () =>
+      collectionsApi().then((api) => api.getCollections({ data: params })),
     staleTime: STALE.MODERATE,
   });
 
 export const collectionQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.collections.detail(id),
-    queryFn: () => getCollection({ data: { id } }),
+    queryFn: () =>
+      collectionsApi().then((api) => api.getCollection({ data: { id } })),
     staleTime: 0,
   });
 
 export const collectionFormOptionsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.collections.formOptions(),
-    queryFn: () => getCollectionFormOptions(),
+    queryFn: () =>
+      collectionsApi().then((api) => api.getCollectionFormOptions()),
     staleTime: STALE.LOOKUP,
   });
 
@@ -281,49 +205,54 @@ export const collectionFormOptionsQueryOptions = () =>
 export const ordersQueryOptions = (params: OrdersQueryInput) =>
   queryOptions({
     queryKey: queryKeys.orders.list(params),
-    queryFn: () => getOrders({ data: params }),
+    queryFn: () => ordersApi().then((api) => api.getOrders({ data: params })),
     staleTime: STALE.FAST,
   });
 
 export const orderQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.orders.detail(id),
-    queryFn: () => getOrder({ data: { id } }),
+    queryFn: () => ordersApi().then((api) => api.getOrder({ data: { id } })),
     staleTime: 0,
   });
 
 export const orderFormDataQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.orders.formData(id),
-    queryFn: () => getOrderFormData({ data: { id } }),
+    queryFn: () =>
+      ordersApi().then((api) => api.getOrderFormData({ data: { id } })),
     staleTime: 0,
   });
 
 export const orderItemsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.items(orderId),
-    queryFn: () => getOrderItems({ data: { orderId } }),
+    queryFn: () =>
+      ordersApi().then((api) => api.getOrderItems({ data: { orderId } })),
     staleTime: STALE.FAST,
   });
 
 export const orderPaymentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.payments(orderId),
-    queryFn: () => getOrderPayments({ data: { orderId } }),
+    queryFn: () =>
+      ordersApi().then((api) => api.getOrderPayments({ data: { orderId } })),
     staleTime: 0,
   });
 
 export const orderCodQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.cod(orderId),
-    queryFn: () => getOrderCod({ data: { orderId } }),
+    queryFn: () =>
+      ordersApi().then((api) => api.getOrderCod({ data: { orderId } })),
     staleTime: 0,
   });
 
 export const orderShipmentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.shipments(orderId),
-    queryFn: () => getOrderShipments({ data: { orderId } }),
+    queryFn: () =>
+      ordersApi().then((api) => api.getOrderShipments({ data: { orderId } })),
     staleTime: 0,
   });
 
@@ -334,21 +263,26 @@ export const orderShipmentsQueryOptions = (orderId: string) =>
 export const customersQueryOptions = (params: CustomersQueryInput) =>
   queryOptions({
     queryKey: queryKeys.customers.list(params),
-    queryFn: () => getCustomers({ data: params }),
+    queryFn: () =>
+      customersApi().then((api) => api.getCustomers({ data: params })),
     staleTime: STALE.MODERATE,
   });
 
 export const customerQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.customers.detail(id),
-    queryFn: () => getCustomer({ data: { id } }),
+    queryFn: () =>
+      customersApi().then((api) => api.getCustomer({ data: { id } })),
     staleTime: 0,
   });
 
 export const customerHistoryQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.customers.history(id),
-    queryFn: () => getCustomerHistory({ data: { id } }),
+    queryFn: () =>
+      customersApi().then((api) =>
+        api.getCustomerHistory({ data: { id } }),
+      ),
     staleTime: 0,
   });
 
@@ -359,14 +293,16 @@ export const customerHistoryQueryOptions = (id: string) =>
 export const discountsQueryOptions = (params: DiscountsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.discounts.list(params),
-    queryFn: () => getDiscounts({ data: params }),
+    queryFn: () =>
+      discountsApi().then((api) => api.getDiscounts({ data: params })),
     staleTime: STALE.MODERATE,
   });
 
 export const discountQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.discounts.detail(id),
-    queryFn: () => getDiscount({ data: { id } }),
+    queryFn: () =>
+      discountsApi().then((api) => api.getDiscount({ data: { id } })),
     staleTime: 0,
   });
 
@@ -377,14 +313,14 @@ export const discountQueryOptions = (id: string) =>
 export const pagesQueryOptions = (params: PagesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.pages.list(params),
-    queryFn: () => getPages({ data: params }),
+    queryFn: () => pagesApi().then((api) => api.getPages({ data: params })),
     staleTime: STALE.MODERATE,
   });
 
 export const pageQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.pages.detail(id),
-    queryFn: () => getPage({ data: { id } }),
+    queryFn: () => pagesApi().then((api) => api.getPage({ data: { id } })),
     staleTime: 0,
   });
 
@@ -395,21 +331,22 @@ export const pageQueryOptions = (id: string) =>
 export const widgetsQueryOptions = (params: WidgetsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.widgets.list(params),
-    queryFn: () => getWidgets({ data: params }),
+    queryFn: () => widgetsApi().then((api) => api.getWidgets({ data: params })),
     staleTime: STALE.MODERATE,
   });
 
 export const widgetQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.widgets.detail(id),
-    queryFn: () => getWidget({ data: { id } }),
+    queryFn: () => widgetsApi().then((api) => api.getWidget({ data: { id } })),
     staleTime: 0,
   });
 
 export const widgetHistoryQueryOptions = (widgetId: string) =>
   queryOptions({
     queryKey: queryKeys.widgets.history(widgetId),
-    queryFn: () => getWidgetHistory({ data: { widgetId } }),
+    queryFn: () =>
+      widgetsApi().then((api) => api.getWidgetHistory({ data: { widgetId } })),
     staleTime: STALE.SLOW,
   });
 
@@ -420,14 +357,16 @@ export const widgetHistoryQueryOptions = (widgetId: string) =>
 export const attributesQueryOptions = (params: AttributesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.attributes.list(params),
-    queryFn: () => getAttributes({ data: params }),
+    queryFn: () =>
+      attributesApi().then((api) => api.getAttributes({ data: params })),
     staleTime: STALE.LOOKUP,
   });
 
 export const attributeValuesQueryOptions = (params: AttributeValuesQueryInput) =>
   queryOptions({
     queryKey: queryKeys.attributes.values(params),
-    queryFn: () => getAttributeValues({ data: params }),
+    queryFn: () =>
+      attributesApi().then((api) => api.getAttributeValues({ data: params })),
     staleTime: STALE.LOOKUP,
   });
 
@@ -438,14 +377,15 @@ export const attributeValuesQueryOptions = (params: AttributeValuesQueryInput) =
 export const analyticsScriptsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.analytics.list(),
-    queryFn: () => getAnalyticsScripts(),
+    queryFn: () => analyticsApi().then((api) => api.getAnalyticsScripts()),
     staleTime: STALE.LOOKUP,
   });
 
 export const analyticsScriptQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.analytics.detail(id),
-    queryFn: () => getAnalyticsScript({ data: { id } }),
+    queryFn: () =>
+      analyticsApi().then((api) => api.getAnalyticsScript({ data: { id } })),
     staleTime: 0,
   });
 
@@ -456,7 +396,8 @@ export const analyticsScriptQueryOptions = (id: string) =>
 export const inventoryQueryOptions = (params: InventoryQueryInput) =>
   queryOptions({
     queryKey: queryKeys.inventory.list(params),
-    queryFn: () => getInventory({ data: params }),
+    queryFn: () =>
+      inventoryApi().then((api) => api.getInventory({ data: params })),
     staleTime: STALE.FAST,
   });
 
@@ -467,14 +408,14 @@ export const inventoryQueryOptions = (params: InventoryQueryInput) =>
 export const mediaListQueryOptions = (params: MediaListQueryInput) =>
   queryOptions({
     queryKey: queryKeys.media.list(params),
-    queryFn: () => getMediaList({ data: params }),
+    queryFn: () => mediaApi().then((api) => api.getMediaList({ data: params })),
     staleTime: STALE.SLOW,
   });
 
 export const mediaFoldersQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.media.folders(),
-    queryFn: () => getMediaFolders(),
+    queryFn: () => mediaApi().then((api) => api.getMediaFolders()),
     staleTime: STALE.SLOW,
   });
 
@@ -485,7 +426,7 @@ export const mediaFoldersQueryOptions = () =>
 export const navigationItemsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.navigation.items(),
-    queryFn: () => getNavigationItems(),
+    queryFn: () => navigationApi().then((api) => api.getNavigationItems()),
     staleTime: STALE.LOOKUP,
   });
 
@@ -494,7 +435,10 @@ export const navigationPreviewProductsQueryOptions = (
 ) =>
   queryOptions({
     queryKey: queryKeys.navigation.previewProducts(params),
-    queryFn: () => getNavigationPreviewProducts({ data: params }),
+    queryFn: () =>
+      navigationApi().then((api) =>
+        api.getNavigationPreviewProducts({ data: params }),
+      ),
     staleTime: STALE.SLOW,
   });
 
@@ -505,7 +449,8 @@ export const navigationPreviewProductsQueryOptions = (
 export const fraudCheckerProvidersQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.fraudChecker.list(),
-    queryFn: () => getFraudCheckerProviders(),
+    queryFn: () =>
+      fraudCheckerApi().then((api) => api.getFraudCheckerProviders()),
     staleTime: STALE.LOOKUP,
   });
 
@@ -553,14 +498,14 @@ export const abandonedCheckoutsQueryOptions = (params: {
 export const rbacRolesQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.rbac.roles(),
-    queryFn: () => getRbacRoles(),
+    queryFn: () => rbacApi().then((api) => api.getRbacRoles()),
     staleTime: STALE.CONFIG,
   });
 
 export const rbacPermissionsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.rbac.permissions(),
-    queryFn: () => getRbacPermissions(),
+    queryFn: () => rbacApi().then((api) => api.getRbacPermissions()),
     staleTime: STALE.CONFIG,
   });
 
@@ -571,21 +516,22 @@ export const rbacPermissionsQueryOptions = () =>
 export const adminUsersQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.adminUsers.list(),
-    queryFn: () => getAdminUsers(),
+    queryFn: () => authManagementApi().then((api) => api.getAdminUsers()),
     staleTime: STALE.LOOKUP,
   });
 
 export const accountSecurityQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.auth.accountSecurity(),
-    queryFn: () => getAccountSecurity(),
+    queryFn: () =>
+      authManagementApi().then((api) => api.getAccountSecurity()),
     staleTime: STALE.LOOKUP,
   });
 
 export const twoFaInfoQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.auth.twoFaInfo(),
-    queryFn: () => get2faInfo(),
+    queryFn: () => authManagementApi().then((api) => api.get2faInfo()),
     staleTime: STALE.LOOKUP,
   });
 
@@ -596,98 +542,102 @@ export const twoFaInfoQueryOptions = () =>
 export const settingsByCategoryQueryOptions = (category: string) =>
   queryOptions({
     queryKey: queryKeys.settings.byCategory(category),
-    queryFn: () => getSettingsByCategory({ data: { category } }),
+    queryFn: () =>
+      settingsApi().then((api) =>
+        api.getSettingsByCategory({ data: { category } }),
+      ),
     staleTime: STALE.CONFIG,
   });
 
 export const generalSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.general(),
-    queryFn: () => getGeneralSettings(),
+    queryFn: () => settingsApi().then((api) => api.getGeneralSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const storefrontUrlQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.storefrontUrl(),
-    queryFn: () => getStorefrontUrl(),
+    queryFn: () => settingsApi().then((api) => api.getStorefrontUrl()),
     staleTime: STALE.CONFIG,
   });
 
 export const currencySettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.currency(),
-    queryFn: () => getCurrencySettings(),
+    queryFn: () => settingsApi().then((api) => api.getCurrencySettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const seoSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.seo(),
-    queryFn: () => getSeoSettings(),
+    queryFn: () => settingsApi().then((api) => api.getSeoSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const securitySettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.security(),
-    queryFn: () => getSecuritySettings(),
+    queryFn: () => settingsApi().then((api) => api.getSecuritySettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const authSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.auth(),
-    queryFn: () => getAuthSettings(),
+    queryFn: () => settingsApi().then((api) => api.getAuthSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const emailSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.email(),
-    queryFn: () => getEmailSettings(),
+    queryFn: () => settingsApi().then((api) => api.getEmailSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const firebaseSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.firebase(),
-    queryFn: () => getFirebaseSettings(),
+    queryFn: () => settingsApi().then((api) => api.getFirebaseSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const businessSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.business(),
-    queryFn: () => getBusinessSettings(),
+    queryFn: () => settingsApi().then((api) => api.getBusinessSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const themeSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.theme(),
-    queryFn: () => getThemeSettings(),
+    queryFn: () => settingsApi().then((api) => api.getThemeSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const mediaSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.media(),
-    queryFn: () => getMediaSettings(),
+    queryFn: () => settingsApi().then((api) => api.getMediaSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const smsSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.sms(),
-    queryFn: () => getSmsSettings(),
+    queryFn: () => settingsApi().then((api) => api.getSmsSettings()),
     staleTime: STALE.CONFIG,
   });
 
 export const metaConversionsSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.metaConversions(),
-    queryFn: () => getMetaConversionsSettings(),
+    queryFn: () =>
+      settingsApi().then((api) => api.getMetaConversionsSettings()),
     staleTime: STALE.CONFIG,
   });
 
@@ -697,49 +647,56 @@ export const metaConversionsLogsQueryOptions = (params: {
 }) =>
   queryOptions({
     queryKey: queryKeys.settings.metaConversionsLogs(params),
-    queryFn: () => getMetaConversionsLogs({ data: params }),
+    queryFn: () =>
+      settingsApi().then((api) =>
+        api.getMetaConversionsLogs({ data: params }),
+      ),
     staleTime: STALE.MODERATE,
   });
 
 export const allowedCountriesQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.allowedCountries(),
-    queryFn: () => getAllowedCountries(),
+    queryFn: () => settingsApi().then((api) => api.getAllowedCountries()),
     staleTime: STALE.CONFIG,
   });
 
 export const paymentMethodsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.paymentMethods(),
-    queryFn: () => getPaymentMethods(),
+    queryFn: () => settingsApi().then((api) => api.getPaymentMethods()),
     staleTime: STALE.CONFIG,
   });
 
 export const paymentGatewaySettingsQueryOptions = (gateway: string) =>
   queryOptions({
     queryKey: queryKeys.settings.paymentGateway(gateway),
-    queryFn: () => getPaymentGatewaySettings({ data: { gateway } }),
+    queryFn: () =>
+      settingsApi().then((api) =>
+        api.getPaymentGatewaySettings({ data: { gateway } }),
+      ),
     staleTime: STALE.CONFIG,
   });
 
 export const notificationChannelsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.notificationChannels(),
-    queryFn: () => getNotificationChannels(),
+    queryFn: () => settingsApi().then((api) => api.getNotificationChannels()),
     staleTime: STALE.CONFIG,
   });
 
 export const adminNotificationChannelsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.adminNotificationChannels(),
-    queryFn: () => getAdminNotificationChannels(),
+    queryFn: () =>
+      settingsApi().then((api) => api.getAdminNotificationChannels()),
     staleTime: STALE.CONFIG,
   });
 
 export const deliveryProvidersQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.deliveryProviders(),
-    queryFn: () => getDeliveryProviders(),
+    queryFn: () => deliveryApi().then((api) => api.getDeliveryProviders()),
     staleTime: STALE.CONFIG,
   });
 
@@ -748,7 +705,8 @@ export const deliveryLocationsQueryOptions = (
 ) =>
   queryOptions({
     queryKey: queryKeys.settings.deliveryLocations(params),
-    queryFn: () => getDeliveryLocations({ data: params }),
+    queryFn: () =>
+      deliveryApi().then((api) => api.getDeliveryLocations({ data: params })),
     staleTime: STALE.LOOKUP,
   });
 
@@ -757,14 +715,17 @@ export const allDeliveryLocationsQueryOptions = (
 ) =>
   queryOptions({
     queryKey: queryKeys.settings.deliveryLocationsAll(params),
-    queryFn: () => getAllDeliveryLocations({ data: params }),
+    queryFn: () =>
+      deliveryApi().then((api) =>
+        api.getAllDeliveryLocations({ data: params }),
+      ),
     staleTime: STALE.LOOKUP,
   });
 
 export const importPathaoStatusQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.importPathaoStatus(),
-    queryFn: () => getImportPathaoStatus(),
+    queryFn: () => deliveryApi().then((api) => api.getImportPathaoStatus()),
     staleTime: STALE.LOOKUP,
   });
 
@@ -773,7 +734,10 @@ export const checkoutLanguagesQueryOptions = (
 ) =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutLanguages(params),
-    queryFn: () => getCheckoutLanguages({ data: params }),
+    queryFn: () =>
+      checkoutLanguagesApi().then((api) =>
+        api.getCheckoutLanguages({ data: params }),
+      ),
     staleTime: STALE.CONFIG,
   });
 
@@ -782,14 +746,17 @@ export const shippingMethodsQueryOptions = (
 ) =>
   queryOptions({
     queryKey: queryKeys.settings.shippingMethods(params),
-    queryFn: () => getShippingMethods({ data: params }),
+    queryFn: () =>
+      shippingMethodsApi().then((api) =>
+        api.getShippingMethods({ data: params }),
+      ),
     staleTime: STALE.CONFIG,
   });
 
 export const heroSlidersQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.heroSliders(),
-    queryFn: () => getHeroSliders(),
+    queryFn: () => heroSlidersApi().then((api) => api.getHeroSliders()),
     staleTime: STALE.CONFIG,
   });
 
@@ -800,7 +767,7 @@ export const heroSlidersQueryOptions = () =>
 export const aiPromptsQueryOptions = (type: string) =>
   queryOptions({
     queryKey: queryKeys.ai.prompts(type),
-    queryFn: () => getAiPrompts({ data: { type } }),
+    queryFn: () => aiApi().then((api) => api.getAiPrompts({ data: { type } })),
     staleTime: STALE.LOOKUP,
   });
 
@@ -811,21 +778,21 @@ export const aiPromptsQueryOptions = (type: string) =>
 export const cacheStatsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.cache.stats(),
-    queryFn: () => getCacheStats(),
+    queryFn: () => cacheApi().then((api) => api.getCacheStats()),
     staleTime: STALE.REALTIME,
   });
 
 export const cacheLastClearedQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.cache.lastCleared(),
-    queryFn: () => getCacheLastCleared(),
+    queryFn: () => cacheApi().then((api) => api.getCacheLastCleared()),
     staleTime: STALE.REALTIME,
   });
 
 export const cacheGroupsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.cache.groups(),
-    queryFn: () => getCacheGroups(),
+    queryFn: () => cacheApi().then((api) => api.getCacheGroups()),
     staleTime: STALE.REALTIME,
   });
 
@@ -836,7 +803,7 @@ export const cacheGroupsQueryOptions = () =>
 export const setupStatusQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.setup.status(),
-    queryFn: () => getSetupStatus(),
+    queryFn: () => authManagementApi().then((api) => api.getSetupStatus()),
     staleTime: STALE.STATIC,
   });
 
@@ -847,6 +814,6 @@ export const setupStatusQueryOptions = () =>
 export const firebaseConfigQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.firebase.config(),
-    queryFn: () => getFirebaseConfig(),
+    queryFn: () => firebaseApi().then((api) => api.getFirebaseConfig()),
     staleTime: STALE.CONFIG,
   });

@@ -1,5 +1,6 @@
 // src/components/admin/product-form/OrganizationCard.tsx
 import { memo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -31,6 +32,7 @@ import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
 import { getServerFnError } from "@/lib/api-helpers";
 import { createCategory } from "@/lib/api-functions/categories";
+import { queryKeys } from "@/lib/query-keys";
 
 export interface Category {
   id: string;
@@ -138,6 +140,7 @@ function CategoryCombobox({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleCreate = async () => {
     if (!search.trim()) return;
@@ -169,6 +172,11 @@ function CategoryCombobox({
 
       toast.success(`Category "${newCategory.name}" created successfully`);
       onCategoryCreated(newCategory);
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
       setOpen(false);
       setSearch("");
     } catch (error: unknown) {

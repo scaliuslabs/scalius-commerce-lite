@@ -6,13 +6,16 @@ import { AdminHeader } from "@/components/admin/layout/AdminHeader";
 import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { Toaster } from "@/components/ui/sonner";
-import { adminRouteGuard } from "~/lib/auth.fns";
+import {
+  getAdminRouteContext,
+  primeAdminRouteContextCache,
+} from "~/lib/admin-route-context";
 import { ADMIN_ACCESS_DENIED_PATH, shouldAllowAdminPath } from "~/lib/admin-access";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
     // Auth + RBAC guard: redirects to /auth/setup, /auth/login, or /auth/two-factor as needed
-    const authContext = await adminRouteGuard();
+    const authContext = await getAdminRouteContext();
     if (!shouldAllowAdminPath(location.pathname, authContext.hasAdminAccess)) {
       throw redirect({ to: ADMIN_ACCESS_DENIED_PATH });
     }
@@ -22,11 +25,16 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminLayout() {
-  const { user, permissions, isSuperAdmin } = Route.useRouteContext();
+  const authContext = Route.useRouteContext();
+  const { user, permissions, isSuperAdmin } = authContext;
 
   // Scroll content area to top on route change
   const scrollRef = useRef<HTMLDivElement>(null);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    primeAdminRouteContextCache(authContext);
+  }, [authContext]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
   }, [pathname]);

@@ -75,10 +75,11 @@ export function useServerTable<TData>({
   defaultPageSize = 10,
   initialColumnVisibility = {},
 }: UseServerTableOptions<TData>): UseServerTableReturn<TData> {
-  // React Query with keepPreviousData — no flash on page/sort change
+  // Show cached rows immediately, then refresh them in the background on route return.
   const { data: rawData, isFetching, isLoading } = useQuery({
     ...qOpts,
     placeholderData: keepPreviousData,
+    refetchOnMount: "always",
   });
 
   // Extract typed data from API response

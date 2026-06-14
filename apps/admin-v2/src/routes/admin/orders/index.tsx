@@ -11,6 +11,7 @@ import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ordersQueryOptions } from "~/lib/api.queries";
 import { queryKeys } from "~/lib/query-keys";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useUpdateOrderStatus,
   useBulkDeleteOrders,
@@ -69,9 +70,9 @@ interface ShipmentStatus {
 export const Route = createFileRoute("/admin/orders/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 30,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(ordersQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, ordersQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [
@@ -426,12 +427,14 @@ function OrdersPage() {
     async (providerId: string) => {
       setIsShipping(true);
       let successCount = 0;
+      const shippedOrderIds: string[] = [];
       for (const orderId of selectedIds) {
         try {
           const result = await createOrderShipment({
             data: { orderId, shipment: { providerId, options: {} } },
           });
           successCount++;
+          shippedOrderIds.push(orderId);
           setShipmentStatuses((prev) => ({
             ...prev,
             [orderId]: result,
@@ -447,11 +450,23 @@ function OrdersPage() {
       } else {
         toast.error("Shipment failed");
       }
+      if (shippedOrderIds.length > 0) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+        for (const orderId of shippedOrderIds) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.orders.detail(orderId),
+          });
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.orders.shipments(orderId),
+          });
+        }
+      }
       setIsShipping(false);
       setIsShippingDialogOpen(false);
       if (successCount === selectedIds.length) clearSelection();
     },
-    [selectedIds, clearSelection],
+    [queryClient, selectedIds, clearSelection],
   );
 
   // ── Sync shipment statuses when data changes ──────────────────

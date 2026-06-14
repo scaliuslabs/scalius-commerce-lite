@@ -17,6 +17,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { pagesQueryOptions } from "~/lib/api.queries";
+import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeletePage,
   usePermanentDeletePage,
@@ -50,9 +51,9 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 export const Route = createFileRoute("/admin/pages/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
-  staleTime: 0,
+  staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(pagesQueryOptions(mapParams(deps)));
+    await warmRouteQuery(queryClient, pagesQueryOptions(mapParams(deps)));
   },
   head: ({ match }) => ({
     meta: [
