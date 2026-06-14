@@ -7,12 +7,15 @@ import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getEncryptionKey } from "../../../utils/encryption-key";
 import { upsertEncryptedSetting } from "@scalius/core/modules/payments/gateway-settings";
+import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
+const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
+const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 
 // ─────────────────────────────────────────
 // AUTH
@@ -115,6 +118,7 @@ app.openapi(saveAuthRoute, async (c) => {
             .where(eq(siteSettings.id, existingSettings.id));
 
         await invalidateSiteSettingsCache(getKv());
+        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
         return ok(c, { message: "Auth settings saved successfully" });
 });
 
@@ -183,6 +187,7 @@ app.openapi(saveSecurityRoute, async (c) => {
             if (env?.CACHE) {
                 c.executionCtx.waitUntil(env.CACHE.put("security:csp_allowed_domains", cspAllowedDomains));
             }
+            await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
         }
 
         return ok(c, { message: "Security settings saved successfully" });

@@ -523,13 +523,18 @@ const verify2faRoute = createRoute({
 });
 
 app.openapi(verify2faRoute, async (c) => {
-    try {
-        const db = c.get("db");
-        const env = c.env;
-        const auth = createAuth(env);
-        const { code, trustDevice, type } = c.req.valid("json");
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const session = c.get("session");
+    const auth = createAuth(c.env);
+    const { code, trustDevice, type } = c.req.valid("json");
 
-        let verifyResult: { token?: string; user?: { id: string } } | null = null;
+    if (!session) {
+        throw new UnauthorizedError("No active session found");
+    }
+
+    let verifyResult: { token?: string; user?: { id: string } } | null = null;
+    try {
         if (type === "backup") {
             verifyResult = await auth.api.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
         } else if (type === "email") {
@@ -537,27 +542,34 @@ app.openapi(verify2faRoute, async (c) => {
         } else {
             verifyResult = await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
         }
-
-        const sessionToken = verifyResult?.token;
-        if (sessionToken) {
-            const sessionByToken = await db.select({ id: sessionTable.id }).from(sessionTable).where(eq(sessionTable.token, sessionToken)).get();
-            if (sessionByToken) {
-                await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
-                return ok(c, { message: "Two-factor authentication verified" });
-            }
-        }
-
-        const session = c.get("session");
-        if (session) {
-            await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
-            return ok(c, { message: "Two-factor authentication verified" });
-        }
-
-        throw new UnauthorizedError("Could not find session to update");
-    } catch (error: unknown) {
-        if (error instanceof Error && error.message?.includes("Invalid")) throw new ValidationError("The verification code is invalid or expired");
-        throw error;
+    } catch {
+        throw new ValidationError("The verification code is invalid or expired");
     }
+
+    const sessionToken = verifyResult?.token;
+    if (sessionToken) {
+        const sessionByToken = await db
+            .select({ id: sessionTable.id })
+            .from(sessionTable)
+            .where(and(
+                eq(sessionTable.id, session.id),
+                eq(sessionTable.userId, sessionUser.id),
+                eq(sessionTable.token, sessionToken),
+            ))
+            .get();
+        if (!sessionByToken) {
+            throw new UnauthorizedError("Two-factor verification proof is invalid");
+        }
+
+        await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
+        return ok(c, { message: "Two-factor authentication verified" });
+    }
+
+    await db.update(sessionTable).set({ twoFactorVerified: true }).where(and(
+        eq(sessionTable.id, session.id),
+        eq(sessionTable.userId, sessionUser.id),
+    ));
+    return ok(c, { message: "Two-factor authentication verified" });
 });
 
 // ─────────────────────────────────────────

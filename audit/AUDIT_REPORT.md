@@ -24,9 +24,9 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 115 files and 748 tests after the auth/dashboard hardening slice.
+- `pnpm test`: passed 117 files and 754 tests after the auth/cache hardening slice.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm deploy`: passed and redeployed API, admin, and storefront Workers. Latest deploy output versions: API `4e191a10-8a56-4f60-83c7-ebdd9e431e5e`, admin `1fa6e70f-df67-4282-be0a-dd5abb2aecfa`, storefront `6f5c4744-9fba-4185-8571-9c37140289eb`.
+- Full `pnpm deploy`: previously redeployed API, admin, and storefront Workers at API `4e191a10-8a56-4f60-83c7-ebdd9e431e5e`, admin `1fa6e70f-df67-4282-be0a-dd5abb2aecfa`, storefront `6f5c4744-9fba-4185-8571-9c37140289eb`. The latest targeted auth/cache deploy updated API to `76dee35f-507c-4654-a049-d8feb66d63ae` and storefront to `e5765834-61cf-4d8a-80ec-eb70a0c9ad3b`.
 - Live HTTP and browser checks: API setup/OpenAPI, storefront home/cart/checkout, dashboard demo login, authenticated `/admin`, and authenticated `/admin/orders` returned successfully after redeploy with no captured browser console errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
@@ -98,6 +98,30 @@ Fix direction: render summary data with DOM APIs/text nodes, or sanitize through
 Status: Verified on 2026-06-13. Checkout summary customer fields render through DOM text nodes instead of `innerHTML`, with an injection regression test. See `SEC-004` in `REMEDIATION_TRACKER.md`.
 
 ## P1 Findings
+
+### AUTH-009: Legacy 2FA verify route can fail as 500 or trust an unrelated session token
+
+The legacy `/api/v1/admin/auth/2fa/verify` route still called Better Auth verification directly and only converted errors whose message included `Invalid` into validation errors. Other expected provider failures such as expired codes could surface as 500s. It also accepted a returned Better Auth session token by token alone instead of binding it to the current session and current user.
+
+Fix direction: require an active current session, map any OTP/TOTP/backup-code verification failure to the standard invalid-or-expired validation response, and only mark a session verified when the proof belongs to the current session and user.
+
+Status: Verified on 2026-06-14. The route now requires an active session, converts verification failures to 400 validation errors, checks returned token proofs against `session.id`, `session.userId`, and `session.token`, and falls back to updating only the current session/user when Better Auth returns no token. Focused route tests cover success, expired-code mapping, and mismatched token rejection. Deployed to API version `76dee35f-507c-4654-a049-d8feb66d63ae`; live demo sign-in/session plus `/admin` and `/admin/orders` browser smoke passed.
+
+### AUTH-010: Cross-worker Better Auth session rotation can drop replacement cookies
+
+Read-only auth re-audit found that password change and first-time 2FA setup can call Better Auth through the API worker while the browser is on the dashboard/admin worker. When Better Auth rotates or replaces the current session and returns `Set-Cookie` from the API worker, the TanStack server-function API helper unwraps JSON and does not propagate that cookie back to the browser.
+
+Fix direction: redesign these flows so session-rotating Better Auth calls happen same-origin on the admin worker/browser, or explicitly preserve the current session while revoking only intended other sessions. Prove the behavior with a two-browser password-change test and first-time email/TOTP setup tests.
+
+Status: Not Started as of 2026-06-14. Do not treat the live demo account smoke as coverage for this; the demo account currently has 2FA disabled and the smoke did not submit a password change.
+
+### CACHE-005: Settings and no-cache routes had stale or misleading cache behavior
+
+The cache audit found that auth/checkout settings writes updated checkout behavior fields but only invalidated the site-settings cache, CSP/security settings writes updated raw KV without purging public CSP/layout caches, `CACHE_TTLS.NONE` still wrote API cache entries because the middleware clamped KV TTLs downstream, and storefront warm logging counted fulfilled HTTP 500/404 warm fetches as successful.
+
+Fix direction: route settings writes through the existing cache invalidation groups, make zero/negative TTL bypass cache reads and writes, and count only fulfilled `true` warm responses.
+
+Status: Verified on 2026-06-14. Auth settings now invalidate the `checkout` group, CSP/security settings invalidate the `layout` group, `cacheMiddleware({ ttl: 0 })` bypasses cache entirely, and purge warm logs count only successful responses. Verification included focused API cache/auth tests, API/storefront typechecks and builds, root tests/lint/env/dist-secret checks, API deploy `76dee35f-507c-4654-a049-d8feb66d63ae`, storefront deploy `e5765834-61cf-4d8a-80ec-eb70a0c9ad3b`, live API analytics no-cache header check, live CSP/API health checks, and live admin/storefront browser smoke.
 
 ### PAY-006: Late gateway success can pay terminal orders
 
@@ -334,6 +358,14 @@ Fix direction: introduce an exclusive fulfillment claim or explicit in-progress 
 Status: Verified on 2026-06-13. Bulk provider shipment creation now acquires a durable order-level shipment claim before carrier side effects, passes the claim id through to the insert-first `delivery_shipments` row, clears the claim only after local shipped state succeeds, and leaves `delivery_shipments.status = reconcile_required` plus an indefinite order claim when provider success cannot be finalized locally. Admin order/status/COD/fulfillment/edit/delete/refund/payment-session/shipment-refresh paths reject active claims; payment and delivery webhook/queue paths surface retryable failures instead of silently skipping external truth. Focused fulfillment, delivery tracking, payment-session, payment-queue, and order-edit tests cover the behavior. See `ORDER-008` in `REMEDIATION_TRACKER.md`.
 
 ## P2 Findings
+
+### PERF-003: Admin route chunks and dashboard loaders still have avoidable first-load cost
+
+Read-only performance audit found several remaining admin hot-path costs: route code splitting is effectively off because generated route modules are statically imported, `api.queries.ts` imports query options for many domains, dashboard first paint blocks on daily activity chart data that renders later, customer daily activity lacks a matching `createdAt` index, the admin guard does repeated sequential work before child loaders, checkout settings prefetches inactive tabs and duplicates default-tab fetches, orders pays for DnD/date-picker code on initial render, and order detail has a post-render payments waterfall.
+
+Fix direction: split this into small, measured slices. Start with route/query splitting and dashboard activity separation, then index the customer activity query, reduce repeated guard work, slim checkout settings and orders chunks, and prefetch order payments in the order-detail loader.
+
+Status: Not Started as of 2026-06-14. Verification should include before/after bundle/module graphs, dashboard loader timing, and browser smoke for dashboard, orders, and settings checkout.
 
 ### ORDER-009: Admin full order edits can lose inventory-delta retry context
 

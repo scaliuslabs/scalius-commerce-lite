@@ -224,6 +224,74 @@ describe("admin auth management 2FA method changes", () => {
   });
 });
 
+describe("admin auth management legacy 2FA verification", () => {
+  it("marks the current session verified when the Better Auth token proof matches", async () => {
+    const db = createDbMock();
+    const verifyTOTP = vi.fn().mockResolvedValue({ token: "verified_current_session_token" });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        verifyTOTP,
+      },
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "totp", code: "123456" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(verifyTOTP).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      body: { code: "123456", trustDevice: false },
+    });
+    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
+  });
+
+  it("maps expired or invalid Better Auth verification errors to validation errors", async () => {
+    const db = createDbMock();
+    mocks.createAuth.mockReturnValue({
+      api: {
+        verifyTOTP: vi.fn().mockRejectedValue(new Error("Code expired")),
+      },
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "totp", code: "000000" }),
+    });
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(db.__updateSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects token proofs that do not belong to the current session and user", async () => {
+    const db = createDbMock({ matchingSession: false });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        verifyTOTP: vi.fn().mockResolvedValue({ token: "other_session_token" }),
+      },
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "totp", code: "123456" }),
+    });
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(db.__updateSet).not.toHaveBeenCalled();
+  });
+});
+
 describe("first-admin setup recovery", () => {
   it("does not promote an existing account when the submitted password cannot authenticate it", async () => {
     const db = createSetupDbMock();
