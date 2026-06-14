@@ -287,6 +287,7 @@ Notable migrations:
 - `0037` -- Scoped widget JavaScript content on widgets and widget history
 - `0038` -- Order shipment claim fields for provider/manual fulfillment coordination
 - `0039` -- SSLCommerz `val_id` payment idempotency and payment plan status normalization
+- `0040` -- Better Auth `twoFactor.verified` column
 
 Validate migration metadata after schema or migration edits:
 

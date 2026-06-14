@@ -22,7 +22,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 
 | Mount Point | Route File | Purpose |
 |---|---|---|
-| `/auth` | `routes/auth.ts` | Better Auth endpoints |
+| `/auth` | `routes/auth.ts` | Service JWT, Firebase config, token stats, and token revocation endpoints; Better Auth is hosted by the admin worker |
 | `/attributes` | `routes/attributes.ts` | Filterable product attributes |
 | `/collections` | `routes/collections.ts` | Homepage collections |
 | `/hero` | `routes/hero.ts` | Hero section data |
@@ -116,7 +116,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/hero-sliders` | `settings/hero-sliders.ts` | Hero slider CRUD |
 | `/meta-conversions` | `settings/meta-conversions-admin.ts` | Meta Conversions API config |
 | `/notification-channels` | `settings/notification-channels.ts` | Notification channel config per order status |
-| `/` (root) | `settings/sms.ts` | SMS provider settings (4 providers: smsnetbd, bdbulksms, mimsms, gennet) |
+| `/` (root) | `settings/sms.ts` | SMS provider settings shown under admin notification settings (4 providers: smsnetbd, bdbulksms, mimsms, gennet) |
 | `/` (root) | `settings/business.ts` | Business info (company name, TIN, logo, address, invoice prefix) |
 
 ### Payment Routes (public, storefront-facing)
@@ -133,7 +133,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 
 | Route | Purpose |
 |-------|---------|
-| `/setup` | Initial deployment auth setup (bypasses normal auth) |
+| `/setup` | Initial deployment auth setup at `/api/v1/setup` (bypasses normal auth) |
 | `/docs` | Swagger UI |
 | `/openapi.json` | Auto-generated OpenAPI 3.0 spec |
 | `/health` | Health check with cache stats |
@@ -154,7 +154,7 @@ Then, route-specific middleware:
 
 | Middleware | Applied To | Purpose |
 |---|---|---|
-| `adminAuthMiddleware` | `/admin/*`, `/cache/*` | Better Auth session OR JWT Bearer OR Scanner Token. Then RBAC permission check. |
+| `adminAuthMiddleware` | `/admin/*`, `/cache/*` | Better Auth session cookie OR JWT Bearer token OR scanner session cookie. Then RBAC/2FA permission checks. |
 | `authMiddleware` | `/orders/*` | JWT Bearer token verification with auto-refresh. |
 | `cacheMiddleware` | Individual routes | KV-backed response caching with configurable TTL. |
 
@@ -164,13 +164,13 @@ Then, route-specific middleware:
 
 1. **Better Auth session cookie** -- from the admin dashboard SSR frontend
 2. **JWT Bearer token** -- from decoupled mobile/external apps (auto-refreshes near expiry, returns new token via `X-New-Token` header)
-3. **X-Scanner-Token header** -- from the warehouse scanner app (KV-stored, restricted to `/inventory/` endpoints only, role is `scanner` not `admin`)
+3. **Scanner session cookie** -- created after QR token exchange by the admin worker; restricted to exact scanner workflow endpoints, role is `scanner` not `admin`
 
-After authentication, it performs RBAC: resolves the user's effective permission set via `getUserPermissions()` (which handles super-admin internally), then checks route-specific permissions via `getRoutePermission()` supporting `permission`, `anyOf`, and `allOf` modes.
+After authentication, it rejects 2FA-enabled admin sessions that have not completed 2FA, except exact `GET /admin/auth/2fa/info`, `POST /admin/auth/2fa/verify`, and `POST /admin/auth/2fa/complete-verification` requests. It then performs RBAC: resolves the user's effective permission set via `getUserPermissions()` (which handles super-admin internally), then checks route-specific permissions via `getRoutePermission()` supporting `permission`, `anyOf`, and `allOf` modes. Scanner sessions skip full RBAC but are limited to the scanner allowlist.
 
 ### Auth Middleware (`src/middleware/auth.ts`)
 
-JWT Bearer token verification for protected public routes (e.g., `/orders/*`). Skips auth for `/health`, `/docs`, `/openapi.json`, and `/auth/token`. Auto-refreshes tokens nearing expiry. Returns generic error messages to prevent token enumeration.
+JWT Bearer token verification for protected public routes (e.g., `/orders/*`) and protected `/auth/*` token-management routes. `/auth/token` and `/auth/firebase-config` are public before this middleware; `/auth/me`, `/auth/revoke`, and `/auth/token-stats` require a valid JWT. Auto-refreshes tokens nearing expiry and returns generic error messages to prevent token enumeration.
 
 ### Webhook Auth (`src/middleware/webhook-auth.ts`)
 
@@ -346,7 +346,7 @@ app.use("/*", cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:things
 | `src/worker.ts` | Worker entry point (fetch + queue + scheduled) |
 | `src/app.ts` | Hono app, route mounting, middleware, OpenAPI spec |
 | `src/queue-consumer.ts` | Queue message dispatcher |
-| `src/middleware/admin-auth.ts` | Admin auth (session + JWT + scanner token) + RBAC |
+| `src/middleware/admin-auth.ts` | Admin auth (session + JWT + scanner session cookie) + 2FA gate + RBAC |
 | `src/middleware/auth.ts` | JWT auth for protected public routes |
 | `src/middleware/webhook-auth.ts` | Delivery webhook signature verification (HMAC/token/IP) |
 | `src/middleware/cache.ts` | KV-backed response cache middleware |

@@ -56,7 +56,7 @@ export const getSessionInfo = createServerFn().handler(async () => {
 });
 
 /**
- * Check if any admin user exists in admin-v2's local Better Auth DB.
+ * Check if any admin user exists in the shared Better Auth D1 database.
  */
 export const checkAdminExists = createServerFn().handler(async () => {
   const { initBindings } = await import("~/lib/auth.server");
@@ -64,8 +64,11 @@ export const checkAdminExists = createServerFn().handler(async () => {
   initBindings();
   try {
     return await queryAdminExists(env.DB);
-  } catch {
-    return false;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("no such table")) return false;
+    console.error("Failed to check admin setup status:", e);
+    return true;
   }
 });
 
@@ -80,7 +83,7 @@ export const loginPageGuard = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
   initBindings();
 
-  // Check if any admin exists in local Better Auth DB
+  // Check if any admin exists in the shared Better Auth D1 database.
   const { env } = await import("cloudflare:workers");
   let adminExists = true; // fail-closed: assume admin exists unless proven otherwise
   try {
@@ -126,7 +129,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   const { env } = await import("cloudflare:workers");
   initBindings();
 
-  // Check if any admin exists in local Better Auth DB
+  // Check if any admin exists in the shared Better Auth D1 database.
   let adminExists = true; // fail-closed
   try {
     adminExists = await queryAdminExists(env.DB);

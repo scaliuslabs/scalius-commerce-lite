@@ -74,7 +74,11 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
     setIsLoading(true);
     setError(null);
     try {
-      await authClient.twoFactor.sendOtp();
+      const result = await authClient.twoFactor.sendOtp();
+      if (result?.error) {
+        setError(result.error.message || "Failed to send verification code");
+        return;
+      }
       setEmailSent(true);
       toast.success("Verification code sent to your email");
     } catch {

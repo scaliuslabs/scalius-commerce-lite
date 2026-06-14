@@ -22,6 +22,7 @@ import {
 import type { ChartConfig } from "@/components/ui/chart";
 import { motion } from "motion/react";
 import { useCurrency } from "@/hooks/use-currency";
+import { hasDailyActivityData } from "./dashboard-chart-data";
 
 const DashboardChart = React.lazy(() =>
   import("./DashboardChart").then((m) => ({ default: m.DashboardChart }))
@@ -178,8 +179,17 @@ export const DashboardStats = memo(function DashboardStats({
   const { symbol } = useCurrency();
   const [shouldLoadChart, setShouldLoadChart] = React.useState(false);
   const chartConfig = React.useMemo(() => getChartConfig(symbol), [symbol]);
+  const hasRenderableChartData = React.useMemo(
+    () => hasDailyActivityData(initialDailyData),
+    [initialDailyData],
+  );
 
   React.useEffect(() => {
+    if (!hasRenderableChartData) {
+      setShouldLoadChart(false);
+      return;
+    }
+
     const win = window as typeof window & {
       requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
       cancelIdleCallback?: (id: number) => void;
@@ -194,7 +204,7 @@ export const DashboardStats = memo(function DashboardStats({
 
     const timeoutId = window.setTimeout(() => setShouldLoadChart(true), 800);
     return () => window.clearTimeout(timeoutId);
-  }, []);
+  }, [hasRenderableChartData]);
 
   return (
     <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the dashboard. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
@@ -262,7 +272,7 @@ export const DashboardStats = memo(function DashboardStats({
         </motion.div>
       </motion.div>
 
-      {shouldLoadChart ? (
+      {hasRenderableChartData && shouldLoadChart ? (
         <Suspense fallback={<LoadingFallback height="h-[340px]" />}>
           <DashboardChart
             initialDailyData={initialDailyData}

@@ -52,19 +52,17 @@ Commands run: `pnpm audit --json`, `pnpm outdated --recursive --format json`, `p
 - Impact: Secrets in URLs are more likely to leak via access logs, browser history, analytics, CDN logs, and error telemetry.
 - Recommended fix: remove GET purge auth, use POST only, send `Authorization: Bearer <token>` or `X-Purge-Token`, and compare with timing-safe logic.
 
-### 7. Medium: Cloudflare toolchain is behind current releases and version ownership is inconsistent
+### 7. Medium: Cloudflare toolchain was behind current releases and version ownership was inconsistent
 
-- Evidence: app manifests declare Wrangler in `apps/admin-v2/package.json:98`, `apps/api/package.json:50`, and `apps/storefront/package.json:59`; root override forces `wrangler >=4.76.0` at `package.json:73`. `pnpm outdated` reports `wrangler` current `4.76.0`, latest `4.90.1`; `@cloudflare/workers-types` current `4.20260313.1`, latest `4.20260511.1`.
-- Evidence: `pnpm exec wrangler --version` from repo root resolves the globally installed Wrangler `4.75.0` via `/Users/arob/.nvm/versions/node/v24.13.1/bin/wrangler`, because Wrangler is not a root devDependency.
-- Impact: Deploy/debug behavior can differ depending on cwd and whether scripts use root or app-local `pnpm exec`.
-- Recommended fix: add a root devDependency on the exact Wrangler version, align all app `wrangler` ranges to the same version, upgrade `@cloudflare/workers-types`, and add a script that prints and verifies the expected Wrangler version before deployment.
+- Current status on 2026-06-14: app manifests align on `wrangler@^4.100.0`; packages that declare Workers types use `@cloudflare/workers-types@4.20260613.1`; the deploy script runs app-local `pnpm exec wrangler` for build/deploy steps and deploy output confirmed Wrangler `4.100.0`.
+- Remaining caveat: `pnpm exec wrangler --version` at the repo root can still resolve a globally installed Wrangler because Wrangler is app-local rather than a root devDependency. Prefer root deploy scripts or app-local workspace commands, not ad hoc root Wrangler calls.
+- Recommended fix if root ad hoc Wrangler usage becomes common: add a root wrapper script that runs the target app's locked Wrangler and fails if the resolved version differs from the app manifests.
 
-### 8. Medium: Storefront and admin build tooling have dev-server advisories
+### 8. Medium: Storefront and admin build tooling had dev-server advisories
 
-- Evidence: `apps/storefront/package.json:34` declares Astro `^6.0.4`; `apps/storefront/package.json:52` declares `@astrojs/cloudflare`; `apps/storefront/package.json:58` declares Vite `^7.3.1`; `apps/admin-v2/package.json:97` declares Vite `^8.0.0`. Lockfile resolves Astro `6.0.4` at `pnpm-lock.yaml:3912`, storefront Vite `7.3.1` at `pnpm-lock.yaml:6701`, and admin/root Vite `8.0.1` at `pnpm-lock.yaml:6741`.
-- Audit: Astro is below `6.1.10`, `@astrojs/cloudflare` is below `13.1.10`, Vite 7 needs `>=7.3.2`, and Vite 8 needs `>=8.0.5`.
-- Impact: Some issues are dev-server focused, but the Astro/Cloudflare adapter advisories touch SSR/server-island and image-transform behavior.
-- Recommended fix: upgrade Astro to latest compatible `6.x`, `@astrojs/cloudflare` to latest compatible `13.x`, storefront Vite to patched `7.3.2+` or migrate to `8.x` if Astro supports it, and admin Vite to `>=8.0.5`.
+- Current status on 2026-06-14: admin Vite is `8.0.16`; storefront Astro is `6.4.6`; `@astrojs/cloudflare` is `13.7.0`; storefront Vite is `7.3.5`.
+- Package freshness check: `pnpm outdated -r` reports only storefront `vite@7.3.5` versus latest `8.0.16`. This is an intentional hold because the current storefront Astro/Cloudflare adapter line declares Vite `^7.3.2` compatibility for that app.
+- Recommended fix: revisit storefront Vite 8 only when the Astro/Cloudflare adapter line advertises compatible Vite 8 support for the storefront runtime.
 
 ### 9. Medium: Deploy script applies remote migrations as part of deploy without a production safety gate
 

@@ -24,9 +24,9 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with warnings.
-- `pnpm test`: passed 115 files and 740 tests after the widget cache-invalidation slice.
+- `pnpm test`: passed 115 files and 748 tests after the auth/dashboard hardening slice.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm deploy`: passed and redeployed API, admin, and storefront Workers. Deploy output versions: API `a6b3e5ff-1730-4748-a288-d99e51c1fb63`, admin `788dbc42-4852-437e-bf85-2b6a1249087a`, storefront `90ab10e1-74a7-4920-a247-18ef89b06d96`.
+- Full `pnpm deploy`: passed and redeployed API, admin, and storefront Workers. Latest deploy output versions: API `4e191a10-8a56-4f60-83c7-ebdd9e431e5e`, admin `1fa6e70f-df67-4282-be0a-dd5abb2aecfa`, storefront `6f5c4744-9fba-4185-8571-9c37140289eb`.
 - Live HTTP and browser checks: API setup/OpenAPI, storefront home/cart/checkout, dashboard demo login, authenticated `/admin`, and authenticated `/admin/orders` returned successfully after redeploy with no captured browser console errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
@@ -41,15 +41,15 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 
 ## P0 Findings
 
-### SEC-001: Admin API does not enforce 2FA verification at the API boundary
+### SEC-001: Admin API did not enforce 2FA verification at the API boundary
 
-`apps/api/src/middleware/admin-auth.ts` accepts a Better Auth session and sets the admin user without checking whether a 2FA-enabled session has completed 2FA. Admin UI helpers redirect when 2FA is needed, but direct API access should not rely on UI-only enforcement.
+Original finding: `apps/api/src/middleware/admin-auth.ts` accepted a Better Auth session and set the admin user without checking whether a 2FA-enabled session had completed 2FA. Admin UI helpers redirected when 2FA was needed, but direct API access should not rely on UI-only enforcement.
 
 Fix direction: enforce the 2FA-verified session state in the API admin middleware, then add route tests for unverified 2FA sessions.
 
 Status: Verified on 2026-06-13 and tightened again on 2026-06-14. Admin API middleware now rejects unverified 2FA sessions before RBAC except exact 2FA info/verify/complete-verification endpoints, with focused API middleware tests. See `SEC-001` in `REMEDIATION_TRACKER.md`.
 
-### AUTH-002: Direct 2FA mark endpoint can bypass the second factor
+### AUTH-002: Direct 2FA mark endpoint could bypass the second factor
 
 The re-audit found that `/api/v1/admin/auth/2fa/mark-verified` was exempted from the 2FA middleware gate and then blindly set `session.twoFactorVerified = true`. Any password-authenticated admin account with 2FA enabled could call that endpoint directly and unlock the admin API surface without proving possession of the second factor.
 
@@ -57,7 +57,7 @@ Fix direction: remove the blind mark endpoint. Complete 2FA only after Better Au
 
 Status: Verified on 2026-06-14. The old mark endpoint is no longer routed or exempted. The replacement `/2fa/complete-verification` endpoint requires the session token returned by successful Better Auth verification and checks it against the current session id and user id before setting `twoFactorVerified`. Focused API route/middleware tests, API/admin typechecks, root validation, full deploy, and live admin smoke checks pass.
 
-### AUTH-003: Browser-callable setup helper can promote arbitrary emails to super-admin
+### AUTH-003: Browser-callable setup helper could promote arbitrary emails to super-admin
 
 The re-audit found `markFirstUserAsSuperAdmin` in the admin app as a browser-callable TanStack server function. It accepted only `{ email }` and updated `user.role = 'admin', is_super_admin = 1` without a session check, setup lock check, no-admin check, or proof that the email belonged to the guarded setup-created user.
 
@@ -65,9 +65,9 @@ Fix direction: delete the helper and keep first-admin promotion inside the guard
 
 Status: Verified on 2026-06-14. The helper and setup-form call site are removed. Focused stale-reference scan, admin typecheck, root validation, full deploy, and live admin smoke checks pass.
 
-### SEC-002: Scanner token minting bypasses inventory RBAC
+### SEC-002: Scanner token minting bypassed inventory RBAC
 
-Raw QR-token scanner bypass appears fixed: scanner sessions are exchanged into a cookie and limited to an allowlist in `packages/shared/src/scanner-auth.ts`. The current problem is earlier: `apps/admin-v2/src/routes/api/scanner-token.tsx` mints scanner tokens for any authenticated admin session, without checking inventory/stock permissions.
+Raw QR-token scanner bypass was already fixed during this audit: scanner sessions are exchanged into a cookie and limited to an allowlist in `packages/shared/src/scanner-auth.ts`. The remaining finding at the time was earlier in the flow: `apps/admin-v2/src/routes/api/scanner-token.tsx` minted scanner tokens for any authenticated admin session, without checking inventory/stock permissions.
 
 Fix direction: require the same permission that allows stock lookup/adjust/set before minting a scanner token.
 
@@ -421,7 +421,7 @@ Status: Verified on 2026-06-13. Account settings now uses the parent `/admin` ro
 
 The API can create an admin user while returning `emailFailed: true` when the invite email provider fails. The admin UI ignored that response and always showed that the email was sent.
 
-Status: Verified on 2026-06-13. The typed auth-management wrapper exposes `emailFailed`, and the team-member hook shows the API message as a warning when invite delivery fails.
+Status: Verified on 2026-06-13 and rechecked in docs on 2026-06-14. The typed auth-management wrapper exposes `emailFailed`, and the team-member hook shows the API message as a warning when invite delivery fails. The API no longer returns the generated temp password when invite delivery fails; admins should fix email settings or use password reset.
 
 ### STORE-002: Storefront browser `/api/v1` fallback is not a real proxy
 
@@ -623,7 +623,7 @@ Status: Verified on 2026-06-13. `happy-dom` is now declared in the storefront pa
 
 Fix direction: remove volatile counts from prose or generate them automatically.
 
-Status: Verified on 2026-06-14. The API-client README points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and documents the bundled generated Fetch client instead of the deprecated `@hey-api/client-fetch` runtime package. The database README avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0039`, and removes a stale singleton-constraint limitation.
+Status: Verified on 2026-06-14. The API-client README points to `openapi.json` and generated files as the source of truth, avoids endpoint/method line counts, and documents the bundled generated Fetch client instead of the deprecated `@hey-api/client-fetch` runtime package. The database README avoids fragile column counts, documents `widgetPlacements`, updates migration notes through `0040`, and removes a stale singleton-constraint limitation.
 
 ### CLEAN-001: Route directory contains `.DS_Store`
 
@@ -642,7 +642,7 @@ Status: Verified on 2026-06-13. `DashboardChart` now renders a fixed-height empt
 ## Stale Or Corrected Old Findings
 
 - API RBAC for unmapped admin routes now appears fail-closed. Do not repeat "RBAC fallback allows unknown admin routes" without new evidence.
-- Raw scanner QR-token bearer bypass and scanner token mint RBAC are remediated. Do not repeat scanner-token claims without checking the current route and tests.
+- Raw scanner QR-token bearer bypass and scanner token mint RBAC are remediated. Scanner auth now uses a scanner session cookie restricted to exact allowlisted endpoints. Do not repeat scanner-token claims without checking the current route and tests.
 - D1 migration drift was not confirmed by `drizzle-kit check`; metadata/generation risk remains.
 - Widget sanitizer bypass was not re-confirmed in this pass. Previously confirmed widget script-extraction and target-aware cache-invalidation issues are remediated; repeat widget claims should cite fresh evidence and current tests.
 

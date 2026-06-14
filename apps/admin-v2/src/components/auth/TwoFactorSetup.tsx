@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import {
-  complete2faVerification,
   set2faMethod,
 } from "@/lib/api-functions/auth-management";
 import { Button } from "@/components/ui/button";
@@ -48,8 +47,11 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
 
       if (result.data) {
         setBackupCodes(result.data.backupCodes || []);
-        // Send email OTP immediately
-        await authClient.twoFactor.sendOtp();
+        const otpResult = await authClient.twoFactor.sendOtp();
+        if (otpResult?.error) {
+          setError(otpResult.error.message || "Failed to send verification code");
+          return;
+        }
         setStep("verify");
         toast.success("Verification code sent to your email");
       }
@@ -65,25 +67,7 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.verifyOtp({ code: verificationCode });
-
-      if (result.error) {
-        setError(result.error.message || "Invalid code");
-        setIsLoading(false);
-        return;
-      }
-
-      const sessionToken = result.data?.token;
-      if (!sessionToken) {
-        setError("Verification succeeded, but no session proof was returned.");
-        setIsLoading(false);
-        return;
-      }
-
-      await complete2faVerification({ data: { sessionToken } });
-
-      // Set email as the default 2FA method
-      await set2faMethod({ data: { method: "email" } });
+      await set2faMethod({ data: { method: "email", code: verificationCode } });
 
       setStep("backup");
     } catch (err: unknown) {
@@ -96,7 +80,11 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
   const handleResendOtp = async () => {
     setIsLoading(true);
     try {
-      await authClient.twoFactor.sendOtp();
+      const result = await authClient.twoFactor.sendOtp();
+      if (result?.error) {
+        toast.error(result.error.message || "Failed to send code");
+        return;
+      }
       toast.success("New code sent to your email");
     } catch {
       toast.error("Failed to send code");

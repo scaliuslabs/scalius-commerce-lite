@@ -4,7 +4,7 @@ import { checkAdminExists } from "~/lib/auth.fns";
 
 export const Route = createFileRoute("/auth/setup")({
   beforeLoad: async () => {
-    // Only accessible when no admin users exist in local Better Auth DB
+    // Only accessible when no admin users exist in the shared Better Auth D1 database.
     const adminExists = await checkAdminExists();
     if (adminExists) {
       throw redirect({ to: "/auth/login" });

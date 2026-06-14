@@ -73,9 +73,11 @@ const dashboardRoute = createRoute({
 app.openapi(dashboardRoute, async (c) => {
     const db = c.get("db");
 
-    const stats = await getDashboardStats(db);
-    const recentOrders = await getRecentOrders(db, 11);
-    const dailyActivityData = await getDailyActivityData(db, 90);
+    const [stats, recentOrders, dailyActivityData] = await Promise.all([
+        getDashboardStats(db),
+        getRecentOrders(db, 11),
+        getDailyActivityData(db, 90),
+    ]);
 
     return ok(c, { stats, recentOrders, dailyActivityData });
 });

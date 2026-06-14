@@ -16,6 +16,24 @@ Current evidence indicates raw QR-token use has been narrowed. Scanner tokens ar
 
 Current related issue: none currently tracked; scanner token minting now has focused RBAC coverage.
 
+### "API /auth routes are Better Auth endpoints"
+
+Current evidence indicates `/api/v1/auth/*` is the API worker's service-token/Firebase/token-management router. Better Auth is served by the admin worker's `/api/auth/*` routes and shared auth configuration.
+
+Current related issue: none currently tracked; re-check `apps/api/src/routes/auth.ts` and `apps/admin-v2/src/routes/api/auth/$.ts` before reopening.
+
+### "Admin 2FA is mandatory for all admins"
+
+Current evidence indicates 2FA setup remains optional, but enabled 2FA is enforced per session in both the TanStack admin route guard and API admin middleware. The API gate currently exempts only exact 2FA info, verify, and complete-verification endpoints.
+
+Current related issue: none currently tracked; re-check `apps/api/src/middleware/admin-auth.ts` and `apps/admin-v2/src/lib/auth.fns.ts` before reopening.
+
+### "Admin invite email failure exposes or logs the temporary password"
+
+Current evidence indicates invite-email failure now returns `emailFailed: true` and instructs admins to use password reset or fix email settings. The API does not return the temporary password on failure.
+
+Current related issue: none currently tracked; re-check `apps/api/src/routes/admin/auth-management.ts` before reopening.
+
 ### "D1 migrations are definitely drifted"
 
 Current `drizzle-kit check` passes. Treat this as a generation and metadata risk, not a confirmed runtime schema mismatch, unless a fresh replay/generation check proves otherwise.
@@ -30,11 +48,15 @@ Current related issue: none currently tracked; root tests pass.
 
 ### "Root tests pass with 9 files and 143 tests"
 
-This is stale. The latest root test run reported 108 files and 712 tests passing.
+This is stale. The latest root test run reported 115 files and 748 tests passing.
 
 ### "pnpm dev starts only admin + API"
 
 This is stale. Root `pnpm dev` starts API, admin, and storefront through `scripts/dev.sh`. `pnpm dev:admin` starts admin + API, and `pnpm dev:storefront` starts storefront + API.
+
+### "Use `pnpm dev:setup --force` for ordinary env repair"
+
+This is stale. Use `pnpm dev:setup --env-only` for missing or blank local env keys. Reserve `pnpm dev:setup --force --env-only` for regenerating local env files or repairing shared-secret drift without touching migrations/admin data.
 
 ## Still Valid But Needs Narrow Wording
 

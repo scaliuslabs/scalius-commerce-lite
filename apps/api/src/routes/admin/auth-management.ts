@@ -3,6 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { and, eq, count, or } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
 import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
@@ -437,7 +438,16 @@ const update2faMethodRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Update 2FA method",
     request: {
-        body: { content: { "application/json": { schema: z.object({ method: z.enum(["totp", "email"]) }) } } }
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        method: z.enum(["totp", "email"]),
+                        code: z.string().min(1),
+                    }),
+                },
+            },
+        },
     },
     responses: {
         200: { description: "Method updated", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
@@ -447,8 +457,41 @@ const update2faMethodRoute = createRoute({
 
 app.openapi(update2faMethodRoute, async (c) => {
     const db = c.get("db");
+    const auth = createAuth(c.env);
     const sessionUser = c.get("user");
-    const { method } = c.req.valid("json");
+    const session = c.get("session");
+    const { method, code } = c.req.valid("json");
+
+    if (!session) {
+        throw new UnauthorizedError("No active session found");
+    }
+
+    let verifyResult: { token?: string } | undefined;
+    try {
+        verifyResult = method === "email"
+            ? await auth.api.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: false } })
+            : await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: false } });
+    } catch {
+        throw new ValidationError("The verification code is invalid or expired");
+    }
+
+    const sessionToken = verifyResult?.token;
+    if (sessionToken) {
+        const sessionByToken = await db
+            .select({ id: sessionTable.id })
+            .from(sessionTable)
+            .where(and(
+                eq(sessionTable.token, sessionToken),
+                eq(sessionTable.userId, sessionUser.id),
+            ))
+            .get();
+        if (!sessionByToken) {
+            throw new UnauthorizedError("Two-factor method proof is invalid");
+        }
+        await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
+    } else {
+        await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, session.id));
+    }
 
     await db.update(user).set({ twoFactorMethod: method }).where(eq(user.id, sessionUser.id));
 
@@ -595,6 +638,24 @@ function isBetterAuthUserAlreadyExistsError(error: unknown): boolean {
     );
 }
 
+async function verifyExistingSetupAccountPassword(
+    auth: ReturnType<typeof createAuth>,
+    db: Pick<Database, "delete">,
+    email: string,
+    password: string,
+): Promise<boolean> {
+    try {
+        const result = await auth.api.signInEmail({ body: { email, password } });
+        const token = (result as { token?: string } | undefined)?.token;
+        if (token) {
+            await db.delete(sessionTable).where(eq(sessionTable.token, token));
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 const setupRoute = createRoute({
     method: "post",
     path: "/",
@@ -683,6 +744,18 @@ setupApp.openapi(setupRoute, async (c) => {
         const currentAdminExists = (currentAdminResult[0]?.count ?? 0) > 0;
         if (currentAdminExists) {
             throw new ForbiddenError("An admin user already exists. Please use the login page.");
+        }
+
+        const passwordMatchesExistingAccount = await verifyExistingSetupAccountPassword(
+            auth,
+            db,
+            email,
+            password,
+        );
+        if (!passwordMatchesExistingAccount) {
+            throw new ConflictError(
+                "An account with this email already exists. Use that account's existing password or reset it before completing first-admin setup.",
+            );
         }
 
         await db

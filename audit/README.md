@@ -17,11 +17,12 @@ This folder is the working audit system for slice-by-slice remediation. It repla
 
 - `CI=true pnpm install --frozen-lockfile` passes with pnpm 11.6.0.
 - `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, and `pnpm check:dist-secrets` pass at the repo root. Lint still reports warnings only.
-- `pnpm test` currently passes: 108 files and 712 tests.
-- `pnpm --filter @scalius/database check:migrations` passes: 40 SQL files, 40 journal entries, 26 snapshots, and 14 allowed manual snapshot gaps.
-- Local stack smoke passed after `pnpm dev`: `pnpm dev:doctor --require-running`, storefront `/`, `/cart`, `/checkout`, admin login, and `/admin/orders`.
-- Full `pnpm run deploy` passed and redeployed API, admin, and storefront Workers; live API/storefront/dashboard health checks returned 200.
-- Live dashboard login with `demo@scalius.com` succeeded and `/admin/orders` loaded.
+- `pnpm test` currently passes: 115 files and 748 tests.
+- `pnpm --filter @scalius/database check:migrations` passes: 41 SQL files, 41 journal entries, 26 snapshots, and 15 allowed manual snapshot gaps.
+- Current auth/dashboard hardening gates pass: admin/API/api-client/root typechecks, focused API auth-management tests, dashboard chart-data test, root tests/lint/build, migration metadata check, audit, peers, frozen install, and dist-secret checks.
+- Local stack smoke passed after `pnpm dev`: local migration `0040`, `pnpm dev:doctor --require-running`, storefront `/`, `/cart`, `/checkout`, direct local admin sign-in, browser `/admin`, and `/admin/orders`.
+- Full `pnpm deploy` passed and redeployed API `4e191a10-8a56-4f60-83c7-ebdd9e431e5e`, admin `1fa6e70f-df67-4282-be0a-dd5abb2aecfa`, and storefront `6f5c4744-9fba-4185-8571-9c37140289eb`; remote D1 migration `0040` was already applied and the final redeploy reported no pending migrations.
+- Live dashboard login with `demo@scalius.com` succeeded and browser `/admin` plus `/admin/orders` loaded with no captured console errors.
 - The live storefront missing-image issue was fixed after the smoke pass: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Several hard-to-run flows still require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
 

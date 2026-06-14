@@ -281,6 +281,13 @@
       "when": 1781452800000,
       "tag": "0039_sslcommerz_val_id_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1781452801000,
+      "tag": "0040_two_factor_verified",
+      "breakpoints": true
     }
   ]
 }

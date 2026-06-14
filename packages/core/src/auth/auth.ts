@@ -49,6 +49,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
       enabled: true,
       requireEmailVerification: false,
       minPasswordLength: 12,
+      revokeSessionsOnPasswordReset: true,
       // Email verification callback - called when user needs to verify email
       sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
         // Import dynamically to avoid circular dependencies
@@ -213,15 +214,22 @@ export type Auth = ReturnType<typeof createAuth>;
 let cachedAuth: Auth | null = null;
 let cachedEnvSignature: string | null = null;
 
+function getAuthEnvSignature(env?: Env | NodeJS.ProcessEnv): string {
+  const source = (env ?? process.env) as Record<string, string | undefined>;
+  return [
+    source.BETTER_AUTH_SECRET ?? "",
+    source.BETTER_AUTH_URL ?? "",
+    source.PUBLIC_API_BASE_URL ?? "",
+    source.STOREFRONT_URL ?? "",
+  ].join("\u0000");
+}
+
 /**
  * Get or create an auth instance.
  * Uses caching to avoid recreating the instance on every request.
  */
 export function getAuth(env?: Env | NodeJS.ProcessEnv): Auth {
-  // Create a signature to detect env changes (keyed only on the auth secret)
-  const envSignature = env
-    ? `${(env as Record<string, string>).BETTER_AUTH_SECRET || ""}`
-    : `${process.env.BETTER_AUTH_SECRET || ""}`;
+  const envSignature = getAuthEnvSignature(env);
 
   // Return cached instance if env hasn't changed
   if (cachedAuth && cachedEnvSignature === envSignature) {
