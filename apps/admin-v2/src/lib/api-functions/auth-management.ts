@@ -70,6 +70,7 @@ export interface AccountSecurityResponse {
 
 export interface SetTwoFactorMethodInput {
   method: TwoFactorMethod;
+  code: string;
 }
 
 export interface VerifyTwoFactorInput {

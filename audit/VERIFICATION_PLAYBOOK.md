@@ -73,7 +73,7 @@ pnpm --filter @scalius/admin-v2 typecheck
 rg -n 'mark2faVerified|mark-verified|markFirstUserAsSuperAdmin' apps/admin-v2/src apps/api/src packages/core/src
 ```
 
-For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`.
+For `AUTH-002`, direct `mark-verified` calls must fail before RBAC, and `/2fa/complete-verification` must require a Better Auth session-token proof matching the current session and user. For `AUTH-003`, no browser-callable server function may promote an arbitrary email to super-admin; first-admin promotion belongs to `/api/v1/setup`. For `AUTH-006`, `/2fa/method` must verify a code for the target method inside the API route before updating `user.twoFactorMethod`; a browser-only prior verification is not enough.
 
 Admin server-function slice changes:
 
@@ -434,6 +434,7 @@ Use `pnpm check:env` as the routine drift guard. Use generated Wrangler output o
 2. Start a session that has not completed 2FA.
 3. Call an admin API route directly.
 4. Expected current verified behavior: API rejects the request until 2FA is verified.
+5. Method-change regression: submit `/api/v1/admin/auth/2fa/method` with an invalid target-method code and verify the preferred method is not changed.
 
 Scanner RBAC:
 

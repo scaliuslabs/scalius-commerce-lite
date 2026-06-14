@@ -2,7 +2,7 @@
 // Dashboard statistics and activity data queries.
 // Extracted from src/lib/admin.ts.
 
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc } from "drizzle-orm";
 import { retryTransientD1 } from "../../utils/transient-d1";
@@ -12,6 +12,27 @@ const DASHBOARD_QUERY_RETRY_DELAYS_MS = [150, 350, 750] as const;
 async function runDashboardQuery<T>(operation: () => Promise<T> | T): Promise<T> {
     return retryTransientD1(operation, { delaysMs: DASHBOARD_QUERY_RETRY_DELAYS_MS });
 }
+
+type CountRow = { count: number };
+type CurrentMonthRow = {
+    count: number;
+    revenue: number | null;
+    delivered: number;
+    processing: number;
+    shipping: number;
+    cancelled: number;
+};
+type MonthComparisonRow = { count: number; revenue: number | null };
+type TotalRevenueRow = { total: number | null };
+type DailyOrderRow = {
+    date: string;
+    orderCount: number;
+    totalRevenue: number;
+};
+type DailyCustomerRow = {
+    date: string;
+    customerCount: number;
+};
 
 /** Aggregated dashboard metrics for the admin home page. */
 export async function getDashboardStats(db: Database) {
@@ -28,53 +49,59 @@ export async function getDashboardStats(db: Database) {
         firstDayOfLastMonth.getTime() / 1000,
     );
 
-    const totalProductsArr = await runDashboardQuery(() =>
-        db
-            .select({ count: sql<number>`count(*)` })
-            .from(products)
-            .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`),
-    );
-    const totalCustomersArr = await runDashboardQuery(() =>
-        db
-            .select({ count: sql<number>`count(*)` })
-            .from(customers)
-            .where(sql`${customers.deletedAt} is null`),
-    );
-    const currentMonthArr = await runDashboardQuery(() =>
-        db
-            .select({
-                count: sql<number>`count(*)`,
-                revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
-                delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
-                processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
-                shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
-                cancelled: sql<number>`count(case when status in ('cancelled', 'returned') then 1 end)`,
-            })
-            .from(orders)
-            .where(
-                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs}`,
-            ),
-    );
-    const lastMonthArr = await runDashboardQuery(() =>
-        db
-            .select({
-                count: sql<number>`count(*)`,
-                revenue: sql<number>`sum(total_amount)`,
-            })
-            .from(orders)
-            .where(
-                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-            ),
-    );
-    const totalRevenueArr = await runDashboardQuery(() =>
-        db
-            .select({
-                total: sql<number>`sum(total_amount)`,
-            })
-            .from(orders)
-            .where(
-                sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-            ),
+    const [
+        totalProductsArr,
+        totalCustomersArr,
+        currentMonthArr,
+        lastMonthArr,
+        totalRevenueArr,
+    ] = await runDashboardQuery(() =>
+        safeBatch(db, [
+            db
+                .select({ count: sql<number>`count(*)` })
+                .from(products)
+                .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`),
+            db
+                .select({ count: sql<number>`count(*)` })
+                .from(customers)
+                .where(sql`${customers.deletedAt} is null`),
+            db
+                .select({
+                    count: sql<number>`count(*)`,
+                    revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
+                    delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
+                    processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
+                    shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
+                    cancelled: sql<number>`count(case when status in ('cancelled', 'returned') then 1 end)`,
+                })
+                .from(orders)
+                .where(
+                    sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs}`,
+                ),
+            db
+                .select({
+                    count: sql<number>`count(*)`,
+                    revenue: sql<number>`sum(total_amount)`,
+                })
+                .from(orders)
+                .where(
+                    sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+                ),
+            db
+                .select({
+                    total: sql<number>`sum(total_amount)`,
+                })
+                .from(orders)
+                .where(
+                    sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+                ),
+        ]) as Promise<[
+            CountRow[],
+            CountRow[],
+            CurrentMonthRow[],
+            MonthComparisonRow[],
+            TotalRevenueRow[],
+        ]>,
     );
 
     const totalProducts = totalProductsArr[0]?.count ?? 0;
@@ -152,45 +179,48 @@ export async function getDailyActivityData(db: Database, days: number) {
     startDate.setDate(now.getDate() - days);
     const startDateTs = Math.floor(startDate.getTime() / 1000);
 
-    const dailyOrderData = await runDashboardQuery(() => db
-        .select({
-            date: sql<string>`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
-            orderCount: sql<number>`count(*)`.mapWith(Number),
-            totalRevenue: sql<number>`sum(${orders.totalAmount})`.mapWith(Number),
-        })
-        .from(orders)
-        .where(
-            and(
-                sql`${orders.deletedAt} is null`,
-                sql`${orders.createdAt} >= ${startDateTs}`,
-                sql`${orders.status} NOT IN ('cancelled', 'returned')`,
-            ),
-        )
-        .groupBy(
-            sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
-        )
-        .orderBy(
-            sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch')) asc`,
-        ));
-
-    const dailyCustomerData = await runDashboardQuery(() => db
-        .select({
-            date: sql<string>`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
-            customerCount: sql<number>`count(*)`.mapWith(Number),
-        })
-        .from(customers)
-        .where(
-            and(
-                sql`${customers.deletedAt} is null`,
-                sql`${customers.createdAt} >= ${startDateTs}`,
-            ),
-        )
-        .groupBy(
-            sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
-        )
-        .orderBy(
-            sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch')) asc`,
-        ));
+    const [dailyOrderData, dailyCustomerData] = await runDashboardQuery(() =>
+        safeBatch(db, [
+            db
+                .select({
+                    date: sql<string>`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
+                    orderCount: sql<number>`count(*)`.mapWith(Number),
+                    totalRevenue: sql<number>`sum(${orders.totalAmount})`.mapWith(Number),
+                })
+                .from(orders)
+                .where(
+                    and(
+                        sql`${orders.deletedAt} is null`,
+                        sql`${orders.createdAt} >= ${startDateTs}`,
+                        sql`${orders.status} NOT IN ('cancelled', 'returned')`,
+                    ),
+                )
+                .groupBy(
+                    sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
+                )
+                .orderBy(
+                    sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch')) asc`,
+                ),
+            db
+                .select({
+                    date: sql<string>`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
+                    customerCount: sql<number>`count(*)`.mapWith(Number),
+                })
+                .from(customers)
+                .where(
+                    and(
+                        sql`${customers.deletedAt} is null`,
+                        sql`${customers.createdAt} >= ${startDateTs}`,
+                    ),
+                )
+                .groupBy(
+                    sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
+                )
+                .orderBy(
+                    sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch')) asc`,
+                ),
+        ]) as Promise<[DailyOrderRow[], DailyCustomerRow[]]>,
+    );
 
     const result = [];
     const currentDate = new Date(startDate);

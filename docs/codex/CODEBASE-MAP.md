@@ -1,13 +1,13 @@
 # Codebase Map
 
-Last reviewed: 2026-05-11
+Last reviewed: 2026-06-14
 
 ## Runtime Shape
 
 Scalius Commerce is a pnpm/Turborepo monorepo with three Cloudflare Worker applications:
 
 - `apps/api` - Hono + `@hono/zod-openapi` API worker. `apps/api/src/worker.ts` exports a `WorkerEntrypoint` with `fetch`, `queue`, and `scheduled`. `apps/api/src/app.ts` mounts routes under `/api/v1`, initializes D1/KV/R2 per request, applies CORS/security headers, exposes Swagger/OpenAPI, and uses JSON error envelopes.
-- `apps/admin-v2` - TanStack Start admin dashboard. Admin data flows through route loaders/components, `src/lib/api.queries.ts`, `src/lib/api.mutations.ts`, `src/lib/api.functions.ts`, and `src/lib/api.server.ts`. In production it uses the API worker/service binding path and expects API response envelopes unchanged.
+- `apps/admin-v2` - TanStack Start admin dashboard. Admin data flows through route loaders/components, typed domain server-function slices under `src/lib/api-functions/`, `src/lib/api.queries.ts`, `src/lib/api.mutations.ts`, and `src/lib/api.server.ts`. The former broad `src/lib/api.functions.ts` barrel has been removed. In production it uses the API worker/service binding path and expects API response envelopes unchanged.
 - `apps/storefront` - Astro SSR storefront with React islands. It calls the API through `env.BACKEND_API` where available, uses edge/L1/L2 caching in `src/lib/*cache*`, and has checkout proxy routes that unwrap API `.data` before returning browser-facing payloads.
 
 ## Package Roles

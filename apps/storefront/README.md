@@ -35,7 +35,7 @@ src/
     api/             # Server-side proxy routes
       checkout/      # create-order, stripe-intent, sslcommerz-session, polar-session
       auth/          # Auth proxy routes
-      customer-auth/ # Customer OTP auth proxy
+      customer-auth/ # Same-origin Customer OTP auth proxy
       products/      # Product data proxy
     products/        # Product detail pages
     categories/      # Category listing pages
@@ -174,7 +174,7 @@ Consolidated accessors for Cloudflare Worker bindings. All delegate to `apiConte
 | `shipping.ts` | Shipping methods, locations |
 | `settings.ts` | Site settings, SEO |
 | `storefront.ts` | Homepage data bundle |
-| `customer-auth.ts` | Customer OTP auth |
+| `customer-auth.ts` | Customer OTP auth API helpers that call the same-origin proxy |
 | `abandoned-checkouts.ts` | Abandoned checkout tracking |
 | `tracking.ts` | Analytics/tracking config |
 
@@ -190,7 +190,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `checkout/polar-session.ts` | Create Polar checkout session |
 | `purge-cache.ts` | Cache purge endpoint (bumps KV version) |
 | `auth/` | Auth proxy routes |
-| `customer-auth/` | Customer OTP auth proxy |
+| `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |
 | `__ptproxy.ts` | Partytown analytics proxy |
 | `facebook-feed.xml.ts` | Facebook product feed |

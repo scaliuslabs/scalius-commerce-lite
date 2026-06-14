@@ -22,5 +22,7 @@ export function getDailyActivityDataForRange(
 export function hasDailyActivityData(
   dailyData: readonly DailyActivityDataPoint[],
 ) {
-  return dailyData.length > 0;
+  return dailyData.some(
+    (item) => item.orders > 0 || item.revenue > 0 || item.newCustomers > 0,
+  );
 }

@@ -78021,10 +78021,15 @@
                       "totp",
                       "email"
                     ]
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
-                  "method"
+                  "method",
+                  "code"
                 ]
               }
             }

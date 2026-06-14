@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  complete2faVerification,
   set2faMethod,
 } from "~/lib/api-functions/auth-management";
 import type { User } from "./AccountSettingsContainer";
@@ -72,7 +71,11 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
         if (selectedMethod === "totp") {
           setStep("qr");
         } else {
-          await authClient.twoFactor.sendOtp();
+          const otpResult = await authClient.twoFactor.sendOtp();
+          if (otpResult?.error) {
+            setError(otpResult.error.message || "Failed to send verification code");
+            return;
+          }
           setStep("verify");
         }
       }
@@ -88,29 +91,16 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const result = selectedMethod === "totp"
-        ? await authClient.twoFactor.verifyTotp({ code: verificationCode })
-        : await authClient.twoFactor.verifyOtp({ code: verificationCode });
-
-      if (result.error) {
-        setError(result.error.message || "Invalid verification code");
-        return;
-      }
-
-      const sessionToken = result.data?.token;
-      if (!sessionToken) {
-        setError("Verification succeeded, but no session proof was returned.");
-        return;
-      }
-
-      await complete2faVerification({ data: { sessionToken } });
-
-      await set2faMethod({ data: { method: selectedMethod } });
+      await set2faMethod({ data: { method: selectedMethod, code: verificationCode } });
 
       setStep("backup");
       setIsEnabled(true);
       setCurrentMethod(selectedMethod);
-      toast.success("Two-factor authentication enabled");
+      toast.success(
+        setupMode === "change"
+          ? "Verification method changed successfully"
+          : "Two-factor authentication enabled",
+      );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
@@ -147,22 +137,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.verifyTotp({ code: verificationCode });
-
-      if (result.error) {
-        setError(result.error.message || "Invalid verification code");
-        return;
-      }
-
-      const sessionToken = result.data?.token;
-      if (!sessionToken) {
-        setError("Verification succeeded, but no session proof was returned.");
-        return;
-      }
-
-      await complete2faVerification({ data: { sessionToken } });
-
-      await set2faMethod({ data: { method: "totp" } });
+      await set2faMethod({ data: { method: "totp", code: verificationCode } });
 
       setCurrentMethod("totp");
       setStep("backup");
@@ -179,14 +154,15 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      await set2faMethod({ data: { method: "email" } });
-
-      setCurrentMethod("email");
-      setShowSetup(false);
-      resetState();
-      toast.success("Verification method changed to Email");
+      const result = await authClient.twoFactor.sendOtp();
+      if (result?.error) {
+        setError(result.error.message || "Failed to send verification code");
+        return;
+      }
+      setStep("verify");
+      toast.success("Verification code sent to your email");
     } catch {
-      setError("Failed to change method");
+      setError("Failed to send verification code");
     } finally {
       setIsLoading(false);
     }
@@ -218,7 +194,11 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
   const handleResendOtp = async () => {
     setIsLoading(true);
     try {
-      await authClient.twoFactor.sendOtp();
+      const result = await authClient.twoFactor.sendOtp();
+      if (result?.error) {
+        toast.error(result.error.message || "Failed to send verification code");
+        return;
+      }
       toast.success("Verification code sent to your email");
     } catch {
       toast.error("Failed to send verification code");

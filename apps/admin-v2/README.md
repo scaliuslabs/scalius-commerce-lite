@@ -64,7 +64,7 @@ createServerFn (252 typed domain functions)
 |------|---------|
 | `src/router.tsx` | Router config + QueryClient + SSR integration |
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
-| `src/routes/admin.tsx` | Admin layout (sidebar, auth guard, RBAC context) |
+| `src/routes/admin.tsx` | Admin layout (sidebar, SSR auth guard, RBAC context) |
 | `src/lib/api-functions/` | Typed domain server-function slices; 252 createServerFn calls |
 | `src/lib/api.queries.ts` | 78 queryOptions with staleTime tiers |
 | `src/lib/api.mutations.ts` | 114 exported mutation hooks with cache invalidation |
@@ -92,7 +92,7 @@ createServerFn (252 typed domain functions)
 pnpm dev:admin     # From repo root: start API :8787 + admin :4323
 ```
 
-Run `pnpm dev:setup` first to create local env files, apply D1 migrations, and create the default local admin. Use `pnpm dev` from the repo root when you also want the storefront.
+Run `pnpm dev:setup` first to create local env files, apply D1 migrations, and create the default local admin through `/api/v1/setup`. Use `pnpm dev` from the repo root when you also want the storefront.
 
 ## Cloudflare Bindings
 

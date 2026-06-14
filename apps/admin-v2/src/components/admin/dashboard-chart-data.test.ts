@@ -19,6 +19,17 @@ describe("dashboard chart data", () => {
     expect(hasDailyActivityData([])).toBe(false);
   });
 
+  it("treats all-zero daily activity as non-renderable", () => {
+    const zeroData = Array.from({ length: 90 }, (_, index) => ({
+      date: `2026-03-${String(index + 1).padStart(2, "0")}`,
+      orders: 0,
+      revenue: 0,
+      newCustomers: 0,
+    })) satisfies DailyActivityDataPoint[];
+
+    expect(hasDailyActivityData(zeroData)).toBe(false);
+  });
+
   it("keeps only the selected time range when data is available", () => {
     const result = getDailyActivityDataForRange(dailyActivityData, "7d");
 

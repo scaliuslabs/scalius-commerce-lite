@@ -6,23 +6,23 @@ Complete authentication and role-based access control for the Scalius Commerce a
 
 ```
 Admin Auth Flow:
-  Browser --> Astro Middleware Pipeline --> Better Auth Session Check
-                                            |
-                                            v
-                                      RBAC Permission Load
-                                            |
-                                            v
-                                      Page/API Route Guard
-
-API Worker Auth Flow (service bindings / external apps):
-  Request --> Hono admin-auth middleware --> Better Auth Cookie OR JWT Bearer
+  Browser --> TanStack Start middleware --> Better Auth Session Check
                                              |
                                              v
-                                       RBAC Permission Check via route-permissions.ts
+                                       RBAC Permission Load
+                                             |
+                                             v
+                                       Page/API Route Guard
+
+API Worker Auth Flow (service bindings / external apps):
+  Request --> Hono admin-auth middleware --> Better Auth Cookie OR JWT Bearer OR Scanner Cookie
+                                             |
+                                             v
+                                       2FA gate + RBAC Permission Check via route-permissions.ts
 
 Customer Auth Flow (storefront):
-  Browser --> API /customer-auth/send-otp --> KV-stored OTP
-  Browser --> API /customer-auth/verify   --> KV-stored session (cs_tok cookie)
+  Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/send-otp --> KV-stored OTP
+  Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/verify   --> KV-stored session (cs_tok cookie)
 ```
 
 ## Files
@@ -31,7 +31,7 @@ Customer Auth Flow (storefront):
 
 | File | Purpose |
 |------|---------|
-| `auth.ts` | `createAuth()` / `getAuth()` -- Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), admin plugin. Cached per BETTER_AUTH_SECRET. |
+| `auth.ts` | `createAuth()` / `getAuth()` -- Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), admin plugin. Cached per runtime auth signature: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_API_BASE_URL`, and `STOREFRONT_URL`. |
 | `index.ts` | Barrel re-export of `createAuth`, `getAuth`, and `Auth` type. |
 
 ### RBAC
@@ -51,7 +51,7 @@ Customer Auth Flow (storefront):
 
 | File | Tables |
 |------|--------|
-| `packages/database/src/schema/auth.ts` | `user`, `session`, `account`, `verification`, `twoFactor` |
+| `packages/database/src/schema/auth.ts` | `user`, `session`, `account`, `verification`, `twoFactor` including Better Auth's `verified` column |
 | `packages/database/src/schema/rbac.ts` | `permissions`, `roles`, `rolePermissions`, `userRoles`, `userPermissions` |
 
 ## Better Auth Configuration
@@ -63,6 +63,7 @@ Customer Auth Flow (storefront):
 - **Rate limiting**: 5 sign-in attempts/min, 3 password resets/5min, 5 2FA attempts/min, session checks unlimited
 - **IP detection**: `cf-connecting-ip` then `x-forwarded-for`, IPv6 /64 subnet grouping
 - **Trusted origins**: `BETTER_AUTH_URL` + `STOREFRONT_URL`
+- **Password resets**: Better Auth revokes existing sessions after password reset.
 - **Email callbacks**: `sendVerificationEmail`, `sendResetPassword`, and 2FA `sendOTP` all dynamically import `sendEmail` from `../integrations/email` to avoid circular dependencies. All templates use `escapeHtml()` from `@scalius/shared/html-escape`.
 
 ### Plugins
@@ -121,41 +122,43 @@ Customer Auth Flow (storefront):
 
 ## Admin Middleware Pipeline
 
-Execution order: `auth` -> `admin-detection` -> `rbac` -> `csp` -> `cache-invalidation`
+The TanStack admin app now uses route/server-function guards rather than the old Astro middleware chain.
 
-### 1. Auth Middleware (`middleware/auth.ts`)
+### 1. Auth Server Helpers (`apps/admin-v2/src/lib/auth.server.ts`)
 
 - Detects Cloudflare environment, initializes DB/KV/Storage bindings
-- Stores request headers for SSR loader cookie forwarding
-- Extracts Better Auth session for non-API routes
-- Populates `context.locals.session`, `context.locals.user`, `context.locals._env`
+- Reads the current request cookie header for SSR guards and server functions
+- Extracts Better Auth sessions for admin route guards and auth pages
+- Provides shared binding/session helpers to TanStack server functions
 
-### 2. Admin Detection Middleware (`middleware/admin-detection.ts`)
+### 2. Admin Detection Guards (`apps/admin-v2/src/lib/auth.fns.ts`)
 
 - `/auth/login`: Redirects to `/auth/setup` if no admin users exist. Redirects to `/admin` if already authenticated (with 2FA check).
 - `/admin/*`: Redirects to `/auth/setup` if no admin users exist. Redirects to `/auth/login` if unauthenticated. Redirects to `/auth/two-factor` if 2FA enabled but session not verified.
-- Caches "hasAdminUsers" in memory + KV permanently once true.
+- Loads the current Better Auth session and returns serializable user/session context for TanStack route guards.
 
-### 3. RBAC Middleware (`middleware/rbac.ts`)
+### 3. RBAC Loader (`apps/admin-v2/src/middleware/rbac.server.ts`)
 
-- Calls `autoSeedRbacIfNeeded()` on every request (guarded by in-memory flag)
-- Loads user permissions via `getUserPermissions()` into `context.locals.permissions`
-- Checks `isSuperAdmin()` into `context.locals._isSuperAdmin`
-- **API route protection**: Validates auth for protected API patterns, then checks fine-grained route permissions via `getRoutePermission()`
-- **Page-level protection**: Checks `hasPageAccess()` for `/admin/*` routes. Redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/settings/account` are always accessible.
+- Calls `autoSeedRbacIfNeeded()` before permission loads
+- Loads user permissions via `getUserPermissions()` and returns permission arrays to the route context
+- Checks `isSuperAdmin()` and `hasAdminAccess()`
+- **Page-level protection**: `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/settings/account` are always accessible.
 
 ## API Worker Auth (Hono)
 
 ### Admin Auth Middleware (`apps/api/src/middleware/admin-auth.ts`)
 
-Dual authentication strategy:
+Authentication strategy:
 1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding)
 2. **JWT Bearer token** -- fallback (for external/mobile apps)
+3. **Scanner session cookie** -- created after the admin worker exchanges a QR token; limited to exact scanner workflow endpoints
 
 Then validates:
+- 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`).
 - User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.
 - Fine-grained route permission check via `getRoutePermission()`
 - Super admins bypass all permission checks
+- Scanner sessions use only the scanner allowlist and never inherit the minting admin's role or permissions.
 
 ### JWT Auth Middleware (`apps/api/src/middleware/auth.ts`)
 
@@ -163,7 +166,7 @@ Simpler JWT-only middleware for non-admin routes (`/auth/token`, `/auth/me`, etc
 
 ### Service-to-Service Token (`apps/api/src/routes/auth.ts`)
 
-`GET /auth/token` -- exchanges `X-API-Token` header for a JWT with `role: "system"`. Uses constant-time comparison. The token grants system-level access.
+`GET /api/v1/auth/token` -- exchanges `X-API-Token` header for a JWT with `role: "system"`. Uses constant-time comparison. The token grants system-level access. Other `/api/v1/auth/*` routes are service token helpers, Firebase config, token revocation, current-token info, and token stats; they are not Better Auth endpoints.
 
 ## Auth Pages (Admin Frontend)
 
@@ -172,7 +175,7 @@ Simpler JWT-only middleware for non-admin routes (`/auth/token`, `/auth/me`, etc
 | `/auth/login` | Sign-in form. Redirects to setup if no admins exist, to admin if already logged in. |
 | `/auth/setup` | First admin user creation. Blocked if any admin already exists. Rate-limited (5/hour/IP via KV). Seeds RBAC. |
 | `/auth/two-factor` | 2FA verification form. Shows if session exists but `twoFactorVerified` is false. |
-| `/auth/setup-2fa` | Mandatory 2FA setup page (for new accounts). Redirects if 2FA already enabled. |
+| `/auth/setup-2fa` | Optional 2FA setup page. Redirects if 2FA already enabled. |
 | `/auth/forgot-password` | Password reset request form. |
 | `/auth/reset-password` | Password reset confirmation with token. |
 | `/auth/index` | Redirects to `/auth/login`. |
@@ -197,7 +200,7 @@ Completely separate from Better Auth. OTP-based, sessionless JWT-free design usi
 2. `verifyOtp()` -- normalizes identifier to E.164, validates OTP, creates/finds customer in DB, creates KV session, returns `CustomerSession` with `cs_tok` cookie
 3. `getCustomerBySession()` -- retrieves session from KV by token
 4. `deleteCustomerSession()` -- logout
-5. `updateCustomerProfile()` -- updates customer DB record and refreshes KV session
+5. `updateCustomerProfile()` -- updates the customer DB record and refreshes the KV session name; address/location fields are persisted in D1 but not mirrored into the session object
 
 Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer records auto-created on first successful OTP verification.
 
@@ -208,17 +211,17 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/users` | List all admin users with roles and overrides |
-| POST | `/users` | Create admin user (generates temp password, sends invite email, assigns role) |
+| POST | `/users` | Create admin user (generates temp password, sends invite email, assigns role; if invite email fails, the temp password is not returned and admins should use password reset) |
 | DELETE | `/users/{id}` | Delete admin user (prevents last admin deletion) |
 | POST | `/change-password` | Change current user password (12-char minimum) |
 | POST | `/update-profile` | Update name and avatar |
 | GET | `/2fa/info` | Get current user 2FA status |
 | POST | `/2fa/complete-verification` | Complete 2FA after Better Auth verification; requires the verification session token bound to the current session/user |
-| POST | `/2fa/method` | Switch between TOTP and email OTP |
-| POST | `/2fa/verify` | Verify TOTP or backup code |
+| POST | `/2fa/method` | Switch between TOTP and email OTP after verifying a code for the target method |
+| POST | `/2fa/verify` | Verify TOTP, email OTP, or backup code |
 | GET | `/account-security` | Get 2FA method and super admin status |
 
-### Setup (`/api/v1/admin/setup/`)
+### Setup (`/api/v1/setup`)
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -243,7 +246,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 ## Known Gaps
 
-1. **2FA is NOT enforced as mandatory**. The `/auth/setup-2fa` page exists and the `TwoFactorSetup` component shows "2FA Required" messaging, but no middleware redirects users there. Users without 2FA can access the admin dashboard freely. The admin-detection middleware only redirects to `/auth/two-factor` if 2FA IS enabled but NOT yet verified for the current session.
+1. **2FA is optional, but enabled 2FA is enforced per session**. Users without 2FA can access the admin dashboard. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification endpoints.
 
 2. **`clearAllPermissionCache()` is local only**: When roles/permissions are modified via the RBAC API, `clearAllPermissionCache()` clears only the current Worker isolate's in-memory Map. Other isolates serve stale permissions for up to 5 minutes (KV TTL). No KV prefix-scan deletion exists.
 
@@ -253,7 +256,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 5. **Customer auth has no 2FA**. Storefront customers authenticate solely via single-factor OTP (email or phone).
 
-6. **Admin user creation sends temp password by email**. If email delivery fails, the temp password is logged to console as a fallback -- a security concern in production.
+6. **Admin user creation depends on invite/password-reset email delivery**. If invite delivery fails, the API reports `emailFailed: true` without returning the temp password; the creating admin should fix email settings or use the password reset flow.
 
 7. **No session revocation on role changes**. When a user's roles or permissions are modified, their existing sessions remain valid with stale permissions until the cache TTL expires (5 min). Active sessions are not invalidated.
 

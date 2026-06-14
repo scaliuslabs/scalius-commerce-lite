@@ -393,7 +393,7 @@ pnpm dev:setup
 
 Use the current Node 22 LTS line from `.nvmrc` (Node 22.18+ is required by the current toolchain); `pnpm dev:doctor` warns when your active Node version differs. `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
-Use `pnpm dev:setup --env-only` when `dev:doctor` reports missing, incomplete, or non-local env URL values. It appends missing/blank keys in `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin; use `--force --env-only` only when you intentionally want to regenerate local env files.
+Use `pnpm dev:setup --env-only` when `dev:doctor` reports missing, incomplete, or non-local env URL values. It appends missing/blank keys in `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin. Use `pnpm dev:setup --force --env-only` only when local env files must be regenerated or shared secrets are out of sync; it still avoids database/admin changes because of `--env-only`.
 
 Default local admin:
 
@@ -501,7 +501,7 @@ pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
 | Firebase (FCM) | Settings → Notifications |
 | Stripe / SSLCommerz / Polar | Settings → Checkout → Payment Gateways |
 | Pathao / Steadfast | Settings → Delivery Providers |
-| SMS Providers | Settings → Checkout → SMS |
+| SMS Providers | Settings → Notifications / SMS providers |
 | OpenRouter (AI) | Widget editor settings |
 
 ---
@@ -547,7 +547,7 @@ deploy.
 |---------|----------|
 | Port conflicts on startup | `lsof -tiTCP:8787 -iTCP:4322 -iTCP:4323 -iTCP:9229 -iTCP:9230 -iTCP:9231 -iTCP:9232 -iTCP:9233 -sTCP:LISTEN \| xargs kill -9` |
 | Forgot local admin credentials | Run `pnpm dev:admin:reset` |
-| Auth sign-in loops | Run `pnpm dev:admin:reset`, or `pnpm dev:setup --force --env-only` to regenerate local env files |
+| Auth sign-in loops | Run `pnpm dev:admin:reset`; use `pnpm dev:setup --env-only` for missing local env keys, or `pnpm dev:setup --force --env-only` only when shared local secrets are out of sync |
 | D1 errors in dev | Run `pnpm dev:reset` for a clean database |
 | "Using default JWT secret" | Set `JWT_SECRET` in `.dev.vars` |
 | Stale OpenAPI types | Run `pnpm generate:sdk` with API running |
