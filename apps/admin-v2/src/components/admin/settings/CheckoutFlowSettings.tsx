@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     Card,
     CardContent,
@@ -21,10 +22,18 @@ import { toast } from "sonner";
 import { Loader2, Save, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getAuthSettings, updateAuthSettings } from "@/lib/api-functions/settings";
+import { updateAuthSettings } from "@/lib/api-functions/settings";
+import { authSettingsQueryOptions } from "@/lib/api-query-options/settings";
+import { queryKeys } from "@/lib/query-keys";
 
 export default function CheckoutFlowSettings() {
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+    const {
+        data: authSettings,
+        isLoading,
+        isError,
+        refetch,
+    } = useQuery(authSettingsQueryOptions());
     const [saving, setSaving] = useState(false);
 
     const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
@@ -33,33 +42,38 @@ export default function CheckoutFlowSettings() {
     const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
 
     useEffect(() => {
-        fetchSettings();
-    }, []);
-
-    const fetchSettings = async () => {
-        try {
-            const data = await getAuthSettings() as Record<string, unknown>;
-            setGuestCheckoutEnabled(data.guestCheckoutEnabled !== false);
-            setCheckoutMode((data.checkoutMode as string) || "all");
-            setPartialPaymentEnabled(!!data.partialPaymentEnabled);
-            setPartialPaymentAmount((data.partialPaymentAmount as number) || 0);
-        } catch {
-            toast.error("Failed to load checkout flow settings");
-        } finally {
-            setLoading(false);
-        }
-    };
+        if (!authSettings) return;
+        const data = authSettings as Record<string, unknown>;
+        setGuestCheckoutEnabled(data.guestCheckoutEnabled !== false);
+        setCheckoutMode((data.checkoutMode as string) || "all");
+        setPartialPaymentEnabled(!!data.partialPaymentEnabled);
+        setPartialPaymentAmount((data.partialPaymentAmount as number) || 0);
+    }, [authSettings]);
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
         setSaving(true);
 
+        const nextSettings = {
+            guestCheckoutEnabled,
+            checkoutMode,
+            partialPaymentEnabled,
+            partialPaymentAmount,
+        };
+
         try {
             await updateAuthSettings({
-                data: { guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount },
+                data: nextSettings,
             });
+            queryClient.setQueryData(
+                queryKeys.settings.auth(),
+                (current: Record<string, unknown> | undefined) => ({
+                    ...(current ?? {}),
+                    ...nextSettings,
+                }),
+            );
+            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.auth() });
             toast.success("Checkout flow settings saved successfully!");
-            fetchSettings();
         } catch (err) {
             toast.error(getServerFnError(err, "Failed to save checkout flow settings"));
         } finally {
@@ -67,11 +81,30 @@ export default function CheckoutFlowSettings() {
         }
     };
 
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+        );
+    }
+
+    if (isError && !authSettings) {
+        return (
+            <Alert className="max-w-2xl border-destructive/30 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertDescription className="flex items-center justify-between gap-4 text-sm">
+                    <span>Failed to load checkout flow settings.</span>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void refetch()}
+                    >
+                        Retry
+                    </Button>
+                </AlertDescription>
+            </Alert>
         );
     }
 

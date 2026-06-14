@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { storefrontUrlQueryOptions } from "~/lib/api.queries";
+import { storefrontUrlQueryOptions } from "~/lib/api-query-options/settings";
 
 /**
  * Constructs a full storefront URL by combining the base URL with a path.
@@ -51,4 +51,3 @@ export function useStorefrontUrl() {
     getStorefrontPath,
   };
 }
-

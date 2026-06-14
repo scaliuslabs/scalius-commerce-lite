@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { firebaseConfigQueryOptions } from "~/lib/api.queries";
+import { firebaseConfigQueryOptions } from "~/lib/api-query-options/firebase";
 
 type PushInitStatus =
   | "idle"
