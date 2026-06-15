@@ -1,6 +1,13 @@
+import { lazy, Suspense } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { MediaManagerPage } from "~/components/admin/media-manager";
 import { RouteErrorComponent } from "~/lib/list-helpers";
+import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
+
+const MediaManagerPage = lazy(() =>
+  import("~/components/admin/media-manager/MediaManagerPage").then((module) => ({
+    default: module.MediaManagerPage,
+  })),
+);
 
 export const Route = createFileRoute("/admin/media")({
   head: () => ({ meta: [{ title: "Media | Scalius Admin" }] }),
@@ -9,5 +16,9 @@ export const Route = createFileRoute("/admin/media")({
 });
 
 function MediaPage() {
-  return <MediaManagerPage />;
+  return (
+    <Suspense fallback={<PageLoadingSpinner />}>
+      <MediaManagerPage />
+    </Suspense>
+  );
 }

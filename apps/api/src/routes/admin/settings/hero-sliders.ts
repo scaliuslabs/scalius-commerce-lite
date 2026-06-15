@@ -8,10 +8,19 @@ import { NotFoundError, ValidationError, ConflictError } from "../../../utils/ap
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 import { nullableTimestampSchema } from "../../../schemas/timestamps";
-import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
+import {
+    getOptionalExecutionContext,
+    invalidateGroups,
+    triggerStorefrontPurgeForGroups,
+} from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+
+async function invalidateHomepageCaches(c: { env: Env; executionCtx?: ExecutionContext }): Promise<void> {
+    await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE);
+    triggerStorefrontPurgeForGroups([...HOMEPAGE_CACHE_GROUPS], c.env, getOptionalExecutionContext(c));
+}
 
 const sliderImageSchema = z.object({
     id: z.string(),
@@ -106,7 +115,7 @@ app.openapi(createSliderRoute, (async (c) => {
     const slider = sliderArr[0];
     if (!slider) throw new ValidationError("Failed to create slider");
 
-    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
+    await invalidateHomepageCaches(c);
     return created(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as AppRouteHandler<typeof createSliderRoute>);
 
@@ -169,7 +178,7 @@ app.openapi(updateSliderRoute, (async (c) => {
         .returning();
 
     if (!slider) throw new NotFoundError("Slider not found");
-    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
+    await invalidateHomepageCaches(c);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as AppRouteHandler<typeof updateSliderRoute>);
 
@@ -198,7 +207,7 @@ app.openapi(deleteSliderRoute, (async (c) => {
         .returning();
 
     if (!slider) throw new NotFoundError("Slider not found");
-    await invalidateApiAndStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c.env);
+    await invalidateHomepageCaches(c);
     return ok(c, { ...slider, images: parseSliderImages(slider.images) });
 }) as AppRouteHandler<typeof deleteSliderRoute>);
 

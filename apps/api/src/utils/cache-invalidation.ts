@@ -393,10 +393,20 @@ export function triggerStorefrontPurgeForGroups(
     console.error("[Cache] Storefront group purge failed:", err),
   );
 
-  if (executionCtx) {
+  if (executionCtx && typeof executionCtx.waitUntil === "function") {
     executionCtx.waitUntil(purgePromise);
   } else {
     void purgePromise;
+  }
+}
+
+export function getOptionalExecutionContext(c: {
+  executionCtx?: ExecutionContext;
+}): ExecutionContext | undefined {
+  try {
+    return c.executionCtx;
+  } catch {
+    return undefined;
   }
 }
 
@@ -475,7 +485,7 @@ export async function invalidateCatalogCaches(
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];
   await invalidateGroups(groups, c.env?.CACHE);
-  triggerStorefrontPurgeForGroups(groups, c.env, c.executionCtx);
+  triggerStorefrontPurgeForGroups(groups, c.env, getOptionalExecutionContext(c));
 }
 
 /**

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -42,9 +42,7 @@ import { useAiImprover } from './widget-form/useAiImprover';
 import { AiAssistant } from './widget-form/AiAssistant';
 import { WidgetDetails } from './widget-form/WidgetDetails';
 import { WidgetPlacement } from './widget-form/WidgetPlacement';
-import { FullScreenEditor, type EditorMode } from './widget-form/FullScreenEditor';
-import { WidgetHistoryModal } from './widget-form/WidgetHistoryModal';
-import { WidgetPasteModal } from './widget-form/WidgetPasteModal';
+import type { EditorMode } from './widget-form/FullScreenEditor';
 import { UnsavedChangesGuard } from '../shared/UnsavedChangesGuard';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -55,6 +53,22 @@ import {
   normalizeWidgetPlacementSlotForScope,
   type SupportedWidgetPlacementScopeValue,
 } from '@scalius/shared/widget-placement';
+
+const FullScreenEditor = lazy(() =>
+  import('./widget-form/FullScreenEditor').then((module) => ({
+    default: module.FullScreenEditor,
+  })),
+);
+const WidgetHistoryModal = lazy(() =>
+  import('./widget-form/WidgetHistoryModal').then((module) => ({
+    default: module.WidgetHistoryModal,
+  })),
+);
+const WidgetPasteModal = lazy(() =>
+  import('./widget-form/WidgetPasteModal').then((module) => ({
+    default: module.WidgetPasteModal,
+  })),
+);
 
 interface WidgetFormProps {
   widget?: Widget | null;
@@ -328,6 +342,7 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
   const aiPlacementContext = useMemo(() => getPlacementAiContext(watchedPlacements), [watchedPlacements]);
   const aiGenerator = useAiGenerator(aiContext, widget, true, aiPlacementContext);
   const aiImprover = useAiImprover({ aiContext, aiGenerator });
+  const shouldMountEditor = isEditorOpen || aiGenerator.isLoadingPrompt || aiImprover.isImproving;
 
   const watchedHtmlContent = watch('htmlContent') || '';
   const watchedCssContent = watch('cssContent') || '';
@@ -977,59 +992,62 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
         </div>
       </form>
 
-      {/* Unified Full Screen Editor */}
-      <FullScreenEditor
-        isOpen={isEditorOpen}
-        onClose={() => {
-          setIsEditorOpen(false);
-          if (editorMode === 'live-preview') {
-            setLivePreviewContent(null);
-          }
-        }}
-        onCancelProcessing={editorMode === 'improvement' ? aiImprover.cancel : aiGenerator.cancelGeneration}
-        content={
-          editorMode === 'improvement'
-            ? aiImprover.contentToImprove
-            : editorMode === 'live-preview'
-              ? livePreviewContent
-              : aiGenerator.generationError
-                ? null
-              : aiGenerator.generatedContent ?? (aiGenerator.isLoadingPrompt ? aiGenerator.draftContent : null)
-        }
-        rawOutput={
-          editorMode === 'improvement'
-            ? aiImprover.rawOutput
-            : editorMode === 'generation-preview'
-              ? aiGenerator.rawOutput || undefined
-              : undefined
-        }
-        error={editorMode === 'generation-preview' ? aiGenerator.generationError : undefined}
-        mode={editorMode}
-        onAccept={
-          editorMode === 'improvement'
-            ? handleAcceptImprovement
-            : editorMode === 'live-preview'
-              ? () => {
-                  toast.info('Already in the form.');
-                  setIsEditorOpen(false);
-                  setLivePreviewContent(null);
-                }
-              : handleAcceptPreview
-        }
-        onImprove={editorMode === 'improvement' ? aiImprover.improve : undefined}
-        onRequestImprovement={editorMode === 'generation-preview' ? handleRequestImprovement : undefined}
-        isProcessing={editorMode === 'improvement' ? aiImprover.isImproving : aiGenerator.isLoadingPrompt}
-        canAccept={editorMode === 'generation-preview' ? aiGenerator.canAcceptGenerated : true}
-        processingProgress={
-          (editorMode === 'improvement' ? aiImprover.improvementProgress : aiGenerator.generationProgress) ?? undefined
-        }
-        aiContext={aiContext}
-        promptType={aiGenerator.promptType}
-        setPromptType={aiGenerator.setPromptType}
-        sections={editorMode === 'improvement' || editorMode === 'generation-preview' ? sections : []}
-        currentImprovementTarget={aiImprover.currentImprovementTarget}
-        improvementHistory={aiImprover.improvementHistory}
-      />
+      {shouldMountEditor && (
+        <Suspense fallback={null}>
+          <FullScreenEditor
+            isOpen={isEditorOpen}
+            onClose={() => {
+              setIsEditorOpen(false);
+              if (editorMode === 'live-preview') {
+                setLivePreviewContent(null);
+              }
+            }}
+            onCancelProcessing={editorMode === 'improvement' ? aiImprover.cancel : aiGenerator.cancelGeneration}
+            content={
+              editorMode === 'improvement'
+                ? aiImprover.contentToImprove
+                : editorMode === 'live-preview'
+                  ? livePreviewContent
+                  : aiGenerator.generationError
+                    ? null
+                  : aiGenerator.generatedContent ?? (aiGenerator.isLoadingPrompt ? aiGenerator.draftContent : null)
+            }
+            rawOutput={
+              editorMode === 'improvement'
+                ? aiImprover.rawOutput
+                : editorMode === 'generation-preview'
+                  ? aiGenerator.rawOutput || undefined
+                  : undefined
+            }
+            error={editorMode === 'generation-preview' ? aiGenerator.generationError : undefined}
+            mode={editorMode}
+            onAccept={
+              editorMode === 'improvement'
+                ? handleAcceptImprovement
+                : editorMode === 'live-preview'
+                  ? () => {
+                      toast.info('Already in the form.');
+                      setIsEditorOpen(false);
+                      setLivePreviewContent(null);
+                    }
+                  : handleAcceptPreview
+            }
+            onImprove={editorMode === 'improvement' ? aiImprover.improve : undefined}
+            onRequestImprovement={editorMode === 'generation-preview' ? handleRequestImprovement : undefined}
+            isProcessing={editorMode === 'improvement' ? aiImprover.isImproving : aiGenerator.isLoadingPrompt}
+            canAccept={editorMode === 'generation-preview' ? aiGenerator.canAcceptGenerated : true}
+            processingProgress={
+              (editorMode === 'improvement' ? aiImprover.improvementProgress : aiGenerator.generationProgress) ?? undefined
+            }
+            aiContext={aiContext}
+            promptType={aiGenerator.promptType}
+            setPromptType={aiGenerator.setPromptType}
+            sections={editorMode === 'improvement' || editorMode === 'generation-preview' ? sections : []}
+            currentImprovementTarget={aiImprover.currentImprovementTarget}
+            improvementHistory={aiImprover.improvementHistory}
+          />
+        </Suspense>
+      )}
 
       {/* Save Version Dialog */}
       <AlertDialog open={isSaveVersionOpen} onOpenChange={setIsSaveVersionOpen}>
@@ -1059,23 +1077,29 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Version History Modal */}
-      <WidgetHistoryModal
-        isOpen={isHistoryOpen}
-        onOpenChange={setIsHistoryOpen}
-        history={history}
-        selectedHistoryItem={selectedHistoryItem}
-        setSelectedHistoryItem={setSelectedHistoryItem}
-        isLoading={isHistoryLoading}
-        error={historyError}
-        deletingHistoryIds={deletingHistoryIds}
-        handleRestore={handleRestore}
-        handleDeleteHistory={handleDeleteHistory}
-        widgetName={widget?.name || ''}
-      />
+      {isHistoryOpen && (
+        <Suspense fallback={null}>
+          <WidgetHistoryModal
+            isOpen={isHistoryOpen}
+            onOpenChange={setIsHistoryOpen}
+            history={history}
+            selectedHistoryItem={selectedHistoryItem}
+            setSelectedHistoryItem={setSelectedHistoryItem}
+            isLoading={isHistoryLoading}
+            error={historyError}
+            deletingHistoryIds={deletingHistoryIds}
+            handleRestore={handleRestore}
+            handleDeleteHistory={handleDeleteHistory}
+            widgetName={widget?.name || ''}
+          />
+        </Suspense>
+      )}
 
-      {/* Paste Modal */}
-      <WidgetPasteModal isOpen={isPasteModalOpen} onOpenChange={setIsPasteModalOpen} onApply={handlePaste} />
+      {isPasteModalOpen && (
+        <Suspense fallback={null}>
+          <WidgetPasteModal isOpen={isPasteModalOpen} onOpenChange={setIsPasteModalOpen} onApply={handlePaste} />
+        </Suspense>
+      )}
     </div>
   );
 };

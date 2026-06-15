@@ -102,7 +102,7 @@ Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `pac
 
 1. `updateOrderStatus()` reads current order state
 2. Validates transition via `validateTransition()`
-3. **COD auto-sync**: If order is COD and new status is DELIVERED or COMPLETED, auto-updates `paymentStatus` to `paid`
+3. **COD paid-state guard**: If order is COD and new status is DELIVERED or COMPLETED, the order must already have successful COD collection evidence. Generic status updates do not synthesize COD payment state.
 4. CAS update on `version` column FIRST (prevents race between admin + webhook)
 5. On CAS success, or when retry sees the requested status already persisted, applies inventory side effects via `applyInventoryForStatusChange()`
 6. Persists/reconfirms the resulting `inventoryAction`
@@ -191,7 +191,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | DELETE | `/:id/permanent` | `permanentlyDeleteOrder()` | Hard delete |
 | POST | `/bulk-delete` | `bulkDeleteOrders()` | Bulk soft/permanent delete |
 | POST | `/bulk-ship` | `bulkShipOrders()` | Bulk shipment creation |
-| PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD auto-sync + notifications |
+| PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD paid-state guard + notifications |
 | GET | `/:id/items` | direct query | Items with product details and images |
 | GET | `/:id/payments` | direct query | Order payments + payment plan |
 | GET | `/:id/cod` | direct query | COD tracking record |
