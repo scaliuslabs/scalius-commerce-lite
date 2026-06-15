@@ -48,7 +48,7 @@ export type CollectionFormValues = z.infer<typeof collectionFormSchema>;
 
 export interface CollectionFormProps {
   categories: Category[];
-  products: Product[];
+  products?: Product[];
   defaultValues?: Partial<CollectionFormValues>;
   isEdit?: boolean;
 }

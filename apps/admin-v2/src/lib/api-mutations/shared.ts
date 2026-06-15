@@ -11,3 +11,11 @@ export function invalidateDashboardQueries(queryClient: QueryClient) {
 export function invalidateProductStatsQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
 }
+
+export function invalidateProductLookupQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() });
+}
+
+export function invalidateCollectionLookupQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.collections.byIds() });
+}

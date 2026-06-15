@@ -96,6 +96,37 @@ export async function getCollectionById(db: Database, id: string) {
         .then((rows: (typeof collections.$inferSelect)[]) => rows[0] ?? null);
 }
 
+function normalizeLookupIds(ids: string[]): string[] {
+    return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+}
+
+export async function getCollectionsByIds(db: Database, ids: string[]) {
+    const lookupIds = normalizeLookupIds(ids);
+    if (lookupIds.length === 0) return [];
+
+    const orderById = new Map(lookupIds.map((id, index) => [id, index]));
+    const rows = await db
+        .select({
+            id: collections.id,
+            name: collections.name,
+            type: collections.type,
+        })
+        .from(collections)
+        .where(and(inArray(collections.id, lookupIds), isNull(collections.deletedAt)));
+
+    return rows.sort(
+        (a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0),
+    );
+}
+
+export async function getCollectionCategoryOptions(db: Database) {
+    return db
+        .select({ id: categories.id, name: categories.name })
+        .from(categories)
+        .where(isNull(categories.deletedAt))
+        .limit(500);
+}
+
 // ─────────────────────────────────────────
 // Admin mutations
 // ─────────────────────────────────────────

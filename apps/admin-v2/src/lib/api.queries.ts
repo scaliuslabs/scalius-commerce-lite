@@ -66,6 +66,10 @@ const STALE = {
   STATIC: 1000 * 60 * 60, // 1hr — setup status
 } as const;
 
+function normalizeLookupIds(ids: readonly string[]): string[] {
+  return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+}
+
 // Detail queries use staleTime: 0 (always stale) combined with
 // staleTime: Infinity in route loaders. This implements stale-while-revalidate:
 // - Loader serves cached data instantly (never blocks if cache exists)
@@ -108,6 +112,20 @@ export const productsQueryOptions = (params: ProductsQueryInput) =>
     queryFn: () => productsApi().then((api) => api.getProducts({ data: params })),
     staleTime: STALE.MODERATE,
   });
+
+export const productsByIdsQueryOptions = (ids: readonly string[]) => {
+  const normalizedIds = normalizeLookupIds(ids);
+  return queryOptions({
+    queryKey: queryKeys.products.byIds(normalizedIds),
+    queryFn: () =>
+      normalizedIds.length === 0
+        ? Promise.resolve({ products: [] })
+        : productsApi().then((api) =>
+            api.getProductsByIds({ data: { ids: normalizedIds } }),
+          ),
+    staleTime: STALE.LOOKUP,
+  });
+};
 
 export const productQueryOptions = (id: string) =>
   queryOptions({
@@ -182,6 +200,20 @@ export const collectionsQueryOptions = (params: CollectionsQueryInput) =>
     staleTime: STALE.MODERATE,
   });
 
+export const collectionsByIdsQueryOptions = (ids: readonly string[]) => {
+  const normalizedIds = normalizeLookupIds(ids);
+  return queryOptions({
+    queryKey: queryKeys.collections.byIds(normalizedIds),
+    queryFn: () =>
+      normalizedIds.length === 0
+        ? Promise.resolve({ collections: [] })
+        : collectionsApi().then((api) =>
+            api.getCollectionsByIds({ data: { ids: normalizedIds } }),
+          ),
+    staleTime: STALE.LOOKUP,
+  });
+};
+
 export const collectionQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.collections.detail(id),
@@ -195,6 +227,14 @@ export const collectionFormOptionsQueryOptions = () =>
     queryKey: queryKeys.collections.formOptions(),
     queryFn: () =>
       collectionsApi().then((api) => api.getCollectionFormOptions()),
+    staleTime: STALE.LOOKUP,
+  });
+
+export const collectionCategoryOptionsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.collections.categoryOptions(),
+    queryFn: () =>
+      collectionsApi().then((api) => api.getCollectionCategoryOptions()),
     staleTime: STALE.LOOKUP,
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   FormDescription,
@@ -19,27 +19,11 @@ import {
   SelectValue,
 } from "../../ui/select";
 import { Button } from "../../ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "../../ui/command";
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Badge } from "../../ui/badge";
-import { Trash2, Layers, Package, Search, Loader2, Info } from "lucide-react";
-import { getProducts } from "~/lib/api-functions/products";
+import { Trash2, Layers, Package, Info } from "lucide-react";
 import type { CollectionFormValues, Category, Product } from "./types";
-
-const PAGE_SIZE = 10;
-const SEARCH_DEBOUNCE_MS = 300;
+import { ProductPickerPopover } from "./ProductPickerPopover";
 
 interface ProductSelectionSectionProps {
   form: UseFormReturn<CollectionFormValues>;
@@ -50,7 +34,7 @@ interface ProductSelectionSectionProps {
   selectedProductIds: string[];
   addCategory: (id: string) => void;
   removeCategory: (id: string) => void;
-  addProduct: (id: string) => void;
+  addProduct: (product: Product) => void;
   removeProduct: (id: string) => void;
 }
 
@@ -66,144 +50,6 @@ export const ProductSelectionSection = React.memo(
     addProduct,
     removeProduct,
   }: ProductSelectionSectionProps) {
-    const [productSearchOpen, setProductSearchOpen] = useState(false);
-    const [productSearchTerm, setProductSearchTerm] = useState("");
-
-    // Paginated product state
-    const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalProducts, setTotalProducts] = useState(0);
-
-    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // Track the category filter that was used for the current displayed results
-    const lastCategoryFilterRef = useRef<string | undefined>(undefined);
-
-    const loadProducts = useCallback(
-      async (page = 1, search?: string) => {
-        try {
-          if (page === 1) {
-            setIsSearching(true);
-          } else {
-            setIsLoadingMore(true);
-          }
-
-          if (selectedCategoryIds.length > 1) {
-            // Multiple categories: fetch per category and merge (deduped)
-            const allProducts = new Map<string, Product>();
-            await Promise.all(
-              selectedCategoryIds.map(async (catId) => {
-                const data = await getProducts({
-                  data: {
-                    limit: 50,
-                    page: 1,
-                    search: search?.trim() || undefined,
-                    categoryId: catId,
-                  },
-                });
-                for (const p of data.products || []) {
-                  allProducts.set(p.id, p);
-                }
-              }),
-            );
-            const merged = Array.from(allProducts.values());
-            setDisplayedProducts(merged);
-            setTotalPages(1);
-            setTotalProducts(merged.length);
-            setCurrentPage(1);
-          } else {
-            // 0 or 1 category: standard paginated fetch
-            const categoryId =
-              selectedCategoryIds.length === 1
-                ? selectedCategoryIds[0]
-                : undefined;
-            lastCategoryFilterRef.current = categoryId;
-
-            const data = await getProducts({
-              data: {
-                limit: PAGE_SIZE,
-                page,
-                search: search?.trim() || undefined,
-                categoryId,
-              },
-            });
-
-            if (data.products) {
-              if (page === 1) {
-                setDisplayedProducts(data.products);
-              } else {
-                setDisplayedProducts((prev) => [...prev, ...data.products!]);
-              }
-              setTotalPages(data.pagination?.totalPages || 1);
-              setTotalProducts(data.pagination?.total || 0);
-              setCurrentPage(page);
-            }
-          }
-        } catch (error: unknown) {
-          if (import.meta.env.DEV) console.error("Error loading products:", error);
-        } finally {
-          setIsSearching(false);
-          setIsLoadingMore(false);
-        }
-      },
-      [selectedCategoryIds],
-    );
-
-    // Load products when the popover opens
-    useEffect(() => {
-      if (productSearchOpen) {
-        setProductSearchTerm("");
-        setCurrentPage(1);
-        loadProducts(1, "");
-      }
-    }, [productSearchOpen, loadProducts]);
-
-    // Debounced search when the search term changes
-    useEffect(() => {
-      if (!productSearchOpen) return;
-
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-
-      searchTimeoutRef.current = setTimeout(() => {
-        loadProducts(1, productSearchTerm);
-      }, SEARCH_DEBOUNCE_MS);
-
-      return () => {
-        if (searchTimeoutRef.current) {
-          clearTimeout(searchTimeoutRef.current);
-        }
-      };
-    }, [productSearchTerm, productSearchOpen, loadProducts]);
-
-    // Reload when category selection changes while popover is open
-    useEffect(() => {
-      if (!productSearchOpen) return;
-
-      const currentCategoryId =
-        selectedCategoryIds.length > 0 ? selectedCategoryIds[0] : undefined;
-
-      // Only reload if the effective category filter actually changed
-      if (currentCategoryId !== lastCategoryFilterRef.current) {
-        loadProducts(1, productSearchTerm);
-      }
-    }, [selectedCategoryIds, productSearchOpen, productSearchTerm, loadProducts]);
-
-    const loadMoreProducts = () => {
-      if (currentPage < totalPages && !isLoadingMore) {
-        loadProducts(currentPage + 1, productSearchTerm);
-      }
-    };
-
-    // Filter out already-selected products from the displayed list
-    const availableProducts = React.useMemo(() => {
-      const selectedSet = new Set(selectedProductIds);
-      return displayedProducts.filter((p) => !selectedSet.has(p.id));
-    }, [displayedProducts, selectedProductIds]);
-
     const hasSpecificProducts = selectedProductIds.length > 0;
     const hasCategoriesOnly =
       selectedCategoryIds.length > 0 && !hasSpecificProducts;
@@ -300,102 +146,13 @@ export const ProductSelectionSection = React.memo(
               <Package className="h-4 w-4 text-muted-foreground" />
               <FormLabel>Specific Products (Optional)</FormLabel>
             </div>
-            <Popover
-              open={productSearchOpen}
-              onOpenChange={(open) => {
-                setProductSearchOpen(open);
-                if (!open) {
-                  setProductSearchTerm("");
-                }
-              }}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={productSearchOpen}
-                  className="w-full justify-between font-normal"
-                >
-                  Search products to add...
-                  <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="p-0 w-[var(--radix-popover-trigger-width)]"
-                align="start"
-                sideOffset={4}
-              >
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder={
-                      selectedCategoryIds.length > 0
-                        ? "Search within selected categories..."
-                        : "Search products..."
-                    }
-                    className="h-10 border-none focus:ring-0"
-                    value={productSearchTerm}
-                    onValueChange={setProductSearchTerm}
-                  />
-                  <CommandList className="max-h-[300px] overflow-auto">
-                    {isSearching ? (
-                      <div className="flex items-center justify-center py-6">
-                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                        <span className="text-sm text-muted-foreground">
-                          Searching products...
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <CommandEmpty className="py-6 text-center text-sm">
-                          No products found.
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {availableProducts.map((product) => (
-                            <CommandItem
-                              key={product.id}
-                              value={product.name}
-                              onSelect={() => {
-                                addProduct(product.id);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              {product.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-
-                        {currentPage < totalPages && (
-                          <div className="py-2 px-2 border-t">
-                            <Button
-                              variant="outline"
-                              className="w-full"
-                              size="sm"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                loadMoreProducts();
-                              }}
-                              disabled={isLoadingMore}
-                            >
-                              {isLoadingMore ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Loading...
-                                </>
-                              ) : (
-                                <>
-                                  Load More ({displayedProducts.length} of{" "}
-                                  {totalProducts})
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <ProductPickerPopover
+              triggerLabel="Search products to add..."
+              selectedCategoryIds={selectedCategoryIds}
+              excludeProductIds={selectedProductIds}
+              onSelectProduct={addProduct}
+              buttonClassName="w-full justify-between font-normal"
+            />
             {selectedProducts.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {selectedProducts.map((product) => (

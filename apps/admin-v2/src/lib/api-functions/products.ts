@@ -46,9 +46,26 @@ export interface ProductListItemDto {
   sku?: string;
 }
 
+export interface ProductPickerItemDto {
+  id: string;
+  name: string;
+  price: number;
+  categoryId: string | null;
+  primaryImage: string | null;
+  discountPercentage: number | null;
+}
+
 export interface ProductsListPayload {
   products: ProductListItemDto[];
   pagination: PaginationPayload;
+}
+
+export interface ProductsByIdsInput {
+  ids: string[];
+}
+
+export interface ProductsByIdsPayload {
+  products: ProductPickerItemDto[];
 }
 
 export interface ProductStatsPayload {
@@ -241,6 +258,16 @@ export const getProducts = createServerFn({ method: "GET" })
   .validator((data: ProductsQueryInput) => data)
   .handler(async ({ data }): Promise<ProductsListPayload> => {
     return apiGet<ProductsListPayload>("/products", toProductsParams(data));
+  });
+
+export const getProductsByIds = createServerFn({ method: "GET" })
+  .validator((data: ProductsByIdsInput) => data)
+  .handler(async ({ data }): Promise<ProductsByIdsPayload> => {
+    const ids = Array.from(new Set(data.ids.map((id) => id.trim()).filter(Boolean)));
+    if (ids.length === 0) return { products: [] };
+    return apiGet<ProductsByIdsPayload>("/products/by-ids", {
+      ids: ids.join(","),
+    });
   });
 
 export const getProduct = createServerFn({ method: "GET" })

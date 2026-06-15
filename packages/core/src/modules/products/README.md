@@ -127,11 +127,9 @@ Storefront ([slug].astro)
 
 ## Known Gaps
 
-1. **`hasDiscount` filter only checks percentage**: `getStorefrontProducts()` in `products.storefront.ts:90-91` filters `hasDiscount` using only `discountPercentage > 0`, missing products with flat discounts (`discountAmount > 0, discountPercentage = 0`).
+1. **Update is delete-and-reinsert for images/attributes/richContent**: `updateProduct()` deletes ALL images, attributes, and rich content then re-inserts. This means image IDs change on every save (unless the admin passes the original ID and it doesn't start with `temp_`).
 
-2. **Update is delete-and-reinsert for images/attributes/richContent**: `updateProduct()` deletes ALL images, attributes, and rich content then re-inserts. This means image IDs change on every save (unless the admin passes the original ID and it doesn't start with `temp_`).
-
-3. **Variant sort order updates are not batched**: `updateVariantSortOrder()` in `products.variants.ts` runs individual UPDATE queries per color and per size value rather than using `db.batch()`, which could be slow for many distinct values.
+2. **Variant sort order updates are not batched**: `updateVariantSortOrder()` in `products.variants.ts` runs individual UPDATE queries per color and per size value rather than using `db.batch()`, which could be slow for many distinct values.
 
 4. **`searchStorefrontProducts` re-imports modules at call time**: `products.storefront.ts:458-459` uses dynamic `import()` for `ftsMatch` and drizzle-orm operators that are already available at module scope. This is unnecessary overhead.
 

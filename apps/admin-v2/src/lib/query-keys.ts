@@ -36,6 +36,10 @@ export const queryKeys = {
     all: ["products"] as const,
     list: (params?: Record<string, unknown>) => listKey("products", params),
     detail: (id: string) => ["products", "detail", id] as const,
+    byIds: (ids?: readonly string[]) =>
+      ids !== undefined
+        ? (["products", "by-ids", ids] as const)
+        : (["products", "by-ids"] as const),
     stats: () => ["products", "stats"] as const,
     variants: (productId: string) =>
       ["products", "variants", productId] as const,
@@ -56,6 +60,11 @@ export const queryKeys = {
     all: ["collections"] as const,
     list: (params?: Record<string, unknown>) => listKey("collections", params),
     detail: (id: string) => ["collections", "detail", id] as const,
+    byIds: (ids?: readonly string[]) =>
+      ids !== undefined
+        ? (["collections", "by-ids", ids] as const)
+        : (["collections", "by-ids"] as const),
+    categoryOptions: () => ["collections", "category-options"] as const,
     formOptions: () => ["collections", "form-options"] as const,
   },
 

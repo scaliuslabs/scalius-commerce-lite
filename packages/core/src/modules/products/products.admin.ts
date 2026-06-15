@@ -252,6 +252,52 @@ export async function listProducts(db: Database, options: {
     };
 }
 
+export interface ProductPickerSummary {
+    id: string;
+    name: string;
+    price: number;
+    categoryId: string | null;
+    primaryImage: string | null;
+    discountPercentage: number | null;
+}
+
+function normalizeLookupIds(ids: string[]): string[] {
+    return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+}
+
+/** Returns lightweight product metadata for already-known product IDs. */
+export async function getProductsByIds(
+    db: Database,
+    ids: string[],
+): Promise<ProductPickerSummary[]> {
+    const lookupIds = normalizeLookupIds(ids);
+    if (lookupIds.length === 0) return [];
+
+    const orderById = new Map(lookupIds.map((id, index) => [id, index]));
+    const rows = await db
+        .select({
+            id: products.id,
+            name: products.name,
+            price: products.price,
+            categoryId: products.categoryId,
+            discountPercentage: products.discountPercentage,
+            primaryImage: sql<string | null>`(
+                SELECT ${productImages.url}
+                FROM ${productImages}
+                WHERE ${productImages.productId} = ${products.id}
+                  AND ${productImages.isPrimary} = 1
+                ORDER BY ${productImages.sortOrder} ASC
+                LIMIT 1
+            )`.as("primaryImage"),
+        })
+        .from(products)
+        .where(and(inArray(products.id, lookupIds), isNull(products.deletedAt)));
+
+    return rows.sort(
+        (a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0),
+    );
+}
+
 /**
  * Returns full product details including variants and images.
  * Returns null if the product does not exist.

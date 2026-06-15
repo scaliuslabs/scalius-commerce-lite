@@ -13,7 +13,7 @@ import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Folder, Loader2, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
-import { getCollections } from "~/lib/api-functions/collections";
+import { getCollections, getCollectionsByIds } from "~/lib/api-functions/collections";
 
 // Collection interface
 interface Collection {
@@ -55,7 +55,8 @@ export function CollectionSelector({
   const [totalCollections, setTotalCollections] = useState(0);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSearchTermRef = useRef(searchTerm);
-  const resolvedRef = useRef(false);
+  const lastResolutionSignatureRef = useRef("");
+  const skipNextSearchLoadRef = useRef(false);
 
   useEffect(() => {
     latestSearchTermRef.current = searchTerm;
@@ -103,22 +104,20 @@ export function CollectionSelector({
     }
   }, []);
 
-  // Resolve initially selected collections that only have IDs (name === id)
+  // Resolve selected collections that only have IDs (name === id)
   useEffect(() => {
-    if (resolvedRef.current) return;
+    const unresolvedIds = selectedCollections
+      .filter((collection) => collection.name === collection.id || !collection.name)
+      .map((collection) => collection.id);
+    const signature = unresolvedIds.join("|");
+    if (!signature || signature === lastResolutionSignatureRef.current) return;
 
-    const needsResolution = selectedCollections.some(
-      (c) => c.name === c.id || !c.name,
-    );
-    if (!needsResolution || selectedCollections.length === 0) return;
-
-    resolvedRef.current = true;
+    lastResolutionSignatureRef.current = signature;
+    let cancelled = false;
 
     const resolveNames = async () => {
       try {
-        const data = await getCollections({
-          data: { limit: 100 },
-        });
+        const data = await getCollectionsByIds({ data: { ids: unresolvedIds } });
         const allCollections = data.collections || [];
         const collectionMap = new Map(
           allCollections.map((c) => [c.id, c]),
@@ -137,7 +136,7 @@ export function CollectionSelector({
         });
 
         // Only update if names actually changed
-        if (
+        if (!cancelled &&
           resolved.some(
             (r, i) =>
               r.name !== selectedCollections[i].name ||
@@ -152,11 +151,15 @@ export function CollectionSelector({
     };
 
     void resolveNames();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCollections, onChange]);
 
   // Load collections when dropdown opens
   useEffect(() => {
     if (open) {
+      skipNextSearchLoadRef.current = true;
       loadCollections(1, latestSearchTermRef.current);
     }
   }, [loadCollections, open]);
@@ -164,6 +167,11 @@ export function CollectionSelector({
   // Handle search input changes
   useEffect(() => {
     if (!open) return;
+
+    if (skipNextSearchLoadRef.current && searchTerm === "") {
+      skipNextSearchLoadRef.current = false;
+      return;
+    }
 
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);

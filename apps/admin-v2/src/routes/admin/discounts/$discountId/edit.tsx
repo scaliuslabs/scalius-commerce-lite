@@ -3,11 +3,11 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
-  collectionFormOptionsQueryOptions,
-  collectionsQueryOptions,
+  collectionsByIdsQueryOptions,
   discountQueryOptions,
+  productsByIdsQueryOptions,
 } from "~/lib/api.queries";
-import type { Discount, CollectionFormOptionsData } from "~/types/api-responses";
+import type { Discount } from "~/types/api-responses";
 import type { Product, Collection } from "~/components/admin/discount/amount-off-products/types";
 import { RouteErrorComponent } from "~/lib/list-helpers";
 import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
@@ -35,6 +35,20 @@ const searchSchema = z.object({
   duplicate: z.boolean().default(false).catch(false),
 });
 
+function getDiscountProductIds(discount: Discount): string[] {
+  return Array.from(new Set([
+    ...(discount.relatedProducts?.buy || []),
+    ...(discount.relatedProducts?.get || []),
+  ].filter(Boolean)));
+}
+
+function getDiscountCollectionIds(discount: Discount): string[] {
+  return Array.from(new Set([
+    ...(discount.relatedCollections?.buy || []),
+    ...(discount.relatedCollections?.get || []),
+  ].filter(Boolean)));
+}
+
 export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
   validateSearch: searchSchema,
   loader: async ({ context: { queryClient }, params }) => {
@@ -45,9 +59,15 @@ export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
 
     const discount = discountResult as Discount;
     if (discount.type === "amount_off_products") {
+      const productIds = getDiscountProductIds(discount);
+      const collectionIds = getDiscountCollectionIds(discount);
       await Promise.all([
-        queryClient.ensureQueryData(collectionFormOptionsQueryOptions()),
-        queryClient.ensureQueryData(collectionsQueryOptions({ limit: 100 })),
+        productIds.length > 0
+          ? queryClient.ensureQueryData(productsByIdsQueryOptions(productIds))
+          : Promise.resolve(),
+        collectionIds.length > 0
+          ? queryClient.ensureQueryData(collectionsByIdsQueryOptions(collectionIds))
+          : Promise.resolve(),
       ]);
     }
   },
@@ -146,28 +166,28 @@ function AmountOffProductsEditor({
   startDate,
   endDate,
 }: DiscountEditorProps) {
-  const { data: formOptions } = useSuspenseQuery(collectionFormOptionsQueryOptions());
-  const { data: collectionsData } = useSuspenseQuery(collectionsQueryOptions({ limit: 100 }));
-  const fo = formOptions as CollectionFormOptionsData;
-  const allProducts = (fo.products || []) as Product[];
-  const allProductIds = [
-    ...(discount.relatedProducts?.buy || []),
-    ...(discount.relatedProducts?.get || []),
-  ];
-  const selectedProducts = allProducts.filter((p) => allProductIds.includes(p.id));
-  const allCollectionIds = [
-    ...(discount.relatedCollections?.buy || []),
-    ...(discount.relatedCollections?.get || []),
-  ];
-  const collectionsArray =
-    (collectionsData as { collections?: Array<{ id: string; name: string; type?: string }> })
-      ?.collections || [];
-  const collectionsMap = new Map(collectionsArray.map((c) => [c.id, c]));
-  const selectedCollections: Collection[] = allCollectionIds.map((colId: string) => {
-    const found = collectionsMap.get(colId);
+  const allProductIds = getDiscountProductIds(discount);
+  const allCollectionIds = getDiscountCollectionIds(discount);
+  const { data: productsData } = useSuspenseQuery(productsByIdsQueryOptions(allProductIds));
+  const { data: collectionsData } = useSuspenseQuery(collectionsByIdsQueryOptions(allCollectionIds));
+  const productsMap = new Map(
+    ((productsData as { products?: Product[] }).products || []).map((product) => [
+      product.id,
+      product,
+    ]),
+  );
+  const selectedProducts = allProductIds.map(
+    (productId) => productsMap.get(productId) ?? { id: productId, name: productId, price: 0 },
+  );
+  const collectionsMap = new Map(
+    ((collectionsData as { collections?: Array<{ id: string; name: string; type?: string }> })
+      .collections || []).map((collection) => [collection.id, collection]),
+  );
+  const selectedCollections: Collection[] = allCollectionIds.map((collectionId: string) => {
+    const found = collectionsMap.get(collectionId);
     return {
-      id: colId,
-      name: found?.name || colId,
+      id: collectionId,
+      name: found?.name || collectionId,
       description: null,
       slug: "",
       type: (found?.type as "manual" | "dynamic") || undefined,

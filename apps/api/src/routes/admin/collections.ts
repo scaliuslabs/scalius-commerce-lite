@@ -5,6 +5,8 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     listCollections,
     getCollectionById,
+    getCollectionCategoryOptions,
+    getCollectionsByIds,
     createCollection,
     updateCollection,
     deleteCollection,
@@ -30,6 +32,19 @@ import {
 import { collectionSchema } from "../../schemas/entities";
 import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+const collectionOptionSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+});
+
+const collectionPickerSummarySchema = collectionOptionSchema.extend({
+    type: z.enum(["manual", "dynamic"]),
+});
+
+function parseLookupIds(ids: string | undefined): string[] {
+    return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+}
 
 // ── Form Options (categories + products for collection form) ──
 
@@ -75,6 +90,34 @@ app.openapi(formOptionsRoute, async (c) => {
     return ok(c, { categories: allCategories, products: allProducts });
 });
 
+// ── Category Options (lightweight collection form options) ──
+
+const categoryOptionsRoute = createRoute({
+    method: "get",
+    path: "/category-options",
+    tags: ["Admin - Collections"],
+    summary: "Get categories for collection forms",
+    responses: {
+        200: {
+            description: "Category options",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        categories: z.array(collectionOptionSchema),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(categoryOptionsRoute, async (c) => {
+    const db = c.get("db");
+    const categoryOptions = await getCollectionCategoryOptions(db);
+    return ok(c, { categories: categoryOptions });
+});
+
 // ── List Collections ──
 
 const listRoute = createRoute({
@@ -113,6 +156,42 @@ app.openapi(listRoute, async (c) => {
         order: q.order as "asc" | "desc" | undefined
     });
     return ok(c, result);
+});
+
+// ── Collection Picker Summaries ──
+
+const getByIdsRoute = createRoute({
+    method: "get",
+    path: "/by-ids",
+    tags: ["Admin - Collections"],
+    summary: "Get lightweight collection summaries for known IDs",
+    request: {
+        query: z.object({
+            ids: z.string().optional().default("").openapi({
+                description: "Comma-separated collection IDs. At most 100 IDs are resolved.",
+            }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Collection summaries",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        collections: z.array(collectionPickerSummarySchema),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getByIdsRoute, async (c) => {
+    const db = c.get("db");
+    const { ids } = c.req.valid("query");
+    const collections = await getCollectionsByIds(db, parseLookupIds(ids));
+    return ok(c, { collections });
 });
 
 // ── Create Collection ──
