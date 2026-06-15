@@ -2,6 +2,8 @@
 
 Use these slices when launching future agents. Each slice should be owned end to end by one agent unless the work is explicitly split at a stable boundary.
 
+Most historical slices below are now verified and should be treated as regression-audit prompts, not open remediation instructions. Use [REMEDIATION_TRACKER.md](REMEDIATION_TRACKER.md) for live status before assigning work.
+
 ## Slice 1: Admin Auth, 2FA, RBAC, Scanner
 
 Tracker IDs: `SEC-001`, `SEC-002`, `ADMIN-002`.
@@ -25,6 +27,8 @@ Re-audit admin API auth/RBAC for 2FA and scanner access. Do not change unrelated
 ## Slice 2: Public API Surface And Privacy
 
 Tracker IDs: `SEC-003`, `PRIV-001`, `SEC-004`.
+
+Current state: verified. Public checkout-language mutations are not mounted on the public router, order-success receipts require receipt tokens and render minimal DTOs, and checkout summary user data is rendered as text. Future work should re-audit these boundaries for regressions.
 
 Scope:
 

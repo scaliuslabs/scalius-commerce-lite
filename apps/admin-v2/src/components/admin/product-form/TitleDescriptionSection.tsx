@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   FormControl,
@@ -10,11 +11,16 @@ import { Input } from "@/components/ui/input";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import {
-  AdditionalInfoManager,
-  type RichContentItem,
-} from "./AdditionalInfoManager";
+import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 import type { ProductFormValues } from "./types";
+
+const AdditionalInfoManager = lazy(() =>
+  import("./AdditionalInfoManager").then((module) => ({
+    default: module.AdditionalInfoManager,
+  })),
+);
+
+type RichContentItem = NonNullable<ProductFormValues["additionalInfo"]>[number];
 
 interface TitleDescriptionSectionProps {
   form: UseFormReturn<ProductFormValues>;
@@ -23,6 +29,8 @@ interface TitleDescriptionSectionProps {
 export function TitleDescriptionSection({
   form,
 }: TitleDescriptionSectionProps) {
+  const [activeTab, setActiveTab] = useState("description");
+
   return (
     <div className="space-y-4">
       {/* Product Title */}
@@ -48,7 +56,11 @@ export function TitleDescriptionSection({
 
       {/* Product Description with Additional Info Tabs */}
       <Card className="overflow-hidden">
-        <Tabs defaultValue="description" className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="w-full"
+        >
           <TabsList className="w-full justify-start rounded-none border-b h-9 p-0 bg-transparent">
             <TabsTrigger
               value="description"
@@ -85,21 +97,25 @@ export function TitleDescriptionSection({
           </TabsContent>
 
           <TabsContent value="additional" className="p-3 m-0">
-            <FormField
-              control={form.control}
-              name="additionalInfo"
-              render={({ field }) => (
-                <FormItem>
-                  <AdditionalInfoManager
-                    initialContent={(field.value as RichContentItem[]) || []}
-                    onContentChange={(newContent) => {
-                      field.onChange(newContent);
-                    }}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {activeTab === "additional" ? (
+              <Suspense fallback={<LoadingFallback height="h-36" />}>
+                <FormField
+                  control={form.control}
+                  name="additionalInfo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <AdditionalInfoManager
+                        initialContent={(field.value as RichContentItem[]) || []}
+                        onContentChange={(newContent) => {
+                          field.onChange(newContent);
+                        }}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </Suspense>
+            ) : null}
           </TabsContent>
         </Tabs>
       </Card>

@@ -116,9 +116,10 @@ Customer Auth Flow (storefront):
 
 - **L1**: In-memory `Map<userId, {permissions, timestamp}>` per Worker isolate, 5-minute TTL
 - **L2**: Cloudflare KV (`rbac:perms:{userId}`), 5-minute TTL
+- **Read order**: `getUserPermissions(db, userId, kv)` uses KV as the cross-isolate source of truth when KV is supplied, then refreshes from D1 on KV miss. Stale local memory must not override a missing/cleared KV entry.
 - **D1 batch query**: All 3 queries (user lookup, role permissions, user overrides) run in a single `db.batch()` call
 - **Cache invalidation**: `clearPermissionCache(userId, kv)` deletes both L1 and L2. `clearAllPermissionCache()` clears local Map only (no KV prefix deletion).
-- **Weakness**: `clearAllPermissionCache()` only clears the current isolate's Map. Other isolates retain stale L1 caches until TTL expiry.
+- **Mutation rule**: RBAC mutation routes must delete affected per-user KV entries with `clearPermissionCache(userId, kv)`. `clearAllPermissionCache()` is useful only for the current isolate and must not be treated as cross-isolate invalidation.
 
 ## Admin Middleware Pipeline
 
@@ -247,9 +248,9 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 1. **2FA is optional, but enabled 2FA is enforced per session**. Users without 2FA can access the admin dashboard. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification endpoints.
 
-2. **`clearAllPermissionCache()` is local only**: When roles/permissions are modified via the RBAC API, `clearAllPermissionCache()` clears only the current Worker isolate's in-memory Map. Other isolates serve stale permissions for up to 5 minutes (KV TTL). No KV prefix-scan deletion exists.
+2. **`clearAllPermissionCache()` is local only**: Cross-isolate RBAC invalidation depends on deleting affected `rbac:perms:{userId}` KV entries with `clearPermissionCache(userId, kv)`. Role/permission mutation routes should enumerate affected users and clear those keys; do not rely on local-only broad cache clearing.
 
-3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The admin-auth middleware normalizes paths by prepending `/api/v1` if not present, but the rbac middleware in Astro uses paths as-is.
+3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The API admin-auth middleware normalizes paths by prepending `/api/v1` if not present. Admin page access is handled separately through the TanStack Start guard and `@scalius/core/auth/rbac/page-permissions`.
 
 4. **Fraud checker is NOT called during checkout or order processing**. It is a standalone admin-only tool for manual phone number lookups. No automated fraud screening exists in the order pipeline.
 
@@ -257,6 +258,6 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 6. **Admin user creation depends on invite/password-reset email delivery**. If invite delivery fails, the API reports `emailFailed: true` without returning the temp password; the creating admin should fix email settings or use the password reset flow.
 
-7. **No session revocation on role changes**. When a user's roles or permissions are modified, their existing sessions remain valid with stale permissions until the cache TTL expires (5 min). Active sessions are not invalidated.
+7. **No session revocation on role changes**. When a user's roles or permissions are modified, their existing sessions remain valid. Effective permission checks should refresh after affected KV permission-cache entries are deleted, but sessions themselves are not revoked.
 
 8. **Super admin is set by first-user heuristic**. `autoSeedRbacIfNeeded()` also checks on every isolate start whether the first `role=admin` user (by `createdAt`) is a super admin and sets them if not. This could promote an unintended user if the original super admin is deleted.

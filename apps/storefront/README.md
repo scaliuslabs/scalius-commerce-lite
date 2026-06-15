@@ -135,7 +135,7 @@ When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN
 
 ### Architecture
 
-Each API domain has its own module file (e.g., `products.ts`, `categories.ts`, `orders.ts`). All use `createApiUrl()` from `client.ts` to build request URLs and `fetch()` directly -- the storefront does NOT use the generated SDK for data fetching, only for types.
+Each API domain has its own module file (e.g., `products.ts`, `categories.ts`, `orders.ts`). Most read paths use generated SDK methods from `@scalius/api-client/sdk` with the configured clients in `client.ts`, so SSR requests can use the runtime API URL, auth token, retry behavior, and service-binding transport where available. Direct `fetch()` helpers remain for proxy routes and flows that need custom request bodies, polling, retries, or raw response handling.
 
 ### Typed Envelope Unwrapping (`src/lib/api/unwrap.ts`)
 
@@ -234,13 +234,13 @@ Gateway-based payment architecture:
 
 The storefront imports ONLY:
 - `@scalius/shared` -- Pure utility functions (currency formatting, CORS, etc.)
-- `@scalius/api-client` -- Generated SDK types (type-only imports)
+- `@scalius/api-client` -- Generated SDK types, generated endpoint helpers, and client factory/runtime used through the configured clients in `src/lib/api/client.ts`
 
 It does NOT import:
 - `@scalius/core` -- Domain services
 - `@scalius/database` -- Schema, client, migrations
 
-All data access goes through the API worker via service binding or HTTP fetch.
+All data access goes through the API worker via the configured SDK clients, service binding transport, or explicit HTTP fetch/proxy exceptions. Storefront code should not use the generated singleton client when a request needs runtime env, auth, retry, or service-binding behavior.
 
 ## Cloudflare Bindings
 

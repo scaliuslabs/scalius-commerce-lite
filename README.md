@@ -323,18 +323,18 @@ All error responses: `{ "success": false, "error": { "code": "...", "message": "
 
 Drizzle schema and SQL migrations for Cloudflare D1 (SQLite). The schema declarations and migration journal are the source of truth; avoid copying volatile table or migration counts into docs.
 
-| Domain | Tables | Key Tables |
-|--------|--------|------------|
-| Auth | 5 | user, session, account, verification, twoFactor |
-| RBAC | 5 | permissions, roles, rolePermissions, userRoles, userPermissions |
-| Products | 10 | products, productVariants, productImages, categories, collections, productAttributes, media, mediaFolders |
-| Orders | 7 | orders, orderItems, orderPayments, paymentPlans, codTracking, webhookEvents, abandonedCheckouts |
-| Customers | 2 | customers, customerHistory |
-| Inventory | 2 | inventoryMovements, productLowStockAlerts |
-| Delivery | 3 | deliveryLocations, deliveryProviders, deliveryShipments |
-| Marketing | 6 | discounts, discountProducts, discountCollections, discountUsage, metaConversionsSettings, metaConversionsLogs |
-| Content | 6 | pages, widgets, widgetHistory, heroSections, heroSliders, pageTemplates |
-| System | 6 | settings, siteSettings, analytics, adminFcmTokens, shippingMethods, checkoutLanguages |
+| Domain | Key Tables |
+|--------|------------|
+| Auth | user, session, account, verification, twoFactor |
+| RBAC | permissions, roles, rolePermissions, userRoles, userPermissions |
+| Products | products, productVariants, productImages, categories, collections, productAttributes, media, mediaFolders |
+| Orders | orders, orderItems, orderPayments, paymentPlans, codTracking, webhookEvents, abandonedCheckouts |
+| Customers | customers, customerHistory |
+| Inventory | inventoryMovements, productLowStockAlerts |
+| Delivery | deliveryLocations, deliveryProviders, deliveryShipments |
+| Marketing | discounts, discountProducts, discountCollections, discountUsage, metaConversionsSettings, metaConversionsLogs |
+| Content | pages, widgets, widgetPlacements, widgetHistory, heroSections, heroSliders, pageTemplates |
+| System | settings, siteSettings, analytics, adminFcmTokens, shippingMethods, checkoutLanguages |
 
 FTS5 full-text search with Bengali tokenizer is enabled by migration `0031`.
 
