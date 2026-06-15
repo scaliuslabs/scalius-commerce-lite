@@ -21,32 +21,43 @@ type PopoverOrderItem = {
 interface OrderItemsPopoverProps {
   orderId: string;
   itemCount: number;
+  initialOpen?: boolean;
 }
 
 export function OrderItemsPopover({
   orderId,
   itemCount,
+  initialOpen = false,
 }: OrderItemsPopoverProps) {
   const { symbol } = useCurrency();
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = React.useState(initialOpen);
   const [items, setItems] = React.useState<PopoverOrderItem[] | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const handleOpenChange = async (open: boolean) => {
-    setIsOpen(open);
-    if (open && !items) {
-      setIsLoading(true);
-      try {
-        const data = await getOrderItems({ data: { orderId } });
-        setItems(data);
-      } catch (error) {
-        console.error("Failed to fetch order items:", error);
-        setItems([]); // Set to empty array on error to prevent re-fetching
-        toast.error("Error", { description: "Could not load order items." });
-      } finally {
-        setIsLoading(false);
-      }
+  const loadItems = React.useCallback(async () => {
+    if (items || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const data = await getOrderItems({ data: { orderId } });
+      setItems(data);
+    } catch (error) {
+      console.error("Failed to fetch order items:", error);
+      setItems([]);
+      toast.error("Error", { description: "Could not load order items." });
+    } finally {
+      setIsLoading(false);
     }
+  }, [isLoading, items, orderId]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      void loadItems();
+    }
+  }, [isOpen, loadItems]);
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
   };
 
   return (

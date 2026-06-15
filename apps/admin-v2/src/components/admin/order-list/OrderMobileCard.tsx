@@ -28,9 +28,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { OrderStatusSelector } from "./OrderStatusSelector";
-import { OrderItemsPopover } from "./OrderItemsPopover";
+import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
-import { FraudCheckIndicator } from "./FraudCheckIndicator";
+import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
@@ -116,7 +116,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                 <Badge variant="outline" className="text-xs">
                   ID: {order.id.slice(0, 8)}
                 </Badge>
-                <OrderItemsPopover
+                <LazyOrderItemsPopover
                   orderId={order.id}
                   itemCount={order.itemCount}
                 />
@@ -146,7 +146,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
           <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
             <Phone className="h-3.5 w-3.5 shrink-0" />
             <span>{formatPhoneForDisplay(order.customerPhone)}</span>
-            <FraudCheckIndicator
+            <LazyFraudCheckIndicator
               phone={order.customerPhone}
               orderId={order.id}
             />

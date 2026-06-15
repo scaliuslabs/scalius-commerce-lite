@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -17,14 +17,20 @@ import {
 interface FraudCheckIndicatorProps {
   phone: string;
   orderId: string;
+  initialOpen?: boolean;
 }
 
-export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function FraudCheckIndicator({
+  phone,
+  initialOpen = false,
+}: FraudCheckIndicatorProps) {
+  const [isOpen, setIsOpen] = useState(initialOpen);
   const [isLoading, setIsLoading] = useState(false);
   const [fraudData, setFraudData] = useState<FraudLookupData | null>(null);
+  const [hasRequestedFraudData, setHasRequestedFraudData] = useState(false);
 
-  const handleCheck = async () => {
+  const handleCheck = useCallback(async () => {
+    setHasRequestedFraudData(true);
     setIsLoading(true);
     try {
       const result = await fraudCheckerLookup({ data: { phone } });
@@ -34,14 +40,17 @@ export function FraudCheckIndicator({ phone }: FraudCheckIndicatorProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [phone]);
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (open && !fraudData && !isLoading) {
-      handleCheck();
-    }
   };
+
+  useEffect(() => {
+    if (isOpen && !hasRequestedFraudData && !isLoading) {
+      void handleCheck();
+    }
+  }, [handleCheck, hasRequestedFraudData, isLoading, isOpen]);
 
   const getDeliveryRate = () => {
     if (!fraudData?.total_parcels) return 0;
