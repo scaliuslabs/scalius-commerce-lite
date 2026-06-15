@@ -492,7 +492,9 @@ export function AmountOffOrderForm({
                             >
                               <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
                               {field.value ? (
-                                formatDateShort(field.value) // Format: Sep 10, 2023
+                                <span suppressHydrationWarning>
+                                  {formatDateShort(field.value)}
+                                </span>
                               ) : (
                                 <span>Pick a date</span>
                               )}
@@ -540,7 +542,9 @@ export function AmountOffOrderForm({
                             >
                               <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
                               {field.value ? (
-                                formatDateShort(field.value)
+                                <span suppressHydrationWarning>
+                                  {formatDateShort(field.value)}
+                                </span>
                               ) : (
                                 <span>No end date</span>
                               )}
