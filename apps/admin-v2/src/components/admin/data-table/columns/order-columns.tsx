@@ -25,10 +25,10 @@ import {
   formatRelativeDate,
   formatDateVerbose,
 } from "@scalius/shared/timestamps";
-import { OrderItemsPopover } from "~/components/admin/order-list/OrderItemsPopover";
+import { LazyOrderItemsPopover } from "~/components/admin/order-list/LazyOrderItemsPopover";
 import { OrderStatusSelector } from "~/components/admin/order-list/OrderStatusSelector";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
-import { FraudCheckIndicator } from "~/components/admin/order-list/FraudCheckIndicator";
+import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraudCheckIndicator";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn } from "./column-factories";
 
@@ -146,7 +146,7 @@ export function getOrderColumns(
                     `, ${order.areaName || order.area}`}
                 </span>
               </div>
-              <FraudCheckIndicator
+              <LazyFraudCheckIndicator
                 phone={order.customerPhone}
                 orderId={order.id}
               />
@@ -162,7 +162,7 @@ export function getOrderColumns(
       id: "items",
       header: () => <span>Items</span>,
       cell: ({ row }) => (
-        <OrderItemsPopover
+        <LazyOrderItemsPopover
           orderId={row.original.id}
           itemCount={row.original.itemCount}
         />
