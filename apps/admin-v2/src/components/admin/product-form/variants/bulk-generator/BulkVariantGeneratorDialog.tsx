@@ -39,6 +39,7 @@ interface BulkVariantGeneratorProps {
   existingVariants: ProductVariant[];
   onGenerate: (variants: BulkGeneratedVariant[]) => Promise<void>;
   disabled?: boolean;
+  initialOpen?: boolean;
 }
 
 export function BulkVariantGenerator({
@@ -46,9 +47,10 @@ export function BulkVariantGenerator({
   existingVariants,
   onGenerate,
   disabled,
+  initialOpen = false,
 }: BulkVariantGeneratorProps) {
   const { symbol } = useCurrency();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Form state

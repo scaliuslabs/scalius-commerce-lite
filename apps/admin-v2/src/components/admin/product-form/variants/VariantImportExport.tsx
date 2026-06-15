@@ -19,12 +19,6 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import {
-  variantsToCsv,
-  downloadCsv,
-  parseCsvToVariants,
-  generateCsvTemplate,
-} from "./utils/csvHelpers";
 import type {
   ProductVariant,
   BulkGeneratedVariant,
@@ -33,14 +27,12 @@ import type {
 
 interface VariantImportExportProps {
   variants: ProductVariant[];
-  existingSkus: string[];
   onImport: (variants: BulkGeneratedVariant[]) => Promise<void>;
   disabled?: boolean;
 }
 
 export function VariantImportExport({
   variants,
-  // existingSkus,
   onImport,
   disabled,
 }: VariantImportExportProps) {
@@ -51,13 +43,17 @@ export function VariantImportExport({
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const { variantsToCsv, downloadCsv } = await import("./utils/csvHelpers");
     const csv = variantsToCsv(variants);
     const timestamp = new Date().toISOString().split("T")[0];
     downloadCsv(csv, `variants-${timestamp}.csv`);
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const { generateCsvTemplate, downloadCsv } = await import(
+      "./utils/csvHelpers"
+    );
     const template = generateCsvTemplate();
     downloadCsv(template, "variant-template.csv");
   };
@@ -71,7 +67,11 @@ export function VariantImportExport({
     const reader = new FileReader();
     reader.onload = async (e) => {
       const csvText = e.target?.result as string;
-      const result = parseCsvToVariants(csvText);
+      const { parseCsvToVariants } = await import("./utils/csvHelpers");
+      const result = parseCsvToVariants(
+        csvText,
+        variants.map((variant) => variant.sku),
+      );
       setImportResult(result);
     };
     reader.readAsText(file);
@@ -82,63 +82,7 @@ export function VariantImportExport({
 
     setIsImporting(true);
     try {
-      // Convert CSV rows to BulkGeneratedVariant format
-      const csvLines = (fileInputRef.current?.files?.[0] as File)
-        .text()
-        .then((text) => {
-          const lines = text.trim().split("\n").slice(1); // Skip header
-          const variants: BulkGeneratedVariant[] = [];
-
-          for (const line of lines) {
-            const values = parseCsvLine(line);
-            if (values.length < 6) continue;
-
-            const [
-              sku,
-              size,
-              color,
-              weightStr,
-              priceStr,
-              stockStr,
-              discountType,
-              discountValueStr,
-            ] = values;
-
-            const price = parseFloat(priceStr);
-            const stock = parseInt(stockStr, 10);
-            const weight =
-              weightStr && weightStr.trim() ? parseFloat(weightStr) : null;
-            const parsedDiscountType =
-              discountType?.trim().toLowerCase() === "flat"
-                ? "flat"
-                : "percentage";
-            const discountValue =
-              discountValueStr && discountValueStr.trim()
-                ? parseFloat(discountValueStr)
-                : null;
-
-            variants.push({
-              sku: sku.trim(),
-              size: size?.trim() || null,
-              color: color?.trim() || null,
-              weight,
-              price,
-              stock,
-              discountType: parsedDiscountType,
-              discountPercentage:
-                parsedDiscountType === "percentage" ? discountValue : null,
-              discountAmount:
-                parsedDiscountType === "flat" ? discountValue : null,
-              barcode: null,
-              barcodeType: null,
-            });
-          }
-
-          return variants;
-        });
-
-      const variantsToImport = await csvLines;
-      await onImport(variantsToImport);
+      await onImport(importResult.variants);
 
       setImportDialogOpen(false);
       setImportResult(null);
@@ -151,28 +95,6 @@ export function VariantImportExport({
       setIsImporting(false);
     }
   };
-
-  function parseCsvLine(line: string): string[] {
-    const result: string[] = [];
-    let current = "";
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === "," && !inQuotes) {
-        result.push(current);
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-
-    result.push(current);
-    return result;
-  }
 
   return (
     <div className="flex gap-2">

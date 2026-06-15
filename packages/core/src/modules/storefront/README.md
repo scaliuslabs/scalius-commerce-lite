@@ -75,7 +75,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 ### Public SEO (`/api/v1/seo`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt). Defaults to "Scalius Commerce" | `api:seo:*` with TTL=0 |
+| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt). Defaults to "Scalius Commerce" | `api:seo:*` with CACHE_TTLS.STANDARD / 3600s |
 
 ### Public Checkout (`/api/v1/checkout`)
 | Method | Path | Description |
@@ -124,5 +124,5 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 ## Known Gaps
 
 - Public hero route at `/api/v1/hero/sliders` and the consolidated `/api/v1/storefront/homepage` both serve hero slider data -- the storefront uses the consolidated endpoint, making the standalone hero endpoint partially redundant.
-- Public SEO route at `/api/v1/seo` has TTL=0 on its cache middleware (effectively no caching), while the same data is cached via the consolidated homepage endpoint.
+- Public SEO route at `/api/v1/seo` and the consolidated homepage endpoint both cache SEO data with `CACHE_TTLS.STANDARD`; SEO settings writes purge the homepage cache group, including the `api:seo:` prefix.
 - Abandoned checkouts cleanup endpoint requires auth middleware, but the save endpoint does not.
