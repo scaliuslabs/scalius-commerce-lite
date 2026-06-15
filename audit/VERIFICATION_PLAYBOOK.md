@@ -115,13 +115,28 @@ rg -n 'queryKeys\\.products\\.stats\\(\\)|invalidateProductStatsQueries' \
 ! rg '@dnd-kit|useSortable|DndContext|SortableContext|sortableKeyboardCoordinates' apps/admin-v2/src/components/admin/data-table/DataTable.tsx
 rg -n '@dnd-kit|useSortable|DndContext|SortableContext|sortableKeyboardCoordinates' apps/admin-v2/src/components/admin/data-table/SortableDataTableContent.tsx
 rg -n 'LazyMediaManager|lazy\\(\\(\\) => import\\("\\./MediaManager"\\)\\)' apps/admin-v2/src/components/admin/media-manager
+rg -n 'DeferredTiptapEditor' \
+  apps/admin-v2/src/components/admin/ProductForm.tsx \
+  apps/admin-v2/src/components/admin/CategoryForm.tsx \
+  apps/admin-v2/src/components/admin/PageForm.tsx \
+  apps/admin-v2/src/components/admin/footer-builder/ContentSection.tsx \
+  apps/admin-v2/src/components/admin/product-form
+! rg '<TiptapEditor|React\\.lazy\\(\\(\\) => import\\([^\\n]*tiptap|useEditor|EditorContent' \
+  apps/admin-v2/src/components/admin/ProductForm.tsx \
+  apps/admin-v2/src/components/admin/CategoryForm.tsx \
+  apps/admin-v2/src/components/admin/PageForm.tsx \
+  apps/admin-v2/src/components/admin/footer-builder/ContentSection.tsx \
+  apps/admin-v2/src/components/admin/product-form
 rg -n 'lazy\\(\\(\\) => import\\("\\./widget-form/(FullScreenEditor|WidgetHistoryModal|WidgetPasteModal)"' apps/admin-v2/src/components/admin/widgets/WidgetForm.tsx
 rg -n 'import\\("@scalius/core/modules/ai/prompt-helper-v2"\\)|import\\("\\./standalone-prompt"\\)' apps/admin-v2/src/components/admin/widgets/widget-form/useAiGenerator.ts
 pnpm --filter @scalius/admin-v2 typecheck
 pnpm --filter @scalius/admin-v2 lint
+pnpm --filter @scalius/admin-v2 build
+find apps/admin-v2/dist/client/assets \( -name 'ProductForm-*.js' -o -name 'CategoryForm-*.js' -o -name 'PageForm-*.js' -o -name 'footer-builder-*.js' \) -print0 | xargs -0 rg 'useEditor|EditorContent|createTiptapExtensions|prosemirror' || true
+find apps/admin-v2/dist/client/assets -maxdepth 1 -type f \( -name '*Tiptap*' -o -name '*DeferredTiptap*' \) -exec ls -lh {} +
 ```
 
-Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked, and widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker, `/admin/media`, `/admin/settings/hero-sliders` custom `Add Slide Image` picker, and `/admin/widgets/create` paste/preview/copy-prompt.
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked. Rich-text form fields should render the lightweight `DeferredTiptapEditor` shell first, production form chunks should not contain Tiptap internals such as `useEditor`, `EditorContent`, ProseMirror, or `createTiptapExtensions`, and the real `TiptapEditor` should remain a separate lazy asset. Widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker and rich-text edit shell, `/admin/categories/new` rich-text edit shell, `/admin/pages/new` rich-text edit shell, `/admin/media`, `/admin/settings/hero-sliders` custom `Add Slide Image` picker, and `/admin/widgets/create` paste/preview/copy-prompt.
 
 Admin mutation-barrel split checks:
 
@@ -206,7 +221,7 @@ pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/admin-v2 typecheck
 ```
 
-For `CACHE-003`/`CACHE-008`/`CACHE-013`, non-widget admin writes for shipping methods, delivery providers, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Delivery-provider writes are checkout-affecting and must invalidate `["checkout"]`; the admin delivery-provider UI must invalidate `queryKeys.settings.deliveryProviders()` after successful saves/deletes. Hero slider create/update/delete must invalidate homepage API KV and schedule the storefront purge defensively; hero slider reads must not purge. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
+For `CACHE-003`/`CACHE-008`/`CACHE-013`/`CACHE-014`, non-widget admin writes for shipping methods, delivery providers, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, security settings, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Delivery-provider writes are checkout-affecting and must invalidate `["checkout"]`; the admin delivery-provider UI must invalidate `queryKeys.settings.deliveryProviders()` after successful saves/deletes. Hero slider create/update/delete must invalidate homepage API KV and schedule the storefront purge defensively; hero slider reads must not purge. Security/CSP writes must invalidate `["layout"]` and must not require a Hono `ExecutionContext` just to cache `security:csp_allowed_domains`. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
 
 Storefront purge route checks:
 

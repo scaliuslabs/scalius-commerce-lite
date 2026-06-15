@@ -1,16 +1,12 @@
 // src/components/admin/product-form/AdditionalInfoManager.tsx
-import React, { Suspense } from "react";
+import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
-
-const TiptapEditor = React.lazy(() =>
-  import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
-);
+import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { Plus, Trash2, GripVertical, ChevronDown } from "lucide-react";
 import {
   DndContext,
@@ -142,17 +138,15 @@ function SortableRichContentItem({
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <Suspense fallback={<LoadingFallback />}>
-                        <TiptapEditor
-                          content={field.value || ""}
-                          onChange={(newContent: string) => {
-                            field.onChange(newContent);
-                            onUpdate(item.id, { content: newContent });
-                          }}
-                          placeholder="Add content for this section..."
-                          compact={true}
-                        />
-                      </Suspense>
+                      <DeferredTiptapEditor
+                        content={field.value || ""}
+                        onChange={(newContent: string) => {
+                          field.onChange(newContent);
+                          onUpdate(item.id, { content: newContent });
+                        }}
+                        placeholder="Add content for this section..."
+                        compact={true}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

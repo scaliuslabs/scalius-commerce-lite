@@ -154,10 +154,9 @@ Authentication strategy:
 3. **Scanner session cookie** -- created after the admin worker exchanges a QR token; limited to exact scanner workflow endpoints
 
 Then validates:
-- 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`).
+- 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`, `POST /2fa/method`).
 - User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.
-- Fine-grained route permission check via `getRoutePermission()`
-- Super admins bypass all permission checks
+- Fine-grained route permission check via `getRoutePermission()`. Unmapped admin routes fail closed, including for super admins.
 - Scanner sessions use only the scanner allowlist and never inherit the minting admin's role or permissions.
 
 ### JWT Auth Middleware (`apps/api/src/middleware/auth.ts`)
@@ -217,7 +216,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 | POST | `/update-profile` | Update name and avatar |
 | GET | `/2fa/info` | Get current user 2FA status |
 | POST | `/2fa/complete-verification` | Complete 2FA after Better Auth verification; requires the verification session token bound to the current session/user |
-| POST | `/2fa/method` | Switch between TOTP and email OTP after verifying a code for the target method |
+| POST | `/2fa/method` | Switch between TOTP and email OTP after verifying a code for the target method or proving the same-origin Better Auth `sessionToken` matches the current session/user |
 | POST | `/2fa/verify` | Verify TOTP, email OTP, or backup code |
 | GET | `/account-security` | Get 2FA method and super admin status |
 

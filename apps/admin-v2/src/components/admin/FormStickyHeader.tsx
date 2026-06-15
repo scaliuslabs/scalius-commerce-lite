@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus } from "lucide-react";
@@ -36,7 +37,11 @@ export function FormActionBar({
       ? saveLabel || `Save ${title.replace(/s$/, "")}`
       : saveLabel || `Create ${title.replace(/s$/, "")}`;
 
-  const portalTarget = document.getElementById("form-action-bar-slot");
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById("form-action-bar-slot"));
+  }, []);
 
   const bar = (
     <div className="border-t bg-background">
