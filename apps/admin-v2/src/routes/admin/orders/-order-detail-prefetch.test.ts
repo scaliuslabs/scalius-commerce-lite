@@ -33,7 +33,10 @@ import { prefetchOrderDetailQueries } from "../../../lib/order-detail-prefetch";
 
 type PrefetchClient = Parameters<typeof prefetchOrderDetailQueries>[0];
 
-function createQueryClient(paymentMethod: string | null, options?: { rejectPayments?: boolean }) {
+function createQueryClient(
+  paymentMethod: string | null,
+  options?: { rejectPayments?: boolean; rejectProviders?: boolean },
+) {
   const ensureQueryData = vi.fn(async (queryOptions: { queryKey: readonly unknown[] }) => {
     if (queryOptions.queryKey[0] === "orders" && queryOptions.queryKey[1] === "detail") {
       return { id: "ord_1", paymentMethod };
@@ -43,6 +46,13 @@ function createQueryClient(paymentMethod: string | null, options?: { rejectPayme
   const prefetchQuery = vi.fn(async (queryOptions: { queryKey: readonly unknown[] }) => {
     if (options?.rejectPayments && queryOptions.queryKey[1] === "payments") {
       throw new Error("payment history temporarily unavailable");
+    }
+    if (
+      options?.rejectProviders &&
+      queryOptions.queryKey[0] === "settings" &&
+      queryOptions.queryKey[1] === "delivery-providers"
+    ) {
+      throw new Error("delivery providers temporarily unavailable");
     }
   });
 
@@ -66,13 +76,13 @@ describe("order detail prefetch", () => {
     expect(ensureQueryData.mock.calls.map(([options]) => options.queryKey)).toEqual([
       ["orders", "detail", "ord_1"],
       ["orders", "shipments", "ord_1"],
-      ["settings", "delivery-providers"],
     ]);
     expect(prefetchQuery.mock.calls.map(([options]) => options.queryKey)).toEqual(
       expect.arrayContaining([
         ["orders", "payments", "ord_1"],
         ["orders", "cod", "ord_1"],
         ["settings", "currency"],
+        ["settings", "delivery-providers"],
       ]),
     );
   });
@@ -87,6 +97,7 @@ describe("order detail prefetch", () => {
       expect.arrayContaining([
         ["orders", "payments", "ord_1"],
         ["settings", "currency"],
+        ["settings", "delivery-providers"],
       ]),
     );
     expect(prefetchedKeys).not.toContainEqual(["orders", "cod", "ord_1"]);
@@ -98,5 +109,13 @@ describe("order detail prefetch", () => {
 
     await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith("Order payment prefetch skipped", expect.any(Error));
+  });
+
+  it("keeps the order page loadable when delivery provider prefetch fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { queryClient } = createQueryClient("stripe", { rejectProviders: true });
+
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith("Order delivery provider prefetch skipped", expect.any(Error));
   });
 });

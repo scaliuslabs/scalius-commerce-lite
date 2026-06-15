@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { OrderView } from "~/components/admin/OrderView";
 import type { DeliveryProviderRecord } from "~/types/api-responses";
 import type { Order } from "~/components/admin/orderview/types";
@@ -129,7 +129,7 @@ function OrderViewPage() {
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
-  const { data: providers } = useSuspenseQuery({
+  const { data: providers = [] } = useQuery({
     ...deliveryProvidersQueryOptions(),
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });

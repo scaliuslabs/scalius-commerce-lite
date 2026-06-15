@@ -32,6 +32,11 @@ export async function prefetchOrderDetailQueries(
       .catch((error) => {
         console.warn("Order currency prefetch skipped", error);
       }),
+    queryClient
+      .prefetchQuery(deliveryProvidersQueryOptions())
+      .catch((error) => {
+        console.warn("Order delivery provider prefetch skipped", error);
+      }),
   ];
 
   if (order.paymentMethod === "cod") {
@@ -49,7 +54,6 @@ export async function prefetchOrderDetailQueries(
       ...orderShipmentsQueryOptions(orderId),
       staleTime: Infinity,
     }),
-    queryClient.ensureQueryData(deliveryProvidersQueryOptions()),
     ...optionalWarmQueries,
   ]);
 }
