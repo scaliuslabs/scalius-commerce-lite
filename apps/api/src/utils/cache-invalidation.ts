@@ -400,6 +400,39 @@ export function triggerStorefrontPurgeForGroups(
   }
 }
 
+/**
+ * Trigger the storefront purge endpoint for exact storefront cache prefixes.
+ * This is the scheduled counterpart to `purgeStorefrontForPrefixes()` for
+ * committed writes whose purge should not decide whether the mutation succeeded.
+ */
+export function triggerStorefrontPurgeForPrefixes(
+  prefixes: readonly string[],
+  env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+  options: { groups?: readonly string[]; bumpVersion?: boolean } = {},
+  executionCtx?: ExecutionContext,
+): void {
+  const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
+  if (uniquePrefixes.length === 0 && options.bumpVersion !== true) return;
+
+  const purgeUrl = env?.PURGE_URL;
+  const purgeToken = env?.PURGE_TOKEN;
+  if (!purgeUrl || !purgeToken) return;
+
+  const purgePromise = purgeStorefrontForPrefixes(
+    uniquePrefixes,
+    env,
+    options,
+  ).catch((err) =>
+    console.error("[Cache] Storefront prefix purge failed:", err),
+  );
+
+  if (executionCtx && typeof executionCtx.waitUntil === "function") {
+    executionCtx.waitUntil(purgePromise);
+  } else {
+    void purgePromise;
+  }
+}
+
 export function getOptionalExecutionContext(c: {
   executionCtx?: ExecutionContext;
 }): ExecutionContext | undefined {
@@ -408,6 +441,25 @@ export function getOptionalExecutionContext(c: {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Invalidate API KV entries and schedule the matching storefront purge.
+ * Use this after admin writes that have already committed DB/KV state, so a
+ * downstream storefront network/purge failure cannot turn the mutation into a
+ * false 500 response.
+ */
+export async function invalidateApiAndScheduleStorefrontGroups(
+  groups: readonly string[],
+  c: { env?: Env; executionCtx?: ExecutionContext },
+): Promise<void> {
+  const normalizedGroups = [...groups];
+  await invalidateGroups(normalizedGroups, c.env?.CACHE);
+  triggerStorefrontPurgeForGroups(
+    normalizedGroups,
+    c.env,
+    getOptionalExecutionContext(c),
+  );
 }
 
 /**

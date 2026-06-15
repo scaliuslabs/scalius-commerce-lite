@@ -9,7 +9,7 @@ import { getEncryptionKey } from "../../../utils/encryption-key";
 import { upsertEncryptedSetting } from "@scalius/core/modules/payments/gateway-settings";
 import {
     getOptionalExecutionContext,
-    invalidateApiAndStorefrontGroups,
+    invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
 
 import { ok } from "../../../utils/api-response";
@@ -121,7 +121,7 @@ app.openapi(saveAuthRoute, async (c) => {
             .where(eq(siteSettings.id, existingSettings.id));
 
         await invalidateSiteSettingsCache(getKv());
-        await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
+        await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
         return ok(c, { message: "Auth settings saved successfully" });
 });
 
@@ -201,7 +201,7 @@ app.openapi(saveSecurityRoute, async (c) => {
                     void cacheWrite;
                 }
             }
-            await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
+            await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
         }
 
         return ok(c, { message: "Security settings saved successfully" });

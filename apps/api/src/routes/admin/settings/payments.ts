@@ -6,8 +6,7 @@ import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { getEncryptionKey } from "../../../utils/encryption-key";
 import {
-    invalidateGroups,
-    purgeStorefrontForGroups,
+    invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 import {
@@ -27,9 +26,8 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 const CHECKOUT_CACHE_GROUPS = ["checkout"];
 
-async function invalidateCheckoutCaches(c: { env: Env }): Promise<void> {
-    await invalidateGroups(CHECKOUT_CACHE_GROUPS, c.env.CACHE);
-    await purgeStorefrontForGroups(CHECKOUT_CACHE_GROUPS, c.env);
+async function invalidateCheckoutCaches(c: { env: Env; executionCtx?: ExecutionContext }): Promise<void> {
+    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
 }
 
 // ─────────────────────────────────────────

@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
     deleteNavigationConfig: vi.fn(),
     getKv: vi.fn(),
     invalidateSiteSettingsCache: vi.fn(),
-    invalidateApiAndStorefrontGroups: vi.fn(),
+    invalidateApiAndScheduleStorefrontGroups: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/navigation", () => ({
@@ -34,7 +34,7 @@ vi.mock("../../utils/kv-cache", () => ({
 }));
 
 vi.mock("../../utils/cache-invalidation", () => ({
-    invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+    invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
 import { adminNavigationRoutes } from "./navigation";
@@ -49,7 +49,7 @@ function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     mocks.getKv.mockReturnValue({ id: "kv" });
     mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
-    mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+    mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
     mocks.saveNavigationConfig.mockResolvedValue(undefined);
     mocks.updateNavigationConfig.mockResolvedValue(undefined);
     mocks.deleteNavigationConfig.mockResolvedValue(undefined);
@@ -152,6 +152,9 @@ describe("admin navigation routes", () => {
         );
 
         expect(response.status).toBe(method === "DELETE" ? 204 : 200);
-        expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["layout"], env);
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["layout"],
+            expect.objectContaining({ env }),
+        );
     });
 });
