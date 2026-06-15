@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Plus, Trash2, Tag } from "lucide-react";
 import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { discountsQueryOptions } from "~/lib/api.queries";
+import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { useCurrency } from "~/hooks/use-currency";
 import {

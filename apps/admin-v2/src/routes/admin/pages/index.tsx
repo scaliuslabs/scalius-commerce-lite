@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
-import { pagesQueryOptions } from "~/lib/api.queries";
+import { pagesQueryOptions } from "~/lib/api-query-options/pages";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeletePage,

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { InventoryManager } from "~/components/admin/InventoryManager";
-import { inventoryQueryOptions } from "~/lib/api.queries";
+import { inventoryQueryOptions } from "~/lib/api-query-options/inventory";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/inventory")({

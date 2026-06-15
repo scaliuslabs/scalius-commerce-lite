@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { PlusCircle, Trash2, Layers } from "lucide-react";
 import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { collectionsQueryOptions } from "~/lib/api.queries";
+import { collectionsQueryOptions } from "~/lib/api-query-options/collections";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useUpdateCollection,

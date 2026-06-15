@@ -18,9 +18,9 @@ import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import {
   productsQueryOptions,
-  categoryFormOptionsQueryOptions,
   productStatsQueryOptions,
-} from "~/lib/api.queries";
+} from "~/lib/api-query-options/products";
+import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteProduct,

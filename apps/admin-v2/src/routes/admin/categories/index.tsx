@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
-import { categoriesQueryOptions } from "~/lib/api.queries";
+import { categoriesQueryOptions } from "~/lib/api-query-options/categories";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteCategory,
