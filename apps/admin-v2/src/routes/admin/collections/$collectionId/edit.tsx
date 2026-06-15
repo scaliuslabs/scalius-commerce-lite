@@ -1,17 +1,55 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CollectionForm } from "~/components/admin/collection-form";
-import { collectionQueryOptions, collectionFormOptionsQueryOptions } from "~/lib/api.queries";
+import {
+  collectionCategoryOptionsQueryOptions,
+  collectionQueryOptions,
+  productsByIdsQueryOptions,
+} from "~/lib/api.queries";
 import type { Category, Product } from "~/components/admin/collection-form/types";
 import { RouteErrorComponent } from "~/lib/list-helpers";
+import type { CollectionDto } from "~/lib/api-functions/collections";
+
+interface CollectionConfig {
+  categoryIds: string[];
+  productIds: string[];
+  specificProductIds?: string[];
+  featuredProductId?: string;
+  maxProducts?: number;
+  title?: string;
+  subtitle?: string;
+}
+
+function parseCollectionConfig(config: CollectionDto["config"]): CollectionConfig {
+  if (typeof config === "string") {
+    try {
+      return JSON.parse(config) as CollectionConfig;
+    } catch {
+      return { categoryIds: [], productIds: [] };
+    }
+  }
+  return (config || { categoryIds: [], productIds: [] }) as CollectionConfig;
+}
+
+function productIdsFromConfig(config: CollectionConfig): string[] {
+  return Array.from(new Set([
+    ...(config.productIds || config.specificProductIds || []),
+    ...(config.featuredProductId ? [config.featuredProductId] : []),
+  ].filter(Boolean)));
+}
 
 export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
     const [collection] = await Promise.all([
       queryClient.ensureQueryData({ ...collectionQueryOptions(params.collectionId), staleTime: Infinity }).catch(() => null),
-      queryClient.ensureQueryData(collectionFormOptionsQueryOptions()),
+      queryClient.ensureQueryData(collectionCategoryOptionsQueryOptions()),
     ]);
     if (!collection) throw redirect({ to: "/admin/collections" });
+
+    const productIds = productIdsFromConfig(parseCollectionConfig(collection.config));
+    if (productIds.length > 0) {
+      await queryClient.ensureQueryData(productsByIdsQueryOptions(productIds));
+    }
   },
   head: () => ({ meta: [{ title: "Edit Collection | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
@@ -21,11 +59,11 @@ export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
 function EditCollectionPage() {
   const { collectionId } = Route.useParams();
   const { data: collectionData } = useSuspenseQuery(collectionQueryOptions(collectionId));
-  const { data: formOptions } = useSuspenseQuery(collectionFormOptionsQueryOptions());
+  const { data: formOptions } = useSuspenseQuery(collectionCategoryOptionsQueryOptions());
 
   const c = collectionData;
-  const fo: { categories?: Category[]; products?: Product[] } = formOptions;
-  const parsedConfig = typeof c.config === "string" ? JSON.parse(c.config) : c.config || {};
+  const fo: { categories?: Category[] } = formOptions;
+  const parsedConfig = parseCollectionConfig(c.config);
   const config = {
     categoryIds: parsedConfig.categoryIds || [],
     productIds: parsedConfig.productIds || parsedConfig.specificProductIds || [],
@@ -34,6 +72,9 @@ function EditCollectionPage() {
     title: parsedConfig.title || "",
     subtitle: parsedConfig.subtitle || "",
   };
+  const { data: productLookup } = useSuspenseQuery(
+    productsByIdsQueryOptions(productIdsFromConfig(config)),
+  );
   const validTypes = ["manual", "dynamic"];
   const formType = validTypes.includes(c.type) ? c.type : "manual";
 
@@ -41,7 +82,7 @@ function EditCollectionPage() {
     <div className="container max-w-7xl py-4 pb-8">
       <CollectionForm
         categories={fo.categories || []}
-        products={fo.products || []}
+        products={(productLookup as { products?: Product[] }).products || []}
         defaultValues={{
           id: c.id,
           name: c.name,

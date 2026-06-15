@@ -26,6 +26,9 @@ export function useCreateCategory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
+      });
       invalidateProductStatsQueries(queryClient);
       toast.success("Category created");
     },
@@ -46,6 +49,9 @@ export function useUpdateCategory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
+      });
       invalidateProductStatsQueries(queryClient);
       toast.success("Category updated");
     },
@@ -62,6 +68,9 @@ export function useDeleteCategory() {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
       });
       invalidateProductStatsQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
@@ -80,6 +89,9 @@ export function usePermanentDeleteCategory() {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
       });
       invalidateProductStatsQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
@@ -100,6 +112,9 @@ export function useRestoreCategory() {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
       });
       invalidateProductStatsQueries(queryClient);
       queryClient.invalidateQueries({
@@ -122,6 +137,9 @@ export function useBulkDeleteCategories() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
+      });
       invalidateProductStatsQueries(queryClient);
       toast.success(
         variables.permanent
@@ -143,6 +161,9 @@ export function useBulkRestoreCategories() {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
       });
       invalidateProductStatsQueries(queryClient);
       toast.success(`${categoryIds.length} categories restored`);

@@ -14,7 +14,7 @@ import { Check, ChevronsUpDown, Loader2, Tag, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
-import { getProducts } from "~/lib/api-functions/products";
+import { getProducts, getProductsByIds } from "~/lib/api-functions/products";
 
 // Product interface based on what's used in OrderForm
 interface Product {
@@ -58,6 +58,8 @@ export function ProductSelector({
   const [totalPages, setTotalPages] = useState(1);
   const [totalProducts, setTotalProducts] = useState(0);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastResolutionSignatureRef = useRef("");
+  const skipNextSearchLoadRef = useRef(false);
 
   // Main function to load products
   const loadProducts = useCallback(async (page = 1, search = "") => {
@@ -100,6 +102,7 @@ export function ProductSelector({
   // Load initial products when dropdown opens
   useEffect(() => {
     if (open) {
+      skipNextSearchLoadRef.current = true;
       loadProducts(1, "");
     }
   }, [open, loadProducts]);
@@ -107,6 +110,11 @@ export function ProductSelector({
   // Handle search input changes
   useEffect(() => {
     if (!open) return;
+
+    if (skipNextSearchLoadRef.current && searchTerm === "") {
+      skipNextSearchLoadRef.current = false;
+      return;
+    }
 
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -125,6 +133,41 @@ export function ProductSelector({
       }
     };
   }, [searchTerm, open, loadProducts]);
+
+  useEffect(() => {
+    const unresolvedIds = selectedProducts
+      .filter((product) => product.name === product.id || !product.name)
+      .map((product) => product.id);
+    const signature = unresolvedIds.join("|");
+    if (!signature || signature === lastResolutionSignatureRef.current) return;
+
+    lastResolutionSignatureRef.current = signature;
+    let cancelled = false;
+
+    const resolveNames = async () => {
+      try {
+        const data = await getProductsByIds({ data: { ids: unresolvedIds } });
+        const productMap = new Map(data.products.map((product) => [product.id, product]));
+        const resolved = selectedProducts.map((selected) => {
+          const found = productMap.get(selected.id);
+          return found && (selected.name === selected.id || !selected.name)
+            ? { ...selected, ...found }
+            : selected;
+        });
+
+        if (!cancelled && resolved.some((item, index) => item.name !== selectedProducts[index].name)) {
+          onChange(resolved);
+        }
+      } catch (error: unknown) {
+        if (import.meta.env.DEV) console.error("Error resolving product names:", error);
+      }
+    };
+
+    void resolveNames();
+    return () => {
+      cancelled = true;
+    };
+  }, [onChange, selectedProducts]);
 
   // Load more products for pagination
   const loadMoreProducts = () => {

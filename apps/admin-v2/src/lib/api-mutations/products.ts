@@ -23,6 +23,7 @@ import {
 import {
   getServerFnError,
   invalidateDashboardQueries,
+  invalidateProductLookupQueries,
   invalidateProductStatsQueries,
   queryKeys,
 } from "./shared";
@@ -33,6 +34,7 @@ export function useCreateProduct() {
     mutationFn: (data: CreateProductInput) => createProduct({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       toast.success("Product created");
@@ -48,6 +50,7 @@ export function useUpdateProduct() {
     mutationFn: (data: UpdateProductInput) => updateProduct({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
@@ -66,6 +69,7 @@ export function useDeleteProduct() {
     mutationFn: (id: string) => deleteProduct({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(id) });
@@ -82,6 +86,7 @@ export function usePermanentDeleteProduct() {
     mutationFn: (id: string) => permanentDeleteProduct({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(id) });
@@ -100,6 +105,7 @@ export function useRestoreProduct() {
     mutationFn: (id: string) => restoreProduct({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
@@ -119,6 +125,7 @@ export function useBulkDeleteProducts() {
       bulkDeleteProducts({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       toast.success(

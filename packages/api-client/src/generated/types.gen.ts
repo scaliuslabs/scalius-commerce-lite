@@ -443,13 +443,15 @@ export type GetApiV1AttributesFilterableResponses = {
      */
     200: {
         success: true;
-        data: Array<{
-            id: string;
-            name: string;
-            slug: string;
-            values: Array<string>;
-            [key: string]: unknown;
-        }>;
+        data: {
+            filters: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<string>;
+                [key: string]: unknown;
+            }>;
+        };
     };
 };
 
@@ -486,13 +488,15 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
      */
     200: {
         success: true;
-        data: Array<{
-            id: string;
-            name: string;
-            slug: string;
-            values: Array<string>;
-            [key: string]: unknown;
-        }>;
+        data: {
+            filters: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<string>;
+                [key: string]: unknown;
+            }>;
+        };
     };
 };
 
@@ -540,13 +544,15 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
      */
     200: {
         success: true;
-        data: Array<{
-            id: string;
-            name: string;
-            slug: string;
-            values: Array<string>;
-            [key: string]: unknown;
-        }>;
+        data: {
+            filters: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<string>;
+                [key: string]: unknown;
+            }>;
+        };
     };
 };
 
@@ -590,13 +596,15 @@ export type GetApiV1AttributesSearchFiltersResponses = {
      */
     200: {
         success: true;
-        data: Array<{
-            id: string;
-            name: string;
-            slug: string;
-            values: Array<string>;
-            [key: string]: unknown;
-        }>;
+        data: {
+            filters: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<string>;
+                [key: string]: unknown;
+            }>;
+        };
     };
 };
 
@@ -1982,7 +1990,7 @@ export type GetApiV1StorefrontHomepageResponses = {
             }>;
             collections: Array<{
                 [key: string]: unknown;
-            }>;
+            } | null>;
             [key: string]: unknown;
         };
     };
@@ -2133,9 +2141,13 @@ export type GetApiV1StorefrontLayoutResponses = {
             header: {
                 [key: string]: unknown;
             };
-            navigation: {
+            navigation: Array<{
+                id?: string;
+                title: string;
+                href?: string;
+                subMenu?: Array<unknown>;
                 [key: string]: unknown;
-            };
+            }>;
             footer: {
                 [key: string]: unknown;
             };
@@ -2756,10 +2768,15 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 [key: string]: unknown;
             }>;
             customer: {
-                id: string;
+                id?: string;
                 name: string;
-                phone: string;
-                [key: string]: unknown;
+                email?: string;
+                phone?: string;
+                address?: string | null;
+                cityName?: string | null;
+                zoneName?: string | null;
+                city?: string | null;
+                zone?: string | null;
             };
         };
     };
@@ -5401,6 +5418,90 @@ export type GetApiV1AdminCollectionsFormOptionsResponses = {
 
 export type GetApiV1AdminCollectionsFormOptionsResponse = GetApiV1AdminCollectionsFormOptionsResponses[keyof GetApiV1AdminCollectionsFormOptionsResponses];
 
+export type GetApiV1AdminCollectionsCategoryOptionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/collections/category-options';
+};
+
+export type GetApiV1AdminCollectionsCategoryOptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsCategoryOptionsError = GetApiV1AdminCollectionsCategoryOptionsErrors[keyof GetApiV1AdminCollectionsCategoryOptionsErrors];
+
+export type GetApiV1AdminCollectionsCategoryOptionsResponses = {
+    /**
+     * Category options
+     */
+    200: {
+        success: true;
+        data: {
+            categories: Array<{
+                id: string;
+                name: string;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsCategoryOptionsResponse = GetApiV1AdminCollectionsCategoryOptionsResponses[keyof GetApiV1AdminCollectionsCategoryOptionsResponses];
+
 export type GetApiV1AdminCollectionsData = {
     body?: never;
     path?: never;
@@ -5623,6 +5724,96 @@ export type PostApiV1AdminCollectionsResponses = {
 };
 
 export type PostApiV1AdminCollectionsResponse = PostApiV1AdminCollectionsResponses[keyof PostApiV1AdminCollectionsResponses];
+
+export type GetApiV1AdminCollectionsByIdsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Comma-separated collection IDs. At most 100 IDs are resolved.
+         */
+        ids?: string;
+    };
+    url: '/api/v1/admin/collections/by-ids';
+};
+
+export type GetApiV1AdminCollectionsByIdsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsByIdsError = GetApiV1AdminCollectionsByIdsErrors[keyof GetApiV1AdminCollectionsByIdsErrors];
+
+export type GetApiV1AdminCollectionsByIdsResponses = {
+    /**
+     * Collection summaries
+     */
+    200: {
+        success: true;
+        data: {
+            collections: Array<{
+                id: string;
+                name: string;
+                type: 'manual' | 'dynamic';
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsByIdsResponse = GetApiV1AdminCollectionsByIdsResponses[keyof GetApiV1AdminCollectionsByIdsResponses];
 
 export type PostApiV1AdminCollectionsBulkDeleteData = {
     body?: {
@@ -22209,6 +22400,99 @@ export type PostApiV1AdminProductsResponses = {
 };
 
 export type PostApiV1AdminProductsResponse = PostApiV1AdminProductsResponses[keyof PostApiV1AdminProductsResponses];
+
+export type GetApiV1AdminProductsByIdsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Comma-separated product IDs. At most 100 IDs are resolved.
+         */
+        ids?: string;
+    };
+    url: '/api/v1/admin/products/by-ids';
+};
+
+export type GetApiV1AdminProductsByIdsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdsError = GetApiV1AdminProductsByIdsErrors[keyof GetApiV1AdminProductsByIdsErrors];
+
+export type GetApiV1AdminProductsByIdsResponses = {
+    /**
+     * Product summaries
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                price: number;
+                categoryId: string | null;
+                primaryImage: string | null;
+                discountPercentage: number | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdsResponse = GetApiV1AdminProductsByIdsResponses[keyof GetApiV1AdminProductsByIdsResponses];
 
 export type PostApiV1AdminProductsBulkDeleteData = {
     body?: {

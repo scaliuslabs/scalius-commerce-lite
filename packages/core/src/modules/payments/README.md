@@ -95,7 +95,6 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | File | Purpose |
 |------|---------|
 | `PaymentGatewaysManager.tsx` | Main payment settings UI. 2x2 accordion grid. Lazy-loads credentials per-gateway on expand. Manages enabled/disabled toggles, default method selector, save per-gateway. |
-| `PaymentMethodSettings.tsx` | Older/simpler payment method settings component (Stripe + SSLCommerz + COD only; no Polar). Card-based layout. |
 | `PolarSettingsForm.tsx` | `PolarForm` (credentials form) + `PolarSetupGuide` (5-step setup dialog) |
 | `payment-gateway-utils.tsx` | Shared types (`StripeData`, `SSLCommerzData`, `PolarData`, `MethodKey`), reusable components (`PasswordInput`, `SaveBtn`, `SandboxToggle`, `LiveWarning`, `ExtLink`), gateway logo SVGs, `META` lookup |
 
@@ -351,11 +350,8 @@ Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
 ## Known Gaps
 
 1. **Stripe `charge.refunded` queue message**: Exists in the queue consumer but is audit-only (no DB mutation). Refunds are handled synchronously via the admin refund endpoint.
-2. **`PaymentMethodSettings.tsx`**: Older component that lists only Stripe + SSLCommerz + COD (no Polar support). `PaymentGatewaysManager.tsx` is the current component with all 4 gateways.
-3. **SSLCommerz refund IP whitelisting**: Production refunds require the server's public IP to be registered with SSLCommerz. Sandbox works without this.
-4. **COD refund**: `CODProvider.createRefund()` returns a marker ID only. Actual cash refund is a manual operational process.
-5. **No capture endpoint exposed**: `capturePaymentIntent()` and `cancelPaymentIntent()` exist in `stripe.ts` but have no API route. They would need to be called from an admin fulfillment flow.
-6. **processPaymentFailed**: Does not record `polarCheckoutId` on the failed payment entry (only handles stripe/sslcommerz gateway-specific IDs).
-7. **Partial payment COD exclusion**: When `partialPaymentEnabled` is true on the storefront, COD is hidden from the payment method list. However, the API routes do not enforce this -- a direct API call could still create a COD order with partial payment config active.
-8. **Factory not used by API routes**: API routes call legacy wrapper functions (`createPaymentIntent()`, `initSSLCommerzSession()`, etc.) directly rather than going through `createPaymentProvider()` factory. The factory/provider pattern is implemented but not yet the primary code path for session creation.
-9. **SSLCommerz refund amount hardcoded to 2 decimals**: `initiateSSLCommerzRefund()` uses `toFixed(2)` for the refund amount because the currency is not passed to the refund function and SSLCommerz only supports BDT refunds (which has 2 decimals).
+2. **SSLCommerz refund IP whitelisting**: Production refunds require the server's public IP to be registered with SSLCommerz. Sandbox works without this.
+3. **COD refund**: `CODProvider.createRefund()` returns a marker ID only. Actual cash refund is a manual operational process.
+4. **No capture endpoint exposed**: `capturePaymentIntent()` and `cancelPaymentIntent()` exist in `stripe.ts` but have no API route. They would need to be called from an admin fulfillment flow.
+5. **Factory not used by API routes**: API routes call legacy wrapper functions (`createPaymentIntent()`, `initSSLCommerzSession()`, etc.) directly rather than going through `createPaymentProvider()` factory. The factory/provider pattern is implemented but not yet the primary code path for session creation.
+6. **SSLCommerz refund amount hardcoded to 2 decimals**: `initiateSSLCommerzRefund()` uses `toFixed(2)` for the refund amount because the currency is not passed to the refund function and SSLCommerz only supports BDT refunds (which has 2 decimals).

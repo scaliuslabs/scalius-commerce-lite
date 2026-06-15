@@ -30,6 +30,19 @@ import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+const productPickerSummarySchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    categoryId: z.string().nullable(),
+    primaryImage: z.string().nullable(),
+    discountPercentage: z.number().nullable(),
+});
+
+function parseLookupIds(ids: string | undefined): string[] {
+    return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+}
+
 // ── Product Stats ──
 
 const statsRoute = createRoute({
@@ -148,6 +161,42 @@ app.openapi(listRoute, async (c) => {
         order: query.order as "asc" | "desc" | undefined
     });
     return ok(c, result);
+});
+
+// ── Product Picker Summaries ──
+
+const getByIdsRoute = createRoute({
+    method: "get",
+    path: "/by-ids",
+    tags: ["Admin - Products"],
+    summary: "Get lightweight product summaries for known IDs",
+    request: {
+        query: z.object({
+            ids: z.string().optional().default("").openapi({
+                description: "Comma-separated product IDs. At most 100 IDs are resolved.",
+            }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Product summaries",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        products: z.array(productPickerSummarySchema),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getByIdsRoute, async (c) => {
+    const db = c.get("db");
+    const { ids } = c.req.valid("query");
+    const products = await ProductsAdmin.getProductsByIds(db, parseLookupIds(ids));
+    return ok(c, { products });
 });
 
 // ── Create Product ──

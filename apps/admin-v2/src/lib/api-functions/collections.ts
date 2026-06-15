@@ -39,6 +39,20 @@ export interface CollectionsListPayload {
   pagination: PaginationPayload;
 }
 
+export interface CollectionPickerItemDto {
+  id: string;
+  name: string;
+  type: CollectionType;
+}
+
+export interface CollectionsByIdsInput {
+  ids: string[];
+}
+
+export interface CollectionsByIdsPayload {
+  collections: CollectionPickerItemDto[];
+}
+
 export interface CollectionsQueryInput {
   [key: string]: string | number | boolean | undefined;
   page?: number;
@@ -69,6 +83,10 @@ export interface CollectionFormOptionsPayload {
   }>;
 }
 
+export interface CollectionCategoryOptionsPayload {
+  categories: Array<{ id: string; name: string }>;
+}
+
 export interface MessagePayload {
   message: string;
 }
@@ -90,11 +108,27 @@ export const getCollections = createServerFn({ method: "GET" })
     return apiGet<CollectionsListPayload>("/collections", toCollectionsParams(data));
   });
 
+export const getCollectionsByIds = createServerFn({ method: "GET" })
+  .validator((data: CollectionsByIdsInput) => data)
+  .handler(async ({ data }): Promise<CollectionsByIdsPayload> => {
+    const ids = Array.from(new Set(data.ids.map((id) => id.trim()).filter(Boolean)));
+    if (ids.length === 0) return { collections: [] };
+    return apiGet<CollectionsByIdsPayload>("/collections/by-ids", {
+      ids: ids.join(","),
+    });
+  });
+
 export const getCollection = createServerFn({ method: "GET" })
   .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<CollectionDto> => {
     return apiGet<CollectionDto>(`/collections/${data.id}`);
   });
+
+export const getCollectionCategoryOptions = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<CollectionCategoryOptionsPayload> => {
+  return apiGet<CollectionCategoryOptionsPayload>("/collections/category-options");
+});
 
 export const getCollectionFormOptions = createServerFn({
   method: "GET",

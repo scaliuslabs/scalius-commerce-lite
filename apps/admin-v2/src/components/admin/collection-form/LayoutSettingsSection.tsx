@@ -21,23 +21,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select";
+import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 import { Switch } from "../../ui/switch";
+import { X } from "lucide-react";
 import type { CollectionFormValues, Product } from "./types";
 import { collectionTypes } from "./types";
+import { ProductPickerPopover } from "./ProductPickerPopover";
 
 interface LayoutSettingsSectionProps {
   form: UseFormReturn<CollectionFormValues>;
   selectedType: "manual" | "dynamic";
-  filteredProducts: Product[];
+  knownProducts: Product[];
+  selectedCategoryIds: string[];
+  onProductDiscovered: (product: Product) => void;
 }
 
 export const LayoutSettingsSection = React.memo(
   function LayoutSettingsSection({
     form,
     selectedType,
-    filteredProducts,
+    knownProducts,
+    selectedCategoryIds,
+    onProductDiscovered,
   }: LayoutSettingsSectionProps) {
+    const productsById = React.useMemo(
+      () => new Map(knownProducts.map((product) => [product.id, product])),
+      [knownProducts],
+    );
+
     return (
       <div className="space-y-3">
         {/* Status Card */}
@@ -173,32 +185,36 @@ export const LayoutSettingsSection = React.memo(
                     <FormLabel className="text-sm font-medium">
                       Featured Product
                     </FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(
-                          value === "__NONE__" ? undefined : value,
-                        );
-                      }}
-                      value={field.value || "__NONE__"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a featured product (optional)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent
-                        position="popper"
-                        className="rounded-xl bg-background max-h-[300px] overflow-y-auto"
-                        sideOffset={4}
-                      >
-                        <SelectItem value="__NONE__">None</SelectItem>
-                        {filteredProducts.map((product) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <div className="flex gap-2">
+                        <ProductPickerPopover
+                          triggerLabel={
+                            field.value
+                              ? productsById.get(field.value)?.name || field.value
+                              : "Select a featured product"
+                          }
+                          selectedCategoryIds={selectedCategoryIds}
+                          onSelectProduct={(product) => {
+                            onProductDiscovered(product);
+                            field.onChange(product.id);
+                          }}
+                          buttonClassName="min-w-0 flex-1 justify-between font-normal"
+                        />
+                        {field.value ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => field.onChange(undefined)}
+                          >
+                            <X className="h-4 w-4" />
+                            <span className="sr-only">
+                              Clear featured product
+                            </span>
+                          </Button>
+                        ) : null}
+                      </div>
+                    </FormControl>
                     <FormDescription className="text-xs">
                       Displayed prominently in Collection Style 1
                     </FormDescription>

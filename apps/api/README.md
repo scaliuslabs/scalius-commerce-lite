@@ -167,7 +167,7 @@ Then, route-specific middleware:
 2. **JWT Bearer token** -- from decoupled mobile/external apps (auto-refreshes near expiry, returns new token via `X-New-Token` header)
 3. **Scanner session cookie** -- created after QR token exchange by the admin worker; restricted to exact scanner workflow endpoints, role is `scanner` not `admin`
 
-After authentication, it rejects 2FA-enabled admin sessions that have not completed 2FA, except exact `GET /admin/auth/2fa/info`, `POST /admin/auth/2fa/verify`, and `POST /admin/auth/2fa/complete-verification` requests. It then performs RBAC: resolves the user's effective permission set via `getUserPermissions()` (which handles super-admin internally), then checks route-specific permissions via `getRoutePermission()` supporting `permission`, `anyOf`, and `allOf` modes. Scanner sessions skip full RBAC but are limited to the scanner allowlist.
+After authentication, it rejects 2FA-enabled admin sessions that have not completed 2FA, except exact `GET /admin/auth/2fa/info`, `POST /admin/auth/2fa/verify`, `POST /admin/auth/2fa/complete-verification`, and `POST /admin/auth/2fa/method` requests. It then performs RBAC: resolves the user's effective permission set via `getUserPermissions()` (which handles super-admin internally), then checks route-specific permissions via `getRoutePermission()` supporting `permission`, `anyOf`, and `allOf` modes. Scanner sessions skip full RBAC but are limited to the scanner allowlist.
 
 ### Auth Middleware (`src/middleware/auth.ts`)
 

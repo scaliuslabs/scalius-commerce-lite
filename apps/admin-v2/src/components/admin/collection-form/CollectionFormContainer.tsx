@@ -24,6 +24,7 @@ import {
   collectionFormSchema,
   type CollectionFormValues,
   type CollectionFormProps,
+  type Product,
 } from "./types";
 
 const DEFAULT_CONFIG = {
@@ -34,14 +35,17 @@ const DEFAULT_CONFIG = {
   subtitle: "",
 } as const;
 
+const EMPTY_PRODUCTS: Product[] = [];
+
 export function CollectionForm({
   categories,
-  products,
+  products = EMPTY_PRODUCTS,
   defaultValues,
   isEdit = false,
 }: CollectionFormProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [knownProducts, setKnownProducts] = React.useState<Product[]>(products);
   const form = useForm<CollectionFormValues>({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
@@ -59,22 +63,36 @@ export function CollectionForm({
   const selectedCategoryIds = form.watch("config.categoryIds");
   const selectedProductIds = form.watch("config.productIds");
 
-  const filteredProducts = React.useMemo(() => {
-    if (selectedCategoryIds.length === 0) {
-      return products;
-    }
-    return products.filter((product) =>
-      product.categoryId ? selectedCategoryIds.includes(product.categoryId) : false,
-    );
-  }, [selectedCategoryIds, products]);
+  React.useEffect(() => {
+    setKnownProducts((current) => {
+      const byId = new Map(current.map((product) => [product.id, product]));
+      for (const product of products) {
+        byId.set(product.id, product);
+      }
+      return Array.from(byId.values());
+    });
+  }, [products]);
 
   const selectedCategories = React.useMemo(() => {
     return categories.filter((cat) => selectedCategoryIds.includes(cat.id));
   }, [selectedCategoryIds, categories]);
 
+  const productsById = React.useMemo(
+    () => new Map(knownProducts.map((product) => [product.id, product])),
+    [knownProducts],
+  );
+
   const selectedProducts = React.useMemo(() => {
-    return products.filter((prod) => selectedProductIds.includes(prod.id));
-  }, [selectedProductIds, products]);
+    return selectedProductIds.map((id) => productsById.get(id) ?? { id, name: id });
+  }, [productsById, selectedProductIds]);
+
+  const rememberProduct = React.useCallback((product: Product) => {
+    setKnownProducts((current) => {
+      const byId = new Map(current.map((item) => [item.id, item]));
+      byId.set(product.id, product);
+      return Array.from(byId.values());
+    });
+  }, []);
 
   const handleSubmit: SubmitHandler<CollectionFormValues> = async (values) => {
     try {
@@ -121,10 +139,11 @@ export function CollectionForm({
     );
   };
 
-  const addProduct = (productId: string) => {
+  const addProduct = (product: Product) => {
+    rememberProduct(product);
     const currentIds = form.getValues("config.productIds");
-    if (!currentIds.includes(productId)) {
-      form.setValue("config.productIds", [...currentIds, productId]);
+    if (!currentIds.includes(product.id)) {
+      form.setValue("config.productIds", [...currentIds, product.id]);
     }
   };
 
@@ -186,7 +205,9 @@ export function CollectionForm({
             <LayoutSettingsSection
               form={form}
               selectedType={selectedType}
-              filteredProducts={filteredProducts}
+              knownProducts={knownProducts}
+              selectedCategoryIds={selectedCategoryIds}
+              onProductDiscovered={rememberProduct}
             />
           </div>
         </form>

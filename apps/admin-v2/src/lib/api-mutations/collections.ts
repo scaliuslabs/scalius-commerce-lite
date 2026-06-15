@@ -12,7 +12,11 @@ import {
   type CreateCollectionInput,
   type UpdateCollectionInput,
 } from "../api-functions/collections";
-import { getServerFnError, queryKeys } from "./shared";
+import {
+  getServerFnError,
+  invalidateCollectionLookupQueries,
+  queryKeys,
+} from "./shared";
 
 export function useCreateCollection() {
   const queryClient = useQueryClient();
@@ -20,6 +24,7 @@ export function useCreateCollection() {
     mutationFn: (data: CreateCollectionInput) => createCollection({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.collections.formOptions(),
       });
@@ -36,6 +41,7 @@ export function useUpdateCollection() {
     mutationFn: (data: UpdateCollectionInput) => updateCollection({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.collections.detail(variables.id),
       });
@@ -55,6 +61,7 @@ export function useDeleteCollection() {
     mutationFn: (id: string) => deleteCollection({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.collections.formOptions(),
       });
@@ -72,6 +79,7 @@ export function usePermanentDeleteCollection() {
     mutationFn: (id: string) => deleteCollectionPermanent({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.collections.formOptions(),
       });
@@ -91,6 +99,7 @@ export function useRestoreCollection() {
     mutationFn: (id: string) => restoreCollection({ data: { id } }),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.collections.formOptions(),
       });
@@ -111,6 +120,7 @@ export function useReorderCollections() {
       reorderCollections({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to reorder collections")),
@@ -126,6 +136,7 @@ export function useBulkDeleteCollections() {
       }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.collections.formOptions(),
       });
@@ -144,6 +155,7 @@ export function useBulkRestoreCollections() {
     mutationFn: (data: { ids: string[] }) => bulkRestoreCollections({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
+      invalidateCollectionLookupQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.collections.formOptions(),
       });
