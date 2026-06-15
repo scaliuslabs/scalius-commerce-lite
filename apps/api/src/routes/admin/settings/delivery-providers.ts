@@ -6,12 +6,14 @@ import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../../utils/api-error";
 import { getEncryptionKey } from "../../../utils/encryption-key";
+import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const MASKED_VALUE = "••••••••••••";
+const DELIVERY_PROVIDER_CACHE_GROUPS = ["checkout"] as const;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
 
@@ -140,6 +142,7 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
         credentials: maskCredentialsForClient(savedCredentials)
     };
 
+    await invalidateApiAndStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c.env);
     return created(c, maskedResponse);
 }) as unknown as AppRouteHandler<typeof createProviderRoute>);
 
@@ -195,6 +198,7 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
             ...savedProvider,
             credentials: maskCredentialsForClient(newCredentials)
         };
+        await invalidateApiAndStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c.env);
         return created(c, maskedResponse);
     }
 
@@ -221,6 +225,7 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
         credentials: maskCredentialsForClient(updatedCredentials)
     };
 
+    await invalidateApiAndStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c.env);
     return ok(c, maskedResponse);
 }) as unknown as AppRouteHandler<typeof updateProviderRoute>);
 
@@ -363,6 +368,7 @@ app.openapi(deleteProviderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
+    await invalidateApiAndStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c.env);
     return ok(c, {});
 });
 
