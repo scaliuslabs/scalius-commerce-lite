@@ -8,7 +8,7 @@ Curated product groups displayed on the storefront homepage, with manual and dyn
 |------|---------|
 | `index.ts` | Barrel exports (re-exports service + validation) |
 | `collections.validation.ts` | Zod schemas: `createCollectionSchema`, `updateCollectionSchema`, `collectionConfigSchema` |
-| `collections.service.ts` | All DB queries, mutations, and product resolution (13 exported functions + types) |
+| `collections.service.ts` | All DB queries, mutations, lookup helpers, and product resolution |
 
 ## Collection Types
 
@@ -52,6 +52,8 @@ The `config` column stores a JSON object:
 |----------|-----------|-------|
 | `listCollections` | `(db, { page?, limit?, search?, showTrashed?, sort?, order? })` | LIKE search, sortable by name/type/isActive/updatedAt/sortOrder (whitelist-validated), default limit 20 |
 | `getCollectionById` | `(db, id)` | Active collections only (excludes soft-deleted), returns null if not found |
+| `getCollectionsByIds` | `(db, ids)` | Batch lookup by IDs, preserving only active/non-deleted collections |
+| `getCollectionCategoryOptions` | `(db)` | Lightweight active category options for collection builders |
 
 ### Mutations
 

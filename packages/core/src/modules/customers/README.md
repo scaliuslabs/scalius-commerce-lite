@@ -59,7 +59,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 - Session prefix in KV: `cust_session:`
 - Session TTL: 30 days
 - `getCustomerBySession()` checks expiry, deletes expired sessions
-- `updateCustomerProfile()` updates both DB and KV session (name, address, city, zone)
+- `updateCustomerProfile()` updates the DB record and mirrors the customer name into the KV session. Address/city/zone fields are persisted in D1 but are not mirrored into the session object.
 
 **Transport selection:**
 - Site settings `authVerificationMethod` controls allowed methods

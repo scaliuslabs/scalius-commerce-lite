@@ -1,4 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -44,8 +47,12 @@ function createDbMock(options: { matchingSession?: boolean } = {}) {
 }
 
 function createTestApp(
-  db: ReturnType<typeof createDbMock>,
-  options: { twoFactorEnabled?: boolean; session?: { id: string; twoFactorVerified?: boolean } | null } = {},
+  db: unknown,
+  options: {
+    twoFactorEnabled?: boolean;
+    session?: { id: string; twoFactorVerified?: boolean } | null;
+    user?: Record<string, unknown>;
+  } = {},
 ) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
   app.onError((error, c) => {
@@ -57,7 +64,10 @@ function createTestApp(
     c.set("user", {
       id: "user_1",
       email: "admin@example.com",
+      name: "Admin",
+      role: "admin",
       twoFactorEnabled: options.twoFactorEnabled ?? true,
+      ...options.user,
     } as never);
     if (options.session !== null) {
       c.set("session", options.session ?? { id: "session_1" });
@@ -66,6 +76,53 @@ function createTestApp(
   });
   app.route("/auth", adminAuthManagementRoutes);
   return app;
+}
+
+function createAdminUserListDbMock() {
+  const adminUsers = [
+    {
+      id: "admin_2",
+      name: "Ops Admin",
+      email: "ops@example.com",
+      emailVerified: true,
+      image: null,
+      twoFactorEnabled: true,
+      isSuperAdmin: false,
+      createdAt: 1,
+    },
+  ];
+  const roleRows = [
+    { id: "role_1", name: "manager", displayName: "Manager" },
+  ];
+  const overrideRows = [
+    { permissionName: "products.view", granted: true },
+    { permissionName: "orders.refund", granted: false },
+  ];
+
+  return {
+    select: vi.fn((selection: Record<string, unknown>) => ({
+      from: vi.fn(() => {
+        if ("emailVerified" in selection) {
+          return { where: vi.fn(async () => adminUsers) };
+        }
+        if ("displayName" in selection) {
+          return {
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(async () => roleRows),
+            })),
+          };
+        }
+        if ("permissionName" in selection) {
+          return {
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(async () => overrideRows),
+            })),
+          };
+        }
+        return { where: vi.fn(async () => []) };
+      }),
+    })),
+  };
 }
 
 function createSetupDbMock() {
@@ -123,6 +180,54 @@ function setupRequestBody(password = "ScaliusLocal123!") {
     password,
   });
 }
+
+describe("admin auth management user permissions", () => {
+  it("lists admin users after RBAC middleware admits a non-legacy-role admin", async () => {
+    const db = createAdminUserListDbMock();
+    const app = createTestApp(db, {
+      user: {
+        role: "operations_manager",
+        twoFactorEnabled: false,
+      },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/users", {
+      method: "GET",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = await response.json() as {
+      data?: {
+        users?: Array<{
+          id: string;
+          roles: Array<{ name: string }>;
+          overrides: { grants: string[]; denials: string[] };
+        }>;
+      };
+    };
+    expect(body.data?.users).toEqual([
+      expect.objectContaining({
+        id: "admin_2",
+        roles: [{ id: "role_1", name: "manager", displayName: "Manager" }],
+        overrides: {
+          grants: ["products.view"],
+          denials: ["orders.refund"],
+        },
+      }),
+    ]);
+  });
+
+  it("does not re-check legacy user.role inside user-management handlers", () => {
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
+      "utf8",
+    );
+
+    expect(source).not.toContain('sessionUser.role !== "admin"');
+    expect(source).not.toContain("Only administrators can create new admin users");
+    expect(source).not.toContain("Only administrators can delete admin users");
+  });
+});
 
 describe("admin auth management 2FA completion", () => {
   it("marks the current session verified when the Better Auth session-token proof matches", async () => {

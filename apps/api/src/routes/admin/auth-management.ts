@@ -100,11 +100,6 @@ const listUsersRoute = createRoute({
 app.openapi(listUsersRoute, async (c) => {
     try {
         const db = c.get("db");
-        const sessionUser = c.get("user");
-
-        if (sessionUser.role !== "admin") {
-            throw new ForbiddenError("Only administrators can access this resource");
-        }
 
         const adminUsers = await db
             .select({
@@ -186,10 +181,6 @@ app.openapi(createUserRoute, async (c) => {
         const env = c.env;
         const auth = createAuth(env);
 
-        if (sessionUser.role !== "admin") {
-            throw new ForbiddenError("Only administrators can create new admin users");
-        }
-
         const { name, email, roleId } = c.req.valid("json");
 
         if (roleId) {
@@ -270,10 +261,6 @@ app.openapi(deleteUserRoute, async (c) => {
         const db = c.get("db");
         const sessionUser = c.get("user");
         const { id: userId } = c.req.valid("param");
-
-        if (sessionUser.role !== "admin") {
-            throw new ForbiddenError("Only administrators can delete admin users");
-        }
 
         if (userId === sessionUser.id) {
             throw new ValidationError("You cannot delete your own account");

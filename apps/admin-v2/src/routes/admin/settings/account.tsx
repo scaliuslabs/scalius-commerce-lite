@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { AccountSettingsWithPermissions } from "~/components/admin/AccountSettingsWithPermissions";
+import { AccountSettings } from "~/components/admin/account-settings";
 import { accountSecurityQueryOptions } from "~/lib/api.queries";
 import type { AccountSecurity } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/list-helpers";
@@ -16,11 +16,7 @@ export const Route = createFileRoute("/admin/settings/account")({
 
 function AccountSettingsPage() {
   const { data: securityResult } = useSuspenseQuery(accountSecurityQueryOptions());
-  const {
-    user,
-    permissions,
-    isSuperAdmin: routeIsSuperAdmin,
-  } = Route.useRouteContext();
+  const { user } = Route.useRouteContext();
 
   const security = securityResult as AccountSecurity;
   const userData = {
@@ -28,7 +24,6 @@ function AccountSettingsPage() {
     twoFactorEnabled: user.twoFactorEnabled ?? false,
     twoFactorMethod: security.twoFactorMethod,
   };
-  const isSuperAdmin = routeIsSuperAdmin || (security.isSuperAdmin ?? false);
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -39,11 +34,7 @@ function AccountSettingsPage() {
         </p>
       </div>
 
-      <AccountSettingsWithPermissions
-        user={userData}
-        permissions={permissions}
-        isSuperAdmin={isSuperAdmin}
-      />
+      <AccountSettings user={userData} />
     </div>
   );
 }

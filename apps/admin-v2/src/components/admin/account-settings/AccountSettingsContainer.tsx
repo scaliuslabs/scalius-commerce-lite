@@ -25,6 +25,10 @@ interface AccountSettingsProps {
 export function AccountSettings({ user }: AccountSettingsProps) {
   const { hasPermission } = usePermissions();
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
+  const canViewTeam =
+    hasPermission(PERMISSIONS.TEAM_VIEW) ||
+    hasPermission(PERMISSIONS.TEAM_MANAGE) ||
+    canManageRoles;
 
   return (
     <div className="space-y-6">
@@ -40,10 +44,12 @@ export function AccountSettings({ user }: AccountSettingsProps) {
             <KeyRound className="h-4 w-4" />
             Password
           </TabsTrigger>
-          <TabsTrigger value="team" className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Team
-          </TabsTrigger>
+          {canViewTeam && (
+            <TabsTrigger value="team" className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Team
+            </TabsTrigger>
+          )}
           {canManageRoles && (
             <TabsTrigger value="roles" className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground flex items-center gap-2">
               <ShieldPlus className="h-4 w-4" />
@@ -60,9 +66,11 @@ export function AccountSettings({ user }: AccountSettingsProps) {
           <ChangePasswordForm />
         </TabsContent>
 
-        <TabsContent value="team" className="space-y-6">
-          <AdminUsersManager currentUserId={user.id} />
-        </TabsContent>
+        {canViewTeam && (
+          <TabsContent value="team" className="space-y-6">
+            <AdminUsersManager currentUserId={user.id} />
+          </TabsContent>
+        )}
 
         {canManageRoles && (
           <TabsContent value="roles" className="space-y-6">

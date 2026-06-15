@@ -131,13 +131,11 @@ Storefront ([slug].astro)
 
 2. **Variant sort order updates are not batched**: `updateVariantSortOrder()` in `products.variants.ts` runs individual UPDATE queries per color and per size value rather than using `db.batch()`, which could be slow for many distinct values.
 
-4. **`searchStorefrontProducts` re-imports modules at call time**: `products.storefront.ts:458-459` uses dynamic `import()` for `ftsMatch` and drizzle-orm operators that are already available at module scope. This is unnecessary overhead.
+3. **`searchStorefrontProducts` re-imports modules at call time**: `products.storefront.ts:458-459` uses dynamic `import()` for `ftsMatch` and drizzle-orm operators that are already available at module scope. This is unnecessary overhead.
 
-5. **`permanentDeleteProduct` does not clean up attribute values in bulk delete**: `bulkDeleteProducts()` deletes variants, images, and products but not `productAttributeValues` or `productRichContent` for permanent deletes. Single `permanentDeleteProduct()` does clean these up. The FK cascade on `productAttributeValues` and `productRichContent` handles this because both reference `products.id` with `onDelete: cascade`, so this is not a data integrity issue, but the bulk path relies on cascade while the single path explicitly deletes.
+4. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
 
-6. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
-
-7. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
+5. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
 
 ## Dependencies
 

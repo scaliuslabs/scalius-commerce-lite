@@ -25,8 +25,8 @@ Three independent status dimensions, each with its own transition map. Exported 
 incomplete --> pending, cancelled
 pending    --> processing, confirmed, cancelled
 processing --> confirmed, cancelled
-confirmed  --> shipped, cancelled
-shipped    --> delivered, returned, cancelled
+confirmed  --> shipped, delivered, cancelled
+shipped    --> confirmed, delivered, returned, cancelled
 delivered  --> completed, returned, refunded, partially_refunded
 completed  --> returned, refunded, partially_refunded
 cancelled  --> pending, confirmed       (admin reactivation only)
@@ -38,6 +38,8 @@ partially_refunded --> refunded
 All 11 states: `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`, `refunded`, `partially_refunded`.
 
 **Note on CANCELLED:** The state machine allows `cancelled -> pending` and `cancelled -> confirmed` for admin reactivation. When this happens, `inventory-transitions.ts` detects `currentAction === "restored"` and re-reserves stock via `reserveOrderItems()`. The comment in the state machine explicitly says "Admin override only: merchants can reactivate cancelled orders."
+
+**Note on carrier retries:** `confirmed -> delivered` is allowed for direct delivery confirmation, and `shipped -> confirmed` is allowed when a carrier delivery attempt fails and the merchant needs to retry shipment without restoring or deducting stock.
 
 ### Payment Status Transitions
 

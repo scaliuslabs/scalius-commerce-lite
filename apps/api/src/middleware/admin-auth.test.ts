@@ -119,6 +119,37 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("allows team viewing separately from team mutation", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.TEAM_VIEW]));
+
+    const listNext = vi.fn().mockResolvedValue(undefined);
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/auth/users", "GET") as never,
+      listNext,
+    );
+    expect(listNext).toHaveBeenCalledTimes(1);
+
+    const createNext = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/auth/users", "POST") as never,
+        createNext,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action",
+    });
+    expect(createNext).not.toHaveBeenCalled();
+
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.TEAM_MANAGE]));
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/auth/users", "POST") as never,
+      createNext,
+    );
+    expect(createNext).toHaveBeenCalledTimes(1);
+  });
+
   it("stores the Better Auth session on the Hono context", async () => {
     mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
     const next = vi.fn().mockResolvedValue(undefined);
@@ -284,6 +315,68 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
     await adminAuthMiddleware(
       createContext("/api/v1/admin/navigation/preview-products", "GET") as never,
+      next,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps deeper Pathao import status to delivery-location edit permission", async () => {
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW]),
+    );
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext(
+          "/api/v1/admin/settings/delivery-locations/import-pathao/status",
+          "GET",
+        ) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action",
+    });
+
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT]),
+    );
+    await adminAuthMiddleware(
+      createContext(
+        "/api/v1/admin/settings/delivery-locations/import-pathao/status",
+        "GET",
+      ) as never,
+      next,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps widget generation session status to widget edit permission", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.WIDGETS_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext(
+          "/api/v1/admin/widget-generation-runs/sessions/session_1/status",
+          "GET",
+        ) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action",
+    });
+
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.WIDGETS_EDIT]));
+    await adminAuthMiddleware(
+      createContext(
+        "/api/v1/admin/widget-generation-runs/sessions/session_1/status",
+        "GET",
+      ) as never,
       next,
     );
     expect(next).toHaveBeenCalledTimes(1);

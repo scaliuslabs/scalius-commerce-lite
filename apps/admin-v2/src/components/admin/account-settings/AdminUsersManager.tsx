@@ -59,6 +59,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const { hasPermission } = usePermissions();
+  const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
 
   const handleAddUser = async (e: React.SyntheticEvent) => {
@@ -92,14 +93,16 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               Manage administrator access to your store
             </CardDescription>
           </div>
-          <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Add Member
-          </Button>
+          {canManageTeam && (
+            <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Member
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
-        {showAddForm && (
+        {canManageTeam && showAddForm && (
           <form onSubmit={handleAddUser} className="mb-6 p-5 bg-muted/30 rounded-xl border space-y-4">
             <h4 className="font-medium">Invite New Team Member</h4>
             {error && (
@@ -256,7 +259,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                       Permissions
                     </Button>
                   )}
-                  {adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
+                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">

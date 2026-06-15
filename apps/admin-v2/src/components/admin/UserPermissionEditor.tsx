@@ -1,5 +1,6 @@
 // src/components/admin/UserPermissionEditor.tsx
 import { useState, useEffect } from "react";
+import { useRouter } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Shield, AlertTriangle, Crown, X } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
+import { refreshAdminRouteContext } from "@/lib/admin-route-context";
 import {
   assignUserPermission,
   assignUserRole,
@@ -71,6 +73,7 @@ export function UserPermissionEditor({
   onClose,
   onUpdate,
 }: UserPermissionEditorProps) {
+  const router = useRouter();
   const [roles, setRoles] = useState<Role[]>([]);
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -124,10 +127,16 @@ export function UserPermissionEditor({
     .filter((r) => assignedRoleIds.has(r.id))
     .forEach((r) => r.permissions.forEach((p) => rolePermissions.add(p)));
 
+  const refreshPermissions = async () => {
+    await refreshAdminRouteContext(router);
+  };
+
   const handleAddRole = async (roleId: string) => {
     try {
       await assignUserRole({ data: { userId: user.id, roleId } });
       setAssignedRoleIds((prev) => new Set([...prev, roleId]));
+      await refreshPermissions();
+      onUpdate();
       toast.success("Role assigned successfully");
     } catch (error: unknown) {
       console.error("Error assigning role:", error);
@@ -143,6 +152,8 @@ export function UserPermissionEditor({
         newSet.delete(roleId);
         return newSet;
       });
+      await refreshPermissions();
+      onUpdate();
       toast.success("Role removed successfully");
     } catch (error: unknown) {
       console.error("Error removing role:", error);
@@ -174,6 +185,8 @@ export function UserPermissionEditor({
         return { grants, denials };
       });
 
+      await refreshPermissions();
+      onUpdate();
       toast.success("Permission override set");
     } catch (error: unknown) {
       console.error("Error setting permission:", error);
@@ -192,6 +205,8 @@ export function UserPermissionEditor({
         return { grants, denials };
       });
 
+      await refreshPermissions();
+      onUpdate();
       toast.success("Permission override removed");
     } catch (error: unknown) {
       console.error("Error removing override:", error);
