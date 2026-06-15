@@ -57,6 +57,15 @@ Admin components:
 pnpm exec vitest run apps/admin-v2/src/path/to/test.ts
 ```
 
+Admin order detail:
+
+```bash
+pnpm exec vitest run apps/admin-v2/src/routes/admin/orders/-order-detail-prefetch.test.ts
+pnpm --filter @scalius/admin-v2 typecheck
+```
+
+Expected result: order and shipment prefetches remain required for a real order detail render, but delivery-provider, payment-history, currency, and COD warmups are optional. A delivery-provider prefetch failure should log `Order delivery provider prefetch skipped` and keep the order detail route loadable with an empty provider fallback.
+
 Admin shell/list routing:
 
 ```bash
@@ -387,7 +396,7 @@ Expected result:
 - Browser login at `http://localhost:4323/auth/login` reaches `/admin`.
 - API worker logs show `GET /api/v1/admin/dashboard/summary 200 OK` and `GET /api/v1/admin/dashboard/activity 200 OK`; the legacy `GET /api/v1/admin/dashboard` endpoint should remain available for compatibility.
 - The admin proxy route can be checked with a cookie jar; `GET http://localhost:4323/api/v1/admin/dashboard` should return `200 OK` and `x-proxy-base-url: http://localhost:8787/api/v1`.
-- Admin order detail should render without a payment-card waterfall: visit an order detail page such as `http://localhost:4323/admin/orders/{id}` and confirm the initial route load warms `/orders/{id}/payments`; COD orders should also warm `/orders/{id}/cod`. Optional payment/COD prefetch failures should log a warning and keep the order detail page loadable.
+- Admin order detail should render without a payment-card waterfall: visit an order detail page such as `http://localhost:4323/admin/orders/{id}` and confirm the initial route load warms `/orders/{id}/payments`; COD orders should also warm `/orders/{id}/cod`. Optional delivery-provider/payment/COD/currency warmup failures should log a warning and keep the order detail page loadable.
 - Admin checkout settings should render the checkout-flow tab after preloading only auth settings; payment gateway and shipping method API calls should not happen until their tabs are opened.
 
 ## Turbo And Deploy Checks
