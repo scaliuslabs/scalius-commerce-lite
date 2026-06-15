@@ -7,6 +7,7 @@
 
 export * from "./api-mutations/analytics";
 export * from "./api-mutations/attributes";
+export * from "./api-mutations/cache";
 export * from "./api-mutations/categories";
 export * from "./api-mutations/checkout-languages";
 export * from "./api-mutations/collections";

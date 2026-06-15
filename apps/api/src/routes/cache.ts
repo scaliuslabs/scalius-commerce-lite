@@ -126,7 +126,18 @@ const clearAllRoute = createRoute({
 });
 
 app.openapi(clearAllRoute, async (c) => {
-  await deleteCacheByPattern("api:*", kv(c));
+  const kvNs = kv(c);
+  await deleteCacheByPattern("api:*", kvNs);
+
+  const groupNames = Object.keys(INVALIDATION_GROUPS);
+  const now = Date.now().toString();
+  if (kvNs) {
+    await Promise.all(
+      groupNames.map((group) =>
+        kvNs.put(`sc:_last_cleared:${group}`, now, { expirationTtl: 86400 * 30 }),
+      ),
+    );
+  }
 
   const env = c.env as Env;
   const purgeUrl = env?.PURGE_URL;
