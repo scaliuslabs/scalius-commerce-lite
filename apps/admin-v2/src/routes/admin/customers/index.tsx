@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { useCurrency } from "~/hooks/use-currency";
-import { customersQueryOptions } from "~/lib/api.queries";
+import { customersQueryOptions } from "~/lib/api-query-options/customers";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteCustomer,

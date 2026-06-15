@@ -43,7 +43,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import { StatCard } from "@/components/admin/shared/StatCard";
-import { inventoryQueryOptions } from "@/lib/api.queries";
+import { inventoryQueryOptions } from "@/lib/api-query-options/inventory";
 import {
   adjustInventory,
   type InventoryMovement,

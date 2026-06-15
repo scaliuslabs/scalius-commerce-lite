@@ -53,7 +53,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
-import { abandonedCheckoutsQueryOptions } from "@/lib/api.queries";
+import { abandonedCheckoutsQueryOptions } from "@/lib/api-query-options/abandoned-checkouts";
 import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 

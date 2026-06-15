@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
-import { categoryFormOptionsQueryOptions } from "~/lib/api.queries";
+import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import type { Category } from "~/components/admin/product-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 

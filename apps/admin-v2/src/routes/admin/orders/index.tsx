@@ -18,7 +18,7 @@ import type { DateRange } from "react-day-picker";
 import { formatDateShort } from "@scalius/shared/timestamps";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { ordersQueryOptions } from "~/lib/api.queries";
+import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {

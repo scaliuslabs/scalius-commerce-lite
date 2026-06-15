@@ -18,7 +18,7 @@ import {
 } from "../../ui/select";
 import { LoaderCircle, Truck } from "lucide-react";
 import { toast } from "sonner";
-import { deliveryProvidersQueryOptions } from "~/lib/api.queries";
+import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
 import type { DeliveryProviderRecord } from "~/types/api-responses";
 
 interface BulkShipDialogProps {

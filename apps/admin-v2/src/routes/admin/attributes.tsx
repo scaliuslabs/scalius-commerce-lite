@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Tags, Trash2, Plus } from "lucide-react";
 import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { attributesQueryOptions } from "~/lib/api.queries";
+import { attributesQueryOptions } from "~/lib/api-query-options/attributes";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useUpdateAttribute,
