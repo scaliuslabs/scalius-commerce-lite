@@ -185,11 +185,12 @@ For `CACHE-001`, payment-method, Stripe, SSLCommerz, and Polar settings writes m
 Admin/storefront cache invalidation checks:
 
 ```bash
-pnpm --filter @scalius/api exec vitest run src/utils/cache-invalidation.test.ts src/routes/admin/settings/site-cache-invalidation.test.ts src/routes/admin/navigation.test.ts src/routes/checkout-languages.test.ts src/routes/admin/attributes-cache-invalidation.test.ts src/routes/admin/settings/shipping-cache-invalidation.test.ts src/routes/admin/settings/hero-sliders-cache-invalidation.test.ts src/routes/admin/settings/delivery-locations-cache-invalidation.test.ts
+pnpm --filter @scalius/api exec vitest run src/utils/cache-invalidation.test.ts src/routes/admin/settings/site-cache-invalidation.test.ts src/routes/admin/navigation.test.ts src/routes/checkout-languages.test.ts src/routes/admin/attributes-cache-invalidation.test.ts src/routes/admin/settings/shipping-cache-invalidation.test.ts src/routes/admin/settings/hero-sliders-cache-invalidation.test.ts src/routes/admin/settings/delivery-locations-cache-invalidation.test.ts src/routes/admin/settings/delivery-providers-cache-invalidation.test.ts
 pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/admin-v2 typecheck
 ```
 
-For `CACHE-003`, non-widget admin writes for shipping methods, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Hero slider create/update/delete must purge homepage caches; hero slider reads must not purge. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
+For `CACHE-003`/`CACHE-008`, non-widget admin writes for shipping methods, delivery providers, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Delivery-provider writes are checkout-affecting and must invalidate `["checkout"]`; the admin delivery-provider UI must invalidate `queryKeys.settings.deliveryProviders()` after successful saves/deletes. Hero slider create/update/delete must purge homepage caches; hero slider reads must not purge. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
 
 Storefront purge route checks:
 

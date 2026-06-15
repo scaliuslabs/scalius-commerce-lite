@@ -1,4 +1,5 @@
 import { type FC, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   type DeliveryProviderRecord,
@@ -13,6 +14,7 @@ import {
   testDeliveryProvider,
   testDeliveryCredentials,
 } from "~/lib/api-functions/delivery";
+import { queryKeys } from "~/lib/query-keys";
 
 // Default credentials structure per provider type
 const DEFAULT_CREDENTIALS = {
@@ -53,6 +55,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
   providers: initialProviders,
   apiBaseUrl = "",
 }) => {
+  const queryClient = useQueryClient();
   const [providers, setProviders] =
     useState<DeliveryProviderRecord[]>(initialProviders);
   const [selectedProvider, setSelectedProvider] =
@@ -87,6 +90,12 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
 
   const creds = parseJSON(formData.credentials);
   const conf = parseJSON(formData.config);
+
+  const refreshDeliveryProviderQueries = () => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.settings.deliveryProviders(),
+    });
+  };
 
   const resetForm = (provider?: DeliveryProviderRecord) => {
     if (provider) {
@@ -171,6 +180,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       setSelectedProvider(savedProvider);
       setIsEditing(false);
       setIsCreating(false);
+      refreshDeliveryProviderQueries();
       toast.success("Provider saved successfully");
     } catch (error: unknown) {
       toast.error(getServerFnError(error, "Failed to save provider"));
@@ -187,6 +197,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       setProviders((prev) =>
         prev.filter((p) => p.id !== selectedProvider.id),
       );
+      refreshDeliveryProviderQueries();
       toast.success("Provider deleted");
       setSelectedProvider(null);
     } catch (error: unknown) {

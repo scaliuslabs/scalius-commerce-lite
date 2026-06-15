@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `RBAC-001`, `STORE-007`, `PERF-004`, `PERF-005`, `STORE-008`, `AUTH-011`, `CACHE-006`, and `CACHE-007` slices are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
+Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `ADMIN-011`, `RBAC-001`, `STORE-007`, `PERF-004`, `PERF-005`, `STORE-008`, `AUTH-011`, `CACHE-006`, `CACHE-007`, and `CACHE-008` slices are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
 
 ## Validation Performed
 
@@ -24,10 +24,10 @@ Current tracked remediation state: the original tracker items, the 2026-06-14 au
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with no ESLint warnings across API, admin, storefront, api-client, core, database, and shared.
-- `pnpm test`: passed 126 files and 795 tests after the purge-cache GET and dashboard first-paint motion slice.
+- `pnpm test`: passed 127 files and 799 tests after the delivery-provider cache invalidation slice.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm deploy`: latest purge-cache GET and dashboard first-paint motion slice redeployed API `128ebde2-62df-4f03-98f6-e7fa0d37534b`, admin `1e80b617-bffc-46f4-8a7b-b2e0e23ae606`, and storefront `f767dd69-aa71-4470-b842-a250283d4b2b`.
-- Live HTTP and browser checks: API setup, dashboard login page, authenticated `/admin`, `/admin/products`, `/admin/orders`, storefront `/`, storefront `/search`, and direct storefront purge-cache GET/query-token checks returned successfully after redeploy with no error-boundary page, stuck loading state, or captured console/runtime errors.
+- Full `pnpm deploy`: latest delivery-provider cache invalidation slice redeployed API `c2dbd146-3d1d-4907-a08c-6dd9f89df83d`, admin `1b04ca74-5c77-4423-ac15-600aee909650`, and storefront `420b911c-ea06-48c1-9812-2ee0ad67a90c`.
+- Live HTTP and browser checks: API setup, dashboard login page, authenticated `/admin`, `/admin/orders`, `/admin/settings/delivery-providers`, storefront `/`, storefront `/search`, and direct storefront purge-cache GET checks returned successfully after redeploy with no error-boundary page, stuck loading state, or captured console/runtime errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
@@ -146,6 +146,14 @@ The cache re-audit found that authenticated `GET /api/purge-cache` bumped the st
 Fix direction: keep `POST /api/purge-cache` as the only mutating purge method, make `GET` deterministic and non-mutating, preserve query-string credential rejection, and add route tests that prove GET does not touch KV/L1/warming while POST full and selective purges still work.
 
 Status: Verified on 2026-06-15. `GET /api/purge-cache` now rejects `?token=` without mutation and otherwise returns `405 Allow: POST` with `Cache-Control: no-store`. Focused storefront route tests prove header-authenticated GET does not call `CACHE_CONTROL.get`, `CACHE_CONTROL.put`, L1 clear helpers, `waitUntil`, or warm `fetch`, while POST full and prefix-only purges still bump the version and warm only when HTML-affecting. The root test suite now covers 126 files / 795 tests. Full deploy completed to API `128ebde2-62df-4f03-98f6-e7fa0d37534b`, admin `1e80b617-bffc-46f4-8a7b-b2e0e23ae606`, and storefront `f767dd69-aa71-4470-b842-a250283d4b2b`; live GET and query-token checks returned the expected 405/400 no-store responses.
+
+### CACHE-008 / ADMIN-011: Delivery-provider writes skipped checkout invalidation
+
+Delivery-provider settings affect checkout delivery behavior, but the provider create/update/delete routes did not invalidate the API/storefront `checkout` cache group. The admin delivery-provider UI also updated only component-local state, leaving `queryKeys.settings.deliveryProviders()` stale for other prefetched admin consumers.
+
+Fix direction: treat delivery providers as checkout-affecting settings, invalidate `["checkout"]` after successful provider writes, and invalidate the admin delivery-provider query key after successful UI saves/deletes.
+
+Status: Verified on 2026-06-15. Delivery-provider create, update, update-as-create, and delete routes now call `invalidateApiAndStorefrontGroups(["checkout"], c.env)`. The admin delivery-provider container invalidates `queryKeys.settings.deliveryProviders()` after local state updates for successful saves/deletes. Focused route tests cover all provider write paths; API/admin typechecks and lints, root typecheck/lint/test/build/env/dist-secret/migration/audit/peer/diff gates, local `pnpm dev` plus browser smoke, full deploy to API `c2dbd146-3d1d-4907-a08c-6dd9f89df83d`, admin `1b04ca74-5c77-4423-ac15-600aee909650`, and storefront `420b911c-ea06-48c1-9812-2ee0ad67a90c`, and live `/admin/settings/delivery-providers` browser smoke passed.
 
 ### STORE-007: Storefront CSP middleware ignored enveloped settings responses
 
