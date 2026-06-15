@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
+  Calendar as CalendarIcon,
   Plus,
   Trash2,
   Truck,
@@ -12,7 +13,12 @@ import {
 } from "lucide-react";
 import { DataTableToolbar } from "../DataTableToolbar";
 import type { DateRange } from "react-day-picker";
-import { DateRangePickerWithPresets } from "~/components/admin/order-list/DateRangePickerWithPresets";
+
+const DateRangePickerWithPresets = lazy(() =>
+  import("~/components/admin/order-list/DateRangePickerWithPresets").then(
+    (module) => ({ default: module.DateRangePickerWithPresets }),
+  ),
+);
 
 const statusFilters = [
   { value: "pending", label: "Pending" },
@@ -48,6 +54,81 @@ interface OrderToolbarProps {
   autoRefreshEnabled: boolean;
   onToggleAutoRefresh: () => void;
   countdown: number;
+}
+
+function formatRangeDate(date: Date) {
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getDateRangeLabel(dateRange: DateRange | undefined) {
+  if (!dateRange?.from) return "Pick a date range";
+  if (!dateRange.to) return formatRangeDate(dateRange.from);
+  return `${formatRangeDate(dateRange.from)} - ${formatRangeDate(dateRange.to)}`;
+}
+
+function DateRangeButton({
+  dateRange,
+  onClick,
+  disabled,
+}: {
+  dateRange: DateRange | undefined;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Button
+      id="date"
+      variant="outline"
+      size="sm"
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`h-9 w-[240px] justify-start text-left text-xs font-normal ${
+        !dateRange ? "text-muted-foreground" : ""
+      }`}
+      aria-busy={disabled ? "true" : undefined}
+    >
+      <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+      <span className="truncate" suppressHydrationWarning>
+        {getDateRangeLabel(dateRange)}
+      </span>
+    </Button>
+  );
+}
+
+function LazyDateRangeFilter({
+  dateRange,
+  onDateRangeChange,
+}: {
+  dateRange: DateRange | undefined;
+  onDateRangeChange: (range: DateRange | undefined) => void;
+}) {
+  const [shouldLoadPicker, setShouldLoadPicker] = useState(false);
+
+  if (!shouldLoadPicker) {
+    return (
+      <DateRangeButton
+        dateRange={dateRange}
+        onClick={() => setShouldLoadPicker(true)}
+      />
+    );
+  }
+
+  return (
+    <Suspense
+      fallback={<DateRangeButton dateRange={dateRange} disabled />}
+    >
+      <DateRangePickerWithPresets
+        date={dateRange}
+        setDate={onDateRangeChange}
+        initialOpen
+      />
+    </Suspense>
+  );
 }
 
 export function OrderToolbar({
@@ -138,9 +219,9 @@ export function OrderToolbar({
 
   const filters: ReactNode = (
     <div className="flex items-center gap-2">
-      <DateRangePickerWithPresets
-        date={dateRange}
-        setDate={onDateRangeChange}
+      <LazyDateRangeFilter
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
       />
       <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50">
         <Checkbox

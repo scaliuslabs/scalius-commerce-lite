@@ -27,6 +27,7 @@ interface DateRangePickerProps {
   setDate: (date: DateRange | undefined) => void;
   className?: string;
   align?: "center" | "start" | "end";
+  initialOpen?: boolean;
 }
 
 const PRESETS = [
@@ -77,8 +78,9 @@ export function DateRangePickerWithPresets({
   setDate,
   className,
   align = "start",
+  initialOpen = false,
 }: DateRangePickerProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(initialOpen);
   const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date);
 
   React.useEffect(() => {
