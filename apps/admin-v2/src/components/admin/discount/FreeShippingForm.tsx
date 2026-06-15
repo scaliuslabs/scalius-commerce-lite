@@ -212,7 +212,9 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                           >
                             {field.value &&
                               !isNaN(new Date(field.value).getTime()) ? (
-                              formatDateShort(field.value)
+                              <span suppressHydrationWarning>
+                                {formatDateShort(field.value)}
+                              </span>
                             ) : (
                               <span>Pick a date</span>
                             )}
@@ -265,7 +267,9 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                           >
                             {field.value &&
                               !isNaN(new Date(field.value).getTime()) ? (
-                              formatDateShort(field.value)
+                              <span suppressHydrationWarning>
+                                {formatDateShort(field.value)}
+                              </span>
                             ) : (
                               <span>No end date</span>
                             )}
@@ -526,7 +530,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                 {form.watch("limitOnePerCustomer") ? " (1 per customer)" : ""}
               </span>
               <span className="text-muted-foreground">Period</span>
-              <span className="font-medium">
+              <span className="font-medium" suppressHydrationWarning>
                 {form.watch("startDate")
                   ? formatDateShort(form.watch("startDate")!)
                   : "---"}

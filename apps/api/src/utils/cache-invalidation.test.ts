@@ -334,8 +334,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(waitUntil).not.toHaveBeenCalled();
   });
 
-  it("purges product catalog caches with dependent collection caches", async () => {
+  it("schedules product catalog storefront purges with dependent collection caches", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    const waitUntil = vi.fn();
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -344,7 +345,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
         PURGE_URL: "https://storefront.example.com/api/purge-cache",
         PURGE_TOKEN: "secret-token",
       } as Env,
+      executionCtx: { waitUntil } as unknown as ExecutionContext,
     });
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0]!;
@@ -362,6 +368,32 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "global_all_collections",
         "widgets_scope_",
       ]),
+    );
+  });
+
+  it("does not fail catalog writes when the scheduled storefront purge rejects", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("Network connection lost"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const waitUntil = vi.fn();
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      invalidateCatalogCaches("discounts", {
+        env: {
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+        } as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await expect(purgePromise).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      "[Cache] Storefront group purge failed:",
+      expect.any(Error),
     );
   });
 });

@@ -56,7 +56,9 @@ export function ActiveDatesSection({ form }: ActiveDatesSectionProps) {
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {field.value &&
                           !isNaN(new Date(field.value).getTime()) ? (
-                          formatDateShort(field.value)
+                          <span suppressHydrationWarning>
+                            {formatDateShort(field.value)}
+                          </span>
                         ) : (
                           <span>Pick a date</span>
                         )}
@@ -105,7 +107,9 @@ export function ActiveDatesSection({ form }: ActiveDatesSectionProps) {
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {field.value &&
                             !isNaN(new Date(field.value).getTime()) ? (
-                            formatDateShort(field.value)
+                            <span suppressHydrationWarning>
+                              {formatDateShort(field.value)}
+                            </span>
                           ) : (
                             <span>No end date</span>
                           )}

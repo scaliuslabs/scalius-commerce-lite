@@ -61,7 +61,7 @@ export function SummaryCard({
             {form.watch("limitOnePerCustomer") ? " (1 per customer)" : ""}
           </div>
           <div className="text-muted-foreground">Period</div>
-          <div className="font-medium">
+          <div className="font-medium" suppressHydrationWarning>
             {form.watch("startDate")
               ? formatDateShort(form.watch("startDate")!)
               : "---"}

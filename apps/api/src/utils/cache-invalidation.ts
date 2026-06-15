@@ -474,7 +474,8 @@ export async function invalidateCatalogCaches(
   c: { env?: Env; executionCtx?: ExecutionContext },
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];
-  await invalidateApiAndStorefrontGroups(groups, c.env);
+  await invalidateGroups(groups, c.env?.CACHE);
+  triggerStorefrontPurgeForGroups(groups, c.env, c.executionCtx);
 }
 
 /**
