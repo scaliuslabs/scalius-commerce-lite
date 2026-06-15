@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
@@ -20,12 +20,9 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { ExternalLink } from "lucide-react";
-
-const TiptapEditor = React.lazy(() =>
-  import("../ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
-);
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
+import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
@@ -35,7 +32,6 @@ import {
   type CreatePageInput,
   type PageFeaturedImageDto,
 } from "@/lib/api-functions/pages";
-import { LoadingFallback } from "./shared/LoadingFallback";
 import { pageFormSchema, type PageFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
@@ -194,16 +190,12 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      {isClient && (
-                        <Suspense fallback={<LoadingFallback height="h-64" />}>
-                          <TiptapEditor
-                            content={field.value}
-                            onChange={field.onChange}
-                            placeholder="Write your page content here..."
-                            compact={true}
-                          />
-                        </Suspense>
-                      )}
+                      <DeferredTiptapEditor
+                        content={field.value}
+                        onChange={field.onChange}
+                        placeholder="Write your page content here..."
+                        compact={true}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

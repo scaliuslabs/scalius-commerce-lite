@@ -32,12 +32,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { Suspense } from "react";
-import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
-
-const TiptapEditor = React.lazy(() =>
-  import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
-);
+import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import type { ProductFormValues, Category } from "./types";
 
 interface BasicInfoSectionProps {
@@ -52,7 +47,6 @@ export function BasicInfoSection({
   form,
   categories,
   isEdit,
-  isClient,
   getStorefrontPath,
 }: BasicInfoSectionProps) {
   return (
@@ -171,22 +165,12 @@ export function BasicInfoSection({
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        {isClient ? (
-                          <Suspense fallback={<LoadingFallback />}>
-                            <TiptapEditor
-                              content={field.value || ""}
-                              onChange={field.onChange}
-                              placeholder="Enter product description"
-                              className="min-h-[180px]"
-                            />
-                          </Suspense>
-                        ) : (
-                          <div className="border rounded-md min-h-[180px] p-4">
-                            <div className="text-muted-foreground">
-                              Loading editor...
-                            </div>
-                          </div>
-                        )}
+                        <DeferredTiptapEditor
+                          content={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Enter product description"
+                          className="min-h-[180px]"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

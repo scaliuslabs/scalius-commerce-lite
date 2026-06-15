@@ -47,7 +47,6 @@ export function ProductForm({
   defaultValues,
   isEdit = false,
 }: ProductFormProps) {
-  const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
 
   // Clean the meta description to avoid showing the marker to users
@@ -70,11 +69,6 @@ export function ProductForm({
     productId: defaultValues?.id,
     isEdit,
   });
-
-  // Set up client-side rendering flag
-  React.useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   // Initialize form
   const form = useForm<ProductFormValues>({
@@ -138,7 +132,7 @@ export function ProductForm({
             {/* Left Column - Main Content (2/3 width on large screens) */}
             <div className="lg:col-span-2 space-y-4">
               {/* Title & Description */}
-              <TitleDescriptionSection form={form} isClient={isClient} />
+              <TitleDescriptionSection form={form} />
 
               {/* Product Images */}
               <ProductImagesSection

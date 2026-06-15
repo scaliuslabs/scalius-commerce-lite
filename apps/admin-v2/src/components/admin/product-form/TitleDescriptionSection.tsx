@@ -1,5 +1,3 @@
-// src/components/admin/product-form/TitleDescriptionSection.tsx
-import React, { Suspense } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   FormControl,
@@ -9,11 +7,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
-
-const TiptapEditor = React.lazy(() =>
-  import("@/components/ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
-);
+import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import {
@@ -24,12 +18,10 @@ import type { ProductFormValues } from "./types";
 
 interface TitleDescriptionSectionProps {
   form: UseFormReturn<ProductFormValues>;
-  isClient: boolean;
 }
 
 export function TitleDescriptionSection({
   form,
-  isClient,
 }: TitleDescriptionSectionProps) {
   return (
     <div className="space-y-4">
@@ -79,25 +71,12 @@ export function TitleDescriptionSection({
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    {isClient ? (
-                      <Suspense fallback={<LoadingFallback height="h-64" />}>
-                        <TiptapEditor
-                          content={field.value || ""}
-                          onChange={field.onChange}
-                          placeholder="Describe your product..."
-                          compact={true}
-                        />
-                      </Suspense>
-                    ) : (
-                      <div
-                        className="border rounded-md p-4"
-                        style={{ minHeight: "200px" }}
-                      >
-                        <div className="text-muted-foreground text-sm">
-                          Loading editor...
-                        </div>
-                      </div>
-                    )}
+                    <DeferredTiptapEditor
+                      content={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder="Describe your product..."
+                      compact={true}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

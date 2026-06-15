@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -19,23 +19,19 @@ import {
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
-
-const TiptapEditor = React.lazy(() =>
-  import("../ui/tiptap").then((m) => ({ default: m.TiptapEditor }))
-);
 import { ExternalLink } from "lucide-react";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
+import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import {
   createCategory,
   updateCategory,
   type CategoryImageInput,
   type CreateCategoryInput,
 } from "@/lib/api-functions/categories";
-import { LoadingFallback } from "./shared/LoadingFallback";
 import { categoryFormSchema, type CategoryFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
@@ -75,12 +71,7 @@ export function CategoryForm({
   defaultValues,
   isEdit = false,
 }: CategoryFormProps) {
-  const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
-
-  React.useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -197,25 +188,12 @@ export function CategoryForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      {isClient ? (
-                        <Suspense fallback={<LoadingFallback height="h-64" />}>
-                          <TiptapEditor
-                            content={field.value || ""}
-                            onChange={field.onChange}
-                            placeholder="Enter category description with rich formatting..."
-                            compact={true}
-                          />
-                        </Suspense>
-                      ) : (
-                        <div
-                          className="border rounded-md p-4"
-                          style={{ minHeight: "200px" }}
-                        >
-                          <div className="text-muted-foreground text-sm">
-                            Loading editor...
-                          </div>
-                        </div>
-                      )}
+                      <DeferredTiptapEditor
+                        content={field.value || ""}
+                        onChange={field.onChange}
+                        placeholder="Enter category description with rich formatting..."
+                        compact={true}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

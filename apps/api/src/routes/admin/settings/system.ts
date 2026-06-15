@@ -7,7 +7,10 @@ import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getEncryptionKey } from "../../../utils/encryption-key";
 import { upsertEncryptedSetting } from "@scalius/core/modules/payments/gateway-settings";
-import { invalidateApiAndStorefrontGroups } from "../../../utils/cache-invalidation";
+import {
+    getOptionalExecutionContext,
+    invalidateApiAndStorefrontGroups,
+} from "../../../utils/cache-invalidation";
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
@@ -185,7 +188,18 @@ app.openapi(saveSecurityRoute, async (c) => {
 
             const env = c.env as Env | undefined;
             if (env?.CACHE) {
-                c.executionCtx.waitUntil(env.CACHE.put("security:csp_allowed_domains", cspAllowedDomains));
+                const cacheWrite = env.CACHE
+                    .put("security:csp_allowed_domains", cspAllowedDomains)
+                    .catch((error) => {
+                        console.error("[Settings] Failed to cache CSP allowed domains:", error);
+                    });
+
+                const executionCtx = getOptionalExecutionContext(c);
+                if (executionCtx) {
+                    executionCtx.waitUntil(cacheWrite);
+                } else {
+                    void cacheWrite;
+                }
             }
             await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
         }

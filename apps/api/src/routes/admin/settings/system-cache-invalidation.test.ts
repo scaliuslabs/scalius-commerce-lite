@@ -7,6 +7,13 @@ const mocks = vi.hoisted(() => ({
   getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
   invalidateApiAndStorefrontGroups: vi.fn(),
+  getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
+    try {
+      return c.executionCtx;
+    } catch {
+      return undefined;
+    }
+  }),
   upsertEncryptedSetting: vi.fn(),
 }));
 
@@ -20,6 +27,7 @@ vi.mock("@scalius/core/modules/settings", () => ({
 
 vi.mock("../../../utils/cache-invalidation", () => ({
   invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+  getOptionalExecutionContext: mocks.getOptionalExecutionContext,
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
@@ -88,7 +96,9 @@ function createTestApp() {
 function requestJson(
   app: OpenAPIHono<{ Bindings: Env }>,
   env: Env,
-  executionCtx: { waitUntil: ReturnType<typeof vi.fn>; passThroughOnException: ReturnType<typeof vi.fn> },
+  executionCtx:
+    | { waitUntil: ReturnType<typeof vi.fn>; passThroughOnException: ReturnType<typeof vi.fn> }
+    | undefined,
   path: string,
   body: unknown,
 ) {
@@ -134,6 +144,21 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["layout"], env);
+  });
+
+  it("does not fail CSP security settings save when ExecutionContext is unavailable", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, undefined, "/security", {
+      cspAllowedDomains: "https://payments.example.com",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(env.CACHE.put).toHaveBeenCalledWith(
+      "security:csp_allowed_domains",
+      "https://payments.example.com",
+    );
     expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["layout"], env);
   });
 });
