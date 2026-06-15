@@ -112,11 +112,13 @@ rg -n 'queryKeys\\.products\\.stats\\(\\)|invalidateProductStatsQueries' \
   apps/admin-v2/src/components/admin/WelcomeBanner.tsx \
   apps/admin-v2/src/components/ui/background-gradient.tsx \
   apps/admin-v2/src/components/ui/container-text-flip.tsx
+! rg '@dnd-kit|useSortable|DndContext|SortableContext|sortableKeyboardCoordinates' apps/admin-v2/src/components/admin/data-table/DataTable.tsx
+rg -n '@dnd-kit|useSortable|DndContext|SortableContext|sortableKeyboardCoordinates' apps/admin-v2/src/components/admin/data-table/SortableDataTableContent.tsx
 pnpm --filter @scalius/admin-v2 typecheck
 pnpm --filter @scalius/admin-v2 lint
 ```
 
-Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`.
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does.
 
 Admin mutation-barrel split checks:
 
