@@ -13,7 +13,7 @@ import {
   useRestoreDiscount,
   useToggleDiscountStatus,
   useBulkDeleteDiscounts,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/discounts";
 import {
   DataTable,
   useServerTable,

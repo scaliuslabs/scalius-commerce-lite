@@ -23,7 +23,7 @@ import {
   usePermanentDeleteCategory,
   useRestoreCategory,
   useBulkDeleteCategories,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/categories";
 import {
   DataTable,
   DataTableToolbar,

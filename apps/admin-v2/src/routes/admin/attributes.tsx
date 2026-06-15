@@ -12,7 +12,7 @@ import {
   usePermanentDeleteAttribute,
   useRestoreAttribute,
   useBulkDeleteAttributes,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/attributes";
 import {
   DataTable,
   DataTableToolbar,

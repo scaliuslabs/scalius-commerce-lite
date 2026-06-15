@@ -101,10 +101,10 @@ rg -n 'clearAdminRouteContextCache' \
   apps/admin-v2/src/components/admin/account-settings/TwoFactorSetup.tsx \
   apps/admin-v2/src/components/auth/UserMenu.tsx
 rg -n 'queryKeys\\.dashboard\\.all|invalidateDashboardQueries' \
-  apps/admin-v2/src/lib/api.mutations.ts \
+  apps/admin-v2/src/lib/api-mutations \
   apps/admin-v2/src/routes/admin/orders/index.tsx
 rg -n 'queryKeys\\.products\\.stats\\(\\)|invalidateProductStatsQueries' \
-  apps/admin-v2/src/lib/api.mutations.ts \
+  apps/admin-v2/src/lib/api-mutations \
   apps/admin-v2/src/components/admin/CategoryForm.tsx \
   apps/admin-v2/src/components/admin/product-form/OrganizationCard.tsx
 ! rg 'motion/react' \
@@ -121,13 +121,15 @@ Expected result: the checkout settings route loader warms only `authSettingsQuer
 Admin mutation-barrel split checks:
 
 ```bash
-rg -n "from ['\"][~@]/lib/api\\.mutations|~/lib/api\\.mutations|@/lib/api\\.mutations" apps/admin-v2/src
+! rg "from ['\"][~@]/lib/api\\.mutations|~/lib/api\\.mutations|@/lib/api\\.mutations" apps/admin-v2/src
+rg -n '^export \* from "\./api-mutations/' apps/admin-v2/src/lib/api.mutations.ts
+rg -n "from ['\"][~@]/lib/api-mutations" apps/admin-v2/src
 pnpm --filter @scalius/admin-v2 typecheck
 pnpm --filter @scalius/admin-v2 lint
 pnpm --filter @scalius/admin-v2 build
 ```
 
-Expected result after the future `ADMIN-013` slice: route-reachable components import mutation hooks from domain modules under `apps/admin-v2/src/lib/api-mutations/*`. The legacy `api.mutations.ts` compatibility barrel may remain for external or slow-path imports, but hot route modules should not import it directly.
+Expected result: route-reachable components import mutation hooks from domain modules under `apps/admin-v2/src/lib/api-mutations/*`. The legacy `api.mutations.ts` compatibility barrel should contain only domain `export *` lines and no route/component under `apps/admin-v2/src` should import it directly.
 
 Admin 2FA/setup auth boundary:
 

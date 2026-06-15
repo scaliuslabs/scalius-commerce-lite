@@ -36,7 +36,7 @@ import { cn } from "@scalius/shared/utils";
 import { formatDateShort } from "@scalius/shared/timestamps";
 import { Separator } from "../../ui/separator";
 import { toast } from "sonner";
-import { useCreateDiscount, useUpdateDiscount } from "~/lib/api.mutations";
+import { useCreateDiscount, useUpdateDiscount } from "~/lib/api-mutations/discounts";
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import {
   Tooltip,

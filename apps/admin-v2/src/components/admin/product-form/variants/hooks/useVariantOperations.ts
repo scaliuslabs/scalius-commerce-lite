@@ -9,7 +9,7 @@ import {
   useBulkCreateProductVariants,
   useBulkUpdateProductVariants,
   useDuplicateProductVariant,
-} from "@/lib/api.mutations";
+} from "@/lib/api-mutations/products";
 
 function toProductVariant(result: unknown): ProductVariant {
   const r = result as Record<string, unknown>;

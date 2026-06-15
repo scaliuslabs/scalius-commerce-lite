@@ -287,7 +287,7 @@ export function getDiscountColumns(
         <DataTableColumnHeader column={column} title="Start" />
       ),
       cell: ({ row }) => (
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-xs" suppressHydrationWarning>
           {formatDate(row.original.startDate)}
         </span>
       ),
@@ -299,7 +299,7 @@ export function getDiscountColumns(
         <DataTableColumnHeader column={column} title="End" />
       ),
       cell: ({ row }) => (
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-xs" suppressHydrationWarning>
           {row.original.endDate
             ? formatDate(row.original.endDate)
             : "No end date"}

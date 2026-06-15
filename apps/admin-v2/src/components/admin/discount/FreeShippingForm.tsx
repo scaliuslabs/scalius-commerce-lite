@@ -35,7 +35,7 @@ import {
 } from "../../ui/tooltip";
 import { Badge } from "../../ui/badge";
 import { toast } from "sonner";
-import { useCreateDiscount, useUpdateDiscount } from "~/lib/api.mutations";
+import { useCreateDiscount, useUpdateDiscount } from "~/lib/api-mutations/discounts";
 import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";

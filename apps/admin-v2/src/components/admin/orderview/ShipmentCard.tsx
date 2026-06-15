@@ -20,7 +20,7 @@ import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
 import type { Order, OrderShipment } from "./types";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateOrderShipment } from "@/lib/api.mutations";
+import { useCreateOrderShipment } from "@/lib/api-mutations/orders";
 import { queryKeys } from "@/lib/query-keys";
 
 interface ShipmentCardProps {

@@ -23,7 +23,7 @@ import {
   usePermanentDeleteCustomer,
   useRestoreCustomer,
   useBulkDeleteCustomers,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/customers";
 import {
   DataTable,
   DataTableToolbar,

@@ -219,13 +219,13 @@ flowchart LR
     SF["createServerFn<br/>(typed domain functions)"] --> QO["queryOptions<br/>(domain wrappers)"]
     QO --> L["Route Loader<br/>(ensureQueryData)"]
     L --> C["Component<br/>(useSuspenseQuery)"]
-    C --> M["useMutation<br/>(114 hooks)"]
+    C --> M["useMutation<br/>(domain hook modules)"]
     M -->|invalidateQueries| QO
 ```
 
 - **Server Functions**: typed functions live under domain slices in `src/lib/api-functions/`
 - **Query Options**: React Query wrappers are split between the legacy broad file and narrower domain modules with 7 staleTime tiers (10s -> 1hr)
-- **Mutations** (`api.mutations.ts`): exported hooks with cache invalidation and toast notifications
+- **Mutations** (`src/lib/api-mutations/<domain>.ts`): domain hook modules with cache invalidation and toast notifications; `api.mutations.ts` is only a compatibility re-export barrel
 - **Stale-While-Revalidate**: Detail queries use `staleTime: 0` + loader `staleTime: Infinity` for instant navigation
 
 ### Pages (60+)

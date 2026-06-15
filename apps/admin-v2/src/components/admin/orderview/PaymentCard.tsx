@@ -45,7 +45,7 @@ import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { orderPaymentsQueryOptions, orderCodQueryOptions } from "@/lib/api.queries";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { queryKeys } from "@/lib/query-keys";
-import { useUpdateOrderCod, useRefundOrder } from "@/lib/api.mutations";
+import { useUpdateOrderCod, useRefundOrder } from "@/lib/api-mutations/orders";
 import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";

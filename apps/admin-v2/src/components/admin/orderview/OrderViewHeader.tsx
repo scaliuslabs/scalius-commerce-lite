@@ -25,7 +25,7 @@ import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-import { useUpdateFulfillmentStatus } from "@/lib/api.mutations";
+import { useUpdateFulfillmentStatus } from "@/lib/api-mutations/orders";
 import type { UpdateFulfillmentStatusInput } from "@/lib/api-functions/orders";
 
 type FulfillmentStatus = UpdateFulfillmentStatusInput["status"];

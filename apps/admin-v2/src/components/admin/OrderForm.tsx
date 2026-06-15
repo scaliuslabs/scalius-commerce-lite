@@ -15,7 +15,7 @@ import {
   updateDiscountAmount,
 } from "@/store/orderStore";
 import { getDeliveryLocations } from "@/lib/api-functions/delivery";
-import { useCreateOrder, useUpdateOrder } from "@/lib/api.mutations";
+import { useCreateOrder, useUpdateOrder } from "@/lib/api-mutations/orders";
 import type {
   CreateOrderInput,
   UpdateOrderInput,

@@ -13,7 +13,7 @@ import {
   useRestoreCollection,
   useBulkDeleteCollections,
   useReorderCollections,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/collections";
 import {
   DataTable,
   DataTableToolbar,
