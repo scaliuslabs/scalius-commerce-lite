@@ -3,7 +3,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Tags, Trash2, Plus } from "lucide-react";
-import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
+import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import { attributesQueryOptions } from "~/lib/api.queries";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {

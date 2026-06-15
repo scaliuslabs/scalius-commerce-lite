@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { FraudCheckerSettings } from "~/components/admin/FraudCheckerSettings";
-import { fraudCheckerProvidersQueryOptions } from "~/lib/api.queries";
+import { fraudCheckerProvidersQueryOptions } from "~/lib/api-query-options/fraud-checker";
 import type { FraudCheckerProviderPayload } from "~/lib/api-functions/fraud-checker";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/fraud-checker")({
   loader: async ({ context: { queryClient } }) => {

@@ -76,14 +76,31 @@ pnpm --filter @scalius/admin-v2 typecheck
 Admin performance hot-path checks:
 
 ```bash
-pnpm exec vitest run apps/admin-v2/src/routes/admin/settings/-checkout-loader.test.ts
+pnpm exec vitest run \
+  apps/admin-v2/src/lib/route-graph-boundaries.test.ts \
+  apps/admin-v2/src/routes/admin/settings/-checkout-loader.test.ts
 ! rg "api\\.queries" \
+  apps/admin-v2/src/routes/admin/index.tsx \
+  apps/admin-v2/src/routes/admin/settings/index.tsx \
+  apps/admin-v2/src/routes/admin/settings/account.tsx \
+  apps/admin-v2/src/routes/admin/settings/cache.tsx \
   apps/admin-v2/src/routes/admin/settings/checkout.tsx \
+  apps/admin-v2/src/routes/admin/settings/delivery-providers.tsx \
+  apps/admin-v2/src/routes/admin/settings/fraud-checker.tsx \
+  apps/admin-v2/src/routes/admin/settings/hero-sliders.tsx \
+  apps/admin-v2/src/routes/admin/settings/meta-conversion.tsx \
+  apps/admin-v2/src/routes/admin/settings/notifications.tsx \
+  apps/admin-v2/src/routes/admin/settings/theme.tsx \
+  apps/admin-v2/src/components/admin/CacheManager.tsx \
+  apps/admin-v2/src/components/admin/delivery-locations/hooks/useDeliveryLocations.ts \
+  apps/admin-v2/src/components/admin/shipping-methods/hooks/useShippingMethods.ts \
   apps/admin-v2/src/components/admin/settings/CheckoutFlowSettings.tsx \
   apps/admin-v2/src/components/admin/layout/AppSidebar.tsx \
   apps/admin-v2/src/hooks/use-currency.ts \
   apps/admin-v2/src/hooks/use-storefront-url.ts \
   apps/admin-v2/src/hooks/use-firebase-init.ts
+! rg "import \\{[^}]*RouteErrorComponent[^}]*\\} from ['\\\"]~\\/lib\\/list-helpers['\\\"]" \
+  apps/admin-v2/src/routes/admin
 rg -n '^import .*api-functions' apps/admin-v2/src/lib/api.queries.ts
 rg -n 'const .*Api = \\(\\) => import\\("./api-functions/' apps/admin-v2/src/lib/api.queries.ts
 rg -n 'warmRouteQuery' \
@@ -155,6 +172,22 @@ rg -n 'import\\("@scalius/core/modules/ai/prompt-helper-v2"\\)|import\\("\\./sta
 pnpm --filter @scalius/admin-v2 typecheck
 pnpm --filter @scalius/admin-v2 lint
 pnpm --filter @scalius/admin-v2 build
+node - <<'NODE'
+const { readFileSync } = require("node:fs");
+const manifest = JSON.parse(
+  readFileSync("apps/admin-v2/dist/server/.vite/manifest.json", "utf8"),
+);
+const hotEntries = Object.entries(manifest).filter(
+  ([key]) => key.includes("routes/admin/index") || key.includes("routes/admin/settings"),
+);
+for (const [key, value] of hotEntries) {
+  const blob = JSON.stringify(value);
+  if (blob.includes("list-helpers") || blob.includes("api.queries")) {
+    throw new Error(`${key} still references list-helpers/api.queries`);
+  }
+}
+console.log({ checked: hotEntries.length });
+NODE
 find apps/admin-v2/dist/client/assets \( -name 'ProductForm-*.js' -o -name 'CategoryForm-*.js' -o -name 'PageForm-*.js' -o -name 'footer-builder-*.js' \) -print0 | xargs -0 rg 'useEditor|EditorContent|createTiptapExtensions|prosemirror' || true
 find apps/admin-v2/dist/client/assets -maxdepth 1 -type f \( -name '*Tiptap*' -o -name '*DeferredTiptap*' \) -exec ls -lh {} +
 node - <<'NODE'
@@ -209,7 +242,7 @@ console.log({ checked });
 NODE
 ```
 
-Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked. Rich-text form fields should render the lightweight `DeferredTiptapEditor` shell first, production form chunks should not contain Tiptap internals such as `useEditor`, `EditorContent`, ProseMirror, or `createTiptapExtensions`, and the real `TiptapEditor` should remain a separate lazy asset. Product form first load should have no static import of `AdditionalInfoManager`, `DraggableImageGallery`, or sortable dependencies; those may appear only as lazy dependency metadata/chunks. Product variant edit first load should have no static import of `bulk-generator`, `VariantSortModal`, or `csvHelpers`; clicking `Bulk Generate`, `Import/Export CSV`, or `Reorder` should load the needed tool on demand and still open the expected dialog/action. General Settings Header/Footer first load should have no static import of header social, header navigation, footer social, footer navigation menus, `NavigationBuilder`, or sortable dependencies; clicking the relevant Header/Footer subtabs should load and render those sections on demand. Widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker, product image/additional-info lazy shells, and rich-text edit shell; `/admin/products/:id/edit` variant `Bulk Generate` and `Reorder`; `/admin/categories/new` rich-text edit shell; `/admin/pages/new` rich-text edit shell; `/admin/media`; `/admin/settings/hero-sliders` custom `Add Slide Image` picker; `/admin/settings` Header Contact & Social, Header Navigation, Footer Branding, and Footer Navigation Menus; and `/admin/widgets/create` paste/preview/copy-prompt.
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, hot dashboard/settings/cache/delivery/shipping/fraud/hero-slider surfaces should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel, and routes should import `RouteErrorComponent` from `route-error.tsx` instead of Zod-backed `list-helpers.tsx`. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked. Rich-text form fields should render the lightweight `DeferredTiptapEditor` shell first, production form chunks should not contain Tiptap internals such as `useEditor`, `EditorContent`, ProseMirror, or `createTiptapExtensions`, and the real `TiptapEditor` should remain a separate lazy asset. Product form first load should have no static import of `AdditionalInfoManager`, `DraggableImageGallery`, or sortable dependencies; those may appear only as lazy dependency metadata/chunks. Product variant edit first load should have no static import of `bulk-generator`, `VariantSortModal`, or `csvHelpers`; clicking `Bulk Generate`, `Import/Export CSV`, or `Reorder` should load the needed tool on demand and still open the expected dialog/action. General Settings Header/Footer first load should have no static import of header social, header navigation, footer social, footer navigation menus, `NavigationBuilder`, or sortable dependencies; clicking the relevant Header/Footer subtabs should load and render those sections on demand. Widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker, product image/additional-info lazy shells, and rich-text edit shell; `/admin/products/:id/edit` variant `Bulk Generate` and `Reorder`; `/admin/categories/new` rich-text edit shell; `/admin/pages/new` rich-text edit shell; `/admin/media`; `/admin/settings/hero-sliders` custom `Add Slide Image` picker; `/admin/settings` Header Contact & Social, Header Navigation, Footer Branding, and Footer Navigation Menus; and `/admin/widgets/create` paste/preview/copy-prompt.
 
 Admin mutation-barrel split checks:
 

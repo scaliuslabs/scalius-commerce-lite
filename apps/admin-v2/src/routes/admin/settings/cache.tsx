@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CacheManager } from "~/components/admin/CacheManager";
-import { cacheStatsQueryOptions, cacheLastClearedQueryOptions, cacheGroupsQueryOptions } from "~/lib/api.queries";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { cacheStatsQueryOptions, cacheLastClearedQueryOptions, cacheGroupsQueryOptions } from "~/lib/api-query-options/cache";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/cache")({
   loader: async ({ context: { queryClient } }) => {

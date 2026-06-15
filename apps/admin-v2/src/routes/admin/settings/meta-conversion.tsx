@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { MetaConversionsManager } from "~/components/admin/meta-conversions";
-import { metaConversionsSettingsQueryOptions } from "~/lib/api.queries";
+import { metaConversionsSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import type { MetaConversionsSettingsResponse } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/meta-conversion")({
   loader: async ({ context: { queryClient } }) => {

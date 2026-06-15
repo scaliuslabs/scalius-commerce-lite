@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import FirebaseSettingsForm from "~/components/admin/settings/FirebaseSettingsForm";
-import { firebaseSettingsQueryOptions } from "~/lib/api.queries";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { firebaseSettingsQueryOptions } from "~/lib/api-query-options/settings";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/notifications")({
   loader: async ({ context: { queryClient } }) => {

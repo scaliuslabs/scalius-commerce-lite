@@ -7,7 +7,7 @@ import {
   productsByIdsQueryOptions,
 } from "~/lib/api.queries";
 import type { Category, Product } from "~/components/admin/collection-form/types";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import type { CollectionDto } from "~/lib/api-functions/collections";
 
 interface CollectionConfig {

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import ThemeSettingsPage from "~/components/admin/settings/ThemeSettingsPage";
-import { themeSettingsQueryOptions } from "~/lib/api.queries";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { themeSettingsQueryOptions } from "~/lib/api-query-options/settings";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/theme")({
   loader: async ({ context: { queryClient } }) => {

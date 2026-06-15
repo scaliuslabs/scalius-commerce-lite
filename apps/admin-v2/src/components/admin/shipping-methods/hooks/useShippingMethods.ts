@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { shippingMethodsQueryOptions } from "~/lib/api.queries";
+import { shippingMethodsQueryOptions } from "~/lib/api-query-options/shipping-methods";
 import { queryKeys } from "~/lib/query-keys";
 import {
   useCreateShippingMethod,

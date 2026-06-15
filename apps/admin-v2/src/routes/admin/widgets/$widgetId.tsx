@@ -3,7 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { WidgetForm } from "~/components/admin/widgets/WidgetForm";
 import { widgetQueryOptions } from "~/lib/api.queries";
 import type { Widget } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/widgets/$widgetId")({
   loader: async ({ context: { queryClient }, params }) => {

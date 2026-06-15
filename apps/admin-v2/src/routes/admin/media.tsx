@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
 
 const MediaManagerPage = lazy(() =>

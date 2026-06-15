@@ -13,7 +13,7 @@ import {
   ORDER_DETAIL_PREFETCH_STALE_MS,
   prefetchOrderDetailQueries,
 } from "~/lib/order-detail-prefetch";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import type {
   OrderDetailDto,
   OrderShipmentDto,

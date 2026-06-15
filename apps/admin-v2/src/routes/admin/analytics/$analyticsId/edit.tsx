@@ -3,7 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { AnalyticsForm } from "~/components/admin/AnalyticsForm";
 import { analyticsScriptQueryOptions } from "~/lib/api.queries";
 import type { AnalyticsScript } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/analytics/$analyticsId/edit")({
   loader: async ({ context: { queryClient }, params }) => {

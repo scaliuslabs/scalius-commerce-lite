@@ -6,7 +6,7 @@ import {
   deliveryLocationsQueryOptions,
   deliveryProvidersQueryOptions,
   importPathaoStatusQueryOptions,
-} from "~/lib/api.queries";
+} from "~/lib/api-query-options/delivery";
 import { queryKeys } from "~/lib/query-keys";
 import {
   useCreateDeliveryLocation,

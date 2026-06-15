@@ -4,7 +4,7 @@ import { PageForm } from "~/components/admin/PageForm";
 import { pageQueryOptions } from "~/lib/api.queries";
 import type { PageDto } from "~/lib/api-functions/pages";
 import type { PageFormValues } from "~/lib/form-schemas";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import { unixToDate } from "@scalius/shared/timestamps";
 
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
