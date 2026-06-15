@@ -1,5 +1,5 @@
 // src/components/admin/header-builder/NavigationSection.tsx
-import { NavigationBuilder } from "../navigation";
+import { NavigationBuilder } from "../navigation/NavigationBuilder";
 import type { NavigationItem } from "./types";
 
 interface NavigationSectionProps {

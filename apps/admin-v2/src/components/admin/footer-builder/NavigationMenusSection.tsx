@@ -28,7 +28,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
-import { NavigationBuilder } from "../navigation";
+import { NavigationBuilder } from "../navigation/NavigationBuilder";
 import type { FooterMenu, NavigationItem } from "./types";
 
 interface NavigationMenusSectionProps {
