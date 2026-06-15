@@ -98,11 +98,27 @@ rg -n 'queryKeys\\.products\\.stats\\(\\)|invalidateProductStatsQueries' \
   apps/admin-v2/src/lib/api.mutations.ts \
   apps/admin-v2/src/components/admin/CategoryForm.tsx \
   apps/admin-v2/src/components/admin/product-form/OrganizationCard.tsx
+! rg 'motion/react' \
+  apps/admin-v2/src/components/admin/DashboardStats.tsx \
+  apps/admin-v2/src/components/admin/WelcomeBanner.tsx \
+  apps/admin-v2/src/components/ui/background-gradient.tsx \
+  apps/admin-v2/src/components/ui/container-text-flip.tsx
 pnpm --filter @scalius/admin-v2 typecheck
 pnpm --filter @scalius/admin-v2 lint
 ```
 
-Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats.
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`.
+
+Admin mutation-barrel split checks:
+
+```bash
+rg -n "from ['\"][~@]/lib/api\\.mutations|~/lib/api\\.mutations|@/lib/api\\.mutations" apps/admin-v2/src
+pnpm --filter @scalius/admin-v2 typecheck
+pnpm --filter @scalius/admin-v2 lint
+pnpm --filter @scalius/admin-v2 build
+```
+
+Expected result after the future `ADMIN-013` slice: route-reachable components import mutation hooks from domain modules under `apps/admin-v2/src/lib/api-mutations/*`. The legacy `api.mutations.ts` compatibility barrel may remain for external or slow-path imports, but hot route modules should not import it directly.
 
 Admin 2FA/setup auth boundary:
 
@@ -174,6 +190,16 @@ pnpm --filter @scalius/api typecheck
 ```
 
 For `CACHE-003`, non-widget admin writes for shipping methods, delivery locations, checkout languages, navigation, analytics, site settings, hero sliders, and attributes must invalidate the right API KV group and trigger the matching storefront purge group. Hero slider create/update/delete must purge homepage caches; hero slider reads must not purge. Widget target-aware purge narrowing is tracked separately as `CACHE-004`.
+
+Storefront purge route checks:
+
+```bash
+pnpm --filter @scalius/storefront exec vitest run src/pages/api/purge-cache.test.ts src/lib/cache-purge-policy.test.ts --passWithNoTests
+pnpm exec vitest run --config apps/api/vitest.config.ts apps/api/src/utils/cache-invalidation.test.ts
+curl -i https://storefront.scalius.com/api/purge-cache
+```
+
+Expected result: `GET /api/purge-cache` is non-mutating and returns `405 Allow: POST` unless rejecting query-string credentials with `400`; it must not read/write the KV cache-version key, clear L1, or warm pages. `POST /api/purge-cache` remains the mutating path. Full/HTML-affecting purges bump the KV version, clear L1, and warm critical pages; prefix-only non-HTML purges still bump the version so L2 Cache API keys move but do not warm critical pages.
 
 Widget cache invalidation checks:
 

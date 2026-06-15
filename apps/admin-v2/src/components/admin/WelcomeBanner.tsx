@@ -3,11 +3,10 @@
 import React from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { X as CloseIcon, PartyPopper } from "lucide-react";
-import { BackgroundGradient } from "../ui/background-gradient"; // Import the new component
-import { ContainerTextFlip } from "../ui/container-text-flip"; // Import Text Flip
+import { BackgroundGradient } from "../ui/background-gradient";
+import { ContainerTextFlip } from "../ui/container-text-flip";
 
 export function WelcomeBanner() {
-  // SSR-safe: default to visible, check sessionStorage after hydration
   const [showBanner, setShowBanner] = React.useState(true);
 
   React.useEffect(() => {
@@ -20,7 +19,6 @@ export function WelcomeBanner() {
     }
   }, []);
 
-  // Handler for dismissing the banner - wrapped in useCallback
   const handleDismissBanner = React.useCallback(() => {
     const storageKey = "welcomeBannerDismissedUntil";
     const dismissDuration = 60 * 60 * 1000; // 60 minutes
@@ -29,7 +27,6 @@ export function WelcomeBanner() {
     setShowBanner(false);
   }, []);
 
-  // Early return if banner shouldn't be shown
   if (!showBanner) {
     return null;
   }
@@ -46,13 +43,11 @@ export function WelcomeBanner() {
             handleDismissBanner();
           }}
           aria-label="Dismiss welcome message"
-          // Keep the button visible above the gradient
           className="absolute right-4 top-4 z-20 p-1.5 rounded-full text-gray-600 dark:text-gray-400 hover:bg-gray-200/70 dark:hover:bg-gray-700/70 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-white pointer-events-auto"
         >
           <CloseIcon className="h-5 w-5" />
         </button>
 
-        {/* Content remains relative but inside the gradient */}
         <div className="relative z-10 flex items-center gap-3">
           <PartyPopper className="w-7 h-7 text-primary/80 shrink-0" />
           <div>
