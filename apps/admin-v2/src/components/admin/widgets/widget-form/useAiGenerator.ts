@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { generateCompletePrompt } from '@scalius/core/modules/ai/prompt-helper-v2';
 import { ERROR_MESSAGES } from '@scalius/core/modules/ai/ai-config';
 import { useStagedGeneration } from './useStagedGeneration';
 import {
@@ -496,12 +495,19 @@ export const useAiGenerator = (
           allCategories: aiContext.allCategoriesSelected,
         },
       });
-      const [systemPrompt, contextData] = await Promise.all([promptPromise, contextPromise]);
+      const promptHelperPromise = import('@scalius/core/modules/ai/prompt-helper-v2');
+      const standalonePromptPromise = import('./standalone-prompt');
+      const [promptHelper, standalonePromptHelper, systemPrompt, contextData] = await Promise.all([
+        promptHelperPromise,
+        standalonePromptPromise,
+        promptPromise,
+        contextPromise,
+      ]);
       if (!systemPrompt) throw new Error('Could not fetch system prompt.');
       notifyAiContextWarnings(contextData);
       const selectedImages = getModelLimitedImages({ warn: true });
 
-      const combinedPrompt = await generateCompletePrompt({
+      const combinedPrompt = await promptHelper.generateCompletePrompt({
         systemPrompt,
         userPrompt: getPlacementAwarePrompt(),
         selectedImages,
@@ -512,33 +518,10 @@ export const useAiGenerator = (
         promptType: effectivePromptType,
       });
 
-      // Add header and footer for standalone use
-    const standalonePrompt = `# STANDALONE WIDGET GENERATOR PROMPT
-
-**Instructions**: Copy this entire prompt and paste it into your preferred AI chatbot (ChatGPT, Claude, Gemini, etc.). After receiving the response, copy the \`<htmljs>\`, \`<css>\`, and optional \`<js>\` sections and paste them back using the "Paste AI Response" button.
-
-═══════════════════════════════════════════════════════════════
-
-${combinedPrompt}
-
-═══════════════════════════════════════════════════════════════
-
-**IMPORTANT**: Your response must use this EXACT format:
-
-<htmljs>
-<!-- Your complete HTML code here. Keep scripts out of HTML. -->
-</htmljs>
-
-<css>
-/* Your complete CSS code here */
-</css>
-
-<js>
-/* Optional root-scoped behavior. Use widget.root/query/queryAll only. */
-</js>
-
-Do NOT use markdown code blocks. Do NOT use JSON format. Use ONLY the tags shown above.
-${selectedImages.length > 0 ? `\n\n**Note**: ${selectedImages.length} image URL(s) provided above. Use them in your HTML.` : ''}`;
+      const standalonePrompt = standalonePromptHelper.buildStandalonePrompt({
+        combinedPrompt,
+        imageCount: selectedImages.length,
+      });
 
       await navigator.clipboard.writeText(standalonePrompt);
       toast.success('Standalone prompt copied! Paste it into any AI chatbot.', {

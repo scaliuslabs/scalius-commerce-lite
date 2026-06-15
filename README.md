@@ -158,7 +158,7 @@ graph LR
     C --> F[(R2)]
 ```
 
-In production, service bindings are zero-latency RPC calls (no HTTP overhead). In development, they fall back to `fetch("http://localhost:8787")`.
+In production, service bindings are zero-latency RPC calls (no HTTP overhead). In local development, admin falls back to the Vite proxy/HTTP API at `localhost:8787`, and storefront intentionally skips local service binding because separately started Miniflare processes cannot reliably share the Fetcher.
 
 ---
 
@@ -290,16 +290,18 @@ The storefront is an **Astro 6 SSR** application with React 19 islands for inter
 
 Standalone **Hono** app with auto-generated OpenAPI spec and interactive Swagger UI.
 
-### Endpoints (~160)
+### API Surface
 
-| Namespace | Auth | Endpoints | Purpose |
-|-----------|------|-----------|---------|
-| `/api/v1/admin/**` | Session/JWT + RBAC | ~110 | Admin CRUD operations |
-| `/api/v1/products`, `/categories`, etc. | None | ~30 | Public storefront data |
-| `/api/v1/orders/**` | JWT | 3 | Customer order management |
-| `/api/v1/payment/**` | None | 3 | Payment session creation |
-| `/api/v1/webhooks/**` | Signature | 5 | Gateway callbacks |
-| `/api/v1/health`, `/docs` | None | 4 | System endpoints |
+The generated OpenAPI spec and `packages/api-client/openapi.json` are the source of truth for exact path/operation counts.
+
+| Namespace | Auth | Purpose |
+|-----------|------|---------|
+| `/api/v1/admin/**` | Session/JWT + RBAC | Admin CRUD operations |
+| `/api/v1/products`, `/categories`, etc. | None | Public storefront data |
+| `/api/v1/orders/**` | Customer/session or receipt-token scoped | Customer order creation, status, and receipts |
+| `/api/v1/payment/**` | Receipt-token scoped | Payment session creation |
+| `/api/v1/webhooks/**` | Provider signature/token validation | Gateway and delivery callbacks |
+| `/api/v1/health`, `/docs` | None | System endpoints |
 
 ### Queue Processing
 
@@ -528,7 +530,9 @@ deploy.
 | `storefront.scalius.com` | scalius-storefront | Customer Store |
 | `cloud.scalius.com` | R2 Bucket | Media CDN + Image Resizing |
 
-### Cloudflare Bindings (All Workers)
+### Cloudflare Bindings (Production, Per Worker)
+
+Not every worker has every binding. Wrangler configs are the source of truth for exact bindings per worker.
 
 | Binding | Type | Purpose |
 |---------|------|---------|

@@ -30,16 +30,24 @@ import {
 import { useMediaManager } from "./hooks/useMediaManager";
 import type { MediaManagerProps } from "./types";
 
+type MediaManagerInternalProps = MediaManagerProps & {
+  initialOpen?: boolean;
+  onInitialOpenHandled?: () => void;
+};
+
 export function MediaManager({
   onSelect,
   onSelectMultiple,
   selectedFiles = [],
   triggerLabel = "Select Image",
+  trigger,
   acceptedFileTypes = "image/*",
   maxFileSize = 10,
   dialogClassName,
-}: MediaManagerProps) {
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+  initialOpen = false,
+  onInitialOpenHandled,
+}: MediaManagerInternalProps) {
+  const [dialogOpen, setDialogOpen] = React.useState(initialOpen);
 
   const mm = useMediaManager({
     autoLoad: false,
@@ -68,6 +76,12 @@ export function MediaManager({
       mm.loadFolders();
     }
   }, [dialogOpen, mm.currentFolderId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!initialOpen) return;
+    setDialogOpen(true);
+    onInitialOpenHandled?.();
+  }, [initialOpen, onInitialOpenHandled]);
 
   // Initialize selection when dialog opens
   useEffect(() => {
@@ -102,10 +116,14 @@ export function MediaManager({
     <>
       <Dialog open={dialogOpen} onOpenChange={handleDialogChange}>
         <DialogTrigger asChild>
-          <Button type="button" variant="outline" className="w-full">
-            <Upload className="mr-2 h-4 w-4" />
-            {triggerLabel}
-          </Button>
+          {React.isValidElement(trigger) ? (
+            trigger
+          ) : (
+            <Button type="button" variant="outline" className="w-full">
+              <Upload className="mr-2 h-4 w-4" />
+              {triggerLabel}
+            </Button>
+          )}
         </DialogTrigger>
 
         <DialogContent

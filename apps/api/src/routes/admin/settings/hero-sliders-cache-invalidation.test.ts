@@ -4,11 +4,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  invalidateApiAndStorefrontGroups: vi.fn(),
+  getOptionalExecutionContext: vi.fn(),
+  invalidateGroups: vi.fn(),
+  triggerStorefrontPurgeForGroups: vi.fn(),
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+  getOptionalExecutionContext: mocks.getOptionalExecutionContext,
+  invalidateGroups: mocks.invalidateGroups,
+  triggerStorefrontPurgeForGroups: mocks.triggerStorefrontPurgeForGroups,
 }));
 
 import { heroSlidersRoutes } from "./hero-sliders";
@@ -55,7 +59,8 @@ function createTestApp(db = createDb()) {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+  mocks.invalidateGroups.mockResolvedValue(undefined);
+  mocks.getOptionalExecutionContext.mockReturnValue(undefined);
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
@@ -91,7 +96,8 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["homepage"], env);
+    expect(mocks.invalidateGroups).toHaveBeenCalledWith(["homepage"], env.CACHE);
+    expect(mocks.triggerStorefrontPurgeForGroups).toHaveBeenCalledWith(["homepage"], env, undefined);
   });
 
   it("does not invalidate homepage caches after hero slider reads", async () => {
@@ -104,7 +110,8 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.invalidateGroups).not.toHaveBeenCalled();
+    expect(mocks.triggerStorefrontPurgeForGroups).not.toHaveBeenCalled();
   });
 
   it("invalidates homepage caches after hero slider updates", async () => {
@@ -121,7 +128,8 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["homepage"], env);
+    expect(mocks.invalidateGroups).toHaveBeenCalledWith(["homepage"], env.CACHE);
+    expect(mocks.triggerStorefrontPurgeForGroups).toHaveBeenCalledWith(["homepage"], env, undefined);
   });
 
   it("invalidates homepage caches after hero slider deletes", async () => {
@@ -134,6 +142,7 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["homepage"], env);
+    expect(mocks.invalidateGroups).toHaveBeenCalledWith(["homepage"], env.CACHE);
+    expect(mocks.triggerStorefrontPurgeForGroups).toHaveBeenCalledWith(["homepage"], env, undefined);
   });
 });

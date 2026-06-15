@@ -1,6 +1,8 @@
-# GitHub Issue Log
+# Historical GitHub Issue Log
 
 Last reviewed: 2026-05-11
+
+This file is retained as a verification record for older GitHub issues. It is not the current remediation queue; use `audit/REMEDIATION_TRACKER.md` for active work.
 
 ## Verified Fixes
 

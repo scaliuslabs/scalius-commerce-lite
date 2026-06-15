@@ -81,7 +81,7 @@ the schema declarations are the source of truth.
 | `session` | Auth sessions. `token` (unique), `expiresAt`, `twoFactorVerified`, `impersonatedBy` |
 | `account` | OAuth/credential accounts. `providerId`, `accessToken`, `refreshToken`, `password` |
 | `verification` | Email/phone verification tokens. `identifier`, `value`, `expiresAt` |
-| `twoFactor` | TOTP secrets and backup codes. `secret`, `backupCodes` (JSON string) |
+| `twoFactor` | TOTP secrets, backup codes, and verification state. `secret`, `backupCodes` (JSON string), `verified` |
 
 ### `rbac.ts` -- Role-Based Access Control
 

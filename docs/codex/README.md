@@ -2,14 +2,14 @@
 
 Last reviewed: 2026-05-12
 
-This folder is for Codex operational context only. Treat source code, tests, deployed behavior, and GitHub issues as the source of truth; older markdown and comments can be stale.
+This folder is for Codex operational context only. Treat source code, tests, deployed behavior, `audit/REMEDIATION_TRACKER.md`, and GitHub issues as the source of truth; older markdown and comments can be stale.
 
 ## Files
 
 - `CODEBASE-MAP.md` - implementation-derived architecture map and data-flow notes.
 - `WIDGET-AI.md` - current widget AI provider/prompt architecture and verification targets.
 - `WIDGET-SYSTEM.md` - widget/page-builder purpose, quality bar, and reliability requirements.
-- `ISSUE-LOG.md` - GitHub issue work queue, commit references, and verification status.
+- `ISSUE-LOG.md` - historical GitHub issue verification log. Use `audit/REMEDIATION_TRACKER.md` for the current remediation queue.
 
 ## Rules For Updating
 

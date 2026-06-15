@@ -138,7 +138,7 @@ Dispatches `PaymentQueueMessage` types:
 - **SDK**: `stripe` v17+ (Web Fetch API native, works on CF Workers)
 - **Client singleton**: Module-level `_stripe` with key rotation detection (`_stripeKey` comparison)
 - **Session creation**: `createPaymentIntent()` creates a Stripe PaymentIntent; returns `clientSecret` for client-side confirmation via Stripe.js
-- **Capture modes**: Automatic (default) or manual (`manualCapture: true` -- authorize now, capture later via `capturePaymentIntent()`)
+- **Capture modes**: Provider code supports automatic (default) or manual (`manualCapture: true` -- authorize now, capture later via `capturePaymentIntent()`). Public checkout session routes currently force `manualCapture: false`.
 - **Cancel**: `cancelPaymentIntent()` cancels uncaptured intents
 - **Webhook verification**: `verifyStripeWebhook()` uses `constructEventAsync` (Web Crypto compatible)
 - **Webhook events handled**: `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `charge.refunded`
@@ -215,11 +215,15 @@ Before any writes, `processPaymentConfirmed()` calls `validateTransition()` for 
 - Order: `incomplete -> pending` (on first payment)
 - Payment: `unpaid -> partial` or `unpaid -> paid` (depending on whether balance reaches zero)
 
+### Public Session Policy
+
+Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and site settings, and keeps public Stripe sessions on automatic capture.
+
 ### Partial Payments (Deposit/Balance)
 
 Payment types: `full`, `deposit`, `balance`.
 
-- **Deposit flow**: API route validates `depositAmount < totalAmount`, creates a `paymentPlans` record, creates intent/session for deposit amount only. `processPaymentConfirmed()` sets payment plan status to `deposit_paid`.
+- **Deposit flow**: API route requires partial payments to be enabled and the requested deposit to match the configured `siteSettings.partialPaymentAmount` for the order. It creates a `paymentPlans` record, creates intent/session for the server-derived deposit amount only, and `processPaymentConfirmed()` sets payment plan status to `deposit_paid`.
 - **Balance flow**: API route computes `balanceDue` from order, creates intent/session for remaining amount. `processPaymentConfirmed()` sets payment plan status to `completed` when balance reaches zero.
 - **Storefront**: When `partialPaymentEnabled` is true in checkout config, COD is hidden and button labels change to "Pay Advance via {gateway}". Advance amount is `min(partialPaymentAmount, totalAmount)`.
 
