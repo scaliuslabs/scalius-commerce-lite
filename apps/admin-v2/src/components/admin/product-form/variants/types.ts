@@ -91,7 +91,7 @@ export interface BulkGeneratedVariant {
   discountPercentage: number | null;
   discountAmount: number | null;
   barcode: string | null;
-  barcodeType: string | null;
+  barcodeType: ProductVariant["barcodeType"];
 }
 
 // --- Template Types ---
@@ -130,6 +130,7 @@ export interface CsvImportResult {
   success: boolean;
   imported: number;
   failed: number;
+  variants: BulkGeneratedVariant[];
   errors: Array<{
     row: number;
     error: string;

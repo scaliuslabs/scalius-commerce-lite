@@ -1,6 +1,6 @@
 // src/components/admin/ProductForm/variants/VariantActionsToolbar.tsx
 
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,8 +11,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Trash2, Filter, X } from "lucide-react";
-import { BulkVariantGenerator } from "./bulk-generator";
+import {
+  Filter,
+  Loader2,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import { VariantImportExport } from "./VariantImportExport";
 import type {
   ProductVariant,
@@ -20,6 +27,12 @@ import type {
   SortField,
   SortOrder,
 } from "./types";
+
+const BulkVariantGenerator = lazy(() =>
+  import("./bulk-generator").then((module) => ({
+    default: module.BulkVariantGenerator,
+  })),
+);
 
 interface VariantActionsToolbarProps {
   productSlug?: string;
@@ -154,12 +167,11 @@ export function VariantActionsToolbar({
                 )}
                 <VariantImportExport
                   variants={variants}
-                  existingSkus={variants.map((v) => v.sku)}
                   onImport={onImport}
                   disabled={disabled}
                 />
 
-                <BulkVariantGenerator
+                <LazyBulkVariantGenerator
                   productSlug={productSlug}
                   existingVariants={variants}
                   onGenerate={onBulkGenerate}
@@ -209,5 +221,54 @@ export function VariantActionsToolbar({
         </div>
       )}
     </div>
+  );
+}
+
+interface LazyBulkVariantGeneratorProps {
+  productSlug?: string;
+  existingVariants: ProductVariant[];
+  onGenerate: (variants: BulkGeneratedVariant[]) => Promise<void>;
+  disabled?: boolean;
+}
+
+function LazyBulkVariantGenerator({
+  productSlug,
+  existingVariants,
+  onGenerate,
+  disabled,
+}: LazyBulkVariantGeneratorProps) {
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  if (!shouldLoad) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => setShouldLoad(true)}
+      >
+        <Sparkles className="mr-2 h-4 w-4" />
+        Bulk Generate
+      </Button>
+    );
+  }
+
+  return (
+    <Suspense
+      fallback={
+        <Button variant="outline" size="sm" disabled>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Bulk Generate
+        </Button>
+      }
+    >
+      <BulkVariantGenerator
+        productSlug={productSlug}
+        existingVariants={existingVariants}
+        onGenerate={onGenerate}
+        disabled={disabled}
+        initialOpen
+      />
+    </Suspense>
   );
 }

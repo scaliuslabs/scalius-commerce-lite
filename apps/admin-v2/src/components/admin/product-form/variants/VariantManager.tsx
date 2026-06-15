@@ -1,6 +1,6 @@
 // src/components/admin/ProductForm/variants/VariantManager.tsx
 
-import { useState, useEffect, useMemo } from "react";
+import { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import { useCurrency } from "@/hooks/use-currency";
 import {
   Card,
@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowUpDown } from "lucide-react";
 import { VariantActionsToolbar } from "./VariantActionsToolbar";
 import { VariantTable } from "./VariantTable";
-import { VariantSortModal } from "./VariantSortModal";
 import { VariantStatsDisplay } from "./VariantStatsDisplay";
 import { VariantDeleteDialogs } from "./VariantDeleteDialogs";
 import { useVariantOperations } from "./hooks/useVariantOperations";
@@ -29,6 +28,12 @@ import type {
   VariantFilters,
   VariantSort,
 } from "./types";
+
+const VariantSortModal = lazy(() =>
+  import("./VariantSortModal").then((module) => ({
+    default: module.VariantSortModal,
+  })),
+);
 
 interface VariantManagerProps {
   productId: string;
@@ -420,12 +425,16 @@ export function VariantManager({
       />
 
       {/* Variant Sort Modal */}
-      <VariantSortModal
-        productId={productId}
-        isOpen={isSortModalOpen}
-        onClose={() => setIsSortModalOpen(false)}
-        onSortUpdated={handleSortUpdated}
-      />
+      {isSortModalOpen ? (
+        <Suspense fallback={null}>
+          <VariantSortModal
+            productId={productId}
+            isOpen={isSortModalOpen}
+            onClose={() => setIsSortModalOpen(false)}
+            onSortUpdated={handleSortUpdated}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
