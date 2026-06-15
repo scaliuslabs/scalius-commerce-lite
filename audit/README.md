@@ -17,13 +17,13 @@ This folder is the working audit system for slice-by-slice remediation. It repla
 
 - `CI=true pnpm install --frozen-lockfile` passes with pnpm 11.6.0.
 - `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, and `pnpm check:dist-secrets` pass at the repo root. Root ESLint is warning-free across the seven code workspaces.
-- `pnpm test` currently passes: 125 files and 791 tests.
+- `pnpm test` currently passes: 126 files and 795 tests.
 - `pnpm --filter @scalius/database check:migrations` passes: 42 SQL files, 42 journal entries, 27 snapshots, and 15 allowed manual snapshot gaps.
 - `pnpm outdated -r` reports only the intentional storefront Vite pin: `vite@7.3.5` versus latest Vite 8. Latest `astro@6.4.6` and `@astrojs/cloudflare@13.7.0` package metadata still depend on `vite@^7.3.2`.
-- Current auth/cache hardening gates pass: focused 2FA trusted-device/pending-method tests, focused cache-invalidation tests, affected API/admin typechecks and lints, root tests/lint/typecheck/build, env checks, dist-secret checks, migration metadata, audit, peer checks, and live browser smoke.
+- Current auth/cache/performance hardening gates pass: focused 2FA trusted-device/pending-method tests, focused cache-invalidation tests, storefront purge-cache route tests, affected API/admin/storefront typechecks and lints, root tests/lint/typecheck/build, env checks, dist-secret checks, migration metadata, audit, peer checks, and live browser smoke.
 - Local stack smoke passed with API/admin/storefront dev servers: local migrations had no pending changes, `pnpm dev:doctor --require-running` passed after warmup, browser `/admin`, browser storefront `/`, and HTTP API/admin/storefront probes returned 200. The only local doctor warning was Node 24.13.1 versus the repo's Node 22 preference.
-- Latest full `pnpm deploy` passed after the `AUTH-011` and `CACHE-006` slice and redeployed API `e6371993-57e5-4cca-8b06-ffa201b5f1a4`, admin `7d9f3990-6c55-4e16-b095-bc5a6adb2538`, and storefront `c6e6eb39-1829-4070-a543-96a1b6e77f13`.
-- Live checks covered API setup, dashboard login page, demo sign-in API, authenticated `/admin`, `/admin/products`, `/admin/orders`, storefront `/`, storefront `/search`, and direct same-origin Better Auth `trustDevice: true` attempts for TOTP/email/backup-code verification. No checked page showed error-boundary text or captured console/runtime errors.
+- Latest full `pnpm deploy` passed after the `CACHE-007` and `PERF-005` slice and redeployed API `128ebde2-62df-4f03-98f6-e7fa0d37534b`, admin `1e80b617-bffc-46f4-8a7b-b2e0e23ae606`, and storefront `f767dd69-aa71-4470-b842-a250283d4b2b`.
+- Live checks covered API setup, dashboard login page, authenticated `/admin`, `/admin/products`, `/admin/orders`, storefront `/`, storefront `/search`, and direct storefront purge-cache GET/query-token checks. No checked page showed error-boundary text or captured console/runtime errors.
 - The live storefront missing-image issue was fixed after the smoke pass: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Several hard-to-run flows still require Wrangler, queues, Cache API behavior, service bindings, provider sandboxes, or deployed Worker testing.
 

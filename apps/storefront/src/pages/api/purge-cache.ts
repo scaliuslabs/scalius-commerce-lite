@@ -119,25 +119,7 @@ async function warmCriticalCaches(baseUrl: string): Promise<void> {
   );
 }
 
-export const GET: APIRoute = async ({ request, url, locals }) => {
-  const hostname = url.hostname;
-  const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
-
-  const env = cfEnv as unknown as Env;
-  const secretToken = env.PURGE_TOKEN as string;
-  const kv = env.CACHE_CONTROL;
-
-  if (!secretToken) {
-    console.error("PURGE_TOKEN is not set in environment variables.");
-    return new Response(
-      JSON.stringify({ error: "Server configuration error" }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
-
+export const GET: APIRoute = async ({ url }) => {
   // Never accept purge credentials in URLs. Query strings are commonly logged
   // by proxies, analytics, and browser history; callers must use a header.
   if (url.searchParams.has("token")) {
@@ -145,65 +127,30 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
       JSON.stringify({
         error: `Purge token must be sent with Authorization: Bearer or ${PURGE_TOKEN_HEADER}`,
       }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  const providedToken = getPurgeTokenFromHeaders(request.headers);
-  if (!providedToken || !(await timingSafeCompare(providedToken, secretToken))) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  try {
-    const currentVersionStr = await kv.get(cacheKey);
-    const currentVersion = currentVersionStr
-      ? parseInt(currentVersionStr, 10)
-      : 0;
-    const newVersion = currentVersion + 1;
-
-    await kv.put(cacheKey, newVersion.toString());
-
-    // Clear the in-memory API cache as well
-    // This ensures cached API data (widgets, collections, products, etc.) is also refreshed
-    smartCache.clear();
-
-    // Warm critical caches in the background
-    // This ensures the next visitor gets fast response
-    // Uses waitUntil to avoid blocking the purge response
-    const protocol = url.protocol; // 'https:' or 'http:'
-    const baseUrl = `${protocol}//${hostname}`;
-    locals.cfContext.waitUntil(warmCriticalCaches(baseUrl));
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Cache for ${hostname} invalidated. New version is ${newVersion}.`,
-        details: {
-          htmlCachePurged: true,
-          apiCachePurged: true,
-          l2CacheInvalidated: true,
-          cacheWarmingStarted: true,
-          newVersion,
-        },
-      }),
       {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        },
       },
     );
-  } catch (error: unknown) {
-    console.error(
-      `Failed to update cache version in KV for ${hostname}:`,
-      error,
-    );
-    return new Response(JSON.stringify({ error: "Failed to purge cache" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
   }
+
+  return new Response(
+    JSON.stringify({
+      error: "Method Not Allowed",
+      message: "Use POST to purge storefront cache.",
+    }),
+    {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        Allow: "POST",
+      },
+    },
+  );
 };
 
 export const POST: APIRoute = async ({ request, url, locals }) => {

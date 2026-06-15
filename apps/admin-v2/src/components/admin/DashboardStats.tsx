@@ -20,7 +20,6 @@ import {
   CheckCircle,
 } from "lucide-react";
 import type { ChartConfig } from "@/components/ui/chart";
-import { motion } from "motion/react";
 import { useCurrency } from "@/hooks/use-currency";
 import { hasDailyActivityData } from "./dashboard-chart-data";
 
@@ -145,29 +144,8 @@ const getChartConfig = (symbol: string): ChartConfig => ({
   },
 });
 
-// Define animation variants
-const containerVariants = {
-  hidden: { opacity: 1 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
-
-const cardVariants = {
-  hidden: { opacity: 0, y: 30, scale: 0.95 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      duration: 0.4,
-      ease: [0, 0, 0.2, 1] as const,
-    },
-  },
-};
+const statsCardEntryClassName = "animate-fade-in-up [animation-fill-mode:both]";
+const statsCardEntryDelays = ["0ms", "60ms", "120ms", "180ms"] as const;
 
 export const DashboardStats = memo(function DashboardStats({
   totalProducts,
@@ -209,13 +187,11 @@ export const DashboardStats = memo(function DashboardStats({
   return (
     <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the dashboard. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <div className="space-y-6">
-      <motion.div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.div variants={cardVariants}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <div
+          className={statsCardEntryClassName}
+          style={{ animationDelay: statsCardEntryDelays[0] }}
+        >
           <StatsCard
             title="Monthly Orders"
             value={currentMonth.orders}
@@ -226,8 +202,11 @@ export const DashboardStats = memo(function DashboardStats({
               isPositive: currentMonth.orderGrowth >= 0,
             }}
           />
-        </motion.div>
-        <motion.div variants={cardVariants}>
+        </div>
+        <div
+          className={statsCardEntryClassName}
+          style={{ animationDelay: statsCardEntryDelays[1] }}
+        >
           <StatsCard
             title="Monthly Revenue"
             value={`${symbol}${currentMonth.revenue.toLocaleString()}`}
@@ -238,8 +217,11 @@ export const DashboardStats = memo(function DashboardStats({
               isPositive: currentMonth.revenueGrowth >= 0,
             }}
           />
-        </motion.div>
-        <motion.div variants={cardVariants}>
+        </div>
+        <div
+          className={statsCardEntryClassName}
+          style={{ animationDelay: statsCardEntryDelays[2] }}
+        >
           <StatsCard
             title="Total Customers"
             value={totalCustomers}
@@ -254,8 +236,11 @@ export const DashboardStats = memo(function DashboardStats({
                 : undefined
             }
           />
-        </motion.div>
-        <motion.div variants={cardVariants}>
+        </div>
+        <div
+          className={statsCardEntryClassName}
+          style={{ animationDelay: statsCardEntryDelays[3] }}
+        >
           <StatsCard
             title="Active Products"
             value={totalProducts}
@@ -269,8 +254,8 @@ export const DashboardStats = memo(function DashboardStats({
               </>
             }
           />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
       {hasRenderableChartData && shouldLoadChart ? (
         <Suspense fallback={<LoadingFallback height="h-[340px]" />}>
