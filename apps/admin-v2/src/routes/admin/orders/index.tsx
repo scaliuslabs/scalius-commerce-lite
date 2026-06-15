@@ -1,4 +1,12 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -25,8 +33,13 @@ import { OrderToolbar } from "~/components/admin/data-table/toolbars/OrderToolba
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ShoppingBag } from "lucide-react";
 import { DeleteOrderDialog } from "~/components/admin/order-list/DeleteOrderDialog";
-import { BulkShipDialog } from "~/components/admin/order-list/BulkShipDialog";
 import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
+
+const BulkShipDialog = lazy(() =>
+  import("~/components/admin/order-list/BulkShipDialog").then((module) => ({
+    default: module.BulkShipDialog,
+  })),
+);
 
 // ── Search schema ─────────────────────────────────────────────────
 
@@ -607,13 +620,17 @@ function OrdersPage() {
       />
 
       {/* Bulk ship dialog */}
-      <BulkShipDialog
-        isOpen={isShippingDialogOpen}
-        onOpenChange={setIsShippingDialogOpen}
-        isShipping={isShipping}
-        onConfirm={handleBulkShipmentSubmit}
-        itemCount={selectedIds.length}
-      />
+      {(isShippingDialogOpen || isShipping) && (
+        <Suspense fallback={null}>
+          <BulkShipDialog
+            isOpen={isShippingDialogOpen}
+            onOpenChange={setIsShippingDialogOpen}
+            isShipping={isShipping}
+            onConfirm={handleBulkShipmentSubmit}
+            itemCount={selectedIds.length}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
