@@ -5,7 +5,7 @@ import {
   productQueryOptions,
 } from "~/lib/api.queries";
 import type { ProductVariant } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 interface ProductListResult {
   products?: Array<{

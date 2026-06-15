@@ -10,7 +10,8 @@ import {
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { toast } from "sonner";
-import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
+import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import type { Row } from "@tanstack/react-table";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { DateRange } from "react-day-picker";

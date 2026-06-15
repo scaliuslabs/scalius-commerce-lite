@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { AccountSettings } from "~/components/admin/account-settings";
-import { accountSecurityQueryOptions } from "~/lib/api.queries";
+import { accountSecurityQueryOptions } from "~/lib/api-query-options/auth-management";
 import type { AccountSecurity } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/account")({
   loader: async ({ context: { queryClient } }) => {

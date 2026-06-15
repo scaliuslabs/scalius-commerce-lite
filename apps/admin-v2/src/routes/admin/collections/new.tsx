@@ -3,7 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { CollectionForm } from "~/components/admin/collection-form";
 import { collectionCategoryOptionsQueryOptions } from "~/lib/api.queries";
 import type { Category } from "~/components/admin/collection-form/types";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/collections/new")({
   loader: async ({ context: { queryClient } }) => {

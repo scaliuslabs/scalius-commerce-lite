@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { InventoryManager } from "~/components/admin/InventoryManager";
 import { inventoryQueryOptions } from "~/lib/api.queries";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/inventory")({
   loader: async ({ context: { queryClient } }) => {

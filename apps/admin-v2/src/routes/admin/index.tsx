@@ -7,8 +7,8 @@ import { WelcomeBanner } from "~/components/admin/WelcomeBanner";
 import {
   dashboardActivityQueryOptions,
   dashboardSummaryQueryOptions,
-} from "~/lib/api.queries";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+} from "~/lib/api-query-options/dashboard";
+import { RouteErrorComponent } from "~/lib/route-error";
 import type { DashboardSummaryData } from "~/lib/api-functions/dashboard";
 import { isTransientD1Error } from "@scalius/core/utils/transient-d1";
 

@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CustomerHistoryView } from "~/components/admin/CustomerHistoryView";
 import { customerHistoryQueryOptions } from "~/lib/api.queries";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/customers/$customerId/history")({
   loader: async ({ context: { queryClient }, params }) => {

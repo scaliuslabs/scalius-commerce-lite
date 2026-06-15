@@ -3,7 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductView } from "~/components/admin/ProductView";
 import { productQueryOptions } from "~/lib/api.queries";
 import type { ProductDetail } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/products/$productId/")({
   loader: async ({ params, context: { queryClient } }) => {

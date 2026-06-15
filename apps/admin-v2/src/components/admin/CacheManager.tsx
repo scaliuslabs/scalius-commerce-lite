@@ -34,7 +34,7 @@ import {
   cacheGroupsQueryOptions,
   cacheLastClearedQueryOptions,
   cacheStatsQueryOptions,
-} from "@/lib/api.queries";
+} from "@/lib/api-query-options/cache";
 import {
   useClearCache,
   useClearCacheGroup,

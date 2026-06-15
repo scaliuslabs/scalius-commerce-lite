@@ -13,7 +13,7 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `ADMIN-011`, `ADMIN-012`, `ADMIN-013`, `ADMIN-014`, `RBAC-001`, `RBAC-002`, `STORE-007`, `PERF-004`, `PERF-005`, `STORE-008`, `AUTH-011`, `CACHE-006`, `CACHE-007`, `CACHE-008`, `CACHE-009`, `CACHE-010`, `CACHE-011`, `CACHE-012`, `CACHE-013`, `CACHE-014`, `CACHE-015`, and `DOC-002` slices are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise. New follow-up from the latest read-only subagent pass is tracked as `PERF-006`.
+Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `ADMIN-011`, `ADMIN-012`, `ADMIN-013`, `ADMIN-014`, `RBAC-001`, `RBAC-002`, `STORE-007`, `PERF-004`, `PERF-005`, `PERF-006`, `STORE-008`, `AUTH-011`, `CACHE-006`, `CACHE-007`, `CACHE-008`, `CACHE-009`, `CACHE-010`, `CACHE-011`, `CACHE-012`, `CACHE-013`, `CACHE-014`, `CACHE-015`, and `DOC-002` slices are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
 
 ## Validation Performed
 

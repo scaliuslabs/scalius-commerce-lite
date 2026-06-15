@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { DeliveryProviderSettings } from "~/components/admin/delivery-providers";
-import { deliveryProvidersQueryOptions } from "~/lib/api.queries";
+import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
 import type { DeliveryProviderRecord } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/delivery-providers")({
   loader: async ({ context: { queryClient } }) => {

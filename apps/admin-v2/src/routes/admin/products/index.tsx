@@ -14,7 +14,8 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { createListSearchSchema, createDataSelector, RouteErrorComponent } from "~/lib/list-helpers";
+import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import {
   productsQueryOptions,
   categoryFormOptionsQueryOptions,

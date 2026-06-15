@@ -9,7 +9,7 @@ import {
 } from "~/lib/api.queries";
 import type { Discount } from "~/types/api-responses";
 import type { Product, Collection } from "~/components/admin/discount/amount-off-products/types";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
 
 const AmountOffProductsForm = lazy(

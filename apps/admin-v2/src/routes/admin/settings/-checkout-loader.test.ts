@@ -21,7 +21,7 @@ vi.mock("~/components/admin/settings/CheckoutSettingsPage", () => ({
 
 vi.mock("~/lib/api-query-options/settings", () => queryOptionMocks);
 
-vi.mock("~/lib/list-helpers", () => ({
+vi.mock("~/lib/route-error", () => ({
   RouteErrorComponent: () => null,
 }));
 

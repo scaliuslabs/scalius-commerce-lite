@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AbandonedCheckoutsManager } from "~/components/admin/AbandonedCheckoutsManager";
 import { abandonedCheckoutsQueryOptions } from "~/lib/api.queries";
-import { RouteErrorComponent } from "~/lib/list-helpers";
+import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/abandoned-checkouts")({
   loader: async ({ context: { queryClient } }) => {
