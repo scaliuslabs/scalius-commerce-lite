@@ -10,7 +10,7 @@ import {
   usePermanentDeleteWidget,
   useRestoreWidget,
   useBulkDeleteWidgets,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/widgets";
 import {
   DataTable,
   DataTableToolbar,

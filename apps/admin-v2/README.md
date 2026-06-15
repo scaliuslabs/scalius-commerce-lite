@@ -67,7 +67,8 @@ createServerFn (252 typed domain functions)
 | `src/routes/admin.tsx` | Admin layout (sidebar, SSR auth guard, RBAC context) |
 | `src/lib/api-functions/` | Typed domain server-function slices; 252 createServerFn calls |
 | `src/lib/api.queries.ts` | 78 queryOptions with staleTime tiers |
-| `src/lib/api.mutations.ts` | 114 exported mutation hooks with cache invalidation |
+| `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
+| `src/lib/api.mutations.ts` | Compatibility re-export barrel for mutation hooks |
 | `src/lib/api.server.ts` | HTTP transport layer (service binding / fetch) |
 | `src/lib/query-keys.ts` | Centralized query key factory (20 domains) |
 | `src/lib/list-helpers.tsx` | Shared search schema, data selector, error component |

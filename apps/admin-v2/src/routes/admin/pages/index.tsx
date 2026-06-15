@@ -23,7 +23,7 @@ import {
   usePermanentDeletePage,
   useRestorePage,
   useBulkDeletePages,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/pages";
 import {
   DataTable,
   DataTableToolbar,

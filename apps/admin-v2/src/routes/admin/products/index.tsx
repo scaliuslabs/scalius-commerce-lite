@@ -26,7 +26,7 @@ import {
   usePermanentDeleteProduct,
   useRestoreProduct,
   useBulkDeleteProducts,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/products";
 import { useCurrency } from "~/hooks/use-currency";
 import { useServerTable, DataTable } from "~/components/admin/data-table";
 import {

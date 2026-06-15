@@ -9,7 +9,7 @@ import {
   useDeleteShippingMethod,
   usePermanentDeleteShippingMethod,
   useRestoreShippingMethod,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/shipping-methods";
 import {
   deleteShippingMethod as deleteShippingMethodFn,
   permanentDeleteShippingMethod as permanentDeleteShippingMethodFn,

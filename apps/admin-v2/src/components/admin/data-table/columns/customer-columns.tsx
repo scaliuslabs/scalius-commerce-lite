@@ -110,7 +110,9 @@ export function getCustomerColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-4 w-4" />
-          {formatDate(row.original.lastOrderAt)}
+          <span suppressHydrationWarning>
+            {formatDate(row.original.lastOrderAt)}
+          </span>
         </div>
       ),
     },

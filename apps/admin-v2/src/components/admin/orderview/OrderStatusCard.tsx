@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import { Receipt, Loader2, Undo2 } from "lucide-react";
 import type { Order } from "./types";
 import { getAvailableTransitions } from "./types";
-import { useUpdateOrderStatus, useReturnOrder } from "@/lib/api.mutations";
+import { useUpdateOrderStatus, useReturnOrder } from "@/lib/api-mutations/orders";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 

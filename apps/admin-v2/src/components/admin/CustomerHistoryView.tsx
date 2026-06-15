@@ -121,7 +121,6 @@ export function CustomerHistoryView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16 text-lg border">
-            {" "}
             {/* Use Avatar Component */}
             {/* <AvatarImage src={customer.avatarUrl} alt={customer.name} /> // Add if you have avatar URLs */}
             <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
@@ -132,7 +131,9 @@ export function CustomerHistoryView({
             </h1>
             <p className="text-sm text-muted-foreground">
               Customer since{" "}
-              {formatDateShort(customer.createdAt)}
+              <span suppressHydrationWarning>
+                {formatDateShort(customer.createdAt)}
+              </span>
             </p>
           </div>
         </div>
@@ -252,7 +253,7 @@ export function CustomerHistoryView({
                     <span className="text-xs text-muted-foreground">
                       Last order placed
                     </span>
-                    <p className="font-medium">
+                    <p className="font-medium" suppressHydrationWarning>
                       {formatDateShort(customer.lastOrderAt)}
                     </p>
                   </div>
@@ -280,7 +281,6 @@ export function CustomerHistoryView({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    {" "}
                     {/* Subtle header background */}
                     <TableHead className="w-[120px]">Order ID</TableHead>
                     <TableHead className="w-[150px]">Date</TableHead>
@@ -310,7 +310,9 @@ export function CustomerHistoryView({
                           </Button>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {formatDateShort(order.createdAt)}
+                          <span suppressHydrationWarning>
+                            {formatDateShort(order.createdAt)}
+                          </span>
                         </TableCell>
                         <TableCell className="font-medium">
                           {symbol}
@@ -419,7 +421,10 @@ export function CustomerHistoryView({
                           >
                             {record.changeType}
                           </Badge>
-                          <span className="text-muted-foreground whitespace-nowrap">
+                          <span
+                            className="text-muted-foreground whitespace-nowrap"
+                            suppressHydrationWarning
+                          >
                             {formatDate(record.createdAt)}
                           </span>
                         </div>

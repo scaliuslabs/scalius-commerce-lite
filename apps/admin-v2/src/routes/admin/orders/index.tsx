@@ -16,7 +16,7 @@ import {
   useUpdateOrderStatus,
   useBulkDeleteOrders,
   useRestoreOrder,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/orders";
 import { createOrderShipment } from "~/lib/api-functions/orders";
 import { useCurrency } from "~/hooks/use-currency";
 import { useServerTable, DataTable } from "~/components/admin/data-table";

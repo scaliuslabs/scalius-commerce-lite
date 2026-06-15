@@ -197,7 +197,8 @@ Scope:
 
 - `apps/admin-v2/src/lib/api-functions/**`
 - `apps/admin-v2/src/lib/api.queries.ts`
-- `apps/admin-v2/src/lib/api.mutations.ts`
+- `apps/admin-v2/src/lib/api-mutations/**`
+- `apps/admin-v2/src/lib/api.mutations.ts` compatibility exports only
 - one selected admin domain route/component set
 
 Current state: `ADMIN-001` is verified. The legacy admin server-function barrel has been removed, and server functions live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`. Use fresh `rg` scans for volatile counts. Future admin simplification should focus on one domain at a time: remove UI casts, replace broad DTO adapters, keep URL-search loaders aligned with query keys, and reduce direct component calls where a mutation/query wrapper would be clearer.

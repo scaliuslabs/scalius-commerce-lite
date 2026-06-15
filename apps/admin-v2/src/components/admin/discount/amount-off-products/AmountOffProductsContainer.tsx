@@ -15,7 +15,7 @@ import { Separator } from "../../../ui/separator";
 import { toast } from "sonner";
 import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
-import { useCreateDiscount, useUpdateDiscount } from "~/lib/api.mutations";
+import { useCreateDiscount, useUpdateDiscount } from "~/lib/api-mutations/discounts";
 import { DiscountDetailsSection } from "./DiscountDetailsSection";
 import { AppliesToSection } from "./AppliesToSection";
 import { MinimumRequirementsSection } from "./MinimumRequirementsSection";

@@ -7,7 +7,7 @@ import {
   useSoftDeleteCheckoutLanguage,
   useDeleteCheckoutLanguage,
   useRestoreCheckoutLanguage,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/checkout-languages";
 import {
   type CheckoutLanguage,
   type CheckoutLanguagesPagination,

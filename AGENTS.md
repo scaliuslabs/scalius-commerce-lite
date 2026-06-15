@@ -147,14 +147,14 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - Local auth routes under `apps/admin-v2/src/routes/api/auth/$.ts` are handled by the admin worker, not the API worker.
 - The `/admin` route guard intentionally runs during SSR so unauthenticated requests server-redirect to `/auth/login` before the admin shell HTML is emitted. Do not re-add `ssr: false` to the admin route without replacing that redirect behavior.
 - `@/` and `~/` both alias to `apps/admin-v2/src`.
-- Admin server functions live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, with route-facing wrappers in `api.queries.ts` and `api.mutations.ts`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
+- Admin server functions live in typed domain slices under `apps/admin-v2/src/lib/api-functions/`, with route-facing query wrappers in `api.queries.ts` and route-facing mutation hooks in domain modules under `apps/admin-v2/src/lib/api-mutations/`. Direct proxy/fetch exceptions exist for media uploads, abandoned checkout serialization, FCM token registration, scanner flows, and widget AI streaming.
 - Add new admin server functions to a domain slice under `apps/admin-v2/src/lib/api-functions/` with normal typechecking; do not recreate a broad legacy barrel.
 - Hot admin shell/default-tab query options may live in narrow modules under `apps/admin-v2/src/lib/api-query-options/`; use those instead of importing the broad `api.queries.ts` barrel when a route or always-mounted shell component needs only one small settings/dashboard/Firebase query.
 - Account settings must use the parent `/admin` route's effective permission context. Do not feed the full RBAC permission catalog into a nested `PermissionProvider`.
 - The `/admin` route caches the admin guard context briefly on the client to keep navigation fast. Any UI path that changes the current user's profile, 2FA/security state, session, or effective permissions must call `clearAdminRouteContextCache()` before `router.invalidate()` or navigation that expects fresh shell/header context.
 - URL-search-driven list routes must declare `loaderDeps` and prefetch with `mapParams(deps)` so deep links warm the same query keys components render.
 - SSR/admin loaders must await query data that first-render UI consumes. Do not fire-and-forget prefetch query keys that can affect the dehydrated first render; use deterministic `ensureQueryData()`/awaited warming or render a stable placeholder. Timestamp-only text may use a tight `suppressHydrationWarning` on the timestamp node.
-- Mutations that change products, customers, or orders must invalidate `queryKeys.dashboard.all` because the dashboard summary/activity are derived from those domains. Category mutations must invalidate `queryKeys.products.stats()` because product stats include the category count. Keep direct server-function mutation paths aligned with the central hooks in `apps/admin-v2/src/lib/api.mutations.ts`.
+- Mutations that change products, customers, or orders must invalidate `queryKeys.dashboard.all` because the dashboard summary/activity are derived from those domains. Category mutations must invalidate `queryKeys.products.stats()` because product stats include the category count. Keep direct server-function mutation paths aligned with the domain hooks in `apps/admin-v2/src/lib/api-mutations/*`; `apps/admin-v2/src/lib/api.mutations.ts` is only a compatibility re-export barrel and should not be imported by route-reachable code.
 - Checkout settings should preload only the default checkout-flow auth settings. Payment gateway and shipping tab data should lazy-load from their tab components unless the tab mounting behavior changes.
 - Order detail routes must use `prefetchOrderDetailQueries()` from `apps/admin-v2/src/lib/order-detail-prefetch.ts`. Order and shipments are required first-render data and may redirect when missing; delivery providers, payment history, currency settings, and COD tracking for COD orders are optional warmups that should log/continue on failure instead of redirecting away from an otherwise valid order. Components that consume optional provider data must render a stable fallback such as an empty provider list.
 - Keep server-function payloads route-shaped and JSON-serializable. If generated SDK responses include index signatures, strip them with local DTO helpers instead of adding file-level `@ts-nocheck`.
@@ -274,7 +274,8 @@ Storefront should use its configured SDK clients from `apps/storefront/src/lib/a
 - Admin server functions: `apps/admin-v2/src/lib/api-functions/`
 - Admin API server helper: `apps/admin-v2/src/lib/api.server.ts`
 - Admin query options: `apps/admin-v2/src/lib/api.queries.ts`
-- Admin mutations: `apps/admin-v2/src/lib/api.mutations.ts`
+- Admin mutation hooks: `apps/admin-v2/src/lib/api-mutations/`
+- Admin mutation compatibility barrel: `apps/admin-v2/src/lib/api.mutations.ts`
 - Admin auth server helpers: `apps/admin-v2/src/lib/auth.server.ts`
 - Admin auth functions: `apps/admin-v2/src/lib/auth.fns.ts`
 - Admin RBAC: `apps/admin-v2/src/middleware/rbac.server.ts`

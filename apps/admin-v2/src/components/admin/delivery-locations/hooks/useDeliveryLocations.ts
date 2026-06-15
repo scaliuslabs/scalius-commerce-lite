@@ -14,7 +14,7 @@ import {
   useDeleteDeliveryLocation,
   useBulkDeleteDeliveryLocations,
   useCleanAllDeliveryLocations,
-} from "~/lib/api.mutations";
+} from "~/lib/api-mutations/delivery-locations";
 import {
   type DeliveryLocation,
   importPathaoLocations,
