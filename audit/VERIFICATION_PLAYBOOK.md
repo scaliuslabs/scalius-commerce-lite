@@ -121,6 +121,12 @@ rg -n 'DeferredTiptapEditor' \
   apps/admin-v2/src/components/admin/PageForm.tsx \
   apps/admin-v2/src/components/admin/footer-builder/ContentSection.tsx \
   apps/admin-v2/src/components/admin/product-form
+rg -n 'lazy\\(\\(\\) => import\\("\\./AdditionalInfoManager"|lazy\\(\\(\\) => import\\("../DraggableImageGallery"\\)' \
+  apps/admin-v2/src/components/admin/product-form/TitleDescriptionSection.tsx \
+  apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx
+! rg 'import .*AdditionalInfoManager|import .*DraggableImageGallery|@dnd-kit|sortableKeyboardCoordinates|DndContext|SortableContext' \
+  apps/admin-v2/src/components/admin/product-form/TitleDescriptionSection.tsx \
+  apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx
 ! rg '<TiptapEditor|React\\.lazy\\(\\(\\) => import\\([^\\n]*tiptap|useEditor|EditorContent' \
   apps/admin-v2/src/components/admin/ProductForm.tsx \
   apps/admin-v2/src/components/admin/CategoryForm.tsx \
@@ -134,9 +140,20 @@ pnpm --filter @scalius/admin-v2 lint
 pnpm --filter @scalius/admin-v2 build
 find apps/admin-v2/dist/client/assets \( -name 'ProductForm-*.js' -o -name 'CategoryForm-*.js' -o -name 'PageForm-*.js' -o -name 'footer-builder-*.js' \) -print0 | xargs -0 rg 'useEditor|EditorContent|createTiptapExtensions|prosemirror' || true
 find apps/admin-v2/dist/client/assets -maxdepth 1 -type f \( -name '*Tiptap*' -o -name '*DeferredTiptap*' \) -exec ls -lh {} +
+node - <<'NODE'
+const fs = require("fs");
+const dir = "apps/admin-v2/dist/client/assets";
+const file = fs.readdirSync(dir).find((name) => /^ProductForm-.*\.js$/.test(name));
+if (!file) throw new Error("ProductForm chunk not found");
+const src = fs.readFileSync(`${dir}/${file}`, "utf8");
+const imports = [...src.matchAll(/import[^;]+from"\.\/([^"]+)"/g)].map((match) => match[1]);
+const forbidden = imports.filter((name) => /sortable|AdditionalInfoManager|DraggableImageGallery|TiptapEditor|prosemirror/i.test(name) && !/DeferredTiptapEditor/i.test(name));
+if (forbidden.length) throw new Error(`Unexpected static ProductForm imports: ${forbidden.join(", ")}`);
+console.log({ file, bytes: src.length });
+NODE
 ```
 
-Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked. Rich-text form fields should render the lightweight `DeferredTiptapEditor` shell first, production form chunks should not contain Tiptap internals such as `useEditor`, `EditorContent`, ProseMirror, or `createTiptapExtensions`, and the real `TiptapEditor` should remain a separate lazy asset. Widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker and rich-text edit shell, `/admin/categories/new` rich-text edit shell, `/admin/pages/new` rich-text edit shell, `/admin/media`, `/admin/settings/hero-sliders` custom `Add Slide Image` picker, and `/admin/widgets/create` paste/preview/copy-prompt.
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, and the always-mounted admin shell/settings hooks above should use narrow `api-query-options/*` modules instead of the broad `api.queries.ts` barrel. In `api.queries.ts`, runtime domain access should use `const ...Api = () => import("./api-functions/...")`; static `api-functions` imports should be type-only. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked. Rich-text form fields should render the lightweight `DeferredTiptapEditor` shell first, production form chunks should not contain Tiptap internals such as `useEditor`, `EditorContent`, ProseMirror, or `createTiptapExtensions`, and the real `TiptapEditor` should remain a separate lazy asset. Product form first load should have no static import of `AdditionalInfoManager`, `DraggableImageGallery`, or sortable dependencies; those may appear only as lazy dependency metadata/chunks. Widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker, product image/additional-info lazy shells, and rich-text edit shell; `/admin/categories/new` rich-text edit shell; `/admin/pages/new` rich-text edit shell; `/admin/media`; `/admin/settings/hero-sliders` custom `Add Slide Image` picker; and `/admin/widgets/create` paste/preview/copy-prompt.
 
 Admin mutation-barrel split checks:
 

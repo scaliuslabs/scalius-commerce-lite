@@ -146,7 +146,8 @@ Registered in order in `app.ts`. Every request goes through these global middlew
 1. **Per-request init** (`app.use("*")`) -- Calls `getDb(env)`, `initKv(env.CACHE)`, `initStorage(env.BUCKET)`.
 2. **CORS logging** (`app.use("*")`) -- Logs preflight requests for debugging.
 3. **CORS** (`app.use("*")`) -- Dynamic origin validation via `getCorsOriginContext()` from `@scalius/shared`.
-4. **Proxy base URL** (`app.use("*")`) -- Sets `X-Proxy-Base-URL` header from `PUBLIC_API_BASE_URL`.
+4. **Security headers** (`app.use("*")`) -- Adds `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS outside localhost.
+5. **Proxy base URL** (`app.use("*")`) -- Sets `X-Proxy-Base-URL` header from `PUBLIC_API_BASE_URL`.
 
 **Global error handler** (`app.onError`) -- Single handler that catches all uncaught errors. `ApiError` subclasses return their specific status/code; generic errors return 500. All errors return JSON `{ success: false, error: { code, message, details? } }`.
 
@@ -247,12 +248,12 @@ Thrown errors are caught by `app.onError()` and returned as `{ success: false, e
 
 | Constant | Seconds | Used For |
 |----------|---------|----------|
-| `STANDARD` | 3600 | Products, categories, pages, widgets, collections |
+| `STANDARD` | 3600 | Products, categories, pages, widgets, collections, SEO |
 | `SHORT` | 300 | Search results, order lookups, shipping methods |
 | `MEDIUM` | 600 | Delivery locations |
 | `ATTRIBUTES` | 1800 | Attribute data |
 | `CHECKOUT_CONFIG` | 60 | Gateway config |
-| `NONE` | 0 | Analytics config, SEO |
+| `NONE` | 0 | Analytics config |
 
 ## Queue Consumer
 

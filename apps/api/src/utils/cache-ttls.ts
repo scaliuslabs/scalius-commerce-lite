@@ -21,6 +21,6 @@ export const CACHE_TTLS = {
   /** 1 minute — for highly dynamic config (checkout gateway config) */
   CHECKOUT_CONFIG: 60,
 
-  /** 0 — explicitly no caching (analytics config, SEO — served fresh) */
+  /** 0 — explicitly no caching (analytics config — served fresh) */
   NONE: 0,
 } as const;

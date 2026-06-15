@@ -19,12 +19,14 @@ Modern admin dashboard built with **TanStack Start** (full-stack React framework
 ## Data Flow Pattern
 
 ```
-createServerFn (252 typed domain functions)
-  → queryOptions (78 wrappers, 7 staleTime tiers)
+typed domain server functions
+  → queryOptions wrappers (7 staleTime tiers)
     → ensureQueryData in route loader (prefetch)
       → useSuspenseQuery in component (render)
-        → useMutation (114 exported hooks, cache invalidation + toasts)
+        → domain mutation hooks (cache invalidation + toasts)
 ```
+
+The exact number of server functions, query wrappers, and mutation hooks changes often. Use fresh `rg` scans when counts matter instead of copying numbers into code review or audit notes.
 
 **Stale-While-Revalidate**: Detail queries use `staleTime: 0` in queryOptions + `staleTime: Infinity` in route loaders. Result: instant navigation (serves cache), background refetch (fresh data within ms).
 
@@ -65,12 +67,12 @@ createServerFn (252 typed domain functions)
 | `src/router.tsx` | Router config + QueryClient + SSR integration |
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
 | `src/routes/admin.tsx` | Admin layout (sidebar, SSR auth guard, RBAC context) |
-| `src/lib/api-functions/` | Typed domain server-function slices; 252 createServerFn calls |
-| `src/lib/api.queries.ts` | 78 queryOptions with staleTime tiers |
+| `src/lib/api-functions/` | Typed domain server-function slices |
+| `src/lib/api.queries.ts` | Route-facing queryOptions with staleTime tiers |
 | `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
 | `src/lib/api.mutations.ts` | Compatibility re-export barrel for mutation hooks |
 | `src/lib/api.server.ts` | HTTP transport layer (service binding / fetch) |
-| `src/lib/query-keys.ts` | Centralized query key factory (20 domains) |
+| `src/lib/query-keys.ts` | Centralized query key factory |
 | `src/lib/list-helpers.tsx` | Shared search schema, data selector, error component |
 
 ## Shared Hooks & Components

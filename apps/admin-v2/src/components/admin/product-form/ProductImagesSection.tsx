@@ -1,5 +1,5 @@
 // src/components/admin/product-form/ProductImagesSection.tsx
-import React, { memo } from "react";
+import React, { lazy, memo, Suspense } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -11,12 +11,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info, ChevronDown} from "lucide-react";
+import { ChevronDown, Info } from "lucide-react";
 import { MediaManager } from "../media-manager";
-import { DraggableImageGallery } from "../DraggableImageGallery";
 import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
 import { toast } from "sonner";
+
+const DraggableImageGallery = lazy(() =>
+  import("../DraggableImageGallery").then((module) => ({
+    default: module.DraggableImageGallery,
+  })),
+);
 
 interface ProductImagesSectionProps {
   form: UseFormReturn<ProductFormValues>;
@@ -151,18 +156,22 @@ export const ProductImagesSection = memo(function ProductImagesSection({
               <FormItem>
                 <div className="space-y-3">
                   {field.value.length > 0 && (
-                    <DraggableImageGallery
-                      images={field.value}
-                      colorOptions={uniqueColorOptions}
-                      enableVariantImages={enableVariantImages}
-                      onImagesReorder={(newImages) => field.onChange(newImages)}
-                      onImageRemove={(index) => {
-                        const newImages = [...field.value];
-                        newImages.splice(index, 1);
-                        field.onChange(newImages);
-                      }}
-                      maxVisible={6}
-                    />
+                    <Suspense
+                      fallback={<ImageGalleryFallback count={field.value.length} />}
+                    >
+                      <DraggableImageGallery
+                        images={field.value}
+                        colorOptions={uniqueColorOptions}
+                        enableVariantImages={enableVariantImages}
+                        onImagesReorder={(newImages) => field.onChange(newImages)}
+                        onImageRemove={(index) => {
+                          const newImages = [...field.value];
+                          newImages.splice(index, 1);
+                          field.onChange(newImages);
+                        }}
+                        maxVisible={6}
+                      />
+                    </Suspense>
                   )}
                   <MediaManager
                     selectedFiles={field.value}
@@ -192,3 +201,18 @@ export const ProductImagesSection = memo(function ProductImagesSection({
     </Card>
   );
 });
+
+function ImageGalleryFallback({ count }: { count: number }) {
+  const placeholders = Array.from({ length: Math.min(count, 6) });
+
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      {placeholders.map((_, index) => (
+        <div key={index} className="space-y-2">
+          <div className="aspect-square animate-pulse rounded-md border bg-muted/60" />
+          <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+        </div>
+      ))}
+    </div>
+  );
+}
