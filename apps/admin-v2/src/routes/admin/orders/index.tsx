@@ -32,8 +32,13 @@ import { getOrderColumns } from "~/components/admin/data-table/columns/order-col
 import { OrderToolbar } from "~/components/admin/data-table/toolbars/OrderToolbar";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ShoppingBag } from "lucide-react";
-import { DeleteOrderDialog } from "~/components/admin/order-list/DeleteOrderDialog";
 import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
+
+const DeleteOrderDialog = lazy(() =>
+  import("~/components/admin/order-list/DeleteOrderDialog").then((module) => ({
+    default: module.DeleteOrderDialog,
+  })),
+);
 
 const BulkShipDialog = lazy(() =>
   import("~/components/admin/order-list/BulkShipDialog").then((module) => ({
@@ -120,6 +125,7 @@ function OrdersPage() {
   const [isShipping, setIsShipping] = useState(false);
   // Derive filter values directly from URL search params (reactive to back/forward)
   const activeStatus = search.status ?? null;
+  const isDeleteDialogOpen = !!orderToDelete || isBulkDeleteOpen;
 
   // Date range — derive from URL params
   const dateRange: DateRange | undefined =
@@ -604,20 +610,24 @@ function OrdersPage() {
       </Card>
 
       {/* Delete confirmation */}
-      <DeleteOrderDialog
-        isOpen={!!orderToDelete || isBulkDeleteOpen}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) {
-            setOrderToDelete(null);
-            setIsBulkDeleteOpen(false);
-          }
-        }}
-        isDeleting={bulkDeleteMut.isPending}
-        onConfirm={isBulkDeleteOpen ? handleBulkDeleteConfirm : handleSingleDelete}
-        showTrashed={showTrashed}
-        isBulk={isBulkDeleteOpen}
-        itemCount={selectedIds.length}
-      />
+      {isDeleteDialogOpen && (
+        <Suspense fallback={null}>
+          <DeleteOrderDialog
+            isOpen={isDeleteDialogOpen}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                setOrderToDelete(null);
+                setIsBulkDeleteOpen(false);
+              }
+            }}
+            isDeleting={bulkDeleteMut.isPending}
+            onConfirm={isBulkDeleteOpen ? handleBulkDeleteConfirm : handleSingleDelete}
+            showTrashed={showTrashed}
+            isBulk={isBulkDeleteOpen}
+            itemCount={selectedIds.length}
+          />
+        </Suspense>
+      )}
 
       {/* Bulk ship dialog */}
       {(isShippingDialogOpen || isShipping) && (
