@@ -1,5 +1,5 @@
 // src/components/admin/footer-builder/FooterBuilder.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
@@ -11,8 +11,6 @@ import { saveFooterConfig } from "~/lib/api-functions/settings";
 
 import { BrandingSection } from "./BrandingSection";
 import { ContentSection } from "./ContentSection";
-import { NavigationMenusSection } from "./NavigationMenusSection";
-import { SocialLinksSection } from "./SocialLinksSection";
 
 import type {
   FooterConfig,
@@ -22,6 +20,26 @@ import type {
   LogoConfig,
 } from "./types";
 import { defaultFooterConfig } from "./types";
+
+const NavigationMenusSection = lazy(() =>
+  import("./NavigationMenusSection").then((module) => ({
+    default: module.NavigationMenusSection,
+  })),
+);
+
+const SocialLinksSection = lazy(() =>
+  import("./SocialLinksSection").then((module) => ({
+    default: module.SocialLinksSection,
+  })),
+);
+
+function FooterSubtabSpinner() {
+  return (
+    <div className="flex items-center justify-center py-10">
+      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 /**
  * Migrate legacy config formats to the new structure
@@ -158,17 +176,29 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
         </TabsContent>
 
         <TabsContent value="navigation" className="space-y-6">
-          <NavigationMenusSection
-            menus={config.menus}
-            onChange={(menus) => setConfig((prev) => ({ ...prev, menus }))}
-          />
+          {activeTab === "navigation" && (
+            <Suspense fallback={<FooterSubtabSpinner />}>
+              <NavigationMenusSection
+                menus={config.menus}
+                onChange={(menus) =>
+                  setConfig((prev) => ({ ...prev, menus }))
+                }
+              />
+            </Suspense>
+          )}
         </TabsContent>
 
         <TabsContent value="social" className="space-y-6">
-          <SocialLinksSection
-            social={config.social}
-            onChange={(social) => setConfig((prev) => ({ ...prev, social }))}
-          />
+          {activeTab === "social" && (
+            <Suspense fallback={<FooterSubtabSpinner />}>
+              <SocialLinksSection
+                social={config.social}
+                onChange={(social) =>
+                  setConfig((prev) => ({ ...prev, social }))
+                }
+              />
+            </Suspense>
+          )}
         </TabsContent>
       </Tabs>
 

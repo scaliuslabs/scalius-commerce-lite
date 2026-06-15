@@ -1,5 +1,5 @@
 // src/components/admin/header-builder/HeaderBuilder.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
@@ -14,11 +14,29 @@ import { saveHeaderConfig } from "~/lib/api-functions/settings";
 import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";
 import { ContactSection } from "./ContactSection";
-import { SocialLinksSection } from "./SocialLinksSection";
-import { NavigationSection } from "./NavigationSection";
 
 import type { HeaderConfig, HeaderBuilderProps, NavigationItem, LogoConfig, FaviconConfig, SocialLink } from "./types";
 import { defaultHeaderConfig } from "./types";
+
+const SocialLinksSection = lazy(() =>
+  import("./SocialLinksSection").then((module) => ({
+    default: module.SocialLinksSection,
+  })),
+);
+
+const NavigationSection = lazy(() =>
+  import("./NavigationSection").then((module) => ({
+    default: module.NavigationSection,
+  })),
+);
+
+function HeaderSubtabSpinner() {
+  return (
+    <div className="flex items-center justify-center py-10">
+      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 /**
  * Migrate legacy config formats to the new structure
@@ -168,20 +186,30 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
             contact={config.contact}
             onChange={(contact) => setConfig((prev) => ({ ...prev, contact }))}
           />
-          <SocialLinksSection
-            social={config.social}
-            onChange={(social) => setConfig((prev) => ({ ...prev, social }))}
-          />
+          {activeTab === "contact-social" && (
+            <Suspense fallback={<HeaderSubtabSpinner />}>
+              <SocialLinksSection
+                social={config.social}
+                onChange={(social) =>
+                  setConfig((prev) => ({ ...prev, social }))
+                }
+              />
+            </Suspense>
+          )}
         </TabsContent>
 
         <TabsContent value="navigation" className="mt-0 p-1">
-          <NavigationSection
-            navigation={config.navigation}
-            onChange={(navigation) =>
-              setConfig((prev) => ({ ...prev, navigation }))
-            }
-            getStorefrontPath={getStorefrontPath}
-          />
+          {activeTab === "navigation" && (
+            <Suspense fallback={<HeaderSubtabSpinner />}>
+              <NavigationSection
+                navigation={config.navigation}
+                onChange={(navigation) =>
+                  setConfig((prev) => ({ ...prev, navigation }))
+                }
+                getStorefrontPath={getStorefrontPath}
+              />
+            </Suspense>
+          )}
         </TabsContent>
       </Tabs>
 
