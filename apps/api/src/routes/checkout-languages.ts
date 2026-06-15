@@ -8,7 +8,7 @@ import { NotFoundError, ConflictError } from "../utils/api-error";
 import { ok, created, noContent } from "../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses } from "../schemas/responses";
 import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../schemas/timestamps";
-import { invalidateApiAndStorefrontGroups } from "../utils/cache-invalidation";
+import { invalidateApiAndScheduleStorefrontGroups } from "../utils/cache-invalidation";
 
 type CheckoutLanguageRouteApp = OpenAPIHono<{ Bindings: Env }>;
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
@@ -293,7 +293,7 @@ adminApp.openapi(createRoute2, async (c) => {
     updatedAt: sql`(cast(strftime('%s','now') as int))`
   }).returning();
 
-  await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
+  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return created(c, { language: insertedLanguage });
 });
 
@@ -381,7 +381,7 @@ adminApp.openapi(updateRoute, async (c) => {
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
   const [updated] = await db.update(checkoutLanguages).set(updateData).where(eq(checkoutLanguages.id, id)).returning();
-  await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
+  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return ok(c, { language: updated });
 });
 
@@ -409,7 +409,7 @@ adminApp.openapi(softDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: sql`(cast(strftime('%s','now') as int))` }).where(eq(checkoutLanguages.id, id));
-  await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
+  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return ok(c, {});
 });
 
@@ -433,7 +433,7 @@ adminApp.openapi(hardDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.delete(checkoutLanguages).where(eq(checkoutLanguages.id, id));
-  await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
+  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return noContent(c);
 });
 
@@ -461,7 +461,7 @@ adminApp.openapi(restoreRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   await db.update(checkoutLanguages).set({ deletedAt: null }).where(eq(checkoutLanguages.id, id));
-  await invalidateApiAndStorefrontGroups(CHECKOUT_CACHE_GROUPS, c.env);
+  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return ok(c, {});
 });
 

@@ -6,8 +6,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
     getKv: vi.fn(),
     getEncryptionKey: vi.fn(),
-    invalidateGroups: vi.fn(),
-    purgeStorefrontForGroups: vi.fn(),
+    invalidateApiAndScheduleStorefrontGroups: vi.fn(),
     upsertSetting: vi.fn(),
     upsertEncryptedSetting: vi.fn(),
     getActivePaymentMethods: vi.fn(),
@@ -29,8 +28,7 @@ vi.mock("../../../utils/encryption-key", () => ({
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
-    invalidateGroups: mocks.invalidateGroups,
-    purgeStorefrontForGroups: mocks.purgeStorefrontForGroups,
+    invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
@@ -61,12 +59,7 @@ function createTestApp() {
 
     mocks.getKv.mockReturnValue(kv);
     mocks.getEncryptionKey.mockReturnValue("enc-key");
-    mocks.invalidateGroups.mockResolvedValue(undefined);
-    mocks.purgeStorefrontForGroups.mockResolvedValue({
-        attempted: true,
-        ok: true,
-        status: 200,
-    });
+    mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
     mocks.upsertSetting.mockResolvedValue(undefined);
     mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
     mocks.invalidatePaymentMethodsCache.mockResolvedValue(undefined);
@@ -113,8 +106,10 @@ describe("payment settings cache invalidation", () => {
 
         expect(response.status).toBe(200);
         expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
-        expect(mocks.invalidateGroups).toHaveBeenCalledWith(["checkout"], env.CACHE);
-        expect(mocks.purgeStorefrontForGroups).toHaveBeenCalledWith(["checkout"], env);
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["checkout"],
+            expect.objectContaining({ env }),
+        );
     });
 
     it("invalidates API and storefront checkout caches after Stripe saves", async () => {
@@ -128,8 +123,10 @@ describe("payment settings cache invalidation", () => {
         expect(response.status).toBe(200);
         expect(mocks.invalidateStripeCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
-        expect(mocks.invalidateGroups).toHaveBeenCalledWith(["checkout"], env.CACHE);
-        expect(mocks.purgeStorefrontForGroups).toHaveBeenCalledWith(["checkout"], env);
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["checkout"],
+            expect.objectContaining({ env }),
+        );
     });
 
     it("invalidates API and storefront checkout caches after SSLCommerz saves", async () => {
@@ -144,8 +141,10 @@ describe("payment settings cache invalidation", () => {
         expect(response.status).toBe(200);
         expect(mocks.invalidateSSLCommerzCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
-        expect(mocks.invalidateGroups).toHaveBeenCalledWith(["checkout"], env.CACHE);
-        expect(mocks.purgeStorefrontForGroups).toHaveBeenCalledWith(["checkout"], env);
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["checkout"],
+            expect.objectContaining({ env }),
+        );
     });
 
     it("invalidates API and storefront checkout caches after Polar saves", async () => {
@@ -160,7 +159,9 @@ describe("payment settings cache invalidation", () => {
         expect(response.status).toBe(200);
         expect(mocks.invalidatePolarCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
-        expect(mocks.invalidateGroups).toHaveBeenCalledWith(["checkout"], env.CACHE);
-        expect(mocks.purgeStorefrontForGroups).toHaveBeenCalledWith(["checkout"], env);
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["checkout"],
+            expect.objectContaining({ env }),
+        );
     });
 });

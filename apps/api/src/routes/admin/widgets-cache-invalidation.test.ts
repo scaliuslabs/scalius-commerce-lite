@@ -20,7 +20,14 @@ const mocks = vi.hoisted(() => ({
   deleteHistoryEntry: vi.fn(),
   getWidgetCacheSubjects: vi.fn(),
   invalidateApiCachePatterns: vi.fn(),
-  purgeStorefrontForPrefixes: vi.fn(),
+  getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
+    try {
+      return c.executionCtx;
+    } catch {
+      return undefined;
+    }
+  }),
+  triggerStorefrontPurgeForPrefixes: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/widgets", async () => {
@@ -49,7 +56,8 @@ vi.mock("@scalius/core/modules/widgets", async () => {
 
 vi.mock("../../utils/cache-invalidation", () => ({
   invalidateApiCachePatterns: mocks.invalidateApiCachePatterns,
-  purgeStorefrontForPrefixes: mocks.purgeStorefrontForPrefixes,
+  getOptionalExecutionContext: mocks.getOptionalExecutionContext,
+  triggerStorefrontPurgeForPrefixes: mocks.triggerStorefrontPurgeForPrefixes,
 }));
 
 import { adminWidgetRoutes } from "./widgets";
@@ -91,11 +99,6 @@ function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.invalidateApiCachePatterns.mockResolvedValue(undefined);
-  mocks.purgeStorefrontForPrefixes.mockResolvedValue({
-    attempted: true,
-    ok: true,
-    status: 200,
-  });
   mocks.createWidget.mockResolvedValue({ id: "wid_new" });
   mocks.updateWidget.mockResolvedValue({ id: "wid_1" });
 
@@ -162,7 +165,8 @@ describe("admin widget cache invalidation", () => {
       env.CACHE,
     );
 
-    const [prefixes, purgeEnv, options] = mocks.purgeStorefrontForPrefixes.mock.calls[0]!;
+    const [prefixes, purgeEnv, options, executionCtx] =
+      mocks.triggerStorefrontPurgeForPrefixes.mock.calls[0]!;
     expect(prefixes).toEqual(
       expect.arrayContaining([
         "widget_wid_1",
@@ -182,6 +186,7 @@ describe("admin widget cache invalidation", () => {
     );
     expect(purgeEnv).toBe(env);
     expect(options).toEqual({ groups: ["widgets"], bumpVersion: false });
+    expect(executionCtx).toBeUndefined();
   });
 
   it("warms homepage only for homepage widget placements", async () => {
@@ -216,7 +221,7 @@ describe("admin widget cache invalidation", () => {
       env.CACHE,
     );
 
-    const [prefixes, , options] = mocks.purgeStorefrontForPrefixes.mock.calls[0]!;
+    const [prefixes, , options] = mocks.triggerStorefrontPurgeForPrefixes.mock.calls[0]!;
     expect(prefixes).toEqual(
       expect.arrayContaining([
         "widget_wid_home",
@@ -268,7 +273,7 @@ describe("admin widget cache invalidation", () => {
       env.CACHE,
     );
 
-    const [prefixes, , options] = mocks.purgeStorefrontForPrefixes.mock.calls[0]!;
+    const [prefixes, , options] = mocks.triggerStorefrontPurgeForPrefixes.mock.calls[0]!;
     expect(prefixes).toEqual(
       expect.arrayContaining([
         "widget_wid_page",
@@ -314,6 +319,6 @@ describe("admin widget cache invalidation", () => {
 
     expect(response.status).toBe(201);
     expect(mocks.invalidateApiCachePatterns).not.toHaveBeenCalled();
-    expect(mocks.purgeStorefrontForPrefixes).not.toHaveBeenCalled();
+    expect(mocks.triggerStorefrontPurgeForPrefixes).not.toHaveBeenCalled();
   });
 });

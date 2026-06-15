@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  invalidateApiAndStorefrontGroups: vi.fn(),
+  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   createLocation: vi.fn(),
   getLocationById: vi.fn(),
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
 vi.mock("@scalius/core/modules/delivery/locations", () => ({
@@ -29,7 +29,7 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.createLocation.mockResolvedValue({
     id: "loc_1",
     name: "Dhaka",
@@ -80,6 +80,9 @@ describe("delivery location cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 });

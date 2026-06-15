@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  invalidateApiAndStorefrontGroups: vi.fn(),
+  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getDeliveryProviders: vi.fn(),
   getDeliveryProvider: vi.fn(),
   saveDeliveryProvider: vi.fn(),
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
 vi.mock("@scalius/core/modules/delivery/delivery.service", () => ({
@@ -56,7 +56,7 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.getDeliveryProvider.mockResolvedValue(providerRecord);
   mocks.saveDeliveryProvider.mockResolvedValue(providerRecord);
   mocks.deleteWhere.mockResolvedValue(undefined);
@@ -98,7 +98,10 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 
   it("invalidates checkout caches after provider updates", async () => {
@@ -122,7 +125,10 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 
   it("invalidates checkout caches after update creates a missing provider", async () => {
@@ -147,7 +153,10 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 
   it("invalidates checkout caches after provider deletion", async () => {
@@ -160,6 +169,9 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 });

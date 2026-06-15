@@ -6,7 +6,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
-  invalidateApiAndStorefrontGroups: vi.fn(),
+  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
     try {
       return c.executionCtx;
@@ -26,7 +26,7 @@ vi.mock("@scalius/core/modules/settings", () => ({
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
   getOptionalExecutionContext: mocks.getOptionalExecutionContext,
 }));
 
@@ -78,7 +78,7 @@ function createTestApp() {
 
   mocks.getKv.mockReturnValue(kv);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
-  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -132,7 +132,10 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledWith(kv);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 
   it("invalidates layout caches after CSP security settings save", async () => {
@@ -144,7 +147,10 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["layout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["layout"],
+      expect.objectContaining({ env }),
+    );
   });
 
   it("does not fail CSP security settings save when ExecutionContext is unavailable", async () => {
@@ -159,6 +165,9 @@ describe("system settings cache invalidation", () => {
       "security:csp_allowed_domains",
       "https://payments.example.com",
     );
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["layout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["layout"],
+      expect.objectContaining({ env }),
+    );
   });
 });

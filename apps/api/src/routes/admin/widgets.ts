@@ -32,7 +32,8 @@ import {
 import { widgetPlacementSchema, widgetSchema } from "../../schemas/entities";
 import {
     invalidateApiCachePatterns,
-    purgeStorefrontForPrefixes,
+    getOptionalExecutionContext,
+    triggerStorefrontPurgeForPrefixes,
 } from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -153,7 +154,7 @@ function collectWidgetCacheInvalidation(subjects: WidgetCacheSubject[]) {
 }
 
 async function invalidateWidgetCaches(
-    c: { env: Env },
+    c: { env: Env; executionCtx?: ExecutionContext },
     subjects: WidgetCacheSubject[],
 ): Promise<void> {
     const { apiPatterns, storefrontPrefixes, warmHomepage } =
@@ -162,10 +163,15 @@ async function invalidateWidgetCaches(
         await invalidateApiCachePatterns(apiPatterns, c.env?.CACHE);
     }
     if (storefrontPrefixes.length > 0 || warmHomepage) {
-        await purgeStorefrontForPrefixes(storefrontPrefixes, c.env, {
-            groups: ["widgets"],
-            bumpVersion: warmHomepage,
-        });
+        triggerStorefrontPurgeForPrefixes(
+            storefrontPrefixes,
+            c.env,
+            {
+                groups: ["widgets"],
+                bumpVersion: warmHomepage,
+            },
+            getOptionalExecutionContext(c),
+        );
     }
 }
 

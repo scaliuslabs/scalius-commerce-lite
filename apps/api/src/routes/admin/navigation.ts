@@ -17,7 +17,7 @@ const saveNavigationConfigSchema = z.object({
 });
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getKv } from "../../utils/kv-cache";
-import { invalidateApiAndStorefrontGroups } from "../../utils/cache-invalidation";
+import { invalidateApiAndScheduleStorefrontGroups } from "../../utils/cache-invalidation";
 
 import { ok, noContent } from "../../utils/api-response";
 import {
@@ -213,7 +213,7 @@ app.openapi(saveConfigRoute, async (c) => {
     const { type, config } = c.req.valid("json");
     await saveNavigationConfig(db, type, config as Record<string, unknown>);
     await invalidateSiteSettingsCache(getKv());
-    await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return ok(c, { message: `${type} navigation config saved` });
 });
 
@@ -243,7 +243,7 @@ app.openapi(updateConfigRoute, async (c) => {
     const { type, config } = c.req.valid("json");
     await updateNavigationConfig(db, id, type, config as Record<string, unknown>);
     await invalidateSiteSettingsCache(getKv());
-    await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return ok(c, { message: `${type} navigation config updated` });
 });
 
@@ -278,7 +278,7 @@ app.openapi(deleteConfigRoute, async (c) => {
     const { type } = c.req.valid("json");
     await deleteNavigationConfig(db, id, type);
     await invalidateSiteSettingsCache(getKv());
-    await invalidateApiAndStorefrontGroups(LAYOUT_CACHE_GROUPS, c.env);
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return noContent(c);
 });
 

@@ -6,7 +6,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
-  invalidateApiAndStorefrontGroups: vi.fn(),
+  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getCurrencySettings: vi.fn(),
   saveCurrencySettings: vi.fn(),
   getGeneralSettings: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@scalius/core/modules/settings", () => ({
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
 vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
@@ -70,7 +70,7 @@ function createTestApp() {
 
   mocks.getKv.mockReturnValue(kv);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
-  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.saveCurrencySettings.mockResolvedValue(undefined);
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
@@ -193,6 +193,9 @@ describe("site settings cache invalidation", () => {
     const response = await requestJson(app, env, method, path, body);
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(groups, env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      groups,
+      expect.objectContaining({ env }),
+    );
   });
 });

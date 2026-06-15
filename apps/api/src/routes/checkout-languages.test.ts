@@ -3,11 +3,11 @@ import type { Database } from "@scalius/database/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  invalidateApiAndStorefrontGroups: vi.fn(),
+  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
 }));
 
 vi.mock("../utils/cache-invalidation", () => ({
-  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
 import { checkoutLanguageRoutes, publicCheckoutLanguageRoutes } from "./checkout-languages";
@@ -56,7 +56,7 @@ function createTestApp() {
   });
   app.route("/checkout-languages", publicCheckoutLanguageRoutes);
   app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
-  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue(undefined);
+  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   return { app, env };
 }
 
@@ -142,6 +142,9 @@ describe("checkout language route boundaries", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(["checkout"], env);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 });

@@ -5,12 +5,14 @@ import {
   WIDGET_CACHE_GROUPS,
   getGroupsForPath,
   getStorefrontPrefixesForGroups,
+  invalidateApiAndScheduleStorefrontGroups,
   invalidateApiAndStorefrontGroups,
   invalidateCatalogCaches,
   normalizeStorefrontPurgeUrl,
   purgeStorefrontForGroups,
   purgeStorefrontForPrefixes,
   triggerStorefrontPurgeForGroups,
+  triggerStorefrontPurgeForPrefixes,
 } from "./cache-invalidation";
 
 describe("catalog cache groups", () => {
@@ -201,6 +203,34 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
   });
 
+  it("schedules exact storefront prefix purges through waitUntil", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const waitUntil = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    triggerStorefrontPurgeForPrefixes(
+      ["widget_wid_1", "widgets_scope_product_prod_1"],
+      {
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+      { groups: ["widgets"], bumpVersion: false },
+      { waitUntil } as unknown as ExecutionContext,
+    );
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      groups: ["widgets"],
+      prefixes: ["widget_wid_1", "widgets_scope_product_prod_1"],
+      bumpVersion: false,
+    });
+  });
+
   it("invalidates public checkout config KV cache with the checkout group", () => {
     const checkoutGroup = INVALIDATION_GROUPS.checkout;
     expect(checkoutGroup).toBeDefined();
@@ -308,6 +338,72 @@ describe("triggerStorefrontPurgeForGroups", () => {
       groups: ["layout"],
       bumpVersion: true,
     });
+  });
+
+  it("invalidates API KV prefixes before scheduling the matching storefront purge", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await invalidateApiAndScheduleStorefrontGroups(["layout"], {
+      env: {
+        CACHE: kv,
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as unknown as Env,
+      executionCtx: { waitUntil } as unknown as ExecutionContext,
+    });
+
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:header:" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:footer:" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:navigation:" });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      groups: ["layout"],
+      bumpVersion: true,
+    });
+  });
+
+  it("does not fail scheduled non-catalog writes when the storefront purge rejects", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("Network connection lost"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      invalidateApiAndScheduleStorefrontGroups(["pages", "layout"], {
+        env: {
+          CACHE: kv,
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+        } as unknown as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await expect(purgePromise).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      "[Cache] Storefront group purge failed:",
+      expect.any(Error),
+    );
   });
 
   it("does not purge when config or valid groups are missing", () => {
