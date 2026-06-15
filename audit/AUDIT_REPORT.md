@@ -13,21 +13,21 @@ The original highest risks were not "wrong stack" problems. They were boundary a
 - Some generated/runtime contracts drift because types, SDKs, migrations, and docs are not checked continuously.
 - Full local verification is difficult, so the repo needs smaller reproducible verification loops per slice.
 
-Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `ADMIN-011`, `ADMIN-012`, `ADMIN-013`, `RBAC-001`, `STORE-007`, `PERF-004`, `PERF-005`, `STORE-008`, `AUTH-011`, `CACHE-006`, `CACHE-007`, and `CACHE-008` slices are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
+Current tracked remediation state: the original tracker items, the 2026-06-14 auth/payment/order/storefront/platform/cache follow-ups, `MEDIA-001`, and the 2026-06-15 `ADMIN-009`, `ADMIN-010`, `ADMIN-011`, `ADMIN-012`, `ADMIN-013`, `RBAC-001`, `STORE-007`, `PERF-004`, `PERF-005`, `STORE-008`, `AUTH-011`, `CACHE-006`, `CACHE-007`, `CACHE-008`, `CACHE-009`, `CACHE-010`, and `CACHE-011` slices are marked `Verified` unless a newer row in `audit/REMEDIATION_TRACKER.md` says otherwise.
 
 ## Validation Performed
 
 - Root `pnpm typecheck`: passed.
-- `pnpm --filter @scalius/admin-v2 typecheck`: passed after the final widget extraction; the former `api.functions.ts` barrel no longer exists.
+- `pnpm --filter @scalius/admin-v2 typecheck`: passed after the cache settings query/mutation slice; admin server functions remain in typed domain slices under `api-functions/`.
 - `pnpm --filter @scalius/api typecheck`: passed.
 - `pnpm --filter @scalius/storefront typecheck`: passed.
 - `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`: passed.
 - `pnpm check:env`: passed.
 - `pnpm lint`: passed with no ESLint warnings across API, admin, storefront, api-client, core, database, and shared.
-- `pnpm test`: passed 127 files and 800 tests after the mutation-barrel split and date-hydration cleanup.
+- `pnpm test`: passed 128 files and 802 tests after the cache settings query/mutation slice and storefront purge-cache port-preservation test.
 - `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, `pnpm audit --audit-level moderate`, `pnpm peers check`, frozen install, and `pnpm --filter @scalius/database check:migrations`: passed.
-- Full `pnpm deploy`: latest mutation-barrel split plus date-hydration cleanup redeployed API `fbd26e4f-7598-48f4-b9c4-157bc3439bbd`, admin `5c93cbc7-c3e6-4a03-80e0-38f5ff5eafb5`, and storefront `586a5c96-0965-48d7-8920-0cdccb759f55`.
-- Live HTTP and browser checks: API setup, authenticated `/admin`, `/admin/customers`, `/admin/customers/cust_PYLTnqB6XKPqIt9ApZXqe/history`, `/admin/products`, `/admin/orders`, `/admin/categories`, `/admin/discounts`, `/admin/widgets`, storefront `/`, storefront `/search`, and direct storefront purge-cache GET checks returned successfully after redeploy with no error-boundary page, stuck loading state, or new captured console/runtime errors.
+- Full `pnpm deploy`: latest cache settings UI/API slice redeployed API `a0fae72a-2d3f-4e9b-acb6-1db7e1ff677d`, admin `9f65099c-d064-4f9c-ad54-608c85a1c8f0`, and storefront `6c0da12a-3d87-43e6-a3d8-c4aa228b5a79`.
+- Live HTTP and browser checks: API setup, authenticated `/admin/settings/cache`, storefront `/`, storefront `/search`, and direct storefront purge-cache GET checks returned successfully after redeploy with no error-boundary page, stuck loading state, or new captured console/runtime errors.
 - The live storefront missing-image issue was traced to product content and fixed: the homepage no longer references `https://cloud.scalius.com/zLPBsNbtJCMxTkfPAPHcr.png`, and the replacement primary product image returns `200 image/png`.
 - Focused API/payment tests run by subagents passed for queue consumer, Polar webhook, and COD service slices.
 - Focused storefront Vitest now starts after adding the missing `happy-dom` dev dependency.
@@ -752,6 +752,24 @@ Status: Verified on 2026-06-14. The API-client README points to `openapi.json` a
 Fix direction: remove the file and ensure `.DS_Store` is globally ignored.
 
 Status: Verified on 2026-06-13. The file was removed, and root `.gitignore` already ignores `.DS_Store`.
+
+### CACHE-009: Admin cache-management wording was misleading
+
+The `/admin/settings/cache` UI described storefront purge actions in a way that suggested all groups warm pages or fully purge HTML, even though some groups only clear API/KV prefixes and only selected HTML-affecting groups warm critical storefront pages.
+
+Status: Verified on 2026-06-15. The cache settings UI now labels groups with `Warms HTML` or `Prefix only`, and an invalid nested Badge container was corrected to avoid hydration warnings. Local and live `/admin/settings/cache` browser smoke checks passed after redeploy.
+
+### CACHE-010: Cache settings refetched data outside TanStack Query
+
+`CacheManager` mounted direct server-function calls for stats, last-cleared timestamps, and group metadata even though the route already warmed cache query options. That duplicated work on first render and bypassed the app's normal invalidation path.
+
+Status: Verified on 2026-06-15. `CacheManager` now consumes the shared cache query options and uses domain mutation hooks from `api-mutations/cache.ts`. Local request capture showed the page loading without duplicate decoded cache server-function fanout, and live browser checks showed no browser `/api/v1/cache` calls or error-boundary state.
+
+### CACHE-011: Clear-all cache timestamps were UI-only
+
+The admin clear-all action could make every group appear freshly cleared in local component state, while the API only persisted the generic clear operation. A refresh could therefore lose per-group "last cleared" state even though the UI had reported success.
+
+Status: Verified on 2026-06-15. `POST /api/v1/cache/clear` now persists `sc:_last_cleared:<group>` for every invalidation group. Focused API route tests verify API cache deletion, group timestamp persistence, and `/last-cleared` reads. The same slice also fixed storefront purge warming to use `url.origin`, preserving local/staging ports.
 
 ### UI-001: Empty dashboard can emit Recharts zero-size warnings
 

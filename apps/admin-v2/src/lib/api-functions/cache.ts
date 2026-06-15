@@ -22,20 +22,20 @@ interface CacheStatsPayload {
   stats: CacheStats;
 }
 
-interface CacheLastClearedPayload {
+export interface CacheLastClearedPayload {
   timestamps: Record<string, number | null>;
 }
 
-interface CacheGroupsPayload {
+export interface CacheGroupsPayload {
   groups: Record<string, CacheGroupDefinition>;
   pathMapping: Record<string, string[]>;
 }
 
-interface ClearCachePayload {
+export interface ClearCachePayload {
   message?: string;
 }
 
-interface ClearCacheGroupPayload {
+export interface ClearCacheGroupPayload {
   message: string;
   groups: string[];
   bumpedHtml: boolean;

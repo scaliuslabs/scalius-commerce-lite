@@ -156,6 +156,38 @@ describe("storefront cache purge route", () => {
     );
   });
 
+  it("preserves the local port when warming critical caches", async () => {
+    const { POST } = await import("./purge-cache");
+    const request = new Request("http://localhost:4322/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ bumpVersion: true }),
+    });
+
+    const response = await POST({
+      request,
+      url: new URL(request.url),
+      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+    } as unknown as Parameters<typeof POST>[0]);
+    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
+    await warmPromise;
+
+    expect(response.status).toBe(200);
+    expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_localhost");
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:4322/",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Cache-Control": "no-cache",
+          "X-Cache-Warm": "true",
+        }),
+      }),
+    );
+  });
+
   it("keeps POST selective prefix purges versioned without warming non-HTML groups", async () => {
     const { POST } = await import("./purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {

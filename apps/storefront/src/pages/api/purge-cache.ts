@@ -225,9 +225,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
 
     // Warm critical HTML caches only for groups that affect rendered pages.
     if (newVersion !== null && shouldWarmCaches) {
-      const protocol = url.protocol;
-      const baseUrl = `${protocol}//${hostname}`;
-      locals.cfContext.waitUntil(warmCriticalCaches(baseUrl));
+      locals.cfContext.waitUntil(warmCriticalCaches(url.origin));
     }
 
     return new Response(

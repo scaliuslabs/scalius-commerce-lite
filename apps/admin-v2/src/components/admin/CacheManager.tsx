@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -29,17 +30,16 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { toast } from "sonner";
-import { getServerFnError } from "@/lib/api-helpers";
 import {
-  clearCache,
-  clearCacheGroup,
-  getCacheGroups,
-  getCacheLastCleared,
-  getCacheStats,
-  type CacheGroupDefinition,
-  type CacheStats,
-} from "@/lib/api-functions/cache";
+  cacheGroupsQueryOptions,
+  cacheLastClearedQueryOptions,
+  cacheStatsQueryOptions,
+} from "@/lib/api.queries";
+import {
+  useClearCache,
+  useClearCacheGroup,
+} from "@/lib/api-mutations/cache";
+import type { CacheGroupDefinition } from "@/lib/api-functions/cache";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Separator } from "../ui/separator";
 import {
@@ -67,6 +67,10 @@ const GROUP_CONFIG: Record<string, { icon: React.ComponentType<{ className?: str
   attributes: { icon: ListTree, bgColor: "bg-indigo-100 dark:bg-indigo-900/40", iconColor: "text-indigo-600 dark:text-indigo-400", hoverBorder: "hover:border-indigo-500/50" },
 };
 
+const EMPTY_GROUPS: Record<string, CacheGroupDefinition> = {};
+const EMPTY_PATH_MAPPING: Record<string, string[]> = {};
+const EMPTY_TIMESTAMPS: Record<string, number | null> = {};
+
 function getRelativeTime(timestamp: number | null): string {
   if (!timestamp) return "Never";
   const now = Date.now();
@@ -82,92 +86,53 @@ function getRelativeTime(timestamp: number | null): string {
 }
 
 export function CacheManager() {
-  const [stats, setStats] = useState<CacheStats | null>(null);
-  const [groups, setGroups] = useState<Record<string, CacheGroupDefinition>>({});
-  const [pathMapping, setPathMapping] = useState<Record<string, string[]>>({});
-  const [timestamps, setTimestamps] = useState<Record<string, number | null>>({});
-  const [loading, setLoading] = useState(true);
-  const [clearingGroup, setClearingGroup] = useState<string | null>(null);
-  const [clearingAll, setClearingAll] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [showDeps, setShowDeps] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [statsData, timestampsData, groupsData] = await Promise.all([
-        getCacheStats(),
-        getCacheLastCleared(),
-        getCacheGroups(),
-      ]);
+  const statsQuery = useQuery(cacheStatsQueryOptions());
+  const timestampsQuery = useQuery(cacheLastClearedQueryOptions());
+  const groupsQuery = useQuery(cacheGroupsQueryOptions());
+  const clearGroupMutation = useClearCacheGroup();
+  const clearAllMutation = useClearCache();
 
-      setStats(statsData.stats);
-      setTimestamps(timestampsData.timestamps || {});
-      setGroups(groupsData.groups || {});
-      setPathMapping(groupsData.pathMapping || {});
-      setLastUpdated(new Date());
-    } catch (error: unknown) {
-      console.error("Error fetching cache data:", error);
-      toast.error("Failed to fetch cache data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const stats = statsQuery.data?.stats ?? null;
+  const timestamps = timestampsQuery.data?.timestamps ?? EMPTY_TIMESTAMPS;
+  const groups = groupsQuery.data?.groups ?? EMPTY_GROUPS;
+  const pathMapping = groupsQuery.data?.pathMapping ?? EMPTY_PATH_MAPPING;
+  const loading =
+    statsQuery.isLoading || timestampsQuery.isLoading || groupsQuery.isLoading;
+  const refreshing =
+    statsQuery.isFetching ||
+    timestampsQuery.isFetching ||
+    groupsQuery.isFetching;
+  const clearingGroup = clearGroupMutation.isPending
+    ? clearGroupMutation.variables
+    : null;
+  const clearingAll = clearAllMutation.isPending;
+  const lastUpdated = Math.max(
+    statsQuery.dataUpdatedAt,
+    timestampsQuery.dataUpdatedAt,
+    groupsQuery.dataUpdatedAt,
+  );
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const clearGroup = async (groupName: string) => {
-    try {
-      setClearingGroup(groupName);
-      await clearCacheGroup({ data: { groupName } });
-
-      const groupDef = groups[groupName];
-      toast.success(`${groupDef?.label || groupName} cache cleared`);
-
-      // Update the timestamp locally for instant feedback
-      setTimestamps(prev => ({ ...prev, [groupName]: Date.now() }));
-    } catch (error: unknown) {
-      console.error(`Error clearing ${groupName} cache:`, error);
-      toast.error(getServerFnError(error, `Failed to clear ${groupName} cache`));
-    } finally {
-      setClearingGroup(null);
-    }
-  };
-
-  const clearAll = async () => {
-    try {
-      setClearingAll(true);
-      await clearCache();
-
-      toast.success("All cache cleared successfully");
-
-      // Update all timestamps
-      const now = Date.now();
-      setTimestamps(prev => {
-        const updated = { ...prev };
-        for (const key of Object.keys(groups)) {
-          updated[key] = now;
-        }
-        return updated;
-      });
-    } catch (error: unknown) {
-      console.error("Error clearing all cache:", error);
-      toast.error(getServerFnError(error, "Failed to clear all cache"));
-    } finally {
-      setClearingAll(false);
-    }
+  const refreshData = () => {
+    void Promise.all([
+      statsQuery.refetch(),
+      timestampsQuery.refetch(),
+      groupsQuery.refetch(),
+    ]);
   };
 
   // Build reverse mapping: group -> which paths trigger it
-  const groupTriggers: Record<string, string[]> = {};
-  for (const [path, groupList] of Object.entries(pathMapping)) {
-    for (const g of groupList) {
-      if (!groupTriggers[g]) groupTriggers[g] = [];
-      groupTriggers[g].push(path);
+  const groupTriggers = useMemo(() => {
+    const triggers: Record<string, string[]> = {};
+    for (const [path, groupList] of Object.entries(pathMapping)) {
+      for (const group of groupList) {
+        if (!triggers[group]) triggers[group] = [];
+        triggers[group].push(path);
+      }
     }
-  }
+    return triggers;
+  }, [pathMapping]);
 
   const groupNames = Object.keys(groups);
 
@@ -216,10 +181,16 @@ export function CacheManager() {
             <div className="w-full flex justify-between items-center">
               <span className="text-xs text-muted-foreground flex items-center">
                 <Clock className="h-3 w-3 mr-1" />
-                {lastUpdated ? lastUpdated.toLocaleTimeString() : "\u2014"}
+                {lastUpdated ? (
+                  <span suppressHydrationWarning>
+                    {new Date(lastUpdated).toLocaleTimeString()}
+                  </span>
+                ) : (
+                  "\u2014"
+                )}
               </span>
-              <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
-                <RefreshCw className={`mr-1 h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+              <Button variant="outline" size="sm" onClick={refreshData} disabled={refreshing}>
+                <RefreshCw className={`mr-1 h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
             </div>
@@ -234,14 +205,14 @@ export function CacheManager() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-amber-800/80 dark:text-amber-200/80 leading-relaxed">
+            <div className="text-sm text-amber-800/80 dark:text-amber-200/80 leading-relaxed">
               Cache is organized into <strong>invalidation groups</strong>. When you edit content in the admin,
-              only the relevant groups are cleared — not the entire cache. Groups marked{" "}
-              <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800">Purges HTML</Badge>{" "}
-              also bump the storefront HTML version, causing cached pages to refresh. Groups marked{" "}
-              <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">API only</Badge>{" "}
-              only clear backend API responses without affecting cached HTML pages.
-            </p>
+              only the relevant groups are cleared. Groups marked{" "}
+              <Badge variant="secondary" className="inline-flex text-xs px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800">Warms HTML</Badge>{" "}
+              bump the storefront cache version and warm critical pages. Groups marked{" "}
+              <Badge variant="secondary" className="inline-flex text-xs px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">Prefix only</Badge>{" "}
+              clear matching API/storefront data prefixes without starting critical-page warming.
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -317,11 +288,11 @@ export function CacheManager() {
                   </div>
                   {group?.bumpsHtml ? (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                      Purges HTML
+                      Warms HTML
                     </Badge>
                   ) : (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                      API only
+                      Prefix only
                     </Badge>
                   )}
                 </div>
@@ -339,7 +310,7 @@ export function CacheManager() {
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs"
-                    onClick={() => clearGroup(groupName)}
+                    onClick={() => clearGroupMutation.mutate(groupName)}
                     disabled={clearingGroup !== null || clearingAll}
                   >
                     {isClearing ? (
@@ -395,7 +366,7 @@ export function CacheManager() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={clearAll}>
+                <AlertDialogAction onClick={() => clearAllMutation.mutate()}>
                   Clear all cache
                 </AlertDialogAction>
               </AlertDialogFooter>
