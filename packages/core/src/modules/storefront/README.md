@@ -62,7 +62,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 ### Public Storefront (`/api/v1/storefront`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/homepage` | Consolidated homepage data (SEO, hero, widgets, collections + products) | `api:storefront:homepage:*` with CACHE_TTLS.STANDARD |
+| GET | `/homepage` | Consolidated homepage data (SEO, hero, widgets, collections + products) | API route returns `Cache-Control: no-store`; the Astro storefront applies edge HTML/data caching around rendered pages |
 | GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
 | GET | `/csp` | CSP allowed domains from `settings` (category = security) | `api:storefront:csp:*` with CACHE_TTLS.STANDARD |
 
@@ -124,5 +124,5 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 ## Known Gaps
 
 - Public hero route at `/api/v1/hero/sliders` and the consolidated `/api/v1/storefront/homepage` both serve hero slider data -- the storefront uses the consolidated endpoint, making the standalone hero endpoint partially redundant.
-- Public SEO route at `/api/v1/seo` and the consolidated homepage endpoint both cache SEO data with `CACHE_TTLS.STANDARD`; SEO settings writes purge the homepage cache group, including the `api:seo:` prefix.
+- Public SEO route at `/api/v1/seo` still uses API cache prefixes; the consolidated homepage API route returns `no-store`, while storefront-rendered pages cache through the Astro edge-cache layer.
 - Abandoned checkouts cleanup endpoint requires auth middleware, but the save endpoint does not.

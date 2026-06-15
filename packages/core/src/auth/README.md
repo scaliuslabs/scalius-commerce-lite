@@ -99,7 +99,7 @@ Customer Auth Flow (storefront):
 | Attributes | 4 | No |
 | Analytics | 4 | No |
 | Settings | 16 | `general.*`, `delivery_providers.*`, `fraud_checker.*` |
-| Team | 3 | `manage`, `manage_roles` |
+| Team | 3 | `view`, `manage`, `manage_roles` |
 | Dashboard | 2 | No |
 
 ### 5 System Roles (auto-seeded)
@@ -107,7 +107,7 @@ Customer Auth Flow (storefront):
 | Role | Permissions | Notes |
 |------|-------------|-------|
 | `super_admin` | All 81 | System role, cannot modify permissions |
-| `manager` | All except `permanent_delete`, `delivery_providers.edit`, `fraud_checker.edit`, `team.manage_roles` | System role |
+| `manager` | All except `permanent_delete`, `orders.refund`, `delivery_providers.edit`, `fraud_checker.edit`, `team.manage_roles` | System role |
 | `sales_rep` | Dashboard, products/categories/collections (view), orders (full CRUD + shipments), customers (view/create/edit/history), discounts (view) | System role |
 | `content_editor` | Dashboard, pages/widgets (full CRUD), media (full), collections (view/edit/toggle), settings (header/footer/seo) | System role |
 | `product_specialist` | Dashboard, products (full except permanent_delete), categories (full except permanent_delete), collections (full), attributes (full), media (view/upload) | System role |
@@ -246,7 +246,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 ## Known Gaps
 
-1. **2FA is optional, but enabled 2FA is enforced per session**. Users without 2FA can access the admin dashboard. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification endpoints.
+1. **2FA is optional, but enabled 2FA is enforced per session**. Users without 2FA can access the admin dashboard. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification/method endpoints.
 
 2. **`clearAllPermissionCache()` is local only**: Cross-isolate RBAC invalidation depends on deleting affected `rbac:perms:{userId}` KV entries with `clearPermissionCache(userId, kv)`. Role/permission mutation routes should enumerate affected users and clear those keys; do not rely on local-only broad cache clearing.
 

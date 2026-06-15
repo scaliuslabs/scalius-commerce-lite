@@ -9,7 +9,7 @@ import type { User } from "./AccountSettingsContainer";
 import { useRouter } from "@tanstack/react-router";
 import { getServerFnError } from "~/lib/api-helpers";
 import { updateProfile } from "~/lib/api-functions/auth-management";
-import { clearAdminRouteContextCache } from "~/lib/admin-route-context";
+import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 
 function getInitials(nameStr: string): string {
   return nameStr
@@ -54,8 +54,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
       toast.success("Profile updated successfully");
       setIsEditing(false);
       // Refresh to update header with updated user info
-      clearAdminRouteContextCache();
-      router.invalidate();
+      void refreshAdminRouteContext(router);
     } catch (err) {
       toast.error(getServerFnError(err, "Failed to update profile"));
     } finally {

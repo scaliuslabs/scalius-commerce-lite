@@ -1,5 +1,6 @@
 // src/components/admin/RolesManagement.tsx
 import { useState, useEffect } from "react";
+import { useRouter } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,7 @@ import { usePermissions } from "@/contexts/PermissionContext";
 import { PermissionGate } from "./PermissionGate";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getServerFnError } from "@/lib/api-helpers";
+import { refreshAdminRouteContext } from "@/lib/admin-route-context";
 import {
   createRbacRole,
   deleteRbacRole,
@@ -74,6 +76,7 @@ interface GroupedPermissions {
 }
 
 export function RolesManagement() {
+  const router = useRouter();
   const [roles, setRoles] = useState<Role[]>([]);
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +85,10 @@ export function RolesManagement() {
   const { hasPermission } = usePermissions();
 
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
+
+  const refreshPermissions = async () => {
+    await refreshAdminRouteContext(router);
+  };
 
   // Fetch roles and permissions
   useEffect(() => {
@@ -109,7 +116,8 @@ export function RolesManagement() {
   const handleCreateRole = async (roleData: CreateRbacRoleInput) => {
     try {
       const data = await createRbacRole({ data: roleData });
-      setRoles([...roles, data.role]);
+      setRoles((currentRoles) => [...currentRoles, data.role]);
+      await refreshPermissions();
       toast.success("Role created successfully");
       return true;
     } catch (error: unknown) {
@@ -125,7 +133,10 @@ export function RolesManagement() {
   ) => {
     try {
       const data = await updateRbacRole({ data: { roleId, update: updates } });
-      setRoles(roles.map((r) => (r.id === roleId ? data.role : r)));
+      setRoles((currentRoles) =>
+        currentRoles.map((role) => (role.id === roleId ? data.role : role)),
+      );
+      await refreshPermissions();
       toast.success("Role updated successfully");
       return true;
     } catch (error: unknown) {
@@ -138,7 +149,10 @@ export function RolesManagement() {
   const handleDeleteRole = async (roleId: string) => {
     try {
       await deleteRbacRole({ data: { roleId } });
-      setRoles(roles.filter((r) => r.id !== roleId));
+      setRoles((currentRoles) =>
+        currentRoles.filter((role) => role.id !== roleId),
+      );
+      await refreshPermissions();
       toast.success("Role deleted successfully");
     } catch (error: unknown) {
       console.error("Error deleting role:", error);

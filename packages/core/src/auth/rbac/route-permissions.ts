@@ -629,6 +629,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/settings/delivery-locations/import-pathao": {
     POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+  },
+  "/api/v1/admin/settings/delivery-locations/import-pathao/status": {
+    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
   },
   "/api/v1/admin/settings/delivery-locations/*": {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
@@ -966,7 +970,13 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // Auth Management API (admin user CRUD, 2FA, profile)
   // =============================================
   "/api/v1/admin/auth/users": {
-    GET: { permission: PERMISSIONS.TEAM_MANAGE },
+    GET: {
+      anyOf: [
+        PERMISSIONS.TEAM_VIEW,
+        PERMISSIONS.TEAM_MANAGE,
+        PERMISSIONS.TEAM_MANAGE_ROLES,
+      ],
+    },
     POST: { permission: PERMISSIONS.TEAM_MANAGE },
   },
   "/api/v1/admin/auth/users/*": {
@@ -1020,6 +1030,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/widget-generation-runs/*": {
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
+  },
+  "/api/v1/admin/widget-generation-runs/sessions/*/status": {
+    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
 
 };

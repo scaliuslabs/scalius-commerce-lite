@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import {
   set2faMethod,
 } from "~/lib/api-functions/auth-management";
-import { clearAdminRouteContextCache } from "~/lib/admin-route-context";
+import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import type { User } from "./AccountSettingsContainer";
 
 type TwoFactorStep = "method" | "password" | "qr" | "verify" | "backup";
@@ -79,8 +79,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
   };
 
   const refreshAdminContext = () => {
-    clearAdminRouteContextCache();
-    router.invalidate();
+    void refreshAdminRouteContext(router);
   };
 
   const handleEnable2FA = async () => {

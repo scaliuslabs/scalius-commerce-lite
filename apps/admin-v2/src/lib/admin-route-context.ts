@@ -12,6 +12,21 @@ export function clearAdminRouteContextCache() {
   cachedAdminRouteContext = null;
 }
 
+interface AdminRouteInvalidator {
+  invalidate: () => Promise<unknown> | unknown;
+}
+
+export async function refreshAdminRouteContext(
+  router: AdminRouteInvalidator,
+) {
+  clearAdminRouteContextCache();
+  try {
+    await router.invalidate();
+  } catch (error) {
+    console.warn("Failed to refresh admin route context", error);
+  }
+}
+
 export function primeAdminRouteContextCache(context: AdminRouteContext) {
   if (typeof window === "undefined") return;
   cachedAdminRouteContext = {
