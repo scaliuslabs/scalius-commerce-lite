@@ -82,6 +82,14 @@ describe("admin route graph boundaries", () => {
     expect(source).toMatch(/suppressHydrationWarning[^]*formatDate\(script\.createdAt\)/);
   });
 
+  it("keeps admin navigation from doing focus refetch stampedes", () => {
+    const source = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
+
+    expect(source).toContain("refetchOnWindowFocus: false");
+    expect(source).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
+    expect(source).toContain("scrollRestorationBehavior: \"instant\"");
+  });
+
   it("keeps deferred rich-text previews rendered without eager editor imports", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),

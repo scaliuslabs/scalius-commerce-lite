@@ -32,6 +32,10 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **List Pages**: URL-search-driven list routes declare `loaderDeps`, map validated deps with `mapParams()`, and prefetch the same query keys rendered by components. Component-level loading overlays should stay scoped to the table area.
 
+**Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus. Only truly realtime screens opt in to `refetchOnWindowFocus`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns.
+
+**Scroll Restoration**: The admin shell uses TanStack Router's scroll restoration for the nested `#admin-main-scroll` container with instant behavior. Do not add route-change `scrollTo()` effects in the layout; register additional scroll containers with router scroll restoration instead.
+
 ## staleTime Tiers
 
 | Tier | Duration | Used For |

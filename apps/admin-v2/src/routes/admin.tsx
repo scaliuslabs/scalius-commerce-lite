@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
@@ -38,16 +38,9 @@ function AdminLayout() {
   const authContext = Route.useRouteContext();
   const { user, permissions, isSuperAdmin } = authContext;
 
-  // Scroll content area to top on route change
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
     primeAdminRouteContextCache(authContext);
   }, [authContext]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo(0, 0);
-  }, [pathname]);
 
   return (
     <ThemeProvider>
@@ -57,7 +50,8 @@ function AdminLayout() {
           <SidebarInset className="h-svh overflow-hidden">
             <AdminHeader user={user} />
             <div
-              ref={scrollRef}
+              id="admin-main-scroll"
+              data-scroll-restoration-id="admin-main-scroll"
               className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
             >
               <div className="max-w-7xl mx-auto">
