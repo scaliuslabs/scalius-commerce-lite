@@ -48,38 +48,52 @@ let layoutData: LayoutData | null = null;
 let categoryWidgets: ApiWidget[] = [];
 let error: string | null = null;
 
+// Build product list options before fetching so category, products, filters,
+// and layout can all start in the first cold-cache wave.
+const productListOptions: ProductListOptions = {
+  page,
+  limit: 20,
+  sort: sortBy as ProductListOptions["sort"],
+};
+
+// Add filter parameters (excluding standard navigation params)
+const filterParams = ["page", "sortBy"];
+for (const [key, value] of params.entries()) {
+  if (!filterParams.includes(key) && value) {
+    productListOptions[key] = value;
+  }
+}
+
 try {
-  // Parallel fetch: layout + category data
-  const [fetchedLayoutData, fetchedCategory] = await Promise.all([
-    getLayoutData(),
-    getCategoryBySlug(slug),
+  const layoutPromise = getLayoutData();
+  const categoryPromise = getCategoryBySlug(slug);
+  const productsPromise = getProductsByCategory(slug, productListOptions);
+  const attributesPromise = getFilterableAttributes({ categorySlug: slug });
+  const widgetsPromise = categoryPromise.then((fetchedCategory) =>
+    fetchedCategory
+      ? getActiveWidgetsForScope("category", fetchedCategory.id)
+      : null,
+  );
+
+  // Parallel fetch: layout + category + products + filter metadata + scoped widgets
+  const [
+    fetchedLayoutData,
+    fetchedCategory,
+    fetchedProducts,
+    fetchedAttributes,
+    fetchedWidgets,
+  ] = await Promise.all([
+    layoutPromise,
+    categoryPromise,
+    productsPromise,
+    attributesPromise,
+    widgetsPromise,
   ]);
+
   layoutData = fetchedLayoutData;
   setRuntimeImageCdnPolicy(layoutData?.media);
   category = fetchedCategory;
   if (!category) return new Response(null, { status: 404 });
-
-  // Build product list options
-  const productListOptions: ProductListOptions = {
-    page,
-    limit: 20,
-    sort: sortBy as ProductListOptions["sort"],
-  };
-
-  // Add filter parameters (excluding standard navigation params)
-  const filterParams = ["page", "sortBy"];
-  for (const [key, value] of params.entries()) {
-    if (!filterParams.includes(key) && value) {
-      productListOptions[key] = value;
-    }
-  }
-
-  // Fetch products and attributes in parallel
-  const [fetchedProducts, fetchedAttributes, fetchedWidgets] = await Promise.all([
-    getProductsByCategory(slug, productListOptions),
-    getFilterableAttributes({ categorySlug: slug }),
-    getActiveWidgetsForScope("category", category.id),
-  ]);
 
   productsResponse = fetchedProducts;
   attributes = fetchedAttributes || [];
