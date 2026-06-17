@@ -362,6 +362,11 @@ These mappings are inferred from Worker names and `wrangler.jsonc` vars. Custom-
 - Storefront uses L1 in-memory + L2 Cache API caching keyed by KV version plus deterministic generated build ID, plus purge-cache warming.
 - Admin widget AI supports provider/model settings, AI context, streaming/staged generation, and a Durable Object agent.
 
+## Perfection Log
+
+- **2026-06-18 admin idle navigation + scroll restoration**: Commit `03396af2` disables global TanStack Query window-focus refetches, opts volatile cache stats queries back into focus refetch, registers `#admin-main-scroll` with TanStack Router scroll restoration, and removes the layout-level manual route-change `scrollTo()` race. Verified with `./node_modules/.bin/vitest run apps/admin-v2/src/lib/route-graph-boundaries.test.ts` and `./node_modules/.bin/tsc --noEmit -p apps/admin-v2/tsconfig.json`. Production admin redeploy/live smoke is still required before closing the dashboard idle-navigation complaint.
+- **2026-06-18 storefront category cold-cache loading**: Commit `55a7dd3e` starts category layout, category metadata, product list, filter attributes, and widget reads in the first promise wave for `apps/storefront/src/pages/categories/[slug].astro`, removing the avoidable category-page waterfall. Verified with `./node_modules/.bin/vitest run apps/storefront/src/lib/page-data-boundaries.test.ts`, storefront build ID generation, `apps/storefront/node_modules/.bin/astro check`, `apps/storefront/node_modules/.bin/astro build`, and `scripts/clean-dist-env-files.mjs apps/storefront --check`. Deployed `scalius-storefront` version `1a36bb95-4a45-48b1-b8e4-23c181bdcbfd`; live `/categories/laptop` smoke showed first GET `x-cache-status: MISS; v=1780000082; build=src-4d7f97f6b8864dfd` at about `1.56s` TTFB, then Cloudflare HIT at about `0.06s` TTFB with product/category content intact.
+
 ## Known Backlog / Limitations
 
 - **Active audit backlog**: Check `audit/REMEDIATION_TRACKER.md` before choosing the next remediation slice. The prior live storefront missing-CDN-object reference was fixed through the admin product update path and verified against API data, D1 rows, CDN response, and storefront HTML.
