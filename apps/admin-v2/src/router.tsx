@@ -106,7 +106,7 @@ export function getRouter() {
       queries: {
         staleTime: 1000 * 10, // 10s — data is fresh for 10 seconds
         gcTime: 1000 * 60 * 30, // 30min — keep warm admin data after unmount
-        refetchOnWindowFocus: true, // refetch when user returns to tab
+        refetchOnWindowFocus: false, // Avoid tab-focus refetch stampedes; opt in per realtime query
       },
     },
   });
@@ -115,6 +115,8 @@ export function getRouter() {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    scrollToTopSelectors: ["#admin-main-scroll"],
+    scrollRestorationBehavior: "instant",
     defaultPreload: "intent",
     defaultPendingMs: 200,
     defaultPendingMinMs: 300,

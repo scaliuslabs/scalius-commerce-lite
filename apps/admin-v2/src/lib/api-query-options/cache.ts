@@ -13,6 +13,7 @@ export const cacheStatsQueryOptions = () =>
     queryKey: queryKeys.cache.stats(),
     queryFn: () => getCacheStats(),
     staleTime: REALTIME_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
   });
 
 export const cacheLastClearedQueryOptions = () =>
@@ -20,6 +21,7 @@ export const cacheLastClearedQueryOptions = () =>
     queryKey: queryKeys.cache.lastCleared(),
     queryFn: () => getCacheLastCleared(),
     staleTime: REALTIME_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
   });
 
 export const cacheGroupsQueryOptions = () =>
@@ -27,4 +29,5 @@ export const cacheGroupsQueryOptions = () =>
     queryKey: queryKeys.cache.groups(),
     queryFn: () => getCacheGroups(),
     staleTime: REALTIME_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
   });
