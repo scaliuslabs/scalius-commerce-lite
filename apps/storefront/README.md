@@ -131,6 +131,10 @@ When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN
 | `CACHE_TTL.MEDIUM` | 3600 (1h) | Semi-dynamic (product listings) |
 | `CACHE_TTL.SHORT` | 300 (5m) | Dynamic (CSP settings, checkout config) |
 
+## Page Data Loading
+
+Category pages build product-list options before the first await, then start layout, category, product-list, filter-metadata, and category-widget reads in one promise wave. Category widgets chain from the category promise because they need the category id, but product and filter reads must not wait for the standalone category lookup. Keep this shape until a consolidated category render-data endpoint replaces the separate calls.
+
 ## API Client (`src/lib/api/`)
 
 ### Architecture
