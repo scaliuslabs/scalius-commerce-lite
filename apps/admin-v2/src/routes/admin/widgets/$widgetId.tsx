@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { WidgetForm } from "~/components/admin/widgets/WidgetForm";
-import { widgetQueryOptions } from "~/lib/api.queries";
+import { widgetQueryOptions } from "~/lib/api-query-options/widgets";
 import type { Widget } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 

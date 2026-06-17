@@ -4,7 +4,7 @@ import { z } from "zod";
 import { LayoutDashboard, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import { widgetsQueryOptions } from "~/lib/api.queries";
+import { widgetsQueryOptions } from "~/lib/api-query-options/widgets";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteWidget,

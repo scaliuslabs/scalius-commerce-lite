@@ -4,9 +4,13 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   collectionsByIdsQueryOptions,
+} from "~/lib/api-query-options/collections";
+import {
   discountQueryOptions,
+} from "~/lib/api-query-options/discounts";
+import {
   productsByIdsQueryOptions,
-} from "~/lib/api.queries";
+} from "~/lib/api-query-options/products";
 import type { Discount } from "~/types/api-responses";
 import type { Product, Collection } from "~/components/admin/discount/amount-off-products/types";
 import { RouteErrorComponent } from "~/lib/route-error";

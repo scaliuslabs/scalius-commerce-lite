@@ -27,7 +27,21 @@ const queryOptionMocks = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("../../../lib/api.queries", () => queryOptionMocks);
+vi.mock("../../../lib/api-query-options/orders", () => ({
+  orderCodQueryOptions: queryOptionMocks.orderCodQueryOptions,
+  orderPaymentsQueryOptions: queryOptionMocks.orderPaymentsQueryOptions,
+  orderQueryOptions: queryOptionMocks.orderQueryOptions,
+  orderShipmentsQueryOptions: queryOptionMocks.orderShipmentsQueryOptions,
+}));
+
+vi.mock("../../../lib/api-query-options/delivery", () => ({
+  deliveryProvidersQueryOptions:
+    queryOptionMocks.deliveryProvidersQueryOptions,
+}));
+
+vi.mock("../../../lib/api-query-options/settings", () => ({
+  currencySettingsQueryOptions: queryOptionMocks.currencySettingsQueryOptions,
+}));
 
 import { prefetchOrderDetailQueries } from "../../../lib/order-detail-prefetch";
 

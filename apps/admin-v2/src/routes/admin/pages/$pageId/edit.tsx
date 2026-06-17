@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { PageForm } from "~/components/admin/PageForm";
-import { pageQueryOptions } from "~/lib/api.queries";
+import { pageQueryOptions } from "~/lib/api-query-options/pages";
 import type { PageDto } from "~/lib/api-functions/pages";
 import type { PageFormValues } from "~/lib/form-schemas";
 import { RouteErrorComponent } from "~/lib/route-error";

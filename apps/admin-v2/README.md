@@ -9,7 +9,7 @@ Modern admin dashboard built with **TanStack Start** (full-stack React framework
 - **UI**: React 19 + shadcn/ui + Tailwind CSS v4 + Radix primitives
 - **Tables**: TanStack Table with server-side pagination
 - **Forms**: React Hook Form + Zod validation
-- **Rich Text**: Tiptap editor (images, tables, YouTube, resizable images)
+- **Rich Text**: Sanitized read-only previews with deferred Tiptap editor loading (images, tables, YouTube, resizable images)
 - **DnD**: dnd-kit (sortable lists, collection reorder)
 - **Charts**: Recharts (dashboard analytics)
 - **Auth**: Better Auth (email/password + optional 2FA)
@@ -68,12 +68,13 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
 | `src/routes/admin.tsx` | Admin layout (sidebar, SSR auth guard, RBAC context) |
 | `src/lib/api-functions/` | Typed domain server-function slices |
-| `src/lib/api.queries.ts` | Route-facing queryOptions with staleTime tiers |
+| `src/lib/api-query-options/` | Narrow domain queryOptions with staleTime tiers |
 | `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
 | `src/lib/api.mutations.ts` | Compatibility re-export barrel for mutation hooks |
 | `src/lib/api.server.ts` | HTTP transport layer (service binding / fetch) |
 | `src/lib/query-keys.ts` | Centralized query key factory |
-| `src/lib/list-helpers.tsx` | Shared search schema, data selector, error component |
+| `src/lib/list-helpers.tsx` | Shared list search schemas and data selectors |
+| `src/lib/route-error.tsx` | Shared route-level error boundary component |
 
 ## Shared Hooks & Components
 

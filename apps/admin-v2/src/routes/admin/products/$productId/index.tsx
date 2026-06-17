@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductView } from "~/components/admin/ProductView";
-import { productQueryOptions } from "~/lib/api.queries";
+import { productQueryOptions } from "~/lib/api-query-options/products";
 import type { ProductDetail } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 

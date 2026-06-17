@@ -200,7 +200,7 @@ Tracker IDs: `ADMIN-001`, `ADMIN-003`, `ADMIN-004`.
 Scope:
 
 - `apps/admin-v2/src/lib/api-functions/**`
-- `apps/admin-v2/src/lib/api.queries.ts`
+- `apps/admin-v2/src/lib/api-query-options/`
 - `apps/admin-v2/src/lib/api-mutations/**`
 - `apps/admin-v2/src/lib/api.mutations.ts` compatibility exports only
 - one selected admin domain route/component set

@@ -1,13 +1,27 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { PencilLine } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "../button";
+import { RichContent } from "../rich-content";
 
 const TiptapEditor = lazy(() =>
   import("./TiptapEditor").then((module) => ({
     default: module.TiptapEditor,
   })),
 );
+
+const RICH_CONTENT_BLOCK_RE = /<(img|video|iframe|table|hr)\b/i;
+
+function hasRenderableContent(content: string) {
+  const text = content
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .trim();
+
+  return text.length > 0 || RICH_CONTENT_BLOCK_RE.test(content);
+}
 
 interface DeferredTiptapEditorProps {
   content: string;
@@ -16,49 +30,6 @@ interface DeferredTiptapEditorProps {
   className?: string;
   compact?: boolean;
   editLabel?: string;
-}
-
-const entityMap: Record<string, string> = {
-  amp: "&",
-  apos: "'",
-  gt: ">",
-  lt: "<",
-  nbsp: " ",
-  quot: '"',
-};
-
-function safeCodePoint(value: number, fallback: string): string {
-  if (!Number.isInteger(value) || value < 0 || value > 0x10ffff) {
-    return fallback;
-  }
-
-  return String.fromCodePoint(value);
-}
-
-function decodeHtmlEntities(value: string): string {
-  return value
-    .replace(/&#(\d+);/g, (match, code: string) =>
-      safeCodePoint(Number(code), match),
-    )
-    .replace(/&#x([\da-f]+);/gi, (match, code: string) =>
-      safeCodePoint(Number.parseInt(code, 16), match),
-    )
-    .replace(/&([a-z]+);/gi, (match, entity: string) => {
-      return entityMap[entity.toLowerCase()] ?? match;
-    });
-}
-
-function toPlainTextPreview(content: string): string {
-  return decodeHtmlEntities(
-    content
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<\/(p|div|li|h[1-6]|blockquote|tr)>/gi, " ")
-      .replace(/<br\s*\/?>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim(),
-  );
 }
 
 function EditorLoadingShell({
@@ -90,7 +61,7 @@ export function DeferredTiptapEditor({
   editLabel = "Edit",
 }: DeferredTiptapEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const preview = useMemo(() => toPlainTextPreview(content), [content]);
+  const hasContent = hasRenderableContent(content);
 
   if (isEditing) {
     return (
@@ -120,11 +91,15 @@ export function DeferredTiptapEditor({
       >
         <div
           className={cn(
-            "max-h-32 overflow-hidden whitespace-pre-wrap leading-6",
-            preview ? "text-foreground" : "text-muted-foreground",
+            "max-h-64 overflow-y-auto rounded-sm pr-2 leading-6",
+            hasContent ? "text-foreground" : "text-muted-foreground",
           )}
         >
-          {preview || placeholder}
+          {hasContent ? (
+            <RichContent content={content} variant="compact" />
+          ) : (
+            placeholder
+          )}
         </div>
       </div>
       <div className="flex justify-end border-t bg-muted/20 px-3 py-2">

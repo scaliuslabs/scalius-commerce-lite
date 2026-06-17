@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CategoryForm } from "~/components/admin/CategoryForm";
-import { categoryQueryOptions } from "~/lib/api.queries";
+import { categoryQueryOptions } from "~/lib/api-query-options/categories";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({

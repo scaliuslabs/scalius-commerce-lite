@@ -7,8 +7,8 @@ import type { Order } from "~/components/admin/orderview/types";
 import {
   orderQueryOptions,
   orderShipmentsQueryOptions,
-  deliveryProvidersQueryOptions,
-} from "~/lib/api.queries";
+} from "~/lib/api-query-options/orders";
+import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
 import {
   ORDER_DETAIL_PREFETCH_STALE_MS,
   prefetchOrderDetailQueries,

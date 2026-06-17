@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { checkoutLanguagesQueryOptions } from "~/lib/api.queries";
+import { checkoutLanguagesQueryOptions } from "~/lib/api-query-options/checkout-languages";
 import {
   useCreateCheckoutLanguage,
   useUpdateCheckoutLanguage,

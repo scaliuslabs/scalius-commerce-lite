@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { OrderForm } from "~/components/admin/OrderForm";
 import {
-  productsQueryOptions,
   productQueryOptions,
-} from "~/lib/api.queries";
+  productsQueryOptions,
+} from "~/lib/api-query-options/products";
 import type { ProductVariant } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 

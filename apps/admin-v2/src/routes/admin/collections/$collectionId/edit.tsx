@@ -4,8 +4,8 @@ import { CollectionForm } from "~/components/admin/collection-form";
 import {
   collectionCategoryOptionsQueryOptions,
   collectionQueryOptions,
-  productsByIdsQueryOptions,
-} from "~/lib/api.queries";
+} from "~/lib/api-query-options/collections";
+import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import type { Category, Product } from "~/components/admin/collection-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { CollectionDto } from "~/lib/api-functions/collections";
