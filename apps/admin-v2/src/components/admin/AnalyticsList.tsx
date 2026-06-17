@@ -173,7 +173,9 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
                       {script.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
-                  <TableCell>{formatDate(script.createdAt)}</TableCell>
+                  <TableCell>
+                    <span suppressHydrationWarning>{formatDate(script.createdAt)}</span>
+                  </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
                       <Button

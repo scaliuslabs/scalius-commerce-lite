@@ -42,7 +42,10 @@ import {
 } from "lucide-react";
 import type { Order } from "./types";
 import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orderPaymentsQueryOptions, orderCodQueryOptions } from "@/lib/api.queries";
+import {
+  orderCodQueryOptions,
+  orderPaymentsQueryOptions,
+} from "@/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { queryKeys } from "@/lib/query-keys";
 import { useUpdateOrderCod, useRefundOrder } from "@/lib/api-mutations/orders";

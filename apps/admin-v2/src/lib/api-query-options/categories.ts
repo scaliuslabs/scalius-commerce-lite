@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getCategories,
+  getCategory,
   getCategoryFormOptions,
   type CategoriesQueryInput,
 } from "../api-functions/categories";
@@ -14,6 +15,13 @@ export const categoriesQueryOptions = (params: CategoriesQueryInput) =>
     queryKey: queryKeys.categories.list(params),
     queryFn: () => getCategories({ data: params }),
     staleTime: MODERATE_STALE_TIME_MS,
+  });
+
+export const categoryQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: queryKeys.categories.detail(id),
+    queryFn: () => getCategory({ data: { id } }),
+    staleTime: 0,
   });
 
 export const categoryFormOptionsQueryOptions = () =>

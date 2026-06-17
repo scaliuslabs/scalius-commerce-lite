@@ -1,7 +1,7 @@
 /**
  * Centralized query key factory for all TanStack Query keys.
  *
- * Every query key used in api.queries.ts and api.mutations.ts is defined here.
+ * Every query key used in api-query-options and api-mutations is defined here.
  * This ensures consistency between query definitions and cache invalidation.
  *
  * Convention:

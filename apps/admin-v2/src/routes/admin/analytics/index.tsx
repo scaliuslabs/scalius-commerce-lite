@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { AnalyticsList } from "~/components/admin/AnalyticsList";
-import { analyticsScriptsQueryOptions } from "~/lib/api.queries";
+import { analyticsScriptsQueryOptions } from "~/lib/api-query-options/analytics";
 import type { AnalyticsScript } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 

@@ -15,12 +15,10 @@ function listSourceFiles(dir: string): string[] {
     .filter((path) => /\.(?:ts|tsx)$/.test(path));
 }
 
-function readProjectFile(path: string) {
-  return readFileSync(join(ADMIN_SRC_ROOT, path), "utf8");
-}
-
 function hasBroadQueryBarrelImport(source: string) {
-  return /from\s+["'][@~]\/lib\/api\.queries["']/.test(source);
+  return /from\s+["'](?:[@~]\/lib\/api\.queries|(?:\.\.?\/)+(?:lib\/)?api\.queries)["']/.test(
+    source,
+  );
 }
 
 describe("admin route graph boundaries", () => {
@@ -41,41 +39,14 @@ describe("admin route graph boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps hot dashboard, settings, and list surfaces off the broad query barrel", () => {
-    const protectedFiles = [
-      "routes/admin/index.tsx",
-      "routes/admin/abandoned-checkouts.tsx",
-      "routes/admin/attributes.tsx",
-      "routes/admin/categories/index.tsx",
-      "routes/admin/collections/index.tsx",
-      "routes/admin/customers/index.tsx",
-      "routes/admin/discounts/index.tsx",
-      "routes/admin/inventory.tsx",
-      "routes/admin/orders/index.tsx",
-      "routes/admin/pages/index.tsx",
-      "routes/admin/products/index.tsx",
-      "routes/admin/products/new.tsx",
-      "routes/admin/settings/index.tsx",
-      "routes/admin/settings/account.tsx",
-      "routes/admin/settings/cache.tsx",
-      "routes/admin/settings/checkout.tsx",
-      "routes/admin/settings/delivery-providers.tsx",
-      "routes/admin/settings/fraud-checker.tsx",
-      "routes/admin/settings/hero-sliders.tsx",
-      "routes/admin/settings/meta-conversion.tsx",
-      "routes/admin/settings/notifications.tsx",
-      "routes/admin/settings/theme.tsx",
-      "components/admin/AbandonedCheckoutsManager.tsx",
-      "components/admin/CacheManager.tsx",
-      "components/admin/InventoryManager.tsx",
-      "components/admin/delivery-locations/hooks/useDeliveryLocations.ts",
-      "components/admin/order-list/BulkShipDialog.tsx",
-      "components/admin/shipping-methods/hooks/useShippingMethods.ts",
-    ];
-
-    const offenders = protectedFiles.filter((path) =>
-      hasBroadQueryBarrelImport(readProjectFile(path)),
-    );
+  it("keeps runtime admin source off the broad query barrel", () => {
+    const offenders = listSourceFiles(ADMIN_SRC_ROOT)
+      .map((path) => ({
+        path: relative(ADMIN_SRC_ROOT, path),
+        source: readFileSync(path, "utf8"),
+      }))
+      .filter(({ source }) => hasBroadQueryBarrelImport(source))
+      .map(({ path }) => path);
 
     expect(offenders).toEqual([]);
   });
@@ -90,5 +61,37 @@ describe("admin route graph boundaries", () => {
       .map(({ path }) => path);
 
     expect(offenders).toEqual([]);
+  });
+
+  it("keeps customer form writes invalidating dashboard aggregates", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "CustomerForm.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("queryKeys.customers.list()");
+    expect(source).toContain("queryKeys.dashboard.all");
+  });
+
+  it("keeps analytics list dates hydration-safe", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "AnalyticsList.tsx"),
+      "utf8",
+    );
+
+    expect(source).toMatch(/suppressHydrationWarning[^]*formatDate\(script\.createdAt\)/);
+  });
+
+  it("keeps deferred rich-text previews rendered without eager editor imports", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("import { RichContent } from \"../rich-content\"");
+    expect(source).toContain("<RichContent content={content} variant=\"compact\" />");
+    expect(source).toContain("const TiptapEditor = lazy(");
+    expect(source).not.toContain("from \"./TiptapEditor\"");
+    expect(source).not.toContain("toPlainTextPreview");
   });
 });

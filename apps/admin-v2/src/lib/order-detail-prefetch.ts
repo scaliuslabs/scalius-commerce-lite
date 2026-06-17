@@ -1,12 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   currencySettingsQueryOptions,
-  deliveryProvidersQueryOptions,
+} from "./api-query-options/settings";
+import { deliveryProvidersQueryOptions } from "./api-query-options/delivery";
+import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
   orderQueryOptions,
   orderShipmentsQueryOptions,
-} from "./api.queries";
+} from "./api-query-options/orders";
 
 type OrderDetailQueryClient = Pick<QueryClient, "ensureQueryData" | "prefetchQuery">;
 

@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { LayoutDashboard, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { widgetsQueryOptions } from "~/lib/api.queries";
+import { widgetsQueryOptions } from "~/lib/api-query-options/widgets";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteWidget,

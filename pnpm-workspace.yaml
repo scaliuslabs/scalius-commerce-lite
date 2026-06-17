@@ -43,6 +43,7 @@ overrides:
   "@grpc/grpc-js": "1.14.4"
   ws: "8.21.0"
   qs: "6.15.2"
+  js-yaml: "4.2.0"
 
 allowBuilds:
   '@firebase/util': true

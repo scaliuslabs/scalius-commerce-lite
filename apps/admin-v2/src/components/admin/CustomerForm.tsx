@@ -171,6 +171,7 @@ export function CustomerForm({
     },
     invalidateKeys: [
       queryKeys.customers.list(),
+      queryKeys.dashboard.all,
       ...(isEdit && defaultValues?.id ? [queryKeys.customers.detail(defaultValues.id)] : []),
     ],
     navigateTo: "/admin/customers",

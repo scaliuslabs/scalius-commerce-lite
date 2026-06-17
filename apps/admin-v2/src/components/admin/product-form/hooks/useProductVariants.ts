@@ -2,7 +2,7 @@
 import { useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { extractUniqueColors } from "../utils";
-import { productVariantsQueryOptions } from "@/lib/api.queries";
+import { productVariantsQueryOptions } from "@/lib/api-query-options/products";
 import { queryKeys } from "@/lib/query-keys";
 import type { ProductVariantDto } from "@/lib/api-functions/products";
 

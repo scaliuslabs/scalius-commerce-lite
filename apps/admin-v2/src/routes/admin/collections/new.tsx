@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CollectionForm } from "~/components/admin/collection-form";
-import { collectionCategoryOptionsQueryOptions } from "~/lib/api.queries";
+import { collectionCategoryOptionsQueryOptions } from "~/lib/api-query-options/collections";
 import type { Category } from "~/components/admin/collection-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 

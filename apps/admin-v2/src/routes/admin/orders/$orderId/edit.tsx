@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { OrderForm } from "~/components/admin/OrderForm";
-import { orderFormDataQueryOptions } from "~/lib/api.queries";
+import { orderFormDataQueryOptions } from "~/lib/api-query-options/orders";
 import type { ProductVariant } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 
