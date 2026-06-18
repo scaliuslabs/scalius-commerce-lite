@@ -185,7 +185,14 @@ describe("admin widget cache invalidation", () => {
       ]),
     );
     expect(purgeEnv).toBe(env);
-    expect(options).toEqual({ groups: ["widgets"], bumpVersion: false });
+    expect(options).toEqual({
+      groups: ["widgets"],
+      bumpVersion: false,
+      htmlPaths: expect.arrayContaining([
+        "/categories/shirts",
+        "/products/black-shirt",
+      ]),
+    });
     expect(executionCtx).toBeUndefined();
   });
 
@@ -281,7 +288,58 @@ describe("admin widget cache invalidation", () => {
         "page_render_about-us_",
       ]),
     );
-    expect(options).toEqual({ groups: ["widgets"], bumpVersion: false });
+    expect(options).toEqual({
+      groups: ["widgets"],
+      bumpVersion: false,
+      htmlPaths: ["/about-us"],
+    });
+  });
+
+  it("purges exact collection HTML caches for collection-scoped placements", async () => {
+    const { app, env } = createTestApp();
+    mocks.createWidget.mockResolvedValue({ id: "wid_collection" });
+    mocks.getWidgetCacheSubjects.mockResolvedValueOnce([
+      subject("wid_collection", [
+        { scope: "collection", scopeId: "col_1" },
+      ]),
+    ]);
+
+    const response = await app.request(
+      "/api/v1/admin/widgets",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Collection Widget",
+          htmlContent: "<section>Collection copy</section>",
+          isActive: true,
+          placements: [
+            {
+              scope: "collection",
+              scopeId: "col_1",
+              slot: "top",
+              isActive: true,
+            },
+          ],
+        }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(201);
+
+    const [prefixes, , options] = mocks.triggerStorefrontPurgeForPrefixes.mock.calls[0]!;
+    expect(prefixes).toEqual(
+      expect.arrayContaining([
+        "widget_wid_collection",
+        "widgets_scope_collection_col_1",
+      ]),
+    );
+    expect(options).toEqual({
+      groups: ["widgets"],
+      bumpVersion: false,
+      htmlPaths: ["/collections/col_1"],
+    });
   });
 
   it("does not purge storefront caches for inactive-only widget creates", async () => {

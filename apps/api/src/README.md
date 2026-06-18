@@ -25,7 +25,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/auth` | `routes/auth.ts` | Service JWT, Firebase config, token stats, and token revocation endpoints; Better Auth is hosted by the admin worker |
 | `/attributes` | `routes/attributes.ts` | Filterable product attributes, including cached search facet filters |
 | `/collections` | `routes/collections.ts` | Homepage collections |
-| `/hero` | `routes/hero.ts` | Hero section data |
+| `/hero` | `routes/hero.ts` | Hero section data; slider lists cache only explicit `type=desktop/mobile` variants |
 | `/search` | `routes/search.ts` | FTS5 product search |
 | `/header` | `routes/header.ts` | Header config |
 | `/navigation` | `routes/navigation.ts` | Navigation menus |
@@ -267,6 +267,12 @@ The helper deletes exact API product detail keys, query-varied product detail ke
 
 Search facet caching uses `api:attributes:search-filters` and must stay in both the `search` and `attributes` invalidation groups: product/search changes alter matching category neighborhoods, while attribute writes alter available filter values.
 
+### Hero and Widget Cache Rules
+
+`/api/v1/hero/sliders` is user-agent derived when no `type` query is supplied, so the list route must keep `varyByQuery: true` and cache only explicit `type=desktop` or `type=mobile` requests. Do not cache the untyped auto-detected list response.
+
+Admin widget writes first invalidate API widget/pattern keys, then schedule storefront purges. Product, category, page, and collection scoped placements must include exact rendered `htmlPaths` in the purge payload so those pages move without a global storefront version bump. Homepage/global widget changes are the expected global-version/warm-homepage lane.
+
 ## Queue Consumer
 
 `src/queue-consumer.ts` dispatches messages by type. Two queue strategies:
@@ -353,6 +359,8 @@ app.use("/*", cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:things
 ```
 
 On cache miss, handlers should return as soon as the response is ready; `cacheMiddleware` schedules the KV write through `executionCtx.waitUntil()` in Workers and only awaits it in local/test contexts with no execution context.
+
+If a public endpoint varies by query or request headers, use `varyByQuery` and/or `cacheCondition` deliberately. User-agent-derived responses should usually bypass shared KV cache unless their cache key includes the derived variant.
 
 4. **Delegate to core** -- route handlers should be thin: validate input, call a `@scalius/core` service function, return via `ok()`/`created()`/`noContent()`. Business logic belongs in `packages/core/src/modules/`.
 

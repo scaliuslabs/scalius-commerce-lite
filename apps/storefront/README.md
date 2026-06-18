@@ -29,6 +29,7 @@ src/
     checkout/        # Checkout page logic + gateway handlers
     edge-cache.ts    # L2 edge caching (Cache API + KV versioning/generations + ALS)
     cache-generations.ts # Per-key product cache generation helpers
+    cache-namespace.ts # Canonical KV namespace resolver for version/generation keys
     smart-cache.ts   # In-memory LRU cache (L1)
     middleware-helper/ # CSP handler
     tracking/        # Analytics tracking
@@ -84,6 +85,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 - Strips product variant selection params (size, color) on product pages
 - Appends `cache_v={kvVersion}-{BUILD_ID}` to ensure deployments never serve stale HTML
 - Appends `cache_gen={generation}` on product pages. Exact product purges bump this per-product KV generation, so product HTML moves globally without bumping the whole storefront version.
+- KV version and generation lookups use a canonical namespace: `CACHE_NAMESPACE`, then `STOREFRONT_URL` hostname, then the request hostname. Cache API key URLs still use the actual request hostname/origin so preview, staging, and localhost caches stay isolated.
 
 **Cache flow**:
 1. Check Cloudflare Cache API for cached HTML (with 500ms timeout)
@@ -107,6 +109,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 
 - Uses AsyncLocalStorage for per-request cache context (prevents cross-request state contamination)
 - Cache keys include KV version and BUILD_ID: `https://{hostname}/_api-cache/{key}?v={version}&build={BUILD_ID}`
+- The `{version}` and exact product generations come from the canonical cache namespace, not necessarily `{hostname}`. This prevents alternate production hostnames from reading stale KV version/generation lanes.
 - Exact product keys (`product_slug_*`, `product_variants_*`) also include `g={generation}` from `CACHE_CONTROL` KV. If that generation lookup fails, the exact key bypasses L1/L2 instead of risking a stale product response.
 - 500ms timeout on L2 cache operations to prevent hanging
 - In-flight request deduplication prevents duplicate API calls when multiple components request the same data simultaneously
@@ -122,7 +125,8 @@ Implements a two-layer edge caching strategy for HTML pages:
 
 When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN`:
 - HTML-affecting or broad prefix purges bump the KV version -- all cache keys change, effectively invalidating everything
-- Exact product purges write new per-key generations for `product_slug_*` / `product_variants_*`, delete current-version local Cache API entries as a best-effort cleanup, and warm touched product paths without bumping the global storefront version
+- Exact product purges read the old per-key generation, write a new generation for `product_slug_*` / `product_variants_*`, delete old-generation local Cache API entries as a best-effort cleanup, and warm touched product paths without bumping the global storefront version
+- Scoped widget purges should include exact rendered `htmlPaths` for product, category, page, and collection placements. Homepage/global widget changes are the lane that intentionally bumps the global version and warms the homepage.
 - L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
 - L2 entries with old version or product-generation keys are never matched
 
@@ -257,6 +261,13 @@ All data access goes through the API worker via the configured SDK clients, serv
 | `BACKEND_API` | Service | Service binding to API worker (0ms latency) |
 | `ASSETS` | Fetcher | Static asset serving |
 
+Runtime vars that affect cache identity:
+
+| Var | Purpose |
+|-----|---------|
+| `CACHE_NAMESPACE` | Optional canonical cache version/generation namespace override |
+| `STOREFRONT_URL` | Canonical storefront URL used for cache namespace fallback |
+
 ## Key Files
 
 | File | Purpose |
@@ -264,6 +275,7 @@ All data access goes through the API worker via the configured SDK clients, serv
 | `src/worker.ts` | Cloudflare Worker entry point |
 | `src/middleware.ts` | Cache + API context middleware |
 | `src/lib/edge-cache.ts` | L1+L2 caching with ALS, deduplication, KV versioning |
+| `src/lib/cache-namespace.ts` | Canonical KV namespace resolution for cache version/generation keys |
 | `src/lib/smart-cache.ts` | In-memory LRU cache (1000 entries max) |
 | `src/lib/api/context.ts` | AsyncLocalStorage for per-request Cloudflare bindings |
 | `src/lib/api/runtime-env.ts` | Runtime env accessors with fallback chains |

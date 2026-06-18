@@ -34,6 +34,7 @@ interface CacheContext {
   kvStore: KVNamespace | null;
   kvVersion: string | null;
   hostname: string;
+  cacheNamespace: string;
   waitUntil: ((promise: Promise<unknown>) => void) | null;
 }
 
@@ -66,6 +67,7 @@ const DEFAULT_CONTEXT: CacheContext = {
   kvStore: null,
   kvVersion: null,
   hostname: "localhost",
+  cacheNamespace: "localhost",
   waitUntil: null,
 };
 
@@ -91,11 +93,12 @@ export function setEdgeCacheContext(
   hostname: string,
   waitUntil: ((promise: Promise<unknown>) => void) | null,
   kvStore: KVNamespace | null = null,
+  cacheNamespace: string = hostname,
 ): void {
   // Store context so getEdgeCacheContext() works for callers that
   // don't go through cacheContextAls.run() yet.
   // The ALS path is preferred — this is a compatibility shim.
-  _fallbackContext = { cache, kvStore, kvVersion, hostname, waitUntil };
+  _fallbackContext = { cache, kvStore, kvVersion, hostname, cacheNamespace, waitUntil };
 }
 
 /** Fallback for callers not yet within ALS.run(). */
@@ -148,9 +151,9 @@ function buildScopedMemoryKey(
   generation: string | null,
 ): string {
   if (!ctx.kvVersion) {
-    return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v=disabled`;
+    return `${key}:host=${ctx.hostname}:ns=${ctx.cacheNamespace}:build=${BUILD_ID}:v=disabled`;
   }
-  return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v${ctx.kvVersion}:g${generation ?? "global"}`;
+  return `${key}:host=${ctx.hostname}:ns=${ctx.cacheNamespace}:build=${BUILD_ID}:v${ctx.kvVersion}:g${generation ?? "global"}`;
 }
 
 async function resolveLogicalCacheGeneration(
@@ -173,7 +176,7 @@ async function resolveLogicalCacheGeneration(
 
   const generation = await resolveExactCacheGeneration({
     store: ctx.kvStore,
-    hostname: ctx.hostname,
+    hostname: ctx.cacheNamespace,
     logicalKey: key,
     timeoutMs: GENERATION_LOOKUP_TIMEOUT_MS,
   });

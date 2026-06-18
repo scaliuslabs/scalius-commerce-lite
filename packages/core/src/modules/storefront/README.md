@@ -69,7 +69,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 ### Public Hero (`/api/v1/hero`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/sliders` | Get active hero sliders. Optional `?type=desktop\|mobile` filter. Auto-detects mobile via User-Agent. Sets `X-Device-Type` header | `api:hero:*` with 3600s TTL |
+| GET | `/sliders` | Get active hero sliders. Optional `?type=desktop\|mobile` filter. Auto-detects mobile via User-Agent. Sets `X-Device-Type` header | Explicit `type=desktop/mobile` requests use `api:hero:*` with 3600s TTL; untyped User-Agent-derived requests bypass shared cache |
 | GET | `/sliders/{id}` | Get hero slider by ID (active only) | `api:hero:*` with 3600s TTL |
 
 ### Public SEO (`/api/v1/seo`)
