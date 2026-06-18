@@ -22,7 +22,7 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - `ProductListItem` type includes `discountType`, `discountAmount`, and `discountPercentage` fields
 - `getProducts()` selects `discountType` and `discountAmount` alongside `discountPercentage` for the admin list
 - `getProductDetails()` fetches `productRichContent` (mapped to `additionalInfo`) and `productAttributeValues` (mapped to `attributes`)
-- Storefront product listing with attribute-based filtering (AND logic across attributes)
+- Storefront product listing with attribute-based filtering (AND logic across attributes), with page rows/count read in one DB wave and image/category enrichment read in one dependent wave
 - Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and up to 6 related products from same category
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
@@ -131,11 +131,9 @@ Storefront ([slug].astro)
 
 2. **Variant sort order updates are not batched**: `updateVariantSortOrder()` in `products.variants.ts` runs individual UPDATE queries per color and per size value rather than using `db.batch()`, which could be slow for many distinct values.
 
-3. **`searchStorefrontProducts` re-imports modules at call time**: `products.storefront.ts:458-459` uses dynamic `import()` for `ftsMatch` and drizzle-orm operators that are already available at module scope. This is unnecessary overhead.
+3. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
 
-4. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
-
-5. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
+4. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
 
 ## Dependencies
 

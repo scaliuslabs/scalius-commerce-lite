@@ -152,48 +152,7 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         query = query.innerJoin(subquery, eq(products.id, subquery.productId));
     }
 
-    const productsList = await query.orderBy(orderBy).limit(limit).offset(offset).all();
-    const productIds = productsList.map((p) => p.id);
-
-    let imageMap = new Map<string, { url: string; alt: string | null }>();
-    if (productIds.length > 0) {
-        const images = await db
-            .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
-            .from(productImages)
-            .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
-            .all();
-        imageMap = new Map(images.map((img: { productId: string; url: string; alt: string | null }) => [img.productId, { url: img.url, alt: img.alt }]));
-    }
-
-    let categoryMap = new Map<string, { id: string; name: string; slug: string }>();
-    const categoryIds = [...new Set(productsList.map((p) => p.categoryId).filter(Boolean))] as string[];
-    if (categoryIds.length > 0) {
-        const categoriesData: Array<{ id: string; name: string; slug: string }> = await db
-            .select({ id: categories.id, name: categories.name, slug: categories.slug })
-            .from(categories)
-            .where(inArray(categories.id, categoryIds))
-            .all();
-        categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
-    }
-
-    const productsWithImages = productsList.map(({ variantCount, ...product }: { variantCount: number; id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean; categoryId: string | null; createdAt: number; updatedAt: number }) => {
-        const imgData = imageMap.get(product.id);
-        return {
-            ...product,
-            hasVariants: variantCount > 0,
-            imageUrl: imgData?.url || null,
-            imageAlt: imgData?.alt || null,
-            category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
-            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
-            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
-            discountedPrice: calculateDiscountedPrice(
-                product.price, product.discountType,
-                product.discountPercentage, product.discountAmount,
-            ),
-        };
-    });
-
-    // Count query
+    // Count is independent from the current page rows, so start both reads together.
     let countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(products)
@@ -220,7 +179,50 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
     }
 
-    const totalCount = await countQuery.get();
+    const [productsList, totalCount] = await Promise.all([
+        query.orderBy(orderBy).limit(limit).offset(offset).all(),
+        countQuery.get(),
+    ]);
+    const productIds = productsList.map((p) => p.id);
+
+    let imageMap = new Map<string, { url: string; alt: string | null }>();
+    let categoryMap = new Map<string, { id: string; name: string; slug: string }>();
+    const categoryIds = [...new Set(productsList.map((p) => p.categoryId).filter(Boolean))] as string[];
+    const [images, categoriesData] = await Promise.all([
+        productIds.length > 0
+            ? db
+            .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
+            .from(productImages)
+            .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
+            .all() as Promise<Array<{ productId: string; url: string; alt: string | null }>>
+            : Promise.resolve([] as Array<{ productId: string; url: string; alt: string | null }>),
+        categoryIds.length > 0
+            ? db
+            .select({ id: categories.id, name: categories.name, slug: categories.slug })
+            .from(categories)
+            .where(inArray(categories.id, categoryIds))
+            .all() as Promise<Array<{ id: string; name: string; slug: string }>>
+            : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
+    ]);
+    imageMap = new Map(images.map((img) => [img.productId, { url: img.url, alt: img.alt }]));
+    categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
+
+    const productsWithImages = productsList.map(({ variantCount, ...product }: { variantCount: number; id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean; categoryId: string | null; createdAt: number; updatedAt: number }) => {
+        const imgData = imageMap.get(product.id);
+        return {
+            ...product,
+            hasVariants: variantCount > 0,
+            imageUrl: imgData?.url || null,
+            imageAlt: imgData?.alt || null,
+            category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
+            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
+            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
+            discountedPrice: calculateDiscountedPrice(
+                product.price, product.discountType,
+                product.discountPercentage, product.discountAmount,
+            ),
+        };
+    });
 
     return {
         products: productsWithImages,

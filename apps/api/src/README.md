@@ -157,7 +157,7 @@ Then, route-specific middleware:
 |---|---|---|
 | `adminAuthMiddleware` | `/admin/*`, `/cache/*` | Better Auth session cookie OR JWT Bearer token OR scanner session cookie. Then RBAC/2FA permission checks. |
 | `authMiddleware` | `/orders/*` | JWT Bearer token verification with auto-refresh. |
-| `cacheMiddleware` | Individual routes | KV-backed response caching with configurable TTL. |
+| `cacheMiddleware` | Individual routes | KV-backed response caching with configurable TTL; cache-miss writes use `executionCtx.waitUntil()` when Workers provides it. |
 
 ### Admin Auth Flow (`src/middleware/admin-auth.ts`)
 
@@ -349,6 +349,8 @@ import { CACHE_TTLS } from "../utils/cache-ttls";
 
 app.use("/*", cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:things:" }));
 ```
+
+On cache miss, handlers should return as soon as the response is ready; `cacheMiddleware` schedules the KV write through `executionCtx.waitUntil()` in Workers and only awaits it in local/test contexts with no execution context.
 
 4. **Delegate to core** -- route handlers should be thin: validate input, call a `@scalius/core` service function, return via `ok()`/`created()`/`noContent()`. Business logic belongs in `packages/core/src/modules/`.
 
