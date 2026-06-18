@@ -85,6 +85,27 @@ function createTestApp(options: { tokenOrderId?: string | null }) {
 }
 
 describe("order receipt route", () => {
+  it("does not expose raw order details by ID", async () => {
+    const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
+
+    const response = await app.request(
+      "/api/v1/orders/order_1",
+      {},
+      { CACHE: kv } as never,
+    );
+    const document = orderRoutes.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "Orders", version: "test" },
+    });
+
+    expect(response.status).toBe(404);
+    expect(db.select).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(document.paths).not.toHaveProperty("/{id}");
+    expect(document.paths).toHaveProperty("/receipt/{id}");
+    expect(document.paths).toHaveProperty("/status/{token}");
+  });
+
   it("does not expose a receipt by order ID alone", async () => {
     const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
 

@@ -45,7 +45,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/seo` | `routes/seo.ts` | SEO settings for meta tags |
 | `/products` | `routes/products.ts` | Product catalog |
 | `/categories` | `routes/categories.ts` | Category listings |
-| `/orders` | `routes/orders.ts` | Order creation (auth-protected via `authMiddleware`) |
+| `/orders` | `routes/orders.ts` | Order creation, checkout status polling, and tokenized receipts (auth-protected service calls; no raw public order-by-ID detail route) |
 | `/cache` | `routes/cache.ts` | Cache control (admin-protected via `adminAuthMiddleware`) |
 | `/__ptproxy` | `routes/partytown-proxy.ts` | Partytown analytics proxy |
 

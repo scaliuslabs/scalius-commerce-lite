@@ -12,10 +12,7 @@ import {
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 import { eq, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { getShipments, getActiveDeliveryProviders } from "@scalius/core/modules/delivery/delivery.service";
 import { createStorefrontOrder } from "@scalius/core/modules/orders";
-import { cacheMiddleware } from "../middleware/cache";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError, ValidationError, RateLimitError } from "../utils/api-error";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
@@ -32,112 +29,6 @@ const unixToDate = (timestamp: number | null): Date | null => {
   if (!timestamp) return null;
   return new Date(timestamp * 1000);
 };
-
-// ─── GET /:id ────────────────────────────────────────────────────────────────
-
-app.use(
-  "/:id",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.SHORT,
-    methods: ["GET"],
-    varyByQuery: false,
-    varyByAuth: true
-  }),
-);
-
-const getOrderRoute = createRoute({
-  method: "get",
-  path: "/{id}",
-  tags: ["Orders"],
-  summary: "Get order by ID",
-  request: {
-    params: z.object({
-      id: z.string(),
-    }),
-  },
-  responses: {
-    200: {
-      description: "Order details",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        order: z.object({ id: z.string(), status: z.string(), totalAmount: z.number() }).passthrough(),
-      })) } },
-    },
-    404: errorResponses[404],
-  }
-});
-
-app.openapi(getOrderRoute, async (c) => {
-  const db = c.get("db");
-  const id = c.req.valid("param").id;
-
-  const orderResult = await db
-    .select({
-      id: orders.id,
-      customerName: orders.customerName,
-      customerPhone: orders.customerPhone,
-      customerEmail: orders.customerEmail,
-      customerId: orders.customerId,
-      shippingAddress: orders.shippingAddress,
-      totalAmount: orders.totalAmount,
-      shippingCharge: orders.shippingCharge,
-      discountAmount: orders.discountAmount,
-      notes: orders.notes,
-      city: orders.city,
-      zone: orders.zone,
-      area: orders.area,
-      cityName: orders.cityName,
-      zoneName: orders.zoneName,
-      areaName: orders.areaName,
-      status: orders.status,
-      createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
-      updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
-    })
-    .from(orders)
-    .where(eq(orders.id, id));
-
-  if (!orderResult || orderResult.length === 0) {
-    throw new NotFoundError("Order not found");
-  }
-  const order = orderResult[0];
-  if (!order) throw new NotFoundError("Order not found");
-
-  const items = await db
-    .select({
-      id: orderItems.id,
-      productId: orderItems.productId,
-      variantId: orderItems.variantId,
-      quantity: orderItems.quantity,
-      price: orderItems.price,
-      productName: products.name,
-      productImage: sql<string>`(
-        SELECT ${productImages.url}
-        FROM ${productImages}
-        WHERE ${productImages.productId} = ${products.id}
-        AND ${productImages.isPrimary} = 1
-        LIMIT 1
-      )`.as("productImage"),
-      variantSize: productVariants.size,
-      variantColor: productVariants.color
-    })
-    .from(orderItems)
-    .leftJoin(products, eq(products.id, orderItems.productId))
-    .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-    .where(eq(orderItems.orderId, id));
-
-  const shipments = await getShipments(db, id);
-  const activeProviders = await getActiveDeliveryProviders(db);
-
-  const formattedOrder = {
-    ...order,
-    createdAt: unixToDate(order.createdAt)?.toISOString() || null,
-    updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
-    items,
-    shipments,
-    deliveryProviders: activeProviders
-  };
-
-  return ok(c, { order: formattedOrder });
-});
 
 // ─── GET /status/:token ──────────────────────────────────────────────────────
 
