@@ -198,6 +198,18 @@ describe("admin route graph boundaries", () => {
     }
   });
 
+  it("keeps abandoned checkouts route entry independent from its self-loading list", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "abandoned-checkouts.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("AbandonedCheckoutsManager");
+    expect(source).not.toContain("abandonedCheckoutsQueryOptions");
+    expect(source).not.toContain("ensureQueryData(");
+    expect(source).not.toContain("prefetchQuery(");
+  });
+
   it("keeps new-order creation from blocking on product detail fanout", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "new.tsx"),
