@@ -11,7 +11,8 @@ export function shouldBumpCacheVersionForSelectivePurge({
 }
 
 export function shouldWarmCriticalCachesForSelectivePurge({
+  prefixes = [],
   bumpVersion = false,
 }: SelectivePurgePolicyInput): boolean {
-  return bumpVersion;
+  return bumpVersion || prefixes.length > 0;
 }

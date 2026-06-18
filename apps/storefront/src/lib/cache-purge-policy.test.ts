@@ -12,11 +12,11 @@ describe("selective cache purge policy", () => {
     })).toBe(true);
   });
 
-  it("does not warm critical HTML caches for prefix-only purges", () => {
+  it("warms critical HTML caches for prefix-only purges because the global version moved", () => {
     expect(shouldWarmCriticalCachesForSelectivePurge({
       prefixes: ["global_shipping_methods"],
       bumpVersion: false,
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it("warms critical caches when the caller marks the purge as HTML-affecting", () => {
