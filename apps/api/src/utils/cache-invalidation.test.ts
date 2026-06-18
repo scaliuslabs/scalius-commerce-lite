@@ -29,6 +29,7 @@ describe("catalog cache groups", () => {
       "products",
       "search",
       "collections",
+      "attributes",
     ]);
     expect(getGroupsForPath("/api/v1/admin/categories/cat_123")).toEqual([
       "categories",
@@ -54,6 +55,7 @@ describe("catalog cache groups", () => {
         "product_slug_",
         "all_products_",
         "collection_by_id_",
+        "filterable_attrs_",
         "global_all_collections",
         "widgets_scope_",
       ]),
@@ -474,16 +476,26 @@ describe("triggerStorefrontPurgeForGroups", () => {
   it("schedules product catalog storefront purges with dependent collection caches", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
 
     vi.stubGlobal("fetch", fetchMock);
 
     await invalidateCatalogCaches("products", {
       env: {
+        CACHE: kv,
         PURGE_URL: "https://storefront.example.com/api/purge-cache",
         PURGE_TOKEN: "secret-token",
-      } as Env,
+      } as unknown as Env,
       executionCtx: { waitUntil } as unknown as ExecutionContext,
     });
+
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:filterable" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:category" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:category-slug" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:search-filters" });
 
     expect(waitUntil).toHaveBeenCalledTimes(1);
     const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
@@ -494,7 +506,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const body = JSON.parse(String(init?.body));
 
     expect(body).toMatchObject({
-      groups: ["products", "search", "collections"],
+      groups: ["products", "search", "collections", "attributes"],
       bumpVersion: true,
     });
     expect(body.prefixes).toEqual(
@@ -502,6 +514,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "product_slug_",
         "all_products_",
         "collection_by_id_",
+        "filterable_attrs_",
         "global_all_collections",
         "widgets_scope_",
       ]),
