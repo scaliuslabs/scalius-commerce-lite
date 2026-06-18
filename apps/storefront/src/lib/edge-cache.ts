@@ -121,6 +121,21 @@ export function getEdgeCacheContext(): CacheContext {
  */
 const inflight = new Map<string, Promise<unknown>>();
 
+function runInflightOnly<T>(
+  memoryKey: string,
+  fetcher: () => Promise<T | null>,
+): Promise<T | null> {
+  if (inflight.has(memoryKey)) {
+    return inflight.get(memoryKey) as Promise<T | null>;
+  }
+
+  const promise = fetcher().finally(() => {
+    inflight.delete(memoryKey);
+  });
+  inflight.set(memoryKey, promise);
+  return promise;
+}
+
 /**
  * Build the L2 cache key URL.
  * Uses the actual hostname to follow Cloudflare's recommendation.
@@ -274,7 +289,7 @@ export async function withEdgeCache<T>(
   const ctx = getCacheContext();
 
   if (!ctx.kvVersion) {
-    return fetcher();
+    return runInflightOnly(buildScopedMemoryKey(key, ctx, null), fetcher);
   }
 
   const generationState = await resolveLogicalCacheGeneration(key, ctx);
