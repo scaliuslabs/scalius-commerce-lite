@@ -1,4 +1,6 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -11,13 +13,48 @@ import { ProductSearch } from "./ProductSearch";
 import { ItemSelection } from "./ItemSelection";
 import { OrderItemsTable } from "./OrderItemsTable";
 import { updateOrderItems } from "@/store/orderStore";
+import { productVariantsQueryOptions } from "@/lib/api-query-options/products";
 import type { Product } from "./types";
 
 const productsPerPage = 10;
 const initialProductsToShow = 10;
+type ProductVariant = Product["variants"][number];
+type RawProductVariant = Omit<ProductVariant, "weight"> & {
+  weight: number | string | null;
+  deletedAt?: unknown;
+};
+
+interface ProductVariantsResult {
+  variants?: RawProductVariant[];
+}
+
+function normalizeVariant(variant: RawProductVariant): ProductVariant {
+  return {
+    id: variant.id,
+    size: variant.size,
+    color: variant.color,
+    weight:
+      typeof variant.weight === "string"
+        ? parseFloat(variant.weight) || null
+        : (variant.weight ?? null),
+    sku: variant.sku || "",
+    price: variant.price ?? 0,
+    stock: variant.stock ?? 0,
+    discountType: variant.discountType ?? null,
+    discountPercentage: variant.discountPercentage ?? null,
+    discountAmount: variant.discountAmount ?? null,
+  };
+}
+
+function normalizeVariants(result: unknown): ProductVariant[] {
+  const variants = (result as ProductVariantsResult | null)?.variants;
+  if (!Array.isArray(variants)) return [];
+  return variants.filter((variant) => !variant.deletedAt).map(normalizeVariant);
+}
 
 export function OrderItemsSection() {
   const { form, products: allProducts, refs } = useOrderForm();
+  const queryClient = useQueryClient();
 
   // State for product searching and selection
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -29,7 +66,9 @@ export function OrderItemsSection() {
   // State for the currently selected item before it's added to the list
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
   const [selectedVariant, setSelectedVariant] = React.useState<string>("");
+  const [isLoadingVariants, setIsLoadingVariants] = React.useState(false);
   const [quantity, setQuantity] = React.useState<number>(1);
+  const variantLoadTokenRef = React.useRef(0);
 
   React.useEffect(() => {
     if (allProducts.length > 0) {
@@ -69,14 +108,10 @@ export function OrderItemsSection() {
     setHasMore(endIndex < filteredProducts.length);
   };
 
-  const selectProduct = (product: Product) => {
-    setSelectedProduct(product);
-    setSelectedVariant("");
-    setQuantity(1);
-
+  const focusItemInputs = (hasVariants: boolean) => {
     setTimeout(() => {
       const variantSelect = document.getElementById("variant-select-trigger");
-      if (variantSelect && product.variants.length > 0) {
+      if (variantSelect && hasVariants) {
         variantSelect.focus();
       } else {
         const quantityInput = document.getElementById("quantity-input");
@@ -85,7 +120,51 @@ export function OrderItemsSection() {
     }, 100);
   };
 
+  const selectProduct = (product: Product) => {
+    const loadToken = variantLoadTokenRef.current + 1;
+    variantLoadTokenRef.current = loadToken;
+    const knownVariants = product.variants || [];
+    const shouldLoadVariants =
+      knownVariants.length === 0 && (product.variantCount ?? 0) > 0;
+
+    setSelectedProduct({ ...product, variants: knownVariants });
+    setSelectedVariant("");
+    setQuantity(1);
+    setIsLoadingVariants(shouldLoadVariants);
+
+    if (!shouldLoadVariants) {
+      focusItemInputs(knownVariants.length > 0);
+      return;
+    }
+
+    void queryClient
+      .ensureQueryData(productVariantsQueryOptions(product.id))
+      .then((result) => {
+        if (variantLoadTokenRef.current !== loadToken) return;
+        const variants = normalizeVariants(result);
+        setSelectedProduct((current) =>
+          current?.id === product.id
+            ? { ...current, variants, variantCount: variants.length }
+            : current,
+        );
+        focusItemInputs(variants.length > 0);
+      })
+      .catch((error: unknown) => {
+        if (variantLoadTokenRef.current !== loadToken) return;
+        console.error("Error loading product variants:", error);
+        toast.error("Could not load product variants. You can still add the main product.");
+        focusItemInputs(false);
+      })
+      .finally(() => {
+        if (variantLoadTokenRef.current === loadToken) {
+          setIsLoadingVariants(false);
+        }
+      });
+  };
+
   const clearProductSelection = () => {
+    variantLoadTokenRef.current += 1;
+    setIsLoadingVariants(false);
     setSelectedProduct(null);
     setSelectedVariant("");
     setQuantity(1);
@@ -123,7 +202,7 @@ export function OrderItemsSection() {
   };
 
   const handleAddItem = () => {
-    if (!selectedProduct) return;
+    if (!selectedProduct || isLoadingVariants) return;
 
     const variant = selectedVariant ? selectedProduct.variants.find((v) => v.id === selectedVariant) : null;
     let basePrice = variant ? variant.price : selectedProduct.price;
@@ -191,6 +270,7 @@ export function OrderItemsSection() {
               setQuantity={setQuantity}
               handleAddItem={handleAddItem}
               calculateDiscountedPrice={calculateDiscountedPrice}
+              isLoadingVariants={isLoadingVariants}
             />
           )}
         </div>

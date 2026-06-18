@@ -5,6 +5,7 @@ export interface Product {
     discountPercentage: number | null;
     discountType?: "percentage" | "flat" | null;
     discountAmount?: number | null;
+    variantCount?: number | null;
     variants: {
       id: string;
       size: string | null;

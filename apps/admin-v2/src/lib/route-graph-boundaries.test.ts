@@ -179,6 +179,22 @@ describe("admin route graph boundaries", () => {
     }
   });
 
+  it("keeps new-order creation from blocking on product detail fanout", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "new.tsx"),
+      "utf8",
+    );
+    const loaderSource = source.slice(
+      source.indexOf("loader: async"),
+      source.indexOf("head: ()"),
+    );
+
+    expect(loaderSource).toContain("productsQueryOptions({ page: 1, limit: 100 })");
+    expect(source).not.toContain("productQueryOptions(");
+    expect(loaderSource).not.toContain("Promise.all(");
+    expect(loaderSource).not.toContain("for (let");
+  });
+
   it("keeps deferred rich-text previews rendered without eager editor imports", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),

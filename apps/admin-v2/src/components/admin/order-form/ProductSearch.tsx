@@ -145,10 +145,10 @@ export function ProductSearch({
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground flex items-center ml-2">
-                        {product.variants.length > 0 ? (
+                        {(product.variantCount ?? product.variants.length) > 0 ? (
                           <Badge variant="outline">
-                            {product.variants.length}{" "}
-                            {product.variants.length === 1 ? "variant" : "variants"}
+                            {product.variantCount ?? product.variants.length}{" "}
+                            {(product.variantCount ?? product.variants.length) === 1 ? "variant" : "variants"}
                           </Badge>
                         ) : (
                           <Badge variant="outline">No variants</Badge>
