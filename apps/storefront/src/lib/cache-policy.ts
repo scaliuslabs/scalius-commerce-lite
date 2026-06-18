@@ -20,9 +20,24 @@ export function requestHasPrivateSession(headers: Headers): boolean {
   return hasNamedCookie(cookieHeader, PRIVATE_SESSION_COOKIE_NAMES);
 }
 
-export function isCacheableHtmlResponse(response: Response): boolean {
+const CACHEABLE_PUBLIC_CONTENT_TYPES = [
+  "text/html",
+  "application/xml",
+  "text/xml",
+  "application/xslt+xml",
+  "text/plain",
+];
+
+export function isCacheablePublicResponse(response: Response): boolean {
   if (response.status !== 200) return false;
-  if (!response.headers.get("Content-Type")?.includes("text/html")) return false;
+  const contentType = response.headers.get("Content-Type")?.toLowerCase() ?? "";
+  if (
+    !CACHEABLE_PUBLIC_CONTENT_TYPES.some((type) =>
+      contentType.includes(type),
+    )
+  ) {
+    return false;
+  }
   if (response.headers.has("Set-Cookie")) return false;
 
   const cacheControl = response.headers.get("Cache-Control")?.toLowerCase() ?? "";

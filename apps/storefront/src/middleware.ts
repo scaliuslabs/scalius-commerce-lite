@@ -7,7 +7,7 @@ import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { setEdgeCacheContext, cacheContextAls } from "@/lib/edge-cache";
 import { BUILD_ID } from "@/config/build-id";
 import {
-  isCacheableHtmlResponse,
+  isCacheablePublicResponse,
   requestHasPrivateSession,
 } from "@/lib/cache-policy";
 import { resolveStorefrontCacheVersion } from "@/lib/cache-version";
@@ -35,8 +35,11 @@ const CACHEABLE_PATHS = [
   /^\/categories\/[^/]+$/,
   /^\/collections\/[^/]+$/,
   /^\/search\/?$/,
+  /^\/robots\.txt$/,
   /^\/sitemap\.xml$/,
   /^\/sitemap-.*\.xml$/,
+  /^\/sitemap\.xsl$/,
+  /^\/api\/facebook-feed\.xml$/,
   /^\/(?!api|cart|checkout|buy|order-success|account|health|robots\.txt)[^/.]*$/,
 ];
 
@@ -166,7 +169,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
   return cacheContextAls.run(cacheCtx, async () => {
 
-  // HTML page caching (only for cacheable paths)
+  // Public response caching (HTML plus explicit generated XML/text assets)
   if (
     isGetRequest &&
     isCacheablePath &&
@@ -238,7 +241,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
       const response = await next();
 
-      if (isCacheableHtmlResponse(response)) {
+      if (isCacheablePublicResponse(response)) {
         // Force browsers to ALWAYS revalidate HTML with server.
         // `no-cache` is more aggressive than `max-age=0, must-revalidate`
         // and ensures browser never uses stale HTML after deployments.
