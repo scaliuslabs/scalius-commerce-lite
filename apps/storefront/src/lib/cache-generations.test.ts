@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildExactCacheGenerationKey,
   bumpExactCacheGenerations,
+  cacheGenerationKeyForLogicalKey,
   htmlPathCacheKeyFromPath,
   productSlugCacheKeyFromPath,
   resolveExactCacheGeneration,
@@ -16,7 +17,17 @@ describe("exact cache generations", () => {
     expect(shouldUseExactCacheGeneration("widgets_scope_product_prod_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(true);
     expect(shouldUseExactCacheGeneration("html_path_/categories/drinks")).toBe(true);
+    expect(shouldUseExactCacheGeneration("checkout_config")).toBe(true);
+    expect(shouldUseExactCacheGeneration("global_shipping_methods")).toBe(true);
+    expect(shouldUseExactCacheGeneration("shipping_zones_city_1")).toBe(true);
+    expect(shouldUseExactCacheGeneration("shipping_areas_zone_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("all_products_default")).toBe(false);
+    expect(cacheGenerationKeyForLogicalKey("shipping_zones_city_1")).toBe(
+      "shipping_zones_",
+    );
+    expect(cacheGenerationKeyForLogicalKey("shipping_areas_zone_1")).toBe(
+      "shipping_areas_",
+    );
 
     expect(productSlugCacheKeyFromPath("/products/fish?size=m")).toBe(
       "product_slug_fish",

@@ -40,27 +40,45 @@ vi.mock("@/lib/purge-auth", () => ({
 
 vi.mock("@/lib/cache-purge-policy", () => ({
   shouldBumpCacheVersionForSelectivePurge: ({
+    groups = [],
     prefixes,
     exactKeys = [],
     htmlPaths = [],
     bumpVersion,
   }: {
+    groups?: string[];
     prefixes: string[];
     exactKeys?: string[];
     htmlPaths?: string[];
     bumpVersion: boolean;
-  }) => bumpVersion || (prefixes.length > 0 && exactKeys.length === 0 && htmlPaths.length === 0),
+  }) =>
+    bumpVersion ||
+    (
+      prefixes.length > 0 &&
+      exactKeys.length === 0 &&
+      htmlPaths.length === 0 &&
+      !(groups.length === 1 && groups[0] === "checkout")
+    ),
   shouldWarmCriticalCachesForSelectivePurge: ({
+    groups = [],
     prefixes,
     exactKeys = [],
     htmlPaths = [],
     bumpVersion,
   }: {
+    groups?: string[];
     prefixes: string[];
     exactKeys?: string[];
     htmlPaths?: string[];
     bumpVersion: boolean;
-  }) => bumpVersion || (prefixes.length > 0 && exactKeys.length === 0 && htmlPaths.length === 0),
+  }) =>
+    bumpVersion ||
+    (
+      prefixes.length > 0 &&
+      exactKeys.length === 0 &&
+      htmlPaths.length === 0 &&
+      !(groups.length === 1 && groups[0] === "checkout")
+    ),
 }));
 
 describe("storefront cache purge route", () => {
@@ -241,7 +259,7 @@ describe("storefront cache purge route", () => {
     );
   });
 
-  it("warms critical caches when a selective prefix purge bumps the global version", async () => {
+  it("keeps checkout prefix purges data-scoped without bumping the HTML version", async () => {
     const { POST } = await import("./purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       method: "POST",
@@ -263,30 +281,37 @@ describe("storefront cache purge route", () => {
     } as unknown as Parameters<typeof POST>[0]);
     const body = (await response.json()) as {
       success?: boolean;
-      details?: { newVersion?: number; cacheWarmingStarted?: boolean; prefixesCleared?: number | string };
+      details?: {
+        cacheVersionBumped?: boolean;
+        htmlVersionBumped?: boolean;
+        newVersion?: number | null;
+        cacheWarmingStarted?: boolean;
+        prefixesCleared?: number | string;
+        exactGenerationsBumped?: number;
+      };
     };
 
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.details?.newVersion).toBe(5);
+    expect(body.details?.cacheVersionBumped).toBe(false);
+    expect(body.details?.htmlVersionBumped).toBe(false);
+    expect(body.details?.newVersion).toBeNull();
     expect(body.details?.prefixesCleared).toBe(1);
-    expect(body.details?.cacheWarmingStarted).toBe(true);
+    expect(body.details?.exactGenerationsBumped).toBe(1);
+    expect(body.details?.cacheWarmingStarted).toBe(false);
     expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_storefront.example.com");
-    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith("v_storefront.example.com", "5");
+    expect(mocks.cfEnv.CACHE_CONTROL.put).not.toHaveBeenCalledWith(
+      "v_storefront.example.com",
+      expect.any(String),
+    );
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+      "g:storefront.example.com:checkout_config",
+      expect.any(String),
+    );
     expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith(["checkout_config"]);
     expect(mocks.smartCacheClear).not.toHaveBeenCalled();
-    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
-    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
-    await warmPromise;
-    expect(fetch).toHaveBeenCalledWith(
-      "https://storefront.example.com/",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          "Cache-Control": "no-cache",
-          "X-Cache-Warm": "true",
-        }),
-      }),
-    );
+    expect(mocks.waitUntil).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("keeps scoped widget purges exact instead of bumping the global cache version", async () => {

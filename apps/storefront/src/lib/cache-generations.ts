@@ -6,6 +6,16 @@ const WIDGET_KEY_PREFIX = "widget_";
 const WIDGET_SCOPE_KEY_PREFIX = "widgets_scope_";
 const PAGE_RENDER_KEY_PREFIX = "page_render_";
 const HTML_PATH_KEY_PREFIX = "html_path_";
+const CHECKOUT_DATA_KEYS = [
+  "checkout_config",
+  "global_checkout_language",
+  "global_shipping_cities",
+  "global_shipping_methods",
+] as const;
+const CHECKOUT_DATA_FAMILY_PREFIXES = [
+  "shipping_zones_",
+  "shipping_areas_",
+] as const;
 
 interface GenerationStore {
   get(key: string): Promise<string | null>;
@@ -20,18 +30,38 @@ export function buildExactCacheGenerationKey(
   hostname: string,
   logicalKey: string,
 ): string {
-  return `${EXACT_CACHE_GENERATION_PREFIX}${hostname}:${encodeURIComponent(logicalKey)}`;
+  return `${EXACT_CACHE_GENERATION_PREFIX}${hostname}:${encodeURIComponent(
+    cacheGenerationKeyForLogicalKey(logicalKey) ?? logicalKey,
+  )}`;
 }
 
-export function shouldUseExactCacheGeneration(logicalKey: string): boolean {
-  return (
+export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | null {
+  if (
     logicalKey.startsWith(PRODUCT_SLUG_KEY_PREFIX) ||
     logicalKey.startsWith(PRODUCT_VARIANTS_KEY_PREFIX) ||
     logicalKey.startsWith(WIDGET_KEY_PREFIX) ||
     logicalKey.startsWith(WIDGET_SCOPE_KEY_PREFIX) ||
     logicalKey.startsWith(PAGE_RENDER_KEY_PREFIX) ||
     logicalKey.startsWith(HTML_PATH_KEY_PREFIX)
-  );
+  ) {
+    return logicalKey;
+  }
+
+  if (CHECKOUT_DATA_KEYS.includes(logicalKey as typeof CHECKOUT_DATA_KEYS[number])) {
+    return logicalKey;
+  }
+
+  for (const prefix of CHECKOUT_DATA_FAMILY_PREFIXES) {
+    if (logicalKey.startsWith(prefix)) {
+      return prefix;
+    }
+  }
+
+  return null;
+}
+
+export function shouldUseExactCacheGeneration(logicalKey: string): boolean {
+  return cacheGenerationKeyForLogicalKey(logicalKey) !== null;
 }
 
 export function productSlugCacheKeyFromPath(path: string): string | null {
@@ -135,7 +165,13 @@ export async function bumpExactCacheGenerations({
   hostname: string;
   logicalKeys: readonly string[];
 }): Promise<Array<{ logicalKey: string; generation: string }>> {
-  const uniqueKeys = [...new Set(logicalKeys.filter(Boolean))];
+  const uniqueKeys = [
+    ...new Set(
+      logicalKeys
+        .map((logicalKey) => cacheGenerationKeyForLogicalKey(logicalKey) ?? logicalKey)
+        .filter(Boolean),
+    ),
+  ];
   if (uniqueKeys.length === 0) {
     return [];
   }

@@ -40,30 +40,41 @@ describe("storefront page data boundaries", () => {
       "utf8",
     );
 
-    const optionsIndex = source.indexOf("const productListOptions");
-    const queryMapIndex = source.indexOf("productListOptions.search = query");
-    const filterParamsIndex = source.indexOf('const filterParams = ["q", "page", "sortBy"]');
-    const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
-    const productsPromiseIndex = source.indexOf(
-      "const productsPromise = getProductsByCategory(slug, productListOptions)",
+    const dynamicCheckIndex = source.indexOf(
+      "const hasDynamicFilters = hasDynamicProductListFilterParams(params)",
     );
-    const categoryFetchIndex = source.indexOf("getCategoryBySlug");
+    const optionsIndex = source.indexOf(
+      "let productListOptions: ProductListOptions = queryState.options",
+    );
+    const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
     const attributesPromiseIndex = source.indexOf(
       "const attributesPromise = getFilterableAttributes({ categorySlug: slug })",
     );
+    const dynamicBranchIndex = source.indexOf("if (hasDynamicFilters)");
+    const dynamicProductsIndex = source.indexOf(
+      "productsResponse = await getProductsByCategory(slug, productListOptions)",
+    );
+    const fastProductsPromiseIndex = source.indexOf(
+      "const productsPromise = getProductsByCategory(slug, productListOptions)",
+    );
+    const categoryFetchIndex = source.indexOf("getCategoryBySlug");
     const widgetsPromiseIndex = source.indexOf(
       "const widgetsPromise = productsPromise.then",
     );
-    const promiseAllIndex = source.indexOf("] = await Promise.all([");
+    const promiseAllIndex = source.indexOf(
+      "] = await Promise.all([",
+      widgetsPromiseIndex,
+    );
 
+    expect(dynamicCheckIndex).toBeGreaterThan(-1);
     expect(optionsIndex).toBeGreaterThan(-1);
-    expect(queryMapIndex).toBeGreaterThan(optionsIndex);
-    expect(filterParamsIndex).toBeGreaterThan(queryMapIndex);
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
-    expect(productsPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
+    expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
+    expect(dynamicBranchIndex).toBeGreaterThan(attributesPromiseIndex);
+    expect(dynamicProductsIndex).toBeGreaterThan(dynamicBranchIndex);
+    expect(fastProductsPromiseIndex).toBeGreaterThan(dynamicProductsIndex);
     expect(categoryFetchIndex).toBe(-1);
-    expect(attributesPromiseIndex).toBeGreaterThan(productsPromiseIndex);
-    expect(widgetsPromiseIndex).toBeGreaterThan(attributesPromiseIndex);
+    expect(widgetsPromiseIndex).toBeGreaterThan(fastProductsPromiseIndex);
     expect(promiseAllIndex).toBeGreaterThan(widgetsPromiseIndex);
     expect(source.slice(promiseAllIndex)).toContain("productsPromise");
     expect(source.slice(promiseAllIndex)).toContain("attributesPromise");
@@ -76,20 +87,32 @@ describe("storefront page data boundaries", () => {
       "utf8",
     );
 
-    const optionsIndex = source.indexOf("const productListOptions");
-    const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
-    const productsPromiseIndex = source.indexOf(
-      "const productsPromise = getAllProducts(productListOptions)",
+    const dynamicCheckIndex = source.indexOf(
+      "const hasDynamicFilters = hasDynamicProductListFilterParams(params)",
     );
+    const optionsIndex = source.indexOf(
+      "let productListOptions: ProductListOptions = queryState.options",
+    );
+    const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
     const attributesPromiseIndex = source.indexOf(
       "const attributesPromise = getFilterableAttributes({ searchQuery: query })",
     );
+    const dynamicBranchIndex = source.indexOf("if (hasDynamicFilters)");
+    const dynamicProductsIndex = source.indexOf(
+      "productsResponse = await getAllProducts(productListOptions)",
+    );
+    const fastProductsPromiseIndex = source.indexOf(
+      "const productsPromise = getAllProducts(productListOptions)",
+    );
     const promiseAllIndex = source.indexOf("] = await Promise.all([");
 
+    expect(dynamicCheckIndex).toBeGreaterThan(-1);
     expect(optionsIndex).toBeGreaterThan(-1);
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
-    expect(productsPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
-    expect(attributesPromiseIndex).toBeGreaterThan(productsPromiseIndex);
+    expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
+    expect(dynamicBranchIndex).toBeGreaterThan(attributesPromiseIndex);
+    expect(dynamicProductsIndex).toBeGreaterThan(dynamicBranchIndex);
+    expect(fastProductsPromiseIndex).toBeGreaterThan(dynamicProductsIndex);
     expect(promiseAllIndex).toBeGreaterThan(attributesPromiseIndex);
     expect(source.slice(promiseAllIndex)).toContain("productsPromise");
     expect(source.slice(promiseAllIndex)).toContain("attributesPromise");
