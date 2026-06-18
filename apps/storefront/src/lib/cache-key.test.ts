@@ -4,6 +4,7 @@ import {
   buildHtmlCacheBaseUrl,
   canonicalizeUrlSearchParams,
 } from "./cache-key";
+import { normalizeSearchQuery } from "./search-query";
 
 describe("storefront cache key canonicalization", () => {
   it("sorts surviving HTML query params and removes tracking noise", () => {
@@ -61,6 +62,34 @@ describe("storefront cache key canonicalization", () => {
     );
   });
 
+  it("normalizes search whitespace for HTML cache keys", () => {
+    const first = buildHtmlCacheBaseUrl(
+      new URL("https://storefront.example.com/search?q=boots%20black&brand=Nike"),
+    );
+    const second = buildHtmlCacheBaseUrl(
+      new URL("https://storefront.example.com/search?brand=Nike&q=%20boots%20%20black%20&page=1&sortBy=newest"),
+    );
+
+    expect(first.toString()).toBe(second.toString());
+    expect(first.toString()).toBe(
+      "https://storefront.example.com/search?brand=Nike&q=boots+black",
+    );
+  });
+
+  it("normalizes category q filters without dropping attribute filters", () => {
+    const first = buildHtmlCacheBaseUrl(
+      new URL("https://storefront.example.com/categories/fish?q=hilsa%20fresh&size=L"),
+    );
+    const second = buildHtmlCacheBaseUrl(
+      new URL("https://storefront.example.com/categories/fish?size=L&q=%20hilsa%20%20fresh%20"),
+    );
+
+    expect(first.toString()).toBe(second.toString());
+    expect(first.toString()).toBe(
+      "https://storefront.example.com/categories/fish?q=hilsa+fresh&size=L",
+    );
+  });
+
   it("can preserve empty values when a caller needs exact query semantics", () => {
     const url = new URL("https://storefront.example.com/search?q=&page=1");
 
@@ -82,6 +111,19 @@ describe("storefront cache key canonicalization", () => {
     ).toBe("search=fish");
   });
 
+  it("normalizes product-list search values before building L2 keys", () => {
+    expect(
+      buildCanonicalQueryString({
+        sort: "newest",
+        page: 1,
+        limit: 20,
+        search: "  fish   curry ",
+      }, {
+        defaultParams: { page: 1, limit: 20, sort: "newest" },
+      }),
+    ).toBe("search=fish+curry");
+  });
+
   it("sorts repeated values so equivalent set filters share L2 keys", () => {
     expect(
       buildCanonicalQueryString({
@@ -89,5 +131,11 @@ describe("storefront cache key canonicalization", () => {
         size: ["xl", "m"],
       }),
     ).toBe("color=blue&color=red&size=m&size=xl");
+  });
+
+  it("trims and collapses search query whitespace without changing case", () => {
+    expect(normalizeSearchQuery("  Fresh   Hilsa\nFish  ")).toBe("Fresh Hilsa Fish");
+    expect(normalizeSearchQuery("   ")).toBe("");
+    expect(normalizeSearchQuery(null)).toBe("");
   });
 });

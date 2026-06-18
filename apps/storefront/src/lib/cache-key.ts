@@ -1,3 +1,5 @@
+import { normalizeSearchQuery } from "./search-query";
+
 export const HTML_CACHE_IGNORED_QUERY_PARAMS = [
   "fbclid",
   "gclid",
@@ -14,6 +16,10 @@ const PRODUCT_HTML_IGNORED_QUERY_PARAMS = ["size", "color"] as const;
 
 type QueryValue = string | number | boolean | readonly string[] | null | undefined;
 type QueryDefaults = Record<string, string | number | boolean>;
+
+function normalizeCanonicalQueryValue(key: string, value: string): string {
+  return key === "q" || key === "search" ? normalizeSearchQuery(value) : value;
+}
 
 function appendSortedParams(
   params: URLSearchParams,
@@ -43,7 +49,8 @@ export function canonicalizeUrlSearchParams(
   const ignored = new Set(ignoredParams);
   const entries: Array<[string, string]> = [];
 
-  for (const [key, value] of canonicalUrl.searchParams.entries()) {
+  for (const [key, rawValue] of canonicalUrl.searchParams.entries()) {
+    const value = normalizeCanonicalQueryValue(key, rawValue);
     if (ignored.has(key)) continue;
     if (dropEmptyValues && value === "") continue;
     if (Object.hasOwn(defaultParams, key) && value === String(defaultParams[key])) {
@@ -87,17 +94,19 @@ export function buildCanonicalQueryString(
 
     if (Array.isArray(value)) {
       for (const item of value) {
-        if (item !== "") {
-          entries.push([key, String(item)]);
+        const normalizedItem = normalizeCanonicalQueryValue(key, String(item));
+        if (normalizedItem !== "") {
+          entries.push([key, normalizedItem]);
         }
       }
       continue;
     }
 
-    if (Object.hasOwn(defaultParams, key) && String(value) === String(defaultParams[key])) {
+    const normalizedValue = normalizeCanonicalQueryValue(key, String(value));
+    if (Object.hasOwn(defaultParams, key) && normalizedValue === String(defaultParams[key])) {
       continue;
     }
-    entries.push([key, String(value)]);
+    entries.push([key, normalizedValue]);
   }
 
   const params = new URLSearchParams();

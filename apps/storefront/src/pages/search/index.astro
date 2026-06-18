@@ -22,9 +22,10 @@ import {
   Search,
 } from "lucide-react";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { normalizeSearchQuery } from "@/lib/search-query";
 
 const params = Astro.url.searchParams;
-const query = params.get("q") || "";
+const query = normalizeSearchQuery(params.get("q"));
 const page = parseInt(params.get("page") || "1");
 const sortBy = params.get("sortBy") || "newest";
 
@@ -83,9 +84,13 @@ const pageDescription = query
   : "Explore our full collection of products.";
 
 const currentFilters = Object.fromEntries(params.entries());
+if (query) currentFilters.q = query;
+else delete currentFilters.q;
 
 function getPaginationUrl(pageNum: number) {
   const url = new URL(Astro.url);
+  if (query) url.searchParams.set("q", query);
+  else url.searchParams.delete("q");
   url.searchParams.set("page", pageNum.toString());
   return url.toString();
 }
@@ -379,6 +384,8 @@ const analyticsProductData = products.map((p) => ({
 </Layout>
 
 <script>
+  import { normalizeSearchQuery } from "@/lib/search-query";
+
   function setupFilterInteractivity() {
     const toggleBtn = document.getElementById("mobile-filter-toggle");
     const closeBtn = document.getElementById("mobile-filter-close");
@@ -419,6 +426,9 @@ const analyticsProductData = products.map((p) => ({
 
     sortSelect.addEventListener("change", () => {
       const url = new URL(window.location.href);
+      const query = normalizeSearchQuery(url.searchParams.get("q"));
+      if (query) url.searchParams.set("q", query);
+      else url.searchParams.delete("q");
       url.searchParams.set("sortBy", sortSelect.value);
       url.searchParams.set("page", "1"); // Reset to first page when sorting
       window.location.href = url.toString();

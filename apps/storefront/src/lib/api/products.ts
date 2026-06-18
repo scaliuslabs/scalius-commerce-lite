@@ -16,6 +16,7 @@ import {
   getApiV1Search,
 } from "@scalius/api-client/sdk";
 import { buildCanonicalQueryString } from "@/lib/cache-key";
+import { normalizeSearchQuery } from "@/lib/search-query";
 
 /**
  * A comprehensive data structure for a single product page,
@@ -140,6 +141,21 @@ function emptyProductPagination(
   };
 }
 
+function normalizeProductListOptions(
+  options: ProductListOptions = {},
+): ProductListOptions {
+  const normalized: ProductListOptions = { ...options };
+  if (typeof normalized.search === "string") {
+    const search = normalizeSearchQuery(normalized.search);
+    if (search) {
+      normalized.search = search;
+    } else {
+      delete normalized.search;
+    }
+  }
+  return normalized;
+}
+
 /**
  * Fetches a paginated list of products belonging to a specific category.
  * Wrapped with EdgeCache (1h TTL) - shorter TTL as paginated data can be large.
@@ -156,7 +172,8 @@ export async function getProductsByCategory(
     return null;
   }
 
-  const queryString = buildCanonicalQueryString(options, {
+  const normalizedOptions = normalizeProductListOptions(options);
+  const queryString = buildCanonicalQueryString(normalizedOptions, {
     defaultParams: { page: 1, limit: 20, sort: "newest" },
   });
   const cacheKey = `category_products_${categorySlug}_${queryString || "default"}`;
@@ -168,7 +185,7 @@ export async function getProductsByCategory(
         const { data, error } = await getApiV1CategoriesBySlugProducts({
           client: getConfiguredSdkClient(),
           path: { slug: categorySlug },
-          query: options as Record<string, unknown>,
+          query: normalizedOptions as Record<string, unknown>,
         });
 
         if (error) {
@@ -203,7 +220,8 @@ export async function getProductsByCategory(
 export async function getAllProducts(
   options: ProductListOptions = {},
 ): Promise<PaginatedResponse<Product> | null> {
-  const queryString = buildCanonicalQueryString(options, {
+  const normalizedOptions = normalizeProductListOptions(options);
+  const queryString = buildCanonicalQueryString(normalizedOptions, {
     defaultParams: { page: 1, limit: 20, sort: "newest" },
   });
   const cacheKey = `all_products_${queryString || "default"}`;
@@ -214,7 +232,7 @@ export async function getAllProducts(
       try {
         const { data } = await getApiV1Products({
           client: getConfiguredSdkClient(),
-          query: options as Record<string, unknown>,
+          query: normalizedOptions as Record<string, unknown>,
         });
         const d = unwrapData<{ products: Product[]; pagination: PaginatedResponse<Product>["pagination"] }>(data);
         return d

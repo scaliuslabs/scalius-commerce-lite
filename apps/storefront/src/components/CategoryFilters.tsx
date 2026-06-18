@@ -19,6 +19,7 @@ import {
   appendPriceFilterParams,
   parsePriceFilterValue,
 } from "@/lib/filters/price-url";
+import { normalizeSearchQuery } from "@/lib/search-query";
 
 interface CategoryFiltersProps {
   attributes: FilterableAttribute[];
@@ -173,7 +174,7 @@ export default function CategoryFilters({
       if (!form) return;
 
       const formData = new FormData(form);
-      const query = currentQuery ?? formData.get("q")?.toString() ?? "";
+      const query = normalizeSearchQuery(currentQuery ?? formData.get("q")?.toString());
 
       const finalParams = new URLSearchParams();
 
