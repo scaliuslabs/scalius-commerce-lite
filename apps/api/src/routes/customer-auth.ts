@@ -14,6 +14,7 @@
 // Cookie name:     "cs_tok" (httpOnly, SameSite=Strict, Secure)
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import {
   sendOtp,
   verifyOtp,
@@ -34,6 +35,12 @@ import { nullableTimestampSchema } from "../schemas/timestamps";
 import { ok } from "../utils/api-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+function setPrivateNoStoreHeaders(c: Context) {
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  c.header("Pragma", "no-cache");
+  c.header("Expires", "0");
+}
 
 // ─── POST /send-otp ──────────────────────────────────────────────────────────
 
@@ -229,6 +236,8 @@ const getMeRoute = createRoute({
 });
 
 app.openapi(getMeRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+
   const cookieHeader = c.req.header("Cookie") || null;
   const token = getSessionCookie(cookieHeader);
 
@@ -417,6 +426,8 @@ const getCustomerOrdersRoute = createRoute({
 });
 
 app.openapi(getCustomerOrdersRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+
   const cookieHeader = c.req.header("Cookie") || null;
   const token = getSessionCookie(cookieHeader);
 

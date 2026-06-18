@@ -1,9 +1,8 @@
 // src/lib/api/orders.ts
 
-import { createApiUrl, fetchWithRetry, getConfiguredSdkAuthClient } from "./client";
-import type { Order, OrderReceipt, CreateOrderPayload } from "./types";
+import { createApiUrl, fetchWithRetry } from "./client";
+import type { OrderReceipt, CreateOrderPayload } from "./types";
 import { unwrapData } from "./unwrap";
-import { getApiV1OrdersById } from "@scalius/api-client/sdk";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 
 type CreateOrderResult = {
@@ -119,32 +118,6 @@ export async function createOrder(
       success: false,
       error: "Order creation failed",
     };
-  }
-}
-
-/**
- * Fetches the details of a specific order by its ID.
- * This is an authenticated request.
- *
- * @param orderId The unique identifier of the order.
- * @returns A promise resolving to the full Order object or null if not found.
- */
-export async function getOrderDetails(orderId: string): Promise<Order | null> {
-  if (!orderId) {
-    console.error("getOrderDetails: orderId is required.");
-    return null;
-  }
-
-  try {
-    const { data, error } = await getApiV1OrdersById({
-      client: getConfiguredSdkAuthClient(),
-      path: { id: orderId },
-    });
-    if (error) return null;
-    return unwrapData<{ order: Order }>(data)?.order ?? null;
-  } catch (error: unknown) {
-    console.error(`Error fetching details for order "${orderId}":`, error);
-    return null;
   }
 }
 

@@ -242,6 +242,7 @@ export async function getCustomerOrders(): Promise<{
   try {
     const res = await fetch(authUrl("orders"), {
       credentials: "include",
+      cache: "no-store",
     });
     if (!res.ok) {
       const raw = (await res.json()) as AuthApiEnvelope;

@@ -378,30 +378,6 @@ export interface OrderItem {
   variantColor: string | null;
 }
 
-export interface Order {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  customerEmail: string | null;
-  shippingAddress: string;
-  totalAmount: number;
-  shippingCharge: number;
-  discountAmount: number | null;
-  notes: string | null;
-  city: string;
-  zone: string;
-  area: string | null;
-  cityName: string | null;
-  zoneName: string | null;
-  areaName: string | null;
-  status: string;
-  createdAt: string | null;
-  updatedAt: string | null;
-  items: OrderItem[];
-  shipments: OrderShipment[];
-  deliveryProviders: OrderDeliveryProvider[];
-}
-
 export interface OrderReceipt {
   id: string;
   customerName: string;
@@ -419,22 +395,6 @@ export interface OrderReceipt {
   createdAt: string | null;
   updatedAt: string | null;
   items: OrderItem[];
-}
-
-export interface OrderShipment {
-  id: string;
-  status: string;
-  trackingId?: string;
-  providerType?: string;
-  consignmentId?: string;
-  createdAt?: string;
-}
-
-export interface OrderDeliveryProvider {
-  id: string;
-  name: string;
-  type: string;
-  isActive?: boolean;
 }
 
 export type CreateOrderPayload = OrderPostRequest;

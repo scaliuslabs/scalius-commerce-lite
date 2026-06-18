@@ -4468,50 +4468,6 @@ export type PostApiV1CacheClearGroupResponses = {
 
 export type PostApiV1CacheClearGroupResponse = PostApiV1CacheClearGroupResponses[keyof PostApiV1CacheClearGroupResponses];
 
-export type GetApiV1OrdersByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/orders/{id}';
-};
-
-export type GetApiV1OrdersByIdErrors = {
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1OrdersByIdError = GetApiV1OrdersByIdErrors[keyof GetApiV1OrdersByIdErrors];
-
-export type GetApiV1OrdersByIdResponses = {
-    /**
-     * Order details
-     */
-    200: {
-        success: true;
-        data: {
-            order: {
-                id: string;
-                status: string;
-                totalAmount: number;
-                [key: string]: unknown;
-            };
-        };
-    };
-};
-
-export type GetApiV1OrdersByIdResponse = GetApiV1OrdersByIdResponses[keyof GetApiV1OrdersByIdResponses];
-
 export type GetApiV1OrdersStatusByTokenData = {
     body?: never;
     path: {
