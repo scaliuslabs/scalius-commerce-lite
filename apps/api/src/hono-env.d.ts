@@ -70,6 +70,7 @@ declare global {
     PURGE_URL?: string;
     PURGE_TOKEN?: string;
     PROJECT_CACHE_PREFIX?: string;
+    FCM_SEND_CONCURRENCY?: string | number;
     [key: string]: unknown;
   };
 }

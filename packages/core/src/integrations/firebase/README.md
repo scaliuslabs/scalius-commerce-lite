@@ -34,7 +34,8 @@ A custom FCM implementation for Cloudflare Workers (no Node.js `firebase-admin` 
 - **JWT creation**: Builds RS256 JWTs using Web Crypto API (`crypto.subtle`) for Google OAuth2 token exchange
 - **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Caches access tokens in `SHARED_AUTH_CACHE` KV namespace (3300s TTL) with fallback to uncached if KV not bound.
 - **FCM v1 API**: Sends messages via `https://fcm.googleapis.com/v1/projects/{projectId}/messages:send`
-- **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + jitter. Respects `Retry-After` header.
+- **Bounded fanout**: Sends one FCM v1 request per token with bounded concurrency. Default concurrency is 8; optional runtime var `FCM_SEND_CONCURRENCY` is clamped to 1-20. Response order is preserved so invalid-token cleanup can safely map responses back to the original token list.
+- **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + Web Crypto jitter. Respects `Retry-After` header.
 - **PEM parsing**: Converts PEM private key to ArrayBuffer for Web Crypto, handles formatting issues from env vars (leading/trailing quotes, literal newlines)
 
 #### Interfaces
@@ -57,7 +58,7 @@ interface FCMMessage {
 ```
 
 Key exports:
-- `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Iterates tokens sequentially (not concurrent) and maps error codes to `messaging/*` format (e.g., `UNREGISTERED` -> `messaging/registration-token-not-registered`). All catch blocks use typed `error: unknown`.
+- `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Sends with bounded concurrency and maps error codes to `messaging/*` format (e.g., `UNREGISTERED` -> `messaging/registration-token-not-registered`). All catch blocks use typed `error: unknown`.
 - `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function. When `serviceAccountJson` is provided (e.g., from DB settings), creates a new instance. Otherwise returns a singleton for env-var credentials.
 
 Credential resolution order:
@@ -147,3 +148,8 @@ Firebase settings in `settings` table:
 - `firebase/app`, `firebase/messaging` -- Client-side SDK (imported dynamically in browser)
 - Web Crypto API (`crypto.subtle`) -- JWT signing on server (available in Cloudflare Workers)
 - `SHARED_AUTH_CACHE` KV namespace -- Optional, for caching Google OAuth tokens
+
+## Operations
+
+- `FCM_SEND_CONCURRENCY` is optional and only affects server fanout. Leave it unset for the default of 8. Lower it if Firebase starts returning 429s for a merchant; raise carefully only for high-admin-device installs.
+- Current admin browser push is Firebase FCM only. A first-party Web Push provider remains the Cloudflare-native fallback target; do not describe admin push as Cloudflare-native until that exists.
