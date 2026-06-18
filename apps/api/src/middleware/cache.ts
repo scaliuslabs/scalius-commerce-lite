@@ -15,16 +15,59 @@ const DEFAULT_CACHE_TTL = 3600;
 const DEFAULT_CACHE_CONTROL =
   "public, max-age=0, stale-while-revalidate=120, stale-if-error=300";
 
+type CacheQueryDefaultValue = string | number | boolean | undefined;
+type CacheQueryDefaults =
+  | Record<string, CacheQueryDefaultValue>
+  | ((c: Context) => Record<string, CacheQueryDefaultValue>);
+
 export interface CacheOptions {
   ttl?: number;
   keyPrefix?: string;
   cacheNullValues?: boolean;
   methods?: string[];
   varyByQuery?: boolean;
+  queryDefaults?: CacheQueryDefaults;
   varyByAuth?: boolean;
   cacheCondition?: (c: Context) => boolean;
   /** Override Cache-Control. Default ensures browser revalidation for consistency with KV invalidation. */
   cacheControl?: string;
+}
+
+function resolveQueryDefaults(
+  c: Context,
+  queryDefaults: CacheQueryDefaults | undefined,
+): Record<string, CacheQueryDefaultValue> {
+  return typeof queryDefaults === "function"
+    ? queryDefaults(c)
+    : queryDefaults ?? {};
+}
+
+export function canonicalizeCacheQueryString(
+  url: string,
+  queryDefaults: Record<string, CacheQueryDefaultValue> = {},
+): string {
+  const params = new URL(url).searchParams;
+  const entries: Array<[string, string]> = [];
+
+  for (const [key, value] of params.entries()) {
+    if (value === "") continue;
+    const defaultValue = queryDefaults[key];
+    if (defaultValue !== undefined && value === String(defaultValue)) {
+      continue;
+    }
+    entries.push([key, value]);
+  }
+
+  entries.sort(([aKey, aValue], [bKey, bValue]) => {
+    const keyCompare = aKey.localeCompare(bKey);
+    return keyCompare === 0 ? aValue.localeCompare(bValue) : keyCompare;
+  });
+
+  const canonicalParams = new URLSearchParams();
+  for (const [key, value] of entries) {
+    canonicalParams.append(key, value);
+  }
+  return canonicalParams.toString();
 }
 
 /**
@@ -39,6 +82,7 @@ export const cacheMiddleware = (
     cacheNullValues = false,
     methods = ["GET"],
     varyByQuery = true,
+    queryDefaults,
     varyByAuth = false,
     cacheCondition,
     cacheControl = DEFAULT_CACHE_CONTROL,
@@ -55,8 +99,11 @@ export const cacheMiddleware = (
     // Build cache key
     let cacheKey = `${keyPrefix}${c.req.path}`;
 
-    if (varyByQuery && c.req.query()) {
-      const qs = new URLSearchParams(c.req.query()).toString();
+    if (varyByQuery) {
+      const qs = canonicalizeCacheQueryString(
+        c.req.url,
+        resolveQueryDefaults(c, queryDefaults),
+      );
       if (qs) cacheKey += `?${qs}`;
     }
 

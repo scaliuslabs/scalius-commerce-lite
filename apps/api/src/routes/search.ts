@@ -17,6 +17,7 @@ app.use(
     ttl: CACHE_TTLS.SHORT,
     keyPrefix: "api:search:",
     varyByQuery: true,
+    queryDefaults: { q: "", limit: 10, searchPages: "true", searchCategories: "true" },
     methods: ["GET"]
   }),
 );

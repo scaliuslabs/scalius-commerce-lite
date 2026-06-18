@@ -16,6 +16,7 @@ import {
   resolveExactCacheGeneration,
 } from "./lib/cache-generations";
 import { resolveCacheNamespace } from "./lib/cache-namespace";
+import { buildHtmlCacheBaseUrl } from "./lib/cache-key";
 
 // Timeout constants to prevent hanging on slow/unavailable services
 const KV_TIMEOUT_MS = 1000;
@@ -38,43 +39,10 @@ const CACHEABLE_PATHS = [
   /^\/(?!api|cart|checkout|buy|order-success|account|health|robots\.txt)[^/.]*$/,
 ];
 
-/**
- * Query params that should NOT affect HTML caching.
- * These are typically marketing / tracking parameters.
- */
-const CACHE_KEY_IGNORED_QUERY_PARAMS = [
-  "fbclid",
-  "gclid",
-  "msclkid",
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_term",
-  "utm_content",
-  "ref",
-];
-
 // Check if we're running in Cloudflare Workers environment
 const isCloudflareEnvironment = () => {
   return typeof caches !== "undefined";
 };
-
-function buildCacheKeyUrl(url: URL): URL {
-  const cacheUrl = new URL(url.toString());
-
-  // Remove tracking params from the CACHE KEY (not from the real request URL).
-  for (const param of CACHE_KEY_IGNORED_QUERY_PARAMS) {
-    cacheUrl.searchParams.delete(param);
-  }
-
-  // Product variant selection is client-side. It should not explode cache entries.
-  if (/^\/products\/[^/]+$/.test(cacheUrl.pathname)) {
-    cacheUrl.searchParams.delete("size");
-    cacheUrl.searchParams.delete("color");
-  }
-
-  return cacheUrl;
-}
 
 async function resolveProductHtmlGeneration({
   cacheUrl,
@@ -211,7 +179,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       // Reuse cache version from above (no duplicate KV lookup)
       const cacheVersion = resolvedCacheVersion;
 
-      const cacheUrl = buildCacheKeyUrl(new URL(request.url));
+      const cacheUrl = buildHtmlCacheBaseUrl(new URL(request.url));
       const productGeneration = await resolveProductHtmlGeneration({
         cacheUrl,
         kvBinding,

@@ -21,6 +21,16 @@ app.use(
     ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:products:",
     varyByQuery: true,
+    queryDefaults: (c) => {
+      const normalizedPath = c.req.path.replace(/\/$/, "");
+      if (normalizedPath.endsWith("/products/search")) {
+        return { search: "", page: 1, limit: 10 };
+      }
+      if (normalizedPath.endsWith("/products")) {
+        return { page: 1, limit: 20, sort: "newest" };
+      }
+      return {};
+    },
     methods: ["GET"]
   }),
 );

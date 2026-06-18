@@ -18,6 +18,10 @@ app.use(
     ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:categories:",
     varyByQuery: true,
+    queryDefaults: (c) =>
+      c.req.path.replace(/\/$/, "").endsWith("/products")
+        ? { page: 1, limit: 20, sort: "newest" }
+        : {},
     methods: ["GET"]
   }),
 );

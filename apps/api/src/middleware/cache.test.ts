@@ -13,7 +13,7 @@ vi.mock("../utils/kv-cache", () => ({
   getCacheType: mocks.getCacheType,
 }));
 
-import { cacheMiddleware } from "./cache";
+import { cacheMiddleware, canonicalizeCacheQueryString } from "./cache";
 
 describe("cacheMiddleware", () => {
   afterEach(() => {
@@ -72,5 +72,103 @@ describe("cacheMiddleware", () => {
 
     resolveWrite?.();
     await executionCtx.waitUntil.mock.calls[0]?.[0];
+  });
+
+  it("canonicalizes query order before reading and writing cache keys", async () => {
+    mocks.getCache.mockResolvedValue(null);
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use("*", cacheMiddleware({ ttl: 60, keyPrefix: "api:products:" }));
+    app.get("/products", (c) => c.json({ products: [] }));
+
+    await app.request("/products?brand=Nike&color=Red", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+    await app.request("/products?color=Red&brand=Nike", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+
+    expect(mocks.getCache).toHaveBeenNthCalledWith(
+      1,
+      "api:products:/products?brand=Nike&color=Red",
+      { id: "api-cache-kv" },
+    );
+    expect(mocks.getCache).toHaveBeenNthCalledWith(
+      2,
+      "api:products:/products?brand=Nike&color=Red",
+      { id: "api-cache-kv" },
+    );
+  });
+
+  it("elides configured query defaults without dropping dynamic filters", async () => {
+    mocks.getCache.mockResolvedValue(null);
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use(
+      "*",
+      cacheMiddleware({
+        ttl: 60,
+        keyPrefix: "api:products:",
+        queryDefaults: { page: 1, limit: 20, sort: "newest" },
+      }),
+    );
+    app.get("/products", (c) => c.json({ products: [] }));
+
+    await app.request(
+      "/products?page=1&limit=20&sort=newest&brand=Nike&color=Red",
+      {},
+      { CACHE: { id: "api-cache-kv" } } as unknown as Env,
+    );
+
+    expect(mocks.getCache).toHaveBeenCalledWith(
+      "api:products:/products?brand=Nike&color=Red",
+      { id: "api-cache-kv" },
+    );
+  });
+
+  it("supports path-aware query defaults", async () => {
+    mocks.getCache.mockResolvedValue(null);
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use(
+      "*",
+      cacheMiddleware({
+        ttl: 60,
+        keyPrefix: "api:products:",
+        queryDefaults: (c) =>
+          c.req.path.endsWith("/search")
+            ? { search: "", page: 1, limit: 10 }
+            : { page: 1, limit: 20, sort: "newest" },
+      }),
+    );
+    app.get("/products", (c) => c.json({ products: [] }));
+    app.get("/products/search", (c) => c.json({ products: [] }));
+
+    await app.request("/products?limit=20&page=1&sort=newest", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+    await app.request("/products/search?limit=20&page=1&search=", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+
+    expect(mocks.getCache).toHaveBeenNthCalledWith(
+      1,
+      "api:products:/products",
+      { id: "api-cache-kv" },
+    );
+    expect(mocks.getCache).toHaveBeenNthCalledWith(
+      2,
+      "api:products:/products/search?limit=20",
+      { id: "api-cache-kv" },
+    );
+  });
+
+  it("canonicalizes duplicate query values deterministically", () => {
+    expect(
+      canonicalizeCacheQueryString(
+        "https://api.example.test/products?tag=b&tag=a&page=1",
+        { page: 1 },
+      ),
+    ).toBe("tag=a&tag=b");
   });
 });
