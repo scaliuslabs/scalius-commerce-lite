@@ -40,11 +40,7 @@ describe("catalog cache groups", () => {
       "search",
       "collections",
     ]);
-    expect(getGroupsForPath("/api/v1/admin/inventory/stock-set")).toEqual([
-      "products",
-      "search",
-      "collections",
-    ]);
+    expect(getGroupsForPath("/api/v1/admin/inventory/stock-set")).toEqual([]);
     expect(getGroupsForPath("/api/v1/admin/widgets/wid_123")).toEqual(["widgets"]);
     expect(getGroupsForPath("/api/v1/admin/attributes/attr_123")).toEqual([
       "attributes",

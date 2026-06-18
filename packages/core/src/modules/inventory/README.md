@@ -144,6 +144,8 @@ The function is **idempotent** -- the "released" movement it creates excludes th
 | `inventory-transitions.ts` | `buildInventoryStatements()` -- returns SQL statements for batching; `applyInventoryForStatusChange()` -- standalone wrapper; single source of truth for order-status-driven inventory changes; `InventoryAction` type |
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |
 
+Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) affect product availability, not product/category/collection metadata. API routes should invalidate by affected variant through `invalidateProductAvailabilityCaches(db, { variantIds }, c)` after the write commits, avoiding broad catalog invalidation unless product metadata changed too.
+
 ## Database Schema
 
 ### `product_variants` (stock columns only)

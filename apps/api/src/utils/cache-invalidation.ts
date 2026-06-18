@@ -214,8 +214,6 @@ export const WIDGET_CACHE_GROUPS = [
 
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/products": [...CATALOG_CACHE_GROUPS.products],
-  "/api/v1/admin/inventory": [...CATALOG_CACHE_GROUPS.products],
-  "/api/inventory": [...CATALOG_CACHE_GROUPS.products],
   "/api/v1/admin/categories": [...CATALOG_CACHE_GROUPS.categories],
   "/api/v1/admin/collections": [...CATALOG_CACHE_GROUPS.collections],
   "/api/v1/admin/pages": ["pages", "layout"],
