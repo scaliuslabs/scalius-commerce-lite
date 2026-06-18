@@ -8,7 +8,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses } from "../../schemas/responses";
-import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -264,7 +264,7 @@ app.openapi(adjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustInventory(db, variantId, payload, user?.id);
-        await invalidateCatalogCaches("products", c);
+        await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -338,7 +338,7 @@ app.openapi(stockAdjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustStock(db, variantId, adjustment, reason, user?.id);
-        await invalidateCatalogCaches("products", c);
+        await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -381,7 +381,7 @@ app.openapi(stockSetRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await setStock(db, variantId, newStock, reason, user?.id);
-        await invalidateCatalogCaches("products", c);
+        await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
