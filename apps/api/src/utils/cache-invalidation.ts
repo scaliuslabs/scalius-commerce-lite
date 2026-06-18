@@ -1,5 +1,8 @@
 // src/server/utils/cache-invalidation.ts
-import { deleteCacheByPattern } from "./kv-cache";
+import type { Database } from "@scalius/database/client";
+import { orderItems, products, productVariants } from "@scalius/database/schema";
+import { eq, inArray } from "drizzle-orm";
+import { deleteCache, deleteCacheByPattern } from "./kv-cache";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -10,6 +13,23 @@ export interface InvalidationGroupDef {
   description: string;
   kvPrefixes: string[];
   bumpsHtml: boolean;
+  storefrontPrefixes: string[];
+}
+
+export interface ProductAvailabilityCacheSubject {
+  productId: string;
+  slug: string | null;
+}
+
+export interface ProductAvailabilityCacheInput {
+  orderIds?: readonly string[];
+  productIds?: readonly string[];
+  variantIds?: readonly string[];
+}
+
+export interface ProductAvailabilityCacheInvalidation {
+  apiKeys: string[];
+  apiPatterns: string[];
   storefrontPrefixes: string[];
 }
 
@@ -524,6 +544,183 @@ export async function invalidateApiCachePatterns(
   await Promise.all(
     uniquePatterns.map((pattern) => deleteCacheByPattern(pattern, kv)),
   );
+}
+
+function uniqueValues(values: readonly string[] | undefined): string[] {
+  return [...new Set((values ?? []).filter(Boolean))];
+}
+
+function uniqueAvailabilitySubjects(
+  subjects: readonly ProductAvailabilityCacheSubject[],
+): ProductAvailabilityCacheSubject[] {
+  const byProduct = new Map<string, ProductAvailabilityCacheSubject>();
+  for (const subject of subjects) {
+    if (!subject.productId) continue;
+    byProduct.set(subject.productId, subject);
+  }
+  return [...byProduct.values()];
+}
+
+/**
+ * Resolve product detail cache subjects from stock-changing entities.
+ * Order items can survive soft deletes, but permanent deletes remove them, so
+ * callers for destructive order writes should resolve before the DB mutation
+ * and then invalidate the returned subjects after the mutation commits.
+ */
+export async function resolveProductAvailabilityCacheSubjects(
+  db: Database,
+  input: ProductAvailabilityCacheInput,
+): Promise<ProductAvailabilityCacheSubject[]> {
+  const orderIds = uniqueValues(input.orderIds);
+  const productIds = uniqueValues(input.productIds);
+  const variantIds = uniqueValues(input.variantIds);
+  const subjectRows: ProductAvailabilityCacheSubject[] = [];
+
+  if (orderIds.length > 0) {
+    const rows = await db
+      .selectDistinct({
+        productId: products.id,
+        slug: products.slug,
+      })
+      .from(orderItems)
+      .innerJoin(products, eq(orderItems.productId, products.id))
+      .where(inArray(orderItems.orderId, orderIds));
+    subjectRows.push(...rows);
+  }
+
+  if (productIds.length > 0) {
+    const rows = await db
+      .selectDistinct({
+        productId: products.id,
+        slug: products.slug,
+      })
+      .from(products)
+      .where(inArray(products.id, productIds));
+    subjectRows.push(...rows);
+  }
+
+  if (variantIds.length > 0) {
+    const rows = await db
+      .selectDistinct({
+        productId: products.id,
+        slug: products.slug,
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(productVariants.productId, products.id))
+      .where(inArray(productVariants.id, variantIds));
+    subjectRows.push(...rows);
+  }
+
+  return uniqueAvailabilitySubjects(subjectRows);
+}
+
+export async function tryResolveProductAvailabilityCacheSubjects(
+  db: Database,
+  input: ProductAvailabilityCacheInput,
+): Promise<ProductAvailabilityCacheSubject[]> {
+  try {
+    return await resolveProductAvailabilityCacheSubjects(db, input);
+  } catch (error) {
+    console.error(
+      "[Cache] Failed to resolve product availability cache subjects:",
+      error,
+    );
+    return [];
+  }
+}
+
+export function getProductAvailabilityApiCacheKeys(
+  subjects: readonly ProductAvailabilityCacheSubject[],
+): string[] {
+  const normalizedSubjects = uniqueAvailabilitySubjects(subjects);
+  if (normalizedSubjects.length === 0) return [];
+
+  return [
+    ...normalizedSubjects
+      .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
+        typeof subject.slug === "string" && subject.slug.length > 0,
+      )
+      .map((subject) => `api:products:/api/v1/products/${subject.slug}`),
+    "api:products:/api/v1/products/search",
+  ];
+}
+
+export function getProductAvailabilityApiCachePatterns(
+  subjects: readonly ProductAvailabilityCacheSubject[],
+): string[] {
+  const normalizedSubjects = uniqueAvailabilitySubjects(subjects);
+  if (normalizedSubjects.length === 0) return [];
+
+  return [
+    ...normalizedSubjects
+      .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
+        typeof subject.slug === "string" && subject.slug.length > 0,
+      )
+      .map((subject) => `api:products:/api/v1/products/${subject.slug}?*`),
+    "api:products:/api/v1/products/search?*",
+    "api:search:*",
+  ];
+}
+
+export function getProductAvailabilityStorefrontPrefixes(
+  subjects: readonly ProductAvailabilityCacheSubject[],
+): string[] {
+  return uniqueAvailabilitySubjects(subjects).flatMap((subject) => [
+    ...(subject.slug ? [`product_slug_${subject.slug}`] : []),
+    `product_variants_${subject.productId}`,
+  ]);
+}
+
+export function collectProductAvailabilityCacheInvalidation(
+  subjects: readonly ProductAvailabilityCacheSubject[],
+): ProductAvailabilityCacheInvalidation {
+  return {
+    apiKeys: getProductAvailabilityApiCacheKeys(subjects),
+    apiPatterns: getProductAvailabilityApiCachePatterns(subjects),
+    storefrontPrefixes: getProductAvailabilityStorefrontPrefixes(subjects),
+  };
+}
+
+export async function invalidateProductAvailabilityCacheSubjects(
+  subjects: readonly ProductAvailabilityCacheSubject[],
+  c: { env?: Env; executionCtx?: ExecutionContext },
+): Promise<void> {
+  const normalizedSubjects = uniqueAvailabilitySubjects(subjects);
+  if (normalizedSubjects.length === 0) return;
+
+  const invalidation = collectProductAvailabilityCacheInvalidation(normalizedSubjects);
+
+  console.log(
+    `[Cache] Invalidating product availability for ${normalizedSubjects.length} product(s)`,
+  );
+
+  await Promise.all([
+    ...invalidation.apiKeys.map((key) => deleteCache(key, c.env?.CACHE)),
+    ...invalidation.apiPatterns.map((pattern) =>
+      deleteCacheByPattern(pattern, c.env?.CACHE),
+    ),
+  ]);
+
+  triggerStorefrontPurgeForPrefixes(
+    invalidation.storefrontPrefixes,
+    c.env,
+    { groups: ["products"], bumpVersion: false },
+    getOptionalExecutionContext(c),
+  );
+}
+
+/**
+ * Invalidate product detail/search API KV and exact storefront product cache
+ * prefixes for stock-changing writes such as order creation, cancellation,
+ * refund, return, shipment, and admin stock edits.
+ */
+export async function invalidateProductAvailabilityCaches(
+  db: Database,
+  input: ProductAvailabilityCacheInput,
+  c: { env?: Env; executionCtx?: ExecutionContext },
+): Promise<void> {
+  const subjects = await tryResolveProductAvailabilityCacheSubjects(db, input);
+  await invalidateProductAvailabilityCacheSubjects(subjects, c);
 }
 
 /**

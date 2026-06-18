@@ -6,6 +6,7 @@ import { ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope } from "../../schemas/responses";
+import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -57,6 +58,7 @@ app.openapi(returnOrderRoute, async (c) => {
     const envCache = c.env?.CACHE;
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false }, encryptionKey);
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
     return ok(c, result);
 });
 
@@ -97,6 +99,7 @@ app.openapi(refundOrderRoute, async (c) => {
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway }, encryptionKey);
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
     return ok(c, result);
 });
 

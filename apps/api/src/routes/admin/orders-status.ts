@@ -12,6 +12,7 @@ import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
+import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -82,6 +83,7 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.updateOrderStatus(db, orderId, data.status);
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
 
     // Queue customer notification if the status change warrants one
     if (result.notification && c.env.ORDER_NOTIFICATIONS_QUEUE) {
@@ -169,6 +171,7 @@ app.openapi(postCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.processCodAction(db, orderId, data);
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
 
     // Enqueue notification for COD status changes that affect order status
     const COD_NOTIFICATION_MAP: Record<string, string> = {
@@ -259,6 +262,7 @@ app.openapi(postFulfillRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.createFulfillmentShipment(db, orderId, data);
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
     return created(c, result);
 });
 
@@ -385,6 +389,7 @@ app.openapi(createShipmentRoute, async (c) => {
         console.error(`Failed to create shipment for order ${orderId}: ${errorMessage}`);
         throw new ValidationError(errorMessage);
     }
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
 
     const provider = await getDeliveryProvider(db, data.providerId);
     const createdShipmentRecord = await getLatestShipment(db, orderId);
@@ -546,6 +551,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
 
     try {
         const orderUpdate = await updateOrderStatusFromShipment(db, shipmentId, updatedShipment.status);
+        await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
         orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
     } catch (e: unknown) {
         console.error("Error updating order status:", e);

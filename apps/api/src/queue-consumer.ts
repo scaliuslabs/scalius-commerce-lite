@@ -28,6 +28,7 @@ import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/c
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getEncryptionKey } from "./utils/encryption-key";
+import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
 
@@ -152,6 +153,7 @@ export type AuthOtpQueueMessage =
 export async function handleQueueBatch(
   batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderIngestQueueMessage>,
   env: Env,
+  executionCtx?: ExecutionContext,
 ): Promise<void> {
   const db = getDb(env);
 
@@ -159,12 +161,30 @@ export async function handleQueueBatch(
   // a mixed/manual batch is not cast wholesale to order messages.
   if (batch.queue === "order-ingest" || batch.queue === "order-ingest-queue") {
     await handleOrderIngestBatch(batch as unknown as MessageBatch<OrderIngestQueueMessage>, db, env);
+    const orderMessages = batch.messages as unknown as Message<OrderIngestQueueMessage>[];
+    await invalidateProductAvailabilityCaches(
+      db,
+      {
+        orderIds: orderMessages.map((msg) => msg.body.orderData.id),
+        variantIds: orderMessages.flatMap((msg) =>
+          msg.body.items
+            .map((item) => item.variantId)
+            .filter((variantId): variantId is string => typeof variantId === "string" && variantId.length > 0),
+        ),
+      },
+      { env, executionCtx },
+    );
     return;
   }
 
   // Process each payment/notification/OTP message independently
   const results = await Promise.allSettled(
-    batch.messages.map((msg) => processQueueMessage(msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>, db, env)),
+    batch.messages.map((msg) => processQueueMessage(
+      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>,
+      db,
+      env,
+      executionCtx,
+    )),
   );
 
   // Ack successful, retry failed with backoff
@@ -190,6 +210,7 @@ async function processQueueMessage(
   msg: Message<PaymentQueueMessage | AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
+  executionCtx?: ExecutionContext,
 ): Promise<void> {
   const payload = msg.body;
   console.log(`[Queue] Processing message type=${payload.type} id=${msg.id}`);
@@ -281,6 +302,9 @@ async function processQueueMessage(
         metadata: { currency: payload.currency },
       });
       assertPaymentConfirmed(result, "stripe", payload.orderId);
+      if (result.success) {
+        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+      }
       console.log(`[Queue] Stripe payment confirmed for order ${payload.orderId}`);
       break;
     }
@@ -293,6 +317,7 @@ async function processQueueMessage(
 
     case "payment.stripe.canceled": {
       await releaseOrderInventory(db, payload.orderId);
+      await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
       console.log(`[Queue] Stripe payment cancelled, inventory released for order ${payload.orderId}`);
       break;
     }
@@ -318,6 +343,9 @@ async function processQueueMessage(
         metadata: { currency: payload.currency, cardType: payload.cardType, cardBrand: payload.cardBrand },
       });
       assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
+      if (result.success) {
+        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+      }
       console.log(`[Queue] SSLCommerz payment confirmed for order ${payload.orderId}`);
       break;
     }
@@ -361,6 +389,9 @@ async function processQueueMessage(
         },
       });
       assertPaymentConfirmed(result, "polar", payload.orderId);
+      if (result.success) {
+        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+      }
       console.log(`[Queue] Polar payment confirmed for order ${payload.orderId} (recorded: ${recordAmount}, gateway: ${gatewayAmountMajor} ${polarCurrency})`);
       break;
     }
@@ -383,6 +414,7 @@ async function processQueueMessage(
         polarStatus: payload.polarStatus,
       });
       if (result.success) {
+        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         console.log(`[Queue] Polar refund processed for order ${payload.orderId} (status: ${payload.polarStatus})`);
       } else {
         throw new Error(`Polar refund failed for order ${payload.orderId}: ${result.error}`);

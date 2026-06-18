@@ -10,6 +10,7 @@ import { ok } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
+import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -139,6 +140,7 @@ app.openapi(checkStatusRoute, (async (c: AdminRouteContext<typeof checkStatusRou
         shipmentId,
         result.status,
     );
+    await invalidateProductAvailabilityCaches(db, { orderIds: [currentShipment.orderId] }, c);
 
     // Enqueue customer notification only for actual order status changes.
     if (orderStatusUpdate && orderStatusUpdate.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
