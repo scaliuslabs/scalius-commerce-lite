@@ -61,6 +61,7 @@ const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
 ]);
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ORDER_LIST_LIMIT = 100;
+type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
 
 function normalizeListPositiveInteger(value: number | undefined, fallback: number, max?: number): number {
     if (!Number.isFinite(value)) return fallback;
@@ -113,7 +114,7 @@ export async function listOrders(db: Database, options: {
     page?: number;
     limit?: number;
     showTrashed?: boolean;
-    sort?: "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
+    sort?: OrderListSort;
     order?: "asc" | "desc";
     startDate?: Date;
     endDate?: Date;
@@ -151,11 +152,21 @@ export async function listOrders(db: Database, options: {
         if (isLikelyPhoneSearch(trimmedSearch) && phoneCondition) {
             whereConditions.push(ftsCondition ? sql`(${ftsCondition} OR ${phoneCondition})` : phoneCondition);
             const sanitized = sanitizeFtsQuery(trimmedSearch);
-            rankExpression = sql`(SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}) ASC`;
+            rankExpression = sql`
+                COALESCE(
+                    (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
+                    999999
+                ) ASC
+            `;
         } else if (ftsCondition) {
             whereConditions.push(ftsCondition);
             const sanitized = sanitizeFtsQuery(trimmedSearch);
-            rankExpression = sql`(SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}) ASC`;
+            rankExpression = sql`
+                COALESCE(
+                    (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
+                    999999
+                ) ASC
+            `;
         }
     }
 
@@ -181,6 +192,38 @@ export async function listOrders(db: Database, options: {
         .select({ count: sql<number>`count(*)` })
         .from(orders)
         .where(whereClause);
+
+    const orderByExpressions = (() => {
+        if (rankExpression && sort === "relevance") {
+            return [
+                rankExpression,
+                sql`${orders.updatedAt} desc`,
+                sql`${orders.id} desc`,
+            ];
+        }
+
+        const sortField = (() => {
+            switch (sort) {
+                case "customerName":
+                    return orders.customerName;
+                case "totalAmount":
+                    return orders.totalAmount;
+                case "status":
+                    return orders.status;
+                case "createdAt":
+                    return orders.createdAt;
+                case "relevance":
+                case "updatedAt":
+                default:
+                    return orders.updatedAt;
+            }
+        })();
+
+        return [
+            order === "asc" ? sql`${sortField} asc` : sql`${sortField} desc`,
+            order === "asc" ? sql`${orders.id} asc` : sql`${orders.id} desc`,
+        ];
+    })();
 
     const dataQuery = db
         .select({
@@ -209,29 +252,7 @@ export async function listOrders(db: Database, options: {
         .where(whereClause)
         .limit(limit)
         .offset(offset)
-        .orderBy(
-            (() => {
-                if (rankExpression) return rankExpression;
-
-                const sortField = (() => {
-                    switch (sort) {
-                        case "customerName":
-                            return orders.customerName;
-                        case "totalAmount":
-                            return orders.totalAmount;
-                        case "status":
-                            return orders.status;
-                        case "createdAt":
-                            return orders.createdAt;
-                        case "updatedAt":
-                        default:
-                            return orders.updatedAt;
-                    }
-                })();
-
-                return order === "asc" ? sql`${sortField} asc` : sql`${sortField} desc`;
-            })(),
-        );
+        .orderBy(...orderByExpressions);
 
     // Batch count + data in a single round-trip
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation

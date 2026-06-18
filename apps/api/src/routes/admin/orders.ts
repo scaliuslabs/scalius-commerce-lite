@@ -28,6 +28,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
+type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
 
 function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
     return typeof result === "object"
@@ -142,7 +143,16 @@ const listOrdersRoute = createRoute({
             search: z.string().optional().openapi({ description: "Search query" }),
             status: z.string().optional().openapi({ description: "Filter by status" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed orders" }),
-            sort: z.enum(["customerName", "totalAmount", "status", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
+            sort: z.enum([
+                "relevance",
+                "customerName",
+                "totalAmount",
+                "status",
+                "createdAt",
+                "updatedAt",
+            ]).optional().openapi({
+                description: "Sort field. Use relevance with a search query to order by FTS rank.",
+            }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
             startDate: z.string()
                 .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -165,13 +175,15 @@ const listOrdersRoute = createRoute({
 app.openapi(listOrdersRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
+    const effectiveSort: OrderListSort = query.sort
+        ?? (query.search?.trim() ? "relevance" : "updatedAt");
     const result = await OrdersService.listOrders(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || "",
         status: query.status || undefined,
         showTrashed: query.trashed === "true",
-        sort: query.sort,
+        sort: effectiveSort,
         order: query.order as "asc" | "desc",
         startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
         endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end")

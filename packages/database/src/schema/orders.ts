@@ -67,6 +67,7 @@ export const orders = sqliteTable("orders", {
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_created_at_idx").on(table.createdAt),
     index("orders_deleted_at_idx").on(table.deletedAt),
+    index("orders_list_updated_at_idx").on(table.deletedAt, table.updatedAt),
     index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
     index("orders_customer_phone_idx").on(table.customerPhone),
     index("orders_shipment_claim_idx").on(table.shipmentClaimId, table.shipmentClaimExpiresAt),

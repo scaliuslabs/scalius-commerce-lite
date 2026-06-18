@@ -76,6 +76,21 @@ describe("order list interactions", () => {
     expect(routeSource).not.toContain("range.to.toISOString()");
   });
 
+  it("uses explicit relevance only while starting an order search", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+
+    expect(routeSource).toContain('"relevance"');
+    expect(routeSource).toContain('"customerName"');
+    expect(routeSource).toContain("const hasNextSearch = value.trim().length > 0");
+    expect(routeSource).toContain("const hasCurrentSearch = search.search.trim().length > 0");
+    expect(routeSource).toContain('sort: "relevance"');
+    expect(routeSource).toContain('sort: "updatedAt"');
+    expect(routeSource).toContain('order: "desc"');
+    expect(routeSource).toContain(
+      'currentSort: search.sort === "relevance" ? undefined : search.sort',
+    );
+  });
+
   it("does not advertise mobile range selection that is not implemented", () => {
     const source = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
 
