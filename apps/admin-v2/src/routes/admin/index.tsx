@@ -67,6 +67,11 @@ function DashboardPage() {
   });
   const data = summaryQuery.data ?? EMPTY_DASHBOARD_SUMMARY;
   const dailyActivityData = activityQuery.data?.dailyActivityData ?? [];
+  const activityLoadState = activityQuery.isPending
+    ? "pending"
+    : activityQuery.isError && !activityQuery.data
+      ? "error"
+      : "success";
 
   return (
     <div className="space-y-8">
@@ -97,6 +102,7 @@ function DashboardPage() {
             totalCustomers={data.stats.totalCustomers}
             currentMonth={data.stats.currentMonth}
             initialDailyData={dailyActivityData}
+            activityLoadState={activityLoadState}
           />
         </div>
       </div>

@@ -5,6 +5,13 @@ export interface DailyActivityDataPoint {
   newCustomers: number;
 }
 
+export type DashboardActivityLoadState = "pending" | "success" | "error";
+export type DashboardActivityPanelState =
+  | "loading"
+  | "chart"
+  | "empty"
+  | "unavailable";
+
 export function getDailyActivityDataForRange(
   initialDailyData: readonly DailyActivityDataPoint[] | null | undefined,
   timeRange: string,
@@ -25,4 +32,19 @@ export function hasDailyActivityData(
   return dailyData.some(
     (item) => item.orders > 0 || item.revenue > 0 || item.newCustomers > 0,
   );
+}
+
+export function getDashboardActivityPanelState(
+  dailyData: readonly DailyActivityDataPoint[],
+  loadState: DashboardActivityLoadState,
+): DashboardActivityPanelState {
+  if (loadState === "pending") {
+    return "loading";
+  }
+
+  if (loadState === "error") {
+    return "unavailable";
+  }
+
+  return hasDailyActivityData(dailyData) ? "chart" : "empty";
 }
