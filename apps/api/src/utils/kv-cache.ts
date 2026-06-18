@@ -95,14 +95,14 @@ export function getKv(): KVNamespace | undefined {
 // ---------------------------------------------------------------------------
 // Key helpers
 // ---------------------------------------------------------------------------
-function prefixedKey(key: string): string {
+export function toProjectCacheKey(key: string): string {
   return `${PROJECT_PREFIX}:${key}`;
 }
 
 // For pattern-based deletion we strip the trailing wildcard and treat it as a
 // KV list prefix (KV list is always prefix-based, not glob).
 function patternToPrefix(pattern: string): string {
-  return prefixedKey(pattern.replace(/\*$/, ""));
+  return toProjectCacheKey(pattern.replace(/\*$/, ""));
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ export async function setCache(
   kv?: KVNamespace,
 ): Promise<void> {
   const ns = kv ?? _kv;
-  const fullKey = prefixedKey(key);
+  const fullKey = toProjectCacheKey(key);
 
   if (ns) {
     try {
@@ -147,7 +147,7 @@ export async function getCache<T>(
   kv?: KVNamespace,
 ): Promise<T | null> {
   const ns = kv ?? _kv;
-  const fullKey = prefixedKey(key);
+  const fullKey = toProjectCacheKey(key);
 
   if (ns) {
     try {
@@ -171,7 +171,7 @@ export async function deleteCache(
   kv?: KVNamespace,
 ): Promise<void> {
   const ns = kv ?? _kv;
-  const fullKey = prefixedKey(key);
+  const fullKey = toProjectCacheKey(key);
 
   if (ns) {
     try {
