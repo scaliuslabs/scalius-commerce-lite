@@ -1,12 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import FirebaseSettingsForm from "~/components/admin/settings/FirebaseSettingsForm";
-import { firebaseSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/notifications")({
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(firebaseSettingsQueryOptions());
-  },
   head: () => ({ meta: [{ title: "Notification Settings | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: NotificationSettingsPage,
