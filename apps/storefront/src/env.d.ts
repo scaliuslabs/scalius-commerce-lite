@@ -94,6 +94,7 @@ interface Env {
   PUBLIC_API_URL?: string;
   PUBLIC_API_BASE_URL?: string;
   STOREFRONT_URL?: string;
+  CACHE_NAMESPACE?: string;
   CDN_DOMAIN_URL?: string;
 
   [key: string]: unknown;

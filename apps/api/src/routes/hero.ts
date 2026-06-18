@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 
 import { heroSliders } from "@scalius/database/schema";
 import { eq, or, and, isNull } from "drizzle-orm";
@@ -20,17 +21,53 @@ const parseHeroImages = (imagesJson: string | null | undefined): HeroImage[] => 
   }
 };
 
+const formatHeroTimestamp = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  }
+
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  const date = Number.isFinite(numericValue)
+    ? new Date(numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000)
+    : new Date(String(value));
+
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+};
+
 // Create an OpenAPIHono app for hero routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// Apply cache middleware with longer TTL for hero content
+function shouldCacheHeroRequest(c: Context): boolean {
+  const normalizedPath = c.req.path.replace(/\/$/, "");
+  if (!normalizedPath.endsWith("/hero/sliders")) {
+    return true;
+  }
+
+  const type = c.req.query("type");
+  return type === "desktop" || type === "mobile";
+}
+
+// Apply cache middleware with longer TTL for deterministic hero content.
+// The untyped slider list varies by User-Agent, so cache only explicit
+// `?type=desktop|mobile` list reads plus path-scoped slider detail reads.
 app.use(
   "*",
   cacheMiddleware({
     ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:hero:",
-    varyByQuery: false,
-    methods: ["GET"]
+    varyByQuery: true,
+    methods: ["GET"],
+    cacheCondition: shouldCacheHeroRequest,
   }),
 );
 
@@ -128,8 +165,8 @@ app.openapi(listSlidersRoute, async (c) => {
       type: slider.type,
       images: parseHeroImages(slider.images),
       isActive: slider.isActive,
-      createdAt: slider.createdAt instanceof Date ? slider.createdAt.toISOString() : null,
-      updatedAt: slider.updatedAt instanceof Date ? slider.updatedAt.toISOString() : null,
+      createdAt: formatHeroTimestamp(slider.createdAt),
+      updatedAt: formatHeroTimestamp(slider.updatedAt),
     };
   };
 
@@ -219,8 +256,8 @@ app.openapi(getSliderByIdRoute, async (c) => {
       type: slider.type,
       images,
       isActive: slider.isActive,
-      createdAt: slider.createdAt instanceof Date ? slider.createdAt.toISOString() : null,
-      updatedAt: slider.updatedAt instanceof Date ? slider.updatedAt.toISOString() : null,
+      createdAt: formatHeroTimestamp(slider.createdAt),
+      updatedAt: formatHeroTimestamp(slider.updatedAt),
     }
   });
 });

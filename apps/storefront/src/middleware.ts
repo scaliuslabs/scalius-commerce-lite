@@ -15,6 +15,7 @@ import {
   productSlugCacheKeyFromUrl,
   resolveExactCacheGeneration,
 } from "./lib/cache-generations";
+import { resolveCacheNamespace } from "./lib/cache-namespace";
 
 // Timeout constants to prevent hanging on slow/unavailable services
 const KV_TIMEOUT_MS = 1000;
@@ -78,11 +79,11 @@ function buildCacheKeyUrl(url: URL): URL {
 async function resolveProductHtmlGeneration({
   cacheUrl,
   kvBinding,
-  hostname,
+  cacheNamespace,
 }: {
   cacheUrl: URL;
   kvBinding: KVNamespace;
-  hostname: string;
+  cacheNamespace: string;
 }): Promise<
   | { cacheEnabled: true; generation: string | null }
   | { cacheEnabled: false; reason: string }
@@ -94,7 +95,7 @@ async function resolveProductHtmlGeneration({
 
   const generation = await resolveExactCacheGeneration({
     store: kvBinding,
-    hostname,
+    hostname: cacheNamespace,
     logicalKey,
     timeoutMs: GENERATION_LOOKUP_TIMEOUT_MS,
   });
@@ -139,6 +140,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   const isCloudflareEnv = isCloudflareEnvironment();
   const env = getEnv();
   const kvBinding = env?.CACHE_CONTROL;
+  const cacheNamespace = resolveCacheNamespace(env, hostname);
 
   // Store cache version for reuse (avoid duplicate KV lookups)
   let resolvedCacheVersion: string | null = null;
@@ -149,7 +151,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   if (isCloudflareEnv && kvBinding) {
     try {
       cfCache = (caches as CloudflareCacheStorage).default;
-      const projectCacheVersionKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
+      const projectCacheVersionKey = `${CACHE_VERSION_KEY_PREFIX}${cacheNamespace}`;
 
       const cacheVersionResult = await resolveStorefrontCacheVersion({
         store: kvBinding,
@@ -172,6 +174,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
           hostname,
           waitUntilFn,
           kvBinding,
+          cacheNamespace,
         );
       }
     } catch (error: unknown) {
@@ -188,6 +191,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
     kvStore: kvBinding ?? null,
     kvVersion: resolvedCacheVersion,
     hostname,
+    cacheNamespace,
     waitUntil: isCloudflareEnv ? ((promise: Promise<unknown>) => locals.cfContext.waitUntil(promise)) : null,
   };
 
@@ -211,7 +215,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       const productGeneration = await resolveProductHtmlGeneration({
         cacheUrl,
         kvBinding,
-        hostname,
+        cacheNamespace,
       });
       if (!productGeneration.cacheEnabled) {
         const response = await next();

@@ -115,6 +115,7 @@ function isLivePlacement(placement: WidgetCacheSubject["placements"][number]): b
 function collectWidgetCacheInvalidation(subjects: WidgetCacheSubject[]) {
     const apiPatterns = new Set<string>();
     const storefrontPrefixes = new Set<string>();
+    const htmlPaths = new Set<string>();
     let warmHomepage = false;
 
     for (const subject of subjects) {
@@ -142,6 +143,13 @@ function collectWidgetCacheInvalidation(subjects: WidgetCacheSubject[]) {
                     `api:storefront:page:/api/v1/storefront/pages/slug/${placement.targetSlug}*`,
                 );
                 storefrontPrefixes.add(`page_render_${placement.targetSlug}_`);
+                htmlPaths.add(`/${placement.targetSlug}`);
+            } else if (placement.scope === "product" && placement.targetSlug) {
+                htmlPaths.add(`/products/${placement.targetSlug}`);
+            } else if (placement.scope === "category" && placement.targetSlug) {
+                htmlPaths.add(`/categories/${placement.targetSlug}`);
+            } else if (placement.scope === "collection") {
+                htmlPaths.add(`/collections/${placement.scopeId}`);
             }
         }
     }
@@ -149,6 +157,7 @@ function collectWidgetCacheInvalidation(subjects: WidgetCacheSubject[]) {
     return {
         apiPatterns: [...apiPatterns],
         storefrontPrefixes: [...storefrontPrefixes],
+        htmlPaths: [...htmlPaths],
         warmHomepage,
     };
 }
@@ -157,18 +166,19 @@ async function invalidateWidgetCaches(
     c: { env: Env; executionCtx?: ExecutionContext },
     subjects: WidgetCacheSubject[],
 ): Promise<void> {
-    const { apiPatterns, storefrontPrefixes, warmHomepage } =
+    const { apiPatterns, storefrontPrefixes, htmlPaths, warmHomepage } =
         collectWidgetCacheInvalidation(subjects);
     if (apiPatterns.length > 0) {
         await invalidateApiCachePatterns(apiPatterns, c.env?.CACHE);
     }
-    if (storefrontPrefixes.length > 0 || warmHomepage) {
+    if (storefrontPrefixes.length > 0 || htmlPaths.length > 0 || warmHomepage) {
         triggerStorefrontPurgeForPrefixes(
             storefrontPrefixes,
             c.env,
             {
                 groups: ["widgets"],
                 bumpVersion: warmHomepage,
+                ...(htmlPaths.length > 0 ? { htmlPaths } : {}),
             },
             getOptionalExecutionContext(c),
         );

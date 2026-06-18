@@ -57,6 +57,8 @@ vi.mock("@/lib/cache-purge-policy", () => ({
 describe("storefront cache purge route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (mocks.cfEnv as { STOREFRONT_URL?: string }).STOREFRONT_URL;
+    delete (mocks.cfEnv as { CACHE_NAMESPACE?: string }).CACHE_NAMESPACE;
     mocks.cfEnv.CACHE_CONTROL.get.mockResolvedValue("4");
     mocks.cfEnv.CACHE_CONTROL.put.mockResolvedValue(undefined);
     vi.stubGlobal(
@@ -195,6 +197,41 @@ describe("storefront cache purge route", () => {
     );
   });
 
+  it("uses the canonical storefront URL as the production cache namespace", async () => {
+    (mocks.cfEnv as { STOREFRONT_URL?: string }).STOREFRONT_URL =
+      "https://storefront.example.com";
+    const { POST } = await import("./purge-cache");
+    const request = new Request("https://www.example.com/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ bumpVersion: true }),
+    });
+
+    const response = await POST({
+      request,
+      url: new URL(request.url),
+      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+    } as unknown as Parameters<typeof POST>[0]);
+    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
+    await warmPromise;
+
+    expect(response.status).toBe(200);
+    expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_storefront.example.com");
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith("v_storefront.example.com", "5");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://www.example.com/",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Cache-Control": "no-cache",
+          "X-Cache-Warm": "true",
+        }),
+      }),
+    );
+  });
+
   it("keeps POST selective prefix purges versioned without warming non-HTML groups", async () => {
     const { POST } = await import("./purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
@@ -301,16 +338,16 @@ describe("storefront cache purge route", () => {
       "product_variants_prod_1",
     ]);
     expect(mocks.cacheDelete).toHaveBeenCalledWith(
-      `https://storefront.example.com/_api-cache/product_slug_fish?v=4&build=${BUILD_ID}`,
+      `https://storefront.example.com/_api-cache/product_slug_fish?v=4&build=${BUILD_ID}&g=4`,
     );
     expect(mocks.cacheDelete).toHaveBeenCalledWith(
-      `https://storefront.example.com/_api-cache/product_variants_prod_1?v=4&build=${BUILD_ID}`,
+      `https://storefront.example.com/_api-cache/product_variants_prod_1?v=4&build=${BUILD_ID}&g=4`,
     );
     const htmlDeleteArg = mocks.cacheDelete.mock.calls.find(
       ([arg]) => arg instanceof Request,
     )?.[0] as Request | undefined;
     expect(htmlDeleteArg?.url).toBe(
-      `https://storefront.example.com/products/fish?cache_v=4-${BUILD_ID}`,
+      `https://storefront.example.com/products/fish?cache_v=4-${BUILD_ID}&cache_gen=4`,
     );
     expect(mocks.smartCacheClear).not.toHaveBeenCalled();
     expect(mocks.waitUntil).toHaveBeenCalledTimes(1);

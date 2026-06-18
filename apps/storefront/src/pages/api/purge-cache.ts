@@ -9,10 +9,13 @@ import {
   shouldWarmCriticalCachesForSelectivePurge,
 } from "@/lib/cache-purge-policy";
 import {
+  buildExactCacheGenerationKey,
   bumpExactCacheGenerations,
   productSlugCacheKeyFromPath,
+  shouldUseExactCacheGeneration,
 } from "../../lib/cache-generations";
 import { BUILD_ID } from "../../config/build-id";
+import { resolveCacheNamespace } from "../../lib/cache-namespace";
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
 
@@ -164,24 +167,72 @@ async function warmExactHtmlPaths(baseUrl: string, paths: readonly string[]): Pr
   console.log(`[CacheWarm] Exact warm completed: ${successful}/${uniquePaths.length} path(s) warmed`);
 }
 
-function buildL2CacheKeyUrl(hostname: string, key: string, version: string): string {
-  return `https://${hostname}/_api-cache/${encodeURIComponent(key)}?v=${version}&build=${BUILD_ID}`;
+function buildL2CacheKeyUrl(
+  hostname: string,
+  key: string,
+  version: string,
+  generations: ReadonlyMap<string, string> = new Map(),
+): string {
+  const cacheKey = new URL(`https://${hostname}/_api-cache/${encodeURIComponent(key)}`);
+  cacheKey.searchParams.set("v", version);
+  cacheKey.searchParams.set("build", BUILD_ID);
+  const generation = generations.get(key);
+  if (generation) {
+    cacheKey.searchParams.set("g", generation);
+  }
+  return cacheKey.toString();
 }
 
-function buildHtmlCacheKeyUrl(origin: string, path: string, version: string): string {
+function buildHtmlCacheKeyUrl(
+  origin: string,
+  path: string,
+  version: string,
+  generations: ReadonlyMap<string, string> = new Map(),
+): string {
   const htmlUrl = new URL(path, origin);
   if (/^\/products\/[^/]+$/.test(htmlUrl.pathname)) {
     htmlUrl.searchParams.delete("size");
     htmlUrl.searchParams.delete("color");
   }
   htmlUrl.searchParams.set("cache_v", `${version}-${BUILD_ID}`);
+  const productKey = productSlugCacheKeyFromPath(path);
+  const generation = productKey ? generations.get(productKey) : null;
+  if (generation) {
+    htmlUrl.searchParams.set("cache_gen", generation);
+  }
   return htmlUrl.toString();
+}
+
+async function readCurrentExactGenerations({
+  store,
+  cacheNamespace,
+  logicalKeys,
+}: {
+  store: KVNamespace;
+  cacheNamespace: string;
+  logicalKeys: readonly string[];
+}): Promise<Map<string, string>> {
+  const keys = [...new Set(logicalKeys.filter(shouldUseExactCacheGeneration))];
+  const generations = new Map<string, string>();
+  await Promise.all(
+    keys.map(async (logicalKey) => {
+      try {
+        const generation = await store.get(buildExactCacheGenerationKey(cacheNamespace, logicalKey));
+        generations.set(logicalKey, generation || "0");
+      } catch (error: unknown) {
+        console.warn(`[SelectivePurge] Failed to read exact generation for ${logicalKey}:`, error);
+        generations.set(logicalKey, "0");
+      }
+    }),
+  );
+  return generations;
 }
 
 async function deleteL2ExactKeys(
   hostname: string,
   keys: readonly string[],
   version: string | null,
+  generations: ReadonlyMap<string, string> = new Map(),
 ): Promise<number> {
   const uniqueKeys = [...new Set(keys.filter(Boolean))];
   if (uniqueKeys.length === 0 || !version || typeof caches === "undefined") {
@@ -190,7 +241,7 @@ async function deleteL2ExactKeys(
 
   const cache = (caches as CacheStorage & { default: Cache }).default;
   const results = await Promise.allSettled(
-    uniqueKeys.map((key) => cache.delete(buildL2CacheKeyUrl(hostname, key, version))),
+    uniqueKeys.map((key) => cache.delete(buildL2CacheKeyUrl(hostname, key, version, generations))),
   );
 
   return results.filter((result) => result.status === "fulfilled" && result.value).length;
@@ -212,6 +263,7 @@ async function deleteHtmlPaths(
   origin: string,
   paths: readonly string[],
   version: string | null,
+  generations: ReadonlyMap<string, string> = new Map(),
 ): Promise<number> {
   const uniquePaths = [...new Set(paths.filter(Boolean))];
   if (uniquePaths.length === 0 || !version || typeof caches === "undefined") {
@@ -220,7 +272,7 @@ async function deleteHtmlPaths(
 
   const cache = (caches as CacheStorage & { default: Cache }).default;
   const results = await Promise.allSettled(
-    uniquePaths.map((path) => cache.delete(new Request(buildHtmlCacheKeyUrl(origin, path, version)))),
+    uniquePaths.map((path) => cache.delete(new Request(buildHtmlCacheKeyUrl(origin, path, version, generations)))),
   );
 
   return results.filter((result) => result.status === "fulfilled" && result.value).length;
@@ -316,7 +368,8 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     bumpVersion = false,
   } = body;
   const hostname = url.hostname;
-  const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
+  const cacheNamespace = resolveCacheNamespace(env, hostname);
+  const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${cacheNamespace}`;
   const shouldBumpCacheVersion = shouldBumpCacheVersionForSelectivePurge({ prefixes, bumpVersion });
   const shouldWarmCaches = shouldWarmCriticalCachesForSelectivePurge({ prefixes, bumpVersion });
   const exactGenerationKeys = collectExactGenerationKeys(exactKeys, htmlPaths);
@@ -324,6 +377,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   try {
     let newVersion: number | null = null;
     let currentVersionForExactDeletes: string | null = null;
+    let currentExactGenerations = new Map<string, string>();
     let l2ExactKeysDeleted = 0;
     let htmlPathsDeleted = 0;
     let exactGenerationsBumped = 0;
@@ -337,23 +391,31 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       await kv.put(cacheKey, newVersion.toString());
       console.log(`[SelectivePurge] Bumped storefront cache version to ${newVersion} for ${hostname}`);
     } else if (exactKeys.length > 0 || htmlPaths.length > 0) {
+      currentVersionForExactDeletes = await kv.get(cacheKey);
+      currentExactGenerations = await readCurrentExactGenerations({
+        store: kv,
+        cacheNamespace,
+        logicalKeys: exactGenerationKeys,
+      });
+
       const bumpedGenerations = await bumpExactCacheGenerations({
         store: kv,
-        hostname,
+        hostname: cacheNamespace,
         logicalKeys: exactGenerationKeys,
       });
       exactGenerationsBumped = bumpedGenerations.length;
 
-      currentVersionForExactDeletes = await kv.get(cacheKey);
       l2ExactKeysDeleted = await deleteL2ExactKeys(
         hostname,
         exactKeys,
         currentVersionForExactDeletes,
+        currentExactGenerations,
       );
       htmlPathsDeleted = await deleteHtmlPaths(
         url.origin,
         htmlPaths,
         currentVersionForExactDeletes,
+        currentExactGenerations,
       );
       if (htmlPaths.length > 0) {
         locals.cfContext.waitUntil(warmExactHtmlPaths(url.origin, htmlPaths));
