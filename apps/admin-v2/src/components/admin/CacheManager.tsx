@@ -209,9 +209,9 @@ export function CacheManager() {
               Cache is organized into <strong>invalidation groups</strong>. When you edit content in the admin,
               only the relevant groups are cleared. Groups marked{" "}
               <Badge variant="secondary" className="inline-flex text-xs px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800">Warms HTML</Badge>{" "}
-              bump the storefront cache version and warm critical pages. Groups marked{" "}
-              <Badge variant="secondary" className="inline-flex text-xs px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">Prefix only</Badge>{" "}
-              clear matching API/storefront data prefixes without starting critical-page warming.
+              are directly HTML-affecting. Groups marked{" "}
+              <Badge variant="secondary" className="inline-flex text-xs px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">Data prefixes</Badge>{" "}
+              clear matching API/storefront data prefixes; critical pages are warmed whenever the storefront cache version moves.
             </div>
           </CardContent>
         </Card>
@@ -292,7 +292,7 @@ export function CacheManager() {
                     </Badge>
                   ) : (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                      Prefix only
+                      Data prefixes
                     </Badge>
                   )}
                 </div>

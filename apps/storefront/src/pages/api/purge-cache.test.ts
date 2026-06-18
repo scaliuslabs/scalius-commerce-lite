@@ -47,11 +47,12 @@ vi.mock("@/lib/cache-purge-policy", () => ({
     bumpVersion: boolean;
   }) => bumpVersion || prefixes.length > 0,
   shouldWarmCriticalCachesForSelectivePurge: ({
+    prefixes,
     bumpVersion,
   }: {
     prefixes: string[];
     bumpVersion: boolean;
-  }) => bumpVersion,
+  }) => bumpVersion || prefixes.length > 0,
 }));
 
 describe("storefront cache purge route", () => {
@@ -232,7 +233,7 @@ describe("storefront cache purge route", () => {
     );
   });
 
-  it("keeps POST selective prefix purges versioned without warming non-HTML groups", async () => {
+  it("warms critical caches when a selective prefix purge bumps the global version", async () => {
     const { POST } = await import("./purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       method: "POST",
@@ -261,13 +262,23 @@ describe("storefront cache purge route", () => {
     expect(body.success).toBe(true);
     expect(body.details?.newVersion).toBe(5);
     expect(body.details?.prefixesCleared).toBe(1);
-    expect(body.details?.cacheWarmingStarted).toBe(false);
+    expect(body.details?.cacheWarmingStarted).toBe(true);
     expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_storefront.example.com");
     expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith("v_storefront.example.com", "5");
     expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith(["checkout_config"]);
     expect(mocks.smartCacheClear).not.toHaveBeenCalled();
-    expect(mocks.waitUntil).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
+    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
+    await warmPromise;
+    expect(fetch).toHaveBeenCalledWith(
+      "https://storefront.example.com/",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Cache-Control": "no-cache",
+          "X-Cache-Warm": "true",
+        }),
+      }),
+    );
   });
 
   it("clears exact L1 and L2 keys without bumping the cache version", async () => {
