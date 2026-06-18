@@ -92,4 +92,14 @@ describe("storefront page data boundaries", () => {
     expect(source.slice(promiseAllIndex)).toContain("productsPromise");
     expect(source.slice(promiseAllIndex)).toContain("attributesPromise");
   });
+
+  it("trusts CMS page render data without refetching page widgets", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/[slug].astro`,
+      "utf8",
+    );
+
+    expect(source).toContain("const pageWidgets = pageRenderData?.widgets ?? []");
+    expect(source).not.toContain("getActiveWidgetsForScope(\"page\"");
+  });
 });

@@ -8,6 +8,7 @@ import {
   getApiV1AttributesCategorySlugByCategorySlug,
   getApiV1AttributesSearchFilters,
 } from "@scalius/api-client/sdk";
+import { normalizeSearchQuery } from "@/lib/search-query";
 
 export interface FilterableAttribute {
   id: string;
@@ -27,10 +28,11 @@ export interface FilterableAttribute {
 export async function getFilterableAttributes(
   options: { categorySlug?: string; searchQuery?: string } = {},
 ): Promise<FilterableAttribute[] | null> {
+  const searchQuery = normalizeSearchQuery(options.searchQuery);
   const cacheKey = options.categorySlug
     ? `filterable_attrs_category_${options.categorySlug}`
-    : options.searchQuery
-      ? `filterable_attrs_search_${options.searchQuery}`
+    : searchQuery
+      ? `filterable_attrs_search_${searchQuery}`
       : "filterable_attrs_global";
 
   return withEdgeCache(
@@ -45,10 +47,10 @@ export async function getFilterableAttributes(
             client,
             path: { categorySlug: options.categorySlug },
           });
-        } else if (options.searchQuery) {
+        } else if (searchQuery) {
           result = await getApiV1AttributesSearchFilters({
             client,
-            query: { q: options.searchQuery },
+            query: { q: searchQuery },
           });
         } else {
           result = await getApiV1AttributesFilterable({ client });

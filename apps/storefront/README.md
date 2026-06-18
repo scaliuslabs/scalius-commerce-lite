@@ -124,8 +124,8 @@ Implements a two-layer edge caching strategy for HTML pages:
 ### Cache Key Canonicalization
 
 - `src/lib/cache-key.ts` owns canonical query-string handling for HTML Cache API keys and product-list L2 keys.
-- HTML keys sort surviving query params, drop empty/tracking params (`utm_*`, `fbclid`, etc.), and strip client-side product selection params (`size`, `color`) before `cache_v` / `cache_gen` are added.
-- Product/category listing L2 keys use sorted query strings so equivalent filter objects do not create separate `all_products_` / `category_products_` entries.
+- HTML keys sort surviving query params, trim/collapse search text (`q` / `search`), drop empty/tracking params (`utm_*`, `fbclid`, etc.), and strip client-side product selection params (`size`, `color`) before `cache_v` / `cache_gen` are added.
+- Product/category listing L2 keys use sorted query strings with normalized search text so equivalent filter objects do not create separate `all_products_` / `category_products_` entries.
 - Middleware and `/api/purge-cache` exact HTML deletion must stay aligned on the same helper so deletes and reads target the same key.
 
 ### Cache Invalidation
@@ -147,7 +147,7 @@ When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN
 
 ## Page Data Loading
 
-Product detail pages start layout and product reads together, then chain product-scoped widgets from the product promise so widget fetches do not wait for layout. Category pages build product-list options before the first await, then start layout, category, product-list, filter-metadata, and category-widget reads in one promise wave. Search/all-products pages build product-list options first, then start layout, product-list, and search filter metadata together. Entity-scoped widgets may chain from the entity promise because they need the entity id, but unrelated product/list/filter reads must not wait for standalone metadata lookups. Keep `src/lib/page-data-boundaries.test.ts` aligned with this shape until consolidated render-data endpoints replace the separate calls.
+Product detail pages start layout and product reads together, then chain product-scoped widgets from the product promise so widget fetches do not wait for layout. Category pages build product-list options before the first await, then start layout, category, product-list, filter-metadata, and category-widget reads in one promise wave. Search/all-products pages build product-list options first, then start layout, product-list, and search filter metadata together. CMS page routes trust the consolidated page render-data widgets and must not issue a second scoped widget lookup when a page has no widgets. Entity-scoped widgets may chain from the entity promise because they need the entity id, but unrelated product/list/filter reads must not wait for standalone metadata lookups. Keep `src/lib/page-data-boundaries.test.ts` aligned with this shape until consolidated render-data endpoints replace the separate calls.
 
 ## API Client (`src/lib/api/`)
 

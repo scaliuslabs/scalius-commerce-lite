@@ -33,6 +33,7 @@ import {
   ArrowLeft,
   Search,
 } from "lucide-react";
+import { normalizeSearchQuery } from "@/lib/search-query";
 
 const { slug } = Astro.params;
 if (!slug) return new Response(null, { status: 404 });
@@ -40,7 +41,7 @@ if (!slug) return new Response(null, { status: 404 });
 const params = Astro.url.searchParams;
 const page = parseInt(params.get("page") || "1");
 const sortBy = params.get("sortBy") || "newest";
-const query = params.get("q") || "";
+const query = normalizeSearchQuery(params.get("q"));
 
 let category: Category | null = null;
 let productsResponse: PaginatedResponse<Product> | null = null;
@@ -121,9 +122,13 @@ const pageDescription =
   `Browse products in the ${category?.name} category.`;
 
 const currentFilters = Object.fromEntries(params.entries());
+if (query) currentFilters.q = query;
+else delete currentFilters.q;
 
 function getPaginationUrl(pageNum: number) {
   const url = new URL(Astro.url);
+  if (query) url.searchParams.set("q", query);
+  else url.searchParams.delete("q");
   url.searchParams.set("page", pageNum.toString());
   return url.toString();
 }
@@ -517,6 +522,8 @@ const collectionJsonLd = category
 </Layout>
 
 <script>
+  import { normalizeSearchQuery } from "@/lib/search-query";
+
   function setupFilterInteractivity() {
     const toggleBtn = document.getElementById("mobile-filter-toggle");
     const closeBtn = document.getElementById("mobile-filter-close");
@@ -556,6 +563,9 @@ const collectionJsonLd = category
 
     sortSelect.addEventListener("change", () => {
       const url = new URL(window.location.href);
+      const query = normalizeSearchQuery(url.searchParams.get("q"));
+      if (query) url.searchParams.set("q", query);
+      else url.searchParams.delete("q");
       url.searchParams.set("sortBy", sortSelect.value);
       url.searchParams.set("page", "1"); // Reset to first page when sorting
       window.location.href = url.toString();
