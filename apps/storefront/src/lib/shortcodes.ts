@@ -12,7 +12,16 @@ export interface ShortcodeMatch {
   attributes: Record<string, string>;
 }
 
-// Parse shortcodes from content (this function remains the same)
+function normalizeShortcodeAttributeQuotes(value: string): string {
+  return value
+    .replace(/&quot;/gi, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&#x22;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'");
+}
+
 export function parseShortcodes(content: string): ShortcodeMatch[] {
   const shortcodeRegex = /\[(\w+)([^\]]*)\]/g;
   const matches: ShortcodeMatch[] = [];
@@ -23,10 +32,12 @@ export function parseShortcodes(content: string): ShortcodeMatch[] {
 
     if (type === "widget" || type === "product") {
       const attributes: Record<string, string> = {};
+      const normalizedAttributesString =
+        normalizeShortcodeAttributeQuotes(attributesString);
 
       const attrRegex = /(\w+)=["']([^"']*)["']/g;
       let attrMatch;
-      while ((attrMatch = attrRegex.exec(attributesString)) !== null) {
+      while ((attrMatch = attrRegex.exec(normalizedAttributesString)) !== null) {
         attributes[attrMatch[1]] = attrMatch[2];
       }
 
@@ -94,27 +105,48 @@ export async function renderProductShortcode(
   }
 }
 
-// REFACTORED: Parallel processing — resolve all shortcodes concurrently, then replace
+async function renderShortcode(shortcode: ShortcodeMatch): Promise<string> {
+  if (shortcode.type === "widget") {
+    return renderWidgetShortcode(shortcode.id);
+  }
+  return renderProductShortcode(shortcode.id);
+}
+
+function getShortcodeResolutionKey(shortcode: ShortcodeMatch): string {
+  return `${shortcode.type}:${shortcode.id}`;
+}
+
+// Resolve unique shortcodes concurrently, then replace every matching token.
 export async function processShortcodes(content: string): Promise<string> {
   const normalizedContent = unwrapParagraphWrappedShortcodes(content);
   const shortcodes = parseShortcodes(normalizedContent);
   if (shortcodes.length === 0) return normalizedContent;
 
-  // Phase 1: Resolve all shortcodes in parallel (each triggers an API call)
-  const resolvedMap = new Map<string, string>();
-  await Promise.all(
-    shortcodes.map(async (shortcode) => {
-      let replacement = "";
-      if (shortcode.type === "widget") {
-        replacement = await renderWidgetShortcode(shortcode.id);
-      } else if (shortcode.type === "product") {
-        replacement = await renderProductShortcode(shortcode.id);
-      }
-      resolvedMap.set(shortcode.fullMatch, replacement);
-    }),
+  const replacementPromises = new Map<string, Promise<string>>();
+  for (const shortcode of shortcodes) {
+    const resolutionKey = getShortcodeResolutionKey(shortcode);
+    if (!replacementPromises.has(resolutionKey)) {
+      replacementPromises.set(resolutionKey, renderShortcode(shortcode));
+    }
+  }
+
+  const resolvedByKey = new Map<string, string>(
+    await Promise.all(
+      Array.from(replacementPromises.entries(), async ([key, promise]) => [
+        key,
+        await promise,
+      ] as const),
+    ),
   );
 
-  // Phase 2: Replace all resolved shortcodes in a single pass
+  const resolvedMap = new Map<string, string>();
+  for (const shortcode of shortcodes) {
+    resolvedMap.set(
+      shortcode.fullMatch,
+      resolvedByKey.get(getShortcodeResolutionKey(shortcode)) ?? "",
+    );
+  }
+
   let processedContent = normalizedContent;
   for (const [original, replacement] of resolvedMap) {
     processedContent = processedContent.split(original).join(replacement);
