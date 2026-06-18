@@ -321,6 +321,10 @@ export interface CollectionProductResult {
     featuredProduct: ResolvedProduct | null;
 }
 
+function uniqueNonEmptyIds(ids: string[]): string[] {
+    return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+}
+
 /**
  * Resolve products for a single collection config.
  * Used by the public collection detail endpoint.
@@ -345,11 +349,14 @@ export async function resolveCollectionProducts(
 
     if (productIds.length > 0) {
         // CASE 1: Specific products — ignore categoryIds
+        const specificProductIds = uniqueNonEmptyIds(productIds).slice(0, 100);
         const batchResults = await db.batch([
-            db.select(buildCollectionProductSelect())
-                .from(products)
-                .where(and(inArray(products.id, productIds), eq(products.isActive, true), isNull(products.deletedAt)))
-                .limit(maxProducts),
+            specificProductIds.length > 0
+                ? db.select(buildCollectionProductSelect())
+                    .from(products)
+                    .where(and(inArray(products.id, specificProductIds), eq(products.isActive, true), isNull(products.deletedAt)))
+                    .limit(specificProductIds.length)
+                : noopQuery,
             hasFeaturedProduct
                 ? db.select(buildCollectionProductSelect())
                     .from(products)
@@ -359,9 +366,15 @@ export async function resolveCollectionProducts(
 
         const productsData = batchResults[0] as RawProduct[];
         const featuredData = hasFeaturedProduct ? (batchResults[1] as RawProduct[])[0] ?? null : null;
+        const productsById = new Map(
+            productsData.map((product) => [product.id, enrichProduct(product)]),
+        );
 
         return {
-            products: productsData.map(enrichProduct),
+            products: specificProductIds
+                .map((id) => productsById.get(id))
+                .filter((product): product is ResolvedProduct => product != null)
+                .slice(0, maxProducts),
             categories: [],
             featuredProduct: featuredData ? enrichProduct(featuredData) : null,
         };
@@ -369,13 +382,14 @@ export async function resolveCollectionProducts(
 
     if (categoryIds.length > 0) {
         // CASE 2: Category-based collection
+        const specificCategoryIds = uniqueNonEmptyIds(categoryIds);
         const batchResults = await db.batch([
             db.select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
-                .where(and(inArray(categories.id, categoryIds), isNull(categories.deletedAt))),
+                .where(and(inArray(categories.id, specificCategoryIds), isNull(categories.deletedAt))),
             db.select(buildCollectionProductSelect())
                 .from(products)
-                .where(and(inArray(products.categoryId, categoryIds), eq(products.isActive, true), isNull(products.deletedAt)))
+                .where(and(inArray(products.categoryId, specificCategoryIds), eq(products.isActive, true), isNull(products.deletedAt)))
                 .orderBy(desc(products.createdAt))
                 .limit(maxProducts),
             hasFeaturedProduct
@@ -388,10 +402,13 @@ export async function resolveCollectionProducts(
         const categoriesData = batchResults[0] as { id: string; name: string; slug: string }[];
         const productsData = batchResults[1] as RawProduct[];
         const featuredData = hasFeaturedProduct ? (batchResults[2] as RawProduct[])[0] ?? null : null;
+        const categoriesById = new Map(categoriesData.map((category) => [category.id, category]));
 
         return {
             products: productsData.map(enrichProduct),
-            categories: categoriesData,
+            categories: specificCategoryIds
+                .map((id) => categoriesById.get(id))
+                .filter((category): category is { id: string; name: string; slug: string } => category != null),
             featuredProduct: featuredData ? enrichProduct(featuredData) : null,
         };
     }
