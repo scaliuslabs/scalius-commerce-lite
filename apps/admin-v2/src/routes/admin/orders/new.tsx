@@ -1,10 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { OrderForm } from "~/components/admin/OrderForm";
-import {
-  productQueryOptions,
-  productsQueryOptions,
-} from "~/lib/api-query-options/products";
-import type { ProductVariant } from "~/types/api-responses";
+import { productsQueryOptions } from "~/lib/api-query-options/products";
+import type { Product } from "~/components/admin/order-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 interface ProductListResult {
@@ -13,11 +10,10 @@ interface ProductListResult {
     name: string;
     price: number;
     discountPercentage?: number | null;
+    discountType?: "percentage" | "flat" | null;
+    discountAmount?: number | null;
+    variantCount?: number | null;
   }>;
-}
-
-interface ProductDetailResult {
-  variants?: ProductVariant[];
 }
 
 const defaultValues = {
@@ -34,6 +30,19 @@ const defaultValues = {
   shippingCharge: 0,
 };
 
+function toOrderFormProduct(product: NonNullable<ProductListResult["products"]>[number]): Product {
+  return {
+    id: product.id,
+    name: product.name,
+    price: product.price,
+    discountPercentage: product.discountPercentage ?? null,
+    discountType: product.discountType ?? null,
+    discountAmount: product.discountAmount ?? null,
+    variantCount: product.variantCount ?? 0,
+    variants: [],
+  };
+}
+
 export const Route = createFileRoute("/admin/orders/new")({
   loader: async ({ context: { queryClient } }) => {
     try {
@@ -41,56 +50,7 @@ export const Route = createFileRoute("/admin/orders/new")({
         productsQueryOptions({ page: 1, limit: 100 }),
       );
       const products = (result as ProductListResult).products || [];
-      const BATCH_SIZE = 10;
-      const productsWithVariants: Array<{
-        id: string;
-        name: string;
-        price: number;
-        discountPercentage: number | null;
-        variants: Array<{
-          id: string;
-          size: string | null;
-          color: string | null;
-          weight: number | null;
-          sku: string;
-          price: number;
-          stock: number;
-        }>;
-      }> = [];
-
-      for (let i = 0; i < products.length; i += BATCH_SIZE) {
-        const batch = products.slice(i, i + BATCH_SIZE);
-        const batchResults = await Promise.all(
-          batch.map(async (p) => {
-            try {
-              const detail = await queryClient.ensureQueryData(
-                { ...productQueryOptions(p.id), staleTime: Infinity },
-              );
-              const d = detail as ProductDetailResult;
-              return {
-                id: p.id,
-                name: p.name,
-                price: p.price,
-                discountPercentage: p.discountPercentage ?? null,
-                variants: (d.variants || [])
-                  .filter((v) => !v.deletedAt)
-                  .map((v) => ({
-                    id: v.id,
-                    size: v.size,
-                    color: v.color,
-                    weight: typeof v.weight === "string" ? parseFloat(v.weight) || null : (v.weight ?? null),
-                    sku: v.sku || "",
-                    price: v.price ?? 0,
-                    stock: v.stock ?? 0,
-                  })),
-              };
-            } catch {
-              return { id: p.id, name: p.name, price: p.price, discountPercentage: p.discountPercentage ?? null, variants: [] };
-            }
-          }),
-        );
-        productsWithVariants.push(...batchResults);
-      }
+      const productsWithVariants = products.map(toOrderFormProduct);
       return { productsWithVariants };
     } catch {
       return { productsWithVariants: [] };

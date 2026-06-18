@@ -22,6 +22,7 @@ interface ItemSelectionProps {
   setQuantity: (quantity: number) => void;
   handleAddItem: () => void;
   calculateDiscountedPrice: (product: Product, variantId: string | null) => string;
+  isLoadingVariants?: boolean;
 }
 
 export function ItemSelection({
@@ -32,6 +33,7 @@ export function ItemSelection({
   setQuantity,
   handleAddItem,
   calculateDiscountedPrice,
+  isLoadingVariants = false,
 }: ItemSelectionProps) {
   const { refs } = useOrderForm();
   const { symbol } = useCurrency();
@@ -68,6 +70,7 @@ export function ItemSelection({
         </FormLabel>
         <Select
           value={selectedVariant}
+          disabled={isLoadingVariants}
           onValueChange={(value) => {
             setSelectedVariant(value === "none" ? "" : value);
             setTimeout(
@@ -86,7 +89,7 @@ export function ItemSelection({
               }
             }}
           >
-            <SelectValue placeholder="Select variant" />
+            <SelectValue placeholder={isLoadingVariants ? "Loading variants..." : "Select variant"} />
           </SelectTrigger>
           <SelectContent className="max-h-[300px]">
             <SelectItem value="none">No variant (Main product)</SelectItem>
@@ -159,11 +162,12 @@ export function ItemSelection({
         <Button
           type="button"
           onClick={handleAddItem}
+          disabled={isLoadingVariants}
           className="w-full"
           ref={refs.addItemButtonRef}
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add Item
+          {isLoadingVariants ? "Loading Variants..." : "Add Item"}
         </Button>
       </div>
     </div>
