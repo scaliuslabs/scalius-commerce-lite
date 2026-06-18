@@ -32,7 +32,7 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **List Pages**: URL-search-driven list routes declare `loaderDeps`, map validated deps with `mapParams()`, and prefetch the same query keys rendered by components. Component-level loading overlays should stay scoped to the table area.
 
-**Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus. Only truly realtime screens opt in to `refetchOnWindowFocus`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns.
+**Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus or network reconnect. Only truly realtime screens opt in to `refetchOnWindowFocus` / `refetchOnReconnect`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns. Orders list auto-refresh is merchant-controlled and pauses while `document.hidden`; when the tab becomes visible again it performs one explicit refresh and resets the countdown.
 
 **Scroll Restoration**: The admin shell uses TanStack Router's scroll restoration for the nested `#admin-main-scroll` container with instant behavior. The `useAdminNestedScrollRestoration()` helper snapshots that container before route loads, resets it to top on normal client navigation, and restores the saved position only on browser Back/Forward. Do not add ad hoc route-change `scrollTo()` effects in the layout; extend the helper or register additional scroll containers with router scroll restoration instead.
 
@@ -68,7 +68,8 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 | File | Purpose |
 |------|---------|
-| `src/router.tsx` | Router config + QueryClient + SSR integration |
+| `src/router.tsx` | Router config + SSR integration |
+| `src/lib/admin-query-client.ts` | QueryClient defaults for idle-tab/reconnect policy |
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
 | `src/routes/admin.tsx` | Admin layout (sidebar, SSR auth guard, RBAC context) |
 | `src/lib/api-functions/` | Typed domain server-function slices |

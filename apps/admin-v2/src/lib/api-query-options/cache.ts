@@ -14,6 +14,7 @@ export const cacheStatsQueryOptions = () =>
     queryFn: () => getCacheStats(),
     staleTime: REALTIME_STALE_TIME_MS,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
 export const cacheLastClearedQueryOptions = () =>
@@ -22,6 +23,7 @@ export const cacheLastClearedQueryOptions = () =>
     queryFn: () => getCacheLastCleared(),
     staleTime: REALTIME_STALE_TIME_MS,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
 export const cacheGroupsQueryOptions = () =>
@@ -30,4 +32,5 @@ export const cacheGroupsQueryOptions = () =>
     queryFn: () => getCacheGroups(),
     staleTime: REALTIME_STALE_TIME_MS,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { createRouter, Link } from "@tanstack/react-router";
-import { QueryClient } from "@tanstack/react-query";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { routeTree } from "./routeTree.gen";
+import { createAdminQueryClient } from "./lib/admin-query-client";
 import {
   isRecoverableRouteLoadError,
   recoverableRouteErrorSignature,
@@ -101,15 +101,7 @@ function DefaultErrorComponent({ error }: { error: Error }) {
 }
 
 export function getRouter() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 1000 * 10, // 10s — data is fresh for 10 seconds
-        gcTime: 1000 * 60 * 30, // 30min — keep warm admin data after unmount
-        refetchOnWindowFocus: false, // Avoid tab-focus refetch stampedes; opt in per realtime query
-      },
-    },
-  });
+  const queryClient = createAdminQueryClient();
 
   const router = createRouter({
     routeTree,
