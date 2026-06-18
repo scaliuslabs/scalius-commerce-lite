@@ -132,7 +132,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 
 When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN`:
 - HTML-affecting or prefix purges bump the KV version -- all versioned HTML/L2 keys change, so critical pages are warmed immediately after the bump
-- Exact product purges read the old per-key generation, write a new generation for `product_slug_*` / `product_variants_*`, delete old-generation local Cache API entries as a best-effort cleanup, and warm touched product paths without bumping the global storefront version
+- Exact product purges read the old per-key generation, write a new generation for `product_slug_*` / `product_variants_*`, delete old-generation local Cache API entries as a best-effort cleanup, and warm touched product paths without bumping the global storefront version. Exact `htmlPaths` must be relative paths; the purge endpoint dedupes them, caps them at `20`, and warms them in batches of `4`.
 - Scoped widget purges should include exact rendered `htmlPaths` for product, category, page, and collection placements. Homepage/global widget changes are the lane that intentionally bumps the global version and warms the homepage.
 - L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
 - L2 entries with old version or product-generation keys are never matched

@@ -19,6 +19,8 @@ import { resolveCacheNamespace } from "../../lib/cache-namespace";
 import { buildHtmlCacheBaseUrl } from "../../lib/cache-key";
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
+export const MAX_EXACT_HTML_WARM_PATHS = 20;
+const EXACT_HTML_WARM_CONCURRENCY = 4;
 
 export const prerender = false;
 
@@ -129,43 +131,63 @@ async function warmCriticalCaches(baseUrl: string): Promise<void> {
 }
 
 async function warmExactHtmlPaths(baseUrl: string, paths: readonly string[]): Promise<void> {
-  const uniquePaths = [...new Set(paths.filter(Boolean))];
+  const uniquePaths = normalizeExactHtmlPaths(paths);
   if (uniquePaths.length === 0) {
     return;
   }
 
   console.log(`[CacheWarm] Starting exact warm for ${uniquePaths.length} path(s) on ${baseUrl}...`);
 
-  const results = await Promise.allSettled(
-    uniquePaths.map(async (path) => {
-      const start = Date.now();
-      try {
-        const response = await fetch(new URL(path, baseUrl), {
-          headers: {
-            "X-Cache-Warm": "true",
-            "Cache-Control": "no-cache",
-          },
-        });
+  const results: PromiseSettledResult<boolean>[] = [];
+  for (let index = 0; index < uniquePaths.length; index += EXACT_HTML_WARM_CONCURRENCY) {
+    const chunk = uniquePaths.slice(index, index + EXACT_HTML_WARM_CONCURRENCY);
+    const chunkResults = await Promise.allSettled(
+      chunk.map(async (path) => {
+        const start = Date.now();
+        try {
+          const response = await fetch(new URL(path, baseUrl), {
+            headers: {
+              "X-Cache-Warm": "true",
+              "Cache-Control": "no-cache",
+            },
+          });
 
-        const duration = Date.now() - start;
-        if (response.ok) {
-          console.log(`[CacheWarm] ${path} exact-warmed successfully in ${duration}ms`);
-        } else {
-          console.warn(`[CacheWarm] ${path} exact warm returned ${response.status} in ${duration}ms`);
+          const duration = Date.now() - start;
+          if (response.ok) {
+            console.log(`[CacheWarm] ${path} exact-warmed successfully in ${duration}ms`);
+          } else {
+            console.warn(`[CacheWarm] ${path} exact warm returned ${response.status} in ${duration}ms`);
+          }
+          return response.ok;
+        } catch (error: unknown) {
+          const duration = Date.now() - start;
+          console.error(`[CacheWarm] ${path} exact warm failed after ${duration}ms:`, error);
+          throw error;
         }
-        return response.ok;
-      } catch (error: unknown) {
-        const duration = Date.now() - start;
-        console.error(`[CacheWarm] ${path} exact warm failed after ${duration}ms:`, error);
-        throw error;
-      }
-    }),
-  );
+      }),
+    );
+    results.push(...chunkResults);
+  }
 
   const successful = results.filter(
     (result) => result.status === "fulfilled" && result.value === true,
   ).length;
   console.log(`[CacheWarm] Exact warm completed: ${successful}/${uniquePaths.length} path(s) warmed`);
+}
+
+function normalizeExactHtmlPaths(paths: readonly string[]): string[] {
+  const uniquePaths: string[] = [];
+  const seen = new Set<string>();
+
+  for (const path of paths) {
+    if (!path || !path.startsWith("/") || path.startsWith("//")) continue;
+    if (seen.has(path)) continue;
+    seen.add(path);
+    uniquePaths.push(path);
+    if (uniquePaths.length >= MAX_EXACT_HTML_WARM_PATHS) break;
+  }
+
+  return uniquePaths;
 }
 
 function buildL2CacheKeyUrl(
@@ -361,9 +383,10 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     groups = [],
     prefixes = [],
     exactKeys = [],
-    htmlPaths = [],
+    htmlPaths: requestedHtmlPaths = [],
     bumpVersion = false,
   } = body;
+  const htmlPaths = normalizeExactHtmlPaths(requestedHtmlPaths);
   const hostname = url.hostname;
   const cacheNamespace = resolveCacheNamespace(env, hostname);
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${cacheNamespace}`;

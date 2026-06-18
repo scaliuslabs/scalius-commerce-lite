@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CATALOG_CACHE_GROUPS,
   INVALIDATION_GROUPS,
+  MAX_STOREFRONT_EXACT_HTML_PATHS,
   WIDGET_CACHE_GROUPS,
   collectProductAvailabilityCacheInvalidation,
   getGroupsForPath,
@@ -13,6 +14,7 @@ import {
   invalidateApiAndScheduleStorefrontGroups,
   invalidateApiAndStorefrontGroups,
   invalidateCatalogCaches,
+  normalizeStorefrontHtmlPaths,
   normalizeStorefrontPurgeUrl,
   purgeStorefrontForGroups,
   purgeStorefrontForPrefixes,
@@ -203,6 +205,43 @@ describe("triggerStorefrontPurgeForGroups", () => {
       prefixes: ["widget_wid_1", "widgets_scope_product_prod_1"],
       bumpVersion: false,
     });
+  });
+
+  it("caps and sanitizes exact storefront HTML paths before sending purge payloads", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const noisyPaths = [
+      "/products/p0",
+      "/products/p0",
+      "https://external.example/products/p1",
+      "//external.example/products/p2",
+      ...Array.from(
+        { length: MAX_STOREFRONT_EXACT_HTML_PATHS + 5 },
+        (_, index) => `/products/p${index}`,
+      ),
+    ];
+
+    expect(normalizeStorefrontHtmlPaths(noisyPaths)).toHaveLength(
+      MAX_STOREFRONT_EXACT_HTML_PATHS,
+    );
+
+    const result = await purgeStorefrontForPrefixes(
+      ["product_slug_p0"],
+      {
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+      { groups: ["products"], bumpVersion: false, htmlPaths: noisyPaths },
+    );
+
+    expect(result).toEqual({ attempted: true, ok: true, status: 200 });
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(String(init?.body)) as { htmlPaths: string[] };
+    expect(body.htmlPaths).toHaveLength(MAX_STOREFRONT_EXACT_HTML_PATHS);
+    expect(body.htmlPaths[0]).toBe("/products/p0");
+    expect(body.htmlPaths).not.toContain("https://external.example/products/p1");
+    expect(body.htmlPaths).not.toContain("//external.example/products/p2");
+    expect(new Set(body.htmlPaths).size).toBe(body.htmlPaths.length);
   });
 
   it("schedules exact storefront prefix purges through waitUntil", async () => {

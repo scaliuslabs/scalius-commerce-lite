@@ -4,6 +4,8 @@ import { orderItems, products, productVariants } from "@scalius/database/schema"
 import { eq, inArray } from "drizzle-orm";
 import { deleteCache, deleteCacheByPattern } from "./kv-cache";
 
+export const MAX_STOREFRONT_EXACT_HTML_PATHS = 20;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -32,6 +34,24 @@ export interface ProductAvailabilityCacheInvalidation {
   apiPatterns: string[];
   storefrontPrefixes: string[];
   storefrontHtmlPaths: string[];
+}
+
+export function normalizeStorefrontHtmlPaths(
+  paths: readonly string[],
+  maxPaths = MAX_STOREFRONT_EXACT_HTML_PATHS,
+): string[] {
+  const uniquePaths: string[] = [];
+  const seen = new Set<string>();
+
+  for (const path of paths) {
+    if (!path || !path.startsWith("/") || path.startsWith("//")) continue;
+    if (seen.has(path)) continue;
+    seen.add(path);
+    uniquePaths.push(path);
+    if (uniquePaths.length >= maxPaths) break;
+  }
+
+  return uniquePaths;
 }
 
 // ---------------------------------------------------------------------------
@@ -364,7 +384,7 @@ export async function purgeStorefrontForPrefixes(
 ): Promise<StorefrontPurgeResult> {
   const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
   const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
-  const uniqueHtmlPaths = [...new Set((options.htmlPaths ?? []).filter(Boolean))];
+  const uniqueHtmlPaths = normalizeStorefrontHtmlPaths(options.htmlPaths ?? []);
   if (
     uniquePrefixes.length === 0 &&
     uniqueExactKeys.length === 0 &&
@@ -464,7 +484,7 @@ export function triggerStorefrontPurgeForPrefixes(
 ): void {
   const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
   const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
-  const uniqueHtmlPaths = [...new Set((options.htmlPaths ?? []).filter(Boolean))];
+  const uniqueHtmlPaths = normalizeStorefrontHtmlPaths(options.htmlPaths ?? []);
   if (
     uniquePrefixes.length === 0 &&
     uniqueExactKeys.length === 0 &&
