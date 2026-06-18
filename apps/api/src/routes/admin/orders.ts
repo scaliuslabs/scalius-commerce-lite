@@ -16,6 +16,12 @@ import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
 import { getEncryptionKey } from "../../utils/encryption-key";
+import {
+    invalidateProductAvailabilityCacheSubjects,
+    invalidateProductAvailabilityCaches,
+    resolveProductAvailabilityCacheSubjects,
+    tryResolveProductAvailabilityCacheSubjects,
+} from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -188,6 +194,7 @@ app.openapi(createOrderRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await OrdersService.createOrder(db, data);
+    await invalidateProductAvailabilityCaches(db, { orderIds: [result.id] }, c);
     return created(c, result);
 });
 
@@ -209,7 +216,11 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
+    const subjects = await resolveProductAvailabilityCacheSubjects(db, {
+        orderIds: data.orderIds,
+    });
     await OrdersService.bulkDeleteOrders(db, data.orderIds, data.permanent);
+    await invalidateProductAvailabilityCacheSubjects(subjects, c);
     return noContent(c);
 });
 
@@ -237,10 +248,11 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
     const successCount = results.filter((r) => r.success).length;
+    const successfulOrderIds = results.filter(isSuccessfulOrderResult).map((r) => r.orderId);
+    await invalidateProductAvailabilityCaches(db, { orderIds: successfulOrderIds }, c);
 
     // Enqueue order_shipped notifications for each successfully shipped order
     if (c.env.ORDER_NOTIFICATIONS_QUEUE) {
-        const successfulOrderIds = results.filter(isSuccessfulOrderResult).map((r) => r.orderId);
         if (successfulOrderIds.length > 0) {
             const orderRows = await db.select({
                 id: orders.id,
@@ -322,11 +334,21 @@ app.openapi(updateOrderRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
+    const beforeSubjects = await resolveProductAvailabilityCacheSubjects(db, {
+        orderIds: [orderId],
+    });
     const result = await OrdersService.updateOrder(db, orderId, {
         ...data,
         areaName: data.areaName ?? undefined,
         discountAmount: data.discountAmount ?? 0,
     });
+    const afterSubjects = await tryResolveProductAvailabilityCacheSubjects(db, {
+        orderIds: [orderId],
+    });
+    await invalidateProductAvailabilityCacheSubjects(
+        [...beforeSubjects, ...afterSubjects],
+        c,
+    );
     return ok(c, result);
 });
 
@@ -348,7 +370,11 @@ const deleteOrderRoute = createRoute({
 app.openapi(deleteOrderRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
+    const subjects = await resolveProductAvailabilityCacheSubjects(db, {
+        orderIds: [orderId],
+    });
     await OrdersService.deleteOrder(db, orderId);
+    await invalidateProductAvailabilityCacheSubjects(subjects, c);
     return noContent(c);
 });
 
@@ -371,6 +397,7 @@ app.openapi(restoreOrderRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     await OrdersService.restoreOrder(db, orderId);
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
     return noContent(c);
 });
 
@@ -392,7 +419,11 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
+    const subjects = await resolveProductAvailabilityCacheSubjects(db, {
+        orderIds: [orderId],
+    });
     await OrdersService.permanentlyDeleteOrder(db, orderId);
+    await invalidateProductAvailabilityCacheSubjects(subjects, c);
     return noContent(c);
 });
 

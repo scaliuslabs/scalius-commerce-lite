@@ -13,6 +13,7 @@ import {
     markWebhookEventFailed,
     markWebhookEventProcessed,
 } from "../../utils/webhook-idempotency";
+import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -156,6 +157,7 @@ app.post("/", async (c) => {
             .where(eq(deliveryShipments.id, shipment.id));
 
         const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
+        await invalidateProductAvailabilityCaches(db, { orderIds: [shipment.orderId] }, c);
 
         // Enqueue customer notification only for actual order status changes.
         if (statusResult && statusResult.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {

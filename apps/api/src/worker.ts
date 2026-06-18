@@ -4,6 +4,7 @@ import app from "./app";
 import { handleQueueBatch } from "./queue-consumer";
 import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 export { WidgetDesignAgent } from "./agents/widget-design-agent";
 
 export type { AppType } from "./app";
@@ -16,13 +17,20 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
 
   // Queues: payment events, order ingest, OTP, notifications
   async queue(batch: MessageBatch<Record<string, unknown>>) {
-    return handleQueueBatch(batch as Parameters<typeof handleQueueBatch>[0], this.env);
+    return handleQueueBatch(batch as Parameters<typeof handleQueueBatch>[0], this.env, this.ctx);
   }
 
   // Cron: release orphaned reservation movements every 15 minutes
   async scheduled(_controller: ScheduledController): Promise<void> {
     const db = getDb(this.env);
     const result = await releaseExpiredReservations(db, 30);
+    if (result.releasedVariantIds.length > 0) {
+      await invalidateProductAvailabilityCaches(
+        db,
+        { variantIds: result.releasedVariantIds },
+        { env: this.env, executionCtx: this.ctx },
+      );
+    }
 
     console.log(
       `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +

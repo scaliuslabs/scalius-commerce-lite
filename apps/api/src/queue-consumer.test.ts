@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getDecimalPlaces: vi.fn(() => 2),
   getActiveSmsProvider: vi.fn(),
   getEncryptionKey: vi.fn(() => "test-key"),
+  invalidateProductAvailabilityCaches: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -52,6 +53,10 @@ vi.mock("@scalius/core/integrations/sms", () => ({
 
 vi.mock("./utils/encryption-key", () => ({
   getEncryptionKey: mocks.getEncryptionKey,
+}));
+
+vi.mock("./utils/cache-invalidation", () => ({
+  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
 }));
 
 import { handleQueueBatch, type PaymentQueueMessage } from "./queue-consumer";
@@ -189,6 +194,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      { id: "db" },
+      { orderIds: ["order-stripe"] },
+      { env: {}, executionCtx: undefined },
+    );
   });
 
   it("acks non-retryable confirmed payment guard failures", async () => {
@@ -227,6 +237,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.handleOrderIngestBatch.mock.calls[0]?.[0]).toMatchObject({
       queue: "order-ingest",
     });
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      { id: "db" },
+      { orderIds: ["order_1"], variantIds: [] },
+      { env: {}, executionCtx: undefined },
+    );
   });
 
   it("does not cast a mixed non-order queue to order ingest", async () => {

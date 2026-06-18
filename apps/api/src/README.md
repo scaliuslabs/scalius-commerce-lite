@@ -255,6 +255,16 @@ Thrown errors are caught by `app.onError()` and returned as `{ success: false, e
 | `CHECKOUT_CONFIG` | 60 | Gateway config |
 | `NONE` | 0 | Analytics config |
 
+### Product Availability Invalidation
+
+Stock-changing paths must keep product availability fresh without broad catalog busts. Use helpers from `src/utils/cache-invalidation.ts`:
+
+- `resolveProductAvailabilityCacheSubjects(db, { orderIds, productIds, variantIds })` before destructive writes that may remove `order_items`.
+- `invalidateProductAvailabilityCacheSubjects(subjects, c)` after the write commits.
+- `invalidateProductAvailabilityCaches(db, input, c)` for normal post-commit order/payment/delivery/cron paths.
+
+The helper deletes exact API product detail keys, query-varied product detail keys, product-search keys, and `api:search:*`, then schedules exact storefront prefixes: `product_slug_${slug}` and `product_variants_${productId}` with `bumpVersion: false`. Current call sites cover admin order create/edit/delete/restore/permanent-delete, bulk/manual shipment/status/COD/fulfillment/refund/return paths, order ingest/payment queue mutations, delivery webhook reconciliation, admin shipment refresh, and the scheduled orphan-reservation sweep.
+
 ## Queue Consumer
 
 `src/queue-consumer.ts` dispatches messages by type. Two queue strategies:
@@ -262,6 +272,8 @@ Thrown errors are caught by `app.onError()` and returned as `{ success: false, e
 ### Order Ingest Queue
 
 Queue name: `order-ingest`. Uses batch processing for throughput, but reservation, ambiguous-commit checks, fallback writes, checkout status, ack/retry, and rollback decisions remain isolated per order. A rejected or acked message must not be retried because another message in the same queue batch failed. Handles `order.ingest` messages. Delegated to `handleOrderIngestBatch()` in `@scalius/core/modules/orders/orders.queue`.
+
+After the ingest handler returns, the API queue consumer invalidates targeted product availability caches from the attempted order IDs and variant IDs. This is intentionally post-processing: the ingest handler still owns ack/retry and inventory safety decisions.
 
 ### Payment/Notification/OTP Queue
 

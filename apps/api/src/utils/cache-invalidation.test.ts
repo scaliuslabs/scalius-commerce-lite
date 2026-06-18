@@ -3,14 +3,20 @@ import {
   CATALOG_CACHE_GROUPS,
   INVALIDATION_GROUPS,
   WIDGET_CACHE_GROUPS,
+  collectProductAvailabilityCacheInvalidation,
   getGroupsForPath,
+  getProductAvailabilityApiCacheKeys,
+  getProductAvailabilityApiCachePatterns,
+  getProductAvailabilityStorefrontPrefixes,
   getStorefrontPrefixesForGroups,
+  invalidateProductAvailabilityCacheSubjects,
   invalidateApiAndScheduleStorefrontGroups,
   invalidateApiAndStorefrontGroups,
   invalidateCatalogCaches,
   normalizeStorefrontPurgeUrl,
   purgeStorefrontForGroups,
   purgeStorefrontForPrefixes,
+  resolveProductAvailabilityCacheSubjects,
   triggerStorefrontPurgeForGroups,
   triggerStorefrontPurgeForPrefixes,
 } from "./cache-invalidation";
@@ -491,6 +497,137 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "[Cache] Storefront group purge failed:",
       expect.any(Error),
     );
+  });
+
+  it("builds targeted product availability cache keys without overbroad slug prefixes", () => {
+    const subjects = [
+      { productId: "prod_1", slug: "phone" },
+      { productId: "prod_2", slug: "phone-case" },
+      { productId: "prod_1", slug: "phone" },
+    ];
+
+    expect(collectProductAvailabilityCacheInvalidation(subjects)).toEqual({
+      apiKeys: [
+        "api:products:/api/v1/products/phone",
+        "api:products:/api/v1/products/phone-case",
+        "api:products:/api/v1/products/search",
+      ],
+      apiPatterns: [
+        "api:products:/api/v1/products/phone?*",
+        "api:products:/api/v1/products/phone-case?*",
+        "api:products:/api/v1/products/search?*",
+        "api:search:*",
+      ],
+      storefrontPrefixes: [
+        "product_slug_phone",
+        "product_variants_prod_1",
+        "product_slug_phone-case",
+        "product_variants_prod_2",
+      ],
+    });
+
+    expect(getProductAvailabilityApiCacheKeys(subjects)).toEqual([
+      "api:products:/api/v1/products/phone",
+      "api:products:/api/v1/products/phone-case",
+      "api:products:/api/v1/products/search",
+    ]);
+    expect(getProductAvailabilityApiCachePatterns(subjects)).toEqual([
+      "api:products:/api/v1/products/phone?*",
+      "api:products:/api/v1/products/phone-case?*",
+      "api:products:/api/v1/products/search?*",
+      "api:search:*",
+    ]);
+    expect(getProductAvailabilityStorefrontPrefixes(subjects)).toEqual([
+      "product_slug_phone",
+      "product_variants_prod_1",
+      "product_slug_phone-case",
+      "product_variants_prod_2",
+    ]);
+  });
+
+  it("invalidates targeted product availability API KV before scheduling storefront prefixes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await invalidateProductAvailabilityCacheSubjects(
+      [{ productId: "prod_1", slug: "phone" }],
+      {
+        env: {
+          CACHE: kv,
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+        } as unknown as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      },
+    );
+
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/phone");
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/search");
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:products:/api/v1/products/phone?",
+    });
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:products:/api/v1/products/search?",
+    });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:search:" });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      groups: ["products"],
+      prefixes: ["product_slug_phone", "product_variants_prod_1"],
+      bumpVersion: false,
+    });
+  });
+
+  it("resolves product availability subjects across order, product, and variant inputs", async () => {
+    const responses = [
+      [
+        { productId: "prod_1", slug: "phone" },
+        { productId: "prod_2", slug: "case" },
+      ],
+      [{ productId: "prod_3", slug: "charger" }],
+      [
+        { productId: "prod_2", slug: "case" },
+        { productId: "prod_4", slug: "cable" },
+      ],
+    ];
+    const selectDistinct = vi.fn(() => {
+      const rows = responses.shift() ?? [];
+      const query = {
+        from: vi.fn(() => query),
+        innerJoin: vi.fn(() => query),
+        where: vi.fn(() => Promise.resolve(rows)),
+      };
+      return query;
+    });
+
+    await expect(
+      resolveProductAvailabilityCacheSubjects(
+        { selectDistinct } as never,
+        {
+          orderIds: ["order_1", "order_1"],
+          productIds: ["prod_3"],
+          variantIds: ["var_2"],
+        },
+      ),
+    ).resolves.toEqual([
+      { productId: "prod_1", slug: "phone" },
+      { productId: "prod_2", slug: "case" },
+      { productId: "prod_3", slug: "charger" },
+      { productId: "prod_4", slug: "cable" },
+    ]);
+    expect(selectDistinct).toHaveBeenCalledTimes(3);
   });
 });
 
