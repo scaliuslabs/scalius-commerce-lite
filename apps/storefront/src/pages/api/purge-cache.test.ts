@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BUILD_ID } from "../../config/build-id";
 
 const mocks = vi.hoisted(() => ({
   cfEnv: {
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   },
   clearL1ByPrefixes: vi.fn(),
   smartCacheClear: vi.fn(),
+  cacheDelete: vi.fn(),
   waitUntil: vi.fn(),
 }));
 
@@ -61,6 +63,11 @@ describe("storefront cache purge route", () => {
       "fetch",
       vi.fn().mockResolvedValue(new Response("ok", { status: 200 })),
     );
+    vi.stubGlobal("caches", {
+      default: {
+        delete: mocks.cacheDelete,
+      },
+    });
   });
 
   afterEach(() => {
@@ -221,6 +228,77 @@ describe("storefront cache purge route", () => {
     expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_storefront.example.com");
     expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith("v_storefront.example.com", "5");
     expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith(["checkout_config"]);
+    expect(mocks.smartCacheClear).not.toHaveBeenCalled();
+    expect(mocks.waitUntil).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("clears exact L1 and L2 keys without bumping the cache version", async () => {
+    mocks.cacheDelete.mockResolvedValue(true);
+    const { POST } = await import("./purge-cache");
+    const request = new Request("https://storefront.example.com/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        groups: ["products"],
+        exactKeys: ["product_slug_fish", "product_variants_prod_1"],
+        htmlPaths: ["/products/fish?size=m"],
+        bumpVersion: false,
+      }),
+    });
+
+    const response = await POST({
+      request,
+      url: new URL(request.url),
+      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+    } as unknown as Parameters<typeof POST>[0]);
+    const body = (await response.json()) as {
+      success?: boolean;
+      details?: {
+        cacheVersionBumped?: boolean;
+        newVersion?: number | null;
+        prefixesCleared?: number | string;
+        exactKeysCleared?: number;
+        l2ExactKeysDeleted?: number;
+        htmlPathsCleared?: number;
+        htmlPathsDeleted?: number;
+        cacheWarmingStarted?: boolean;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.details).toMatchObject({
+      cacheVersionBumped: false,
+      newVersion: null,
+      prefixesCleared: 0,
+      exactKeysCleared: 2,
+      l2ExactKeysDeleted: 2,
+      htmlPathsCleared: 1,
+      htmlPathsDeleted: 1,
+      cacheWarmingStarted: false,
+    });
+    expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_storefront.example.com");
+    expect(mocks.cfEnv.CACHE_CONTROL.put).not.toHaveBeenCalled();
+    expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith([
+      "product_slug_fish",
+      "product_variants_prod_1",
+    ]);
+    expect(mocks.cacheDelete).toHaveBeenCalledWith(
+      `https://storefront.example.com/_api-cache/product_slug_fish?v=4&build=${BUILD_ID}`,
+    );
+    expect(mocks.cacheDelete).toHaveBeenCalledWith(
+      `https://storefront.example.com/_api-cache/product_variants_prod_1?v=4&build=${BUILD_ID}`,
+    );
+    const htmlDeleteArg = mocks.cacheDelete.mock.calls.find(
+      ([arg]) => arg instanceof Request,
+    )?.[0] as Request | undefined;
+    expect(htmlDeleteArg?.url).toBe(
+      `https://storefront.example.com/products/fish?cache_v=4-${BUILD_ID}`,
+    );
     expect(mocks.smartCacheClear).not.toHaveBeenCalled();
     expect(mocks.waitUntil).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
