@@ -24,6 +24,11 @@ import {
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
+  PRODUCT_LIST_NAVIGATION_PARAMS,
+  hasDynamicProductListFilterParams,
+  resolveProductListQueryState,
+} from "@/lib/product-list-query";
+import {
   SlidersHorizontal,
   X,
   Tags,
@@ -32,15 +37,19 @@ import {
   ArrowLeft,
   Search,
 } from "lucide-react";
-import { normalizeSearchQuery } from "@/lib/search-query";
 
 const { slug } = Astro.params;
 if (!slug) return new Response(null, { status: 404 });
 
 const params = Astro.url.searchParams;
-const page = parseInt(params.get("page") || "1");
-const sortBy = params.get("sortBy") || "newest";
-const query = normalizeSearchQuery(params.get("q"));
+const hasDynamicFilters = hasDynamicProductListFilterParams(params);
+let queryState = resolveProductListQueryState({ url: Astro.url });
+if (!hasDynamicFilters && queryState.redirectPath) {
+  return Astro.redirect(queryState.redirectPath);
+}
+let sortBy = queryState.sortBy;
+let query = queryState.query;
+let currentFilters = queryState.currentFilters;
 
 let category: Category | null = null;
 let productsResponse: CategoryProductsResponse | null = null;
@@ -48,62 +57,69 @@ let attributes: FilterableAttribute[] = [];
 let layoutData: LayoutData | null = null;
 let categoryWidgets: ApiWidget[] = [];
 let error: string | null = null;
-
-// Build product list options before fetching so category, products, filters,
-// and layout can all start in the first cold-cache wave.
-const productListOptions: ProductListOptions = {
-  page,
-  limit: 20,
-  sort: sortBy as ProductListOptions["sort"],
-};
-
-if (query) {
-  productListOptions.search = query;
-}
-
-// Add filter parameters (excluding standard navigation params)
-const filterParams = ["q", "page", "sortBy"];
-for (const [key, value] of params.entries()) {
-  if (!filterParams.includes(key) && value) {
-    productListOptions[key] = value;
-  }
-}
+let productListOptions: ProductListOptions = queryState.options;
 
 try {
   const layoutPromise = getLayoutData();
-  const productsPromise = getProductsByCategory(slug, productListOptions);
   const attributesPromise = getFilterableAttributes({ categorySlug: slug });
-  const widgetsPromise = productsPromise.then((fetchedProducts) =>
-    fetchedProducts?.category
-      ? getActiveWidgetsForScope("category", fetchedProducts.category.id)
-      : null,
-  );
 
-  // Parallel fetch: layout + products/category + filter metadata + scoped widgets
-  const [
-    fetchedLayoutData,
-    fetchedProducts,
-    fetchedAttributes,
-    fetchedWidgets,
-  ] = await Promise.all([
-    layoutPromise,
-    productsPromise,
-    attributesPromise,
-    widgetsPromise,
-  ]);
+  if (hasDynamicFilters) {
+    const [fetchedLayoutData, fetchedAttributes] = await Promise.all([
+      layoutPromise,
+      attributesPromise,
+    ]);
+    layoutData = fetchedLayoutData;
+    setRuntimeImageCdnPolicy(layoutData?.media);
+    attributes = fetchedAttributes || [];
+    queryState = resolveProductListQueryState({
+      url: Astro.url,
+      attributes,
+    });
+    if (queryState.redirectPath) {
+      return Astro.redirect(queryState.redirectPath);
+    }
+    sortBy = queryState.sortBy;
+    query = queryState.query;
+    currentFilters = queryState.currentFilters;
+    productListOptions = queryState.options;
+    productsResponse = await getProductsByCategory(slug, productListOptions);
+    categoryWidgets = productsResponse?.category
+      ? await getActiveWidgetsForScope("category", productsResponse.category.id) || []
+      : [];
+  } else {
+    const productsPromise = getProductsByCategory(slug, productListOptions);
+    const widgetsPromise = productsPromise.then((fetchedProducts) =>
+      fetchedProducts?.category
+        ? getActiveWidgetsForScope("category", fetchedProducts.category.id)
+        : null,
+    );
 
-  layoutData = fetchedLayoutData;
-  setRuntimeImageCdnPolicy(layoutData?.media);
-  productsResponse = fetchedProducts;
+    // Parallel fetch: layout + products/category + filter metadata + scoped widgets.
+    const [
+      fetchedLayoutData,
+      fetchedProducts,
+      fetchedAttributes,
+      fetchedWidgets,
+    ] = await Promise.all([
+      layoutPromise,
+      productsPromise,
+      attributesPromise,
+      widgetsPromise,
+    ]);
+
+    layoutData = fetchedLayoutData;
+    setRuntimeImageCdnPolicy(layoutData?.media);
+    productsResponse = fetchedProducts;
+    attributes = fetchedAttributes || [];
+    categoryWidgets = fetchedWidgets || [];
+  }
+
   if (productsResponse?.categoryNotFound) return new Response(null, { status: 404 });
   if (!productsResponse?.category) {
     error = "An error occurred while fetching products. Please try again.";
   } else {
     category = productsResponse.category;
   }
-
-  attributes = fetchedAttributes || [];
-  categoryWidgets = fetchedWidgets || [];
 } catch (e: unknown) {
   console.error("Error fetching category data:", e);
   error = "An error occurred while fetching products. Please try again.";
@@ -120,10 +136,6 @@ const pageTitle = category?.metaTitle || category?.name || "Category";
 const pageDescription =
   category?.metaDescription ||
   `Browse products in the ${category?.name} category.`;
-
-const currentFilters = Object.fromEntries(params.entries());
-if (query) currentFilters.q = query;
-else delete currentFilters.q;
 
 function getPaginationUrl(pageNum: number) {
   const url = new URL(Astro.url);
@@ -162,7 +174,7 @@ function generatePaginationLinks(
 }
 
 const activeFilterCount = Object.keys(currentFilters).filter(
-  (key) => !filterParams.includes(key) && currentFilters[key],
+  (key) => !PRODUCT_LIST_NAVIGATION_PARAMS.includes(key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number]) && currentFilters[key],
 ).length;
 
 // Include product name for richer analytics data

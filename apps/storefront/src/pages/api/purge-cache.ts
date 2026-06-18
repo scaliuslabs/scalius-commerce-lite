@@ -401,12 +401,14 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   const cacheNamespace = resolveCacheNamespace(env, hostname);
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${cacheNamespace}`;
   const shouldBumpCacheVersion = shouldBumpCacheVersionForSelectivePurge({
+    groups,
     prefixes,
     exactKeys,
     htmlPaths,
     bumpVersion,
   });
   const shouldWarmCaches = shouldWarmCriticalCachesForSelectivePurge({
+    groups,
     prefixes,
     exactKeys,
     htmlPaths,
@@ -423,8 +425,10 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     let exactGenerationsBumped = 0;
     let exactHtmlWarmScheduled = false;
 
-    // The KV version scopes both HTML and L2 API Cache keys. Prefix purges must
-    // bump it because Cloudflare Cache API cannot delete by prefix.
+    // The KV version scopes both HTML and L2 API Cache keys. Unknown prefix
+    // purges still bump it because Cloudflare Cache API cannot delete by prefix.
+    // Known data-only families use exact generation keys instead, so checkout
+    // changes do not cool unrelated HTML caches.
     if (shouldBumpCacheVersion) {
       const currentVersionStr = await kv.get(cacheKey);
       const currentVersion = currentVersionStr ? parseInt(currentVersionStr, 10) : 0;
@@ -492,7 +496,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         details: {
           groups,
           cacheVersionBumped: shouldBumpCacheVersion,
-          htmlVersionBumped: bumpVersion,
+          htmlVersionBumped: shouldBumpCacheVersion,
           newVersion,
           prefixesCleared: prefixes.length > 0
             ? prefixes.length

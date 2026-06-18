@@ -22,50 +22,66 @@ import {
   Search,
 } from "lucide-react";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
-import { normalizeSearchQuery } from "@/lib/search-query";
+import {
+  PRODUCT_LIST_NAVIGATION_PARAMS,
+  hasDynamicProductListFilterParams,
+  resolveProductListQueryState,
+} from "@/lib/product-list-query";
 
 const params = Astro.url.searchParams;
-const query = normalizeSearchQuery(params.get("q"));
-const page = parseInt(params.get("page") || "1");
-const sortBy = params.get("sortBy") || "newest";
+const hasDynamicFilters = hasDynamicProductListFilterParams(params);
+let queryState = resolveProductListQueryState({ url: Astro.url });
+if (!hasDynamicFilters && queryState.redirectPath) {
+  return Astro.redirect(queryState.redirectPath);
+}
+let query = queryState.query;
+let sortBy = queryState.sortBy;
+let currentFilters = queryState.currentFilters;
 
 let productsResponse: PaginatedResponse<Product> | null = null;
 let attributes: FilterableAttribute[] = [];
 let layoutData: LayoutData | null = null;
 let error: string | null = null;
-
-const productListOptions: ProductListOptions = {
-  page,
-  limit: 20,
-  sort: sortBy as ProductListOptions["sort"],
-};
-
-if (query) {
-  productListOptions.search = query;
-}
-
-const filterParams = ["q", "page", "sortBy"];
-for (const [key, value] of params.entries()) {
-  if (!filterParams.includes(key) && value) {
-    productListOptions[key] = value;
-  }
-}
+let productListOptions: ProductListOptions = queryState.options;
 
 try {
   const layoutPromise = getLayoutData();
-  const productsPromise = getAllProducts(productListOptions);
   const attributesPromise = getFilterableAttributes({ searchQuery: query });
 
-  // Parallel fetch: layout + products + attributes
-  const [fetchedLayoutData, fetchedProducts, fetchedAttributes] = await Promise.all([
-    layoutPromise,
-    productsPromise,
-    attributesPromise,
-  ]);
-  layoutData = fetchedLayoutData;
-  setRuntimeImageCdnPolicy(layoutData?.media);
-  productsResponse = fetchedProducts;
-  attributes = fetchedAttributes || [];
+  if (hasDynamicFilters) {
+    const [fetchedLayoutData, fetchedAttributes] = await Promise.all([
+      layoutPromise,
+      attributesPromise,
+    ]);
+    layoutData = fetchedLayoutData;
+    setRuntimeImageCdnPolicy(layoutData?.media);
+    attributes = fetchedAttributes || [];
+    queryState = resolveProductListQueryState({
+      url: Astro.url,
+      attributes,
+    });
+    if (queryState.redirectPath) {
+      return Astro.redirect(queryState.redirectPath);
+    }
+    query = queryState.query;
+    sortBy = queryState.sortBy;
+    currentFilters = queryState.currentFilters;
+    productListOptions = queryState.options;
+    productsResponse = await getAllProducts(productListOptions);
+  } else {
+    const productsPromise = getAllProducts(productListOptions);
+
+    // Parallel fetch: layout + products + attributes
+    const [fetchedLayoutData, fetchedProducts, fetchedAttributes] = await Promise.all([
+      layoutPromise,
+      productsPromise,
+      attributesPromise,
+    ]);
+    layoutData = fetchedLayoutData;
+    setRuntimeImageCdnPolicy(layoutData?.media);
+    productsResponse = fetchedProducts;
+    attributes = fetchedAttributes || [];
+  }
 } catch (e: unknown) {
   console.error("Error fetching shop/search data:", e);
   error = "An error occurred while fetching products. Please try again.";
@@ -82,10 +98,6 @@ const pageTitle = query ? `Search results for "${query}"` : "Shop All Products";
 const pageDescription = query
   ? `Found ${pagination.total} products for "${query}".`
   : "Explore our full collection of products.";
-
-const currentFilters = Object.fromEntries(params.entries());
-if (query) currentFilters.q = query;
-else delete currentFilters.q;
 
 function getPaginationUrl(pageNum: number) {
   const url = new URL(Astro.url);
@@ -124,7 +136,7 @@ function generatePaginationLinks(
 }
 
 const activeFilterCount = Object.keys(currentFilters).filter(
-  (key) => !filterParams.includes(key) && currentFilters[key]
+  (key) => !PRODUCT_LIST_NAVIGATION_PARAMS.includes(key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number]) && currentFilters[key]
 ).length;
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
