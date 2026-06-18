@@ -19,4 +19,12 @@ describe("admin order list boundaries", () => {
     );
     expect(source).toContain("const offset = (page - 1) * limit");
   });
+
+  it("uses API-provided date bounds exactly", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain("const startTs = Math.floor(startDate.getTime() / 1000)");
+    expect(source).toContain("const endTs = Math.floor(endDate.getTime() / 1000)");
+    expect(source).not.toContain("setHours(23, 59, 59, 999)");
+  });
 });

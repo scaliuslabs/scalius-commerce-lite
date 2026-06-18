@@ -65,6 +65,17 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("void refetchOrders()");
   });
 
+  it("serializes order date filters as date-only values", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+
+    expect(routeSource).toContain("formatDateOnly");
+    expect(routeSource).toContain("parseDateOnly");
+    expect(routeSource).toContain("startDate: formatDateOnly(range?.from)");
+    expect(routeSource).toContain("endDate: formatDateOnly(range?.to)");
+    expect(routeSource).not.toContain("range.from.toISOString()");
+    expect(routeSource).not.toContain("range.to.toISOString()");
+  });
+
   it("does not advertise mobile range selection that is not implemented", () => {
     const source = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
 

@@ -25,6 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
+import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import {
   useUpdateOrderStatus,
   useBulkDeleteOrders,
@@ -58,8 +59,16 @@ const searchSchema = createListSearchSchema(
   { limit: 10, sort: "updatedAt" },
 ).extend({
   status: z.string().optional().catch(undefined),
-  startDate: z.string().optional().catch(undefined),
-  endDate: z.string().optional().catch(undefined),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .catch(undefined),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .catch(undefined),
 });
 
 type SearchParams = z.infer<typeof searchSchema>;
@@ -142,8 +151,8 @@ function OrdersPage() {
   const dateRange: DateRange | undefined =
     search.startDate || search.endDate
       ? {
-          from: search.startDate ? new Date(search.startDate) : undefined,
-          to: search.endDate ? new Date(search.endDate) : undefined,
+          from: parseDateOnly(search.startDate),
+          to: parseDateOnly(search.endDate),
         }
       : undefined;
 
@@ -202,8 +211,8 @@ function OrdersPage() {
   const onDateRangeChange = useCallback(
     (range: DateRange | undefined) => {
       handleNavigate({
-        startDate: range?.from ? range.from.toISOString() : undefined,
-        endDate: range?.to ? range.to.toISOString() : undefined,
+        startDate: formatDateOnly(range?.from),
+        endDate: formatDateOnly(range?.to),
         page: 1,
       });
     },

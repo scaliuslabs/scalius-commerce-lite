@@ -38,17 +38,17 @@ const PRESETS = [
   {
     label: "Yesterday",
     getValue: () => {
-      const d = subDays(new Date(), 1);
+      const d = subDays(startOfToday(), 1);
       return { from: d, to: d };
     },
   },
   {
     label: "Last 7 days",
-    getValue: () => ({ from: subDays(new Date(), 7), to: new Date() }),
+    getValue: () => ({ from: subDays(startOfToday(), 6), to: startOfToday() }),
   },
   {
     label: "Last 30 days",
-    getValue: () => ({ from: subDays(new Date(), 30), to: new Date() }),
+    getValue: () => ({ from: subDays(startOfToday(), 29), to: startOfToday() }),
   },
   {
     label: "This Month",
