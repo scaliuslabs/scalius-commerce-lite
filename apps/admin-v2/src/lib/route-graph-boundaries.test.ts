@@ -179,6 +179,25 @@ describe("admin route graph boundaries", () => {
     }
   });
 
+  it("keeps self-loading settings routes out of route-entry data awaits", () => {
+    const selfLoadingSettingsRoutes = [
+      ["notifications.tsx", "FirebaseSettingsForm"],
+      ["theme.tsx", "ThemeSettingsPage"],
+      ["hero-sliders.tsx", "HeroSliderManager"],
+    ] as const;
+
+    for (const [filename, marker] of selfLoadingSettingsRoutes) {
+      const source = readFileSync(
+        join(ADMIN_SRC_ROOT, "routes", "admin", "settings", filename),
+        "utf8",
+      );
+
+      expect(source).toContain(marker);
+      expect(source).not.toContain("ensureQueryData(");
+      expect(source).not.toContain("prefetchQuery(");
+    }
+  });
+
   it("keeps new-order creation from blocking on product detail fanout", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "new.tsx"),
