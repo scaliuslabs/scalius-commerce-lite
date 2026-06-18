@@ -39,4 +39,18 @@ describe("category route query boundaries", () => {
     expect(source).not.toContain("calculateDiscountedPrice");
     expect(source).not.toContain("ftsMatch");
   });
+
+  it("keeps category-products responses carrying full category metadata", () => {
+    const source = readFileSync(`${ROUTES_DIR}/categories.ts`, "utf8");
+    const routeSchemaIndex = source.indexOf("const getCategoryProductsRoute = createRoute(");
+    const categorySchemaIndex = source.indexOf("category: storefrontCategorySchema", routeSchemaIndex);
+    const categoryForProductsIndex = source.indexOf("const categoryForProducts = {");
+    const productHelperIndex = source.indexOf("getStorefrontCategoryProducts(", categoryForProductsIndex);
+
+    expect(routeSchemaIndex).toBeGreaterThan(-1);
+    expect(categorySchemaIndex).toBeGreaterThan(routeSchemaIndex);
+    expect(categoryForProductsIndex).toBeGreaterThan(categorySchemaIndex);
+    expect(source.slice(categoryForProductsIndex, productHelperIndex)).toContain("createdAt: category.createdAt");
+    expect(source.slice(categoryForProductsIndex, productHelperIndex)).toContain("updatedAt: category.updatedAt");
+  });
 });

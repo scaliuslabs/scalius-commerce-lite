@@ -2,6 +2,8 @@
 
 import { getConfiguredSdkClient } from "./client";
 import type {
+  Category,
+  CategoryProductsResponse,
   Product,
   ProductVariant,
   ProductImage,
@@ -166,7 +168,7 @@ function normalizeProductListOptions(
 export async function getProductsByCategory(
   categorySlug: string,
   options: ProductListOptions = {},
-): Promise<PaginatedResponse<Product> | null> {
+): Promise<CategoryProductsResponse | null> {
   if (!categorySlug) {
     console.error("getProductsByCategory: categorySlug is required.");
     return null;
@@ -182,23 +184,36 @@ export async function getProductsByCategory(
     cacheKey,
     async () => {
       try {
-        const { data, error } = await getApiV1CategoriesBySlugProducts({
+        const { data, error, response } = await getApiV1CategoriesBySlugProducts({
           client: getConfiguredSdkClient(),
           path: { slug: categorySlug },
           query: normalizedOptions as Record<string, unknown>,
         });
 
         if (error) {
-          return {
-            data: [],
-            pagination: emptyProductPagination(options),
-          };
+          if (response?.status === 404) {
+            return {
+              category: null,
+              categoryNotFound: true,
+              data: [],
+              pagination: emptyProductPagination(options),
+            };
+          }
+          console.error(
+            `Error fetching products for category "${categorySlug}":`,
+            error,
+          );
+          return null;
         }
 
-        const d = unwrapData<{ products: Product[]; pagination: PaginatedResponse<Product>["pagination"] }>(data);
+        const d = unwrapData<{
+          category: Category;
+          products: Product[];
+          pagination: PaginatedResponse<Product>["pagination"];
+        }>(data);
         return d
-          ? { data: d.products, pagination: d.pagination }
-          : { data: [], pagination: emptyProductPagination(options) };
+          ? { category: d.category, data: d.products, pagination: d.pagination }
+          : null;
       } catch (error: unknown) {
         console.error(
           `Error fetching products for category "${categorySlug}":`,

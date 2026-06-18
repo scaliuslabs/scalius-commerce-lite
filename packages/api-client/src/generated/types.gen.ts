@@ -3809,6 +3809,7 @@ export type GetApiV1CategoriesResponses = {
                 description: string | null;
                 imageUrl: string | null;
                 createdAt: string | null;
+                updatedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 [key: string]: unknown;
@@ -3869,6 +3870,7 @@ export type GetApiV1CategoriesBySlugResponses = {
                 description: string | null;
                 imageUrl: string | null;
                 createdAt: string | null;
+                updatedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 [key: string]: unknown;
@@ -3959,6 +3961,12 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 id: string;
                 name: string;
                 slug: string;
+                description: string | null;
+                imageUrl: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
                 [key: string]: unknown;
             };
             products: Array<{

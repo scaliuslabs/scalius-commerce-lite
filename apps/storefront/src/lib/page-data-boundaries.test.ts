@@ -47,11 +47,12 @@ describe("storefront page data boundaries", () => {
     const productsPromiseIndex = source.indexOf(
       "const productsPromise = getProductsByCategory(slug, productListOptions)",
     );
+    const categoryFetchIndex = source.indexOf("getCategoryBySlug");
     const attributesPromiseIndex = source.indexOf(
       "const attributesPromise = getFilterableAttributes({ categorySlug: slug })",
     );
     const widgetsPromiseIndex = source.indexOf(
-      "const widgetsPromise = categoryPromise.then",
+      "const widgetsPromise = productsPromise.then",
     );
     const promiseAllIndex = source.indexOf("] = await Promise.all([");
 
@@ -60,6 +61,7 @@ describe("storefront page data boundaries", () => {
     expect(filterParamsIndex).toBeGreaterThan(queryMapIndex);
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
     expect(productsPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
+    expect(categoryFetchIndex).toBe(-1);
     expect(attributesPromiseIndex).toBeGreaterThan(productsPromiseIndex);
     expect(widgetsPromiseIndex).toBeGreaterThan(attributesPromiseIndex);
     expect(promiseAllIndex).toBeGreaterThan(widgetsPromiseIndex);

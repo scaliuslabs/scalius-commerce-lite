@@ -3,12 +3,11 @@
 import Layout from "@/layouts/Layout.astro";
 import {
   getProductsByCategory,
-  getCategoryBySlug,
   getFilterableAttributes,
   getLayoutData,
   type Product,
   type ProductListOptions,
-  type PaginatedResponse,
+  type CategoryProductsResponse,
   type FilterableAttribute,
   type LayoutData,
   type Category,
@@ -44,7 +43,7 @@ const sortBy = params.get("sortBy") || "newest";
 const query = normalizeSearchQuery(params.get("q"));
 
 let category: Category | null = null;
-let productsResponse: PaginatedResponse<Product> | null = null;
+let productsResponse: CategoryProductsResponse | null = null;
 let attributes: FilterableAttribute[] = [];
 let layoutData: LayoutData | null = null;
 let categoryWidgets: ApiWidget[] = [];
@@ -72,25 +71,22 @@ for (const [key, value] of params.entries()) {
 
 try {
   const layoutPromise = getLayoutData();
-  const categoryPromise = getCategoryBySlug(slug);
   const productsPromise = getProductsByCategory(slug, productListOptions);
   const attributesPromise = getFilterableAttributes({ categorySlug: slug });
-  const widgetsPromise = categoryPromise.then((fetchedCategory) =>
-    fetchedCategory
-      ? getActiveWidgetsForScope("category", fetchedCategory.id)
+  const widgetsPromise = productsPromise.then((fetchedProducts) =>
+    fetchedProducts?.category
+      ? getActiveWidgetsForScope("category", fetchedProducts.category.id)
       : null,
   );
 
-  // Parallel fetch: layout + category + products + filter metadata + scoped widgets
+  // Parallel fetch: layout + products/category + filter metadata + scoped widgets
   const [
     fetchedLayoutData,
-    fetchedCategory,
     fetchedProducts,
     fetchedAttributes,
     fetchedWidgets,
   ] = await Promise.all([
     layoutPromise,
-    categoryPromise,
     productsPromise,
     attributesPromise,
     widgetsPromise,
@@ -98,10 +94,14 @@ try {
 
   layoutData = fetchedLayoutData;
   setRuntimeImageCdnPolicy(layoutData?.media);
-  category = fetchedCategory;
-  if (!category) return new Response(null, { status: 404 });
-
   productsResponse = fetchedProducts;
+  if (productsResponse?.categoryNotFound) return new Response(null, { status: 404 });
+  if (!productsResponse?.category) {
+    error = "An error occurred while fetching products. Please try again.";
+  } else {
+    category = productsResponse.category;
+  }
+
   attributes = fetchedAttributes || [];
   categoryWidgets = fetchedWidgets || [];
 } catch (e: unknown) {
