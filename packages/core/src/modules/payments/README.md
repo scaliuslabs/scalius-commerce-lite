@@ -49,7 +49,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `provider.ts` | `PaymentProvider` interface, `CreatePaymentParams`, `CreatePaymentResult`, `RefundParams`, `RefundResult`, `WebhookPayload` | Unified gateway abstraction |
 | `factory.ts` | `createPaymentProvider()`, `GatewayConfig` | Factory function returning the correct `PaymentProvider` for a gateway type; checks `enabled` flag, throws `ServiceUnavailableError` if disabled. Uses discriminated union `GatewayConfig` with exhaustive switch. |
 | `gateway-registry.ts` | `registerGateway()`, `getRegisteredGateways()`, `getGatewayMeta()`, `GatewayMeta` | Runtime registry for dynamic gateway discovery (used by checkout config endpoint). `GatewayMeta` includes `getSettings()`, `getPublicConfig()`, `getCurrencies()`. |
-| `gateway-settings.ts` | `getStripeSettings()`, `getSSLCommerzSettings()`, `getPolarSettings()`, `getActivePaymentMethods()`, `upsertSetting()`, `invalidate*Cache()` | Reads gateway credentials from `settings` DB table, caches in KV (5 min TTL), registers all 4 gateways in the registry via side-effect on import |
+| `gateway-settings.ts` | `getStripeSettings()`, `getSSLCommerzSettings()`, `getPolarSettings()`, `getActivePaymentMethods()`, `upsertSetting()`, `invalidate*Cache()` | Reads gateway credentials from `settings` DB table, caches decrypted/configured results in memory only (5 min TTL), best-effort cleans legacy KV keys, registers all 4 gateways in the registry via side-effect on import |
 | `stripe.ts` | `StripeProvider` class, `createPaymentIntent()`, `capturePaymentIntent()`, `cancelPaymentIntent()`, `createRefund()`, `verifyStripeWebhook()`, `getStripe()` | Stripe SDK wrapper; module-level singleton with key rotation detection |
 | `sslcommerz.ts` | `SSLCommerzProvider` class, `initSSLCommerzSession()`, `validateSSLCommerzIPN()`, `validateSSLCommerzPayment()`, `initiateSSLCommerzRefund()`, `querySSLCommerzRefundStatus()` | SSLCommerz REST API wrapper; no SDK, uses native `fetch`; sandbox/production URL switching. Uses `getDecimalPlaces()` for ISO 4217-aware amount formatting. |
 | `polar.ts` | `PolarProvider` class, `createPolarCheckout()`, `createPolarRefund()`, `verifyPolarWebhook()` | Polar SDK wrapper; uses `@polar-sh/sdk` + `standardwebhooks` for signature verification |
@@ -251,7 +251,7 @@ All gateway credentials are stored in the `settings` DB table with a `category` 
 | `polar` | `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` |
 | `payment_methods` | `enabled_methods` (JSON array), `default_method` |
 
-Settings are cached in memory/KV-compatible helpers (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods`). Admin save operations invalidate the specific gateway cache, the payment methods cache, API checkout config cache (`api:checkout:config:`), and storefront checkout prefixes.
+Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods` are in-memory cache keys, not persistent credential storage). Admin save operations clear the specific gateway cache, clear the payment methods cache, best-effort delete any legacy KV entries with the same keys, invalidate API checkout config cache (`api:checkout:config:`), and purge storefront checkout prefixes.
 
 ### Gateway Registry
 

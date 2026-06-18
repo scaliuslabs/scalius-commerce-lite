@@ -35,6 +35,18 @@ const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CURRENCY_CACHE_GROUPS = ["layout", "checkout"] as const;
 const MEDIA_CACHE_GROUPS = ["media"] as const;
 
+async function deleteLegacyCurrencyGatewayCache(kv?: KVNamespace | null): Promise<void> {
+  if (!kv) return;
+  try {
+    await kv.delete("gw:currency");
+  } catch (error: unknown) {
+    console.warn(
+      "[Settings] Legacy KV delete failed for gw:currency:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 // ─────────────────────────────────────────
 // CURRENCY
 // ─────────────────────────────────────────
@@ -96,7 +108,7 @@ app.openapi(saveCurrencyRoute, async (c) => {
   await saveCurrencySettings(db, body);
 
   const kv = getKv();
-  await kv?.delete("gw:currency");
+  await deleteLegacyCurrencyGatewayCache(kv);
   await invalidateApiAndScheduleStorefrontGroups(CURRENCY_CACHE_GROUPS, c);
 
   return ok(c, { message: "Currency settings saved successfully" });

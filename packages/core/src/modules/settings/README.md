@@ -16,7 +16,7 @@ Central store configuration: site settings (singleton row), key-value settings, 
 |----------|-----------|-------------|
 | `getStorefrontPath` | `(db, path, kv?) => Promise<string>` | Builds a full storefront URL by fetching the base URL from DB, delegates to `@scalius/shared/storefront-url.buildStorefrontPath()` |
 | `getStorefrontBaseUrl` | `(db, kv?) => Promise<string>` | Returns the storefront base URL from `siteSettings.storefrontUrl`. Falls back to `"/"`. KV-cached at `gw:storefront_url` (300s TTL) |
-| `getCurrencyConfig` | `(db, kv?) => Promise<CurrencyConfig>` | Returns `CurrencyConfig { code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ??? / 1 / 2`. KV-cached at `gw:currency` (300s TTL) |
+| `getCurrencyConfig` | `(db, kv?) => Promise<CurrencyConfig>` | Returns `CurrencyConfig { code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ??? / 1 / 2`. KV-cached at `gw:currency` (300s TTL); admin cleanup of this legacy key is best-effort so checkout/layout invalidation still runs after committed writes |
 | `getSiteSettings` | `(db, kv?) => Promise<row>` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
 | `invalidateSiteSettingsCache` | `(kv?) => Promise<void>` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
 | `getNotificationChannels` | `(db) => Promise<Record<string, string[]>>` | Returns notification channel preferences per order status. Normalizes both string-array format (canonical) and boolean-map format (from UI). Defaults to email-only for all 9 shared order notification types |
@@ -132,7 +132,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/currency` | Get currency code/symbol/rate |
-| POST | `/currency` | Save currency settings. Invalidates `gw:currency` KV key |
+| POST | `/currency` | Save currency settings. Best-effort invalidates `gw:currency`, then invalidates layout and checkout cache groups |
 | GET | `/general` | Get header + footer JSON configs |
 | POST | `/header` | Save header config (topBar, logo, favicon, contact, social, navigation). Upserts siteSettings singleton |
 | POST | `/footer` | Save footer config (logo, tagline, description, copyrightText, menus, social). Upserts siteSettings singleton |
