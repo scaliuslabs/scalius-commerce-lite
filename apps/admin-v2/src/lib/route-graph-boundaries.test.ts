@@ -104,6 +104,10 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
       "utf8",
     );
+    const adminRouteContextSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-route-context.ts"),
+      "utf8",
+    );
     const scrollSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "admin-scroll-restoration.ts"),
       "utf8",
@@ -124,6 +128,9 @@ describe("admin route graph boundaries", () => {
     expect(routerSource).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
     expect(routerSource).toContain("scrollRestorationBehavior: \"instant\"");
     expect(adminRouteSource).toContain("useAdminNestedScrollRestoration();");
+    expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_FRESH_MS");
+    expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_STALE_MS");
+    expect(adminRouteContextSource).toContain("refreshAdminRouteContextInBackground");
     expect(scrollSource).toContain('router.subscribe("onBeforeLoad"');
     expect(scrollSource).toContain('router.subscribe("onRendered"');
     expect(scrollSource).toContain('window.addEventListener("popstate"');

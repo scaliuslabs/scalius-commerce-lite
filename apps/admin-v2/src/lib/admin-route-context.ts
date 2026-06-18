@@ -1,15 +1,20 @@
 import { adminRouteGuard } from "~/lib/auth.fns";
 
-const ADMIN_ROUTE_CONTEXT_CACHE_MS = 15_000;
+export const ADMIN_ROUTE_CONTEXT_FRESH_MS = 60_000;
+export const ADMIN_ROUTE_CONTEXT_STALE_MS = 5 * 60_000;
 
 type AdminRouteContext = Awaited<ReturnType<typeof adminRouteGuard>>;
 
 let cachedAdminRouteContext:
-  | { context: AdminRouteContext; expiresAt: number }
+  | { context: AdminRouteContext; freshUntil: number; expiresAt: number }
   | null = null;
+let adminRouteContextRefresh: Promise<void> | null = null;
+let adminRouteContextEpoch = 0;
 
 export function clearAdminRouteContextCache() {
+  adminRouteContextEpoch += 1;
   cachedAdminRouteContext = null;
+  adminRouteContextRefresh = null;
 }
 
 interface AdminRouteInvalidator {
@@ -27,12 +32,40 @@ export async function refreshAdminRouteContext(
   }
 }
 
-export function primeAdminRouteContextCache(context: AdminRouteContext) {
-  if (typeof window === "undefined") return;
+function writeAdminRouteContextCache(
+  context: AdminRouteContext,
+  now = Date.now(),
+) {
   cachedAdminRouteContext = {
     context,
-    expiresAt: Date.now() + ADMIN_ROUTE_CONTEXT_CACHE_MS,
+    freshUntil: now + ADMIN_ROUTE_CONTEXT_FRESH_MS,
+    expiresAt: now + ADMIN_ROUTE_CONTEXT_STALE_MS,
   };
+}
+
+function refreshAdminRouteContextInBackground() {
+  if (adminRouteContextRefresh) return;
+
+  const refreshEpoch = adminRouteContextEpoch;
+  adminRouteContextRefresh = adminRouteGuard()
+    .then((context) => {
+      if (refreshEpoch !== adminRouteContextEpoch) return;
+      writeAdminRouteContextCache(context);
+    })
+    .catch(() => {
+      // Keep the last verified context until the hard TTL; the next blocking guard
+      // will redirect or surface errors if the session is truly no longer usable.
+    })
+    .finally(() => {
+      if (refreshEpoch === adminRouteContextEpoch) {
+        adminRouteContextRefresh = null;
+      }
+    });
+}
+
+export function primeAdminRouteContextCache(context: AdminRouteContext) {
+  if (typeof window === "undefined") return;
+  writeAdminRouteContextCache(context);
 }
 
 export async function getAdminRouteContext(): Promise<AdminRouteContext> {
@@ -42,13 +75,16 @@ export async function getAdminRouteContext(): Promise<AdminRouteContext> {
 
   const now = Date.now();
   if (cachedAdminRouteContext && cachedAdminRouteContext.expiresAt > now) {
+    if (cachedAdminRouteContext.freshUntil <= now) {
+      refreshAdminRouteContextInBackground();
+    }
     return cachedAdminRouteContext.context;
   }
 
+  const loadEpoch = adminRouteContextEpoch;
   const context = await adminRouteGuard();
-  cachedAdminRouteContext = {
-    context,
-    expiresAt: now + ADMIN_ROUTE_CONTEXT_CACHE_MS,
-  };
+  if (loadEpoch === adminRouteContextEpoch) {
+    writeAdminRouteContextCache(context);
+  }
   return context;
 }
