@@ -1,39 +1,95 @@
 // src/integrations/email/index.ts
 // Barrel file for email provider abstraction.
 
-export type { SendEmailOptions, EmailProvider } from "./provider";
+export type {
+  SendEmailOptions,
+  EmailProvider,
+  EmailRuntimeContext,
+  EmailRuntimeSettings,
+  CloudflareEmailBinding,
+} from "./provider";
 export {
   registerEmailProvider,
   getEmailProvider,
   setActiveEmailProvider,
 } from "./provider";
 
+export { CloudflareEmailProvider } from "./cloudflare";
 export { ResendEmailProvider } from "./resend";
+export { getEmailRuntimeSettings, readEmailSetting } from "./settings";
 
 // ── Register built-in providers ─────────────────────────────────────
 
 import { registerEmailProvider } from "./provider";
+import { CloudflareEmailProvider } from "./cloudflare";
 import { ResendEmailProvider } from "./resend";
 
+registerEmailProvider("cloudflare", new CloudflareEmailProvider());
 registerEmailProvider("resend", new ResendEmailProvider());
 
 // ── Convenience functions (preserve existing public API) ────────────
 
-import type { SendEmailOptions } from "./provider";
+import type { EmailRuntimeContext, EmailRuntimeSettings, SendEmailOptions } from "./provider";
 import { getEmailProvider } from "./provider";
+import { getEmailRuntimeSettings } from "./settings";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
+function logEmailFallback(
+  { to, subject, html, from, text }: SendEmailOptions,
+  settings: EmailRuntimeSettings,
+): void {
+  const fromAddress = from || settings.sender;
+  console.log("=".repeat(60));
+  console.log("EMAIL (no configured provider available - logging only)");
+  console.log("=".repeat(60));
+  console.log(`Provider preference: ${settings.provider}`);
+  console.log(`From: ${fromAddress}`);
+  console.log(`To: ${to}`);
+  console.log(`Subject: ${subject}`);
+  console.log("-".repeat(60));
+  console.log(html);
+  if (text) {
+    console.log("-".repeat(60));
+    console.log(text);
+  }
+  console.log("=".repeat(60));
+}
+
+function providerOrder(settings: EmailRuntimeSettings): Array<EmailRuntimeSettings["provider"]> {
+  return settings.provider === "resend"
+    ? ["resend", "cloudflare"]
+    : ["cloudflare", "resend"];
+}
+
+function isProviderConfigured(
+  providerName: EmailRuntimeSettings["provider"],
+  settings: EmailRuntimeSettings,
+  context?: EmailRuntimeContext,
+): boolean {
+  if (providerName === "cloudflare") return Boolean(context?.env?.EMAIL);
+  return Boolean(settings.resendApiKey);
+}
+
 /**
- * Send an email using the active provider.
- * Falls back to console logging when no provider is configured.
+ * Send an email using the configured provider.
+ * Falls back to the secondary provider, then console logging, when unavailable.
  */
-export async function sendEmail(options: SendEmailOptions): Promise<void> {
-  const provider = getEmailProvider();
-  if (!provider) {
-    console.warn("[Email] No email provider registered");
+export async function sendEmail(
+  options: SendEmailOptions,
+  context?: EmailRuntimeContext,
+): Promise<void> {
+  const settings = await getEmailRuntimeSettings(context);
+  const runtimeContext: EmailRuntimeContext = { ...context, settings };
+
+  for (const providerName of providerOrder(settings)) {
+    if (!isProviderConfigured(providerName, settings, runtimeContext)) continue;
+    const provider = getEmailProvider(providerName);
+    if (!provider) continue;
+    await provider.sendEmail(options, runtimeContext);
     return;
   }
-  await provider.sendEmail(options);
+
+  logEmailFallback(options, settings);
 }
 
 /**
@@ -43,6 +99,7 @@ export async function sendVerificationEmail(
   email: string,
   name: string,
   verificationUrl: string,
+  context?: EmailRuntimeContext,
 ): Promise<void> {
   await sendEmail({
     to: email,
@@ -67,7 +124,7 @@ export async function sendVerificationEmail(
       </div>
     `,
     text: `Hi ${name},\n\nPlease verify your email: ${verificationUrl}\n\nExpires in 24 hours.`,  // Plain text: no HTML escaping needed
-  });
+  }, context);
 }
 
 /**
@@ -77,6 +134,7 @@ export async function sendPasswordResetEmail(
   email: string,
   name: string,
   resetUrl: string,
+  context?: EmailRuntimeContext,
 ): Promise<void> {
   await sendEmail({
     to: email,
@@ -101,7 +159,7 @@ export async function sendPasswordResetEmail(
       </div>
     `,
     text: `Hi ${name},\n\nReset your password: ${resetUrl}\n\nExpires in 1 hour.`,
-  });
+  }, context);
 }
 
 /**
@@ -112,6 +170,7 @@ export async function sendAdminInviteEmail(
   inviterName: string,
   tempPassword: string,
   loginUrl: string,
+  context?: EmailRuntimeContext,
 ): Promise<void> {
   await sendEmail({
     to: email,
@@ -140,5 +199,5 @@ export async function sendAdminInviteEmail(
       </div>
     `,
     text: `Hi,\n\n${inviterName} invited you to Scalius Commerce admin.\n\nEmail: ${email}\nTemp Password: ${tempPassword}\n\nLogin: ${loginUrl}\n\nChange your password immediately.`,
-  });
+  }, context);
 }

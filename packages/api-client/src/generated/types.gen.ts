@@ -17570,8 +17570,11 @@ export type GetApiV1AdminSettingsEmailResponses = {
     200: {
         success: true;
         data: {
+            provider: 'cloudflare' | 'resend';
             apiKey: string;
             sender: string;
+            cloudflareBindingConfigured: boolean;
+            resendConfigured: boolean;
         };
     };
 };
@@ -17580,6 +17583,7 @@ export type GetApiV1AdminSettingsEmailResponse = GetApiV1AdminSettingsEmailRespo
 
 export type PostApiV1AdminSettingsEmailData = {
     body?: {
+        provider?: 'cloudflare' | 'resend';
         apiKey?: string;
         sender?: string;
     };

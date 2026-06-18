@@ -15,6 +15,16 @@
  * App-specific env.d.ts files extend this via declaration merging.
  */
 interface Env {
+  EMAIL?: {
+    send(message: {
+      to: string | { email: string; name?: string } | Array<string | { email: string; name?: string }>;
+      from: string | { email: string; name?: string };
+      subject: string;
+      html?: string;
+      text?: string;
+    }): Promise<{ messageId: string }>;
+  };
+
   // KV namespace for caching (used by orders.queue, kv-cache, cache-invalidation, etc.)
   CACHE: KVNamespace;
 
@@ -36,6 +46,8 @@ interface Env {
   // Secrets
   BETTER_AUTH_SECRET: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+  CREDENTIAL_ENCRYPTION_KEY?: string;
+  JWT_SECRET?: string;
 
   // Variables
   BETTER_AUTH_URL?: string;

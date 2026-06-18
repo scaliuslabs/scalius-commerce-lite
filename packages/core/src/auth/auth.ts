@@ -6,6 +6,15 @@ import { getDb } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
+function getEmailRuntimeContext(env?: Env | NodeJS.ProcessEnv) {
+  const source = (env ?? process.env) as Record<string, unknown>;
+  return {
+    env: source,
+    encryptionKey: (source.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
+      ?? (source.JWT_SECRET as string | undefined),
+  };
+}
+
 /**
  * Create Better Auth instance with the given environment.
  * This factory pattern is necessary for Cloudflare Workers where
@@ -26,6 +35,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
   const baseURL = getEnvVar("BETTER_AUTH_URL") || getEnvVar("PUBLIC_API_BASE_URL");
   const storefrontURL = getEnvVar("STOREFRONT_URL");
   const appName = "Scalius Commerce";
+  const emailRuntimeContext = getEmailRuntimeContext(env);
 
   if (!secret) {
     throw new Error("BETTER_AUTH_SECRET is not set. Generate one with: openssl rand -base64 32");
@@ -76,7 +86,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
               </p>
             </div>
           `,
-        });
+        }, emailRuntimeContext);
       },
       // Password reset callback
       sendResetPassword: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
@@ -103,7 +113,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
               </p>
             </div>
           `,
-        });
+        }, emailRuntimeContext);
       },
     },
     session: {
@@ -192,7 +202,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
                   </p>
                 </div>
               `,
-            });
+            }, emailRuntimeContext);
           },
           // OTP expires in 5 minutes
           period: 5,

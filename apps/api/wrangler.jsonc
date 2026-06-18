@@ -42,6 +42,11 @@
   "ai": {
     "binding": "AI"
   },
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

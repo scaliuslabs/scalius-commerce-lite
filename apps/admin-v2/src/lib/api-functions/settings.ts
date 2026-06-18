@@ -97,9 +97,13 @@ export interface AuthSettingsPayload extends SettingsPayload {
   partialPaymentAmount: number | null;
 }
 export type UpdateAuthSettingsInput = SettingsPayload;
+export type EmailProvider = "cloudflare" | "resend";
 export interface EmailSettingsPayload extends SettingsPayload {
+  provider: EmailProvider;
   apiKey: string;
   sender: string;
+  cloudflareBindingConfigured: boolean;
+  resendConfigured: boolean;
 }
 export type UpdateEmailSettingsInput = SettingsPayload;
 export interface FirebaseSettingsPayload extends SettingsPayload {

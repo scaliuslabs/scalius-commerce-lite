@@ -8,7 +8,13 @@ export {
   sendAdminInviteEmail,
 } from "./email/index";
 
-export type { SendEmailOptions, EmailProvider } from "./email/index";
+export type {
+  SendEmailOptions,
+  EmailProvider,
+  EmailRuntimeContext,
+  EmailRuntimeSettings,
+  CloudflareEmailBinding,
+} from "./email/index";
 
 export {
   registerEmailProvider,
@@ -16,4 +22,9 @@ export {
   setActiveEmailProvider,
 } from "./email/index";
 
-export { ResendEmailProvider } from "./email/index";
+export {
+  CloudflareEmailProvider,
+  ResendEmailProvider,
+  getEmailRuntimeSettings,
+  readEmailSetting,
+} from "./email/index";

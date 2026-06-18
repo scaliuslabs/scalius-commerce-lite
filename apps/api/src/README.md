@@ -293,7 +293,7 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 | `payment.polar.failed` | `processPaymentFailed()` | Mark order failed |
 | `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund (can originate from Polar dashboard) |
 | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status notifications across all enabled channels (email, SMS via 4 providers, WhatsApp, FCM push). 9 notification types: order_created, order_confirmed, order_processing, order_shipped, order_delivered, order_completed, order_cancelled, order_returned, order_refunded. Each channel dispatched independently. |
-| `auth.send_otp` | Email / WhatsApp / SMS | Send OTP via email (`sendEmail()`), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers) |
+| `auth.send_otp` | Email / WhatsApp / SMS | Send OTP via email (`sendEmail()` with Cloudflare Email Service default and Resend fallback), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers) |
 
 ## How to Add a New Endpoint
 

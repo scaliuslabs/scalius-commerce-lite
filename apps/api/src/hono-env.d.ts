@@ -25,6 +25,16 @@ declare module "hono" {
 }
 
 declare global {
+  interface CloudflareSendEmailBinding {
+    send(message: {
+      to: string | { email: string; name?: string } | Array<string | { email: string; name?: string }>;
+      from: string | { email: string; name?: string };
+      subject: string;
+      html?: string;
+      text?: string;
+    }): Promise<{ messageId: string }>;
+  }
+
   // Cloudflare Workers environment bindings.
   // DB, CACHE, BUCKET come from wrangler.jsonc bindings.
   // Secrets are set in the Cloudflare dashboard (or via wrangler secret put).
@@ -36,6 +46,7 @@ declare global {
     SHARED_AUTH_CACHE: KVNamespace;
     AI?: Ai;
     WidgetDesignAgent: DurableObjectNamespace;
+    EMAIL?: CloudflareSendEmailBinding;
 
     // Cloudflare Queue bindings
     PAYMENT_EVENTS_QUEUE: Queue;

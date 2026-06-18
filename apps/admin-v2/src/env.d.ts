@@ -170,6 +170,19 @@ interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
+interface CloudflareSendEmailBinding {
+  send(message: {
+    to:
+      | string
+      | { email: string; name?: string }
+      | Array<string | { email: string; name?: string }>;
+    from: string | { email: string; name?: string };
+    subject: string;
+    html?: string;
+    text?: string;
+  }): Promise<{ messageId: string }>;
+}
+
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
@@ -191,6 +204,7 @@ interface Env {
   SESSION: KVNamespace;
   BUCKET: R2Bucket;
   SHARED_AUTH_CACHE: KVNamespace;
+  EMAIL?: CloudflareSendEmailBinding;
 
   // Service binding to API worker
   API: Fetcher;
@@ -200,6 +214,7 @@ interface Env {
   API_TOKEN?: string;
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+  CREDENTIAL_ENCRYPTION_KEY?: string;
 
   // Variables
   BETTER_AUTH_URL?: string;

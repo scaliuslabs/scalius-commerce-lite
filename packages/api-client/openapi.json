@@ -55599,16 +55599,32 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "cloudflare",
+                            "resend"
+                          ]
+                        },
                         "apiKey": {
                           "type": "string"
                         },
                         "sender": {
                           "type": "string"
+                        },
+                        "cloudflareBindingConfigured": {
+                          "type": "boolean"
+                        },
+                        "resendConfigured": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
+                        "provider",
                         "apiKey",
-                        "sender"
+                        "sender",
+                        "cloudflareBindingConfigured",
+                        "resendConfigured"
                       ]
                     }
                   },
@@ -55833,11 +55849,20 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "cloudflare",
+                      "resend"
+                    ]
+                  },
                   "apiKey": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 512
                   },
                   "sender": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 320
                   }
                 }
               }

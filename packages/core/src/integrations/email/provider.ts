@@ -9,18 +9,47 @@ export interface SendEmailOptions {
   text?: string;
 }
 
+export interface CloudflareEmailBinding {
+  send(message: {
+    to: string | { email: string; name?: string };
+    from: string | { email: string; name?: string };
+    subject: string;
+    html?: string;
+    text?: string;
+  }): Promise<{ messageId: string }>;
+}
+
+export interface EmailRuntimeSettings {
+  provider: "cloudflare" | "resend";
+  sender: string;
+  resendApiKey: string | null;
+  hasResendApiKey: boolean;
+  cloudflareBindingConfigured: boolean;
+}
+
+export interface EmailRuntimeContext {
+  db?: unknown;
+  env?: Record<string, unknown> & {
+    EMAIL?: CloudflareEmailBinding;
+    CREDENTIAL_ENCRYPTION_KEY?: string;
+    JWT_SECRET?: string;
+  };
+  encryptionKey?: string;
+  settings?: EmailRuntimeSettings;
+}
+
 /**
  * Contract that every email provider must implement.
  */
 export interface EmailProvider {
   readonly name: string;
-  sendEmail(options: SendEmailOptions): Promise<void>;
+  sendEmail(options: SendEmailOptions, context?: EmailRuntimeContext): Promise<void>;
 }
 
 // ── Provider Registry ───────────────────────────────────────────────
 
 const providers = new Map<string, EmailProvider>();
-let activeProviderName = "resend";
+let activeProviderName = "cloudflare";
 
 /**
  * Register an email provider by name.

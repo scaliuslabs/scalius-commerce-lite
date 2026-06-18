@@ -122,7 +122,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, whatsapp OTP fields. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (resend_api_key, email_sender), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `notifications` (order_channels), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `notifications` (order_channels), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 ## API Endpoints (Admin)
 
@@ -166,8 +166,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/auth` | Save auth/checkout settings. Skips masked token values |
 | GET | `/security` | Get CSP allowed domains |
 | POST | `/security` | Save CSP allowed domains. Also writes to KV at `security:csp_allowed_domains` |
-| GET | `/email` | Get Resend email settings (masks API key) |
-| POST | `/email` | Save Resend API key + sender. Skips masked values |
+| GET | `/email` | Get transactional email provider settings: Cloudflare binding status, Resend key status, selected provider, and sender |
+| POST | `/email` | Save selected email provider + sender. Skips masked Resend key values and encrypts new Resend keys |
 | GET | `/firebase` | Get Firebase settings (masks service account) |
 | POST | `/firebase` | Save Firebase service account + public config. Validates JSON. Invalidates `FIREBASE_CONFIG` layout cache |
 

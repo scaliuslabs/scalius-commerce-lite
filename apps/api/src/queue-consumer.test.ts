@@ -285,7 +285,45 @@ describe("handleQueueBatch payment confirmation retries", () => {
       "order_refunded",
       { reason: "refund" },
       { id: "db" },
-      { encryptionKey: "test-key" },
+      {
+        encryptionKey: "test-key",
+        env: {
+          CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+        },
+      },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes env and encryption context to OTP email dispatch", async () => {
+    const message = createMessage({
+      type: "auth.send_otp",
+      method: "email",
+      allowedMethod: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+    } as const);
+    const env = {
+      EMAIL: {
+        send: vi.fn(),
+      },
+      CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+    } as unknown as Env;
+
+    await handleQueueBatch(createBatch([message]), env);
+
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "buyer@example.com",
+        subject: "Your login code",
+        text: "Your login code is: 123456\n\nExpires in 5 minutes.",
+      }),
+      {
+        db: { id: "db" },
+        env,
+        encryptionKey: "test-key",
+      },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
   });

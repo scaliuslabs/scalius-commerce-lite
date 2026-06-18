@@ -1,101 +1,72 @@
 # Email
 
-Email delivery abstraction with a provider registry. Ships with Resend; extensible for SendGrid, Mailgun, etc.
+Transactional email abstraction with a small provider registry and runtime settings from the `settings` table.
 
-## Connection Status
+## Providers
 
-| Caller | Connected |
-|--------|-----------|
-| Order notification emails (queue consumer) | Yes |
-| OTP login codes (queue consumer) | Yes |
-| Email verification (Better Auth) | Yes |
-| Password reset (Better Auth) | Yes |
-| Admin invitation | Yes |
+Built-in providers:
 
-All callers use the `sendEmail()` convenience function from `index.ts`, which delegates to the active provider. When no Resend API key is configured, emails are logged to the console (development fallback).
+- `cloudflare` -- default Cloudflare Email Service provider using the Workers `send_email` binding named `EMAIL`.
+- `resend` -- optional HTTP fallback using a dashboard-saved Resend API key.
 
-## Provider: Resend
+Every email path calls `sendEmail(options, context?)`. The selector reads `email_provider` from DB settings and tries providers in this order:
 
-The only built-in provider. Calls the Resend HTTP API directly via `fetch("https://api.resend.com/emails")`.
+- Saved provider is `cloudflare`: Cloudflare binding first, then Resend if a key exists.
+- Saved provider is `resend`: Resend first, then Cloudflare if the binding exists.
+- No saved provider: existing Resend keys preserve legacy behavior; otherwise Cloudflare is preferred.
+- No configured provider: logs the email body locally and does not throw.
 
-Credentials are read from the `settings` DB table on every send (no caching):
-- `resend_api_key` (category `email`) -- Resend API key
-- `email_sender` (category `email`) -- Default sender address (falls back to `noreply@example.com`)
+Cloudflare Email Service is the native/default option. Do not add another paid/external email provider without keeping Cloudflare available in API, runtime, UI, and docs.
 
-The `getEmailSettings()` function uses dynamic imports (`await import("@scalius/database/client")`) to avoid circular dependencies and enable tree-shaking. All catch blocks use typed `error: unknown` with `instanceof Error` checks.
+## Settings
 
-### Admin Settings UI
+Category `email` keys:
 
-Configured via the integrations settings page:
-- `GET /api/v1/admin/settings/email` -- Returns masked API key status and sender address
-- `POST /api/v1/admin/settings/email` -- Saves API key and/or sender to `settings` table
+- `email_provider` -- `cloudflare` or `resend`.
+- `email_sender` -- default From address, falling back to `noreply@example.com` at runtime.
+- `resend_api_key` -- encrypted Resend key. Reads use `decryptCredentialsGraceful()`. Writes of real keys must require `CREDENTIAL_ENCRYPTION_KEY`.
 
-## Provider Interface
+Admin API:
+
+- `GET /api/v1/admin/settings/email` returns provider, masked Resend key status, sender, and Cloudflare binding status.
+- `POST /api/v1/admin/settings/email` saves provider/sender, skips masked keys, encrypts new Resend keys, and allows blank key clearing.
+
+## Runtime Context
+
+Callers that run inside Workers must pass context:
 
 ```typescript
-export interface EmailProvider {
-  readonly name: string;
-  sendEmail(options: SendEmailOptions): Promise<void>;
-}
-
-export interface SendEmailOptions {
-  to: string;
-  subject: string;
-  html: string;
-  from?: string;
-  text?: string;
-}
+await sendEmail(message, {
+  db,
+  env,
+  encryptionKey,
+});
 ```
 
-## Adding a New Provider
+The context lets the selector detect `env.EMAIL`, read DB settings without relying on global singleton initialization, and decrypt fallback provider credentials. Queue consumers, Better Auth callbacks, order notifications, and admin invitations all pass this context.
 
-1. **Create provider file** `my-provider.ts`:
-   ```typescript
-   import type { EmailProvider, SendEmailOptions } from "./provider";
+## Cloudflare Binding
 
-   export class MyEmailProvider implements EmailProvider {
-     readonly name = "my-provider";
+The API and admin Workers declare:
 
-     async sendEmail({ to, subject, html, from, text }: SendEmailOptions): Promise<void> {
-       // Read credentials from DB settings table (category "email")
-       // Call your email API
-       // Throw Error on failure
-     }
-   }
-   ```
-   See `resend.ts` for the reference implementation.
+```jsonc
+"send_email": [{ "name": "EMAIL" }]
+```
 
-2. **Register in `index.ts`**:
-   ```typescript
-   import { registerEmailProvider } from "./provider";
-   import { MyEmailProvider } from "./my-provider";
-   registerEmailProvider("my-provider", new MyEmailProvider());
-   ```
-
-3. **Set as active** (optional): Call `setActiveEmailProvider("my-provider")` to make it the default. The active provider name defaults to `"resend"`.
-
-4. **No other code changes needed.** The `sendEmail()` convenience function in `index.ts` uses `getEmailProvider()` which returns the active provider. All callers throughout the codebase use this function.
-
-## Registry Pattern
-
-- `providers` is a module-level `Map<string, EmailProvider>`
-- `registerEmailProvider(name, provider)` adds a provider
-- `getEmailProvider(name?)` retrieves by name, defaults to `activeProviderName`
-- `setActiveEmailProvider(name)` changes the default
-- Resend is registered at module load in `index.ts`
-
-## Convenience Functions
-
-`index.ts` exports pre-built email senders that use the active provider:
-- `sendEmail(options)` -- generic send (used by queue consumer for OTP and order notifications)
-- `sendVerificationEmail(email, name, url)` -- email verification with 24-hour expiry
-- `sendPasswordResetEmail(email, name, url)` -- password reset with 1-hour expiry
-- `sendAdminInviteEmail(email, inviterName, tempPassword, loginUrl)` -- admin invitation with temp credentials
-
-All functions use inline HTML templates with basic responsive styling. User-supplied values are escaped via `escapeHtml()` from `@scalius/shared/html-escape`. No template engine.
+Cloudflare Email Service requires domain onboarding in the Cloudflare dashboard before arbitrary production sends. Local API config intentionally does not declare the binding; local development logs emails unless a provider is explicitly configured.
 
 ## Key Files
 
-- `provider.ts` -- `EmailProvider` interface, registry (`registerEmailProvider`, `getEmailProvider`, `setActiveEmailProvider`)
-- `resend.ts` -- `ResendEmailProvider` implementation (reads settings from DB per-send, calls Resend API, console fallback). Marked `@deprecated` in favor of `packages/core/src/providers/email/resend-adapter.ts` (universal provider), but still active and connected. Typed `error: unknown` catch blocks.
-- `index.ts` -- barrel exports, provider registration at load time, convenience email functions
+- `provider.ts` -- provider interfaces, runtime context types, and registry.
+- `settings.ts` -- DB/runtime settings loader and Resend credential decryption.
+- `cloudflare.ts` -- Workers `EMAIL.send()` provider.
+- `resend.ts` -- Resend HTTP provider.
+- `index.ts` -- provider registration, selection/fallback logic, and convenience templates.
+
+## Adding a Provider
+
+1. Add a provider implementing `EmailProvider`.
+2. Register it in `index.ts`.
+3. Extend `EmailRuntimeSettings` and admin settings only if it needs runtime configuration.
+4. Keep Cloudflare Email Service as a first-class/default option.
+5. Add focused provider-selection tests before shipping.
