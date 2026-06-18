@@ -63,6 +63,7 @@ export interface OrderDetails extends OrderListItem {
         productImage: string | null;
         variantSize: string | null;
         variantColor: string | null;
+        fulfillmentStatus: string;
     }[];
 }
 

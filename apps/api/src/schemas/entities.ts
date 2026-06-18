@@ -194,6 +194,7 @@ export const orderItemSchema = z
     productImage: z.string().nullable(),
     variantSize: z.string().nullable(),
     variantColor: z.string().nullable(),
+    fulfillmentStatus: z.string(),
   })
 
 /** Order detail — returned by getOrderDetails (admin). */
@@ -535,6 +536,16 @@ export const deliveryShipmentSchema = z
     rawStatus: z.string().nullable(),
     externalId: z.string().nullable(),
     trackingId: z.string().nullable(),
+    trackingUrl: z.string().nullable(),
+    courierName: z.string().nullable(),
+    note: z.string().nullable(),
+    metadata: z.string().nullable(),
+    lastChecked: nullableTimestampSchema,
+    shipmentItems: z.string().nullable(),
+    shipmentAmount: z.number().nullable(),
+    isFinalShipment: z.boolean().nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
   })
 
 /** Delivery location (city/zone/area). */

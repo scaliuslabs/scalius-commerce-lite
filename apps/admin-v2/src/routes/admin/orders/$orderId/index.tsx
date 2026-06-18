@@ -56,9 +56,20 @@ function toOrderShipment(shipment: OrderShipmentDto): OrderShipment {
     providerName: shipment.providerName,
     externalId: shipment.externalId,
     trackingId: shipment.trackingId,
+    trackingUrl:
+      typeof raw.trackingUrl === "string" ? raw.trackingUrl : null,
+    courierName:
+      typeof raw.courierName === "string" ? raw.courierName : null,
     status: shipment.status,
     rawStatus: shipment.rawStatus,
+    note: typeof raw.note === "string" ? raw.note : null,
     metadata: toMetadata(raw.metadata),
+    shipmentItems:
+      typeof raw.shipmentItems === "string" ? raw.shipmentItems : null,
+    shipmentAmount:
+      typeof raw.shipmentAmount === "number" ? raw.shipmentAmount : null,
+    isFinalShipment:
+      typeof raw.isFinalShipment === "boolean" ? raw.isFinalShipment : null,
     createdAt,
     updatedAt,
     lastChecked: shipment.lastChecked ?? updatedAt,

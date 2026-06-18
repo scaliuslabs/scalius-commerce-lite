@@ -16,7 +16,10 @@ type ShipmentMetadata = Record<string, unknown> | string | null;
 type ShipmentTimestamp = string | number;
 type ShipmentApiPayload = OrderShipmentDto | RefreshedShipmentPayload;
 
-type Shipment = ShipmentApiPayload & {
+type Shipment = Omit<
+  ShipmentApiPayload,
+  "createdAt" | "updatedAt" | "lastChecked" | "metadata"
+> & {
   metadata: ShipmentMetadata;
   createdAt: ShipmentTimestamp;
   updatedAt: ShipmentTimestamp;
