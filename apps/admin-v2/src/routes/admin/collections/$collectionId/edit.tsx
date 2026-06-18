@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { CollectionForm } from "~/components/admin/collection-form";
 import {
   collectionCategoryOptionsQueryOptions,
@@ -47,8 +47,12 @@ export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
     if (!collection) throw redirect({ to: "/admin/collections" });
 
     const productIds = productIdsFromConfig(parseCollectionConfig(collection.config));
-    if (productIds.length > 0) {
-      await queryClient.ensureQueryData(productsByIdsQueryOptions(productIds));
+    if (typeof window !== "undefined" && productIds.length > 0) {
+      void queryClient
+        .prefetchQuery(productsByIdsQueryOptions(productIds))
+        .catch((error) => {
+          console.warn("Collection product label prefetch skipped", error);
+        });
     }
   },
   head: () => ({ meta: [{ title: "Edit Collection | Scalius Admin" }] }),
@@ -64,6 +68,7 @@ function EditCollectionPage() {
   const c = collectionData;
   const fo: { categories?: Category[] } = formOptions;
   const parsedConfig = parseCollectionConfig(c.config);
+  const selectedProductIds = productIdsFromConfig(parsedConfig);
   const config = {
     categoryIds: parsedConfig.categoryIds || [],
     productIds: parsedConfig.productIds || parsedConfig.specificProductIds || [],
@@ -72,9 +77,10 @@ function EditCollectionPage() {
     title: parsedConfig.title || "",
     subtitle: parsedConfig.subtitle || "",
   };
-  const { data: productLookup } = useSuspenseQuery(
-    productsByIdsQueryOptions(productIdsFromConfig(config)),
-  );
+  const { data: productLookup } = useQuery({
+    ...productsByIdsQueryOptions(selectedProductIds),
+    enabled: selectedProductIds.length > 0,
+  });
   const validTypes = ["manual", "dynamic"];
   const formType = validTypes.includes(c.type) ? c.type : "manual";
 

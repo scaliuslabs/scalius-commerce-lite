@@ -195,6 +195,61 @@ describe("admin route graph boundaries", () => {
     expect(loaderSource).not.toContain("for (let");
   });
 
+  it("keeps edit forms from blocking on secondary label hydration", () => {
+    const discountSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "discounts",
+        "$discountId",
+        "edit.tsx",
+      ),
+      "utf8",
+    );
+    const collectionSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "collections",
+        "$collectionId",
+        "edit.tsx",
+      ),
+      "utf8",
+    );
+    const discountLoaderSource = discountSource.slice(
+      discountSource.indexOf("loader: async"),
+      discountSource.indexOf("head: ({ match })"),
+    );
+    const collectionLoaderSource = collectionSource.slice(
+      collectionSource.indexOf("loader: async"),
+      collectionSource.indexOf("head: ()"),
+    );
+
+    expect(discountLoaderSource).not.toContain(
+      "ensureQueryData(productsByIdsQueryOptions",
+    );
+    expect(discountLoaderSource).not.toContain(
+      "ensureQueryData(collectionsByIdsQueryOptions",
+    );
+    expect(collectionLoaderSource).not.toContain(
+      "ensureQueryData(productsByIdsQueryOptions",
+    );
+    expect(discountSource).not.toContain(
+      "useSuspenseQuery(productsByIdsQueryOptions",
+    );
+    expect(discountSource).not.toContain(
+      "useSuspenseQuery(collectionsByIdsQueryOptions",
+    );
+    expect(collectionSource).not.toContain(
+      "useSuspenseQuery(productsByIdsQueryOptions",
+    );
+    expect(discountSource).toContain("Discount product label prefetch skipped");
+    expect(discountSource).toContain("Discount collection label prefetch skipped");
+    expect(collectionSource).toContain("Collection product label prefetch skipped");
+  });
+
   it("keeps deferred rich-text previews rendered without eager editor imports", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),
