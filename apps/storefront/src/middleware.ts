@@ -12,7 +12,7 @@ import {
 } from "@/lib/cache-policy";
 import { resolveStorefrontCacheVersion } from "@/lib/cache-version";
 import {
-  productSlugCacheKeyFromUrl,
+  htmlPathCacheKeyFromUrl,
   resolveExactCacheGeneration,
 } from "./lib/cache-generations";
 import { resolveCacheNamespace } from "./lib/cache-namespace";
@@ -44,7 +44,7 @@ const isCloudflareEnvironment = () => {
   return typeof caches !== "undefined";
 };
 
-async function resolveProductHtmlGeneration({
+async function resolveHtmlCacheGeneration({
   cacheUrl,
   kvBinding,
   cacheNamespace,
@@ -56,7 +56,7 @@ async function resolveProductHtmlGeneration({
   | { cacheEnabled: true; generation: string | null }
   | { cacheEnabled: false; reason: string }
 > {
-  const logicalKey = productSlugCacheKeyFromUrl(cacheUrl);
+  const logicalKey = htmlPathCacheKeyFromUrl(cacheUrl);
   if (!logicalKey) {
     return { cacheEnabled: true, generation: null };
   }
@@ -180,12 +180,12 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       const cacheVersion = resolvedCacheVersion;
 
       const cacheUrl = buildHtmlCacheBaseUrl(new URL(request.url));
-      const productGeneration = await resolveProductHtmlGeneration({
+      const htmlGeneration = await resolveHtmlCacheGeneration({
         cacheUrl,
         kvBinding,
         cacheNamespace,
       });
-      if (!productGeneration.cacheEnabled) {
+      if (!htmlGeneration.cacheEnabled) {
         const response = await next();
         response.headers.set("X-Cache-Status", "BYPASS_GENERATION");
         response.headers.set(
@@ -195,7 +195,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         response.headers.set("Pragma", "no-cache");
         response.headers.set("Expires", "0");
         console.warn(
-          `Bypassing product HTML cache for ${url.pathname}: ${productGeneration.reason}`,
+          `Bypassing exact HTML cache for ${url.pathname}: ${htmlGeneration.reason}`,
         );
         return await setPageCspHeader(response, env ?? undefined);
       }
@@ -203,8 +203,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       // IMPORTANT: include BUILD_ID so new deployments never serve stale HTML
       // that references removed JS/CSS bundles from previous builds.
       cacheUrl.searchParams.set("cache_v", `${cacheVersion}-${BUILD_ID}`);
-      if (productGeneration.generation !== null) {
-        cacheUrl.searchParams.set("cache_gen", productGeneration.generation);
+      if (htmlGeneration.generation !== null) {
+        cacheUrl.searchParams.set("cache_gen", htmlGeneration.generation);
       }
       const cacheKey = new Request(cacheUrl.toString(), request);
 
@@ -227,8 +227,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         );
         response.headers.set("Pragma", "no-cache");
         response.headers.set("Expires", "0");
-        const generationSuffix = productGeneration.generation !== null
-          ? `; gen=${productGeneration.generation}`
+        const generationSuffix = htmlGeneration.generation !== null
+          ? `; gen=${htmlGeneration.generation}`
           : "";
         const cacheStatus = `HIT; v=${cacheVersion}; build=${BUILD_ID}${generationSuffix}; project=${hostname}`;
         response.headers.set("X-Cache-Status", cacheStatus);
@@ -250,7 +250,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         response.headers.set(
           "X-Cache-Status",
           `MISS; v=${cacheVersion}; build=${BUILD_ID}${
-            productGeneration.generation !== null ? `; gen=${productGeneration.generation}` : ""
+            htmlGeneration.generation !== null ? `; gen=${htmlGeneration.generation}` : ""
           }; project=${hostname}`,
         );
         await setPageCspHeader(response, env ?? undefined);

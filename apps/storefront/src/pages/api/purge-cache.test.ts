@@ -41,18 +41,26 @@ vi.mock("@/lib/purge-auth", () => ({
 vi.mock("@/lib/cache-purge-policy", () => ({
   shouldBumpCacheVersionForSelectivePurge: ({
     prefixes,
+    exactKeys = [],
+    htmlPaths = [],
     bumpVersion,
   }: {
     prefixes: string[];
+    exactKeys?: string[];
+    htmlPaths?: string[];
     bumpVersion: boolean;
-  }) => bumpVersion || prefixes.length > 0,
+  }) => bumpVersion || (prefixes.length > 0 && exactKeys.length === 0 && htmlPaths.length === 0),
   shouldWarmCriticalCachesForSelectivePurge: ({
     prefixes,
+    exactKeys = [],
+    htmlPaths = [],
     bumpVersion,
   }: {
     prefixes: string[];
+    exactKeys?: string[];
+    htmlPaths?: string[];
     bumpVersion: boolean;
-  }) => bumpVersion || prefixes.length > 0,
+  }) => bumpVersion || (prefixes.length > 0 && exactKeys.length === 0 && htmlPaths.length === 0),
 }));
 
 describe("storefront cache purge route", () => {
@@ -279,6 +287,101 @@ describe("storefront cache purge route", () => {
         }),
       }),
     );
+  });
+
+  it("keeps scoped widget purges exact instead of bumping the global cache version", async () => {
+    mocks.cacheDelete.mockResolvedValue(true);
+    const { POST } = await import("./purge-cache");
+    const request = new Request("https://storefront.example.com/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        groups: ["widgets"],
+        prefixes: [
+          "widget_wid_page",
+          "widgets_scope_page_page_1",
+          "page_render_about-us_",
+        ],
+        htmlPaths: ["/about-us"],
+        bumpVersion: false,
+      }),
+    });
+
+    const response = await POST({
+      request,
+      url: new URL(request.url),
+      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+    } as unknown as Parameters<typeof POST>[0]);
+    const body = (await response.json()) as {
+      success?: boolean;
+      details?: {
+        cacheVersionBumped?: boolean;
+        newVersion?: number | null;
+        prefixesCleared?: number | string;
+        exactKeysCleared?: number;
+        exactGenerationsBumped?: number;
+        l2ExactKeysDeleted?: number;
+        htmlPathsCleared?: number;
+        htmlPathsDeleted?: number;
+        cacheWarmingStarted?: boolean;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.details).toMatchObject({
+      cacheVersionBumped: false,
+      newVersion: null,
+      prefixesCleared: 3,
+      exactKeysCleared: 0,
+      exactGenerationsBumped: 4,
+      l2ExactKeysDeleted: 0,
+      htmlPathsCleared: 1,
+      htmlPathsDeleted: 1,
+      cacheWarmingStarted: true,
+    });
+    expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_storefront.example.com");
+    expect(mocks.cfEnv.CACHE_CONTROL.put).not.toHaveBeenCalledWith(
+      "v_storefront.example.com",
+      expect.any(String),
+    );
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+      "g:storefront.example.com:widget_wid_page",
+      expect.any(String),
+    );
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+      "g:storefront.example.com:widgets_scope_page_page_1",
+      expect.any(String),
+    );
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+      `g:storefront.example.com:page_render_about-us_${BUILD_ID}`,
+      expect.any(String),
+    );
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+      "g:storefront.example.com:html_path_%2Fabout-us",
+      expect.any(String),
+    );
+    expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith([
+      "widget_wid_page",
+      "widgets_scope_page_page_1",
+      "page_render_about-us_",
+      `page_render_about-us_${BUILD_ID}`,
+      "html_path_/about-us",
+    ]);
+    const htmlDeleteArg = mocks.cacheDelete.mock.calls.find(
+      ([arg]) => arg instanceof Request,
+    )?.[0] as Request | undefined;
+    expect(htmlDeleteArg?.url).toBe(
+      `https://storefront.example.com/about-us?cache_v=4-${BUILD_ID}&cache_gen=4`,
+    );
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
+    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
+    await warmPromise;
+    const warmUrl = vi.mocked(fetch).mock.calls[0]?.[0] as URL;
+    expect(warmUrl.toString()).toBe("https://storefront.example.com/about-us");
   });
 
   it("clears exact L1 and L2 keys without bumping the cache version", async () => {

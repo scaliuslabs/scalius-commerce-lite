@@ -2,6 +2,10 @@ const EXACT_CACHE_GENERATION_PREFIX = "g:";
 const DEFAULT_GENERATION = "0";
 const PRODUCT_SLUG_KEY_PREFIX = "product_slug_";
 const PRODUCT_VARIANTS_KEY_PREFIX = "product_variants_";
+const WIDGET_KEY_PREFIX = "widget_";
+const WIDGET_SCOPE_KEY_PREFIX = "widgets_scope_";
+const PAGE_RENDER_KEY_PREFIX = "page_render_";
+const HTML_PATH_KEY_PREFIX = "html_path_";
 
 interface GenerationStore {
   get(key: string): Promise<string | null>;
@@ -22,7 +26,11 @@ export function buildExactCacheGenerationKey(
 export function shouldUseExactCacheGeneration(logicalKey: string): boolean {
   return (
     logicalKey.startsWith(PRODUCT_SLUG_KEY_PREFIX) ||
-    logicalKey.startsWith(PRODUCT_VARIANTS_KEY_PREFIX)
+    logicalKey.startsWith(PRODUCT_VARIANTS_KEY_PREFIX) ||
+    logicalKey.startsWith(WIDGET_KEY_PREFIX) ||
+    logicalKey.startsWith(WIDGET_SCOPE_KEY_PREFIX) ||
+    logicalKey.startsWith(PAGE_RENDER_KEY_PREFIX) ||
+    logicalKey.startsWith(HTML_PATH_KEY_PREFIX)
   );
 }
 
@@ -41,6 +49,32 @@ export function productSlugCacheKeyFromPath(path: string): string | null {
 
 export function productSlugCacheKeyFromUrl(url: URL): string | null {
   return productSlugCacheKeyFromPath(url.pathname);
+}
+
+export function htmlPathCacheKeyFromPath(path: string): string | null {
+  const productKey = productSlugCacheKeyFromPath(path);
+  if (productKey) {
+    return productKey;
+  }
+
+  try {
+    const url = new URL(path, "https://cache.local");
+    const pathname = url.pathname;
+    const isExactEntityPath =
+      /^\/categories\/[^/]+$/.test(pathname) ||
+      /^\/collections\/[^/]+$/.test(pathname) ||
+      (/^\/[^/.]+$/.test(pathname) && pathname !== "/search");
+    if (!isExactEntityPath) {
+      return null;
+    }
+    return `${HTML_PATH_KEY_PREFIX}${pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+export function htmlPathCacheKeyFromUrl(url: URL): string | null {
+  return htmlPathCacheKeyFromPath(url.pathname);
 }
 
 export async function resolveExactCacheGeneration({
