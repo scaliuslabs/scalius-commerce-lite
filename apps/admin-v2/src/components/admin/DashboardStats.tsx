@@ -21,7 +21,11 @@ import {
 } from "lucide-react";
 import type { ChartConfig } from "@/components/ui/chart";
 import { useCurrency } from "@/hooks/use-currency";
-import { hasDailyActivityData } from "./dashboard-chart-data";
+import {
+  getDashboardActivityPanelState,
+  type DashboardActivityLoadState,
+  type DashboardActivityPanelState,
+} from "./dashboard-chart-data";
 
 const DashboardChart = React.lazy(() =>
   import("./DashboardChart").then((m) => ({ default: m.DashboardChart }))
@@ -127,6 +131,7 @@ interface DashboardStatsProps {
     customerGrowth?: number;
   };
   initialDailyData: DailyActivityDataPoint[];
+  activityLoadState: DashboardActivityLoadState;
 }
 
 const getChartConfig = (symbol: string): ChartConfig => ({
@@ -147,20 +152,50 @@ const getChartConfig = (symbol: string): ChartConfig => ({
 const statsCardEntryClassName = "animate-fade-in-up [animation-fill-mode:both]";
 const statsCardEntryDelays = ["0ms", "60ms", "120ms", "180ms"] as const;
 
+function DailyActivityStatusPanel({
+  state,
+}: {
+  state: Exclude<DashboardActivityPanelState, "chart" | "loading">;
+}) {
+  const copy =
+    state === "empty"
+      ? {
+          title: "No daily activity yet",
+          description:
+            "Orders, revenue, and customer activity will appear once recorded.",
+        }
+      : {
+          title: "Activity unavailable",
+          description:
+            "Summary metrics are still available while chart data refreshes.",
+        };
+
+  return (
+    <div className="flex h-[340px] w-full items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-6 text-center">
+      <div className="max-w-sm space-y-1">
+        <p className="text-sm font-medium text-foreground">{copy.title}</p>
+        <p className="text-xs text-muted-foreground">{copy.description}</p>
+      </div>
+    </div>
+  );
+}
+
 export const DashboardStats = memo(function DashboardStats({
   totalProducts,
   totalCustomers,
   currentMonth,
   initialDailyData,
+  activityLoadState,
 }: DashboardStatsProps & { currentMonth: { customerGrowth?: number } }) {
 
   const { symbol } = useCurrency();
   const [shouldLoadChart, setShouldLoadChart] = React.useState(false);
   const chartConfig = React.useMemo(() => getChartConfig(symbol), [symbol]);
-  const hasRenderableChartData = React.useMemo(
-    () => hasDailyActivityData(initialDailyData),
-    [initialDailyData],
+  const chartPanelState = React.useMemo(
+    () => getDashboardActivityPanelState(initialDailyData, activityLoadState),
+    [activityLoadState, initialDailyData],
   );
+  const hasRenderableChartData = chartPanelState === "chart";
 
   React.useEffect(() => {
     if (!hasRenderableChartData) {
@@ -257,7 +292,11 @@ export const DashboardStats = memo(function DashboardStats({
         </div>
       </div>
 
-      {hasRenderableChartData && shouldLoadChart ? (
+      {chartPanelState === "loading" ? (
+        <LoadingFallback height="h-[340px]" />
+      ) : chartPanelState === "empty" || chartPanelState === "unavailable" ? (
+        <DailyActivityStatusPanel state={chartPanelState} />
+      ) : shouldLoadChart ? (
         <Suspense fallback={<LoadingFallback height="h-[340px]" />}>
           <DashboardChart
             initialDailyData={initialDailyData}

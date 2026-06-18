@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getDashboardActivityPanelState,
   getDailyActivityDataForRange,
   hasDailyActivityData,
   type DailyActivityDataPoint,
@@ -36,5 +37,12 @@ describe("dashboard chart data", () => {
     expect(result).toHaveLength(7);
     expect(result[0]?.date).toBe("2026-06-04");
     expect(hasDailyActivityData(result)).toBe(true);
+  });
+
+  it("separates loading, empty, unavailable, and chart states", () => {
+    expect(getDashboardActivityPanelState([], "pending")).toBe("loading");
+    expect(getDashboardActivityPanelState([], "success")).toBe("empty");
+    expect(getDashboardActivityPanelState([], "error")).toBe("unavailable");
+    expect(getDashboardActivityPanelState(dailyActivityData, "success")).toBe("chart");
   });
 });
