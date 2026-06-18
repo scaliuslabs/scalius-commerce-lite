@@ -289,6 +289,7 @@ Notable migrations:
 - `0039` -- SSLCommerz `val_id` payment idempotency and payment plan status normalization
 - `0040` -- Better Auth `twoFactor.verified` column
 - `0041` -- Dashboard customer activity index on `(deleted_at, created_at)`
+- `0042` -- Admin order search relevance: rebuilds `orders_fts` with `customer_email` and adds the default list index on `(deleted_at, updated_at)`
 
 Validate migration metadata after schema or migration edits:
 

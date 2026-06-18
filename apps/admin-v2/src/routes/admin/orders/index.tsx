@@ -55,7 +55,14 @@ const BulkShipDialog = lazy(() =>
 // ── Search schema ─────────────────────────────────────────────────
 
 const searchSchema = createListSearchSchema(
-  ["customerName", "totalAmount", "status", "createdAt", "updatedAt"] as const,
+  [
+    "relevance",
+    "customerName",
+    "totalAmount",
+    "status",
+    "createdAt",
+    "updatedAt",
+  ] as const,
   { limit: 10, sort: "updatedAt" },
 ).extend({
   status: z.string().optional().catch(undefined),
@@ -184,8 +191,33 @@ function OrdersPage() {
   );
 
   const onSearchChange = useCallback(
-    (value: string) => handleNavigate({ search: value, page: 1 }),
-    [handleNavigate],
+    (value: string) => {
+      const hasNextSearch = value.trim().length > 0;
+      const hasCurrentSearch = search.search.trim().length > 0;
+
+      if (hasNextSearch && !hasCurrentSearch) {
+        handleNavigate({
+          search: value,
+          page: 1,
+          sort: "relevance",
+          order: "desc",
+        });
+        return;
+      }
+
+      if (!hasNextSearch && search.sort === "relevance") {
+        handleNavigate({
+          search: value,
+          page: 1,
+          sort: "updatedAt",
+          order: "desc",
+        });
+        return;
+      }
+
+      handleNavigate({ search: value, page: 1 });
+    },
+    [handleNavigate, search.search, search.sort],
   );
 
   const onPaginationChange = useCallback(
@@ -399,7 +431,7 @@ function OrdersPage() {
     dataSelector,
     currentPage: search.page,
     currentLimit: search.limit,
-    currentSort: search.sort,
+    currentSort: search.sort === "relevance" ? undefined : search.sort,
     currentOrder: search.order,
     onPaginationChange,
     onSortingChange,

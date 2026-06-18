@@ -27,4 +27,16 @@ describe("admin order list boundaries", () => {
     expect(source).toContain("const endTs = Math.floor(endDate.getTime() / 1000)");
     expect(source).not.toContain("setHours(23, 59, 59, 999)");
   });
+
+  it("only applies FTS rank ordering when relevance is explicitly requested", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain('type OrderListSort = "relevance"');
+    expect(source).toContain("COALESCE(");
+    expect(source).toContain("SELECT rank FROM orders_fts");
+    expect(source).toContain('if (rankExpression && sort === "relevance")');
+    expect(source).toContain("orderBy(...orderByExpressions)");
+    expect(source).toContain('case "relevance":');
+    expect(source).not.toContain("if (rankExpression) return rankExpression");
+  });
 });

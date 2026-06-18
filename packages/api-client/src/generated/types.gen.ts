@@ -23564,19 +23564,19 @@ export type GetApiV1AdminOrdersData = {
          */
         trashed?: 'true' | 'false';
         /**
-         * Sort field
+         * Sort field. Use relevance with a search query to order by FTS rank.
          */
-        sort?: 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
         order?: 'asc' | 'desc';
         /**
-         * Start date filter
+         * Start date filter (YYYY-MM-DD, Bangladesh calendar day)
          */
         startDate?: string;
         /**
-         * End date filter
+         * End date filter (YYYY-MM-DD, Bangladesh calendar day)
          */
         endDate?: string;
     };

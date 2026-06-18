@@ -76144,17 +76144,17 @@
             "schema": {
               "type": "string",
               "enum": [
+                "relevance",
                 "customerName",
                 "totalAmount",
                 "status",
                 "createdAt",
                 "updatedAt"
               ],
-              "default": "updatedAt",
-              "description": "Sort field"
+              "description": "Sort field. Use relevance with a search query to order by FTS rank."
             },
             "required": false,
-            "description": "Sort field",
+            "description": "Sort field. Use relevance with a search query to order by FTS rank.",
             "name": "sort",
             "in": "query"
           },
@@ -76176,20 +76176,22 @@
           {
             "schema": {
               "type": "string",
-              "description": "Start date filter"
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Start date filter (YYYY-MM-DD, Bangladesh calendar day)"
             },
             "required": false,
-            "description": "Start date filter",
+            "description": "Start date filter (YYYY-MM-DD, Bangladesh calendar day)",
             "name": "startDate",
             "in": "query"
           },
           {
             "schema": {
               "type": "string",
-              "description": "End date filter"
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "End date filter (YYYY-MM-DD, Bangladesh calendar day)"
             },
             "required": false,
-            "description": "End date filter",
+            "description": "End date filter (YYYY-MM-DD, Bangladesh calendar day)",
             "name": "endDate",
             "in": "query"
           }
