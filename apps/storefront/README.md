@@ -121,6 +121,13 @@ Implements a two-layer edge caching strategy for HTML pages:
 3. Check L2 (Cache API) -- populate L1 from L2 on hit
 4. Execute fetcher -- store in both L1 and L2
 
+### Cache Key Canonicalization
+
+- `src/lib/cache-key.ts` owns canonical query-string handling for HTML Cache API keys and product-list L2 keys.
+- HTML keys sort surviving query params, drop empty/tracking params (`utm_*`, `fbclid`, etc.), and strip client-side product selection params (`size`, `color`) before `cache_v` / `cache_gen` are added.
+- Product/category listing L2 keys use sorted query strings so equivalent filter objects do not create separate `all_products_` / `category_products_` entries.
+- Middleware and `/api/purge-cache` exact HTML deletion must stay aligned on the same helper so deletes and reads target the same key.
+
 ### Cache Invalidation
 
 When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN`:

@@ -273,6 +273,8 @@ Search facet caching uses `api:attributes:search-filters` and must stay in both 
 
 ### Hero and Widget Cache Rules
 
+`cacheMiddleware({ varyByQuery: true })` sorts query params before building KV keys, and routes with schema defaults should pass `queryDefaults` so explicit defaults do not fragment public caches. Use path-aware defaults when one router has multiple routes with different query defaults, such as `/products` and `/products/search`.
+
 `/api/v1/hero/sliders` is user-agent derived when no `type` query is supplied, so the list route must keep `varyByQuery: true` and cache only explicit `type=desktop` or `type=mobile` requests. Do not cache the untyped auto-detected list response.
 
 Admin widget writes first invalidate API widget/pattern keys, then schedule storefront purges. Product, category, page, and collection scoped placements must include exact rendered `htmlPaths` in the purge payload so those pages move without a global storefront version bump. Homepage/global widget changes are the expected global-version/warm-homepage lane.
@@ -364,7 +366,7 @@ app.use("/*", cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:things
 
 On cache miss, handlers should return as soon as the response is ready; `cacheMiddleware` schedules the KV write through `executionCtx.waitUntil()` in Workers and only awaits it in local/test contexts with no execution context.
 
-If a public endpoint varies by query or request headers, use `varyByQuery` and/or `cacheCondition` deliberately. User-agent-derived responses should usually bypass shared KV cache unless their cache key includes the derived variant.
+If a public endpoint varies by query or request headers, use `varyByQuery`, `queryDefaults`, and/or `cacheCondition` deliberately. User-agent-derived responses should usually bypass shared KV cache unless their cache key includes the derived variant.
 
 4. **Delegate to core** -- route handlers should be thin: validate input, call a `@scalius/core` service function, return via `ok()`/`created()`/`noContent()`. Business logic belongs in `packages/core/src/modules/`.
 

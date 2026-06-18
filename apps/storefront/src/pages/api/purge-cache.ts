@@ -16,6 +16,7 @@ import {
 } from "../../lib/cache-generations";
 import { BUILD_ID } from "../../config/build-id";
 import { resolveCacheNamespace } from "../../lib/cache-namespace";
+import { buildHtmlCacheBaseUrl } from "../../lib/cache-key";
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
 
@@ -189,11 +190,7 @@ function buildHtmlCacheKeyUrl(
   version: string,
   generations: ReadonlyMap<string, string> = new Map(),
 ): string {
-  const htmlUrl = new URL(path, origin);
-  if (/^\/products\/[^/]+$/.test(htmlUrl.pathname)) {
-    htmlUrl.searchParams.delete("size");
-    htmlUrl.searchParams.delete("color");
-  }
+  const htmlUrl = buildHtmlCacheBaseUrl(new URL(path, origin));
   htmlUrl.searchParams.set("cache_v", `${version}-${BUILD_ID}`);
   const productKey = productSlugCacheKeyFromPath(path);
   const generation = productKey ? generations.get(productKey) : null;

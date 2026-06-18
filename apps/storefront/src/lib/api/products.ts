@@ -15,6 +15,7 @@ import {
   getApiV1CategoriesBySlugProducts,
   getApiV1Search,
 } from "@scalius/api-client/sdk";
+import { buildCanonicalQueryString } from "@/lib/cache-key";
 
 /**
  * A comprehensive data structure for a single product page,
@@ -155,13 +156,9 @@ export async function getProductsByCategory(
     return null;
   }
 
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(options)) {
-    if (value !== undefined) {
-      params.append(key, String(value));
-    }
-  }
-  const queryString = params.toString();
+  const queryString = buildCanonicalQueryString(options, {
+    defaultParams: { page: 1, limit: 20, sort: "newest" },
+  });
   const cacheKey = `category_products_${categorySlug}_${queryString || "default"}`;
 
   return withEdgeCache(
@@ -206,13 +203,9 @@ export async function getProductsByCategory(
 export async function getAllProducts(
   options: ProductListOptions = {},
 ): Promise<PaginatedResponse<Product> | null> {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(options)) {
-    if (value !== undefined) {
-      params.append(key, String(value));
-    }
-  }
-  const queryString = params.toString();
+  const queryString = buildCanonicalQueryString(options, {
+    defaultParams: { page: 1, limit: 20, sort: "newest" },
+  });
   const cacheKey = `all_products_${queryString || "default"}`;
 
   return withEdgeCache(
