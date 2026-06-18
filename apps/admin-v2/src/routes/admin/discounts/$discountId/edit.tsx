@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   collectionsByIdsQueryOptions,
@@ -65,14 +65,22 @@ export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
     if (discount.type === "amount_off_products") {
       const productIds = getDiscountProductIds(discount);
       const collectionIds = getDiscountCollectionIds(discount);
-      await Promise.all([
-        productIds.length > 0
-          ? queryClient.ensureQueryData(productsByIdsQueryOptions(productIds))
-          : Promise.resolve(),
-        collectionIds.length > 0
-          ? queryClient.ensureQueryData(collectionsByIdsQueryOptions(collectionIds))
-          : Promise.resolve(),
-      ]);
+      if (typeof window !== "undefined") {
+        if (productIds.length > 0) {
+          void queryClient
+            .prefetchQuery(productsByIdsQueryOptions(productIds))
+            .catch((error) => {
+              console.warn("Discount product label prefetch skipped", error);
+            });
+        }
+        if (collectionIds.length > 0) {
+          void queryClient
+            .prefetchQuery(collectionsByIdsQueryOptions(collectionIds))
+            .catch((error) => {
+              console.warn("Discount collection label prefetch skipped", error);
+            });
+        }
+      }
     }
   },
   head: ({ match }) => ({
@@ -172,8 +180,14 @@ function AmountOffProductsEditor({
 }: DiscountEditorProps) {
   const allProductIds = getDiscountProductIds(discount);
   const allCollectionIds = getDiscountCollectionIds(discount);
-  const { data: productsData } = useSuspenseQuery(productsByIdsQueryOptions(allProductIds));
-  const { data: collectionsData } = useSuspenseQuery(collectionsByIdsQueryOptions(allCollectionIds));
+  const { data: productsData } = useQuery({
+    ...productsByIdsQueryOptions(allProductIds),
+    enabled: allProductIds.length > 0,
+  });
+  const { data: collectionsData } = useQuery({
+    ...collectionsByIdsQueryOptions(allCollectionIds),
+    enabled: allCollectionIds.length > 0,
+  });
   const productsMap = new Map(
     ((productsData as { products?: Product[] }).products || []).map((product) => [
       product.id,

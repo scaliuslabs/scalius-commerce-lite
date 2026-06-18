@@ -32,6 +32,25 @@ interface AmountOffProductsContainerProps {
   initialSelectedCollections?: Collection[];
 }
 
+function isSameSelectedProduct(a: Product, b: Product): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.price === b.price &&
+    a.discountPercentage === b.discountPercentage
+  );
+}
+
+function isSameSelectedCollection(a: Collection, b: Collection): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.description === b.description &&
+    a.slug === b.slug &&
+    a.type === b.type
+  );
+}
+
 export function AmountOffProductsContainer({
   defaultValues,
   initialSelectedProducts = [],
@@ -48,6 +67,42 @@ export function AmountOffProductsContainer({
   const [selectedCollections, setSelectedCollections] = useState<Collection[]>(
     initialSelectedCollections,
   );
+
+  useEffect(() => {
+    if (initialSelectedProducts.length === 0) return;
+    const hydratedById = new Map(
+      initialSelectedProducts.map((product) => [product.id, product]),
+    );
+    setSelectedProducts((current) => {
+      let changed = false;
+      const next = current.map((product) => {
+        const hydrated = hydratedById.get(product.id);
+        if (!hydrated || isSameSelectedProduct(hydrated, product)) return product;
+        changed = true;
+        return hydrated;
+      });
+      return changed ? next : current;
+    });
+  }, [initialSelectedProducts]);
+
+  useEffect(() => {
+    if (initialSelectedCollections.length === 0) return;
+    const hydratedById = new Map(
+      initialSelectedCollections.map((collection) => [collection.id, collection]),
+    );
+    setSelectedCollections((current) => {
+      let changed = false;
+      const next = current.map((collection) => {
+        const hydrated = hydratedById.get(collection.id);
+        if (!hydrated || isSameSelectedCollection(hydrated, collection)) {
+          return collection;
+        }
+        changed = true;
+        return hydrated;
+      });
+      return changed ? next : current;
+    });
+  }, [initialSelectedCollections]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
