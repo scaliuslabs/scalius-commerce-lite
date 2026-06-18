@@ -84,6 +84,22 @@ describe("admin route graph boundaries", () => {
 
   it("keeps admin navigation from doing focus refetch stampedes", () => {
     const routerSource = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
+    const queryClientSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-query-client.ts"),
+      "utf8",
+    );
+    const cacheQuerySource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "cache.ts"),
+      "utf8",
+    );
+    const orderDetailSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
+      "utf8",
+    );
+    const orderListSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "index.tsx"),
+      "utf8",
+    );
     const adminRouteSource = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
       "utf8",
@@ -93,7 +109,14 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(routerSource).toContain("refetchOnWindowFocus: false");
+    expect(routerSource).toContain("createAdminQueryClient()");
+    expect(queryClientSource).toContain("refetchOnWindowFocus: false");
+    expect(queryClientSource).toContain("refetchOnReconnect: false");
+    expect(cacheQuerySource.match(/refetchOnReconnect: true/g)?.length).toBe(3);
+    expect(orderDetailSource.match(/refetchOnReconnect: true/g)?.length).toBe(2);
+    expect(orderListSource).toContain('document.addEventListener("visibilitychange"');
+    expect(orderListSource).toContain("isDocumentHidden()");
+    expect(orderListSource).not.toContain("refreshIntervalRef");
     expect(routerSource).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
     expect(routerSource).toContain("scrollRestorationBehavior: \"instant\"");
     expect(adminRouteSource).toContain("useAdminNestedScrollRestoration();");

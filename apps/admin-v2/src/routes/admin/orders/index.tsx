@@ -84,6 +84,12 @@ interface ShipmentStatus {
   [key: string]: unknown;
 }
 
+const ORDER_AUTO_REFRESH_SECONDS = 60;
+
+function isDocumentHidden() {
+  return typeof document !== "undefined" && document.hidden;
+}
+
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/orders/")({
@@ -144,8 +150,7 @@ function OrdersPage() {
     }
     return false;
   });
-  const [countdown, setCountdown] = useState(60);
-  const refreshIntervalRef = useRef<number | undefined>(undefined);
+  const [countdown, setCountdown] = useState(ORDER_AUTO_REFRESH_SECONDS);
   const countdownIntervalRef = useRef<number | undefined>(undefined);
 
   // ── Mutations ─────────────────────────────────────────────────
@@ -291,30 +296,39 @@ function OrdersPage() {
     }
     if (newValue) {
       handleRefresh();
-      setCountdown(60);
+      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
     }
   }, [autoRefreshEnabled, handleRefresh]);
 
   useEffect(() => {
     if (autoRefreshEnabled) {
-      setCountdown(60);
+      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
       countdownIntervalRef.current = window.setInterval(() => {
-        setCountdown((prev) => (prev <= 1 ? 60 : prev - 1));
+        if (isDocumentHidden()) return;
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            handleRefresh();
+            return ORDER_AUTO_REFRESH_SECONDS;
+          }
+          return prev - 1;
+        });
       }, 1000);
-      refreshIntervalRef.current = window.setInterval(() => {
+
+      const handleVisibilityChange = () => {
+        if (isDocumentHidden()) return;
         handleRefresh();
-      }, 60000);
+        setCountdown(ORDER_AUTO_REFRESH_SECONDS);
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
       return () => {
         if (countdownIntervalRef.current)
           window.clearInterval(countdownIntervalRef.current);
-        if (refreshIntervalRef.current)
-          window.clearInterval(refreshIntervalRef.current);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
       };
     } else {
       if (countdownIntervalRef.current)
         window.clearInterval(countdownIntervalRef.current);
-      if (refreshIntervalRef.current)
-        window.clearInterval(refreshIntervalRef.current);
     }
   }, [autoRefreshEnabled, handleRefresh]);
 
