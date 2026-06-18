@@ -135,7 +135,7 @@ function OrderViewPage() {
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
-  const { data: shipments } = useSuspenseQuery({
+  const { data: shipments = [] } = useQuery({
     ...orderShipmentsQueryOptions(orderId),
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,

@@ -49,7 +49,11 @@ type PrefetchClient = Parameters<typeof prefetchOrderDetailQueries>[0];
 
 function createQueryClient(
   paymentMethod: string | null,
-  options?: { rejectPayments?: boolean; rejectProviders?: boolean },
+  options?: {
+    rejectPayments?: boolean;
+    rejectProviders?: boolean;
+    rejectShipments?: boolean;
+  },
 ) {
   const ensureQueryData = vi.fn(async (queryOptions: { queryKey: readonly unknown[] }) => {
     if (queryOptions.queryKey[0] === "orders" && queryOptions.queryKey[1] === "detail") {
@@ -58,6 +62,9 @@ function createQueryClient(
     return [];
   });
   const prefetchQuery = vi.fn(async (queryOptions: { queryKey: readonly unknown[] }) => {
+    if (options?.rejectShipments && queryOptions.queryKey[1] === "shipments") {
+      throw new Error("shipments temporarily unavailable");
+    }
     if (options?.rejectPayments && queryOptions.queryKey[1] === "payments") {
       throw new Error("payment history temporarily unavailable");
     }
@@ -82,17 +89,17 @@ describe("order detail prefetch", () => {
     vi.restoreAllMocks();
   });
 
-  it("warms order detail, shipments, providers, payments, and COD tracking for COD orders", async () => {
+  it("requires order detail and warms shipments, providers, payments, and COD tracking for COD orders", async () => {
     const { queryClient, ensureQueryData, prefetchQuery } = createQueryClient("cod");
 
     await prefetchOrderDetailQueries(queryClient, "ord_1");
 
     expect(ensureQueryData.mock.calls.map(([options]) => options.queryKey)).toEqual([
       ["orders", "detail", "ord_1"],
-      ["orders", "shipments", "ord_1"],
     ]);
     expect(prefetchQuery.mock.calls.map(([options]) => options.queryKey)).toEqual(
       expect.arrayContaining([
+        ["orders", "shipments", "ord_1"],
         ["orders", "payments", "ord_1"],
         ["orders", "cod", "ord_1"],
         ["settings", "currency"],
@@ -131,5 +138,13 @@ describe("order detail prefetch", () => {
 
     await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith("Order delivery provider prefetch skipped", expect.any(Error));
+  });
+
+  it("keeps the order page loadable when shipment prefetch fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { queryClient } = createQueryClient("stripe", { rejectShipments: true });
+
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith("Order shipment prefetch skipped", expect.any(Error));
   });
 });

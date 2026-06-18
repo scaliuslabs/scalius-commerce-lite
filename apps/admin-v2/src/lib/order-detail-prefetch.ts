@@ -25,6 +25,11 @@ export async function prefetchOrderDetailQueries(
 
   const optionalWarmQueries = [
     queryClient
+      .prefetchQuery({ ...orderShipmentsQueryOptions(orderId), staleTime: Infinity })
+      .catch((error) => {
+        console.warn("Order shipment prefetch skipped", error);
+      }),
+    queryClient
       .prefetchQuery({ ...orderPaymentsQueryOptions(orderId), staleTime: Infinity })
       .catch((error) => {
         console.warn("Order payment prefetch skipped", error);
@@ -51,11 +56,5 @@ export async function prefetchOrderDetailQueries(
     );
   }
 
-  await Promise.all([
-    queryClient.ensureQueryData({
-      ...orderShipmentsQueryOptions(orderId),
-      staleTime: Infinity,
-    }),
-    ...optionalWarmQueries,
-  ]);
+  await Promise.all(optionalWarmQueries);
 }
