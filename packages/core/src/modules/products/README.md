@@ -23,6 +23,7 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - `getProducts()` selects `discountType` and `discountAmount` alongside `discountPercentage` for the admin list
 - `getProductDetails()` fetches `productRichContent` (mapped to `additionalInfo`) and `productAttributeValues` (mapped to `attributes`)
 - Storefront product listing with attribute-based filtering (AND logic across attributes), with page rows/count read in one DB wave and image/category enrichment read in one dependent wave
+- Storefront category-product listing delegates to `getStorefrontCategoryProducts()`, which reuses the shared public product predicate/sort/attribute-filter helpers without paying for the global product list's variant/category enrichment
 - Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and up to 6 related products from same category
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
@@ -51,6 +52,13 @@ Storefront ([slug].astro)
       --> apps/api/src/routes/products.ts [Hono route, 1h cache middleware]
         --> packages/core/src/modules/products/products.storefront.ts [getStorefrontProductBySlug]
           --> D1: parallel queries for images, variants, richContent, attributes, category, relatedProducts
+
+Storefront category ([slug].astro)
+  --> apps/storefront/src/lib/api/products.ts [getProductsByCategory, edge-cached]
+    --> fetch(/api/v1/categories/:slug/products)
+      --> apps/api/src/routes/categories.ts [resolves category + query attribute filters]
+        --> packages/core/src/modules/products/products.storefront.ts [getStorefrontCategoryProducts]
+          --> D1: shared public predicates/sort/attribute filtering + category-scoped rows/count + primary images
 ```
 
 ## Files
@@ -115,6 +123,12 @@ Storefront ([slug].astro)
 | GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, attribute filters, sort |
 | GET | `/search` | `searchStorefrontProducts` | Lightweight search with variants for cart/checkout |
 | GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, relatedProducts |
+
+### Storefront Category Products (`/api/v1/categories`)
+
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| GET | `/{slug}/products` | `getStorefrontCategoryProducts` | Category-scoped product list using shared public list filtering/sort helpers, preserving the category-products response shape |
 
 ### Storefront Attributes (`/api/storefront/attributes`)
 

@@ -16,6 +16,37 @@ import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import type { StorefrontProductFilterInput } from "./products.types";
 import type { Database } from "@scalius/database/client";
 
+type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
+type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
+
+type StorefrontProductListRow = {
+    id: string;
+    name: string;
+    price: number;
+    slug: string;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+    freeDelivery: boolean;
+    categoryId: string | null;
+    createdAt: number;
+    updatedAt: number;
+};
+
+type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
+    variantCount: number;
+};
+
+export interface StorefrontCategoryProductCategory {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    imageUrl: string | null;
+    metaTitle: string | null;
+    metaDescription: string | null;
+}
+
 // ─────────────────────────────────────────
 // Private helpers
 // ─────────────────────────────────────────
@@ -32,27 +63,15 @@ function extractFeatures(description: string | null): string[] {
     return features;
 }
 
-// ─────────────────────────────────────────
-// Storefront queries
-// ─────────────────────────────────────────
-
-/**
- * Returns a paginated list of active storefront products with images and categories.
- * This is the unified query backing the Hono GET /api/storefront/products route.
- */
-export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput) {
+function buildStorefrontProductConditions(params: StorefrontProductFilterInput): SQL[] {
     const {
         category,
         search,
-        page = 1,
-        limit = 20,
-        sort = "newest",
         minPrice,
         maxPrice,
         freeDelivery,
         hasDiscount,
         ids,
-        attributeFilters = [],
     } = params;
 
     const conditions: (SQL | undefined)[] = [
@@ -69,38 +88,121 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
     if (maxPrice !== undefined) conditions.push(sql`${products.price} <= ${maxPrice}`);
     if (freeDelivery === "true") conditions.push(eq(products.freeDelivery, true));
     else if (freeDelivery === "false") conditions.push(eq(products.freeDelivery, false));
-    if (hasDiscount === "true") conditions.push(sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`);
-    else if (hasDiscount === "false") conditions.push(sql`(${products.discountPercentage} IS NULL OR ${products.discountPercentage} = 0) AND (${products.discountAmount} IS NULL OR ${products.discountAmount} = 0)`);
+    if (hasDiscount === "true") {
+        conditions.push(sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`);
+    } else if (hasDiscount === "false") {
+        conditions.push(sql`(${products.discountPercentage} IS NULL OR ${products.discountPercentage} = 0) AND (${products.discountAmount} IS NULL OR ${products.discountAmount} = 0)`);
+    }
     if (ids) {
-        const productIds = ids.split(",");
-        conditions.push(inArray(products.id, productIds));
+        const productIds = ids.split(",").filter(Boolean);
+        if (productIds.length > 0) conditions.push(inArray(products.id, productIds));
     }
 
-    let orderBy: SQL | ReturnType<typeof desc> | typeof products.name;
+    return conditions.filter((condition): condition is SQL => Boolean(condition));
+}
+
+function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest") {
     const effectivePriceSql = sql`CASE
         WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN MAX(${products.price} - ${products.discountAmount}, 0)
         WHEN ${products.discountPercentage} > 0 THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100.0))
         ELSE ${products.price}
     END`;
+
     if (sort === "price-asc") {
-        orderBy = effectivePriceSql;
-    } else if (sort === "price-desc") {
-        orderBy = desc(effectivePriceSql);
-    } else if (sort === "name-asc") {
-        orderBy = products.name;
-    } else if (sort === "name-desc") {
-        orderBy = desc(products.name);
-    } else if (sort === "discount") {
-        // Sort by effective savings ratio (higher savings first)
-        orderBy = desc(sql`CASE
-            WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN ${products.discountAmount} / ${products.price} * 100
+        return effectivePriceSql;
+    }
+    if (sort === "price-desc") {
+        return desc(effectivePriceSql);
+    }
+    if (sort === "name-asc") {
+        return products.name;
+    }
+    if (sort === "name-desc") {
+        return desc(products.name);
+    }
+    if (sort === "discount") {
+        return desc(sql`CASE
+            WHEN ${products.price} > 0 AND ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN ${products.discountAmount} / ${products.price} * 100
             WHEN ${products.discountPercentage} > 0 THEN ${products.discountPercentage}
             ELSE 0
         END`);
-    } else {
-        orderBy = desc(products.createdAt);
+    }
+    return desc(products.createdAt);
+}
+
+function buildAttributeProductSubquery(
+    db: Database,
+    attributeFilters: AttributeFilter[],
+    alias: string,
+) {
+    if (attributeFilters.length === 0) return null;
+
+    return db
+        .select({ productId: productAttributeValues.productId })
+        .from(productAttributeValues)
+        .leftJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
+        .where(
+            or(
+                ...attributeFilters.map((filter) =>
+                    and(
+                        eq(productAttributes.slug, filter.slug),
+                        eq(productAttributeValues.value, filter.value),
+                    ),
+                ),
+            ),
+        )
+        .groupBy(productAttributeValues.productId)
+        .having(sql`count(*) = ${attributeFilters.length}`)
+        .as(alias);
+}
+
+function getPagination(page: number, limit: number, total: number) {
+    return {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+    };
+}
+
+async function readPrimaryProductImageMap(
+    db: Database,
+    productIds: string[],
+): Promise<Map<string, { url: string; alt: string | null }>> {
+    if (productIds.length === 0) {
+        return new Map();
     }
 
+    const images = await db
+        .select({
+            productId: productImages.productId,
+            url: productImages.url,
+            alt: productImages.alt,
+        })
+        .from(productImages)
+        .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
+        .all();
+
+    return new Map(images.map((img) => [img.productId, { url: img.url, alt: img.alt }]));
+}
+
+// ─────────────────────────────────────────
+// Storefront queries
+// ─────────────────────────────────────────
+
+/**
+ * Returns a paginated list of active storefront products with images and categories.
+ * This is the unified query backing the Hono GET /api/storefront/products route.
+ */
+export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput) {
+    const {
+        page = 1,
+        limit = 20,
+        sort = "newest",
+        attributeFilters = [],
+    } = params;
+    const conditions = buildStorefrontProductConditions(params);
+    const orderBy = getStorefrontProductOrderBy(sort);
     const offset = (page - 1) * limit;
 
     let query = db
@@ -130,26 +232,9 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
             products.freeDelivery, products.categoryId, products.createdAt, products.updatedAt,
         );
 
-    if (attributeFilters.length > 0) {
-        const subquery = db
-            .select({ productId: productAttributeValues.productId })
-            .from(productAttributeValues)
-            .leftJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
-            .where(
-                or(
-                    ...attributeFilters.map((filter) =>
-                        and(
-                            eq(productAttributes.slug, filter.slug),
-                            eq(productAttributeValues.value, filter.value),
-                        ),
-                    ),
-                )!,
-            )
-            .groupBy(productAttributeValues.productId)
-            .having(sql`count(*) = ${attributeFilters.length}`)
-            .as("filtered_products");
-
-        query = query.innerJoin(subquery, eq(products.id, subquery.productId));
+    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "filtered_products");
+    if (attributeSubquery) {
+        query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
     }
 
     // Count is independent from the current page rows, so start both reads together.
@@ -158,24 +243,8 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         .from(products)
         .where(and(...conditions));
 
-    if (attributeFilters.length > 0) {
-        const countSubquery = db
-            .select({ productId: productAttributeValues.productId })
-            .from(productAttributeValues)
-            .leftJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
-            .where(
-                or(
-                    ...attributeFilters.map((filter) =>
-                        and(
-                            eq(productAttributes.slug, filter.slug),
-                            eq(productAttributeValues.value, filter.value),
-                        ),
-                    ),
-                )!,
-            )
-            .groupBy(productAttributeValues.productId)
-            .having(sql`count(*) = ${attributeFilters.length}`)
-            .as("count_filtered_products");
+    const countSubquery = buildAttributeProductSubquery(db, attributeFilters, "count_filtered_products");
+    if (countSubquery) {
         countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
     }
 
@@ -185,17 +254,10 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
     ]);
     const productIds = productsList.map((p) => p.id);
 
-    let imageMap = new Map<string, { url: string; alt: string | null }>();
     let categoryMap = new Map<string, { id: string; name: string; slug: string }>();
     const categoryIds = [...new Set(productsList.map((p) => p.categoryId).filter(Boolean))] as string[];
-    const [images, categoriesData] = await Promise.all([
-        productIds.length > 0
-            ? db
-            .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
-            .from(productImages)
-            .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
-            .all() as Promise<Array<{ productId: string; url: string; alt: string | null }>>
-            : Promise.resolve([] as Array<{ productId: string; url: string; alt: string | null }>),
+    const [imageMap, categoriesData] = await Promise.all([
+        readPrimaryProductImageMap(db, productIds),
         categoryIds.length > 0
             ? db
             .select({ id: categories.id, name: categories.name, slug: categories.slug })
@@ -204,10 +266,9 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
             .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
     ]);
-    imageMap = new Map(images.map((img) => [img.productId, { url: img.url, alt: img.alt }]));
     categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
 
-    const productsWithImages = productsList.map(({ variantCount, ...product }: { variantCount: number; id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean; categoryId: string | null; createdAt: number; updatedAt: number }) => {
+    const productsWithImages = productsList.map(({ variantCount, ...product }: StorefrontProductListRowWithVariants) => {
         const imgData = imageMap.get(product.id);
         return {
             ...product,
@@ -226,12 +287,94 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
 
     return {
         products: productsWithImages,
-        pagination: {
-            page,
-            limit,
-            total: totalCount?.count || 0,
-            totalPages: Math.ceil((totalCount?.count || 0) / limit),
-        },
+        pagination: getPagination(page, limit, totalCount?.count || 0),
+    };
+}
+
+/**
+ * Returns category-scoped storefront products using the shared public product
+ * filtering/sort core, without the extra variant/category enrichment needed by
+ * the global product list endpoint.
+ */
+export async function getStorefrontCategoryProducts(
+    db: Database,
+    category: StorefrontCategoryProductCategory,
+    params: StorefrontProductFilterInput,
+) {
+    const {
+        page = 1,
+        limit = 20,
+        sort = "newest",
+        attributeFilters = [],
+    } = params;
+    const conditions = buildStorefrontProductConditions({
+        ...params,
+        category: category.id,
+    });
+    const orderBy = getStorefrontProductOrderBy(sort);
+    const offset = (page - 1) * limit;
+
+    let query = db
+        .select({
+            id: products.id,
+            name: products.name,
+            price: products.price,
+            slug: products.slug,
+            discountType: products.discountType,
+            discountPercentage: products.discountPercentage,
+            discountAmount: products.discountAmount,
+            freeDelivery: products.freeDelivery,
+            categoryId: products.categoryId,
+            createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
+            updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
+        })
+        .from(products)
+        .where(and(...conditions));
+
+    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "category_filtered_products");
+    if (attributeSubquery) {
+        query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
+    }
+
+    let countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(products)
+        .where(and(...conditions));
+
+    const countSubquery = buildAttributeProductSubquery(db, attributeFilters, "category_count_filtered_products");
+    if (countSubquery) {
+        countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
+    }
+
+    const [productsList, totalCount] = await Promise.all([
+        query.orderBy(orderBy).limit(limit).offset(offset).all(),
+        countQuery.get(),
+    ]);
+
+    const imageMap = await readPrimaryProductImageMap(
+        db,
+        productsList.map((product) => product.id),
+    );
+    const productsWithImages = productsList.map((product: StorefrontProductListRow) => {
+        const imgData = imageMap.get(product.id);
+        return {
+            ...product,
+            imageUrl: imgData?.url || null,
+            discountedPrice: calculateDiscountedPrice(
+                product.price,
+                product.discountType,
+                product.discountPercentage,
+                product.discountAmount,
+            ),
+            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
+            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
+            category,
+        };
+    });
+
+    return {
+        products: productsWithImages,
+        pagination: getPagination(page, limit, totalCount?.count || 0),
     };
 }
 

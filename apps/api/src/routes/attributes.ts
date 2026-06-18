@@ -47,6 +47,16 @@ app.use(
   }),
 );
 
+app.use(
+  "/search-filters",
+  cacheMiddleware({
+    ttl: CACHE_TTLS.ATTRIBUTES,
+    keyPrefix: "api:attributes:search-filters",
+    varyByQuery: true,
+    methods: ["GET"],
+  }),
+);
+
 const attributeFilterSchema = z.object({ id: z.string(), name: z.string(), slug: z.string(), values: z.array(z.string()) }).passthrough();
 const filterResponseSchema = successEnvelope(z.object({ filters: z.array(attributeFilterSchema) }));
 
@@ -178,27 +188,27 @@ app.openapi(searchFiltersRoute, async (c) => {
     searchConditions.push(eq(products.categoryId, categoryId));
   }
 
-  // 1. Find products that match the search query
-  const matchingProducts = await db
-    .select({ id: products.id, categoryId: products.categoryId })
+  const matchingCategories = await db
+    .selectDistinct({ categoryId: products.categoryId })
     .from(products)
-    .where(and(...searchConditions))
-    .limit(100);
+    .where(and(...searchConditions));
 
-  if (matchingProducts.length === 0) {
+  if (matchingCategories.length === 0) {
     return ok(c, { filters: [] });
   }
 
-  // 2. Get all categories from matching products
   const categoryIds = [
     ...new Set(
-      matchingProducts
+      matchingCategories
         .map((product) => product.categoryId)
         .filter((id): id is string => id != null),
     ),
   ];
 
-  // 3. Get all filterable attributes that have values in products of these categories
+  if (categoryIds.length === 0) {
+    return ok(c, { filters: [] });
+  }
+
   const searchAttributes = await db
     .selectDistinct({
       attributeId: productAttributeValues.attributeId,

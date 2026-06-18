@@ -39,18 +39,58 @@ describe("storefront product query boundaries", () => {
 
         const categoryIdsIndex = source.indexOf("const categoryIds = [");
         const enrichmentWaveIndex = source.indexOf(
-            "const [images, categoriesData] = await Promise.all([",
+            "const [imageMap, categoriesData] = await Promise.all([",
         );
-        const imagesReadIndex = source.indexOf(".from(productImages)", enrichmentWaveIndex);
+        const imagesReadIndex = source.indexOf(
+            "readPrimaryProductImageMap(db, productIds)",
+            enrichmentWaveIndex,
+        );
         const categoriesReadIndex = source.indexOf(".from(categories)", enrichmentWaveIndex);
-        const imageMapIndex = source.indexOf("imageMap = new Map", enrichmentWaveIndex);
+        const imageMapIndex = source.indexOf("const [imageMap, categoriesData]", enrichmentWaveIndex);
         const categoryMapIndex = source.indexOf("categoryMap = new Map", enrichmentWaveIndex);
 
         expect(categoryIdsIndex).toBeGreaterThan(-1);
         expect(enrichmentWaveIndex).toBeGreaterThan(categoryIdsIndex);
         expect(imagesReadIndex).toBeGreaterThan(enrichmentWaveIndex);
         expect(categoriesReadIndex).toBeGreaterThan(enrichmentWaveIndex);
-        expect(imageMapIndex).toBeGreaterThan(enrichmentWaveIndex);
+        expect(imageMapIndex).toBe(enrichmentWaveIndex);
         expect(categoryMapIndex).toBeGreaterThan(imageMapIndex);
+    });
+
+    it("keeps category products on the shared storefront list core", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+
+        const conditionsHelperIndex = source.indexOf("function buildStorefrontProductConditions");
+        const sortHelperIndex = source.indexOf("function getStorefrontProductOrderBy");
+        const attributeHelperIndex = source.indexOf("function buildAttributeProductSubquery");
+        const categoryHelperIndex = source.indexOf("export async function getStorefrontCategoryProducts");
+        const categoryConditionsIndex = source.indexOf(
+            "const conditions = buildStorefrontProductConditions({",
+            categoryHelperIndex,
+        );
+        const categorySortIndex = source.indexOf(
+            "const orderBy = getStorefrontProductOrderBy(sort);",
+            categoryHelperIndex,
+        );
+        const categoryAttributeIndex = source.indexOf(
+            'buildAttributeProductSubquery(db, attributeFilters, "category_filtered_products")',
+            categoryHelperIndex,
+        );
+        const guardedDiscountSortIndex = source.indexOf(
+            "WHEN ${products.price} > 0 AND ${products.discountType} = 'flat'",
+            sortHelperIndex,
+        );
+
+        expect(conditionsHelperIndex).toBeGreaterThan(-1);
+        expect(sortHelperIndex).toBeGreaterThan(conditionsHelperIndex);
+        expect(attributeHelperIndex).toBeGreaterThan(sortHelperIndex);
+        expect(categoryHelperIndex).toBeGreaterThan(attributeHelperIndex);
+        expect(categoryConditionsIndex).toBeGreaterThan(categoryHelperIndex);
+        expect(categorySortIndex).toBeGreaterThan(categoryHelperIndex);
+        expect(categoryAttributeIndex).toBeGreaterThan(categoryHelperIndex);
+        expect(guardedDiscountSortIndex).toBeGreaterThan(sortHelperIndex);
     });
 });

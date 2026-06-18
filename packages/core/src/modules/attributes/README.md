@@ -52,13 +52,15 @@ Product attribute CRUD, value management, and public storefront filter queries.
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
+| `resolvePublicAttributeFilters` | `(db, queryParams, standardQueryKeys)` | Resolves raw public query params into attribute filters by excluding route-owned query keys and accepting only known product attribute slugs. Shared by product and category product routes. |
 | `getPublicFilterableAttributes` | `(db)` | Returns all filterable attributes with distinct values from active, non-deleted products. For global filter sidebar. |
 | `getPublicAttributesByCategory` | `(db, categoryId)` | Filterable attributes scoped to a specific category. Only includes values on active products in that category. |
 | `getPublicAttributesByProductIds` | `(db, productIds)` | Filterable attributes scoped to a set of product IDs. Used for search results filtering. |
 
 All public queries return `{ filters: PublicAttributeFilter[] }` where each filter has `{ id, name, slug, values: string[] }`. Values are sorted alphabetically.
+The API `/attributes/search-filters` route is KV-cached with the `api:attributes:search-filters` prefix and invalidated by both search/product and attribute cache groups.
 
-**Exported type:** `PublicAttributeFilter`
+**Exported types:** `PublicAttributeFilter`, `PublicAttributeQueryFilter`
 
 ## Dependencies
 

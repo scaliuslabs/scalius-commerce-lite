@@ -1,13 +1,13 @@
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { Database } from "@scalius/database/client";
 import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontProducts,
   getStorefrontProductBySlug,
   searchStorefrontProducts
 } from "@scalius/core/modules/products/products.storefront";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
@@ -103,8 +103,11 @@ app.openapi(listProductsRoute, async (c) => {
   const params = c.req.valid("query");
   const queryParams = c.req.query();
 
-  // Resolve attribute filters from unknown query params
-  const attributeFilters = await getAttributeFilters(db, queryParams, params);
+  const attributeFilters = await resolvePublicAttributeFilters(
+    db,
+    queryParams,
+    Object.keys(params),
+  );
 
   const result = await getStorefrontProducts(db, { ...params, attributeFilters });
   return ok(c, result);
@@ -173,29 +176,5 @@ app.openapi(getProductBySlugRoute, async (c) => {
   if (!result) throw new NotFoundError("Product not found");
   return ok(c, result as unknown as ProductDetailData);
 });
-
-/** Extracts attribute-based filters from raw query params by checking known attribute slugs. */
-async function getAttributeFilters(
-  db: Database,
-  queryParams: Record<string, string>,
-  parsedParams: ReturnType<typeof productFilterSchema.parse>,
-): Promise<Array<{ slug: string; value: string }>> {
-  const knownKeys = new Set(Object.keys(parsedParams));
-  const potentialAttributeKeys = Object.keys(queryParams).filter((k) => !knownKeys.has(k));
-  if (potentialAttributeKeys.length === 0) return [];
-
-  const { productAttributes } = await import("@scalius/database/schema");
-  const { inArray } = await import("drizzle-orm");
-
-  const allAttributes: Array<{ slug: string }> = await db
-    .select({ slug: productAttributes.slug })
-    .from(productAttributes)
-    .where(inArray(productAttributes.slug, potentialAttributeKeys));
-
-  const validSlugs = new Set(allAttributes.map((a) => a.slug));
-  return potentialAttributeKeys
-    .filter((k) => validSlugs.has(k) && queryParams[k])
-    .map((k) => ({ slug: k, value: queryParams[k] ?? "" }));
-}
 
 export { app as productRoutes };
