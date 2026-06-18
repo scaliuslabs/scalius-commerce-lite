@@ -134,15 +134,11 @@ function OrderViewPage() {
     ...orderQueryOptions(orderId),
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
   });
   const { data: shipments } = useSuspenseQuery({
     ...orderShipmentsQueryOptions(orderId),
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
   });
   const { data: providers = [] } = useQuery({
     ...deliveryProvidersQueryOptions(),
