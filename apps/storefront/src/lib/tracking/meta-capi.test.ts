@@ -54,6 +54,7 @@ describe("sendServerEvent", () => {
 
   it("keeps explicitly supplied user data for narrow conversion events", () => {
     sendServerEvent({
+      eventId: "Purchase:order_1",
       eventName: "Purchase",
       userData: {
         em: "buyer@example.com",
@@ -67,10 +68,32 @@ describe("sendServerEvent", () => {
     });
 
     const payload = sendMetaCapiEventMock.mock.calls[0][0];
+    expect(payload.eventId).toBe("Purchase:order_1");
     expect(payload.userData).toMatchObject({
       em: "buyer@example.com",
       ph: "+8801712345678",
       client_user_agent: navigator.userAgent,
     });
+  });
+
+  it("strips checkout secrets from event source URLs before dispatch", () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/order-success?orderId=order_1&token=receipt_secret&payment_intent_client_secret=pi_secret&keep=yes",
+    );
+
+    sendServerEvent({
+      eventId: "Purchase:order_1",
+      eventName: "Purchase",
+      customData: {
+        order_id: "order_1",
+      },
+    });
+
+    const payload = sendMetaCapiEventMock.mock.calls[0][0];
+    expect(payload.eventSourceUrl).toBe(
+      "http://localhost:3000/order-success?orderId=order_1&keep=yes",
+    );
   });
 });

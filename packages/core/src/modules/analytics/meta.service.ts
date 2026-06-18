@@ -2,18 +2,31 @@ import { type Database } from "@scalius/database/client";
 import { metaConversionsSettings, metaConversionsLogs, type MetaConversionsSettings } from "@scalius/database/schema";
 import { eq, lt } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
+import { decryptCredentialsGraceful } from "../../utils/credential-encryption";
 
 /**
  * Fetches the Meta Conversions API settings from the database.
  */
-export async function getCapiSettings(db: Database): Promise<MetaConversionsSettings | null> {
+export async function getCapiSettings(
+    db: Database,
+    encryptionKey?: string,
+): Promise<MetaConversionsSettings | null> {
     try {
         const settings = await db
             .select()
             .from(metaConversionsSettings)
             .where(eq(metaConversionsSettings.id, "singleton"))
             .get();
-        return settings || null;
+        if (!settings) {
+            return null;
+        }
+
+        return {
+            ...settings,
+            accessToken: settings.accessToken
+                ? await decryptCredentialsGraceful(settings.accessToken, encryptionKey)
+                : settings.accessToken,
+        };
     } catch (error: unknown) {
         console.error("Error fetching Meta CAPI settings:", error);
         return null;

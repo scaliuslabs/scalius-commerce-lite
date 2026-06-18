@@ -244,7 +244,7 @@ export const allNavSections: NavSection[] = [
             name: "Meta CAPI",
             href: "/admin/settings/meta-conversion",
             icon: BarChart3,
-            requiredPermission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+            requiredPermission: PERMISSIONS.ANALYTICS_VIEW,
           },
           {
             name: "Cache",

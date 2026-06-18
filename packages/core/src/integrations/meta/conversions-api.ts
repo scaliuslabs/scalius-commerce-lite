@@ -74,6 +74,42 @@ interface CapiPayload {
   test_event_code?: string;
 }
 
+interface SendCapiEventOptions {
+  encryptionKey?: string;
+}
+
+function sanitizeEventSourceUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return "[invalid-url]";
+  }
+}
+
+function redactUserDataForLog(
+  userData: object | undefined,
+): Record<string, unknown> {
+  if (!userData) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.keys(userData).map((key) => [key, "[redacted]"]),
+  );
+}
+
+export function redactCapiPayloadForLog(payload: CapiPayload): Record<string, unknown> {
+  return {
+    data: payload.data.map((event) => ({
+      ...event,
+      event_source_url: sanitizeEventSourceUrl(event.event_source_url),
+      user_data: redactUserDataForLog(event.user_data),
+    })),
+    ...(payload.test_event_code ? { test_event_code: "[redacted]" } : {}),
+  };
+}
+
 /**
  * Hashes user data fields as required by Meta.
  * @param userData The raw user data from the client.
@@ -136,8 +172,9 @@ async function prepareUserData(
 export async function sendCapiEvent(
   db: Database,
   event: Omit<ServerEvent, "user_data"> & { user_data: Record<string, unknown> },
+  options: SendCapiEventOptions = {},
 ) {
-  const settings = await getCapiSettings(db);
+  const settings = await getCapiSettings(db, options.encryptionKey);
   if (!settings || !settings.isEnabled || !settings.pixelId || !settings.accessToken) {
     // FIX: Write a diagnostic log so admin can see skipped events
     let errorMessage = "CAPI integration is disabled in settings.";
@@ -152,7 +189,11 @@ export async function sendCapiEvent(
       eventId: event.event_id,
       eventName: event.event_name,
       status: "failed",
-      requestPayload: JSON.stringify({ data: [{ ...event, user_data: {} }] }, null, 2),
+      requestPayload: JSON.stringify(
+        redactCapiPayloadForLog({ data: [{ ...event, user_data: {} }] }),
+        null,
+        2,
+      ),
       errorMessage: errorMessage,
       eventTime: event.event_time,
     }, fallbackRetentionHours);
@@ -173,7 +214,7 @@ export async function sendCapiEvent(
   const logPayload = {
     eventId: event.event_id,
     eventName: event.event_name,
-    requestPayload: JSON.stringify(payload, null, 2),
+    requestPayload: JSON.stringify(redactCapiPayloadForLog(payload), null, 2),
     eventTime: event.event_time,
   };
 

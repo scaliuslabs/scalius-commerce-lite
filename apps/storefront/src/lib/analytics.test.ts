@@ -3,9 +3,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sendServerEventMock = vi.hoisted(() => vi.fn());
+const createMetaEventIdMock = vi.hoisted(() =>
+  vi.fn((eventName: string, stableKey?: string) =>
+    `${eventName}:${stableKey ?? "generated"}`,
+  ),
+);
 
-vi.mock("@/lib/tracking/meta-capi", () => ({
+vi.mock("./tracking/meta-capi", () => ({
   sendServerEvent: sendServerEventMock,
+}));
+
+vi.mock("./tracking/meta-event-id", () => ({
+  createMetaEventId: createMetaEventIdMock,
 }));
 
 import {
@@ -17,6 +26,7 @@ import {
 describe("storefront analytics", () => {
   beforeEach(() => {
     sendServerEventMock.mockClear();
+    createMetaEventIdMock.mockClear();
     window.fbq = vi.fn() as unknown as NonNullable<Window["fbq"]>;
     window.zaraz = {
       ecommerce: vi.fn().mockResolvedValue(undefined),
@@ -50,6 +60,12 @@ describe("storefront analytics", () => {
       value: 500,
     });
 
+    expect(window.fbq).toHaveBeenCalledWith(
+      "track",
+      "AddToCart",
+      expect.objectContaining({ content_name: "Test product" }),
+      { eventID: "AddToCart:generated" },
+    );
     expect(window.zaraz?.ecommerce).toHaveBeenCalledWith("Product Added", {
       product_id: "sku_1",
       sku: "sku_1",
@@ -69,7 +85,10 @@ describe("storefront analytics", () => {
       value: 500,
     });
     expect(sendServerEventMock).toHaveBeenCalledWith(
-      expect.objectContaining({ eventName: "AddToCart" }),
+      expect.objectContaining({
+        eventId: "AddToCart:generated",
+        eventName: "AddToCart",
+      }),
     );
   });
 
@@ -87,6 +106,12 @@ describe("storefront analytics", () => {
       { em: "buyer@example.com" },
     );
 
+    expect(window.fbq).toHaveBeenCalledWith(
+      "track",
+      "Purchase",
+      expect.objectContaining({ order_id: "order_1" }),
+      { eventID: "Purchase:order_1" },
+    );
     expect(window.zaraz?.ecommerce).toHaveBeenCalledWith("Order Completed", {
       order_id: "order_1",
       total: 1000,
@@ -105,6 +130,7 @@ describe("storefront analytics", () => {
     });
     expect(sendServerEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        eventId: "Purchase:order_1",
         eventName: "Purchase",
         userData: { em: "buyer@example.com" },
       }),
