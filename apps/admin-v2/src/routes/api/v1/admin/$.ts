@@ -11,6 +11,12 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  ADMIN_API_READ_TIMEOUT_CODE,
+  AdminApiReadTimeoutError,
+  createAdminApiReadTimeout,
+  wrapResponseWithAdminApiReadTimeout,
+} from "../../../../lib/admin-api-timeout";
 
 function isLocalApiBase(apiBase?: string): boolean {
   if (!apiBase) return false;
@@ -22,9 +28,23 @@ function isLocalApiBase(apiBase?: string): boolean {
   }
 }
 
-async function proxyToApi(request: Request): Promise<Response> {
+function readTimeoutResponse(error: AdminApiReadTimeoutError): Response {
+  return Response.json(
+    {
+      success: false,
+      error: {
+        code: ADMIN_API_READ_TIMEOUT_CODE,
+        message: error.message,
+      },
+    },
+    { status: error.status },
+  );
+}
+
+export async function proxyToApi(request: Request): Promise<Response> {
   const { env } = await import("cloudflare:workers");
   const url = new URL(request.url);
+  const timeout = createAdminApiReadTimeout(request.method, request.signal);
 
   // Forward the full path (/api/v1/admin/...) to the API worker
   const headers = new Headers(request.headers);
@@ -33,6 +53,9 @@ async function proxyToApi(request: Request): Promise<Response> {
     method: request.method,
     headers,
   };
+  if (timeout.signal) {
+    init.signal = timeout.signal;
+  }
 
   // Forward body for non-GET requests
   if (request.method !== "GET" && request.method !== "HEAD") {
@@ -44,15 +67,25 @@ async function proxyToApi(request: Request): Promise<Response> {
   // Production: service binding. In local dev the binding can still exist, but
   // separate Miniflare processes cannot reliably share it.
   const configuredApiBase = env.PUBLIC_API_BASE_URL as string | undefined;
-  if (env.API && !isLocalApiBase(configuredApiBase)) {
-    const target = `http://api.internal${url.pathname}${url.search}`;
-    return env.API.fetch(target, init);
-  }
+  try {
+    if (env.API && !isLocalApiBase(configuredApiBase)) {
+      const target = `http://api.internal${url.pathname}${url.search}`;
+      const response = await env.API.fetch(target, init);
+      return wrapResponseWithAdminApiReadTimeout(response, timeout);
+    }
 
-  // Fallback: HTTP to API worker
-  const apiBase = configuredApiBase ?? "http://localhost:8787";
-  const target = `${apiBase}${url.pathname}${url.search}`;
-  return fetch(target, init);
+    // Fallback: HTTP to API worker
+    const apiBase = configuredApiBase ?? "http://localhost:8787";
+    const target = `${apiBase}${url.pathname}${url.search}`;
+    const response = await fetch(target, init);
+    return wrapResponseWithAdminApiReadTimeout(response, timeout);
+  } catch (error) {
+    timeout.cleanup();
+    if (timeout.didTimeout()) {
+      return readTimeoutResponse(new AdminApiReadTimeoutError());
+    }
+    throw error;
+  }
 }
 
 export const Route = createFileRoute("/api/v1/admin/$")({

@@ -19,6 +19,12 @@
 import { getRequestHeader, getResponseHeaders } from "@tanstack/react-start/server";
 import { env as cfEnv } from "cloudflare:workers";
 import { splitSetCookieHeader } from "better-auth/cookies";
+import {
+  type AdminApiReadTimeoutHandle,
+  AdminApiReadTimeoutError,
+  createAdminApiReadTimeout,
+  wrapResponseWithAdminApiReadTimeout,
+} from "./admin-api-timeout";
 
 // Admin API prefix -- all admin endpoints live under this path
 const API_PATH_PREFIX = "/api/v1/admin";
@@ -164,10 +170,11 @@ function buildPath(
 async function apiFetchRaw(
   method: string,
   fullPath: string,
-  options?: { body?: unknown; headers?: Record<string, string> },
-): Promise<Response> {
+  options?: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal },
+): Promise<{ response: Response; timeout: AdminApiReadTimeoutHandle }> {
   const cfEnv = getCfEnv();
   const forwardHeaders = getForwardHeaders();
+  const timeout = createAdminApiReadTimeout(method, options?.signal);
 
   const headers: Record<string, string> = {
     ...forwardHeaders,
@@ -180,21 +187,51 @@ async function apiFetchRaw(
     headers,
     body: options?.body ? JSON.stringify(options.body) : undefined,
   };
-
-  // Production: service binding. In local dev the binding may still be present
-  // from wrangler.jsonc, but the API runs in a separate Miniflare process.
-  const configuredApiBase = cfEnv.PUBLIC_API_BASE_URL as string | undefined;
-  if (cfEnv.API && !isLocalApiBase(configuredApiBase)) {
-    const target = `http://api.internal${fullPath}`;
-    const resp = await cfEnv.API.fetch(target, fetchOptions);
-    return resp;
+  if (timeout.signal) {
+    fetchOptions.signal = timeout.signal;
   }
 
-  // Local dev: HTTP to API worker
-  const apiBase = configuredApiBase ?? "http://localhost:8787";
-  const target = `${apiBase}${fullPath}`;
-  const resp = await fetch(target, fetchOptions);
-  return resp;
+  try {
+    // Production: service binding. In local dev the binding may still be present
+    // from wrangler.jsonc, but the API runs in a separate Miniflare process.
+    const configuredApiBase = cfEnv.PUBLIC_API_BASE_URL as string | undefined;
+    if (cfEnv.API && !isLocalApiBase(configuredApiBase)) {
+      const target = `http://api.internal${fullPath}`;
+      const resp = await cfEnv.API.fetch(target, fetchOptions);
+      return { response: resp, timeout };
+    }
+
+    // Local dev: HTTP to API worker
+    const apiBase = configuredApiBase ?? "http://localhost:8787";
+    const target = `${apiBase}${fullPath}`;
+    const resp = await fetch(target, fetchOptions);
+    return { response: resp, timeout };
+  } catch (error) {
+    timeout.cleanup();
+    if (timeout.didTimeout()) {
+      throw new AdminApiReadTimeoutError();
+    }
+    throw error;
+  }
+}
+
+async function readApiFetch<T>(
+  method: string,
+  fullPath: string,
+  options: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } | undefined,
+  readResponse: (response: Response) => Promise<T>,
+): Promise<T> {
+  const { response, timeout } = await apiFetchRaw(method, fullPath, options);
+  try {
+    return await readResponse(response);
+  } catch (error) {
+    if (timeout.didTimeout()) {
+      throw new AdminApiReadTimeoutError();
+    }
+    throw error;
+  } finally {
+    timeout.cleanup();
+  }
 }
 
 // ─── Public helpers (admin endpoints) ─────────────────────────────
@@ -205,8 +242,7 @@ export async function apiGet<T>(
   params?: Record<string, string>,
 ): Promise<T> {
   const fullPath = buildPath(path, params);
-  const response = await apiFetchRaw("GET", fullPath);
-  return handleResponse<T>(response);
+  return readApiFetch("GET", fullPath, undefined, handleResponse<T>);
 }
 
 /** GET request returning raw text (for text/plain endpoints like ai-prompts). */
@@ -215,39 +251,41 @@ export async function apiGetText(
   params?: Record<string, string>,
 ): Promise<string> {
   const fullPath = buildPath(path, params);
-  const response = await apiFetchRaw("GET", fullPath);
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
-  }
-  return response.text();
+  return readApiFetch("GET", fullPath, undefined, async (response) => {
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    return response.text();
+  });
 }
 
 /** POST request to an admin API endpoint. */
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const fullPath = buildPath(path);
-  const response = await apiFetchRaw("POST", fullPath, { body });
-  return handleResponse<T>(response);
+  return readApiFetch("POST", fullPath, { body }, handleResponse<T>);
 }
 
 /** PUT request to an admin API endpoint. */
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   const fullPath = buildPath(path);
-  const response = await apiFetchRaw("PUT", fullPath, { body });
-  return handleResponse<T>(response);
+  return readApiFetch("PUT", fullPath, { body }, handleResponse<T>);
 }
 
 /** PATCH request to an admin API endpoint. */
 export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   const fullPath = buildPath(path);
-  const response = await apiFetchRaw("PATCH", fullPath, { body });
-  return handleResponse<T>(response);
+  return readApiFetch("PATCH", fullPath, { body }, handleResponse<T>);
 }
 
 /** DELETE request to an admin API endpoint. */
 export async function apiDelete<T = void>(path: string, body?: unknown): Promise<T> {
   const fullPath = buildPath(path);
-  const response = await apiFetchRaw("DELETE", fullPath, body ? { body } : undefined);
-  return handleResponse<T>(response);
+  return readApiFetch(
+    "DELETE",
+    fullPath,
+    body ? { body } : undefined,
+    handleResponse<T>,
+  );
 }
 
 // ─── Public helpers (non-admin endpoints: auth, setup, cache) ─────
@@ -258,8 +296,7 @@ export async function apiBaseGet<T>(
   params?: Record<string, string>,
 ): Promise<T> {
   const fullPath = buildPath(path, params, false);
-  const response = await apiFetchRaw("GET", fullPath);
-  return handleResponse<T>(response);
+  return readApiFetch("GET", fullPath, undefined, handleResponse<T>);
 }
 
 /** POST request to a non-admin API endpoint. */
@@ -268,8 +305,7 @@ export async function apiBasePost<T>(
   body?: unknown,
 ): Promise<T> {
   const fullPath = buildPath(path, undefined, false);
-  const response = await apiFetchRaw("POST", fullPath, { body });
-  return handleResponse<T>(response);
+  return readApiFetch("POST", fullPath, { body }, handleResponse<T>);
 }
 
 /**
@@ -283,12 +319,15 @@ export async function apiRawFetch(
     params?: Record<string, string>;
     body?: unknown;
     headers?: Record<string, string>;
+    signal?: AbortSignal;
     prefixed?: boolean;
   },
 ): Promise<Response> {
   const fullPath = buildPath(path, options?.params, options?.prefixed ?? true);
-  return apiFetchRaw(method, fullPath, {
+  const { response, timeout } = await apiFetchRaw(method, fullPath, {
     body: options?.body,
     headers: options?.headers,
+    signal: options?.signal,
   });
+  return wrapResponseWithAdminApiReadTimeout(response, timeout);
 }
