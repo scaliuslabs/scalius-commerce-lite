@@ -134,7 +134,7 @@ When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN
 
 ## Page Data Loading
 
-Category pages build product-list options before the first await, then start layout, category, product-list, filter-metadata, and category-widget reads in one promise wave. Category widgets chain from the category promise because they need the category id, but product and filter reads must not wait for the standalone category lookup. Keep this shape until a consolidated category render-data endpoint replaces the separate calls.
+Product detail pages start layout and product reads together, then chain product-scoped widgets from the product promise so widget fetches do not wait for layout. Category pages build product-list options before the first await, then start layout, category, product-list, filter-metadata, and category-widget reads in one promise wave. Search/all-products pages build product-list options first, then start layout, product-list, and search filter metadata together. Entity-scoped widgets may chain from the entity promise because they need the entity id, but unrelated product/list/filter reads must not wait for standalone metadata lookups. Keep `src/lib/page-data-boundaries.test.ts` aligned with this shape until consolidated render-data endpoints replace the separate calls.
 
 ## API Client (`src/lib/api/`)
 

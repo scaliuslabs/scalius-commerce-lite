@@ -105,20 +105,35 @@ export const cacheMiddleware = (
     const resCacheControl = response.headers.get("Cache-Control");
     if (resCacheControl?.includes("no-store")) return;
 
+    const cloned = response.clone();
+    const cacheWrite = (async () => {
+      try {
+        const body = await cloned.text();
+
+        if (!body && !cacheNullValues) return;
+
+        const headers: Record<string, string> = {};
+        cloned.headers.forEach((value, key) => {
+          headers[key] = value;
+        });
+
+        await setCache(cacheKey, { status: cloned.status, headers, body }, ttl, kv);
+      } catch (error: unknown) {
+        console.error("[Cache] Error writing to cache:", error);
+      }
+    })();
+
+    let executionCtx: ExecutionContext | undefined;
     try {
-      const cloned = response.clone();
-      const body = await cloned.text();
+      executionCtx = c.executionCtx;
+    } catch {
+      executionCtx = undefined;
+    }
 
-      if (!body && !cacheNullValues) return;
-
-      const headers: Record<string, string> = {};
-      cloned.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
-
-      await setCache(cacheKey, { status: cloned.status, headers, body }, ttl, kv);
-    } catch (error: unknown) {
-      console.error("[Cache] Error writing to cache:", error);
+    if (executionCtx && typeof executionCtx.waitUntil === "function") {
+      executionCtx.waitUntil(cacheWrite);
+    } else {
+      await cacheWrite;
     }
   };
 };

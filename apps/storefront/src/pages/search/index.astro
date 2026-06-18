@@ -51,11 +51,15 @@ for (const [key, value] of params.entries()) {
 }
 
 try {
+  const layoutPromise = getLayoutData();
+  const productsPromise = getAllProducts(productListOptions);
+  const attributesPromise = getFilterableAttributes({ searchQuery: query });
+
   // Parallel fetch: layout + products + attributes
   const [fetchedLayoutData, fetchedProducts, fetchedAttributes] = await Promise.all([
-    getLayoutData(),
-    getAllProducts(productListOptions),
-    getFilterableAttributes({ searchQuery: query }),
+    layoutPromise,
+    productsPromise,
+    attributesPromise,
   ]);
   layoutData = fetchedLayoutData;
   setRuntimeImageCdnPolicy(layoutData?.media);

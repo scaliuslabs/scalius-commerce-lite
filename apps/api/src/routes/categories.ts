@@ -174,20 +174,24 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     hasDiscount
   } = params;
 
-  // Get category ID from slug (excluding soft-deleted categories)
-  const category = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      slug: categories.slug,
-      description: categories.description,
-      imageUrl: categories.imageUrl,
-      metaTitle: categories.metaTitle,
-      metaDescription: categories.metaDescription
-    })
-    .from(categories)
-    .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
-    .get();
+  const [category, allAttributes] = await Promise.all([
+    db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+        description: categories.description,
+        imageUrl: categories.imageUrl,
+        metaTitle: categories.metaTitle,
+        metaDescription: categories.metaDescription
+      })
+      .from(categories)
+      .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
+      .get(),
+    db
+      .select({ slug: productAttributes.slug })
+      .from(productAttributes),
+  ]);
 
   if (!category) {
     throw new NotFoundError("Category not found");
@@ -195,9 +199,6 @@ app.openapi(getCategoryProductsRoute, async (c) => {
 
   // Dynamic attribute filtering
   const queryParams = c.req.query();
-  const allAttributes = await db
-    .select({ slug: productAttributes.slug })
-    .from(productAttributes);
   const validAttributeSlugs = new Set(allAttributes.map((attribute) => attribute.slug));
   const attributeFilters: { slug: string; value: string }[] = [];
 
@@ -326,12 +327,47 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     query = query.innerJoin(subquery, eq(products.id, subquery.productId));
   }
 
-  // Execute query
-  const productsList = await query
-    .orderBy(orderBy)
-    .limit(limit)
-    .offset(offset)
-    .all();
+  let countQuery = db
+    .select({ count: sql<number>`count(*)` })
+    .from(products)
+    .where(and(...conditions));
+
+  if (attributeFilters.length > 0) {
+    const countSubquery = db
+      .select({ productId: productAttributeValues.productId })
+      .from(productAttributeValues)
+      .leftJoin(
+        productAttributes,
+        eq(productAttributeValues.attributeId, productAttributes.id),
+      )
+      .where(
+        or(
+          ...attributeFilters.map((filter) =>
+            and(
+              eq(productAttributes.slug, filter.slug),
+              eq(productAttributeValues.value, filter.value),
+            ),
+          ),
+        ),
+      )
+      .groupBy(productAttributeValues.productId)
+      .having(sql`count(*) = ${attributeFilters.length}`)
+      .as("count_filtered_products");
+
+    countQuery = countQuery.innerJoin(
+      countSubquery,
+      eq(products.id, countSubquery.productId),
+    );
+  }
+
+  const [productsList, totalCount] = await Promise.all([
+    query
+      .orderBy(orderBy)
+      .limit(limit)
+      .offset(offset)
+      .all(),
+    countQuery.get(),
+  ]);
 
   // Get primary images for products
   const productIds = productsList.map((product) => product.id);
@@ -381,42 +417,6 @@ app.openapi(getCategoryProductsRoute, async (c) => {
       metaDescription: category.metaDescription
     }
   }));
-
-  // Get total count for pagination - need to apply same filters
-  let countQuery = db
-    .select({ count: sql<number>`count(*)` })
-    .from(products)
-    .where(and(...conditions));
-
-  if (attributeFilters.length > 0) {
-    const countSubquery = db
-      .select({ productId: productAttributeValues.productId })
-      .from(productAttributeValues)
-      .leftJoin(
-        productAttributes,
-        eq(productAttributeValues.attributeId, productAttributes.id),
-      )
-      .where(
-        or(
-          ...attributeFilters.map((filter) =>
-            and(
-              eq(productAttributes.slug, filter.slug),
-              eq(productAttributeValues.value, filter.value),
-            ),
-          ),
-        ),
-      )
-      .groupBy(productAttributeValues.productId)
-      .having(sql`count(*) = ${attributeFilters.length}`)
-      .as("count_filtered_products");
-
-    countQuery = countQuery.innerJoin(
-      countSubquery,
-      eq(products.id, countSubquery.productId),
-    );
-  }
-
-  const totalCount = await countQuery.get();
 
   const appliedFilters: Record<string, AppliedFilterValue> = {
     attributes: attributeFilters,

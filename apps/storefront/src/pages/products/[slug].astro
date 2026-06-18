@@ -1,14 +1,16 @@
 ---
-import { getProductBySlug } from "@/lib/api";
+import { getLayoutData, getProductBySlug } from "@/lib/api";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
-import { loadPageWithLayout } from "@/lib/page-data";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
-import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import {
+  getRuntimeStorefrontUrl,
+  setRuntimeImageCdnPolicy,
+} from "@/lib/api/runtime-env";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 
 const { slug } = Astro.params;
@@ -16,16 +18,25 @@ if (!slug) {
   return new Response(null, { status: 404 });
 }
 
-// Parallel fetch: layout data + product data
-const { layoutData, pageData: productData } = await loadPageWithLayout(() =>
-  getProductBySlug(slug),
+const layoutPromise = getLayoutData();
+const productPromise = getProductBySlug(slug);
+const productWidgetsPromise = productPromise.then((data) =>
+  data ? getActiveWidgetsForScope("product", data.product.id) : null,
 );
+
+// Parallel fetch: layout + product + scoped widgets in the first cold-cache wave
+const [layoutData, productData, fetchedProductWidgets] = await Promise.all([
+  layoutPromise,
+  productPromise,
+  productWidgetsPromise,
+]);
+setRuntimeImageCdnPolicy(layoutData?.media);
 if (!productData) {
   return new Response(null, { status: 404 });
 }
 
 const { product, category, images, variants, relatedProducts } = productData;
-const productWidgets = (await getActiveWidgetsForScope("product", product.id)) ?? [];
+const productWidgets = fetchedProductWidgets ?? [];
 
 const isVariantSpecificImagesEnabled = !!product.metaDescription?.includes(
   "<!--variant_images:enabled-->",
