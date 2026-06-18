@@ -81,11 +81,12 @@ export const Route = createFileRoute("/admin/products/")({
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
-    await Promise.all([
-      warmRouteQuery(queryClient, productsQueryOptions(mapParams(deps))),
-      queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
-      queryClient.ensureQueryData(productStatsQueryOptions()),
-    ]);
+    await warmRouteQuery(queryClient, productsQueryOptions(mapParams(deps)));
+
+    if (typeof window !== "undefined") {
+      void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
+      void queryClient.prefetchQuery(productStatsQueryOptions());
+    }
   },
   head: ({ match }) => ({
     meta: [

@@ -4,9 +4,10 @@ import { inventoryQueryOptions } from "~/lib/api-query-options/inventory";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/inventory")({
-  loader: async ({ context: { queryClient } }) => {
-    // Ensure the default view data is ready: variants tab, sorted by available ascending
-    await queryClient.ensureQueryData(
+  loader: ({ context: { queryClient } }) => {
+    if (typeof window === "undefined") return;
+
+    void queryClient.prefetchQuery(
       inventoryQueryOptions({ section: "variants", page: 1, limit: 50, sort: "available", order: "asc" }),
     );
   },
