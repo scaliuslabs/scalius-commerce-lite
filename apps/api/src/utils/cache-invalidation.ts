@@ -177,7 +177,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   search: {
     label: "Search",
     description: "Search index and filtering",
-    kvPrefixes: ["api:search:"],
+    kvPrefixes: ["api:search:", "api:attributes:search-filters"],
     bumpsHtml: true,
     storefrontPrefixes: ["all_products_", "filterable_attrs_"],
   },
@@ -188,6 +188,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "api:attributes:filterable",
       "api:attributes:category",
       "api:attributes:category-slug",
+      "api:attributes:search-filters",
     ],
     bumpsHtml: true,
     storefrontPrefixes: ["filterable_attrs_"],

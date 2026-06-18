@@ -12,6 +12,39 @@ export interface PublicAttributeFilter {
     values: string[];
 }
 
+export interface PublicAttributeQueryFilter {
+    slug: string;
+    value: string;
+}
+
+/**
+ * Resolves attribute filters from raw public query parameters.
+ * Route schemas own the standard query keys; any remaining key that matches a
+ * known product attribute slug is treated as an attribute filter.
+ */
+export async function resolvePublicAttributeFilters(
+    db: Database,
+    queryParams: Record<string, string>,
+    standardQueryKeys: Iterable<string>,
+): Promise<PublicAttributeQueryFilter[]> {
+    const knownKeys = new Set(standardQueryKeys);
+    const potentialAttributeKeys = Object.keys(queryParams).filter(
+        (key) => !knownKeys.has(key) && queryParams[key],
+    );
+
+    if (potentialAttributeKeys.length === 0) return [];
+
+    const attributes = await db
+        .select({ slug: productAttributes.slug })
+        .from(productAttributes)
+        .where(inArray(productAttributes.slug, potentialAttributeKeys));
+
+    const validSlugs = new Set(attributes.map((attribute) => attribute.slug));
+    return potentialAttributeKeys
+        .filter((key) => validSlugs.has(key))
+        .map((key) => ({ slug: key, value: queryParams[key] ?? "" }));
+}
+
 /**
  * Returns all filterable attributes with their distinct values.
  * Used for the global filter sidebar.

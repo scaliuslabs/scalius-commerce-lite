@@ -23,7 +23,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | Mount Point | Route File | Purpose |
 |---|---|---|
 | `/auth` | `routes/auth.ts` | Service JWT, Firebase config, token stats, and token revocation endpoints; Better Auth is hosted by the admin worker |
-| `/attributes` | `routes/attributes.ts` | Filterable product attributes |
+| `/attributes` | `routes/attributes.ts` | Filterable product attributes, including cached search facet filters |
 | `/collections` | `routes/collections.ts` | Homepage collections |
 | `/hero` | `routes/hero.ts` | Hero section data |
 | `/search` | `routes/search.ts` | FTS5 product search |
@@ -264,6 +264,8 @@ Stock-changing paths must keep product availability fresh without broad catalog 
 - `invalidateProductAvailabilityCaches(db, input, c)` for normal post-commit order/payment/delivery/cron paths.
 
 The helper deletes exact API product detail keys, query-varied product detail keys, product-search keys, and `api:search:*`, then schedules storefront exact data keys (`product_slug_${slug}`, `product_variants_${productId}`) plus exact product HTML paths (`/products/${slug}`) with `bumpVersion: false`. Current call sites cover admin order create/edit/delete/restore/permanent-delete, bulk/manual shipment/status/COD/fulfillment/refund/return paths, order ingest/payment queue mutations, delivery webhook reconciliation, admin shipment refresh, and the scheduled orphan-reservation sweep.
+
+Search facet caching uses `api:attributes:search-filters` and must stay in both the `search` and `attributes` invalidation groups: product/search changes alter matching category neighborhoods, while attribute writes alter available filter values.
 
 ## Queue Consumer
 

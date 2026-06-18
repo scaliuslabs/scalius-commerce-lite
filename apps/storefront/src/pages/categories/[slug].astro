@@ -40,6 +40,7 @@ if (!slug) return new Response(null, { status: 404 });
 const params = Astro.url.searchParams;
 const page = parseInt(params.get("page") || "1");
 const sortBy = params.get("sortBy") || "newest";
+const query = params.get("q") || "";
 
 let category: Category | null = null;
 let productsResponse: PaginatedResponse<Product> | null = null;
@@ -56,8 +57,12 @@ const productListOptions: ProductListOptions = {
   sort: sortBy as ProductListOptions["sort"],
 };
 
+if (query) {
+  productListOptions.search = query;
+}
+
 // Add filter parameters (excluding standard navigation params)
-const filterParams = ["page", "sortBy"];
+const filterParams = ["q", "page", "sortBy"];
 for (const [key, value] of params.entries()) {
   if (!filterParams.includes(key) && value) {
     productListOptions[key] = value;
@@ -152,7 +157,7 @@ function generatePaginationLinks(
 }
 
 const activeFilterCount = Object.keys(currentFilters).filter(
-  (key) => !["page", "sortBy"].includes(key) && currentFilters[key],
+  (key) => !filterParams.includes(key) && currentFilters[key],
 ).length;
 
 // Include product name for richer analytics data

@@ -1,15 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import {
-  categories,
-  products,
-  productImages,
-  productAttributes,
-  productAttributeValues
-} from "@scalius/database/schema";
-import { eq, isNull, sql, and, desc, inArray, or } from "drizzle-orm";
-import { ftsMatch } from "@scalius/core/search";
 import { getPublicCategories, getPublicCategoryBySlug } from "@scalius/core/modules/categories/categories.storefront";
-import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
+import { getStorefrontCategoryProducts } from "@scalius/core/modules/products/products.storefront";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
@@ -163,281 +155,46 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
-  const {
-    page,
-    limit,
-    sort,
-    search,
-    minPrice,
-    maxPrice,
-    freeDelivery,
-    hasDiscount
-  } = params;
-
-  const [category, allAttributes] = await Promise.all([
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        description: categories.description,
-        imageUrl: categories.imageUrl,
-        metaTitle: categories.metaTitle,
-        metaDescription: categories.metaDescription
-      })
-      .from(categories)
-      .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
-      .get(),
-    db
-      .select({ slug: productAttributes.slug })
-      .from(productAttributes),
+  const queryParams = c.req.query();
+  const [category, attributeFilters] = await Promise.all([
+    getPublicCategoryBySlug(db, slug),
+    resolvePublicAttributeFilters(db, queryParams, Object.keys(params)),
   ]);
 
   if (!category) {
     throw new NotFoundError("Category not found");
   }
 
-  // Dynamic attribute filtering
-  const queryParams = c.req.query();
-  const validAttributeSlugs = new Set(allAttributes.map((attribute) => attribute.slug));
-  const attributeFilters: { slug: string; value: string }[] = [];
+  const categoryForProducts = {
+    id: category.id,
+    name: category.name,
+    slug: category.slug,
+    description: category.description,
+    imageUrl: category.imageUrl,
+    metaTitle: category.metaTitle,
+    metaDescription: category.metaDescription,
+  };
 
-  for (const key in queryParams) {
-    if (validAttributeSlugs.has(key)) {
-      const value = queryParams[key];
-      if (value) {
-        attributeFilters.push({ slug: key, value });
-      }
-    }
-  }
-
-  // Build query conditions
-  const conditions = [
-    eq(products.isActive, true),
-    isNull(products.deletedAt),
-    eq(products.categoryId, category.id),
-  ];
-
-  // Apply search filter
-  if (search) {
-    const cond = ftsMatch("products_fts", "products", search);
-    if (cond) conditions.push(cond);
-  }
-
-  // Apply price range filters
-  if (minPrice !== undefined) {
-    conditions.push(sql`${products.price} >= ${minPrice}`);
-  }
-
-  if (maxPrice !== undefined) {
-    conditions.push(sql`${products.price} <= ${maxPrice}`);
-  }
-
-  // Apply free delivery filter
-  if (freeDelivery === "true") {
-    conditions.push(eq(products.freeDelivery, true));
-  } else if (freeDelivery === "false") {
-    conditions.push(eq(products.freeDelivery, false));
-  }
-
-  // Apply discount filter
-  if (hasDiscount === "true") {
-    conditions.push(
-      sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`,
-    );
-  } else if (hasDiscount === "false") {
-    conditions.push(
-      sql`(${products.discountPercentage} = 0 OR ${products.discountPercentage} IS NULL)
-        AND (${products.discountAmount} = 0 OR ${products.discountAmount} IS NULL)`,
-    );
-  }
-
-  // Determine sort order
-  let orderBy;
-  const effectivePriceSql = sql`CASE
-    WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0
-      THEN MAX(${products.price} - ${products.discountAmount}, 0)
-    WHEN ${products.discountPercentage} > 0
-      THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100.0))
-    ELSE ${products.price}
-  END`;
-  if (sort === "price-asc") {
-    orderBy = effectivePriceSql;
-  } else if (sort === "price-desc") {
-    orderBy = desc(effectivePriceSql);
-  } else if (sort === "name-asc") {
-    orderBy = products.name;
-  } else if (sort === "name-desc") {
-    orderBy = desc(products.name);
-  } else if (sort === "discount") {
-    orderBy = desc(sql`CASE
-      WHEN ${products.price} > 0 AND ${products.discountType} = 'flat' AND ${products.discountAmount} > 0
-        THEN ${products.discountAmount} / ${products.price} * 100
-      WHEN ${products.discountPercentage} > 0 THEN ${products.discountPercentage}
-      ELSE 0
-    END`);
-  } else {
-    orderBy = desc(products.createdAt);
-  }
-
-  // Apply pagination
-  const offset = (page - 1) * limit;
-
-  // Build base query
-  let query = db
-    .select({
-      id: products.id,
-      name: products.name,
-      price: products.price,
-      slug: products.slug,
-      discountType: products.discountType,
-      discountPercentage: products.discountPercentage,
-      discountAmount: products.discountAmount,
-      freeDelivery: products.freeDelivery,
-      categoryId: products.categoryId,
-      createdAt: products.createdAt,
-      updatedAt: products.updatedAt
-    })
-    .from(products)
-    .where(and(...conditions));
-
-  // Apply attribute filtering if needed
-  if (attributeFilters.length > 0) {
-    const subquery = db
-      .select({ productId: productAttributeValues.productId })
-      .from(productAttributeValues)
-      .leftJoin(
-        productAttributes,
-        eq(productAttributeValues.attributeId, productAttributes.id),
-      )
-      .where(
-        or(
-          ...attributeFilters.map((filter) =>
-            and(
-              eq(productAttributes.slug, filter.slug),
-              eq(productAttributeValues.value, filter.value),
-            ),
-          ),
-        ),
-      )
-      .groupBy(productAttributeValues.productId)
-      .having(sql`count(*) = ${attributeFilters.length}`)
-      .as("filtered_products");
-
-    query = query.innerJoin(subquery, eq(products.id, subquery.productId));
-  }
-
-  let countQuery = db
-    .select({ count: sql<number>`count(*)` })
-    .from(products)
-    .where(and(...conditions));
-
-  if (attributeFilters.length > 0) {
-    const countSubquery = db
-      .select({ productId: productAttributeValues.productId })
-      .from(productAttributeValues)
-      .leftJoin(
-        productAttributes,
-        eq(productAttributeValues.attributeId, productAttributes.id),
-      )
-      .where(
-        or(
-          ...attributeFilters.map((filter) =>
-            and(
-              eq(productAttributes.slug, filter.slug),
-              eq(productAttributeValues.value, filter.value),
-            ),
-          ),
-        ),
-      )
-      .groupBy(productAttributeValues.productId)
-      .having(sql`count(*) = ${attributeFilters.length}`)
-      .as("count_filtered_products");
-
-    countQuery = countQuery.innerJoin(
-      countSubquery,
-      eq(products.id, countSubquery.productId),
-    );
-  }
-
-  const [productsList, totalCount] = await Promise.all([
-    query
-      .orderBy(orderBy)
-      .limit(limit)
-      .offset(offset)
-      .all(),
-    countQuery.get(),
-  ]);
-
-  // Get primary images for products
-  const productIds = productsList.map((product) => product.id);
-
-  // Only fetch images if we have products
-  let imageMap = new Map<string, string>();
-  if (productIds.length > 0) {
-    const images = await db
-      .select({
-        productId: productImages.productId,
-        url: productImages.url
-      })
-      .from(productImages)
-      .where(
-        and(
-          eq(productImages.isPrimary, true),
-          inArray(productImages.productId, productIds),
-        ),
-      )
-      .all();
-
-    // Create a map of product ID to image URL
-    imageMap = new Map(images.map((image) => [image.productId, image.url]));
-  }
-
-  // Combine products with their images and add category info
-  const productsWithImages = productsList.map((product) => ({
-    ...product,
-    imageUrl: imageMap.get(product.id) || null,
-    discountedPrice: calculateDiscountedPrice(
-      product.price,
-      product.discountType,
-      product.discountPercentage,
-      product.discountAmount,
-    ),
-    createdAt:
-      product.createdAt instanceof Date ? product.createdAt.toISOString() : null,
-    updatedAt:
-      product.updatedAt instanceof Date ? product.updatedAt.toISOString() : null,
-    category: {
-      id: category.id,
-      name: category.name,
-      slug: category.slug,
-      description: category.description,
-      imageUrl: category.imageUrl,
-      metaTitle: category.metaTitle,
-      metaDescription: category.metaDescription
-    }
-  }));
+  const result = await getStorefrontCategoryProducts(db, categoryForProducts, {
+    ...params,
+    attributeFilters,
+  });
 
   const appliedFilters: Record<string, AppliedFilterValue> = {
     attributes: attributeFilters,
-    sort,
+    sort: params.sort,
   };
-  if (search !== undefined) appliedFilters.search = search;
-  if (minPrice !== undefined) appliedFilters.minPrice = minPrice;
-  if (maxPrice !== undefined) appliedFilters.maxPrice = maxPrice;
-  if (freeDelivery !== undefined) appliedFilters.freeDelivery = freeDelivery;
-  if (hasDiscount !== undefined) appliedFilters.hasDiscount = hasDiscount;
+  if (params.search !== undefined) appliedFilters.search = params.search;
+  if (params.minPrice !== undefined) appliedFilters.minPrice = params.minPrice;
+  if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
+  if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
+  if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
 
   return ok(c, {
-    category,
-    products: productsWithImages,
-    pagination: {
-      page,
-      limit,
-      total: totalCount?.count || 0,
-      totalPages: Math.ceil((totalCount?.count || 0) / limit)
-    },
-    appliedFilters
+    category: categoryForProducts,
+    products: result.products,
+    pagination: result.pagination,
+    appliedFilters,
   });
 });
 

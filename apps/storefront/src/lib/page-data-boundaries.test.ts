@@ -41,6 +41,8 @@ describe("storefront page data boundaries", () => {
     );
 
     const optionsIndex = source.indexOf("const productListOptions");
+    const queryMapIndex = source.indexOf("productListOptions.search = query");
+    const filterParamsIndex = source.indexOf('const filterParams = ["q", "page", "sortBy"]');
     const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
     const productsPromiseIndex = source.indexOf(
       "const productsPromise = getProductsByCategory(slug, productListOptions)",
@@ -54,6 +56,8 @@ describe("storefront page data boundaries", () => {
     const promiseAllIndex = source.indexOf("] = await Promise.all([");
 
     expect(optionsIndex).toBeGreaterThan(-1);
+    expect(queryMapIndex).toBeGreaterThan(optionsIndex);
+    expect(filterParamsIndex).toBeGreaterThan(queryMapIndex);
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
     expect(productsPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
     expect(attributesPromiseIndex).toBeGreaterThan(productsPromiseIndex);
