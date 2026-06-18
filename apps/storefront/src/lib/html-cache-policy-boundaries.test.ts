@@ -23,4 +23,20 @@ describe("storefront HTML cache policy boundaries", () => {
     expect(collectionsIndex).toBeGreaterThan(categoriesIndex);
     expect(searchIndex).toBeGreaterThan(collectionsIndex);
   });
+
+  it("keeps generated public XML/text routes in the edge cache lane", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/middleware.ts`,
+      "utf8",
+    );
+
+    const cacheablePathsIndex = source.indexOf("const CACHEABLE_PATHS = [");
+    expect(cacheablePathsIndex).toBeGreaterThan(-1);
+    expect(source).toContain("/^\\/robots\\.txt$/");
+    expect(source).toContain("/^\\/sitemap\\.xml$/");
+    expect(source).toContain("/^\\/sitemap-.*\\.xml$/");
+    expect(source).toContain("/^\\/sitemap\\.xsl$/");
+    expect(source).toContain("/^\\/api\\/facebook-feed\\.xml$/");
+    expect(source).toContain("isCacheablePublicResponse(response)");
+  });
 });
