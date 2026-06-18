@@ -2,7 +2,14 @@
 import type { Database } from "@scalius/database/client";
 import { orderItems, products, productVariants } from "@scalius/database/schema";
 import { eq, inArray } from "drizzle-orm";
-import { deleteCache, deleteCacheByPattern } from "./kv-cache";
+import { deleteCacheByPattern } from "./kv-cache";
+import {
+  API_CACHE_FENCE_GLOBAL_SCOPE,
+  bumpApiCacheFence,
+  bumpApiCacheFences,
+  deleteVersionedCacheKeyFamily,
+  getApiCacheFenceScopeForPattern,
+} from "./api-cache-fence";
 
 export const MAX_STOREFRONT_EXACT_HTML_PATHS = 20;
 
@@ -581,6 +588,8 @@ export async function invalidateGroups(
     `[Cache] Invalidating groups [${groups.join(", ")}] – ${uniquePrefixes.length} KV prefix(es)`,
   );
 
+  await bumpApiCacheFences(uniquePrefixes, kv);
+
   await Promise.all(
     uniquePrefixes.map((prefix) => deleteCacheByPattern(`${prefix}*`, kv)),
   );
@@ -599,6 +608,13 @@ export async function invalidateApiCachePatterns(
 
   console.log(
     `[Cache] Invalidating ${uniquePatterns.length} targeted API KV pattern(s)`,
+  );
+
+  await bumpApiCacheFences(
+    uniquePatterns
+      .map(getApiCacheFenceScopeForPattern)
+      .filter((scope): scope is string => Boolean(scope)),
+    kv,
   );
 
   await Promise.all(
@@ -760,8 +776,20 @@ export async function invalidateProductAvailabilityCacheSubjects(
     `[Cache] Invalidating product availability for ${normalizedSubjects.length} product(s)`,
   );
 
+  await bumpApiCacheFences(
+    [
+      ...invalidation.apiKeys,
+      ...invalidation.apiPatterns
+        .map(getApiCacheFenceScopeForPattern)
+        .filter((scope): scope is string => Boolean(scope)),
+    ],
+    c.env?.CACHE,
+  );
+
   await Promise.all([
-    ...invalidation.apiKeys.map((key) => deleteCache(key, c.env?.CACHE)),
+    ...invalidation.apiKeys.map((key) =>
+      deleteVersionedCacheKeyFamily(key, c.env?.CACHE),
+    ),
     ...invalidation.apiPatterns.map((pattern) =>
       deleteCacheByPattern(pattern, c.env?.CACHE),
     ),
@@ -813,7 +841,8 @@ export async function invalidateCatalogCaches(
  */
 export async function invalidateEntireCache(kv?: KVNamespace): Promise<void> {
   try {
-    await deleteCacheByPattern("*", kv);
+    await bumpApiCacheFence(API_CACHE_FENCE_GLOBAL_SCOPE, kv);
+    await deleteCacheByPattern("api:*", kv);
     console.log("[Cache] Successfully cleared the entire project cache.");
   } catch (error: unknown) {
     console.error("[Cache] Error clearing the entire project cache:", error);

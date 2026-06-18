@@ -1,6 +1,12 @@
 // src/server/middleware/cache.ts
 import type { Context, MiddlewareHandler } from "hono";
 import { getCache, setCache, getCacheType } from "../utils/kv-cache";
+import {
+  captureApiCacheFenceSnapshot,
+  getApiCacheFenceScopesForKey,
+  isApiCacheFenceSnapshotCurrent,
+  withApiCacheFenceToken,
+} from "../utils/api-cache-fence";
 
 // Default TTL in seconds (1 hour)
 const DEFAULT_CACHE_TTL = 3600;
@@ -120,13 +126,19 @@ export const cacheMiddleware = (
       }
     }
 
+    const fenceSnapshot = await captureApiCacheFenceSnapshot(
+      getApiCacheFenceScopesForKey(cacheKey, keyPrefix),
+      kv,
+    );
+    const versionedCacheKey = withApiCacheFenceToken(cacheKey, fenceSnapshot);
+
     // Try cache hit
     try {
       const cached = await getCache<{
         status: number;
         headers: Record<string, string>;
         body: string;
-      }>(cacheKey, kv);
+      }>(versionedCacheKey, kv);
 
       if (cached) {
         const headers = new Headers(cached.headers);
@@ -164,7 +176,18 @@ export const cacheMiddleware = (
           headers[key] = value;
         });
 
-        await setCache(cacheKey, { status: cloned.status, headers, body }, ttl, kv);
+        const isSnapshotCurrent = await isApiCacheFenceSnapshotCurrent(
+          fenceSnapshot,
+          kv,
+        );
+        if (!isSnapshotCurrent) return;
+
+        await setCache(
+          versionedCacheKey,
+          { status: cloned.status, headers, body },
+          ttl,
+          kv,
+        );
       } catch (error: unknown) {
         console.error("[Cache] Error writing to cache:", error);
       }

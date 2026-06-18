@@ -9,6 +9,11 @@ import {
   shouldBumpStorefrontVersion,
   triggerStorefrontPurgeForGroups
 } from "../utils/cache-invalidation";
+import {
+  API_CACHE_FENCE_GLOBAL_SCOPE,
+  bumpApiCacheFences,
+  getMaxApiCacheFenceUpdatedAt,
+} from "../utils/api-cache-fence";
 import { ValidationError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 
@@ -100,8 +105,10 @@ app.openapi(getLastClearedRoute, async (c) => {
   if (kvNs) {
     await Promise.all(
       groupNames.map(async (g) => {
-        const val = await kvNs.get(`sc:_last_cleared:${g}`);
-        timestamps[g] = val ? parseInt(val, 10) : null;
+        timestamps[g] = await getMaxApiCacheFenceUpdatedAt(
+          INVALIDATION_GROUPS[g]?.kvPrefixes ?? [],
+          kvNs,
+        );
       }),
     );
   }
@@ -127,17 +134,15 @@ const clearAllRoute = createRoute({
 
 app.openapi(clearAllRoute, async (c) => {
   const kvNs = kv(c);
-  await deleteCacheByPattern("api:*", kvNs);
-
   const groupNames = Object.keys(INVALIDATION_GROUPS);
-  const now = Date.now().toString();
-  if (kvNs) {
-    await Promise.all(
-      groupNames.map((group) =>
-        kvNs.put(`sc:_last_cleared:${group}`, now, { expirationTtl: 86400 * 30 }),
-      ),
-    );
-  }
+  const fenceScopes = [
+    API_CACHE_FENCE_GLOBAL_SCOPE,
+    ...new Set(
+      groupNames.flatMap((group) => INVALIDATION_GROUPS[group]?.kvPrefixes ?? []),
+    ),
+  ];
+  await bumpApiCacheFences(fenceScopes, kvNs);
+  await deleteCacheByPattern("api:*", kvNs);
 
   const env = c.env as Env;
   const purgeUrl = env?.PURGE_URL;
@@ -209,17 +214,6 @@ app.openapi(clearGroupRoute, async (c) => {
   }
 
   await invalidateGroups(validGroups, kv(c));
-
-  // Record last-cleared timestamps
-  const now = Date.now().toString();
-  const kvNs = kv(c);
-  if (kvNs) {
-    await Promise.all(
-      validGroups.map((g) =>
-        kvNs.put(`sc:_last_cleared:${g}`, now, { expirationTtl: 86400 * 30 }),
-      ),
-    );
-  }
 
   const bumpVersion = shouldBumpStorefrontVersion(validGroups);
   triggerStorefrontPurgeForGroups(validGroups, c.env, c.executionCtx);

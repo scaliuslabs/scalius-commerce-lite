@@ -10,6 +10,7 @@ import {
   getProductAvailabilityApiCachePatterns,
   getProductAvailabilityStorefrontPrefixes,
   getStorefrontPrefixesForGroups,
+  invalidateGroups,
   invalidateProductAvailabilityCacheSubjects,
   invalidateApiAndScheduleStorefrontGroups,
   invalidateApiAndStorefrontGroups,
@@ -383,6 +384,30 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
   });
 
+  it("bumps API cache fences before listing group cache keys", async () => {
+    const calls: string[] = [];
+    const kv = {
+      put: vi.fn(async () => {
+        calls.push("put");
+      }),
+      list: vi.fn(async () => {
+        calls.push("list");
+        return { keys: [], list_complete: true };
+      }),
+      delete: vi.fn(),
+    };
+
+    await invalidateGroups(["layout"], kv as unknown as KVNamespace);
+
+    expect(kv.put).toHaveBeenCalledWith(
+      "sc:_api_cache_fence:api%3Aheader%3A",
+      expect.any(String),
+      { expirationTtl: 86400 * 30 },
+    );
+    expect(calls.indexOf("put")).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf("list")).toBeGreaterThan(calls.indexOf("put"));
+  });
+
   it("invalidates API KV prefixes before scheduling the matching storefront purge", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     const waitUntil = vi.fn();
@@ -592,6 +617,37 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "product_slug_phone-case",
       "product_variants_prod_2",
     ]);
+  });
+
+  it("invalidates product availability exact cache families without deleting sibling slugs", async () => {
+    const store = new Set([
+      "sc:api:products:/api/v1/products/phone",
+      "sc:api:products:/api/v1/products/phone#f:old",
+      "sc:api:products:/api/v1/products/phone-case#f:old",
+    ]);
+    const kv = {
+      put: vi.fn(),
+      list: vi.fn(async ({ prefix }: { prefix?: string }) => ({
+        keys: [...store]
+          .filter((name) => !prefix || name.startsWith(prefix))
+          .map((name) => ({ name })),
+        list_complete: true,
+      })),
+      delete: vi.fn(async (key: string) => {
+        store.delete(key);
+      }),
+    };
+
+    await invalidateProductAvailabilityCacheSubjects(
+      [{ productId: "prod_1", slug: "phone" }],
+      { env: { CACHE: kv } as unknown as Env },
+    );
+
+    expect(store.has("sc:api:products:/api/v1/products/phone")).toBe(false);
+    expect(store.has("sc:api:products:/api/v1/products/phone#f:old")).toBe(false);
+    expect(store.has("sc:api:products:/api/v1/products/phone-case#f:old")).toBe(
+      true,
+    );
   });
 
   it("invalidates targeted product availability API KV before scheduling storefront prefixes", async () => {

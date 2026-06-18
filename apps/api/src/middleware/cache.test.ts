@@ -8,12 +8,31 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../utils/kv-cache", () => ({
+  deleteCache: vi.fn(),
   getCache: mocks.getCache,
   setCache: mocks.setCache,
   getCacheType: mocks.getCacheType,
+  toProjectCacheKey: (key: string) => `sc:${key}`,
 }));
 
 import { cacheMiddleware, canonicalizeCacheQueryString } from "./cache";
+
+function withoutFenceToken(cacheKey: string): string {
+  return cacheKey.replace(/#f:[0-9a-f]+$/, "");
+}
+
+function createFenceKvStore() {
+  const store = new Map<string, string>();
+  const kv = {
+    get: vi.fn(async (key: string) => store.get(key) ?? null),
+    put: vi.fn(async (key: string, value: string) => {
+      store.set(key, value);
+    }),
+    list: vi.fn(),
+    delete: vi.fn(),
+  };
+  return { kv, store };
+}
 
 describe("cacheMiddleware", () => {
   afterEach(() => {
@@ -74,6 +93,64 @@ describe("cacheMiddleware", () => {
     await executionCtx.waitUntil.mock.calls[0]?.[0];
   });
 
+  it("uses fenced cache keys for reads and writes", async () => {
+    mocks.getCache.mockResolvedValue(null);
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use("*", cacheMiddleware({ ttl: 60, keyPrefix: "api:products:" }));
+    app.get("/products", (c) => c.json({ products: [] }));
+
+    const response = await app.request("/products", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+
+    expect(response.status).toBe(200);
+    const readKey = mocks.getCache.mock.calls[0]?.[0] as string;
+    const writeKey = mocks.setCache.mock.calls[0]?.[0] as string;
+    expect(withoutFenceToken(readKey)).toBe("api:products:/products");
+    expect(withoutFenceToken(writeKey)).toBe("api:products:/products");
+    expect(readKey).toMatch(/^api:products:\/products#f:[0-9a-f]+$/);
+    expect(writeKey).toBe(readKey);
+  });
+
+  it("skips a delayed miss write when the captured fence changes", async () => {
+    mocks.getCache.mockResolvedValue(null);
+    mocks.setCache.mockResolvedValue(undefined);
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use("*", cacheMiddleware({ ttl: 60, keyPrefix: "api:products:" }));
+    app.get("/products", (c) => c.json({ products: [] }));
+
+    const { kv, store } = createFenceKvStore();
+    const executionCtx = {
+      waitUntil: vi.fn(),
+      passThroughOnException: vi.fn(),
+    };
+
+    const response = await app.request(
+      "/products",
+      {},
+      { CACHE: kv } as unknown as Env,
+      executionCtx as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+
+    store.set(
+      "sc:_api_cache_fence:api%3Aproducts%3A",
+      JSON.stringify({
+        schema: 1,
+        scope: "api:products:",
+        version: "newer-version",
+        updatedAt: Date.now(),
+      }),
+    );
+
+    await executionCtx.waitUntil.mock.calls[0]?.[0];
+    expect(mocks.setCache).not.toHaveBeenCalled();
+  });
+
   it("canonicalizes query order before reading and writing cache keys", async () => {
     mocks.getCache.mockResolvedValue(null);
 
@@ -88,15 +165,11 @@ describe("cacheMiddleware", () => {
       CACHE: { id: "api-cache-kv" },
     } as unknown as Env);
 
-    expect(mocks.getCache).toHaveBeenNthCalledWith(
-      1,
+    expect(withoutFenceToken(mocks.getCache.mock.calls[0]?.[0] as string)).toBe(
       "api:products:/products?brand=Nike&color=Red",
-      { id: "api-cache-kv" },
     );
-    expect(mocks.getCache).toHaveBeenNthCalledWith(
-      2,
+    expect(withoutFenceToken(mocks.getCache.mock.calls[1]?.[0] as string)).toBe(
       "api:products:/products?brand=Nike&color=Red",
-      { id: "api-cache-kv" },
     );
   });
 
@@ -120,9 +193,8 @@ describe("cacheMiddleware", () => {
       { CACHE: { id: "api-cache-kv" } } as unknown as Env,
     );
 
-    expect(mocks.getCache).toHaveBeenCalledWith(
+    expect(withoutFenceToken(mocks.getCache.mock.calls[0]?.[0] as string)).toBe(
       "api:products:/products?brand=Nike&color=Red",
-      { id: "api-cache-kv" },
     );
   });
 
@@ -151,15 +223,11 @@ describe("cacheMiddleware", () => {
       CACHE: { id: "api-cache-kv" },
     } as unknown as Env);
 
-    expect(mocks.getCache).toHaveBeenNthCalledWith(
-      1,
+    expect(withoutFenceToken(mocks.getCache.mock.calls[0]?.[0] as string)).toBe(
       "api:products:/products",
-      { id: "api-cache-kv" },
     );
-    expect(mocks.getCache).toHaveBeenNthCalledWith(
-      2,
+    expect(withoutFenceToken(mocks.getCache.mock.calls[1]?.[0] as string)).toBe(
       "api:products:/products/search?limit=20",
-      { id: "api-cache-kv" },
     );
   });
 

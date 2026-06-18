@@ -8,7 +8,15 @@ import { cacheControlRoutes } from "./cache";
 function createKvMock() {
   const store = new Map<string, string>([
     ["sc:api:products:one", JSON.stringify({ cached: true })],
-    ["sc:_last_cleared:products", "1000"],
+    [
+      "sc:_api_cache_fence:api%3Aproducts%3A",
+      JSON.stringify({
+        schema: 1,
+        scope: "api:products:",
+        version: "old",
+        updatedAt: 1000,
+      }),
+    ],
   ]);
 
   const kv = {
@@ -41,7 +49,7 @@ function createTestApp() {
 }
 
 describe("cache control routes", () => {
-  it("persists per-group last-cleared timestamps when clearing all cache", async () => {
+  it("bumps API cache fences and reports per-group timestamps when clearing all cache", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-15T10:00:00.000Z"));
 
@@ -65,15 +73,16 @@ describe("cache control routes", () => {
       expect(kv.delete).toHaveBeenCalledWith("sc:api:products:one");
       expect(store.has("sc:api:products:one")).toBe(false);
 
-      const groupNames = Object.keys(INVALIDATION_GROUPS);
-      expect(kv.put).toHaveBeenCalledTimes(groupNames.length);
-      for (const group of groupNames) {
-        expect(kv.put).toHaveBeenCalledWith(
-          `sc:_last_cleared:${group}`,
-          String(Date.now()),
-          { expirationTtl: 86400 * 30 },
-        );
-      }
+      expect(kv.put).toHaveBeenCalledWith(
+        "sc:_api_cache_fence:api%3A",
+        expect.stringContaining(`"updatedAt":${Date.now()}`),
+        { expirationTtl: 86400 * 30 },
+      );
+      expect(kv.put).toHaveBeenCalledWith(
+        "sc:_api_cache_fence:api%3Aproducts%3A",
+        expect.stringContaining(`"updatedAt":${Date.now()}`),
+        { expirationTtl: 86400 * 30 },
+      );
 
       const lastClearedResponse = await app.request(
         "/api/v1/cache/last-cleared",
@@ -88,6 +97,9 @@ describe("cache control routes", () => {
       expect(lastClearedResponse.status).toBe(200);
       expect(lastCleared.success).toBe(true);
       expect(lastCleared.data?.timestamps?.products).toBe(Date.now());
+      expect(Object.keys(lastCleared.data?.timestamps ?? {})).toEqual(
+        Object.keys(INVALIDATION_GROUPS),
+      );
     } finally {
       vi.useRealTimers();
     }
