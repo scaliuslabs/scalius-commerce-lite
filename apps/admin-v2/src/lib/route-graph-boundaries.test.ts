@@ -110,6 +110,8 @@ describe("admin route graph boundaries", () => {
     );
 
     expect(routerSource).toContain("createAdminQueryClient()");
+    expect(routerSource).toContain("defaultPreload: false");
+    expect(routerSource).not.toContain('defaultPreload: "intent"');
     expect(queryClientSource).toContain("refetchOnWindowFocus: false");
     expect(queryClientSource).toContain("refetchOnReconnect: false");
     expect(cacheQuerySource.match(/refetchOnReconnect: true/g)?.length).toBe(3);

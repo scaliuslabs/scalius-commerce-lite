@@ -109,7 +109,7 @@ export function getRouter() {
     scrollRestoration: true,
     scrollToTopSelectors: ["#admin-main-scroll"],
     scrollRestorationBehavior: "instant",
-    defaultPreload: "intent",
+    defaultPreload: false,
     defaultPendingMs: 200,
     defaultPendingMinMs: 300,
     defaultPendingComponent: DefaultPendingComponent,
