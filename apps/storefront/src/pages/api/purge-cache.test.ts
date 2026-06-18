@@ -376,4 +376,63 @@ describe("storefront cache purge route", () => {
       }),
     );
   });
+
+  it("caps exact HTML paths and rejects absolute warm URLs", async () => {
+    mocks.cacheDelete.mockResolvedValue(true);
+    const { MAX_EXACT_HTML_WARM_PATHS, POST } = await import("./purge-cache");
+    const noisyPaths = [
+      "/products/p0",
+      "/products/p0",
+      "https://external.example/products/p1",
+      "//external.example/products/p2",
+      ...Array.from(
+        { length: MAX_EXACT_HTML_WARM_PATHS + 5 },
+        (_, index) => `/products/p${index}`,
+      ),
+    ];
+    const request = new Request("https://storefront.example.com/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        groups: ["products"],
+        htmlPaths: noisyPaths,
+        bumpVersion: false,
+      }),
+    });
+
+    const response = await POST({
+      request,
+      url: new URL(request.url),
+      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+    } as unknown as Parameters<typeof POST>[0]);
+    const body = (await response.json()) as {
+      details?: {
+        htmlPathsCleared?: number;
+        htmlPathsDeleted?: number;
+        exactGenerationsBumped?: number;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.details?.htmlPathsCleared).toBe(MAX_EXACT_HTML_WARM_PATHS);
+    expect(body.details?.htmlPathsDeleted).toBe(MAX_EXACT_HTML_WARM_PATHS);
+    expect(body.details?.exactGenerationsBumped).toBe(MAX_EXACT_HTML_WARM_PATHS);
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
+
+    const htmlDeleteRequests = mocks.cacheDelete.mock.calls
+      .map(([arg]) => arg)
+      .filter((arg): arg is Request => arg instanceof Request);
+    expect(htmlDeleteRequests).toHaveLength(MAX_EXACT_HTML_WARM_PATHS);
+    expect(htmlDeleteRequests.every((requestArg) => requestArg.url.startsWith("https://storefront.example.com/"))).toBe(true);
+
+    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
+    await warmPromise;
+    const warmedUrls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(warmedUrls).toHaveLength(MAX_EXACT_HTML_WARM_PATHS);
+    expect(warmedUrls.every((url) => url.startsWith("https://storefront.example.com/"))).toBe(true);
+    expect(warmedUrls).not.toContain("https://external.example/products/p1");
+  });
 });
