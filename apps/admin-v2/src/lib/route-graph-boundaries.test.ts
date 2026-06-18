@@ -115,7 +115,9 @@ describe("admin route graph boundaries", () => {
     expect(queryClientSource).toContain("refetchOnWindowFocus: false");
     expect(queryClientSource).toContain("refetchOnReconnect: false");
     expect(cacheQuerySource.match(/refetchOnReconnect: true/g)?.length).toBe(3);
-    expect(orderDetailSource.match(/refetchOnReconnect: true/g)?.length).toBe(2);
+    expect(orderDetailSource).toContain("refetchInterval: 30_000");
+    expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
+    expect(orderDetailSource).not.toContain("refetchOnReconnect: true");
     expect(orderListSource).toContain('document.addEventListener("visibilitychange"');
     expect(orderListSource).toContain("isDocumentHidden()");
     expect(orderListSource).not.toContain("refreshIntervalRef");
