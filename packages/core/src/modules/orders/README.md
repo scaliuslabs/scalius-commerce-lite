@@ -67,6 +67,8 @@ complete --> pending
 
 Per-item tracking (on `orderItems.fulfillmentStatus`): `pending`, `picked`, `packed`, `shipped`, `delivered`. These are NOT governed by the state machine -- they are set directly by `createFulfillmentShipment()`.
 
+Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so the dashboard can disable already shipped/delivered items before posting manual fulfillment. Own-courier shipments are stored in `deliveryShipments` without a provider id; API/admin history can render `courierName`, `trackingUrl`, `note`, `shipmentItems`, `shipmentAmount`, and `isFinalShipment`, but provider status refresh must remain disabled for those manual rows.
+
 ## Data Flow
 
 ### Storefront Order Creation (async, queue-based)
@@ -131,7 +133,7 @@ All 9 statuses that trigger notifications are covered. Each dispatches to enable
 
 1. `createFulfillmentShipment()` checks order is not cancelled/returned
 2. Validates no items are already shipped/delivered (throws `ConflictError` if so)
-3. Claims the order with a version/status/fulfillment check, then creates `deliveryShipments` row and updates item fulfillment statuses to `shipped`
+3. Claims the order with a version/status/fulfillment check, then creates a manual/own-courier `deliveryShipments` row and updates item fulfillment statuses to `shipped`
 4. If final shipment: updates order `fulfillmentStatus` to `complete`, and order status to `shipped` when it was still confirmed
 5. Applies inventory deduction for final shipments, including retries where the order was already marked shipped or delivered before inventory completed
 

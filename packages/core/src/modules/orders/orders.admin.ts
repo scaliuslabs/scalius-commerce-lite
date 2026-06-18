@@ -396,6 +396,7 @@ export async function getOrderDetails(
             productImage: productImages.url,
             variantSize: productVariants.size,
             variantColor: productVariants.color,
+            fulfillmentStatus: orderItems.fulfillmentStatus,
         })
         .from(orderItems)
         .leftJoin(products, eq(products.id, orderItems.productId))
@@ -419,6 +420,7 @@ export async function getOrderDetails(
         productImage: item.productImage || null,
         variantSize: item.variantSize || null,
         variantColor: item.variantColor || null,
+        fulfillmentStatus: item.fulfillmentStatus,
     }));
 
     return {

@@ -13,6 +13,7 @@ export interface OrderItem {
   productImage: string | null;
   variantSize: string | null;
   variantColor: string | null;
+  fulfillmentStatus?: string | null;
 }
 
 export interface Order {
@@ -55,9 +56,15 @@ export interface OrderShipment {
   providerName?: string | null;
   externalId: string | null;
   trackingId: string | null;
+  trackingUrl?: string | null;
+  courierName?: string | null;
   status: string;
   rawStatus: string | null;
+  note?: string | null;
   metadata?: ShipmentMetadata;
+  shipmentItems?: string | null;
+  shipmentAmount?: number | null;
+  isFinalShipment?: boolean | null;
   createdAt: OrderTimestamp;
   updatedAt?: OrderTimestamp;
   lastChecked?: OrderTimestamp | null;

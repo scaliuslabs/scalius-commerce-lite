@@ -44341,6 +44341,65 @@
                         "trackingId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "trackingUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "courierName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastChecked": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "nullable": true
+                        },
+                        "shipmentItems": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shipmentAmount": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "isFinalShipment": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "updatedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -44351,7 +44410,17 @@
                         "status",
                         "rawStatus",
                         "externalId",
-                        "trackingId"
+                        "trackingId",
+                        "trackingUrl",
+                        "courierName",
+                        "note",
+                        "metadata",
+                        "lastChecked",
+                        "shipmentItems",
+                        "shipmentAmount",
+                        "isFinalShipment",
+                        "createdAt",
+                        "updatedAt"
                       ]
                     }
                   },
@@ -73948,6 +74017,65 @@
                               "trackingId": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "trackingUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "courierName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "metadata": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "lastChecked": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "shipmentItems": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "shipmentAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "isFinalShipment": {
+                                "type": "boolean",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
                               }
                             },
                             "required": [
@@ -73958,7 +74086,17 @@
                               "status",
                               "rawStatus",
                               "externalId",
-                              "trackingId"
+                              "trackingId",
+                              "trackingUrl",
+                              "courierName",
+                              "note",
+                              "metadata",
+                              "lastChecked",
+                              "shipmentItems",
+                              "shipmentAmount",
+                              "isFinalShipment",
+                              "createdAt",
+                              "updatedAt"
                             ]
                           }
                         }
@@ -74212,7 +74350,19 @@
                             "type": "string",
                             "nullable": true
                           },
-                          "providerName": {
+                          "trackingUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "courierName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "note": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "metadata": {
                             "type": "string",
                             "nullable": true
                           },
@@ -74226,6 +74376,42 @@
                               }
                             ],
                             "nullable": true
+                          },
+                          "shipmentItems": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "shipmentAmount": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "isFinalShipment": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "updatedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "providerName": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -74237,8 +74423,17 @@
                           "rawStatus",
                           "externalId",
                           "trackingId",
-                          "providerName",
-                          "lastChecked"
+                          "trackingUrl",
+                          "courierName",
+                          "note",
+                          "metadata",
+                          "lastChecked",
+                          "shipmentItems",
+                          "shipmentAmount",
+                          "isFinalShipment",
+                          "createdAt",
+                          "updatedAt",
+                          "providerName"
                         ],
                         "additionalProperties": {
                           "nullable": true
@@ -74341,7 +74536,19 @@
                           "type": "string",
                           "nullable": true
                         },
-                        "providerName": {
+                        "trackingUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "courierName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
                           "type": "string",
                           "nullable": true
                         },
@@ -74355,6 +74562,42 @@
                             }
                           ],
                           "nullable": true
+                        },
+                        "shipmentItems": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shipmentAmount": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "isFinalShipment": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "updatedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "providerName": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -74366,8 +74609,17 @@
                         "rawStatus",
                         "externalId",
                         "trackingId",
-                        "providerName",
-                        "lastChecked"
+                        "trackingUrl",
+                        "courierName",
+                        "note",
+                        "metadata",
+                        "lastChecked",
+                        "shipmentItems",
+                        "shipmentAmount",
+                        "isFinalShipment",
+                        "createdAt",
+                        "updatedAt",
+                        "providerName"
                       ],
                       "additionalProperties": {
                         "nullable": true
@@ -74494,6 +74746,65 @@
                         "trackingId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "trackingUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "courierName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastChecked": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "nullable": true
+                        },
+                        "shipmentItems": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shipmentAmount": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "isFinalShipment": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "updatedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -74504,7 +74815,17 @@
                         "status",
                         "rawStatus",
                         "externalId",
-                        "trackingId"
+                        "trackingId",
+                        "trackingUrl",
+                        "courierName",
+                        "note",
+                        "metadata",
+                        "lastChecked",
+                        "shipmentItems",
+                        "shipmentAmount",
+                        "isFinalShipment",
+                        "createdAt",
+                        "updatedAt"
                       ]
                     }
                   },
@@ -74720,6 +75041,65 @@
                         "trackingId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "trackingUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "courierName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastChecked": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "nullable": true
+                        },
+                        "shipmentItems": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shipmentAmount": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "isFinalShipment": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "updatedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -74730,7 +75110,17 @@
                         "status",
                         "rawStatus",
                         "externalId",
-                        "trackingId"
+                        "trackingId",
+                        "trackingUrl",
+                        "courierName",
+                        "note",
+                        "metadata",
+                        "lastChecked",
+                        "shipmentItems",
+                        "shipmentAmount",
+                        "isFinalShipment",
+                        "createdAt",
+                        "updatedAt"
                       ]
                     }
                   },
@@ -74855,12 +75245,60 @@
                           "type": "string",
                           "nullable": true
                         },
-                        "providerName": {
+                        "trackingUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "courierName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
                           "type": "string",
                           "nullable": true
                         },
                         "lastChecked": {
                           "type": "string"
+                        },
+                        "shipmentItems": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shipmentAmount": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "isFinalShipment": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "updatedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "providerName": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "statusChanged": {
                           "type": "boolean"
@@ -74878,8 +75316,17 @@
                         "rawStatus",
                         "externalId",
                         "trackingId",
-                        "providerName",
+                        "trackingUrl",
+                        "courierName",
+                        "note",
+                        "metadata",
                         "lastChecked",
+                        "shipmentItems",
+                        "shipmentAmount",
+                        "isFinalShipment",
+                        "createdAt",
+                        "updatedAt",
+                        "providerName",
                         "statusChanged",
                         "orderStatusUpdate"
                       ],
@@ -76574,6 +77021,9 @@
                               "variantColor": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "fulfillmentStatus": {
+                                "type": "string"
                               }
                             },
                             "required": [
@@ -76585,7 +77035,8 @@
                               "productName",
                               "productImage",
                               "variantSize",
-                              "variantColor"
+                              "variantColor",
+                              "fulfillmentStatus"
                             ]
                           }
                         },
@@ -77052,6 +77503,9 @@
                           "variantColor": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "fulfillmentStatus": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -77063,7 +77517,8 @@
                           "productName",
                           "productImage",
                           "variantSize",
-                          "variantColor"
+                          "variantColor",
+                          "fulfillmentStatus"
                         ]
                       }
                     }

@@ -36,6 +36,8 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **Scroll Restoration**: The admin shell uses TanStack Router's scroll restoration for the nested `#admin-main-scroll` container with instant behavior. The `useAdminNestedScrollRestoration()` helper snapshots that container before route loads, resets it to top on normal client navigation, and restores the saved position only on browser Back/Forward. Do not add ad hoc route-change `scrollTo()` effects in the layout; extend the helper or register additional scroll containers with router scroll restoration instead.
 
+**Order Fulfillment**: Order detail supports provider shipments and own-courier/manual fulfillment. `ManualFulfillmentDialog` posts selected unshipped item IDs to the typed orders server-function slice, invalidates order detail + shipments, and computes final-shipment intent from the remaining fulfillable items. Manual shipment history rows can show courier/tracking/note metadata, but the refresh action is only shown for provider-backed shipments.
+
 ## staleTime Tiers
 
 | Tier | Duration | Used For |

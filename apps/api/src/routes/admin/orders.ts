@@ -459,7 +459,8 @@ app.openapi(getItemsRoute, async (c) => {
             variantSize: productVariants.size,
             variantColor: productVariants.color,
             quantity: orderItems.quantity,
-            price: orderItems.price
+            price: orderItems.price,
+            fulfillmentStatus: orderItems.fulfillmentStatus,
         })
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId))

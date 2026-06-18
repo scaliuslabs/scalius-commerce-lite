@@ -13,11 +13,13 @@ interface ShipmentStatusIndicatorProps {
     orderId: string;
   };
   onStatusUpdated?: (updatedShipment: { id: string; orderId: string; status: string; lastChecked: string | null; [key: string]: unknown }) => void;
+  canRefresh?: boolean;
 }
 
 export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   shipment,
   onStatusUpdated,
+  canRefresh = true,
 }) => {
   const { isRefreshing, refreshShipmentStatus } = useShipmentStatus();
 
@@ -122,18 +124,20 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
           </TooltipContent>
         </Tooltip>
 
-        <Button
-          onClick={handleRefresh}
-          disabled={isRefreshing[shipment.id]}
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0 hover:bg-[var(--muted)]"
-          title="Refresh shipment status"
-        >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${isRefreshing[shipment.id] ? "animate-spin" : ""}`}
-          />
-        </Button>
+        {canRefresh && (
+          <Button
+            onClick={handleRefresh}
+            disabled={isRefreshing[shipment.id]}
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 hover:bg-[var(--muted)]"
+            title="Refresh shipment status"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${isRefreshing[shipment.id] ? "animate-spin" : ""}`}
+            />
+          </Button>
+        )}
       </div>
     </div>
   );

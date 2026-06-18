@@ -10,6 +10,8 @@ import type {
   GetApiV1AdminOrdersData,
   GetApiV1AdminOrdersResponse,
   PostApiV1AdminOrdersBulkDeleteData,
+  PostApiV1AdminOrdersByIdFulfillData,
+  PostApiV1AdminOrdersByIdFulfillResponse,
   PostApiV1AdminOrdersByIdRefundData,
   PostApiV1AdminOrdersByIdRefundResponse,
   PostApiV1AdminOrdersByIdRestoreResponse,
@@ -112,6 +114,10 @@ export type CreateOrderShipmentInput =
     };
 export type CreateOrderShipmentPayload =
   ApiData<PostApiV1AdminOrdersByIdShipmentsResponse>;
+export type CreateFulfillmentShipmentInput = { orderId: string } &
+  ApiBody<PostApiV1AdminOrdersByIdFulfillData>;
+export type CreateFulfillmentShipmentPayload =
+  ApiData<PostApiV1AdminOrdersByIdFulfillResponse>;
 export type UpdateFulfillmentStatusInput = { orderId: string } &
   ApiBody<PutApiV1AdminOrdersByIdFulfillmentStatusData>;
 export type RefreshShipmentStatusInput = {
@@ -263,6 +269,16 @@ export const createOrderShipment = createServerFn({ method: "POST" })
     return apiPost<CreateOrderShipmentPayload>(
       `/orders/${data.orderId}/shipments`,
       buildShipmentBody(data),
+    );
+  });
+
+export const createFulfillmentShipment = createServerFn({ method: "POST" })
+  .validator((data: CreateFulfillmentShipmentInput) => data)
+  .handler(async ({ data }) => {
+    const { orderId, ...body } = data;
+    return apiPost<CreateFulfillmentShipmentPayload>(
+      `/orders/${orderId}/fulfill`,
+      body,
     );
   });
 

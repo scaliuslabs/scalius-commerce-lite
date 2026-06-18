@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkDeleteOrders,
+  createFulfillmentShipment,
   createOrder,
   createOrderShipment,
   refundOrder,
@@ -12,6 +13,7 @@ import {
   updateOrderCod,
   updateOrderStatus,
   type BulkDeleteOrdersInput,
+  type CreateFulfillmentShipmentInput,
   type CreateOrderInput,
   type CreateOrderShipmentInput,
   type RefundOrderInput,
@@ -93,6 +95,29 @@ export function useCreateOrderShipment() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to create shipment")),
+  });
+}
+
+export function useCreateFulfillmentShipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateFulfillmentShipmentInput) =>
+      createFulfillmentShipment({ data }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.shipments(variables.orderId),
+      });
+      toast.success("Fulfillment shipment created");
+    },
+    onError: (err) =>
+      toast.error(
+        getServerFnError(err, "Failed to create fulfillment shipment"),
+      ),
   });
 }
 
