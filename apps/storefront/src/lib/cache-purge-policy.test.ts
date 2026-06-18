@@ -19,6 +19,19 @@ describe("selective cache purge policy", () => {
     })).toBe(true);
   });
 
+  it("keeps prefix purges local when exact HTML targets are supplied", () => {
+    expect(shouldBumpCacheVersionForSelectivePurge({
+      prefixes: ["widgets_scope_product_prod_1"],
+      htmlPaths: ["/products/fish"],
+      bumpVersion: false,
+    })).toBe(false);
+    expect(shouldWarmCriticalCachesForSelectivePurge({
+      prefixes: ["widgets_scope_product_prod_1"],
+      htmlPaths: ["/products/fish"],
+      bumpVersion: false,
+    })).toBe(false);
+  });
+
   it("warms critical caches when the caller marks the purge as HTML-affecting", () => {
     expect(shouldBumpCacheVersionForSelectivePurge({
       prefixes: [],

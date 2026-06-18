@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildExactCacheGenerationKey,
   bumpExactCacheGenerations,
+  htmlPathCacheKeyFromPath,
   productSlugCacheKeyFromPath,
   resolveExactCacheGeneration,
   shouldUseExactCacheGeneration,
@@ -11,12 +12,30 @@ describe("exact cache generations", () => {
   it("recognizes product exact cache keys and product HTML paths", () => {
     expect(shouldUseExactCacheGeneration("product_slug_fish")).toBe(true);
     expect(shouldUseExactCacheGeneration("product_variants_prod_1")).toBe(true);
+    expect(shouldUseExactCacheGeneration("widget_wid_1")).toBe(true);
+    expect(shouldUseExactCacheGeneration("widgets_scope_product_prod_1")).toBe(true);
+    expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(true);
+    expect(shouldUseExactCacheGeneration("html_path_/categories/drinks")).toBe(true);
     expect(shouldUseExactCacheGeneration("all_products_default")).toBe(false);
 
     expect(productSlugCacheKeyFromPath("/products/fish?size=m")).toBe(
       "product_slug_fish",
     );
     expect(productSlugCacheKeyFromPath("/categories/fish")).toBeNull();
+
+    expect(htmlPathCacheKeyFromPath("/products/fish?size=m")).toBe(
+      "product_slug_fish",
+    );
+    expect(htmlPathCacheKeyFromPath("/categories/drinks?sortBy=newest")).toBe(
+      "html_path_/categories/drinks",
+    );
+    expect(htmlPathCacheKeyFromPath("/collections/col_1")).toBe(
+      "html_path_/collections/col_1",
+    );
+    expect(htmlPathCacheKeyFromPath("/about-us")).toBe("html_path_/about-us");
+    expect(htmlPathCacheKeyFromPath("/")).toBeNull();
+    expect(htmlPathCacheKeyFromPath("/search?q=fish")).toBeNull();
+    expect(htmlPathCacheKeyFromPath("/sitemap.xml")).toBeNull();
   });
 
   it("uses default generation when the exact key has not been bumped", async () => {

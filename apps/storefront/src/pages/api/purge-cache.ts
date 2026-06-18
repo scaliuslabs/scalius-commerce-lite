@@ -11,7 +11,7 @@ import {
 import {
   buildExactCacheGenerationKey,
   bumpExactCacheGenerations,
-  productSlugCacheKeyFromPath,
+  htmlPathCacheKeyFromPath,
   shouldUseExactCacheGeneration,
 } from "../../lib/cache-generations";
 import { BUILD_ID } from "../../config/build-id";
@@ -214,8 +214,8 @@ function buildHtmlCacheKeyUrl(
 ): string {
   const htmlUrl = buildHtmlCacheBaseUrl(new URL(path, origin));
   htmlUrl.searchParams.set("cache_v", `${version}-${BUILD_ID}`);
-  const productKey = productSlugCacheKeyFromPath(path);
-  const generation = productKey ? generations.get(productKey) : null;
+  const htmlPathKey = htmlPathCacheKeyFromPath(path);
+  const generation = htmlPathKey ? generations.get(htmlPathKey) : null;
   if (generation) {
     htmlUrl.searchParams.set("cache_gen", generation);
   }
@@ -269,13 +269,23 @@ async function deleteL2ExactKeys(
 function collectExactGenerationKeys(
   exactKeys: readonly string[],
   htmlPaths: readonly string[],
+  prefixes: readonly string[] = [],
 ): string[] {
   return [
     ...exactKeys,
+    ...prefixes.map(normalizeExactGenerationPrefix).filter((key): key is string => Boolean(key)),
     ...htmlPaths
-      .map((path) => productSlugCacheKeyFromPath(path))
+      .map((path) => htmlPathCacheKeyFromPath(path))
       .filter((key): key is string => typeof key === "string" && key.length > 0),
   ];
+}
+
+function normalizeExactGenerationPrefix(prefix: string): string | null {
+  if (!prefix) return null;
+  if (prefix.startsWith("page_render_") && prefix.endsWith("_")) {
+    return `${prefix}${BUILD_ID}`;
+  }
+  return shouldUseExactCacheGeneration(prefix) ? prefix : null;
 }
 
 async function deleteHtmlPaths(
@@ -390,9 +400,19 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   const hostname = url.hostname;
   const cacheNamespace = resolveCacheNamespace(env, hostname);
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${cacheNamespace}`;
-  const shouldBumpCacheVersion = shouldBumpCacheVersionForSelectivePurge({ prefixes, bumpVersion });
-  const shouldWarmCaches = shouldWarmCriticalCachesForSelectivePurge({ prefixes, bumpVersion });
-  const exactGenerationKeys = collectExactGenerationKeys(exactKeys, htmlPaths);
+  const shouldBumpCacheVersion = shouldBumpCacheVersionForSelectivePurge({
+    prefixes,
+    exactKeys,
+    htmlPaths,
+    bumpVersion,
+  });
+  const shouldWarmCaches = shouldWarmCriticalCachesForSelectivePurge({
+    prefixes,
+    exactKeys,
+    htmlPaths,
+    bumpVersion,
+  });
+  const exactGenerationKeys = collectExactGenerationKeys(exactKeys, htmlPaths, prefixes);
 
   try {
     let newVersion: number | null = null;
@@ -401,6 +421,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     let l2ExactKeysDeleted = 0;
     let htmlPathsDeleted = 0;
     let exactGenerationsBumped = 0;
+    let exactHtmlWarmScheduled = false;
 
     // The KV version scopes both HTML and L2 API Cache keys. Prefix purges must
     // bump it because Cloudflare Cache API cannot delete by prefix.
@@ -410,7 +431,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       newVersion = currentVersion + 1;
       await kv.put(cacheKey, newVersion.toString());
       console.log(`[SelectivePurge] Bumped storefront cache version to ${newVersion} for ${hostname}`);
-    } else if (exactKeys.length > 0 || htmlPaths.length > 0) {
+    } else if (exactGenerationKeys.length > 0 || htmlPaths.length > 0) {
       currentVersionForExactDeletes = await kv.get(cacheKey);
       currentExactGenerations = await readCurrentExactGenerations({
         store: kv,
@@ -439,6 +460,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       );
       if (htmlPaths.length > 0) {
         locals.cfContext.waitUntil(warmExactHtmlPaths(url.origin, htmlPaths));
+        exactHtmlWarmScheduled = true;
       }
       console.log(`[SelectivePurge] Bumped ${exactGenerationsBumped} exact cache generation(s) for ${hostname}`);
       console.log(`[SelectivePurge] Deleted ${l2ExactKeysDeleted}/${new Set(exactKeys).size} exact L2 keys for ${hostname}`);
@@ -458,6 +480,9 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     // Warm critical HTML caches only for groups that affect rendered pages.
     if (newVersion !== null && shouldWarmCaches) {
       locals.cfContext.waitUntil(warmCriticalCaches(url.origin));
+    }
+    if (htmlPaths.length > 0 && !exactHtmlWarmScheduled) {
+      locals.cfContext.waitUntil(warmExactHtmlPaths(url.origin, htmlPaths));
     }
 
     return new Response(
