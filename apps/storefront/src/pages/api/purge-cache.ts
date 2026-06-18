@@ -8,6 +8,7 @@ import {
   shouldBumpCacheVersionForSelectivePurge,
   shouldWarmCriticalCachesForSelectivePurge,
 } from "@/lib/cache-purge-policy";
+import { BUILD_ID } from "../../config/build-id";
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
 
@@ -119,6 +120,56 @@ async function warmCriticalCaches(baseUrl: string): Promise<void> {
   );
 }
 
+function buildL2CacheKeyUrl(hostname: string, key: string, version: string): string {
+  return `https://${hostname}/_api-cache/${encodeURIComponent(key)}?v=${version}&build=${BUILD_ID}`;
+}
+
+function buildHtmlCacheKeyUrl(origin: string, path: string, version: string): string {
+  const htmlUrl = new URL(path, origin);
+  if (/^\/products\/[^/]+$/.test(htmlUrl.pathname)) {
+    htmlUrl.searchParams.delete("size");
+    htmlUrl.searchParams.delete("color");
+  }
+  htmlUrl.searchParams.set("cache_v", `${version}-${BUILD_ID}`);
+  return htmlUrl.toString();
+}
+
+async function deleteL2ExactKeys(
+  hostname: string,
+  keys: readonly string[],
+  version: string | null,
+): Promise<number> {
+  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+  if (uniqueKeys.length === 0 || !version || typeof caches === "undefined") {
+    return 0;
+  }
+
+  const cache = (caches as CacheStorage & { default: Cache }).default;
+  const results = await Promise.allSettled(
+    uniqueKeys.map((key) => cache.delete(buildL2CacheKeyUrl(hostname, key, version))),
+  );
+
+  return results.filter((result) => result.status === "fulfilled" && result.value).length;
+}
+
+async function deleteHtmlPaths(
+  origin: string,
+  paths: readonly string[],
+  version: string | null,
+): Promise<number> {
+  const uniquePaths = [...new Set(paths.filter(Boolean))];
+  if (uniquePaths.length === 0 || !version || typeof caches === "undefined") {
+    return 0;
+  }
+
+  const cache = (caches as CacheStorage & { default: Cache }).default;
+  const results = await Promise.allSettled(
+    uniquePaths.map((path) => cache.delete(new Request(buildHtmlCacheKeyUrl(origin, path, version)))),
+  );
+
+  return results.filter((result) => result.status === "fulfilled" && result.value).length;
+}
+
 export const GET: APIRoute = async ({ url }) => {
   // Never accept purge credentials in URLs. Query strings are commonly logged
   // by proxies, analytics, and browser history; callers must use a header.
@@ -185,7 +236,13 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     });
   }
 
-  let body: { groups?: string[]; prefixes?: string[]; bumpVersion?: boolean };
+  let body: {
+    groups?: string[];
+    prefixes?: string[];
+    exactKeys?: string[];
+    htmlPaths?: string[];
+    bumpVersion?: boolean;
+  };
   try {
     body = await request.json();
   } catch {
@@ -195,7 +252,13 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     );
   }
 
-  const { groups = [], prefixes = [], bumpVersion = false } = body;
+  const {
+    groups = [],
+    prefixes = [],
+    exactKeys = [],
+    htmlPaths = [],
+    bumpVersion = false,
+  } = body;
   const hostname = url.hostname;
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
   const shouldBumpCacheVersion = shouldBumpCacheVersionForSelectivePurge({ prefixes, bumpVersion });
@@ -203,6 +266,9 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
 
   try {
     let newVersion: number | null = null;
+    let currentVersionForExactDeletes: string | null = null;
+    let l2ExactKeysDeleted = 0;
+    let htmlPathsDeleted = 0;
 
     // The KV version scopes both HTML and L2 API Cache keys. Prefix purges must
     // bump it because Cloudflare Cache API cannot delete by prefix.
@@ -212,12 +278,27 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       newVersion = currentVersion + 1;
       await kv.put(cacheKey, newVersion.toString());
       console.log(`[SelectivePurge] Bumped storefront cache version to ${newVersion} for ${hostname}`);
+    } else if (exactKeys.length > 0 || htmlPaths.length > 0) {
+      currentVersionForExactDeletes = await kv.get(cacheKey);
+      l2ExactKeysDeleted = await deleteL2ExactKeys(
+        hostname,
+        exactKeys,
+        currentVersionForExactDeletes,
+      );
+      htmlPathsDeleted = await deleteHtmlPaths(
+        url.origin,
+        htmlPaths,
+        currentVersionForExactDeletes,
+      );
+      console.log(`[SelectivePurge] Deleted ${l2ExactKeysDeleted}/${new Set(exactKeys).size} exact L2 keys for ${hostname}`);
+      console.log(`[SelectivePurge] Deleted ${htmlPathsDeleted}/${new Set(htmlPaths).size} exact HTML paths for ${hostname}`);
     }
 
     // Selectively clear L1 cache
-    if (prefixes.length > 0) {
-      clearL1ByPrefixes(prefixes);
-      console.log(`[SelectivePurge] Cleared L1 prefixes: ${prefixes.join(", ")}`);
+    const l1Prefixes = [...new Set([...prefixes, ...exactKeys].filter(Boolean))];
+    if (l1Prefixes.length > 0) {
+      clearL1ByPrefixes(l1Prefixes);
+      console.log(`[SelectivePurge] Cleared L1 prefixes: ${l1Prefixes.join(", ")}`);
     } else {
       smartCache.clear();
       console.log("[SelectivePurge] Cleared all L1 cache (no prefixes specified)");
@@ -237,7 +318,15 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
           cacheVersionBumped: shouldBumpCacheVersion,
           htmlVersionBumped: bumpVersion,
           newVersion,
-          prefixesCleared: prefixes.length > 0 ? prefixes.length : "all",
+          prefixesCleared: prefixes.length > 0
+            ? prefixes.length
+            : exactKeys.length > 0 || htmlPaths.length > 0
+              ? 0
+              : "all",
+          exactKeysCleared: exactKeys.length,
+          l2ExactKeysDeleted,
+          htmlPathsCleared: htmlPaths.length,
+          htmlPathsDeleted,
           cacheWarmingStarted: newVersion !== null && shouldWarmCaches,
         },
       }),

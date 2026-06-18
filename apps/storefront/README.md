@@ -119,7 +119,8 @@ Implements a two-layer edge caching strategy for HTML pages:
 ### Cache Invalidation
 
 When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN`:
-- KV version is bumped -- all cache keys change, effectively invalidating everything
+- HTML-affecting or broad prefix purges bump the KV version -- all cache keys change, effectively invalidating everything
+- Exact-key purges can delete current-version L2 API keys and exact HTML paths without bumping the KV version
 - L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
 - L2 entries with old version keys are never matched
 
@@ -192,7 +193,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
 | `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
 | `checkout/polar-session.ts` | Create Polar checkout session |
-| `purge-cache.ts` | Cache purge endpoint (bumps KV version) |
+| `purge-cache.ts` | Cache purge endpoint (KV version bumps, exact L1/L2 key deletes, exact HTML path deletes) |
 | `auth/` | Auth proxy routes |
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |

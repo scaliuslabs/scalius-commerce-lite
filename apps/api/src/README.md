@@ -263,7 +263,7 @@ Stock-changing paths must keep product availability fresh without broad catalog 
 - `invalidateProductAvailabilityCacheSubjects(subjects, c)` after the write commits.
 - `invalidateProductAvailabilityCaches(db, input, c)` for normal post-commit order/payment/delivery/cron paths.
 
-The helper deletes exact API product detail keys, query-varied product detail keys, product-search keys, and `api:search:*`, then schedules exact storefront prefixes: `product_slug_${slug}` and `product_variants_${productId}` with `bumpVersion: false`. Current call sites cover admin order create/edit/delete/restore/permanent-delete, bulk/manual shipment/status/COD/fulfillment/refund/return paths, order ingest/payment queue mutations, delivery webhook reconciliation, admin shipment refresh, and the scheduled orphan-reservation sweep.
+The helper deletes exact API product detail keys, query-varied product detail keys, product-search keys, and `api:search:*`, then schedules storefront exact data keys (`product_slug_${slug}`, `product_variants_${productId}`) plus exact product HTML paths (`/products/${slug}`) with `bumpVersion: false`. Current call sites cover admin order create/edit/delete/restore/permanent-delete, bulk/manual shipment/status/COD/fulfillment/refund/return paths, order ingest/payment queue mutations, delivery webhook reconciliation, admin shipment refresh, and the scheduled orphan-reservation sweep.
 
 ## Queue Consumer
 

@@ -31,6 +31,7 @@ export interface ProductAvailabilityCacheInvalidation {
   apiKeys: string[];
   apiPatterns: string[];
   storefrontPrefixes: string[];
+  storefrontHtmlPaths: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -355,10 +356,22 @@ export async function purgeStorefrontForGroups(
 export async function purgeStorefrontForPrefixes(
   prefixes: readonly string[],
   env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
-  options: { groups?: readonly string[]; bumpVersion?: boolean } = {},
+  options: {
+    groups?: readonly string[];
+    bumpVersion?: boolean;
+    exactKeys?: readonly string[];
+    htmlPaths?: readonly string[];
+  } = {},
 ): Promise<StorefrontPurgeResult> {
   const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
-  if (uniquePrefixes.length === 0 && options.bumpVersion !== true) {
+  const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
+  const uniqueHtmlPaths = [...new Set((options.htmlPaths ?? []).filter(Boolean))];
+  if (
+    uniquePrefixes.length === 0 &&
+    uniqueExactKeys.length === 0 &&
+    uniqueHtmlPaths.length === 0 &&
+    options.bumpVersion !== true
+  ) {
     return { attempted: false, ok: false, skippedReason: "no-prefixes" };
   }
 
@@ -368,14 +381,28 @@ export async function purgeStorefrontForPrefixes(
     return { attempted: false, ok: false, skippedReason: "missing-config" };
   }
 
+  const body: {
+    groups: string[];
+    prefixes: string[];
+    exactKeys?: string[];
+    htmlPaths?: string[];
+    bumpVersion: boolean;
+  } = {
+    groups: [...new Set(options.groups ?? [])],
+    prefixes: uniquePrefixes,
+    bumpVersion: options.bumpVersion === true,
+  };
+  if (uniqueExactKeys.length > 0) {
+    body.exactKeys = uniqueExactKeys;
+  }
+  if (uniqueHtmlPaths.length > 0) {
+    body.htmlPaths = uniqueHtmlPaths;
+  }
+
   const response = await fetch(normalizeStorefrontPurgeUrl(purgeUrl), {
     method: "POST",
     headers: storefrontPurgeHeaders(purgeToken),
-    body: JSON.stringify({
-      groups: [...new Set(options.groups ?? [])],
-      prefixes: uniquePrefixes,
-      bumpVersion: options.bumpVersion === true,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -428,11 +455,25 @@ export function triggerStorefrontPurgeForGroups(
 export function triggerStorefrontPurgeForPrefixes(
   prefixes: readonly string[],
   env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
-  options: { groups?: readonly string[]; bumpVersion?: boolean } = {},
+  options: {
+    groups?: readonly string[];
+    bumpVersion?: boolean;
+    exactKeys?: readonly string[];
+    htmlPaths?: readonly string[];
+  } = {},
   executionCtx?: ExecutionContext,
 ): void {
   const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
-  if (uniquePrefixes.length === 0 && options.bumpVersion !== true) return;
+  const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
+  const uniqueHtmlPaths = [...new Set((options.htmlPaths ?? []).filter(Boolean))];
+  if (
+    uniquePrefixes.length === 0 &&
+    uniqueExactKeys.length === 0 &&
+    uniqueHtmlPaths.length === 0 &&
+    options.bumpVersion !== true
+  ) {
+    return;
+  }
 
   const purgeUrl = env?.PURGE_URL;
   const purgeToken = env?.PURGE_TOKEN;
@@ -441,7 +482,7 @@ export function triggerStorefrontPurgeForPrefixes(
   const purgePromise = purgeStorefrontForPrefixes(
     uniquePrefixes,
     env,
-    options,
+    { ...options, exactKeys: uniqueExactKeys, htmlPaths: uniqueHtmlPaths },
   ).catch((err) =>
     console.error("[Cache] Storefront prefix purge failed:", err),
   );
@@ -674,10 +715,16 @@ export function getProductAvailabilityStorefrontPrefixes(
 export function collectProductAvailabilityCacheInvalidation(
   subjects: readonly ProductAvailabilityCacheSubject[],
 ): ProductAvailabilityCacheInvalidation {
+  const normalizedSubjects = uniqueAvailabilitySubjects(subjects);
   return {
-    apiKeys: getProductAvailabilityApiCacheKeys(subjects),
-    apiPatterns: getProductAvailabilityApiCachePatterns(subjects),
-    storefrontPrefixes: getProductAvailabilityStorefrontPrefixes(subjects),
+    apiKeys: getProductAvailabilityApiCacheKeys(normalizedSubjects),
+    apiPatterns: getProductAvailabilityApiCachePatterns(normalizedSubjects),
+    storefrontPrefixes: getProductAvailabilityStorefrontPrefixes(normalizedSubjects),
+    storefrontHtmlPaths: normalizedSubjects
+      .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
+        typeof subject.slug === "string" && subject.slug.length > 0,
+      )
+      .map((subject) => `/products/${subject.slug}`),
   };
 }
 
@@ -702,9 +749,14 @@ export async function invalidateProductAvailabilityCacheSubjects(
   ]);
 
   triggerStorefrontPurgeForPrefixes(
-    invalidation.storefrontPrefixes,
+    [],
     c.env,
-    { groups: ["products"], bumpVersion: false },
+    {
+      groups: ["products"],
+      bumpVersion: false,
+      exactKeys: invalidation.storefrontPrefixes,
+      htmlPaths: invalidation.storefrontHtmlPaths,
+    },
     getOptionalExecutionContext(c),
   );
 }

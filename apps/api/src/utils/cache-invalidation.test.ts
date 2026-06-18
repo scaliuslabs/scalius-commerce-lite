@@ -524,6 +524,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "product_slug_phone-case",
         "product_variants_prod_2",
       ],
+      storefrontHtmlPaths: ["/products/phone", "/products/phone-case"],
     });
 
     expect(getProductAvailabilityApiCacheKeys(subjects)).toEqual([
@@ -585,7 +586,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(String(init?.body))).toEqual({
       groups: ["products"],
-      prefixes: ["product_slug_phone", "product_variants_prod_1"],
+      prefixes: [],
+      exactKeys: ["product_slug_phone", "product_variants_prod_1"],
+      htmlPaths: ["/products/phone"],
       bumpVersion: false,
     });
   });
