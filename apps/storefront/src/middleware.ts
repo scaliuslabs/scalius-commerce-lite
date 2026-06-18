@@ -33,6 +33,7 @@ const CACHEABLE_PATHS = [
   /^\/$/,
   /^\/products\/[^/]+$/,
   /^\/categories\/[^/]+$/,
+  /^\/collections\/[^/]+$/,
   /^\/search\/?$/,
   /^\/sitemap\.xml$/,
   /^\/sitemap-.*\.xml$/,
