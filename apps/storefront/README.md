@@ -27,7 +27,8 @@ src/
     api/             # API client modules (per-domain fetch functions + typed unwrap)
     cart/            # Cart utility functions
     checkout/        # Checkout page logic + gateway handlers
-    edge-cache.ts    # L2 edge caching (Cache API + KV versioning + ALS)
+    edge-cache.ts    # L2 edge caching (Cache API + KV versioning/generations + ALS)
+    cache-generations.ts # Per-key product cache generation helpers
     smart-cache.ts   # In-memory LRU cache (L1)
     middleware-helper/ # CSP handler
     tracking/        # Analytics tracking
@@ -82,6 +83,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 - Strips tracking parameters (fbclid, gclid, UTM params, ref)
 - Strips product variant selection params (size, color) on product pages
 - Appends `cache_v={kvVersion}-{BUILD_ID}` to ensure deployments never serve stale HTML
+- Appends `cache_gen={generation}` on product pages. Exact product purges bump this per-product KV generation, so product HTML moves globally without bumping the whole storefront version.
 
 **Cache flow**:
 1. Check Cloudflare Cache API for cached HTML (with 500ms timeout)
@@ -105,7 +107,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 
 - Uses AsyncLocalStorage for per-request cache context (prevents cross-request state contamination)
 - Cache keys include KV version and BUILD_ID: `https://{hostname}/_api-cache/{key}?v={version}&build={BUILD_ID}`
-- `stale-while-revalidate=120` and `stale-if-error=300` for resilience
+- Exact product keys (`product_slug_*`, `product_variants_*`) also include `g={generation}` from `CACHE_CONTROL` KV. If that generation lookup fails, the exact key bypasses L1/L2 instead of risking a stale product response.
 - 500ms timeout on L2 cache operations to prevent hanging
 - In-flight request deduplication prevents duplicate API calls when multiple components request the same data simultaneously
 
@@ -120,9 +122,9 @@ Implements a two-layer edge caching strategy for HTML pages:
 
 When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN`:
 - HTML-affecting or broad prefix purges bump the KV version -- all cache keys change, effectively invalidating everything
-- Exact-key purges can delete current-version L2 API keys and exact HTML paths without bumping the KV version
+- Exact product purges write new per-key generations for `product_slug_*` / `product_variants_*`, delete current-version local Cache API entries as a best-effort cleanup, and warm touched product paths without bumping the global storefront version
 - L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
-- L2 entries with old version keys are never matched
+- L2 entries with old version or product-generation keys are never matched
 
 ### Cache TTL Constants
 
@@ -193,7 +195,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
 | `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
 | `checkout/polar-session.ts` | Create Polar checkout session |
-| `purge-cache.ts` | Cache purge endpoint (KV version bumps, exact L1/L2 key deletes, exact HTML path deletes) |
+| `purge-cache.ts` | Cache purge endpoint (KV version bumps, exact product generation bumps, exact L1/L2 key cleanup, exact HTML path warming) |
 | `auth/` | Auth proxy routes |
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |

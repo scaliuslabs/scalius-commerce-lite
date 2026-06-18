@@ -262,6 +262,7 @@ describe("storefront cache purge route", () => {
         newVersion?: number | null;
         prefixesCleared?: number | string;
         exactKeysCleared?: number;
+        exactGenerationsBumped?: number;
         l2ExactKeysDeleted?: number;
         htmlPathsCleared?: number;
         htmlPathsDeleted?: number;
@@ -276,13 +277,25 @@ describe("storefront cache purge route", () => {
       newVersion: null,
       prefixesCleared: 0,
       exactKeysCleared: 2,
+      exactGenerationsBumped: 2,
       l2ExactKeysDeleted: 2,
       htmlPathsCleared: 1,
       htmlPathsDeleted: 1,
-      cacheWarmingStarted: false,
+      cacheWarmingStarted: true,
     });
     expect(mocks.cfEnv.CACHE_CONTROL.get).toHaveBeenCalledWith("v_storefront.example.com");
-    expect(mocks.cfEnv.CACHE_CONTROL.put).not.toHaveBeenCalled();
+    expect(mocks.cfEnv.CACHE_CONTROL.put).not.toHaveBeenCalledWith(
+      "v_storefront.example.com",
+      expect.any(String),
+    );
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+      "g:storefront.example.com:product_slug_fish",
+      expect.any(String),
+    );
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+      "g:storefront.example.com:product_variants_prod_1",
+      expect.any(String),
+    );
     expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith([
       "product_slug_fish",
       "product_variants_prod_1",
@@ -300,7 +313,19 @@ describe("storefront cache purge route", () => {
       `https://storefront.example.com/products/fish?cache_v=4-${BUILD_ID}`,
     );
     expect(mocks.smartCacheClear).not.toHaveBeenCalled();
-    expect(mocks.waitUntil).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
+    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
+    await warmPromise;
+    const warmUrl = vi.mocked(fetch).mock.calls[0]?.[0] as URL;
+    expect(warmUrl.toString()).toBe("https://storefront.example.com/products/fish?size=m");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Cache-Control": "no-cache",
+          "X-Cache-Warm": "true",
+        }),
+      }),
+    );
   });
 });
