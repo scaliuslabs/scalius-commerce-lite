@@ -48,6 +48,7 @@ interface OrderToolbarProps {
   // Bulk actions
   onBulkDelete: () => void;
   onBulkShip: () => void;
+  isBulkActionBusy?: boolean;
   // Export & refresh
   onExportCSV: () => void;
   // Auto-refresh
@@ -142,6 +143,7 @@ export function OrderToolbar({
   onDateRangeChange,
   onBulkDelete,
   onBulkShip,
+  isBulkActionBusy = false,
   onExportCSV,
   autoRefreshEnabled,
   onToggleAutoRefresh,
@@ -154,6 +156,7 @@ export function OrderToolbar({
           variant="destructive"
           size="sm"
           onClick={onBulkDelete}
+          disabled={isBulkActionBusy}
           className="h-9 px-3 text-xs"
         >
           <Trash2 className="mr-1.5 h-3.5 w-3.5" />
@@ -165,10 +168,11 @@ export function OrderToolbar({
             variant="outline"
             size="sm"
             onClick={onBulkShip}
+            disabled={isBulkActionBusy}
             className="h-9 px-3 text-xs"
           >
             <Truck className="mr-1.5 h-3.5 w-3.5" />
-            Ship Orders ({selectedCount})
+            {isBulkActionBusy ? "Shipping..." : `Ship Orders (${selectedCount})`}
           </Button>
         )}
       </div>

@@ -376,6 +376,7 @@ function OrdersPage() {
     pagination,
     selectedIds,
     clearSelection,
+    deselectIds,
   } = useServerTable({
     columns,
     queryOptions: ordersQueryOptions(mapParams(search)),
@@ -459,9 +460,11 @@ function OrdersPage() {
   // ── Bulk shipment handler (after useServerTable for selectedIds/clearSelection) ──
   const handleBulkShipmentSubmit = useCallback(
     async (providerId: string) => {
+      if (isShipping || selectedIds.length === 0) return;
       setIsShipping(true);
       let successCount = 0;
       const shippedOrderIds: string[] = [];
+      const failedOrderIds: string[] = [];
       for (const orderId of selectedIds) {
         try {
           const result = await createOrderShipment({
@@ -474,6 +477,7 @@ function OrdersPage() {
             [orderId]: result,
           }));
         } catch (error) {
+          failedOrderIds.push(orderId);
           console.error(`Error for order ${orderId}:`, error);
         }
       }
@@ -498,9 +502,14 @@ function OrdersPage() {
       }
       setIsShipping(false);
       setIsShippingDialogOpen(false);
-      if (successCount === selectedIds.length) clearSelection();
+      if (successCount === selectedIds.length) {
+        clearSelection();
+      } else if (successCount > 0) {
+        deselectIds(shippedOrderIds);
+        toast.warning(`${failedOrderIds.length} selected order(s) still need shipment.`);
+      }
     },
-    [queryClient, selectedIds, clearSelection],
+    [queryClient, selectedIds, clearSelection, deselectIds, isShipping],
   );
 
   // ── Sync shipment statuses when data changes ──────────────────
@@ -571,7 +580,11 @@ function OrdersPage() {
       dateRange={dateRange}
       onDateRangeChange={onDateRangeChange}
       onBulkDelete={handleBulkDeleteClick}
-      onBulkShip={() => setIsShippingDialogOpen(true)}
+      onBulkShip={() => {
+        if (isShipping || selectedIds.length === 0) return;
+        setIsShippingDialogOpen(true);
+      }}
+      isBulkActionBusy={isShipping || bulkDeleteMut.isPending}
       onExportCSV={handleExportCSV}
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}
@@ -649,7 +662,10 @@ function OrdersPage() {
         <Suspense fallback={null}>
           <BulkShipDialog
             isOpen={isShippingDialogOpen}
-            onOpenChange={setIsShippingDialogOpen}
+            onOpenChange={(isOpen) => {
+              if (isShipping && !isOpen) return;
+              setIsShippingDialogOpen(isOpen);
+            }}
             isShipping={isShipping}
             onConfirm={handleBulkShipmentSubmit}
             itemCount={selectedIds.length}
