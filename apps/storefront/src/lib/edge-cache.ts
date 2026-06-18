@@ -14,11 +14,16 @@
 
 import { smartCache } from "./smart-cache";
 import { BUILD_ID } from "@/config/build-id";
+import {
+  resolveExactCacheGeneration,
+  shouldUseExactCacheGeneration,
+} from "./cache-generations";
 
 const DEFAULT_TTL_SECONDS = 8640000; // 24 hours - purge-cache handles invalidation
 
 // Timeout for L2 cache operations to prevent hanging (per CF best practices)
 const L2_CACHE_TIMEOUT_MS = 500;
+const GENERATION_LOOKUP_TIMEOUT_MS = 500;
 
 interface EdgeCacheOptions {
   ttlSeconds?: number;
@@ -26,6 +31,7 @@ interface EdgeCacheOptions {
 
 interface CacheContext {
   cache: Cache | null;
+  kvStore: KVNamespace | null;
   kvVersion: string | null;
   hostname: string;
   waitUntil: ((promise: Promise<unknown>) => void) | null;
@@ -57,6 +63,7 @@ export const cacheContextAls: AsyncLocalStorageLike<CacheContext> = _cacheAls;
 /** Default context used when ALS is not yet initialized. */
 const DEFAULT_CONTEXT: CacheContext = {
   cache: null,
+  kvStore: null,
   kvVersion: null,
   hostname: "localhost",
   waitUntil: null,
@@ -83,11 +90,12 @@ export function setEdgeCacheContext(
   kvVersion: string | null,
   hostname: string,
   waitUntil: ((promise: Promise<unknown>) => void) | null,
+  kvStore: KVNamespace | null = null,
 ): void {
   // Store context so getEdgeCacheContext() works for callers that
   // don't go through cacheContextAls.run() yet.
   // The ALS path is preferred — this is a compatibility shim.
-  _fallbackContext = { cache, kvVersion, hostname, waitUntil };
+  _fallbackContext = { cache, kvStore, kvVersion, hostname, waitUntil };
 }
 
 /** Fallback for callers not yet within ALS.run(). */
@@ -115,9 +123,9 @@ const inflight = new Map<string, Promise<unknown>>();
  * Uses the actual hostname to follow Cloudflare's recommendation.
  * Includes KV version and BUILD_ID to ensure proper invalidation.
  *
- * Cache key format: https://{hostname}/_api-cache/{encoded-key}?v={version}&build={BUILD_ID}
+ * Cache key format: https://{hostname}/_api-cache/{encoded-key}?v={version}&build={BUILD_ID}[&g={generation}]
  */
-function buildL2CacheKey(key: string): string {
+function buildL2CacheKey(key: string, generation: string | null): string {
   const ctx = getCacheContext();
   if (!ctx.kvVersion) {
     throw new Error("Cannot build L2 cache key without a cache version");
@@ -125,26 +133,71 @@ function buildL2CacheKey(key: string): string {
   const encodedKey = encodeURIComponent(key);
   // Use actual hostname with a reserved path prefix for API cache
   // This follows Cloudflare's recommendation to avoid hostname mismatches
-  return `https://${ctx.hostname}/_api-cache/${encodedKey}?v=${ctx.kvVersion}&build=${BUILD_ID}`;
+  const cacheKey = new URL(`https://${ctx.hostname}/_api-cache/${encodedKey}`);
+  cacheKey.searchParams.set("v", ctx.kvVersion);
+  cacheKey.searchParams.set("build", BUILD_ID);
+  if (generation !== null) {
+    cacheKey.searchParams.set("g", generation);
+  }
+  return cacheKey.toString();
 }
 
-function buildScopedMemoryKey(key: string, ctx: CacheContext): string {
+function buildScopedMemoryKey(
+  key: string,
+  ctx: CacheContext,
+  generation: string | null,
+): string {
   if (!ctx.kvVersion) {
     return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v=disabled`;
   }
-  return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v${ctx.kvVersion}`;
+  return `${key}:host=${ctx.hostname}:build=${BUILD_ID}:v${ctx.kvVersion}:g${generation ?? "global"}`;
+}
+
+async function resolveLogicalCacheGeneration(
+  key: string,
+  ctx: CacheContext,
+): Promise<
+  | { cacheEnabled: true; generation: string | null }
+  | { cacheEnabled: false; reason: string }
+> {
+  if (!shouldUseExactCacheGeneration(key)) {
+    return { cacheEnabled: true, generation: null };
+  }
+
+  if (!ctx.kvStore) {
+    return {
+      cacheEnabled: false,
+      reason: "KV generation store unavailable",
+    };
+  }
+
+  const generation = await resolveExactCacheGeneration({
+    store: ctx.kvStore,
+    hostname: ctx.hostname,
+    logicalKey: key,
+    timeoutMs: GENERATION_LOOKUP_TIMEOUT_MS,
+  });
+
+  if (generation.status === "unavailable") {
+    return {
+      cacheEnabled: false,
+      reason: generation.reason,
+    };
+  }
+
+  return { cacheEnabled: true, generation: generation.generation };
 }
 
 /**
  * Try to get data from L2 (Cloudflare Cache API).
  * Returns null if not found or if L2 is unavailable.
  */
-async function getFromL2<T>(key: string): Promise<T | null> {
+async function getFromL2<T>(key: string, generation: string | null): Promise<T | null> {
   const ctx = getCacheContext();
   if (!ctx.cache || !ctx.kvVersion) return null;
 
   try {
-    const cacheKeyUrl = buildL2CacheKey(key);
+    const cacheKeyUrl = buildL2CacheKey(key, generation);
 
     // Add timeout to cache.match to prevent hanging (per CF best practices)
     const cachedResponse = await Promise.race([
@@ -169,11 +222,16 @@ async function getFromL2<T>(key: string): Promise<T | null> {
  * Store data in L2 (Cloudflare Cache API).
  * Uses waitUntil to avoid blocking the response.
  */
-function storeInL2<T>(key: string, data: T, ttlSeconds: number): void {
+function storeInL2<T>(
+  key: string,
+  data: T,
+  ttlSeconds: number,
+  generation: string | null,
+): void {
   const ctx = getCacheContext();
   if (!ctx.cache || !ctx.kvVersion) return;
 
-  const cacheKeyUrl = buildL2CacheKey(key);
+  const cacheKeyUrl = buildL2CacheKey(key, generation);
   const response = new Response(JSON.stringify(data), {
     headers: {
       "Content-Type": "application/json",
@@ -183,6 +241,7 @@ function storeInL2<T>(key: string, data: T, ttlSeconds: number): void {
       "X-Cached-At": new Date().toISOString(),
       "X-Cache-Key": key,
       "X-Cache-Version": ctx.kvVersion,
+      ...(generation !== null ? { "X-Cache-Generation": generation } : {}),
     },
   });
 
@@ -215,9 +274,18 @@ export async function withEdgeCache<T>(
     return fetcher();
   }
 
+  const generationState = await resolveLogicalCacheGeneration(key, ctx);
+  if (!generationState.cacheEnabled) {
+    console.warn(
+      `[EdgeCache] Bypassing exact cache for ${key}: ${generationState.reason}`,
+    );
+    return fetcher();
+  }
+  const cacheGeneration = generationState.generation;
+
   // Include hostname, build, and KV version in memory keys so warm isolates
   // cannot share data across custom domains or deployed builds.
-  const memoryKey = buildScopedMemoryKey(key, ctx);
+  const memoryKey = buildScopedMemoryKey(key, ctx, cacheGeneration);
 
   // 1. Check L1 Cache (in-memory) - fastest
   const l1Cached = smartCache.get<T>(memoryKey);
@@ -235,7 +303,7 @@ export async function withEdgeCache<T>(
   const promise = (async (): Promise<T | null> => {
     try {
       // 3a. Check L2 Cache (Cloudflare Cache API) - survives cold starts
-      const l2Cached = await getFromL2<T>(key);
+      const l2Cached = await getFromL2<T>(key, cacheGeneration);
       if (l2Cached !== null) {
         // Populate L1 from L2 for faster subsequent requests
         smartCache.set(memoryKey, l2Cached, ttlSeconds);
@@ -250,7 +318,7 @@ export async function withEdgeCache<T>(
         smartCache.set(memoryKey, data, ttlSeconds);
 
         // Store in L2 (survives cold starts)
-        storeInL2(key, data, ttlSeconds);
+        storeInL2(key, data, ttlSeconds, cacheGeneration);
       }
 
       return data;

@@ -11,12 +11,17 @@ import {
   requestHasPrivateSession,
 } from "@/lib/cache-policy";
 import { resolveStorefrontCacheVersion } from "@/lib/cache-version";
+import {
+  productSlugCacheKeyFromUrl,
+  resolveExactCacheGeneration,
+} from "./lib/cache-generations";
 
 // Timeout constants to prevent hanging on slow/unavailable services
 const KV_TIMEOUT_MS = 1000;
 const CACHE_MATCH_TIMEOUT_MS = 500;
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
+const GENERATION_LOOKUP_TIMEOUT_MS = 500;
 
 type CloudflareCacheStorage = CacheStorage & {
   default: Cache;
@@ -68,6 +73,37 @@ function buildCacheKeyUrl(url: URL): URL {
   }
 
   return cacheUrl;
+}
+
+async function resolveProductHtmlGeneration({
+  cacheUrl,
+  kvBinding,
+  hostname,
+}: {
+  cacheUrl: URL;
+  kvBinding: KVNamespace;
+  hostname: string;
+}): Promise<
+  | { cacheEnabled: true; generation: string | null }
+  | { cacheEnabled: false; reason: string }
+> {
+  const logicalKey = productSlugCacheKeyFromUrl(cacheUrl);
+  if (!logicalKey) {
+    return { cacheEnabled: true, generation: null };
+  }
+
+  const generation = await resolveExactCacheGeneration({
+    store: kvBinding,
+    hostname,
+    logicalKey,
+    timeoutMs: GENERATION_LOOKUP_TIMEOUT_MS,
+  });
+
+  if (generation.status === "unavailable") {
+    return { cacheEnabled: false, reason: generation.reason };
+  }
+
+  return { cacheEnabled: true, generation: generation.generation };
 }
 
 // Resolve Cloudflare env — in production `cfEnv` is populated by the adapter;
@@ -130,7 +166,13 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
         // Set context for API functions (L2 caching) — both ALS and fallback
         const waitUntilFn = (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise);
-        setEdgeCacheContext(cfCache, cacheVersionResult.version, hostname, waitUntilFn);
+        setEdgeCacheContext(
+          cfCache,
+          cacheVersionResult.version,
+          hostname,
+          waitUntilFn,
+          kvBinding,
+        );
       }
     } catch (error: unknown) {
       console.warn("Failed to initialize edge cache context:", error);
@@ -143,6 +185,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   // calls read per-request context instead of module-level state.
   const cacheCtx = {
     cache: resolvedCacheVersion ? cfCache : null,
+    kvStore: kvBinding ?? null,
     kvVersion: resolvedCacheVersion,
     hostname,
     waitUntil: isCloudflareEnv ? ((promise: Promise<unknown>) => locals.cfContext.waitUntil(promise)) : null,
@@ -165,9 +208,32 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       const cacheVersion = resolvedCacheVersion;
 
       const cacheUrl = buildCacheKeyUrl(new URL(request.url));
+      const productGeneration = await resolveProductHtmlGeneration({
+        cacheUrl,
+        kvBinding,
+        hostname,
+      });
+      if (!productGeneration.cacheEnabled) {
+        const response = await next();
+        response.headers.set("X-Cache-Status", "BYPASS_GENERATION");
+        response.headers.set(
+          "Cache-Control",
+          "no-cache, no-store, must-revalidate",
+        );
+        response.headers.set("Pragma", "no-cache");
+        response.headers.set("Expires", "0");
+        console.warn(
+          `Bypassing product HTML cache for ${url.pathname}: ${productGeneration.reason}`,
+        );
+        return await setPageCspHeader(response, env ?? undefined);
+      }
+
       // IMPORTANT: include BUILD_ID so new deployments never serve stale HTML
       // that references removed JS/CSS bundles from previous builds.
       cacheUrl.searchParams.set("cache_v", `${cacheVersion}-${BUILD_ID}`);
+      if (productGeneration.generation !== null) {
+        cacheUrl.searchParams.set("cache_gen", productGeneration.generation);
+      }
       const cacheKey = new Request(cacheUrl.toString(), request);
 
       // Add timeout to cache.match to prevent hanging (per CF best practices)
@@ -189,7 +255,10 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         );
         response.headers.set("Pragma", "no-cache");
         response.headers.set("Expires", "0");
-        const cacheStatus = `HIT; v=${cacheVersion}; build=${BUILD_ID}; project=${hostname}`;
+        const generationSuffix = productGeneration.generation !== null
+          ? `; gen=${productGeneration.generation}`
+          : "";
+        const cacheStatus = `HIT; v=${cacheVersion}; build=${BUILD_ID}${generationSuffix}; project=${hostname}`;
         response.headers.set("X-Cache-Status", cacheStatus);
         return await setPageCspHeader(response, env ?? undefined);
       }
@@ -208,7 +277,9 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         response.headers.set("Expires", "0");
         response.headers.set(
           "X-Cache-Status",
-          `MISS; v=${cacheVersion}; build=${BUILD_ID}; project=${hostname}`,
+          `MISS; v=${cacheVersion}; build=${BUILD_ID}${
+            productGeneration.generation !== null ? `; gen=${productGeneration.generation}` : ""
+          }; project=${hostname}`,
         );
         await setPageCspHeader(response, env ?? undefined);
 

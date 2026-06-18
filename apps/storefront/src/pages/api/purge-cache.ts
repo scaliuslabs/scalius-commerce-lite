@@ -8,6 +8,10 @@ import {
   shouldBumpCacheVersionForSelectivePurge,
   shouldWarmCriticalCachesForSelectivePurge,
 } from "@/lib/cache-purge-policy";
+import {
+  bumpExactCacheGenerations,
+  productSlugCacheKeyFromPath,
+} from "../../lib/cache-generations";
 import { BUILD_ID } from "../../config/build-id";
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
@@ -120,6 +124,46 @@ async function warmCriticalCaches(baseUrl: string): Promise<void> {
   );
 }
 
+async function warmExactHtmlPaths(baseUrl: string, paths: readonly string[]): Promise<void> {
+  const uniquePaths = [...new Set(paths.filter(Boolean))];
+  if (uniquePaths.length === 0) {
+    return;
+  }
+
+  console.log(`[CacheWarm] Starting exact warm for ${uniquePaths.length} path(s) on ${baseUrl}...`);
+
+  const results = await Promise.allSettled(
+    uniquePaths.map(async (path) => {
+      const start = Date.now();
+      try {
+        const response = await fetch(new URL(path, baseUrl), {
+          headers: {
+            "X-Cache-Warm": "true",
+            "Cache-Control": "no-cache",
+          },
+        });
+
+        const duration = Date.now() - start;
+        if (response.ok) {
+          console.log(`[CacheWarm] ${path} exact-warmed successfully in ${duration}ms`);
+        } else {
+          console.warn(`[CacheWarm] ${path} exact warm returned ${response.status} in ${duration}ms`);
+        }
+        return response.ok;
+      } catch (error: unknown) {
+        const duration = Date.now() - start;
+        console.error(`[CacheWarm] ${path} exact warm failed after ${duration}ms:`, error);
+        throw error;
+      }
+    }),
+  );
+
+  const successful = results.filter(
+    (result) => result.status === "fulfilled" && result.value === true,
+  ).length;
+  console.log(`[CacheWarm] Exact warm completed: ${successful}/${uniquePaths.length} path(s) warmed`);
+}
+
 function buildL2CacheKeyUrl(hostname: string, key: string, version: string): string {
   return `https://${hostname}/_api-cache/${encodeURIComponent(key)}?v=${version}&build=${BUILD_ID}`;
 }
@@ -150,6 +194,18 @@ async function deleteL2ExactKeys(
   );
 
   return results.filter((result) => result.status === "fulfilled" && result.value).length;
+}
+
+function collectExactGenerationKeys(
+  exactKeys: readonly string[],
+  htmlPaths: readonly string[],
+): string[] {
+  return [
+    ...exactKeys,
+    ...htmlPaths
+      .map((path) => productSlugCacheKeyFromPath(path))
+      .filter((key): key is string => typeof key === "string" && key.length > 0),
+  ];
 }
 
 async function deleteHtmlPaths(
@@ -263,12 +319,14 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   const cacheKey = `${CACHE_VERSION_KEY_PREFIX}${hostname}`;
   const shouldBumpCacheVersion = shouldBumpCacheVersionForSelectivePurge({ prefixes, bumpVersion });
   const shouldWarmCaches = shouldWarmCriticalCachesForSelectivePurge({ prefixes, bumpVersion });
+  const exactGenerationKeys = collectExactGenerationKeys(exactKeys, htmlPaths);
 
   try {
     let newVersion: number | null = null;
     let currentVersionForExactDeletes: string | null = null;
     let l2ExactKeysDeleted = 0;
     let htmlPathsDeleted = 0;
+    let exactGenerationsBumped = 0;
 
     // The KV version scopes both HTML and L2 API Cache keys. Prefix purges must
     // bump it because Cloudflare Cache API cannot delete by prefix.
@@ -279,6 +337,13 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       await kv.put(cacheKey, newVersion.toString());
       console.log(`[SelectivePurge] Bumped storefront cache version to ${newVersion} for ${hostname}`);
     } else if (exactKeys.length > 0 || htmlPaths.length > 0) {
+      const bumpedGenerations = await bumpExactCacheGenerations({
+        store: kv,
+        hostname,
+        logicalKeys: exactGenerationKeys,
+      });
+      exactGenerationsBumped = bumpedGenerations.length;
+
       currentVersionForExactDeletes = await kv.get(cacheKey);
       l2ExactKeysDeleted = await deleteL2ExactKeys(
         hostname,
@@ -290,12 +355,16 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         htmlPaths,
         currentVersionForExactDeletes,
       );
+      if (htmlPaths.length > 0) {
+        locals.cfContext.waitUntil(warmExactHtmlPaths(url.origin, htmlPaths));
+      }
+      console.log(`[SelectivePurge] Bumped ${exactGenerationsBumped} exact cache generation(s) for ${hostname}`);
       console.log(`[SelectivePurge] Deleted ${l2ExactKeysDeleted}/${new Set(exactKeys).size} exact L2 keys for ${hostname}`);
       console.log(`[SelectivePurge] Deleted ${htmlPathsDeleted}/${new Set(htmlPaths).size} exact HTML paths for ${hostname}`);
     }
 
     // Selectively clear L1 cache
-    const l1Prefixes = [...new Set([...prefixes, ...exactKeys].filter(Boolean))];
+    const l1Prefixes = [...new Set([...prefixes, ...exactGenerationKeys].filter(Boolean))];
     if (l1Prefixes.length > 0) {
       clearL1ByPrefixes(l1Prefixes);
       console.log(`[SelectivePurge] Cleared L1 prefixes: ${l1Prefixes.join(", ")}`);
@@ -324,10 +393,13 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
               ? 0
               : "all",
           exactKeysCleared: exactKeys.length,
+          exactGenerationsBumped,
           l2ExactKeysDeleted,
           htmlPathsCleared: htmlPaths.length,
           htmlPathsDeleted,
-          cacheWarmingStarted: newVersion !== null && shouldWarmCaches,
+          cacheWarmingStarted:
+            (newVersion !== null && shouldWarmCaches) ||
+            (newVersion === null && htmlPaths.length > 0),
         },
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
