@@ -169,9 +169,7 @@ export async function listOrders(db: Database, options: {
     }
 
     if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        const endTs = Math.floor(endOfDay.getTime() / 1000);
+        const endTs = Math.floor(endDate.getTime() / 1000);
         whereConditions.push(sql`${orders.createdAt} <= ${endTs}`);
     }
 

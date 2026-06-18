@@ -22,6 +22,7 @@ import {
     resolveProductAvailabilityCacheSubjects,
     tryResolveProductAvailabilityCacheSubjects,
 } from "../../utils/cache-invalidation";
+import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -143,8 +144,14 @@ const listOrdersRoute = createRoute({
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed orders" }),
             sort: z.enum(["customerName", "totalAmount", "status", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
-            startDate: z.string().optional().openapi({ description: "Start date filter" }),
-            endDate: z.string().optional().openapi({ description: "End date filter" })
+            startDate: z.string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/)
+                .optional()
+                .openapi({ description: "Start date filter (YYYY-MM-DD, Bangladesh calendar day)" }),
+            endDate: z.string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/)
+                .optional()
+                .openapi({ description: "End date filter (YYYY-MM-DD, Bangladesh calendar day)" })
         })
     },
     responses: {
@@ -166,8 +173,8 @@ app.openapi(listOrdersRoute, async (c) => {
         showTrashed: query.trashed === "true",
         sort: query.sort,
         order: query.order as "asc" | "desc",
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined
+        startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
+        endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end")
     });
     return ok(c, result);
 });
