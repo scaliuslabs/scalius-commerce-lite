@@ -57,8 +57,11 @@ export interface UseServerTableOptions<TData> {
 export interface UseServerTableReturn<TData> {
   table: Table<TData>;
   rawData: unknown;
+  error: unknown;
+  isError: boolean;
   isFetching: boolean;
   isLoading: boolean;
+  refetch: () => Promise<unknown>;
   pagination: ServerTablePagination;
   selectedRows: TData[];
   selectedIds: string[];
@@ -82,7 +85,14 @@ export function useServerTable<TData>({
   initialColumnVisibility = {},
 }: UseServerTableOptions<TData>): UseServerTableReturn<TData> {
   // Show cached rows immediately, then refresh them in the background on route return.
-  const { data: rawData, isFetching, isLoading } = useQuery({
+  const {
+    data: rawData,
+    error,
+    isError,
+    isFetching,
+    isLoading,
+    refetch,
+  } = useQuery({
     ...qOpts,
     placeholderData: keepPreviousData,
   });
@@ -183,8 +193,11 @@ export function useServerTable<TData>({
   return {
     table,
     rawData,
+    error,
+    isError,
     isFetching,
     isLoading,
+    refetch,
     pagination,
     selectedRows,
     selectedIds,

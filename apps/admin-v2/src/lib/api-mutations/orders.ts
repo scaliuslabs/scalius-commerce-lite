@@ -163,6 +163,7 @@ export function useUpdateOrderCod() {
   return useMutation({
     mutationFn: (data: UpdateOrderCodInput) => updateOrderCod({ data }),
     onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });

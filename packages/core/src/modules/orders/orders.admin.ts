@@ -60,6 +60,14 @@ const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
     OrderStatus.PARTIALLY_REFUNDED,
 ]);
 type SQLiteBatchItem = BatchItem<"sqlite">;
+const MAX_ORDER_LIST_LIMIT = 100;
+
+function normalizeListPositiveInteger(value: number | undefined, fallback: number, max?: number): number {
+    if (!Number.isFinite(value)) return fallback;
+    const integer = Math.trunc(value as number);
+    const minBounded = Math.max(1, integer);
+    return max == null ? minBounded : Math.min(minBounded, max);
+}
 
 function assertTrashRestoreInventoryActionAllowed(status: string, inventoryAction: string): void {
     if (inventoryAction === "reserved" && isStockReservableStatus(status)) return;
@@ -113,7 +121,7 @@ export async function listOrders(db: Database, options: {
     const {
         search,
         status,
-        page = 1,
+        page: rawPage = 1,
         limit: rawLimit = 10,
         showTrashed = false,
         sort = "updatedAt",
@@ -121,7 +129,8 @@ export async function listOrders(db: Database, options: {
         startDate,
         endDate,
     } = options;
-    const limit = Math.min(Math.max(rawLimit, 1), 100);
+    const page = normalizeListPositiveInteger(rawPage, 1);
+    const limit = normalizeListPositiveInteger(rawLimit, 10, MAX_ORDER_LIST_LIMIT);
     const offset = (page - 1) * limit;
 
     const whereConditions: SQL[] = [];

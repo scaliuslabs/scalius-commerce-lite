@@ -23,4 +23,15 @@ describe("useServerTable boundaries", () => {
     expect(source).toContain("const idSet = new Set(ids)");
     expect(source).toContain("if (idSet.has(id))");
   });
+
+  it("returns query errors and refetch for table-level failure states", () => {
+    const source = readFileSync(USE_SERVER_TABLE_SOURCE, "utf8");
+
+    expect(source).toContain("error,");
+    expect(source).toContain("isError,");
+    expect(source).toContain("refetch,");
+    expect(source).toContain("error: unknown");
+    expect(source).toContain("isError: boolean");
+    expect(source).toContain("refetch: () => Promise<unknown>");
+  });
 });

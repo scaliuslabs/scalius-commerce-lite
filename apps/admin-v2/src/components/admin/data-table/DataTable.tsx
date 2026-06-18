@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { flexRender, type Table, type Row } from "@tanstack/react-table";
+import { AlertTriangle } from "lucide-react";
 import {
   Table as UITable,
   TableBody,
@@ -13,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DataTablePagination } from "./DataTablePagination";
 import { DataTableLoadingOverlay } from "./DataTableLoadingOverlay";
@@ -34,6 +36,8 @@ interface DataTableProps<TData> {
   isLoading: boolean;
   toolbar?: ReactNode;
   emptyState?: EmptyStateConfig;
+  error?: unknown;
+  onRetry?: () => void;
   mobileCardRenderer?: (row: Row<TData>) => ReactNode;
   itemLabel?: string;
   pageSizeOptions?: number[];
@@ -50,6 +54,8 @@ export function DataTable<TData>({
   isLoading,
   toolbar,
   emptyState,
+  error,
+  onRetry,
   mobileCardRenderer,
   itemLabel = "items",
   pageSizeOptions,
@@ -60,7 +66,32 @@ export function DataTable<TData>({
   const isMobile = useIsMobile();
   const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
-  const showInitialLoading = isLoading && !hasRows;
+  const showError = Boolean(error) && !isLoading;
+  const showInitialLoading = isLoading && !hasRows && !showError;
+
+  const renderErrorState = () => (
+    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+      <AlertTriangle className="mb-3 h-10 w-10 text-destructive/70" />
+      <p className="text-sm font-medium text-foreground">
+        Could not load this list
+      </p>
+      <p className="mt-1 max-w-md text-xs text-muted-foreground">
+        The latest rows could not be fetched. Retry before taking bulk actions so
+        you do not act on stale data.
+      </p>
+      {onRetry && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          onClick={onRetry}
+        >
+          Retry
+        </Button>
+      )}
+    </div>
+  );
 
   const renderDesktopTable = (includeDragColumn = false) => (
     <UITable>
@@ -87,7 +118,15 @@ export function DataTable<TData>({
         ))}
       </TableHeader>
       <TableBody>
-        {hasRows ? (
+        {showError ? (
+          <TableRow>
+            <TableCell
+              colSpan={table.getAllColumns().length + (includeDragColumn ? 1 : 0)}
+            >
+              {renderErrorState()}
+            </TableCell>
+          </TableRow>
+        ) : hasRows ? (
           rows.map((row) => (
             <TableRow
               key={row.id}
@@ -129,12 +168,14 @@ export function DataTable<TData>({
       {toolbar}
 
       <div className="relative rounded-md border">
-        <DataTableLoadingOverlay visible={isFetching && !isLoading} />
+        <DataTableLoadingOverlay visible={isFetching && !isLoading && !showError} />
 
         {isMobile && mobileCardRenderer ? (
           // Mobile card view
           <div className="divide-y">
-            {hasRows ? (
+            {showError ? (
+              renderErrorState()
+            ) : hasRows ? (
               rows.map((row) => (
                 <div key={row.id}>{mobileCardRenderer(row)}</div>
               ))
@@ -162,11 +203,13 @@ export function DataTable<TData>({
         )}
       </div>
 
-      <DataTablePagination
-        table={table}
-        itemLabel={itemLabel}
-        pageSizeOptions={pageSizeOptions}
-      />
+      {!showError && (
+        <DataTablePagination
+          table={table}
+          itemLabel={itemLabel}
+          pageSizeOptions={pageSizeOptions}
+        />
+      )}
     </div>
   );
 }
