@@ -19,6 +19,37 @@ export interface PaginationInfo {
   totalPages: number;
 }
 
+export const DEFAULT_LIST_MAX_LIMIT = 100;
+
+export function normalizeListPositiveInteger(
+  value: unknown,
+  fallback: number,
+  options: { max?: number } = {},
+): number {
+  const numeric = (() => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && value.trim() !== "") return Number(value);
+    return Number.NaN;
+  })();
+
+  if (!Number.isFinite(numeric)) return fallback;
+
+  const integer = Math.trunc(numeric);
+  const minBounded = Math.max(1, integer);
+  return options.max == null ? minBounded : Math.min(minBounded, options.max);
+}
+
+export function getCanonicalPageForPagination(
+  page: unknown,
+  pagination: Pick<PaginationInfo, "total" | "totalPages">,
+): number {
+  const currentPage = normalizeListPositiveInteger(page, 1);
+  if (pagination.totalPages > 0) {
+    return Math.min(currentPage, pagination.totalPages);
+  }
+  return pagination.total > 0 ? currentPage : 1;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  createListSearchSchema
 // ═══════════════════════════════════════════════════════════════════
@@ -55,13 +86,26 @@ export function createListSearchSchema<T extends readonly [string, ...string[]]>
     order?: "asc" | "desc";
   },
 ) {
-  const defaultLimit = defaults?.limit ?? 10;
+  const defaultLimit = normalizeListPositiveInteger(
+    defaults?.limit ?? 10,
+    10,
+    { max: DEFAULT_LIST_MAX_LIMIT },
+  );
   const defaultSort = (defaults?.sort ?? sortOptions[0]) as T[number];
   const defaultOrder = defaults?.order ?? "desc";
 
   return z.object({
-    page: z.number().default(1).catch(1),
-    limit: z.number().default(defaultLimit).catch(defaultLimit),
+    page: z.preprocess(
+      (value) => normalizeListPositiveInteger(value, 1),
+      z.number(),
+    ).default(1).catch(1),
+    limit: z.preprocess(
+      (value) =>
+        normalizeListPositiveInteger(value, defaultLimit, {
+          max: DEFAULT_LIST_MAX_LIMIT,
+        }),
+      z.number(),
+    ).default(defaultLimit).catch(defaultLimit),
     search: z.string().default("").catch(""),
     sort: z.enum(sortOptions).default(defaultSort).catch(defaultSort),
     order: z.enum(["asc", "desc"] as const).default(defaultOrder).catch(defaultOrder),

@@ -52,6 +52,19 @@ describe("order list interactions", () => {
     );
   });
 
+  it("surfaces list errors and canonicalizes out-of-range pages", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+
+    expect(routeSource).toContain("getCanonicalPageForPagination");
+    expect(routeSource).toContain("const canonicalPage = getCanonicalPageForPagination(search.page, pagination)");
+    expect(routeSource).toContain("handleNavigate({ page: canonicalPage })");
+    expect(routeSource).toContain("error: rawOrdersError");
+    expect(routeSource).toContain("isError: isOrdersError");
+    expect(routeSource).toContain("refetch: refetchOrders");
+    expect(routeSource).toContain("error={ordersError}");
+    expect(routeSource).toContain("void refetchOrders()");
+  });
+
   it("does not advertise mobile range selection that is not implemented", () => {
     const source = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
 

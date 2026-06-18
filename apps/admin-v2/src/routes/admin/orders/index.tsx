@@ -10,7 +10,11 @@ import {
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { toast } from "sonner";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import {
+  createListSearchSchema,
+  createDataSelector,
+  getCanonicalPageForPagination,
+} from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { Row } from "@tanstack/react-table";
 import type { OrderListItem } from "@scalius/core/modules/orders";
@@ -371,8 +375,11 @@ function OrdersPage() {
   const {
     table,
     rawData: ordersRawData,
+    error: rawOrdersError,
+    isError: isOrdersError,
     isFetching,
     isLoading,
+    refetch: refetchOrders,
     pagination,
     selectedIds,
     clearSelection,
@@ -389,6 +396,14 @@ function OrdersPage() {
     onSortingChange,
     defaultPageSize: 10,
   });
+  const ordersError = isOrdersError ? rawOrdersError : null;
+
+  useEffect(() => {
+    if (!ordersRawData) return;
+    const canonicalPage = getCanonicalPageForPagination(search.page, pagination);
+    if (canonicalPage === search.page) return;
+    handleNavigate({ page: canonicalPage });
+  }, [handleNavigate, ordersRawData, pagination, search.page]);
 
   // ── Export CSV ─────────────────────────────────────────────────
 
@@ -616,6 +631,10 @@ function OrdersPage() {
             table={table}
             isFetching={isFetching}
             isLoading={isLoading}
+            error={ordersError}
+            onRetry={() => {
+              void refetchOrders();
+            }}
             toolbar={toolbar}
             itemLabel="orders"
             pageSizeOptions={[10, 20, 50, 100]}
