@@ -246,6 +246,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
   import { trackFbPurchase } from "@/lib/analytics";
   import type { OrderItem, OrderReceipt } from "@/lib/api";
   import { clearCheckoutSession } from "@/lib/checkout/session-state";
+  import { claimMetaPurchaseTracking } from "@/lib/tracking/meta-purchase-guard";
   import { clearCart } from "@/store/cart";
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -274,37 +275,41 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
       const { order, items: orderItems } = parsedData;
 
       setTimeout(() => {
-        if (typeof window.fbq === "function" && order && orderItems) {
-          trackFbPurchase(
-            {
-              order_id: order.id,
-              content_name: `Order ${order.id}`,
-              content_ids: orderItems.map(
-                (item) => item.variantId || item.productId
-              ),
-              content_type: "product_group",
-              contents: orderItems.map((item) => ({
-                id: item.variantId || item.productId,
-                quantity: item.quantity,
-                item_price: item.price,
-              })),
-              currency: window.__CURRENCY_CODE__ || "BDT",
-              num_items: orderItems.reduce(
-                (sum, item) => sum + item.quantity,
-                0
-              ),
-              value: order.totalAmount,
-            },
-            {}
-          );
-          console.log("FB Purchase event tracked for order:", order.id);
-        } else {
-          if (!order || !orderItems) {
-            console.warn("Order data not available for FB Purchase tracking.");
-          } else {
-            console.warn("fbq not available when attempting to track Purchase");
-          }
+        if (!order || !orderItems) {
+          console.warn("Order data not available for FB Purchase tracking.");
+          return;
         }
+
+        const claim = claimMetaPurchaseTracking(order.id);
+        if (!claim.shouldSend) {
+          console.info("FB Purchase event already tracked for order:", order.id);
+          return;
+        }
+
+        trackFbPurchase(
+          {
+            order_id: order.id,
+            content_name: `Order ${order.id}`,
+            content_ids: orderItems.map(
+              (item) => item.variantId || item.productId
+            ),
+            content_type: "product_group",
+            contents: orderItems.map((item) => ({
+              id: item.variantId || item.productId,
+              quantity: item.quantity,
+              item_price: item.price,
+            })),
+            currency: window.__CURRENCY_CODE__ || "BDT",
+            num_items: orderItems.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            ),
+            value: order.totalAmount,
+          },
+          {},
+          { eventId: claim.eventId }
+        );
+        console.log("FB Purchase event tracked for order:", order.id);
       }, 500);
     } catch (error: unknown) {
       console.error("FB Purchase: Error parsing data attribute:", error);

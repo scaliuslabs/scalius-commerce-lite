@@ -7,7 +7,8 @@
  *
  * NOW INCLUDES SERVER-SIDE EVENT DISPATCHING FOR META CONVERSIONS API (CAPI).
  */
-import { sendServerEvent } from "@/lib/tracking/meta-capi";
+import { sendServerEvent } from "./tracking/meta-capi";
+import { createMetaEventId } from "./tracking/meta-event-id";
 
 // Window augmentation for dataLayer and fbq is in src/env.d.ts
 
@@ -29,6 +30,14 @@ interface CapiUserData {
   em?: string; // Email
   ph?: string; // Phone
   // Add other potential PII fields here if needed in the future
+}
+
+interface MetaEventOptions {
+  eventId?: string;
+}
+
+function pixelEventOptions(eventId: string) {
+  return { eventID: eventId };
 }
 
 /**
@@ -237,9 +246,11 @@ export function trackFbViewContent(data: {
   currency?: string;
   value?: number;
 }): void {
+  const eventId = createMetaEventId("ViewContent");
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "ViewContent", data);
+    window.fbq("track", "ViewContent", data, pixelEventOptions(eventId));
   }
 
   const products = mapFbContentsToZarazProducts(
@@ -260,6 +271,7 @@ export function trackFbViewContent(data: {
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "ViewContent",
     customData: {
       content_ids: data.content_ids,
@@ -284,9 +296,11 @@ export function trackFbAddToCart(data: {
   currency?: string;
   value?: number;
 }): void {
+  const eventId = createMetaEventId("AddToCart");
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "AddToCart", data);
+    window.fbq("track", "AddToCart", data, pixelEventOptions(eventId));
   }
 
   const products = mapFbContentsToZarazProducts(
@@ -307,6 +321,7 @@ export function trackFbAddToCart(data: {
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "AddToCart",
     customData: {
       content_ids: data.content_ids,
@@ -331,9 +346,11 @@ export function trackFbInitiateCheckout(data: {
   num_items?: number;
   value?: number;
 }): void {
+  const eventId = createMetaEventId("InitiateCheckout");
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "InitiateCheckout", data);
+    window.fbq("track", "InitiateCheckout", data, pixelEventOptions(eventId));
   }
 
   sendZarazEcommerce("Checkout Started", {
@@ -348,6 +365,7 @@ export function trackFbInitiateCheckout(data: {
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "InitiateCheckout",
     customData: {
       content_ids: data.content_ids,
@@ -371,9 +389,11 @@ export function trackFbAddPaymentInfo(data?: {
   currency?: string;
   value?: number;
 }): void {
+  const eventId = createMetaEventId("AddPaymentInfo");
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "AddPaymentInfo", data || {});
+    window.fbq("track", "AddPaymentInfo", data || {}, pixelEventOptions(eventId));
   }
 
   sendZarazEcommerce("Payment Info Entered", {
@@ -386,6 +406,7 @@ export function trackFbAddPaymentInfo(data?: {
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "AddPaymentInfo",
     customData: data,
   });
@@ -407,10 +428,14 @@ export function trackFbPurchase(
     order_id?: string;
   },
   userData: CapiUserData, // This is crucial for matching purchase events.
+  options: MetaEventOptions = {},
 ): void {
+  const eventId =
+    options.eventId ?? createMetaEventId("Purchase", data.order_id);
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "Purchase", data);
+    window.fbq("track", "Purchase", data, pixelEventOptions(eventId));
   }
 
   sendZarazEcommerce("Order Completed", {
@@ -424,6 +449,7 @@ export function trackFbPurchase(
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "Purchase",
     userData: userData, // Pass explicit PII for the most important event.
     customData: {
@@ -444,15 +470,18 @@ export function trackFbLead(
   },
   userData?: CapiUserData,
 ): void {
+  const eventId = createMetaEventId("Lead");
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "Lead", data || {});
+    window.fbq("track", "Lead", data || {}, pixelEventOptions(eventId));
   }
 
   sendZarazTrack("Lead", { ...(data ?? {}) });
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "Lead",
     userData: userData,
     customData: data,
@@ -471,15 +500,23 @@ export function trackFbCompleteRegistration(
   },
   userData?: CapiUserData,
 ): void {
+  const eventId = createMetaEventId("CompleteRegistration");
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "CompleteRegistration", data || {});
+    window.fbq(
+      "track",
+      "CompleteRegistration",
+      data || {},
+      pixelEventOptions(eventId),
+    );
   }
 
   sendZarazTrack("CompleteRegistration", { ...(data ?? {}) });
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "CompleteRegistration",
     userData: userData,
     customData: data,
@@ -497,9 +534,11 @@ export function trackFbSearch(data: {
   search_string: string;
   value?: number;
 }): void {
+  const eventId = createMetaEventId("Search");
+
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "Search", data);
+    window.fbq("track", "Search", data, pixelEventOptions(eventId));
   }
 
   sendZarazEcommerce("Products Searched", {
@@ -518,6 +557,7 @@ export function trackFbSearch(data: {
 
   // CAPI: Server-side Event
   sendServerEvent({
+    eventId,
     eventName: "Search",
     customData: {
       ...data,

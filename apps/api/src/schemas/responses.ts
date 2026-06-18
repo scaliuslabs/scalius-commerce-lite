@@ -63,6 +63,10 @@ export const errorResponses = {
     description: "Not found",
     content: { "application/json": { schema: errorResponseSchema } },
   },
+  429: {
+    description: "Rate limit exceeded",
+    content: { "application/json": { schema: errorResponseSchema } },
+  },
   500: {
     description: "Server error",
     content: { "application/json": { schema: errorResponseSchema } },

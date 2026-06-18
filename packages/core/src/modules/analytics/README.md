@@ -61,8 +61,8 @@ Returns per-day arrays for the last N days with zero-filling for days with no da
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `getCapiSettings` | `(db: Database)` | Fetch singleton Meta CAPI settings from `metaConversionsSettings` (id = `"singleton"`). Returns `MetaConversionsSettings | null`. Typed catch blocks (`error: unknown`). |
-| `logCapiEvent` | `(db: Database, logData, retentionHours = 12)` | Insert event log + trigger lazy cleanup via fire-and-forget `void performLogCleanup()`. Uses `@paralleldrive/cuid2` for log IDs. |
+| `getCapiSettings` | `(db: Database, encryptionKey?: string)` | Fetch singleton Meta CAPI settings from `metaConversionsSettings` (id = `"singleton"`). Gracefully decrypts encrypted access tokens when a key is supplied and tolerates legacy plaintext. Returns `MetaConversionsSettings | null`. Typed catch blocks (`error: unknown`). |
+| `logCapiEvent` | `(db: Database, logData, retentionHours = 12)` | Insert event log + trigger lazy cleanup via fire-and-forget `void performLogCleanup()`. Callers must pass redacted request payloads; the Meta CAPI route also redacts legacy stored payloads on admin reads. Uses `@paralleldrive/cuid2` for log IDs. |
 | `performLogCleanup` | `(db: Database, retentionHours: number)` | Delete logs older than retention period. |
 | `manualLogCleanup` | `(db: Database, retentionHours: number)` | Admin-triggered cleanup, returns `{ success: boolean; message: string }`. Uses `error instanceof Error` check in catch. |
 

@@ -3,14 +3,42 @@ import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { sql, eq, desc, count } from "drizzle-orm";
 import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
+import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
+import { redactCapiPayloadForLog } from "@scalius/core/integrations/meta/conversions-api";
 
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { requireEncryptionKey } from "../../../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
+const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
+
+function redactStoredRequestPayload(payload: string | null): string | null {
+    if (!payload) {
+        return payload;
+    }
+
+    try {
+        const parsed = JSON.parse(payload) as Record<string, unknown>;
+        if (!Array.isArray(parsed.data)) {
+            return payload;
+        }
+
+        return JSON.stringify(
+            redactCapiPayloadForLog(
+                parsed as unknown as Parameters<typeof redactCapiPayloadForLog>[0],
+            ),
+            null,
+            2,
+        );
+    } catch {
+        return payload;
+    }
+}
 
 const metaConversionsSettingsSchema = z.object({
     pixelId: z.string().optional(),
@@ -70,11 +98,19 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
     const db = c.get("db");
     const validation = c.req.valid("json");
     const { pixelId, testEventCode, isEnabled, logRetentionDays } = validation;
-    let { accessToken } = validation;
+    let accessToken: string | null | undefined = validation.accessToken;
     const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
 
     if (accessToken === MASKED_VALUE && existingSettings?.accessToken) {
         accessToken = existingSettings.accessToken;
+    } else if (typeof accessToken === "string") {
+        const trimmedAccessToken = accessToken.trim();
+        accessToken = trimmedAccessToken
+            ? await encryptCredentials(
+                trimmedAccessToken,
+                requireEncryptionKey(c.env as unknown as Record<string, unknown>),
+            )
+            : null;
     }
 
     const resultArr = existingSettings
@@ -87,6 +123,7 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
     const result = resultArr[0];
 
     if (!result) throw new ValidationError("Failed to save settings");
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
     return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
 }) as unknown as AppRouteHandler<typeof saveSettingsRoute>);
@@ -98,7 +135,7 @@ const metaConversionsLogSchema = z.object({
     eventName: z.string().nullable(),
     status: z.string().nullable(),
     requestPayload: z.string().nullable(),
-    responseBody: z.string().nullable(),
+    responsePayload: z.string().nullable(),
     errorMessage: z.string().nullable(),
     createdAt: z.number().nullable(),
 }).passthrough();
@@ -139,7 +176,10 @@ app.openapi(getLogsRoute, (async (c: AppRouteContext<typeof getLogsRoute>) => {
     const retentionDays = settings?.logRetentionDays ?? 30;
 
     return ok(c, {
-        logs: logs,
+        logs: logs.map((log) => ({
+            ...log,
+            requestPayload: redactStoredRequestPayload(log.requestPayload),
+        })),
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         retention: { days: retentionDays, hours: retentionDays * 24 }
     });

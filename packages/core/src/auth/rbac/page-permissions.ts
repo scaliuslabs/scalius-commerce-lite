@@ -84,7 +84,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/delivery-providers": { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
   "/admin/settings/fraud-checker": { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
-  "/admin/settings/meta-conversion": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/meta-conversion": { permission: PERMISSIONS.ANALYTICS_VIEW },
   "/admin/settings/cache": { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
 };
 

@@ -342,23 +342,21 @@ const productCategoryAnalytics = productCategory
       // event instead of a 'setTimeout' to avoid arbitrary delays and ensure data
       // isn't dropped for fast-bouncing visitors while remaining predictable for developers.
       const triggerAnalytics = () => {
-        if (typeof window.fbq === "function") {
-          import("@/lib/analytics").then(({ trackFbViewContent }) => {
-            trackFbViewContent({
-              content_ids: [product.id],
-              content_name: product.name,
-              content_category: category?.name,
-              content_type: "product",
-              currency: window.__CURRENCY_CODE__ || "BDT",
-              value: product.discountedPrice,
-              contents: variants.map((v: ProductVariant) => ({
-                id: v.id && v.id !== "default" ? v.id : product.id,
-                quantity: 1,
-                item_price: v.price || product.discountedPrice,
-              })),
-            });
+        import("@/lib/analytics").then(({ trackFbViewContent }) => {
+          trackFbViewContent({
+            content_ids: [product.id],
+            content_name: product.name,
+            content_category: category?.name,
+            content_type: "product",
+            currency: window.__CURRENCY_CODE__ || "BDT",
+            value: product.discountedPrice,
+            contents: variants.map((v: ProductVariant) => ({
+              id: v.id && v.id !== "default" ? v.id : product.id,
+              quantity: 1,
+              item_price: v.price || product.discountedPrice,
+            })),
           });
-        }
+        });
       };
 
       if (document.readyState === "complete") {

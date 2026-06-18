@@ -9,6 +9,7 @@ import { postApiV1MetaEvents } from "@scalius/api-client/sdk";
  * on the backend.
  */
 export interface MetaCapiEventPayload {
+  eventId?: string;
   eventName:
   | "ViewContent"
   | "Search"

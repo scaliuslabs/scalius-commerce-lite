@@ -7,6 +7,7 @@ import {
   sendMetaCapiEvent,
   type MetaCapiEventPayload,
 } from "../api/tracking";
+export { createMetaEventId } from "./meta-event-id";
 
 function getCookie(name: string): string {
   if (typeof document === "undefined") {
@@ -46,6 +47,30 @@ function getBrowserUserData(): Partial<MetaCapiEventPayload["userData"]> {
   return userData;
 }
 
+function sanitizeEventSourceUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const sensitiveParams = [
+      "token",
+      "receiptToken",
+      "payment_intent",
+      "payment_intent_client_secret",
+      "redirect_status",
+      "session_id",
+      "val_id",
+      "tran_id",
+    ];
+
+    for (const param of sensitiveParams) {
+      parsed.searchParams.delete(param);
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 /**
  * Sends a server-side event to Meta's CAPI.
  */
@@ -60,8 +85,9 @@ export function sendServerEvent(
 
   // Construct the full payload
   const fullPayload: MetaCapiEventPayload = {
+    eventId: event.eventId,
     eventName: event.eventName,
-    eventSourceUrl: window.location.href,
+    eventSourceUrl: sanitizeEventSourceUrl(window.location.href),
     userData: {
       ...getBrowserUserData(),
       ...(event.userData || {}),
