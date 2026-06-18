@@ -255,6 +255,8 @@ Thrown errors are caught by `app.onError()` and returned as `{ success: false, e
 | `CHECKOUT_CONFIG` | 60 | Gateway config |
 | `NONE` | 0 | Analytics config |
 
+Catalog invalidation lives in `src/utils/cache-invalidation.ts`. Product writes must keep the `attributes` group in `CATALOG_CACHE_GROUPS.products` because public filter metadata is derived from product category and attribute-value assignments; otherwise storefront category/search sidebars can stay stale after product edits.
+
 ## Queue Consumer
 
 `src/queue-consumer.ts` dispatches messages by type. Two queue strategies:

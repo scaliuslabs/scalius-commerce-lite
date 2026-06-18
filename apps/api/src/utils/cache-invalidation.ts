@@ -220,7 +220,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
 // ---------------------------------------------------------------------------
 
 export const CATALOG_CACHE_GROUPS = {
-  products: ["products", "search", "collections"],
+  products: ["products", "search", "collections", "attributes"],
   categories: ["categories", "products", "search", "collections", "layout"],
   collections: ["collections"],
   discounts: ["products", "search", "collections"],
