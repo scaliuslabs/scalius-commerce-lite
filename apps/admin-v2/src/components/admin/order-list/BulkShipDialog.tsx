@@ -48,6 +48,7 @@ export function BulkShipDialog({
   });
 
   const handleSubmit = () => {
+    if (isShipping) return;
     if (!selectedProvider) {
       toast.error("Error", { description: "Please select a delivery provider." });
       return;
@@ -55,8 +56,13 @@ export function BulkShipDialog({
     onConfirm(selectedProvider);
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (isShipping && !nextOpen) return;
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[425px] bg-[var(--card)] border-[var(--border)] rounded-xl shadow-lg border backdrop-blur-lg">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold leading-tight tracking-tight text-[var(--foreground)]">

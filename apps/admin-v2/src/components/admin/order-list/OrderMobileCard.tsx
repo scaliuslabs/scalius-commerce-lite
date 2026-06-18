@@ -42,7 +42,7 @@ interface OrderMobileCardProps {
   isSelected: boolean;
   isUpdatingStatus: boolean;
   showTrashed: boolean;
-  onToggleSelection: (id: string, shiftKey?: boolean) => void;
+  onToggleSelection: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onPermanentDelete: (id: string) => void;
@@ -91,10 +91,8 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
           <div className="flex items-start gap-3">
             <div
               onClick={(e) => {
-                if (e.shiftKey) {
-                  e.preventDefault();
-                }
-                onToggleSelection(order.id, e.shiftKey);
+                e.preventDefault();
+                onToggleSelection(order.id);
               }}
               className="cursor-pointer mt-0.5 select-none"
             >
@@ -102,7 +100,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                 checked={isSelected}
                 onCheckedChange={() => {}}
                 className="cursor-pointer pointer-events-none"
-                aria-label={`Select order ${order.id}. Hold Shift to select range`}
+                aria-label={`Select order ${order.id}`}
               />
             </div>
             <div>

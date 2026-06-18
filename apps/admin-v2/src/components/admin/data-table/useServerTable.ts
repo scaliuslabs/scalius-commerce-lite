@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -9,7 +9,12 @@ import {
   type VisibilityState,
   type RowSelectionState,
 } from "@tanstack/react-table";
-import { useQuery, keepPreviousData, type UseQueryOptions } from "@tanstack/react-query";
+import {
+  hashKey,
+  keepPreviousData,
+  useQuery,
+  type UseQueryOptions,
+} from "@tanstack/react-query";
 
 export interface ServerTablePagination {
   total: number;
@@ -58,6 +63,7 @@ export interface UseServerTableReturn<TData> {
   selectedRows: TData[];
   selectedIds: string[];
   clearSelection: () => void;
+  deselectIds: (ids: readonly string[]) => void;
 }
 
 export function useServerTable<TData>({
@@ -90,6 +96,16 @@ export function useServerTable<TData>({
   // Table state
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility);
+  const queryScopeHash = useMemo(() => hashKey(qOpts.queryKey), [qOpts.queryKey]);
+  const previousQueryScopeHash = useRef(queryScopeHash);
+  const rowSelectionForCurrentScope =
+    previousQueryScopeHash.current === queryScopeHash ? rowSelection : {};
+
+  useEffect(() => {
+    if (previousQueryScopeHash.current === queryScopeHash) return;
+    previousQueryScopeHash.current = queryScopeHash;
+    setRowSelection({});
+  }, [queryScopeHash]);
 
   // Map URL params to TanStack Table state
   const paginationState: PaginationState = {
@@ -112,7 +128,7 @@ export function useServerTable<TData>({
     state: {
       pagination: paginationState,
       sorting: sortingState,
-      rowSelection,
+      rowSelection: rowSelectionForCurrentScope,
       columnVisibility,
     },
     // Page count from server
@@ -146,7 +162,23 @@ export function useServerTable<TData>({
     .getFilteredSelectedRowModel()
     .rows.map((r) => r.original);
   const selectedIds = selectedRows.map((r) => (r as { id: string }).id);
-  const clearSelection = () => setRowSelection({});
+  const clearSelection = useCallback(() => setRowSelection({}), []);
+  const deselectIds = useCallback((ids: readonly string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setRowSelection((prev) => {
+      let changed = false;
+      const next: RowSelectionState = {};
+      for (const [id, selected] of Object.entries(prev)) {
+        if (idSet.has(id)) {
+          changed = true;
+          continue;
+        }
+        next[id] = selected;
+      }
+      return changed ? next : prev;
+    });
+  }, []);
 
   return {
     table,
@@ -157,5 +189,6 @@ export function useServerTable<TData>({
     selectedRows,
     selectedIds,
     clearSelection,
+    deselectIds,
   };
 }
