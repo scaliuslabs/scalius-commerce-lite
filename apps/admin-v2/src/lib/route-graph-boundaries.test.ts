@@ -83,11 +83,23 @@ describe("admin route graph boundaries", () => {
   });
 
   it("keeps admin navigation from doing focus refetch stampedes", () => {
-    const source = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
+    const routerSource = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
+    const adminRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
+      "utf8",
+    );
+    const scrollSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-scroll-restoration.ts"),
+      "utf8",
+    );
 
-    expect(source).toContain("refetchOnWindowFocus: false");
-    expect(source).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
-    expect(source).toContain("scrollRestorationBehavior: \"instant\"");
+    expect(routerSource).toContain("refetchOnWindowFocus: false");
+    expect(routerSource).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
+    expect(routerSource).toContain("scrollRestorationBehavior: \"instant\"");
+    expect(adminRouteSource).toContain("useAdminNestedScrollRestoration();");
+    expect(scrollSource).toContain('router.subscribe("onBeforeLoad"');
+    expect(scrollSource).toContain('router.subscribe("onRendered"');
+    expect(scrollSource).toContain('window.addEventListener("popstate"');
   });
 
   it("keeps deferred rich-text previews rendered without eager editor imports", () => {
