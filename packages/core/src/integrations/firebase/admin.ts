@@ -11,6 +11,8 @@ interface ServiceAccount {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const DEFAULT_FCM_SEND_CONCURRENCY = 8;
+const MAX_FCM_SEND_CONCURRENCY = 20;
 
 function getEnv(contextEnv?: Record<string, unknown>) {
   if (contextEnv) {
@@ -190,7 +192,7 @@ async function sendFCMMessage(
 
     if (isRetryable && attempt < MAX_RETRIES) {
       const retryAfter = response.headers.get("Retry-After");
-      let delay = 2 ** attempt * 1000 + Math.random() * 1000;
+      let delay = 2 ** attempt * 1000 + randomJitterMs(1000);
       if (retryAfter) {
         delay = parseInt(retryAfter, 10) * 1000;
       }
@@ -218,6 +220,58 @@ async function sendFCMMessage(
       status: "MAX_RETRIES_EXCEEDED",
     },
   };
+}
+
+function randomJitterMs(maxMs: number): number {
+  if (maxMs <= 0) {
+    return 0;
+  }
+
+  const runtimeCrypto = globalThis.crypto;
+  if (!runtimeCrypto?.getRandomValues) {
+    return 0;
+  }
+
+  const values = runtimeCrypto.getRandomValues(new Uint32Array(1));
+  return (values[0] ?? 0) % maxMs;
+}
+
+function resolveSendConcurrency(env: Record<string, unknown>): number {
+  const raw = Number(env.FCM_SEND_CONCURRENCY);
+  if (!Number.isFinite(raw)) {
+    return DEFAULT_FCM_SEND_CONCURRENCY;
+  }
+
+  return Math.max(
+    1,
+    Math.min(MAX_FCM_SEND_CONCURRENCY, Math.floor(raw)),
+  );
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex] as T, currentIndex);
+      }
+    }),
+  );
+
+  return results;
 }
 
 function initializeFCMService(environment?: Record<string, unknown>, serviceAccountJson?: string) {
@@ -281,6 +335,7 @@ export class FCMMessagingService {
   private serviceAccount: ServiceAccount;
   private projectId: string;
   private env: Record<string, unknown>;
+  private sendConcurrency: number;
 
   constructor(environment: Record<string, unknown>, serviceAccountJson?: string) {
     const { serviceAccount, projectId } = initializeFCMService(
@@ -290,6 +345,7 @@ export class FCMMessagingService {
     this.serviceAccount = serviceAccount;
     this.projectId = projectId;
     this.env = environment;
+    this.sendConcurrency = resolveSendConcurrency(environment);
   }
 
   private async ensureValidAccessToken(): Promise<string> {
@@ -335,51 +391,48 @@ export class FCMMessagingService {
     }>;
   }> {
     const accessToken = await this.ensureValidAccessToken();
-    const responses: Array<{
-      success: boolean;
-      error?: { code: string; message: string };
-    }> = [];
-    let successCount = 0;
-    let failureCount = 0;
+    const responses = await mapWithConcurrency(
+      payload.tokens,
+      this.sendConcurrency,
+      async (token) => {
+        try {
+          const message: FCMMessage = {
+            token,
+            notification: payload.notification,
+            data: payload.data,
+            webpush: payload.webpush,
+          };
+          const response = await sendFCMMessage(
+            accessToken,
+            this.projectId,
+            message,
+          );
 
-    for (const token of payload.tokens) {
-      try {
-        const message: FCMMessage = {
-          token,
-          notification: payload.notification,
-          data: payload.data,
-          webpush: payload.webpush,
-        };
-        const response = await sendFCMMessage(
-          accessToken,
-          this.projectId,
-          message,
-        );
+          if (response.error) {
+            return {
+              success: false,
+              error: {
+                code: this.mapErrorCode(response.error.status),
+                message: response.error.message,
+              },
+            };
+          }
 
-        if (response.error) {
-          failureCount++;
-          responses.push({
+          return { success: true };
+        } catch (error: unknown) {
+          return {
             success: false,
             error: {
-              code: this.mapErrorCode(response.error.status),
-              message: response.error.message,
+              code: "messaging/unknown-error",
+              message: error instanceof Error ? error.message : "Unknown error",
             },
-          });
-        } else {
-          successCount++;
-          responses.push({ success: true });
+          };
         }
-      } catch (error: unknown) {
-        failureCount++;
-        responses.push({
-          success: false,
-          error: {
-            code: "messaging/unknown-error",
-            message: error instanceof Error ? error.message : "Unknown error",
-          },
-        });
-      }
-    }
+      },
+    );
+
+    const successCount = responses.filter((response) => response.success).length;
+    const failureCount = responses.length - successCount;
     return { successCount, failureCount, responses };
   }
 

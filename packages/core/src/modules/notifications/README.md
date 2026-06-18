@@ -28,7 +28,7 @@ The order email flow is fully connected:
 2. `updateOrderStatus()` returns a `notification` object with email/name/type
 3. Route enqueues `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
 4. Queue consumer (`queue-consumer.ts`) matches `order.notification` and calls `sendOrderNotificationEmail()`
-5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via the email provider (Resend)
+5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via the active email provider. Cloudflare Email is the native default, with Resend available as the external fallback.
 
 ## Functions
 
@@ -39,7 +39,7 @@ Sends FCM push notifications to all active admin devices about a new order.
 - Reads Firebase service account from `settings` table (category `firebase`, key `service_account`), falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
 - Queries all active tokens from `adminFcmTokens` table
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
-- Calls `FCMMessagingService.sendEachForMulticast()` (iterates tokens sequentially)
+- Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.
 - Auto-deactivates invalid tokens (unregistered or invalid registration) in the database
 - Designed for `ctx.waitUntil()` -- catches all errors internally to prevent unhandled rejections
 - All catch blocks use typed `error: unknown` with `instanceof Error` checks
@@ -61,11 +61,13 @@ Sends transactional order emails to customers. Connected via queue.
 - `order_returned` -- "Your order return has been processed"
 - `order_refunded` -- "Your refund has been processed"
 
-Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Resend by default).
+Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Cloudflare Email by default, Resend fallback).
 
 **SMS channel dispatch**: When SMS is enabled for a status, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. SMS failures are caught and logged but do not affect email delivery.
 
 **WhatsApp channel**: When WhatsApp is enabled for a status, the function logs a placeholder message. Push notifications are handled separately by `sendOrderNotification()`.
+
+**Current provider gaps**: Email has a Cloudflare-native default and external fallback. Admin push is still Firebase-only, SMS is Bangladesh-provider-only, and order WhatsApp is channel-visible but not implemented. Keep those as explicit gaps until first-party Web Push and manual/own-channel alternatives are added.
 
 ## Queue Processing
 

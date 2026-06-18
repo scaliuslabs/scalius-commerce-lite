@@ -18,6 +18,7 @@ const apps = [
       "CREDENTIAL_ENCRYPTION_KEY",
       "PURGE_TOKEN",
       "PROJECT_CACHE_PREFIX",
+      "FCM_SEND_CONCURRENCY",
     ],
   },
   {
