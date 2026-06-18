@@ -26,7 +26,7 @@ meta-capi.ts                      meta-conversions.ts              conversions-a
    a. Fetches CAPI settings from DB via `getCapiSettings()` (singleton row in `metaConversionsSettings`)
    b. If disabled or missing credentials, logs a diagnostic event and returns early
    c. Hashes PII fields (email, phone, name, location) via SHA-256 per Meta's requirements
-   d. Sends to `https://graph.facebook.com/v19.0/{pixelId}/events`
+   d. Sends to `https://graph.facebook.com/{META_GRAPH_API_VERSION}/{pixelId}/events`
    e. Logs success/failure to `metaConversionsLogs` table with request/response payloads
    f. Log retention configured via `logRetentionDays` from settings (default 30 days)
 6. API route uses `ctx.waitUntil()` to process the event in the background (non-blocking response)
@@ -60,7 +60,7 @@ Validated by Zod schema in the API route:
   - Non-PII fields passed through: `client_ip_address`, `client_user_agent`, `fbc`, `fbp`, `external_id`, `subscription_id`, `lead_id`
 
 Configuration:
-- Graph API version: `v19.0`
+- Graph API version: `META_GRAPH_API_VERSION` from `conversions-api.ts` (currently `v25.0`; keep this aligned with Meta's supported Graph API versions)
 - Default log retention: 30 days (from `DEFAULT_LOG_RETENTION_DAYS` constant, overridden by `settings.logRetentionDays`)
 - Test event code support: If `testEventCode` is set in settings, it is included in the payload for Meta Events Manager testing
 

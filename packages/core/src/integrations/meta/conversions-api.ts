@@ -7,6 +7,8 @@ import { type Database } from "@scalius/database/client";
 // Fallback retention used when settings row doesn't exist yet
 const DEFAULT_LOG_RETENTION_DAYS = 30;
 
+export const META_GRAPH_API_VERSION = "v25.0";
+
 // --- META API TYPES ---
 interface UserData {
   em?: string[];
@@ -161,8 +163,7 @@ export async function sendCapiEvent(
 
   const retentionHours = settings.logRetentionDays * 24;
   const { pixelId, accessToken, testEventCode } = settings;
-  const version = "v19.0";
-  const url = `https://graph.facebook.com/${version}/${pixelId}/events?access_token=${accessToken}`;
+  const url = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${pixelId}/events?access_token=${accessToken}`;
 
   const preparedUserData = await prepareUserData(event.user_data);
   const finalEvent: ServerEvent = { ...event, user_data: preparedUserData };

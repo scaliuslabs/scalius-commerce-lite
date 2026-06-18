@@ -160,6 +160,16 @@ interface Window {
   __CHECKOUT_CONFIG__?: unknown;
   dataLayer?: Record<string, unknown>[];
   fbq?: ((...args: unknown[]) => void) & { q?: unknown[] };
+  zaraz?: {
+    ecommerce?: (
+      eventName: string,
+      parameters?: Record<string, unknown>,
+    ) => Promise<unknown> | unknown;
+    track?: (
+      eventName: string,
+      properties?: Record<string, unknown>,
+    ) => Promise<unknown> | unknown;
+  };
 
   // Cart interaction handlers (set by lib/cart/client.ts initCartFunctionality)
   lastShippingEventDetail?: { id: string; fee: number; name?: string };

@@ -12816,11 +12816,11 @@ export type GetApiV1AdminAnalyticsResponse = GetApiV1AdminAnalyticsResponses[key
 export type PostApiV1AdminAnalyticsData = {
     body?: {
         name: string;
-        type: 'google_analytics' | 'facebook_pixel' | 'custom';
-        isActive?: boolean;
-        usePartytown?: boolean;
+        type: 'google_analytics' | 'facebook_pixel' | 'cloudflare_web_analytics' | 'custom';
         config: string;
         location: 'head' | 'body_start' | 'body_end';
+        isActive?: boolean;
+        usePartytown?: boolean;
     };
     path?: never;
     query?: never;
@@ -13086,11 +13086,11 @@ export type PutApiV1AdminAnalyticsByIdData = {
     body?: {
         id: string;
         name: string;
-        type: 'google_analytics' | 'facebook_pixel' | 'custom';
-        isActive: boolean;
-        usePartytown: boolean;
+        type: 'google_analytics' | 'facebook_pixel' | 'cloudflare_web_analytics' | 'custom';
         config: string;
         location: 'head' | 'body_start' | 'body_end';
+        isActive: boolean;
+        usePartytown: boolean;
     };
     path: {
         id: string;

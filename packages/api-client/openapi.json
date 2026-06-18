@@ -40860,16 +40860,9 @@
                     "enum": [
                       "google_analytics",
                       "facebook_pixel",
+                      "cloudflare_web_analytics",
                       "custom"
                     ]
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": true
-                  },
-                  "usePartytown": {
-                    "type": "boolean",
-                    "default": true
                   },
                   "config": {
                     "type": "string",
@@ -40882,6 +40875,14 @@
                       "body_start",
                       "body_end"
                     ]
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "usePartytown": {
+                    "type": "boolean",
+                    "default": true
                   }
                 },
                 "required": [
@@ -41459,14 +41460,9 @@
                     "enum": [
                       "google_analytics",
                       "facebook_pixel",
+                      "cloudflare_web_analytics",
                       "custom"
                     ]
-                  },
-                  "isActive": {
-                    "type": "boolean"
-                  },
-                  "usePartytown": {
-                    "type": "boolean"
                   },
                   "config": {
                     "type": "string",
@@ -41479,16 +41475,22 @@
                       "body_start",
                       "body_end"
                     ]
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "usePartytown": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "id",
                   "name",
                   "type",
-                  "isActive",
-                  "usePartytown",
                   "config",
-                  "location"
+                  "location",
+                  "isActive",
+                  "usePartytown"
                 ]
               }
             }
