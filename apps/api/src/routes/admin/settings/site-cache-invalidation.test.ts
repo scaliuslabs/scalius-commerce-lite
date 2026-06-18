@@ -98,7 +98,7 @@ function createTestApp() {
     await next();
   });
   app.route("/admin/settings", siteSettingsRoutes);
-  return { app, env };
+  return { app, env, kv };
 }
 
 async function requestJson(
@@ -197,5 +197,30 @@ describe("site settings cache invalidation", () => {
       groups,
       expect.objectContaining({ env }),
     );
+  });
+
+  it("does not fail currency saves when legacy gateway currency KV cleanup fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { app, env, kv } = createTestApp();
+    kv.delete.mockRejectedValueOnce(new Error("kv unavailable"));
+
+    const response = await requestJson(app, env, "POST", "/currency", {
+      currencyCode: "BDT",
+      currencySymbol: "Tk",
+      usdExchangeRate: "1",
+    });
+
+    expect(response.status).toBe(200);
+    expect(kv.delete).toHaveBeenCalledWith("gw:currency");
+    expect(warn).toHaveBeenCalledWith(
+      "[Settings] Legacy KV delete failed for gw:currency:",
+      "kv unavailable",
+    );
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["layout", "checkout"],
+      expect.objectContaining({ env }),
+    );
+
+    warn.mockRestore();
   });
 });

@@ -36,6 +36,39 @@ function invalidateCachedCredential(key: string): void {
   credentialCache.delete(key);
 }
 
+async function deleteLegacyCredentialKv(
+  kv: KVNamespace | undefined,
+  key: string,
+): Promise<void> {
+  if (!kv) return;
+  try {
+    await kv.delete(key);
+  } catch (error: unknown) {
+    console.warn(
+      `[Payments] Legacy KV credential cache delete failed for ${key}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+async function cleanupLegacyCredentialKv(
+  kv: KVNamespace | undefined,
+  key: string,
+): Promise<void> {
+  if (!kv) return;
+  try {
+    const kvEntry = await kv.get(key);
+    if (kvEntry) {
+      await deleteLegacyCredentialKv(kv, key);
+    }
+  } catch (error: unknown) {
+    console.warn(
+      `[Payments] Legacy KV credential cache lookup failed for ${key}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -95,11 +128,8 @@ export async function getStripeSettings(
   const cached = getCachedCredential<StripeSettings>(STRIPE_CACHE_KEY);
   if (cached) return cached;
 
-  // Migration path: if KV has a stale entry from before this fix, delete it
-  if (kv) {
-    const kvEntry = await kv.get(STRIPE_CACHE_KEY);
-    if (kvEntry) await kv.delete(STRIPE_CACHE_KEY);
-  }
+  // Migration path: if KV has a stale entry from before this fix, delete it.
+  await cleanupLegacyCredentialKv(kv, STRIPE_CACHE_KEY);
 
   const values = await readCategory(db, STRIPE_CATEGORY);
   if (!values.secret_key || !values.webhook_secret) return null;
@@ -121,7 +151,7 @@ export async function getStripeSettings(
 export async function invalidateStripeCache(kv?: KVNamespace): Promise<void> {
   invalidateCachedCredential(STRIPE_CACHE_KEY);
   // Also clean up any legacy KV entries
-  await kv?.delete(STRIPE_CACHE_KEY);
+  await deleteLegacyCredentialKv(kv, STRIPE_CACHE_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -140,11 +170,8 @@ export async function getSSLCommerzSettings(
   const cached = getCachedCredential<SSLCommerzSettings>(SSL_CACHE_KEY);
   if (cached) return cached;
 
-  // Migration path: clean up stale KV entries
-  if (kv) {
-    const kvEntry = await kv.get(SSL_CACHE_KEY);
-    if (kvEntry) await kv.delete(SSL_CACHE_KEY);
-  }
+  // Migration path: clean up stale KV entries.
+  await cleanupLegacyCredentialKv(kv, SSL_CACHE_KEY);
 
   const values = await readCategory(db, SSL_CATEGORY);
   if (!values.store_id || !values.store_password) return null;
@@ -166,7 +193,7 @@ export async function getSSLCommerzSettings(
 export async function invalidateSSLCommerzCache(kv?: KVNamespace): Promise<void> {
   invalidateCachedCredential(SSL_CACHE_KEY);
   // Also clean up any legacy KV entries
-  await kv?.delete(SSL_CACHE_KEY);
+  await deleteLegacyCredentialKv(kv, SSL_CACHE_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -185,11 +212,8 @@ export async function getPolarSettings(
   const cached = getCachedCredential<PolarSettings>(POLAR_CACHE_KEY);
   if (cached) return cached;
 
-  // Migration path: clean up stale KV entries
-  if (kv) {
-    const kvEntry = await kv.get(POLAR_CACHE_KEY);
-    if (kvEntry) await kv.delete(POLAR_CACHE_KEY);
-  }
+  // Migration path: clean up stale KV entries.
+  await cleanupLegacyCredentialKv(kv, POLAR_CACHE_KEY);
 
   const values = await readCategory(db, POLAR_CATEGORY);
   if (!values.access_token || !values.product_id) return null;
@@ -214,7 +238,7 @@ export async function getPolarSettings(
 export async function invalidatePolarCache(kv?: KVNamespace): Promise<void> {
   invalidateCachedCredential(POLAR_CACHE_KEY);
   // Also clean up any legacy KV entries
-  await kv?.delete(POLAR_CACHE_KEY);
+  await deleteLegacyCredentialKv(kv, POLAR_CACHE_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +379,7 @@ export async function getActivePaymentMethods(
 export async function invalidatePaymentMethodsCache(kv?: KVNamespace): Promise<void> {
   invalidateCachedCredential(PAYMENT_METHODS_CACHE_KEY);
   // Also clean up any legacy KV entries
-  await kv?.delete(PAYMENT_METHODS_CACHE_KEY);
+  await deleteLegacyCredentialKv(kv, PAYMENT_METHODS_CACHE_KEY);
 }
 
 // ---------------------------------------------------------------------------
