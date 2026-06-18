@@ -34,6 +34,8 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus or network reconnect. Only truly realtime screens opt in to `refetchOnWindowFocus` / `refetchOnReconnect`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns. Orders list auto-refresh is merchant-controlled and pauses while `document.hidden`; when the tab becomes visible again it performs one explicit refresh and resets the countdown.
 
+**Read Timeout Behavior**: Admin read-only API transport (`GET`/`HEAD`) is bounded by `ADMIN_API_READ_TIMEOUT_MS` in `src/lib/admin-api-timeout.ts`, including slow JSON/text body reads. Write methods and POST-based streams are deliberately unbounded so committed mutations and long-running widget/AI/import operations are not reported as timed-out guesses.
+
 **Scroll Restoration**: The admin shell uses TanStack Router's scroll restoration for the nested `#admin-main-scroll` container with instant behavior. The `useAdminNestedScrollRestoration()` helper snapshots that container before route loads, resets it to top on normal client navigation, and restores the saved position only on browser Back/Forward. Do not add ad hoc route-change `scrollTo()` effects in the layout; extend the helper or register additional scroll containers with router scroll restoration instead.
 
 **Order Fulfillment**: Order detail supports provider shipments and own-courier/manual fulfillment. `ManualFulfillmentDialog` posts selected unshipped item IDs to the typed orders server-function slice, invalidates order detail + shipments, and computes final-shipment intent from the remaining fulfillable items. Manual shipment history rows can show courier/tracking/note metadata, but the refresh action is only shown for provider-backed shipments.
@@ -78,6 +80,7 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 | `src/lib/api-query-options/` | Narrow domain queryOptions with staleTime tiers |
 | `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
 | `src/lib/api.mutations.ts` | Compatibility re-export barrel for mutation hooks |
+| `src/lib/admin-api-timeout.ts` | Read-only API timeout helper shared by server functions and proxy |
 | `src/lib/api.server.ts` | HTTP transport layer (service binding / fetch) |
 | `src/lib/query-keys.ts` | Centralized query key factory |
 | `src/lib/list-helpers.tsx` | Shared list search schemas and data selectors |
