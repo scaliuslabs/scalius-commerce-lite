@@ -127,6 +127,56 @@ describe("admin route graph boundaries", () => {
     expect(scrollSource).toContain('window.addEventListener("popstate"');
   });
 
+  it("keeps product list route first paint independent from secondary stats", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "products", "index.tsx"),
+      "utf8",
+    );
+    const loaderSource = source.slice(
+      source.indexOf("loader: async"),
+      source.indexOf("head: ({ match })"),
+    );
+
+    expect(loaderSource).toContain(
+      "await warmRouteQuery(queryClient, productsQueryOptions(mapParams(deps)))",
+    );
+    expect(loaderSource).toContain('typeof window !== "undefined"');
+    expect(loaderSource).toContain(
+      "void queryClient.prefetchQuery(categoryFormOptionsQueryOptions())",
+    );
+    expect(loaderSource).toContain(
+      "void queryClient.prefetchQuery(productStatsQueryOptions())",
+    );
+    expect(loaderSource).not.toContain(
+      "queryClient.ensureQueryData(categoryFormOptionsQueryOptions())",
+    );
+    expect(loaderSource).not.toContain(
+      "queryClient.ensureQueryData(productStatsQueryOptions())",
+    );
+  });
+
+  it("keeps secondary admin tool routes from blocking first paint on data reads", () => {
+    const cacheSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "settings", "cache.tsx"),
+      "utf8",
+    );
+    const inventorySource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "inventory.tsx"),
+      "utf8",
+    );
+
+    for (const source of [cacheSource, inventorySource]) {
+      const loaderSource = source.slice(
+        source.indexOf("loader:"),
+        source.indexOf("head:"),
+      );
+      expect(loaderSource).toContain('typeof window === "undefined"');
+      expect(loaderSource).toContain("void queryClient.prefetchQuery(");
+      expect(loaderSource).not.toContain("await queryClient.ensureQueryData(");
+      expect(loaderSource).not.toContain("await Promise.all(");
+    }
+  });
+
   it("keeps deferred rich-text previews rendered without eager editor imports", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),

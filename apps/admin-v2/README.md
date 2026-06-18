@@ -32,6 +32,8 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **List Pages**: URL-search-driven list routes declare `loaderDeps`, map validated deps with `mapParams()`, and prefetch the same query keys rendered by components. Component-level loading overlays should stay scoped to the table area.
 
+**Loader Boundaries**: Route loaders should wait only for data needed to make the first paint correct. Products waits for the primary list, while category options and stats prefetch in the browser. Cache settings and inventory render stable loading states and use client-only prefetches for default reads instead of blocking navigation.
+
 **Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus or network reconnect. Only truly realtime screens opt in to `refetchOnWindowFocus` / `refetchOnReconnect`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns. Orders list auto-refresh is merchant-controlled and pauses while `document.hidden`; when the tab becomes visible again it performs one explicit refresh and resets the countdown.
 
 **Read Timeout Behavior**: Admin read-only API transport (`GET`/`HEAD`) is bounded by `ADMIN_API_READ_TIMEOUT_MS` in `src/lib/admin-api-timeout.ts`, including slow JSON/text body reads. Write methods and POST-based streams are deliberately unbounded so committed mutations and long-running widget/AI/import operations are not reported as timed-out guesses.

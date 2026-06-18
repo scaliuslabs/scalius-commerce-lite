@@ -4,12 +4,12 @@ import { cacheStatsQueryOptions, cacheLastClearedQueryOptions, cacheGroupsQueryO
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/cache")({
-  loader: async ({ context: { queryClient } }) => {
-    await Promise.all([
-      queryClient.ensureQueryData(cacheStatsQueryOptions()),
-      queryClient.ensureQueryData(cacheLastClearedQueryOptions()),
-      queryClient.ensureQueryData(cacheGroupsQueryOptions()),
-    ]);
+  loader: ({ context: { queryClient } }) => {
+    if (typeof window === "undefined") return;
+
+    void queryClient.prefetchQuery(cacheStatsQueryOptions());
+    void queryClient.prefetchQuery(cacheLastClearedQueryOptions());
+    void queryClient.prefetchQuery(cacheGroupsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Cache Settings | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
