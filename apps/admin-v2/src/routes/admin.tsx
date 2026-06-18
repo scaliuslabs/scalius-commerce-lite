@@ -10,6 +10,7 @@ import {
   getAdminRouteContext,
   primeAdminRouteContextCache,
 } from "~/lib/admin-route-context";
+import { useAdminNestedScrollRestoration } from "~/lib/admin-scroll-restoration";
 import {
   ADMIN_ACCESS_DENIED_PATH,
   getDefaultAdminPath,
@@ -37,6 +38,8 @@ export const Route = createFileRoute("/admin")({
 function AdminLayout() {
   const authContext = Route.useRouteContext();
   const { user, permissions, isSuperAdmin } = authContext;
+
+  useAdminNestedScrollRestoration();
 
   useEffect(() => {
     primeAdminRouteContextCache(authContext);

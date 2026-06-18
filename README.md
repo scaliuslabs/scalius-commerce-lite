@@ -228,7 +228,7 @@ flowchart LR
 - **Mutations** (`src/lib/api-mutations/<domain>.ts`): domain hook modules with cache invalidation and toast notifications; `api.mutations.ts` is only a compatibility re-export barrel
 - **Stale-While-Revalidate**: Detail queries use `staleTime: 0` + loader `staleTime: Infinity` for instant navigation
 - **Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but disables focus-return refetch by default. Realtime admin screens opt in per query to avoid long-idle tabs stampeding the API on focus.
-- **Scroll Restoration**: The admin shell registers its nested `#admin-main-scroll` container with TanStack Router scroll restoration and uses instant navigation scroll behavior. Avoid layout-level route-change `scrollTo()` effects.
+- **Scroll Restoration**: The admin shell registers its nested `#admin-main-scroll` container with TanStack Router scroll restoration and uses `useAdminNestedScrollRestoration()` to reset normal client navigation to top while restoring nested scroll on browser Back/Forward. Avoid ad hoc layout-level route-change `scrollTo()` effects.
 
 ### Pages (60+)
 
