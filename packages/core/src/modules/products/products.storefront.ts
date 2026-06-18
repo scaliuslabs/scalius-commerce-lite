@@ -45,6 +45,8 @@ export interface StorefrontCategoryProductCategory {
     imageUrl: string | null;
     metaTitle: string | null;
     metaDescription: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
 }
 
 // ─────────────────────────────────────────

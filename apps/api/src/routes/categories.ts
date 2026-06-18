@@ -56,6 +56,7 @@ const storefrontCategorySchema = z.object({
   description: z.string().nullable(),
   imageUrl: z.string().nullable(),
   createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
 }).passthrough();
@@ -135,7 +136,7 @@ const getCategoryProductsRoute = createRoute({
     200: {
       description: "Category products with pagination and filters",
       content: { "application/json": { schema: successEnvelope(z.object({
-        category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough(),
+        category: storefrontCategorySchema,
         products: z.array(z.object({
           id: z.string(),
           name: z.string(),
@@ -177,6 +178,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     imageUrl: category.imageUrl,
     metaTitle: category.metaTitle,
     metaDescription: category.metaDescription,
+    createdAt: category.createdAt,
+    updatedAt: category.updatedAt,
   };
 
   const result = await getStorefrontCategoryProducts(db, categoryForProducts, {

@@ -165,14 +165,19 @@ export interface Category {
   imageUrl: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
-  createdAt: string;
-  updatedAt?: string;
+  createdAt: string | null;
+  updatedAt?: string | null;
 }
 
 export interface CategorySummary {
   id: string;
   name: string;
   slug: string;
+}
+
+export interface CategoryProductsResponse extends PaginatedResponse<Product> {
+  category: Category | null;
+  categoryNotFound?: boolean;
 }
 
 // ---------------------------------------------------------------------------

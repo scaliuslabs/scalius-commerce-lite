@@ -11907,6 +11907,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "updatedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "metaTitle": {
                                 "type": "string",
                                 "nullable": true
@@ -11923,6 +11927,7 @@
                               "description",
                               "imageUrl",
                               "createdAt",
+                              "updatedAt",
                               "metaTitle",
                               "metaDescription"
                             ],
@@ -12045,6 +12050,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "updatedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "metaTitle": {
                               "type": "string",
                               "nullable": true
@@ -12061,6 +12070,7 @@
                             "description",
                             "imageUrl",
                             "createdAt",
+                            "updatedAt",
                             "metaTitle",
                             "metaDescription"
                           ],
@@ -12312,12 +12322,42 @@
                             },
                             "slug": {
                               "type": "string"
+                            },
+                            "description": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "imageUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "metaTitle": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "metaDescription": {
+                              "type": "string",
+                              "nullable": true
                             }
                           },
                           "required": [
                             "id",
                             "name",
-                            "slug"
+                            "slug",
+                            "description",
+                            "imageUrl",
+                            "createdAt",
+                            "updatedAt",
+                            "metaTitle",
+                            "metaDescription"
                           ],
                           "additionalProperties": {
                             "nullable": true
