@@ -90,6 +90,8 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
         return "Google Analytics";
       case "facebook_pixel":
         return "Facebook Pixel";
+      case "cloudflare_web_analytics":
+        return "Cloudflare Web Analytics";
       case "custom":
         return "Custom Script";
       default:

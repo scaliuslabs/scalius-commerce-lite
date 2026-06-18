@@ -121,13 +121,22 @@ export type CustomerFormValues = z.infer<typeof customerFormSchema>;
 //  ANALYTICS
 // ═══════════════════════════════════════════════════════════════════
 
+export const analyticsScriptTypes = [
+  "google_analytics",
+  "facebook_pixel",
+  "cloudflare_web_analytics",
+  "custom",
+] as const;
+
+export type AnalyticsScriptType = (typeof analyticsScriptTypes)[number];
+
 export const analyticsFormSchema = z.object({
   id: z.string().optional(),
   name: z
     .string()
     .min(3, "Name must be at least 3 characters")
     .max(100, "Name must be less than 100 characters"),
-  type: z.enum(["google_analytics", "facebook_pixel", "custom"]),
+  type: z.enum(analyticsScriptTypes),
   isActive: z.boolean(),
   usePartytown: z.boolean(),
   config: z.string().min(1, "Configuration is required"),

@@ -27,6 +27,7 @@ import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
+import { META_GRAPH_API_VERSION } from "@scalius/core/integrations/meta/conversions-api";
 import { getEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
@@ -246,7 +247,7 @@ async function processQueueMessage(
         if (!payload.waToken || !payload.waPhoneId) {
           throw new Error("WhatsApp credentials missing in queue payload");
         }
-        const waRes = await fetch(`https://graph.facebook.com/v19.0/${payload.waPhoneId}/messages`, {
+        const waRes = await fetch(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${payload.waPhoneId}/messages`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${payload.waToken}`,

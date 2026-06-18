@@ -4,6 +4,7 @@ import { AnalyticsForm } from "~/components/admin/AnalyticsForm";
 import { analyticsScriptQueryOptions } from "~/lib/api-query-options/analytics";
 import type { AnalyticsScript } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { analyticsScriptTypes, type AnalyticsScriptType } from "~/lib/form-schemas";
 
 export const Route = createFileRoute("/admin/analytics/$analyticsId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -20,7 +21,7 @@ function EditAnalyticsPage() {
   const { data } = useSuspenseQuery(analyticsScriptQueryOptions(analyticsId));
   const s = data as AnalyticsScript;
 
-  const validType = (["google_analytics", "facebook_pixel", "custom"].includes(s.type) ? s.type : "custom") as "google_analytics" | "facebook_pixel" | "custom";
+  const validType = (analyticsScriptTypes.includes(s.type as AnalyticsScriptType) ? s.type : "custom") as AnalyticsScriptType;
   const validLocation = (["head", "body_start", "body_end"].includes(s.location) ? s.location : "head") as "head" | "body_start" | "body_end";
   const defaultValues = {
     id: s.id,

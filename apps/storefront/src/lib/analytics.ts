@@ -2,7 +2,8 @@
 
 /**
  * Utility functions for handling analytics scripts and event tracking
- * with Partytown for Facebook Pixel and Google Analytics 4.
+ * with Partytown for Facebook Pixel and Google Analytics 4, plus a passive
+ * Cloudflare Zaraz e-commerce bridge when Zaraz is enabled on the zone.
  *
  * NOW INCLUDES SERVER-SIDE EVENT DISPATCHING FOR META CONVERSIONS API (CAPI).
  */
@@ -14,7 +15,7 @@ import { sendServerEvent } from "@/lib/tracking/meta-capi";
 interface AnalyticsConfig {
   id: string;
   name: string;
-  type: string; // 'google_analytics', 'facebook_pixel', 'custom'
+  type: string;
   isActive: boolean;
   usePartytown: boolean;
   config: string; // JSON string for analytics configuration
@@ -52,6 +53,10 @@ export function processAnalyticsScript(script: AnalyticsConfig): string {
  * Respects the usePartytown field from the database configuration.
  */
 export function shouldUsePartytown(script: AnalyticsConfig): boolean {
+  if (script.type === "cloudflare_web_analytics") {
+    return false;
+  }
+
   if (typeof script.usePartytown === "boolean") {
     return script.usePartytown;
   }
@@ -62,6 +67,110 @@ export function shouldUsePartytown(script: AnalyticsConfig): boolean {
     "google_tag_manager",
   ];
   return partytownTypes.includes(script.type) || script.type === "custom";
+}
+
+type AnalyticsPrimitive = string | number | boolean;
+type AnalyticsValue =
+  | AnalyticsPrimitive
+  | null
+  | undefined
+  | AnalyticsValue[]
+  | { [key: string]: AnalyticsValue };
+
+type ZarazParameters = Record<string, AnalyticsValue>;
+
+function cleanAnalyticsValue(value: AnalyticsValue): AnalyticsValue {
+  if (Array.isArray(value)) {
+    return value
+      .map(cleanAnalyticsValue)
+      .filter((item) => item !== undefined) as AnalyticsValue[];
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value)
+      .map(([key, entryValue]) => [key, cleanAnalyticsValue(entryValue)])
+      .filter(([, entryValue]) => entryValue !== undefined);
+    return Object.fromEntries(entries) as { [key: string]: AnalyticsValue };
+  }
+
+  return value === undefined ? undefined : value;
+}
+
+function cleanAnalyticsParams(params: ZarazParameters): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(params)
+      .map(([key, value]) => [key, cleanAnalyticsValue(value)])
+      .filter(([, value]) => value !== undefined),
+  );
+}
+
+function sendZarazEcommerce(
+  eventName: string,
+  params: ZarazParameters,
+): void {
+  const ecommerce = window.zaraz?.ecommerce;
+  if (typeof ecommerce !== "function") {
+    return;
+  }
+
+  try {
+    void Promise.resolve(ecommerce(eventName, cleanAnalyticsParams(params))).catch(
+      (error: unknown) => {
+        console.warn("Zaraz ecommerce event failed:", error);
+      },
+    );
+  } catch (error) {
+    console.warn("Zaraz ecommerce event failed:", error);
+  }
+}
+
+function sendZarazTrack(eventName: string, params: ZarazParameters): void {
+  const track = window.zaraz?.track;
+  if (typeof track !== "function") {
+    return;
+  }
+
+  try {
+    void Promise.resolve(track(eventName, cleanAnalyticsParams(params))).catch(
+      (error: unknown) => {
+        console.warn("Zaraz event failed:", error);
+      },
+    );
+  } catch (error) {
+    console.warn("Zaraz event failed:", error);
+  }
+}
+
+function mapFbContentsToZarazProducts(
+  contents?: Array<{ id: string; quantity: number; item_price?: number }>,
+  contentIds?: string[],
+): Array<Record<string, AnalyticsValue>> | undefined {
+  if (contents?.length) {
+    return contents.map((item, index) => ({
+      product_id: item.id,
+      sku: item.id,
+      quantity: item.quantity,
+      price: item.item_price,
+      position: index + 1,
+    }));
+  }
+
+  if (contentIds?.length) {
+    return contentIds.map((id, index) => ({
+      product_id: id,
+      sku: id,
+      quantity: 1,
+      position: index + 1,
+    }));
+  }
+
+  return undefined;
+}
+
+function firstProduct(
+  products?: Array<Record<string, AnalyticsValue>>,
+): Record<string, AnalyticsValue> {
+  return products?.[0] ?? {};
 }
 
 // --- E-commerce Event Tracking ---
@@ -108,6 +217,11 @@ export function trackFbPageView(): void {
     window.fbq("track", "PageView");
     console.debug("FB Pixel: PageView tracked");
   }
+
+  sendZarazTrack("PageView", {
+    page_location: window.location?.href,
+    page_path: window.location?.pathname,
+  });
 }
 
 /**
@@ -127,6 +241,22 @@ export function trackFbViewContent(data: {
   if (typeof window.fbq === "function") {
     window.fbq("track", "ViewContent", data);
   }
+
+  const products = mapFbContentsToZarazProducts(
+    data.contents,
+    data.content_ids,
+  );
+  const product = firstProduct(products);
+  sendZarazEcommerce("Product Viewed", {
+    product_id: product.product_id,
+    sku: product.sku,
+    category: data.content_category,
+    name: data.content_name,
+    price: product.price,
+    quantity: product.quantity,
+    currency: data.currency,
+    value: data.value,
+  });
 
   // CAPI: Server-side Event
   sendServerEvent({
@@ -159,6 +289,22 @@ export function trackFbAddToCart(data: {
     window.fbq("track", "AddToCart", data);
   }
 
+  const products = mapFbContentsToZarazProducts(
+    data.contents,
+    data.content_ids,
+  );
+  const product = firstProduct(products);
+  sendZarazEcommerce("Product Added", {
+    product_id: product.product_id,
+    sku: product.sku,
+    name: data.content_name,
+    price: product.price,
+    quantity: product.quantity,
+    products,
+    currency: data.currency,
+    value: data.value,
+  });
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventName: "AddToCart",
@@ -190,6 +336,16 @@ export function trackFbInitiateCheckout(data: {
     window.fbq("track", "InitiateCheckout", data);
   }
 
+  sendZarazEcommerce("Checkout Started", {
+    products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
+    category: data.content_category,
+    name: data.content_name,
+    currency: data.currency,
+    total: data.value,
+    value: data.value,
+    quantity: data.num_items,
+  });
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventName: "InitiateCheckout",
@@ -220,6 +376,14 @@ export function trackFbAddPaymentInfo(data?: {
     window.fbq("track", "AddPaymentInfo", data || {});
   }
 
+  sendZarazEcommerce("Payment Info Entered", {
+    products: mapFbContentsToZarazProducts(data?.contents, data?.content_ids),
+    category: data?.content_category,
+    currency: data?.currency,
+    total: data?.value,
+    value: data?.value,
+  });
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventName: "AddPaymentInfo",
@@ -249,6 +413,15 @@ export function trackFbPurchase(
     window.fbq("track", "Purchase", data);
   }
 
+  sendZarazEcommerce("Order Completed", {
+    order_id: data.order_id,
+    total: data.value,
+    revenue: data.value,
+    currency: data.currency,
+    products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
+    quantity: data.num_items,
+  });
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventName: "Purchase",
@@ -276,6 +449,8 @@ export function trackFbLead(
     window.fbq("track", "Lead", data || {});
   }
 
+  sendZarazTrack("Lead", { ...(data ?? {}) });
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventName: "Lead",
@@ -301,6 +476,8 @@ export function trackFbCompleteRegistration(
     window.fbq("track", "CompleteRegistration", data || {});
   }
 
+  sendZarazTrack("CompleteRegistration", { ...(data ?? {}) });
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventName: "CompleteRegistration",
@@ -324,6 +501,20 @@ export function trackFbSearch(data: {
   if (typeof window.fbq === "function") {
     window.fbq("track", "Search", data);
   }
+
+  sendZarazEcommerce("Products Searched", {
+    query: data.search_string,
+    products: mapFbContentsToZarazProducts(
+      data.contents?.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+      })),
+      data.content_ids,
+    ),
+    category: data.content_category,
+    currency: data.currency,
+    value: data.value,
+  });
 
   // CAPI: Server-side Event
   sendServerEvent({

@@ -12,6 +12,7 @@ declare const window: {
 } & Record<string, unknown>;
 
 import type { Analytics as AnalyticsConfig } from "@scalius/database/schema";
+import { isMainThreadOnlyAnalyticsType } from "../modules/analytics/analytics.validation";
 
 /**
  * Processes an analytics script configuration to add Partytown attributes.
@@ -35,6 +36,10 @@ export function processAnalyticsScript(script: AnalyticsConfig): string {
  * Respects the usePartytown field from the database configuration.
  */
 export function shouldUsePartytown(script: AnalyticsConfig): boolean {
+  if (isMainThreadOnlyAnalyticsType(script.type)) {
+    return false;
+  }
+
   if (typeof script.usePartytown === "boolean") {
     return script.usePartytown;
   }

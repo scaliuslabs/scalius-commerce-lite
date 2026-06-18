@@ -5,7 +5,12 @@ import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import type { Analytics } from "@scalius/database/schema";
 import type { z } from "zod";
-import type { createAnalyticsSchema, updateAnalyticsSchema } from "./analytics.validation";
+import {
+    isMainThreadOnlyAnalyticsType,
+    normalizeCloudflareWebAnalyticsConfig,
+    type createAnalyticsSchema,
+    type updateAnalyticsSchema,
+} from "./analytics.validation";
 
 type CreateAnalyticsInput = z.infer<typeof createAnalyticsSchema>;
 type UpdateAnalyticsInput = z.infer<typeof updateAnalyticsSchema>;
@@ -27,6 +32,22 @@ function formatScriptResponse(script: Analytics | undefined | null) {
     };
 }
 
+function normalizeAnalyticsScriptValues(
+    data: CreateAnalyticsInput | UpdateAnalyticsInput,
+) {
+    const config =
+        data.type === "cloudflare_web_analytics"
+            ? normalizeCloudflareWebAnalyticsConfig(data.config)
+            : data.config;
+
+    return {
+        config,
+        usePartytown: isMainThreadOnlyAnalyticsType(data.type)
+            ? false
+            : data.usePartytown,
+    };
+}
+
 export async function listAnalyticsScripts(db: Database) {
     const results = await db.select().from(analytics).limit(50);
     return results.map(formatScriptResponse);
@@ -44,6 +65,7 @@ export async function getAnalyticsScript(db: Database, id: string) {
 
 export async function createAnalyticsScript(db: Database, data: CreateAnalyticsInput) {
     const analyticsId = "analytics_" + nanoid();
+    const normalized = normalizeAnalyticsScriptValues(data);
 
     const [script] = await db
         .insert(analytics)
@@ -52,8 +74,8 @@ export async function createAnalyticsScript(db: Database, data: CreateAnalyticsI
             name: data.name,
             type: data.type,
             isActive: data.isActive,
-            usePartytown: data.usePartytown,
-            config: data.config,
+            usePartytown: normalized.usePartytown,
+            config: normalized.config,
             location: data.location,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -74,14 +96,16 @@ export async function updateAnalyticsScript(db: Database, id: string, data: Upda
         return null;
     }
 
+    const normalized = normalizeAnalyticsScriptValues(data);
+
     await db
         .update(analytics)
         .set({
             name: data.name,
             type: data.type,
             isActive: data.isActive,
-            usePartytown: data.usePartytown,
-            config: data.config,
+            usePartytown: normalized.usePartytown,
+            config: normalized.config,
             location: data.location,
             updatedAt: sql`unixepoch()`,
         })

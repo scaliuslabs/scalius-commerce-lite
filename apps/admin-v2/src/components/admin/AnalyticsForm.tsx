@@ -31,7 +31,11 @@ import {
   updateAnalyticsScript,
 } from "@/lib/api-functions/analytics";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
-import { analyticsFormSchema, type AnalyticsFormValues } from "@/lib/form-schemas";
+import {
+  analyticsFormSchema,
+  type AnalyticsFormValues,
+  type AnalyticsScriptType,
+} from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -40,20 +44,68 @@ interface AnalyticsFormProps {
   isEdit?: boolean;
 }
 
+const CLOUDFLARE_WEB_ANALYTICS_EXAMPLE =
+  `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN"}'></script>`;
+
+const ANALYTICS_CONFIG_EXAMPLES: Record<AnalyticsScriptType, string> = {
+  google_analytics: `<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'GA_MEASUREMENT_ID');
+</script>`,
+  facebook_pixel: `<!-- Facebook Pixel Code -->
+<script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window, document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', 'PIXEL_ID');
+  fbq('track', 'PageView');
+</script>`,
+  cloudflare_web_analytics: CLOUDFLARE_WEB_ANALYTICS_EXAMPLE,
+  custom: `<!-- Custom Script -->
+<script>
+  // Your custom script here
+</script>`,
+};
+
+const suggestedConfigs = Object.values(ANALYTICS_CONFIG_EXAMPLES);
+
+function getConfigExample(type: AnalyticsScriptType) {
+  return ANALYTICS_CONFIG_EXAMPLES[type] ?? ANALYTICS_CONFIG_EXAMPLES.custom;
+}
+
 export function AnalyticsForm({
   defaultValues,
   isEdit = false,
 }: AnalyticsFormProps) {
+  const defaultType = defaultValues?.type ?? "custom";
   const form = useForm<AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
     defaultValues: {
       name: "",
-      type: "custom",
+      type: defaultType,
       isActive: true,
-      usePartytown: true,
+      usePartytown:
+        defaultType === "cloudflare_web_analytics"
+          ? false
+          : (defaultValues?.usePartytown ?? true),
       config: "",
-      location: "head",
+      location:
+        defaultType === "cloudflare_web_analytics"
+          ? "body_end"
+          : (defaultValues?.location ?? "head"),
       ...defaultValues,
+      ...(defaultType === "cloudflare_web_analytics"
+        ? { usePartytown: false, location: defaultValues?.location ?? "body_end" }
+        : {}),
     },
   });
 
@@ -71,60 +123,46 @@ export function AnalyticsForm({
   });
 
   const handleSubmit = (values: AnalyticsFormValues) => {
-    submitEntity(values);
+    submitEntity({
+      ...values,
+      usePartytown:
+        values.type === "cloudflare_web_analytics" ? false : values.usePartytown,
+    });
   };
 
-  // Helper function to show example config based on type
-  const getConfigExample = (type: string) => {
-    switch (type) {
-      case "google_analytics":
-        return `<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'GA_MEASUREMENT_ID');
-</script>`;
-      case "facebook_pixel":
-        return `<!-- Facebook Pixel Code -->
-<script>
-  !function(f,b,e,v,n,t,s)
-  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-  n.queue=[];t=b.createElement(e);t.async=!0;
-  t.src=v;s=b.getElementsByTagName(e)[0];
-  s.parentNode.insertBefore(t,s)}(window, document,'script',
-  'https://connect.facebook.net/en_US/fbevents.js');
-  fbq('init', 'PIXEL_ID');
-  fbq('track', 'PageView');
-</script>`;
-      default:
-        return `<!-- Custom Script -->
-<script>
-  // Your custom script here
-</script>`;
-    }
-  };
+  const lastSuggestedConfigRef = React.useRef<string | null>(null);
 
   // Update config example when type changes
   React.useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === "type" && value.type) {
+        const nextType = value.type as AnalyticsScriptType;
         const currentConfig = form.getValues("config");
+        const previousSuggestion = lastSuggestedConfigRef.current;
+        const nextSuggestion = getConfigExample(nextType);
         if (
           !currentConfig ||
-          currentConfig === getConfigExample(form.getValues("type") as string)
+          currentConfig === previousSuggestion ||
+          suggestedConfigs.includes(currentConfig)
         ) {
-          form.setValue("config", getConfigExample(value.type as string), {
+          form.setValue("config", nextSuggestion, {
             shouldValidate: true,
           });
+        }
+        lastSuggestedConfigRef.current = nextSuggestion;
+
+        if (nextType === "cloudflare_web_analytics") {
+          form.setValue("usePartytown", false, { shouldValidate: true });
+          form.setValue("location", "body_end", { shouldValidate: true });
         }
       }
     });
     return () => subscription.unsubscribe();
   }, [form]);
+
+  const selectedType = form.watch("type");
+  const isCloudflareWebAnalytics =
+    selectedType === "cloudflare_web_analytics";
 
   return (
     <FormContainer
@@ -185,11 +223,14 @@ export function AnalyticsForm({
                     <SelectItem value="facebook_pixel">
                       Facebook Pixel
                     </SelectItem>
+                    <SelectItem value="cloudflare_web_analytics">
+                      Cloudflare Web Analytics
+                    </SelectItem>
                     <SelectItem value="custom">Custom Script</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  The type of analytics script you want to add.
+                  Choose the provider this script belongs to.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -225,6 +266,9 @@ export function AnalyticsForm({
                 </Select>
                 <FormDescription>
                   Where in the HTML document to place this script.
+                  {isCloudflareWebAnalytics
+                    ? " Cloudflare recommends installing the beacon before the closing body tag."
+                    : ""}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -245,7 +289,9 @@ export function AnalyticsForm({
                   />
                 </FormControl>
                 <FormDescription>
-                  The actual script code that will be inserted into your site.
+                  {isCloudflareWebAnalytics
+                    ? "Paste the Cloudflare Web Analytics site token or the official beacon snippet."
+                    : "The actual script code that will be inserted into your site."}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -281,13 +327,15 @@ export function AnalyticsForm({
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Use Partytown</FormLabel>
                   <FormDescription>
-                    Run this script in a web worker to improve page
-                    performance
+                    {isCloudflareWebAnalytics
+                      ? "Cloudflare's beacon runs on the main thread so it can read browser performance timing."
+                      : "Run this script in a web worker to improve page performance."}
                   </FormDescription>
                 </div>
                 <FormControl>
                   <Switch
                     checked={field.value}
+                    disabled={isCloudflareWebAnalytics}
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>

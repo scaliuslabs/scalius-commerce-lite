@@ -27,9 +27,16 @@ Third-party analytics script management, Meta Conversions API integration, and a
 
 ### Zod Schemas (`analytics.validation.ts`)
 
-- `createAnalyticsSchema` -- name (3-100 chars), type (`google_analytics` | `facebook_pixel` | `custom`), isActive (default true), usePartytown (default true), config (non-empty string), location (`head` | `body_start` | `body_end`)
+- `createAnalyticsSchema` -- name (3-100 chars), type (`google_analytics` | `facebook_pixel` | `cloudflare_web_analytics` | `custom`), isActive (default true), usePartytown (default true), config (non-empty string), location (`head` | `body_start` | `body_end`)
 - `updateAnalyticsSchema` -- same fields plus `id` (required)
 - `toggleAnalyticsSchema` -- `{ isActive: boolean }`
+
+Cloudflare Web Analytics is first-class because it is the default Cloudflare-native
+alternative to GA/Facebook page analytics. Admins may paste either the Cloudflare
+site token or the official beacon snippet. Token-only saves are normalized to the
+`https://static.cloudflareinsights.com/beacon.min.js` snippet, `usePartytown` is
+forced off, and the admin UI defaults it to `body_end` so the beacon can read
+browser performance timing directly.
 
 ## Dashboard Statistics
 
