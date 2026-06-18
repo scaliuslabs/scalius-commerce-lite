@@ -109,6 +109,16 @@ interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
+interface CloudflareSendEmailBinding {
+  send(message: {
+    to: string | { email: string; name?: string } | Array<string | { email: string; name?: string }>;
+    from: string | { email: string; name?: string };
+    subject: string;
+    html?: string;
+    text?: string;
+  }): Promise<{ messageId: string }>;
+}
+
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
@@ -145,6 +155,7 @@ interface Env {
   SHARED_AUTH_CACHE: KVNamespace;
   AI?: Ai;
   WidgetDesignAgent: DurableObjectNamespace;
+  EMAIL?: CloudflareSendEmailBinding;
 
   // Cloudflare Queue bindings
   PAYMENT_EVENTS_QUEUE: Queue;

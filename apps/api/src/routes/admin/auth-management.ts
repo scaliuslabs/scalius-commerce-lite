@@ -13,6 +13,7 @@ import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError, ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import { getEncryptionKey } from "../../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type BetterAuthHeaders = Headers & { getSetCookie?: () => string[] };
@@ -216,7 +217,11 @@ app.openapi(createUserRoute, async (c) => {
 
         let emailFailed = false;
         try {
-            await sendAdminInviteEmail(email, sessionUser.name, tempPassword, loginUrl);
+            await sendAdminInviteEmail(email, sessionUser.name, tempPassword, loginUrl, {
+                db,
+                env: env as unknown as Record<string, unknown>,
+                encryptionKey: getEncryptionKey(env as unknown as Record<string, unknown>),
+            });
         } catch (emailError: unknown) {
             console.error("Failed to send invitation email:", emailError);
             emailFailed = true;

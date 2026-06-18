@@ -221,6 +221,7 @@ async function processQueueMessage(
     //       to src/modules/notifications/otp.handler.ts
     case "auth.send_otp": {
       if (payload.method === "email") {
+        const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
         await sendEmail({
           to: payload.identifier,
           subject: "Your login code",
@@ -235,6 +236,10 @@ async function processQueueMessage(
             </div>
           `,
           text: `Your login code is: ${payload.code}\n\nExpires in 5 minutes.`,
+        }, {
+          db,
+          env: env as unknown as Record<string, unknown>,
+          encryptionKey,
         });
         console.log(`[Queue] Sent OTP email to ${payload.identifier}`);
       } else if (payload.method === "phone" && payload.allowedMethod === "whatsapp_otp") {
@@ -434,7 +439,10 @@ async function processQueueMessage(
         payload.notificationType,
         payload.data,
         db,
-        { encryptionKey },
+        {
+          encryptionKey,
+          env: env as unknown as Record<string, unknown>,
+        },
       );
 
       // Admin push notification — check admin channel settings before sending

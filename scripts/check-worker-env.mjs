@@ -29,6 +29,7 @@ const apps = [
       "API_TOKEN",
       "JWT_SECRET",
       "FIREBASE_SERVICE_ACCOUNT_CRED_JSON",
+      "CREDENTIAL_ENCRYPTION_KEY",
       "PURGE_TOKEN",
       "PROJECT_CACHE_PREFIX",
     ],
@@ -127,6 +128,12 @@ function collectConfigNames(config) {
   visit(config);
 
   for (const binding of config.durable_objects?.bindings ?? []) {
+    if (typeof binding.name === "string") {
+      names.add(binding.name);
+    }
+  }
+
+  for (const binding of config.send_email ?? []) {
     if (typeof binding.name === "string") {
       names.add(binding.name);
     }

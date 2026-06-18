@@ -4,6 +4,7 @@ import type { Database } from "@scalius/database/client";
 const mocks = vi.hoisted(() => ({
     getNotificationChannels: vi.fn(),
     getActiveSmsProvider: vi.fn(),
+    sendEmail: vi.fn(),
     sendSms: vi.fn(),
 }));
 
@@ -16,7 +17,7 @@ vi.mock("../../integrations/sms", () => ({
 }));
 
 vi.mock("../../integrations/email", () => ({
-    sendEmail: vi.fn(),
+    sendEmail: mocks.sendEmail,
 }));
 
 import { sendOrderNotificationEmail } from "./notifications.service";
@@ -85,5 +86,43 @@ describe("order notification dispatch", () => {
             message:
                 "Hi SMS Customer, your order #order_1 has been refunded. Contact us if you have questions.",
         });
+    });
+
+    it("passes runtime context when sending order emails", async () => {
+        const db = createDb();
+        const emailEnv = {
+            EMAIL: {
+                send: vi.fn(),
+            },
+        };
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["email"],
+        });
+        mocks.sendEmail.mockResolvedValue(undefined);
+
+        await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Email Customer",
+            "order_2",
+            "order_created",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                env: emailEnv,
+            },
+        );
+
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                to: "buyer@example.com",
+                subject: "Order #order_2 Received",
+            }),
+            {
+                db,
+                env: emailEnv,
+                encryptionKey: "credential-key",
+            },
+        );
     });
 });

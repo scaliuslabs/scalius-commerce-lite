@@ -44,6 +44,11 @@
       "bucket_name": "scalius-media"
     }
   ],
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
   "services": [
     {
       "binding": "API",

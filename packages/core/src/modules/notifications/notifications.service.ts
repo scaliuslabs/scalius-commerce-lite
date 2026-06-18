@@ -6,6 +6,7 @@ import { adminFcmTokens, settings } from "@scalius/database/schema";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
 import { eq, sql, and, inArray } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
+import type { EmailRuntimeContext } from "../../integrations/email";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import type { OrderNotificationType } from "./notification-types";
 
@@ -134,6 +135,7 @@ export async function sendOrderNotification(
 
 interface OrderNotificationOptions {
     encryptionKey?: string;
+    env?: EmailRuntimeContext["env"];
 }
 
 /**
@@ -220,6 +222,10 @@ export async function sendOrderNotificationEmail(
               </div>
             `,
                 text: `${name}, ${htmlMessages[type]?.replace(/<[^>]+>/g, "") || `Order #${orderId} updated.`}`,
+            }, {
+                db,
+                env: options.env,
+                encryptionKey: options.encryptionKey,
             });
         } catch (emailError: unknown) {
             console.error(`[Notifications] Email failed for ${type} (order ${orderId}):`, emailError);

@@ -5,8 +5,9 @@ import { nanoid } from "nanoid";
 
 import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
-import { getEncryptionKey } from "../../../utils/encryption-key";
-import { upsertEncryptedSetting } from "@scalius/core/modules/payments/gateway-settings";
+import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
+import { upsertEncryptedSetting, upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
 import {
     getOptionalExecutionContext,
     invalidateApiAndScheduleStorefrontGroups,
@@ -217,27 +218,42 @@ const getEmailRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Get email settings (system)",
     responses: {
-        200: { description: "Email settings", content: { "application/json": { schema: successEnvelope(z.object({ apiKey: z.string(), sender: z.string() })) } } },
+        200: { description: "Email settings", content: { "application/json": { schema: successEnvelope(z.object({
+            provider: z.enum(["cloudflare", "resend"]),
+            apiKey: z.string(),
+            sender: z.string(),
+            cloudflareBindingConfigured: z.boolean(),
+            resendConfigured: z.boolean(),
+        })) } } },
         ...errorResponses,
     }
 });
 
 app.openapi(getEmailRoute, async (c) => {
     const db = c.get("db");
-        const [apiKeyRow, senderRow] = await Promise.all([
-            db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "resend_api_key"), eq(settings.category, "email"))).get(),
-            db.select({ value: settings.value }).from(settings).where(and(eq(settings.key, "email_sender"), eq(settings.category, "email"))).get(),
-        ]);
+        const emailSettings = await getEmailRuntimeSettings({
+            db,
+            env: c.env as Record<string, unknown>,
+            encryptionKey: getEncryptionKey(c.env as Record<string, unknown>),
+        });
+        const sender = await readEmailSetting(db, "email_sender");
 
         return ok(c, {
-            apiKey: apiKeyRow?.value ? MASKED : "",
-            sender: senderRow?.value || ""
+            provider: emailSettings.provider,
+            apiKey: emailSettings.hasResendApiKey ? MASKED : "",
+            sender: sender || "",
+            cloudflareBindingConfigured: emailSettings.cloudflareBindingConfigured,
+            resendConfigured: emailSettings.hasResendApiKey,
         });
 });
 
 const saveEmailSchema = z.object({
-    apiKey: z.string().optional(),
-    sender: z.string().optional(),
+    provider: z.enum(["cloudflare", "resend"]).optional(),
+    apiKey: z.string().max(512).optional(),
+    sender: z.string().max(320).refine(
+        (value) => value.trim() === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+        "Sender must be a valid email address",
+    ).optional(),
 });
 
 const saveEmailRoute = createRoute({
@@ -254,20 +270,25 @@ const saveEmailRoute = createRoute({
 
 app.openapi(saveEmailRoute, async (c) => {
     const db = c.get("db");
-        const { apiKey, sender } = c.req.valid("json");
+        const { apiKey, sender, provider } = c.req.valid("json");
         const updates: Promise<unknown>[] = [];
 
+        if (provider) {
+            updates.push(upsertSetting(db, "email", "email_provider", provider));
+        }
+
         if (typeof apiKey === "string" && apiKey !== MASKED) {
-            const encKey = getEncryptionKey(c.env as Record<string, unknown>);
-            updates.push(upsertEncryptedSetting(db, "email", "resend_api_key", apiKey, encKey));
+            const trimmedApiKey = apiKey.trim();
+            if (trimmedApiKey) {
+                const encKey = requireEncryptionKey(c.env as Record<string, unknown>);
+                updates.push(upsertEncryptedSetting(db, "email", "resend_api_key", trimmedApiKey, encKey));
+            } else {
+                updates.push(upsertSetting(db, "email", "resend_api_key", ""));
+            }
         }
 
         if (typeof sender === "string") {
-            updates.push(
-                db.insert(settings)
-                    .values({ id: `set_${nanoid(10)}`, key: "email_sender", value: sender, type: "string", category: "email" })
-                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: sender, updatedAt: sql`(unixepoch())` } })
-            );
+            updates.push(upsertSetting(db, "email", "email_sender", sender.trim()));
         }
 
         await Promise.all(updates);

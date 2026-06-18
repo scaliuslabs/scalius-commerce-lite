@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  getEmailRuntimeSettings: vi.fn(),
+  readEmailSetting: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
     try {
       return c.executionCtx;
@@ -15,6 +17,7 @@ const mocks = vi.hoisted(() => ({
     }
   }),
   upsertEncryptedSetting: vi.fn(),
+  upsertSetting: vi.fn(),
 }));
 
 vi.mock("../../../utils/kv-cache", () => ({
@@ -32,6 +35,12 @@ vi.mock("../../../utils/cache-invalidation", () => ({
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
   upsertEncryptedSetting: mocks.upsertEncryptedSetting,
+  upsertSetting: mocks.upsertSetting,
+}));
+
+vi.mock("@scalius/core/integrations/email", () => ({
+  getEmailRuntimeSettings: mocks.getEmailRuntimeSettings,
+  readEmailSetting: mocks.readEmailSetting,
 }));
 
 import { systemSettingsRoutes } from "./system";
@@ -69,6 +78,7 @@ function createTestApp() {
     },
     PURGE_URL: "https://storefront.example.com/api/purge-cache",
     PURGE_TOKEN: "secret-token",
+    CREDENTIAL_ENCRYPTION_KEY: "credential-key",
   } as unknown as Env;
   const executionCtx = {
     waitUntil: vi.fn(),
@@ -79,6 +89,16 @@ function createTestApp() {
   mocks.getKv.mockReturnValue(kv);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
+  mocks.upsertSetting.mockResolvedValue(undefined);
+  mocks.getEmailRuntimeSettings.mockResolvedValue({
+    provider: "cloudflare",
+    sender: "orders@example.com",
+    resendApiKey: null,
+    hasResendApiKey: false,
+    cloudflareBindingConfigured: true,
+  });
+  mocks.readEmailSetting.mockResolvedValue("orders@example.com");
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -168,6 +188,73 @@ describe("system settings cache invalidation", () => {
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["layout"],
       expect.objectContaining({ env }),
+    );
+  });
+
+  it("returns email provider status without exposing provider secrets", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/email",
+      { method: "GET" },
+      env,
+      executionCtx as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: {
+        provider: "cloudflare",
+        apiKey: "",
+        sender: "orders@example.com",
+        cloudflareBindingConfigured: true,
+        resendConfigured: false,
+      },
+    });
+  });
+
+  it("saves email provider and sender without resaving a masked Resend key", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/email", {
+      provider: "cloudflare",
+      sender: "orders@example.com",
+      apiKey: "••••••••••••",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.upsertSetting).toHaveBeenCalledWith(
+      expect.anything(),
+      "email",
+      "email_provider",
+      "cloudflare",
+    );
+    expect(mocks.upsertSetting).toHaveBeenCalledWith(
+      expect.anything(),
+      "email",
+      "email_sender",
+      "orders@example.com",
+    );
+    expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+  });
+
+  it("encrypts a new Resend key before saving it", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/email", {
+      provider: "resend",
+      sender: "orders@example.com",
+      apiKey: "re_secret_key",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+      expect.anything(),
+      "email",
+      "resend_api_key",
+      "re_secret_key",
+      "credential-key",
     );
   });
 });
