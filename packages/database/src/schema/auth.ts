@@ -28,7 +28,10 @@ export const user = sqliteTable("user", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    index("user_role_idx").on(table.role),
+    index("user_super_admin_idx").on(table.isSuperAdmin),
+]);
 
 export const session = sqliteTable("session", {
     id: text("id").primaryKey(),

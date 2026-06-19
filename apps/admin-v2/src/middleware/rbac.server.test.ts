@@ -56,6 +56,19 @@ describe("loadUserPermissions", () => {
 
     expect(context.isSuperAdmin).toBe(true);
     expect(context.hasAdminAccess).toBe(true);
+    expect(context.permissions).toEqual(new Set());
+    expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledWith(mocks.db);
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(mocks.isSuperAdmin).not.toHaveBeenCalled();
+  });
+
+  it("uses a known non-super-admin value while loading effective grants", async () => {
+    const { loadUserPermissions } = await import("./rbac.server");
+
+    const context = await loadUserPermissions("user_1", "admin", false);
+
+    expect(context.isSuperAdmin).toBe(false);
+    expect(context.hasAdminAccess).toBe(true);
     expect(context.permissions).toEqual(new Set(["orders.read"]));
     expect(mocks.getUserPermissions).toHaveBeenCalledWith(
       mocks.db,
