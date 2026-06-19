@@ -6,7 +6,7 @@ Complete authentication and role-based access control for the Scalius Commerce a
 
 ```
 Admin Auth Flow:
-  Browser --> TanStack Start middleware --> Better Auth Session Check
+  Browser --> TanStack Start route guard --> Direct D1 session-cookie lookup
                                              |
                                              v
                                        RBAC Permission Load
@@ -43,7 +43,7 @@ Customer Auth Flow (storefront):
 | `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (L1 Map + L2 KV + D1 batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), `clearPermissionCache()`, `clearAllPermissionCache()` |
 | `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
 | `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. |
-| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds all 81 permissions and 5 system roles on first admin access. Sets first `role=admin` user as super admin. Runs once per isolate lifecycle (in-memory flag). |
+| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds all 81 permissions and 5 system roles on first admin access. Sets first `role=admin` user as super admin. Runs once per isolate lifecycle (in-memory flag) and uses a versioned six-hour Cloudflare KV marker when a `CACHE` binding is supplied so fresh isolates can skip the expensive seed-current D1 batch. |
 | `rbac/api-protection.ts` | Higher-order functions for wrapping API route handlers: `withPermission()`, `withAnyPermission()`, `withAllPermissions()`, `withSuperAdmin()`. Also `checkPermissionForApi()`, `checkAnyPermissionForApi()`, `checkAllPermissionsForApi()` helpers, and `unauthorizedResponse()` / `forbiddenResponse()` factory functions. These are Astro-style wrappers; the Hono API uses middleware instead. |
 | `rbac/index.ts` | Barrel re-export of all RBAC modules. |
 
@@ -125,22 +125,21 @@ Customer Auth Flow (storefront):
 
 The TanStack admin app now uses route/server-function guards rather than the old Astro middleware chain.
 
-### 1. Auth Server Helpers (`apps/admin-v2/src/lib/auth.server.ts`)
+### 1. Auth Helpers
 
-- Detects Cloudflare environment, initializes DB/KV/Storage bindings
-- Reads the current request cookie header for SSR guards and server functions
-- Extracts Better Auth sessions for admin route guards and auth pages
-- Provides shared binding/session helpers to TanStack server functions
+- `apps/admin-v2/src/lib/admin-session.server.ts` is the hot route-guard path. It extracts the signed Better Auth session cookie, strips the signature suffix, and verifies the active session/user directly through D1 with expiry and ban predicates.
+- `apps/admin-v2/src/lib/auth.server.ts` remains the Better Auth integration boundary for `/api/auth/*`, 2FA verification paths, and auth operations that need Better Auth itself. Do not pull it back into normal `/admin` guard reads.
 
 ### 2. Admin Detection Guards (`apps/admin-v2/src/lib/auth.fns.ts`)
 
 - `/auth/login`: Redirects to `/auth/setup` if no admin users exist. Redirects to `/admin` if already authenticated (with 2FA check).
 - `/admin/*`: Redirects to `/auth/setup` if no admin users exist. Redirects to `/auth/login` if unauthenticated. Redirects to `/auth/two-factor` if 2FA enabled but session not verified.
-- Loads the current Better Auth session and returns serializable user/session context for TanStack route guards.
+- Loads the current session through the direct D1 helper and returns serializable user/session context for TanStack route guards.
 
 ### 3. RBAC Loader (`apps/admin-v2/src/middleware/rbac.server.ts`)
 
-- Calls `autoSeedRbacIfNeeded()` before permission loads
+- Returns immediately for a known super admin before importing Cloudflare env, database helpers, or core RBAC modules.
+- Calls `autoSeedRbacIfNeeded(db, kv)` before non-super-admin permission loads; keep the KV binding wired so seed-current checks are not repeated by every fresh isolate.
 - Loads user permissions via `getUserPermissions()` and returns permission arrays to the route context
 - Checks `isSuperAdmin()` and `hasAdminAccess()`
 - **Page-level protection**: `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/settings/account` are always accessible.

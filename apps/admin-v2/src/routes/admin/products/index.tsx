@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { z } from "zod";
 import {
   Plus,
   Package,
@@ -14,7 +13,13 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import {
+  createDataSelector,
+  createListSearchValidator,
+  normalizeSearchString,
+  type ListSearchParams,
+  type SearchValidatorInput,
+} from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import {
   productsQueryOptions,
@@ -51,14 +56,23 @@ import { StatCard } from "~/components/admin/shared/StatCard";
 
 // ── Search schema ─────────────────────────────────────────────────
 
-const searchSchema = createListSearchSchema(
+const baseSearchValidator = createListSearchValidator(
   ["name", "price", "category", "createdAt", "updatedAt"] as const,
   { sort: "updatedAt" },
-).extend({
-  category: z.string().default("all").catch("all"),
-});
+);
 
-type SearchParams = z.infer<typeof searchSchema>;
+type ProductSort = "name" | "price" | "category" | "createdAt" | "updatedAt";
+
+type SearchParams = ListSearchParams<ProductSort> & {
+  category: string;
+};
+
+function validateProductSearch(search: SearchValidatorInput<SearchParams>): SearchParams {
+  return {
+    ...baseSearchValidator(search),
+    category: normalizeSearchString(search.category, "all"),
+  };
+}
 
 // ── Map search params to API params ───────────────────────────────
 
@@ -77,7 +91,7 @@ function mapParams(deps: SearchParams) {
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/products/")({
-  validateSearch: searchSchema,
+  validateSearch: validateProductSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {

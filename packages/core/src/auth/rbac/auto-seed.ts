@@ -12,9 +12,11 @@ import {
 import { PERMISSIONS, getAllPermissions } from "./permissions";
 
 // Track if seeding has been checked this isolate lifecycle.
-// Reset to false on each new deployment (fresh isolate).
-// If you reset the DB manually, run `pnpm deploy` to get a fresh isolate.
+// Reset to false on each new deployment (fresh isolate). The optional KV marker
+// below also needs to expire or be purged after an intentional manual DB reset.
 let seedingChecked = false;
+const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v1";
+const RBAC_SEED_CACHE_TTL_SECONDS = 6 * 60 * 60;
 
 type SystemRoleSeed = {
   name: string;
@@ -127,6 +129,65 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
       ],
     },
   ];
+}
+
+function hashString(input: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function getRbacSeedCacheKey(): string {
+  const permissionSignature = getAllPermissions()
+    .map((permission) => [
+      permission.name,
+      permission.resource,
+      permission.action,
+      permission.category,
+      permission.isSensitive ? "1" : "0",
+    ].join(":"))
+    .sort()
+    .join("|");
+  const roleSignature = getSystemRoleSeeds()
+    .map((role) => `${role.name}:${[...role.permissions].sort().join(",")}`)
+    .sort()
+    .join("|");
+
+  return `${RBAC_SEED_CACHE_PREFIX}:${hashString(`${permissionSignature}::${roleSignature}`)}`;
+}
+
+export async function isRbacSeedCacheCurrent(
+  kv?: Pick<KVNamespace, "get">,
+): Promise<boolean> {
+  if (!kv) return false;
+  try {
+    return (await kv.get(getRbacSeedCacheKey())) === "1";
+  } catch (error) {
+    console.warn(
+      "RBAC: Failed to read seed cache marker:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return false;
+  }
+}
+
+export async function markRbacSeedCacheCurrent(
+  kv?: Pick<KVNamespace, "put">,
+): Promise<void> {
+  if (!kv) return;
+  try {
+    await kv.put(getRbacSeedCacheKey(), "1", {
+      expirationTtl: RBAC_SEED_CACHE_TTL_SECONDS,
+    });
+  } catch (error) {
+    console.warn(
+      "RBAC: Failed to write seed cache marker:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 /**
@@ -307,16 +368,25 @@ async function isRbacSeedCurrent(db: Database): Promise<boolean> {
  * Called from middleware on admin route access
  * Safe to call multiple times - only seeds once
  */
-export async function autoSeedRbacIfNeeded(db: Database): Promise<void> {
+export async function autoSeedRbacIfNeeded(
+  db: Database,
+  kv?: Pick<KVNamespace, "get" | "put">,
+): Promise<void> {
   // Quick check — only runs once per isolate lifecycle, zero DB cost after that
   if (seedingChecked) {
     return;
   }
 
   try {
+    if (await isRbacSeedCacheCurrent(kv)) {
+      seedingChecked = true;
+      return;
+    }
+
     const seeded = await isRbacSeeded(db);
     if (seeded && await isRbacSeedCurrent(db)) {
       seedingChecked = true;
+      await markRbacSeedCacheCurrent(kv);
       return;
     }
 
@@ -337,6 +407,7 @@ export async function autoSeedRbacIfNeeded(db: Database): Promise<void> {
     }
 
     seedingChecked = true;
+    await markRbacSeedCacheCurrent(kv);
   } catch (error: unknown) {
     console.error("RBAC: Auto-seeding failed:", error);
     // Don't set seedingChecked so it retries on next request

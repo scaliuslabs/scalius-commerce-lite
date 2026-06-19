@@ -6,6 +6,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
+import { getAdminSessionFromCookieHeader } from "./admin-session.server";
 
 type AdminDb = Pick<D1Database, "prepare">;
 
@@ -15,14 +16,6 @@ let adminExistsCache: { value: true; expiresAt: number } | null = null;
 let adminExistsInFlight: Promise<boolean> | null = null;
 let adminExistsCacheEpoch = 0;
 let workerEnvInFlight: Promise<Env> | null = null;
-
-function buildCookieHeaders(cookieHeader: string | null | undefined): Headers | null {
-  const cookie = cookieHeader?.trim();
-  if (!cookie) return null;
-  const headers = new Headers();
-  headers.set("cookie", cookie);
-  return headers;
-}
 
 async function getWorkerEnv(): Promise<Env> {
   const inFlight =
@@ -95,13 +88,11 @@ async function getCachedAdminExists(db: AdminDb): Promise<boolean> {
  */
 export const getSessionInfo = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
-  const headers = buildCookieHeaders(getRequestHeader("cookie"));
-  if (!headers) return null;
-
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
-  initBindings();
-
-  const authResult = await getAuthSession(headers);
+  const env = await getWorkerEnv();
+  const authResult = await getAdminSessionFromCookieHeader(
+    env.DB,
+    getRequestHeader("cookie"),
+  );
   if (!authResult) return null;
 
   return {
@@ -159,13 +150,10 @@ export const loginPageGuard = createServerFn().handler(async () => {
   }
 
   // Check session
-  const headers = buildCookieHeaders(getRequestHeader("cookie"));
-  if (!headers) return null;
-
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
-  initBindings();
-
-  const authResult = await getAuthSession(headers);
+  const authResult = await getAdminSessionFromCookieHeader(
+    env.DB,
+    getRequestHeader("cookie"),
+  );
   if (authResult?.session && authResult?.user) {
     const twoFactorVerified = authResult.session.twoFactorVerified === true;
     if (!authResult.user.twoFactorEnabled || twoFactorVerified) {
@@ -201,15 +189,10 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   }
 
   // Check session
-  const headers = buildCookieHeaders(getRequestHeader("cookie"));
-  if (!headers) {
-    throw redirect({ to: "/auth/login" });
-  }
-
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
-  initBindings();
-
-  const authResult = await getAuthSession(headers);
+  const authResult = await getAdminSessionFromCookieHeader(
+    env.DB,
+    getRequestHeader("cookie"),
+  );
   if (!authResult?.session || !authResult?.user) {
     throw redirect({ to: "/auth/login" });
   }
@@ -252,13 +235,12 @@ export const adminRouteGuard = createServerFn().handler(async () => {
  */
 export const redirectIfAuthenticated = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
-  const headers = buildCookieHeaders(getRequestHeader("cookie"));
-  if (!headers) return null;
+  const env = await getWorkerEnv();
 
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
-  initBindings();
-
-  const authResult = await getAuthSession(headers);
+  const authResult = await getAdminSessionFromCookieHeader(
+    env.DB,
+    getRequestHeader("cookie"),
+  );
   if (authResult?.session) {
     throw redirect({ to: "/admin" });
   }

@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { FileText, Plus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -33,12 +32,12 @@ import {
 import { getPageColumns } from "~/components/admin/data-table/columns/page-columns";
 import type { Page } from "~/types/api-responses";
 
-const searchSchema = createListSearchSchema(
+const validatePageSearch = createListSearchValidator(
   ["title", "sortOrder", "createdAt", "updatedAt"] as const,
   { sort: "updatedAt" },
 );
 
-function mapParams(deps: z.infer<typeof searchSchema>) {
+function mapParams(deps: ReturnType<typeof validatePageSearch>) {
   return {
     page: deps.page,
     limit: deps.limit,
@@ -50,7 +49,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 }
 
 export const Route = createFileRoute("/admin/pages/")({
-  validateSearch: searchSchema,
+  validateSearch: validatePageSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {

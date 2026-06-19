@@ -2,11 +2,12 @@
  * Shared helpers for list route patterns.
  *
  * Eliminates copy-pasted search schemas and data selectors across admin list
- * routes. Keep route UI boundaries in `route-error.tsx` so simple routes do
- * not pull Zod through this helper.
+ * routes. Keep route UI boundaries in `route-error.tsx` and keep this helper
+ * dependency-free because TanStack's generated route tree eagerly imports
+ * route validateSearch code for every route.
  */
 
-import { z } from "zod";
+import type { SearchSchemaInput } from "@tanstack/react-router";
 
 // ═══════════════════════════════════════════════════════════════════
 //  Shared types
@@ -20,6 +21,22 @@ export interface PaginationInfo {
 }
 
 export const DEFAULT_LIST_MAX_LIMIT = 100;
+
+export interface ListSearchParams<TSort extends string = string> {
+  page: number;
+  limit: number;
+  search: string;
+  sort: TSort;
+  order: "asc" | "desc";
+  trashed: boolean;
+}
+
+export type SearchValidatorInput<T extends object = object> = {
+  [K in keyof T]?: unknown;
+} & Record<string, unknown> &
+  SearchSchemaInput;
+
+type SearchInput<T extends object> = SearchValidatorInput<T>;
 
 export function normalizeListPositiveInteger(
   value: unknown,
@@ -50,35 +67,60 @@ export function getCanonicalPageForPagination(
   return pagination.total > 0 ? currentPage : 1;
 }
 
+export function normalizeSearchString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+export function normalizeOptionalSearchString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+export function normalizeBooleanSearchParam(
+  value: unknown,
+  fallback = false,
+): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+  return fallback;
+}
+
+export function normalizeEnumSearchParam<T extends string>(
+  value: unknown,
+  options: readonly T[],
+  fallback: T,
+): T {
+  return typeof value === "string" && options.includes(value as T)
+    ? (value as T)
+    : fallback;
+}
+
+export function normalizeDateSearchParam(value: unknown): string | undefined {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : undefined;
+}
+
 // ═══════════════════════════════════════════════════════════════════
-//  createListSearchSchema
+//  createListSearchValidator
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * Creates a Zod search schema for list routes with standard pagination,
- * search, sorting, and trash support.
- *
- * The returned schema can be extended with `.extend({})` for route-specific
- * fields (e.g., orders adds `status`, `paymentStatus`; discounts adds `type`).
+ * Creates a lightweight validateSearch function for list routes with standard
+ * pagination, search, sorting, and trash support.
  *
  * @example
  * ```ts
- * const searchSchema = createListSearchSchema(
+ * const validateSearch = createListSearchValidator(
  *   ["name", "createdAt", "updatedAt"] as const,
  *   { sort: "updatedAt" }
  * );
- *
- * // Extend for extra fields:
- * const orderSearchSchema = createListSearchSchema(
- *   ["customerName", "totalAmount", "status", "createdAt", "updatedAt"] as const,
- *   { limit: 10 }
- * ).extend({
- *   status: z.string().optional().catch(undefined),
- *   paymentStatus: z.string().optional().catch(undefined),
- * });
  * ```
  */
-export function createListSearchSchema<T extends readonly [string, ...string[]]>(
+export function createListSearchValidator<T extends readonly [string, ...string[]]>(
   sortOptions: T,
   defaults?: {
     limit?: number;
@@ -94,22 +136,17 @@ export function createListSearchSchema<T extends readonly [string, ...string[]]>
   const defaultSort = (defaults?.sort ?? sortOptions[0]) as T[number];
   const defaultOrder = defaults?.order ?? "desc";
 
-  return z.object({
-    page: z.preprocess(
-      (value) => normalizeListPositiveInteger(value, 1),
-      z.number(),
-    ).default(1).catch(1),
-    limit: z.preprocess(
-      (value) =>
-        normalizeListPositiveInteger(value, defaultLimit, {
-          max: DEFAULT_LIST_MAX_LIMIT,
-        }),
-      z.number(),
-    ).default(defaultLimit).catch(defaultLimit),
-    search: z.string().default("").catch(""),
-    sort: z.enum(sortOptions).default(defaultSort).catch(defaultSort),
-    order: z.enum(["asc", "desc"] as const).default(defaultOrder).catch(defaultOrder),
-    trashed: z.boolean().default(false).catch(false),
+  return (
+    search: SearchInput<ListSearchParams<T[number]>>,
+  ): ListSearchParams<T[number]> => ({
+    page: normalizeListPositiveInteger(search.page, 1),
+    limit: normalizeListPositiveInteger(search.limit, defaultLimit, {
+      max: DEFAULT_LIST_MAX_LIMIT,
+    }),
+    search: normalizeSearchString(search.search),
+    sort: normalizeEnumSearchParam(search.sort, sortOptions, defaultSort),
+    order: normalizeEnumSearchParam(search.order, ["asc", "desc"] as const, defaultOrder),
+    trashed: normalizeBooleanSearchParam(search.trashed),
   });
 }
 

@@ -5,7 +5,7 @@ import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
 import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
-import { Toaster } from "@/components/ui/sonner";
+import { DeferredToaster } from "@/components/ui/deferred-toaster";
 import {
   getAdminRouteContext,
   primeAdminRouteContextCache,
@@ -65,7 +65,7 @@ function AdminLayout() {
             <div id="form-action-bar-slot" />
           </SidebarInset>
         </SidebarProvider>
-        <Toaster richColors closeButton position="top-right" />
+        <DeferredToaster />
       </PermissionProvider>
     </ThemeProvider>
   );

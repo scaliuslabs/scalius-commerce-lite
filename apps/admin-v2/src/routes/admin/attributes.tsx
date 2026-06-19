@@ -1,9 +1,8 @@
 import { useMemo, useCallback, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Tags, Trash2, Plus } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { attributesQueryOptions } from "~/lib/api-query-options/attributes";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -31,12 +30,12 @@ import {
 import { useAttributeActions } from "~/components/admin/attributes-manager/hooks/useAttributeActions";
 import type { NewAttribute } from "~/components/admin/attributes-manager/types";
 
-const searchSchema = createListSearchSchema(
+const validateAttributeSearch = createListSearchValidator(
   ["name", "slug", "filterable", "updatedAt"] as const,
   { sort: "name", order: "asc" },
 );
 
-function mapParams(deps: z.infer<typeof searchSchema>) {
+function mapParams(deps: ReturnType<typeof validateAttributeSearch>) {
   return {
     page: deps.page,
     limit: deps.limit,
@@ -48,7 +47,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 }
 
 export const Route = createFileRoute("/admin/attributes")({
-  validateSearch: searchSchema,
+  validateSearch: validateAttributeSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {

@@ -1,9 +1,14 @@
 import { useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { LayoutDashboard, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import {
+  DEFAULT_LIST_MAX_LIMIT,
+  normalizeListPositiveInteger,
+  normalizeSearchString,
+  type SearchValidatorInput,
+} from "~/lib/list-helpers";
 import { widgetsQueryOptions } from "~/lib/api-query-options/widgets";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
@@ -21,14 +26,26 @@ import { getWidgetColumns } from "~/components/admin/data-table/columns/widget-c
 import type { Widget, WidgetListResponse } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 
-const searchSchema = z.object({
-  page: z.number().default(1).catch(1),
-  limit: z.number().default(10).catch(10),
-  search: z.string().default("").catch(""),
-});
+type WidgetSearchParams = {
+  page: number;
+  limit: number;
+  search: string;
+};
+
+function validateWidgetSearch(
+  search: SearchValidatorInput<WidgetSearchParams>,
+): WidgetSearchParams {
+  return {
+    page: normalizeListPositiveInteger(search.page, 1),
+    limit: normalizeListPositiveInteger(search.limit, 10, {
+      max: DEFAULT_LIST_MAX_LIMIT,
+    }),
+    search: normalizeSearchString(search.search),
+  };
+}
 
 export const Route = createFileRoute("/admin/widgets/")({
-  validateSearch: searchSchema,
+  validateSearch: validateWidgetSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {

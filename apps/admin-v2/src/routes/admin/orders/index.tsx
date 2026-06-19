@@ -8,12 +8,15 @@ import {
   useState,
 } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { toast } from "sonner";
 import {
-  createListSearchSchema,
   createDataSelector,
+  createListSearchValidator,
   getCanonicalPageForPagination,
+  normalizeDateSearchParam,
+  normalizeOptionalSearchString,
+  type ListSearchParams,
+  type SearchValidatorInput,
 } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { Row } from "@tanstack/react-table";
@@ -54,7 +57,7 @@ const BulkShipDialog = lazy(() =>
 
 // ── Search schema ─────────────────────────────────────────────────
 
-const searchSchema = createListSearchSchema(
+const baseSearchValidator = createListSearchValidator(
   [
     "relevance",
     "customerName",
@@ -64,21 +67,30 @@ const searchSchema = createListSearchSchema(
     "updatedAt",
   ] as const,
   { limit: 10, sort: "updatedAt" },
-).extend({
-  status: z.string().optional().catch(undefined),
-  startDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .catch(undefined),
-  endDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .catch(undefined),
-});
+);
 
-type SearchParams = z.infer<typeof searchSchema>;
+type OrderSort =
+  | "relevance"
+  | "customerName"
+  | "totalAmount"
+  | "status"
+  | "createdAt"
+  | "updatedAt";
+
+type SearchParams = ListSearchParams<OrderSort> & {
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+};
+
+function validateOrderSearch(search: SearchValidatorInput<SearchParams>): SearchParams {
+  return {
+    ...baseSearchValidator(search),
+    status: normalizeOptionalSearchString(search.status),
+    startDate: normalizeDateSearchParam(search.startDate),
+    endDate: normalizeDateSearchParam(search.endDate),
+  };
+}
 
 // ── Map search params to API params ───────────────────────────────
 
@@ -114,7 +126,7 @@ function isDocumentHidden() {
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/orders/")({
-  validateSearch: searchSchema,
+  validateSearch: validateOrderSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 30,
   loader: async ({ context: { queryClient }, deps }) => {

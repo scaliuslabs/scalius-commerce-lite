@@ -39,6 +39,23 @@ describe("admin route graph boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps route search validators out of the Zod runtime", () => {
+    const routeOffenders = listSourceFiles(join(ADMIN_SRC_ROOT, "routes"))
+      .map((path) => ({
+        path: relative(ADMIN_SRC_ROOT, path),
+        source: readFileSync(path, "utf8"),
+      }))
+      .filter(({ source }) => /from\s+["']zod["']/.test(source))
+      .map(({ path }) => path);
+    const listHelperSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "list-helpers.tsx"),
+      "utf8",
+    );
+
+    expect(routeOffenders).toEqual([]);
+    expect(listHelperSource).not.toMatch(/from\s+["']zod["']/);
+  });
+
   it("keeps runtime admin source off the broad query barrel", () => {
     const offenders = listSourceFiles(ADMIN_SRC_ROOT)
       .map((path) => ({
@@ -61,6 +78,56 @@ describe("admin route graph boundaries", () => {
       .map(({ path }) => path);
 
     expect(offenders).toEqual([]);
+  });
+
+  it("keeps admin route guards off the full Better Auth runtime", () => {
+    const authFunctionsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "auth.fns.ts"),
+      "utf8",
+    );
+    const directSessionSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-session.server.ts"),
+      "utf8",
+    );
+    const rbacServerSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "middleware", "rbac.server.ts"),
+      "utf8",
+    );
+
+    expect(authFunctionsSource).toContain("./admin-session.server");
+    expect(authFunctionsSource).not.toContain("~/lib/auth.server");
+    expect(authFunctionsSource).not.toContain("getAuthSession");
+    expect(directSessionSource).not.toMatch(/from\s+["']better-auth/);
+    expect(directSessionSource).not.toMatch(/from\s+["']@better-auth/);
+    expect(directSessionSource).not.toContain("@scalius/database");
+    expect(directSessionSource).not.toContain("@scalius/core/auth");
+    expect(rbacServerSource).not.toMatch(/import\s+[^;]*from\s+["']@scalius\/database\/client["']/);
+    expect(rbacServerSource).not.toMatch(/import\s+[^;]*from\s+["']@scalius\/core\/auth\/rbac/);
+    expect(rbacServerSource.indexOf("knownIsSuperAdmin === true")).toBeLessThan(
+      rbacServerSource.indexOf('import("cloudflare:workers")'),
+    );
+  });
+
+  it("keeps admin shell auth/toast actions behind lazy client boundaries", () => {
+    const adminRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
+      "utf8",
+    );
+    const userMenuSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "UserMenu.tsx"),
+      "utf8",
+    );
+    const deferredToasterSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "deferred-toaster.tsx"),
+      "utf8",
+    );
+
+    expect(adminRouteSource).toContain("@/components/ui/deferred-toaster");
+    expect(adminRouteSource).not.toContain("@/components/ui/sonner");
+    expect(userMenuSource).not.toMatch(/import\s+\{\s*authClient\s*\}/);
+    expect(userMenuSource).toContain('await import("@/lib/auth-client")');
+    expect(deferredToasterSource).toContain("lazy(() =>");
+    expect(deferredToasterSource).toContain('import("./sonner")');
   });
 
   it("keeps customer form writes invalidating dashboard aggregates", () => {

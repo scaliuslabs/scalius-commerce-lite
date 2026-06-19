@@ -837,7 +837,7 @@ setupApp.openapi(setupRoute, async (c) => {
         await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
 
         const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-        await autoSeedRbacIfNeeded(db);
+        await autoSeedRbacIfNeeded(db, kv);
 
         return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
     } catch (error: unknown) {
@@ -878,7 +878,7 @@ setupApp.openapi(setupRoute, async (c) => {
             .where(eq(user.id, existingUser.id));
 
         const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-        await autoSeedRbacIfNeeded(db);
+        await autoSeedRbacIfNeeded(db, kv);
 
         return created(c, { message: "Admin account recovered successfully", userId: existingUser.id });
     } finally {

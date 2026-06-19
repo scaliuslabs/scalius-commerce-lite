@@ -2,21 +2,21 @@
  * Server-only RBAC helpers. Isolated from client bundles.
  */
 
-import { getDb } from "@scalius/database/client";
-import { getUserPermissions, isSuperAdmin } from "@scalius/core/auth/rbac/helpers";
-import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
-import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
-import { env as cfEnv } from "cloudflare:workers";
-import { hasRbacAdminAccess } from "~/lib/admin-access";
-
-function getCfEnv(): Env {
-  return cfEnv;
-}
-
 export interface RbacContext {
   permissions: Set<string>;
   isSuperAdmin: boolean;
   hasAdminAccess: boolean;
+}
+
+function createRbacContext(
+  permissions: Set<string>,
+  isSuperAdmin: boolean,
+): RbacContext {
+  return {
+    permissions,
+    isSuperAdmin,
+    hasAdminAccess: isSuperAdmin || permissions.size > 0,
+  };
 }
 
 /**
@@ -27,20 +27,27 @@ export async function loadUserPermissions(
   _userRole?: string | null,
   knownIsSuperAdmin?: boolean | null,
 ): Promise<RbacContext> {
-  const env = getCfEnv();
-  const db = getDb(env);
-  const kv = env.CACHE as KVNamespace | undefined;
-
-  await retryTransientD1(() => autoSeedRbacIfNeeded(db));
-
   if (knownIsSuperAdmin === true) {
-    const permissions = new Set<string>();
-    return {
-      permissions,
-      isSuperAdmin: true,
-      hasAdminAccess: hasRbacAdminAccess({ isSuperAdmin: true, permissions }),
-    };
+    return createRbacContext(new Set<string>(), true);
   }
+
+  const [
+    { env },
+    { getDb },
+    { getUserPermissions, isSuperAdmin },
+    { autoSeedRbacIfNeeded },
+    { retryTransientD1 },
+  ] = await Promise.all([
+    import("cloudflare:workers"),
+    import("@scalius/database/client"),
+    import("@scalius/core/auth/rbac/helpers"),
+    import("@scalius/core/auth/rbac/auto-seed"),
+    import("@scalius/core/utils/transient-d1"),
+  ]);
+  const db = getDb(env as Env);
+  const kv = (env as Env).CACHE as KVNamespace | undefined;
+
+  await retryTransientD1(() => autoSeedRbacIfNeeded(db, kv));
 
   const permissions = await retryTransientD1(() => getUserPermissions(db, userId, kv));
   const superAdmin =
@@ -48,9 +55,5 @@ export async function loadUserPermissions(
       ? knownIsSuperAdmin
       : await retryTransientD1(() => isSuperAdmin(db, userId));
 
-  return {
-    permissions,
-    isSuperAdmin: superAdmin,
-    hasAdminAccess: hasRbacAdminAccess({ isSuperAdmin: superAdmin, permissions }),
-  };
+  return createRbacContext(permissions, superAdmin);
 }

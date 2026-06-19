@@ -1,9 +1,8 @@
 import { useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { PlusCircle, Trash2, Layers } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { collectionsQueryOptions } from "~/lib/api-query-options/collections";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -25,12 +24,12 @@ import {
   type CollectionItem,
 } from "~/components/admin/data-table/columns/collection-columns";
 
-const searchSchema = createListSearchSchema(
+const validateCollectionSearch = createListSearchValidator(
   ["name", "type", "isActive", "sortOrder", "updatedAt"] as const,
   { sort: "sortOrder", order: "asc" },
 );
 
-function mapParams(deps: z.infer<typeof searchSchema>) {
+function mapParams(deps: ReturnType<typeof validateCollectionSearch>) {
   return {
     page: deps.page,
     limit: deps.limit,
@@ -42,7 +41,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 }
 
 export const Route = createFileRoute("/admin/collections/")({
-  validateSearch: searchSchema,
+  validateSearch: validateCollectionSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {

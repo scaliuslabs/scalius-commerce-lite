@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { Tag, Plus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -35,12 +34,12 @@ import {
   type CategoryListItem,
 } from "~/components/admin/data-table/columns/category-columns";
 
-const searchSchema = createListSearchSchema(
+const validateCategorySearch = createListSearchValidator(
   ["name", "createdAt", "updatedAt"] as const,
   { sort: "updatedAt" },
 );
 
-function mapParams(deps: z.infer<typeof searchSchema>) {
+function mapParams(deps: ReturnType<typeof validateCategorySearch>) {
   return {
     page: deps.page,
     limit: deps.limit,
@@ -52,7 +51,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 }
 
 export const Route = createFileRoute("/admin/categories/")({
-  validateSearch: searchSchema,
+  validateSearch: validateCategorySearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {

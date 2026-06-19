@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { Users, UserPlus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -33,12 +32,12 @@ import {
 import { getCustomerColumns } from "~/components/admin/data-table/columns/customer-columns";
 import type { Customer } from "~/types/api-responses";
 
-const searchSchema = createListSearchSchema(
+const validateCustomerSearch = createListSearchValidator(
   ["name", "totalOrders", "totalSpent", "lastOrderAt", "createdAt", "updatedAt"] as const,
   { limit: 10, sort: "updatedAt" },
 );
 
-function mapParams(deps: z.infer<typeof searchSchema>) {
+function mapParams(deps: ReturnType<typeof validateCustomerSearch>) {
   return {
     page: deps.page,
     limit: deps.limit,
@@ -50,7 +49,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 }
 
 export const Route = createFileRoute("/admin/customers/")({
-  validateSearch: searchSchema,
+  validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
