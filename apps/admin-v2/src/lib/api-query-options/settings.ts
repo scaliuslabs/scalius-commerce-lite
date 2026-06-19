@@ -1,7 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getAuthSettings,
-  getCurrencySettings,
   getFirebaseSettings,
   getGeneralSettings,
   getMetaConversionsLogs,
@@ -10,6 +9,7 @@ import {
   getThemeSettings,
 } from "../api-functions/settings";
 import { queryKeys } from "../query-keys";
+export { currencySettingsQueryOptions } from "./currency";
 export { storefrontUrlQueryOptions } from "./storefront-url";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;
@@ -19,13 +19,6 @@ export const generalSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.general(),
     queryFn: () => getGeneralSettings(),
-    staleTime: CONFIG_STALE_TIME_MS,
-  });
-
-export const currencySettingsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.currency(),
-    queryFn: () => getCurrencySettings(),
     staleTime: CONFIG_STALE_TIME_MS,
   });
 

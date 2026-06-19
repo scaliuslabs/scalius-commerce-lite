@@ -8,7 +8,6 @@ import {
   type SettingsPayload,
   updateAuthSettings,
   updateBusinessSettings,
-  updateCurrencySettings,
   updateEmailSettings,
   updateFirebaseSettings,
   updateMediaSettings,
@@ -19,6 +18,7 @@ import {
   updateStorefrontUrl,
   updateThemeSettings,
 } from "../api-functions/settings";
+import { updateCurrencySettings } from "../api-functions/currency";
 import { getServerFnError, queryKeys } from "./shared";
 
 export function useUpdateSettings(category: string) {

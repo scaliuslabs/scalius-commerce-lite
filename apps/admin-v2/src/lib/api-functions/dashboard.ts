@@ -24,11 +24,6 @@ export interface DashboardStatsPayload {
   };
 }
 
-export type DashboardHomeStatsPayload = Omit<
-  DashboardStatsPayload,
-  "totalRevenue"
->;
-
 export interface DashboardRecentOrder {
   id: string;
   customerName: string;
@@ -50,29 +45,8 @@ export interface DashboardData {
   dailyActivityData: DashboardDailyActivity[];
 }
 
-export interface DashboardSummaryData {
-  stats: DashboardHomeStatsPayload;
-  recentOrders: DashboardRecentOrder[];
-}
-
-export interface DashboardActivityData {
-  dailyActivityData: DashboardDailyActivity[];
-}
-
 export const getDashboardData = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<DashboardData>("/dashboard");
-  },
-);
-
-export const getDashboardSummary = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<DashboardSummaryData>("/dashboard/home-summary");
-  },
-);
-
-export const getDashboardActivity = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<DashboardActivityData>("/dashboard/activity");
   },
 );

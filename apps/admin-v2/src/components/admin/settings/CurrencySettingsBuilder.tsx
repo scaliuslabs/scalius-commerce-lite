@@ -19,7 +19,7 @@ import {
   getCurrencySettings,
   type SettingsPayload,
   updateCurrencySettings,
-} from "@/lib/api-functions/settings";
+} from "@/lib/api-functions/currency";
 
 interface CurrencyEntry {
   code: string;
