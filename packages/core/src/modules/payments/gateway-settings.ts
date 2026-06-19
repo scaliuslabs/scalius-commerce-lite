@@ -286,7 +286,7 @@ export async function upsertSetting(
     });
 }
 
-/** Encrypt a value then upsert it. Falls back to plaintext if no key. */
+/** Encrypt a provider secret then upsert it. New credential writes must fail closed when no key is configured. */
 export async function upsertEncryptedSetting(
   db: Database,
   category: string,
@@ -294,9 +294,11 @@ export async function upsertEncryptedSetting(
   value: string,
   encryptionKey?: string,
 ): Promise<void> {
-  const stored = encryptionKey
-    ? await encryptCredentials(value, encryptionKey)
-    : value;
+  if (!encryptionKey) {
+    throw new Error("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+  }
+
+  const stored = await encryptCredentials(value, encryptionKey);
   await upsertSetting(db, category, key, stored);
 }
 

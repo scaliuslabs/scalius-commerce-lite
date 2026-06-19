@@ -7,6 +7,7 @@ import {
   invalidatePolarCache,
   invalidateSSLCommerzCache,
   invalidateStripeCache,
+  upsertEncryptedSetting,
 } from "./gateway-settings";
 
 function createRejectingDeleteKv(): KVNamespace {
@@ -40,6 +41,22 @@ function createDbReturningCategoryReads(
       }),
     }),
   };
+}
+
+function createDbCapturingInsert() {
+  const captured: { values?: Record<string, unknown> } = {};
+  const db = {
+    insert: vi.fn(() => ({
+      values: vi.fn((values: Record<string, unknown>) => {
+        captured.values = values;
+        return {
+          onConflictDoUpdate: vi.fn(async () => undefined),
+        };
+      }),
+    })),
+  };
+
+  return { db, captured };
 }
 
 describe("payment gateway settings cache cleanup", () => {
@@ -166,5 +183,29 @@ describe("payment gateway settings cache cleanup", () => {
       enabledMethods: ["polar"],
       defaultMethod: "polar",
     });
+  });
+
+  it("fails closed instead of storing provider secrets without an encryption key", async () => {
+    const { db } = createDbCapturingInsert();
+
+    await expect(
+      upsertEncryptedSetting(db as never, "stripe", "secret_key", "sk_live_missing_key"),
+    ).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY is required");
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it("encrypts provider secrets before writing them to settings", async () => {
+    const { db, captured } = createDbCapturingInsert();
+    const key = Buffer.alloc(32, 7).toString("base64");
+
+    await upsertEncryptedSetting(db as never, "stripe", "secret_key", "sk_live_secret", key);
+
+    expect(captured.values).toMatchObject({
+      category: "stripe",
+      key: "secret_key",
+      type: "string",
+    });
+    expect(captured.values?.value).toEqual(expect.any(String));
+    expect(captured.values?.value).not.toBe("sk_live_secret");
   });
 });

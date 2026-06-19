@@ -192,6 +192,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/polar` | Get Polar credentials (masks token + webhook) |
 | POST | `/polar` | Save Polar credentials. Invalidates polar, payment methods, and checkout config/cache |
 
+Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Reads keep graceful legacy fallback so existing plaintext/JWT-encrypted rows can still be migrated.
+
 ### `shipping.ts` -- Shipping methods CRUD
 Full CRUD with soft-delete, restore, permanent delete, pagination, search, sort.
 
