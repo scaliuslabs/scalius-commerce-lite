@@ -76,7 +76,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 1. **Storefront POST /orders** -- `createStorefrontOrder()` validates prices server-side, verifies discounts, checks partial payment rules, resolves locations, builds queue payload with pre-generated `orderId` and `checkoutToken`
 2. **Enqueue** -- API route sends payload to `ORDER_INGEST_QUEUE`, writes `{ status: "processing", orderId }` to KV
 3. **Queue consumer** -- `handleOrderIngestBatch()` processes the batch:
-   - Phase 1: Accumulate DB write statements (customer, order, items, discount usage) and reservation entries
+   - Phase 1: Accumulate DB write statements (customer, order, items, discount usage, durable `order_created` notification outbox row) and reservation entries
    - Phase 1b: Re-check discount usage limits to narrow race window
    - Phase 2: `reserveStockBatch()` per order/pool -- if one order cannot reserve, retry only that message
    - Phase 3: `db.batch()` atomic write -- if succeeds, init COD tracking for COD orders, write "completed" to KV, ack messages
@@ -110,8 +110,8 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 4. CAS update on `version` column FIRST (prevents race between admin + webhook)
 5. On CAS success, or when retry sees the requested status already persisted, applies inventory side effects via `applyInventoryForStatusChange()`
 6. Persists/reconfirms the resulting `inventoryAction`
-7. Returns `StatusUpdateResult` with optional notification payload
-8. API route enqueues notification to `ORDER_NOTIFICATIONS_QUEUE` if present
+7. Returns `StatusUpdateResult` with optional notification payload and transition dedupe key
+8. API route records the notification in `order_notification_outbox`, then relays it to `ORDER_NOTIFICATIONS_QUEUE` when available
 
 **Notification Status Mapping** (`NOTIFICATION_STATUSES` in `orders.fulfillment.ts`):
 
@@ -127,7 +127,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 | `returned` | `order_returned` |
 | `refunded` | `order_refunded` |
 
-All 9 statuses that trigger notifications are covered. Each dispatches to enabled channels (email, SMS, WhatsApp, push) independently via the queue consumer.
+All 9 statuses that trigger notifications are covered. Each dispatches to enabled channels (email, SMS, WhatsApp, push) independently via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel delivery remains at-least-once until individual providers expose idempotent send receipts.
 
 ### Fulfillment Flow
 
@@ -166,9 +166,9 @@ Two queues are relevant:
 | Queue | Message Type | Handler |
 |-------|-------------|---------|
 | `ORDER_INGEST_QUEUE` | `order.ingest` | `handleOrderIngestBatch()` -- batched DB writes + inventory reservation |
-| `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
+| `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | Outbox-backed `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
 
-The `order.notification` handler in `queue-consumer.ts` sends both email (via `sendOrderNotificationEmail()` with `db` for channel preference checking) and FCM push notifications (via `sendOrderNotification()`) to admin devices. FCM failures are caught and logged but do not affect email delivery.
+The `order.notification` handler in `queue-consumer.ts` claims `order_notification_outbox` rows by `outboxId`, sends email/SMS/WhatsApp through `sendOrderNotificationEmail()` with `db` for channel preference checking, optionally sends FCM push notifications through `sendOrderNotification()`, then marks the row `sent`. FCM failures are caught and logged but do not affect customer channel delivery. Customer-channel failures mark the row retryable before the Cloudflare Queue message is retried.
 
 Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.confirmed`, `payment.polar.confirmed`, etc.) are handled in `queue-consumer.ts` and call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module.
 

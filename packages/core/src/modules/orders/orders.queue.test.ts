@@ -5,6 +5,14 @@ const mocks = vi.hoisted(() => ({
   reserveStockBatch: vi.fn(),
   releaseMultiple: vi.fn(),
   initCODTracking: vi.fn(),
+  buildOrderCreatedNotificationDedupeKey: vi.fn((orderId: string) => `order_created:${orderId}`),
+  createOrderNotificationOutboxInsertValues: vi.fn((input: Record<string, unknown>) => ({
+    id: `outbox_${input.orderId}`,
+    ...input,
+    payload: JSON.stringify(input),
+    status: "pending",
+  })),
+  recordAndEnqueueOrderNotification: vi.fn(),
 }));
 
 vi.mock("../inventory", () => ({
@@ -14,6 +22,12 @@ vi.mock("../inventory", () => ({
 
 vi.mock("../payments/cod", () => ({
   initCODTracking: mocks.initCODTracking,
+}));
+
+vi.mock("../notifications/order-notification-outbox", () => ({
+  buildOrderCreatedNotificationDedupeKey: mocks.buildOrderCreatedNotificationDedupeKey,
+  createOrderNotificationOutboxInsertValues: mocks.createOrderNotificationOutboxInsertValues,
+  recordAndEnqueueOrderNotification: mocks.recordAndEnqueueOrderNotification,
 }));
 
 import { handleOrderIngestBatch } from "./orders.queue";
@@ -186,8 +200,15 @@ describe("handleOrderIngestBatch isolation", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     mocks.releaseMultiple.mockResolvedValue({ success: true, results: [] });
     mocks.initCODTracking.mockResolvedValue(undefined);
+    mocks.recordAndEnqueueOrderNotification.mockResolvedValue({
+      outboxId: "outbox_order",
+      dedupeKey: "order_created:order",
+      created: false,
+      enqueued: true,
+    });
   });
 
   it("retries only the order whose stock reservation fails", async () => {

@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
+import type { OrderNotificationType } from "@scalius/core/modules/notifications";
 import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
@@ -14,6 +15,7 @@ import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import {
+    enqueueOrderNotificationMessage,
     enqueueOrderNotificationsForStatus,
     enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
@@ -89,10 +91,11 @@ app.openapi(updateStatusRoute, async (c) => {
     const result = await OrdersService.updateOrderStatus(db, orderId, data.status);
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
 
-    // Queue customer notification if the status change warrants one
-    if (result.notification && c.env.ORDER_NOTIFICATIONS_QUEUE) {
-        try {
-            await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+    if (result.notification) {
+        await enqueueOrderNotificationMessage({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            message: {
                 type: "order.notification",
                 orderId: result.notification.orderId,
                 customerEmail: result.notification.customerEmail,
@@ -101,10 +104,10 @@ app.openapi(updateStatusRoute, async (c) => {
                 data: data.status === "shipped" && result.notification.trackingId
                     ? { trackingId: result.notification.trackingId }
                     : undefined,
-            });
-        } catch (err: unknown) {
-            console.error(`[orders] Failed to enqueue notification for ${orderId}:`, err);
-        }
+            },
+            dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
+            source: "orders-status-update",
+        });
     }
 
     return ok(c, { message: result.message });
@@ -178,29 +181,33 @@ app.openapi(postCodRoute, async (c) => {
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
 
     // Enqueue notification for COD status changes that affect order status
-    const COD_NOTIFICATION_MAP: Record<string, string> = {
+    const COD_NOTIFICATION_MAP: Partial<Record<typeof data.action, OrderNotificationType>> = {
         collected: "order_delivered",
         returned: "order_returned",
     };
     const notifType = COD_NOTIFICATION_MAP[data.action];
-    if (notifType && c.env.ORDER_NOTIFICATIONS_QUEUE) {
-        try {
-            const order = await db.select({
-                customerEmail: orders.customerEmail,
-                customerName: orders.customerName,
-            }).from(orders).where(eq(orders.id, orderId)).get();
+    if (notifType) {
+        const order = await db.select({
+            customerEmail: orders.customerEmail,
+            customerName: orders.customerName,
+            status: orders.status,
+            version: orders.version,
+        }).from(orders).where(eq(orders.id, orderId)).get();
 
-            if (order) {
-                await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
+        if (order) {
+            await enqueueOrderNotificationMessage({
+                db,
+                queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+                message: {
                     type: "order.notification",
                     orderId,
                     customerEmail: order.customerEmail ?? undefined,
                     customerName: order.customerName,
                     notificationType: notifType,
-                });
-            }
-        } catch (notifErr) {
-            console.error(`[orders] Failed to enqueue COD notification for ${orderId}:`, notifErr);
+                },
+                dedupeKey: `cod:${orderId}:${data.action}:v${order.version}:${order.status}`,
+                source: "orders-cod-action",
+            });
         }
     }
 
@@ -411,11 +418,12 @@ app.openapi(createShipmentRoute, async (c) => {
             queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
             orderIds: [orderId],
             newStatus: "shipped",
-            trackingByOrderId: createdShipmentRecord.trackingId
-                ? { [orderId]: createdShipmentRecord.trackingId }
-                : undefined,
-            source: "orders-shipment-create",
-        });
+        trackingByOrderId: createdShipmentRecord.trackingId
+            ? { [orderId]: createdShipmentRecord.trackingId }
+            : undefined,
+        dedupeKeyByOrderId: { [orderId]: `shipment:${createdShipmentRecord.id}:order_shipped` },
+        source: "orders-shipment-create",
+    });
     }
 
     const enhancedShipment = {

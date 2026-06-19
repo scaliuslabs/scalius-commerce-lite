@@ -26,6 +26,7 @@ import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/err
 import { validateTransition } from "./order-state-machine";
 import type { StatusUpdateResult } from "./orders.types";
 import type { OrderNotificationType } from "../notifications/notification-types";
+import { buildOrderStatusNotificationDedupeKey } from "../notifications/order-notification-outbox";
 import {
     assertNoActiveShipmentClaim,
     hasActiveShipmentClaim,
@@ -532,6 +533,16 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
             customerEmail: existingOrder.customerEmail ?? undefined,
             customerName: existingOrder.customerName,
             notificationType,
+            dedupeKey: buildOrderStatusNotificationDedupeKey({
+                orderId,
+                notificationType,
+                previousStatus: existingOrder.status,
+                newStatus: status,
+                version: existingOrder.version + 1,
+            }),
+            previousStatus: existingOrder.status,
+            newStatus: status,
+            version: existingOrder.version + 1,
             ...(status === OrderStatus.SHIPPED && data?.trackingId
                 ? { trackingId: data.trackingId }
                 : {}),

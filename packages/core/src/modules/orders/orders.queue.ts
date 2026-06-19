@@ -9,12 +9,17 @@
 //   - Cloudflare KV checkout status updates
 
 import { sql, eq, and } from "drizzle-orm";
-import { orders, orderItems, customers, customerHistory, discounts, discountUsage } from "@scalius/database/schema";
+import { orders, orderItems, customers, customerHistory, discounts, discountUsage, orderNotificationOutbox } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 import { reserveStockBatch, releaseMultiple } from "../inventory";
 import { initCODTracking } from "../payments/cod";
 import type { getDb } from "@scalius/database/client";
 import type { OrderIngestQueuePayload } from "./orders.types";
+import {
+    buildOrderCreatedNotificationDedupeKey,
+    createOrderNotificationOutboxInsertValues,
+    recordAndEnqueueOrderNotification,
+} from "../notifications/order-notification-outbox";
 
 // ── Message type ────────────────────────────────────────────────────────────
 
@@ -223,18 +228,26 @@ async function completeQueuedOrder(
     msg.ack();
     console.log(logMessage);
 
-    if (env.ORDER_NOTIFICATIONS_QUEUE) {
-        try {
-            await env.ORDER_NOTIFICATIONS_QUEUE.send({
-                type: "order.notification",
+    try {
+        const notificationResult = await recordAndEnqueueOrderNotification({
+            db,
+            queue: env.ORDER_NOTIFICATIONS_QUEUE,
+            notification: {
+                dedupeKey: buildOrderCreatedNotificationDedupeKey(payload.orderData.id),
                 orderId: payload.orderData.id,
                 customerEmail: payload.orderData.customerEmail ?? undefined,
                 customerName: payload.orderData.customerName,
                 notificationType: "order_created",
-            });
-        } catch (notifErr) {
-            console.error(`[Queue] Failed to enqueue order_created notification for ${payload.orderData.id}:`, notifErr);
+                source: "order-ingest",
+            },
+        });
+        if (!notificationResult.enqueued) {
+            console.warn(
+                `[Queue] order_created notification for ${payload.orderData.id} recorded but not enqueued: ${notificationResult.skippedReason}`,
+            );
         }
+    } catch (notifErr) {
+        console.error(`[Queue] Failed to record order_created notification for ${payload.orderData.id}:`, notifErr);
     }
 }
 
@@ -438,6 +451,17 @@ export async function handleOrderIngestBatch(
                     ),
                 );
             }
+
+            writeBatch.push(
+                db.insert(orderNotificationOutbox).values(createOrderNotificationOutboxInsertValues({
+                    dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
+                    orderId: od.id,
+                    customerEmail: od.customerEmail ?? undefined,
+                    customerName: od.customerName,
+                    notificationType: "order_created",
+                    source: "order-ingest",
+                })),
+            );
 
             // Discount usage record
             if (payload.discountUsage) {

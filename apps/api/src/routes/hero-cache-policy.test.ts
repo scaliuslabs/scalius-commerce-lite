@@ -109,12 +109,12 @@ describe("hero route cache policy", () => {
       "https://cdn.example.com/mobile.jpg",
     ]);
     expect(kv.put).toHaveBeenCalledWith(
-      "sc:api:hero:/api/v1/hero/sliders?type=desktop",
+      expect.stringMatching(/^sc:api:hero:\/api\/v1\/hero\/sliders\?type=desktop#f:[a-f0-9]+$/),
       expect.any(String),
       { expirationTtl: 3600 },
     );
     expect(kv.put).toHaveBeenCalledWith(
-      "sc:api:hero:/api/v1/hero/sliders?type=mobile",
+      expect.stringMatching(/^sc:api:hero:\/api\/v1\/hero\/sliders\?type=mobile#f:[a-f0-9]+$/),
       expect.any(String),
       { expirationTtl: 3600 },
     );

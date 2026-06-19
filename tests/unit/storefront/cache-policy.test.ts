@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  isCacheableHtmlResponse,
+  isCacheablePublicResponse,
   requestHasPrivateSession,
 } from "../../../apps/storefront/src/lib/cache-policy";
 
@@ -36,7 +36,7 @@ describe("storefront cache policy", () => {
       },
     });
 
-    expect(isCacheableHtmlResponse(response)).toBe(false);
+    expect(isCacheablePublicResponse(response)).toBe(false);
   });
 
   it("respects no-store/private response cache directives", () => {
@@ -48,7 +48,7 @@ describe("storefront cache policy", () => {
       },
     });
 
-    expect(isCacheableHtmlResponse(noStore)).toBe(false);
+    expect(isCacheablePublicResponse(noStore)).toBe(false);
   });
 
   it("allows public HTML without cookies", () => {
@@ -57,6 +57,6 @@ describe("storefront cache policy", () => {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
 
-    expect(isCacheableHtmlResponse(response)).toBe(true);
+    expect(isCacheablePublicResponse(response)).toBe(true);
   });
 });
