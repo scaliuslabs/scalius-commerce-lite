@@ -1,6 +1,7 @@
 // src/components/auth/TwoFactorSetup.tsx
 // Simple email-based 2FA setup - sends code to email automatically
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import {
   set2faMethod,
@@ -25,6 +26,7 @@ interface TwoFactorSetupProps {
 }
 
 export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
+  const navigate = useNavigate();
   const [step, setStep] = useState<SetupStep>("password");
   const [password, setPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -115,7 +117,7 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
   };
 
   const handleComplete = () => {
-    window.location.href = "/admin";
+    void navigate({ to: "/admin" });
   };
 
   // Password confirmation

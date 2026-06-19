@@ -32,9 +32,11 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **List Pages**: URL-search-driven list routes declare `loaderDeps`, map validated deps with `mapParams()`, and prefetch the same query keys rendered by components. Component-level loading overlays should stay scoped to the table area.
 
-**Loader Boundaries**: Route loaders should wait only for data needed to make the first paint correct. Products waits for the primary list, while category options and stats prefetch in the browser. Cache settings and inventory render stable loading states and use client-only prefetches for default reads instead of blocking navigation.
+**Loader Boundaries**: Route loaders should wait only for data needed to make the first paint correct. Products waits for the primary list, while category options and stats prefetch in the browser. Dashboard summary uses `warmRouteQuery()`: cold SSR waits for correct metrics, but client transitions prefetch and show `DashboardSummaryLoading` instead of blocking navigation or flashing fake zero values. Cache settings and inventory render stable loading states and use client-only prefetches for default reads instead of blocking navigation.
 
 **Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus or network reconnect. The `/admin` route-context cache keeps already-verified auth/RBAC shell context fresh for 1 minute and stale-while-revalidated for up to 4 hours, so returning to an idle tab does not block the first in-app navigation on guard reads. UI paths that change the current user's profile, 2FA/security state, session, or permissions must call `refreshAdminRouteContext(router)`. Only truly realtime screens opt in to `refetchOnWindowFocus` / `refetchOnReconnect`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns. Orders list auto-refresh is merchant-controlled and pauses while `document.hidden`; when the tab becomes visible again it performs one explicit refresh and resets the countdown.
+
+**Auth Guard Performance**: Auth/setup/2FA success paths use TanStack Router navigation instead of full document reloads so the hydrated app survives post-login transitions. The setup guard caches only positive "admin exists" D1 reads for a short isolate TTL; missing-admin results are not cached. `adminRouteGuard()` reuses the fresh Better Auth `user.isSuperAdmin` field when loading RBAC context, avoiding a duplicate super-admin D1 read while preserving a fallback query if the auth payload omits the field.
 
 **Order Detail Polling**: Order detail polls order and shipment data every 30 seconds for webhook-driven updates, but it intentionally inherits the global focus/reconnect defaults. Do not re-add focus or reconnect refetches there; the interval is enough, and idle-tab resume should not refresh the old order while the merchant navigates away.
 
@@ -79,6 +81,8 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 | `src/router.tsx` | Router config + SSR integration |
 | `src/lib/admin-query-client.ts` | QueryClient defaults for idle-tab/reconnect policy |
 | `src/lib/admin-route-context.ts` | Stale-while-revalidate admin shell auth/RBAC context |
+| `src/lib/auth.fns.ts` | Auth/setup guards, positive admin-exists cache, admin RBAC context server functions |
+| `src/middleware/rbac.server.ts` | Server-only RBAC loading with auto-seed and optional fresh super-admin shortcut |
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
 | `src/routes/admin.tsx` | Admin layout (sidebar, SSR auth guard, RBAC context) |
 | `src/lib/api-functions/` | Typed domain server-function slices |

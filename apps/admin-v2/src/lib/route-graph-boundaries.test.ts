@@ -110,6 +110,41 @@ describe("admin route graph boundaries", () => {
     expect(authClientSource).not.toContain("adminClient");
   });
 
+  it("keeps post-auth success navigation inside the hydrated router", () => {
+    const loginFormSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "LoginForm.tsx"),
+      "utf8",
+    );
+    const twoFactorFormSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "TwoFactorForm.tsx"),
+      "utf8",
+    );
+    const setupFormSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "SetupForm.tsx"),
+      "utf8",
+    );
+    const twoFactorSetupSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "TwoFactorSetup.tsx"),
+      "utf8",
+    );
+    const authClientSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "auth-client.ts"),
+      "utf8",
+    );
+
+    for (const source of [
+      loginFormSource,
+      twoFactorFormSource,
+      setupFormSource,
+      twoFactorSetupSource,
+    ]) {
+      expect(source).toContain("useNavigate");
+      expect(source).toContain('navigate({ to: "/admin" })');
+      expect(source).not.toContain('window.location.href = "/admin"');
+    }
+    expect(authClientSource).not.toContain("window.location.href");
+  });
+
   it("keeps admin navigation from doing focus refetch stampedes", () => {
     const routerSource = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
     const queryClientSource = readFileSync(
@@ -220,6 +255,26 @@ describe("admin route graph boundaries", () => {
     expect(loaderSource).not.toContain(
       "queryClient.ensureQueryData(productStatsQueryOptions())",
     );
+  });
+
+  it("keeps dashboard client transitions from blocking on summary data", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "index.tsx"),
+      "utf8",
+    );
+    const loaderSource = source.slice(
+      source.indexOf("loader: async"),
+      source.indexOf("head: ()"),
+    );
+
+    expect(loaderSource).toContain(
+      "await warmRouteQuery(queryClient, dashboardSummaryQueryOptions())",
+    );
+    expect(loaderSource).not.toContain(
+      "await queryClient.ensureQueryData(dashboardSummaryQueryOptions())",
+    );
+    expect(source).toContain("isSummaryInitialLoading");
+    expect(source).toContain("DashboardSummaryLoading");
   });
 
   it("keeps secondary admin tool routes from blocking first paint on data reads", () => {

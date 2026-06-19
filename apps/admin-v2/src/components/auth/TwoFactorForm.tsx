@@ -2,6 +2,7 @@
 // Two-factor verification form for login - supports TOTP, Email OTP, and backup codes
 // Auto-detects user's preferred 2FA method
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ interface TwoFactorFormProps {
 }
 
 export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
+  const navigate = useNavigate();
   const [initialPendingMethods] = useState(() => readPendingTwoFactorMethods());
   const [method, setMethod] = useState<VerifyTwoFactorMethod>(() =>
     chooseInitialTwoFactorMethod({
@@ -142,7 +144,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
       await complete2faVerification({ data: { sessionToken } });
       clearPendingTwoFactorMethods();
 
-      window.location.href = "/admin";
+      await navigate({ to: "/admin" });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
       setIsLoading(false);
@@ -152,7 +154,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
   const handleSignOut = async () => {
     clearPendingTwoFactorMethods();
     await authClient.signOut();
-    window.location.href = "/auth/login";
+    await navigate({ to: "/auth/login" });
   };
 
   const switchMethod = (newMethod: VerifyTwoFactorMethod) => {

@@ -25,6 +25,7 @@ export interface RbacContext {
 export async function loadUserPermissions(
   userId: string,
   _userRole?: string | null,
+  knownIsSuperAdmin?: boolean | null,
 ): Promise<RbacContext> {
   const env = getCfEnv();
   const db = getDb(env);
@@ -33,7 +34,10 @@ export async function loadUserPermissions(
   await retryTransientD1(() => autoSeedRbacIfNeeded(db));
 
   const permissions = await retryTransientD1(() => getUserPermissions(db, userId, kv));
-  const superAdmin = await retryTransientD1(() => isSuperAdmin(db, userId));
+  const superAdmin =
+    typeof knownIsSuperAdmin === "boolean"
+      ? knownIsSuperAdmin
+      : await retryTransientD1(() => isSuperAdmin(db, userId));
 
   return {
     permissions,

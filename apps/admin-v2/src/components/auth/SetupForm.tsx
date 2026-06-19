@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { runSetup } from "@/lib/api-functions/auth-management";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
 import { Loader2, Mail, Lock, User, AlertCircle } from "lucide-react";
 
 export function SetupForm() {
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,11 +56,11 @@ export function SetupForm() {
       if (signInResult.error) {
         // If sign-in fails, redirect to login page
         console.error("Sign in after setup failed:", signInResult.error);
-        window.location.href = "/auth/login";
+        await navigate({ to: "/auth/login" });
         return;
       }
 
-      window.location.href = "/admin";
+      await navigate({ to: "/admin" });
       return;
     } catch (err: unknown) {
       console.error("Setup error:", err);
