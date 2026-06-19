@@ -29,16 +29,6 @@ vi.mock("@scalius/core/utils/transient-d1", () => ({
   retryTransientD1: mocks.retryTransientD1,
 }));
 
-vi.mock("~/lib/admin-access", () => ({
-  hasRbacAdminAccess: ({
-    isSuperAdmin,
-    permissions,
-  }: {
-    isSuperAdmin: boolean;
-    permissions: Set<string>;
-  }) => isSuperAdmin || permissions.size > 0,
-}));
-
 describe("loadUserPermissions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -49,7 +39,7 @@ describe("loadUserPermissions", () => {
     mocks.retryTransientD1.mockImplementation((operation: () => unknown) => operation());
   });
 
-  it("uses a fresh Better Auth super-admin value instead of re-querying D1", async () => {
+  it("uses a fresh Better Auth super-admin value without loading D1 or seeding", async () => {
     const { loadUserPermissions } = await import("./rbac.server");
 
     const context = await loadUserPermissions("user_1", "admin", true);
@@ -57,7 +47,9 @@ describe("loadUserPermissions", () => {
     expect(context.isSuperAdmin).toBe(true);
     expect(context.hasAdminAccess).toBe(true);
     expect(context.permissions).toEqual(new Set());
-    expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledWith(mocks.db);
+    expect(mocks.getDb).not.toHaveBeenCalled();
+    expect(mocks.autoSeedRbacIfNeeded).not.toHaveBeenCalled();
+    expect(mocks.retryTransientD1).not.toHaveBeenCalled();
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
     expect(mocks.isSuperAdmin).not.toHaveBeenCalled();
   });
@@ -70,6 +62,10 @@ describe("loadUserPermissions", () => {
     expect(context.isSuperAdmin).toBe(false);
     expect(context.hasAdminAccess).toBe(true);
     expect(context.permissions).toEqual(new Set(["orders.read"]));
+    expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledWith(
+      mocks.db,
+      mocks.cfEnv.CACHE,
+    );
     expect(mocks.getUserPermissions).toHaveBeenCalledWith(
       mocks.db,
       "user_1",

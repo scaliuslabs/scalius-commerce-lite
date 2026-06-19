@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { z } from "zod";
 import {
   collectionsByIdsQueryOptions,
 } from "~/lib/api-query-options/collections";
@@ -15,6 +14,10 @@ import type { Discount } from "~/types/api-responses";
 import type { Product, Collection } from "~/components/admin/discount/amount-off-products/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
+import {
+  normalizeBooleanSearchParam,
+  type SearchValidatorInput,
+} from "~/lib/list-helpers";
 
 const AmountOffProductsForm = lazy(
   () =>
@@ -35,9 +38,17 @@ const FreeShippingForm = lazy(
     })),
 );
 
-const searchSchema = z.object({
-  duplicate: z.boolean().default(false).catch(false),
-});
+type DiscountEditSearchParams = {
+  duplicate: boolean;
+};
+
+function validateDiscountEditSearch(
+  search: SearchValidatorInput<DiscountEditSearchParams>,
+): DiscountEditSearchParams {
+  return {
+    duplicate: normalizeBooleanSearchParam(search.duplicate),
+  };
+}
 
 function getDiscountProductIds(discount: Discount): string[] {
   return Array.from(new Set([
@@ -54,7 +65,7 @@ function getDiscountCollectionIds(discount: Discount): string[] {
 }
 
 export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
-  validateSearch: searchSchema,
+  validateSearch: validateDiscountEditSearch,
   loader: async ({ context: { queryClient }, params }) => {
     const discountResult = await queryClient
       .ensureQueryData({ ...discountQueryOptions(params.discountId), staleTime: Infinity })

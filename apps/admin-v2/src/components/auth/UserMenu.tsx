@@ -1,7 +1,6 @@
 // src/components/auth/UserMenu.tsx
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { authClient } from "@/lib/auth-client";
 import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +32,7 @@ export function UserMenu({ user }: UserMenuProps) {
     setIsLoading(true);
     try {
       clearAdminRouteContextCache();
+      const { authClient } = await import("@/lib/auth-client");
       await authClient.signOut();
       window.location.href = "/auth/login";
     } catch (error: unknown) {

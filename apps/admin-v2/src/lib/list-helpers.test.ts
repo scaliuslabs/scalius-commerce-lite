@@ -1,31 +1,36 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_LIST_MAX_LIMIT,
-  createListSearchSchema,
+  createListSearchValidator,
   getCanonicalPageForPagination,
   normalizeListPositiveInteger,
+  type SearchValidatorInput,
 } from "./list-helpers";
+
+function searchInput(value: Record<string, unknown>): SearchValidatorInput {
+  return value as unknown as SearchValidatorInput;
+}
 
 describe("list helpers", () => {
   it("normalizes page and limit URL values before query construction", () => {
-    const schema = createListSearchSchema(
+    const validateSearch = createListSearchValidator(
       ["createdAt", "updatedAt"] as const,
       { limit: 10, sort: "updatedAt" },
     );
 
-    expect(schema.parse({ page: "3", limit: "20" })).toMatchObject({
+    expect(validateSearch(searchInput({ page: "3", limit: "20" }))).toMatchObject({
       page: 3,
       limit: 20,
     });
-    expect(schema.parse({ page: "-4", limit: "999" })).toMatchObject({
+    expect(validateSearch(searchInput({ page: "-4", limit: "999" }))).toMatchObject({
       page: 1,
       limit: DEFAULT_LIST_MAX_LIMIT,
     });
-    expect(schema.parse({ page: "2.9", limit: "50.8" })).toMatchObject({
+    expect(validateSearch(searchInput({ page: "2.9", limit: "50.8" }))).toMatchObject({
       page: 2,
       limit: 50,
     });
-    expect(schema.parse({ page: "bad", limit: "bad" })).toMatchObject({
+    expect(validateSearch(searchInput({ page: "bad", limit: "bad" }))).toMatchObject({
       page: 1,
       limit: 10,
     });

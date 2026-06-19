@@ -1,13 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 import { ScannerApp } from "~/components/admin/scanner";
+import {
+  normalizeOptionalSearchString,
+  type SearchValidatorInput,
+} from "~/lib/list-helpers";
 
-const scannerSearchSchema = z.object({
-  token: z.string().optional().catch(undefined),
-});
+type ScannerSearchParams = {
+  token?: string;
+};
+
+function validateScannerSearch(
+  search: SearchValidatorInput<ScannerSearchParams>,
+): ScannerSearchParams {
+  return {
+    token: normalizeOptionalSearchString(search.token),
+  };
+}
 
 export const Route = createFileRoute("/scanner")({
-  validateSearch: scannerSearchSchema,
+  validateSearch: validateScannerSearch,
   head: () => ({
     meta: [
       { charSet: "utf-8" },

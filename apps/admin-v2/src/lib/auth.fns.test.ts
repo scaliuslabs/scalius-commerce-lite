@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   cfEnv: {} as { DB?: unknown },
   retryTransientD1: vi.fn((operation: () => unknown) => operation()),
-  initBindings: vi.fn(),
-  getAuthSession: vi.fn(),
   getRequestHeader: vi.fn(),
   loadUserPermissions: vi.fn(),
 }));
@@ -13,11 +11,6 @@ vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
 
 vi.mock("@scalius/core/utils/transient-d1", () => ({
   retryTransientD1: mocks.retryTransientD1,
-}));
-
-vi.mock("~/lib/auth.server", () => ({
-  initBindings: mocks.initBindings,
-  getAuthSession: mocks.getAuthSession,
 }));
 
 vi.mock("@tanstack/react-start/server", () => ({
@@ -73,13 +66,34 @@ function createDeferredAdminExistsDb() {
   };
 }
 
+function createAdminGuardDb(sessionRow: Record<string, unknown> | null) {
+  const adminFirst = vi.fn(async () => ({ found: 1 }));
+  const sessionFirst = vi.fn(async () => sessionRow);
+  const adminBind = vi.fn(() => ({ first: adminFirst }));
+  const sessionBind = vi.fn(() => ({ first: sessionFirst }));
+  const prepare = vi.fn((sql: string) => {
+    if (sql.includes("FROM session s")) {
+      return { bind: sessionBind };
+    }
+    return { bind: adminBind };
+  });
+
+  return {
+    db: { prepare },
+    adminFirst,
+    sessionFirst,
+    adminBind,
+    sessionBind,
+    prepare,
+  };
+}
+
 describe("admin setup guard cache", () => {
   beforeEach(async () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     mocks.retryTransientD1.mockImplementation((operation: () => unknown) => operation());
     mocks.getRequestHeader.mockReturnValue("");
-    mocks.getAuthSession.mockResolvedValue(null);
     mocks.loadUserPermissions.mockResolvedValue({
       permissions: new Set(),
       isSuperAdmin: false,
@@ -97,7 +111,6 @@ describe("admin setup guard cache", () => {
     await expect(checkAdminExists()).resolves.toBe(true);
     await expect(checkAdminExists()).resolves.toBe(true);
 
-    expect(mocks.initBindings).not.toHaveBeenCalled();
     expect(db.prepare).toHaveBeenCalledTimes(1);
     expect(db.prepare).toHaveBeenCalledWith(
       "SELECT 1 as found FROM user WHERE role = ? OR is_super_admin = 1 LIMIT 1",
@@ -161,24 +174,19 @@ describe("admin setup guard cache", () => {
   });
 
   it("passes the fresh Better Auth super-admin value into RBAC loading", async () => {
-    const db = createAdminExistsDb([1]);
-    mocks.cfEnv.DB = db.db;
-    mocks.getRequestHeader.mockReturnValue("better-auth.session_token=token");
-    mocks.getAuthSession.mockResolvedValue({
-      user: {
-        id: "user_1",
-        name: "Admin",
-        email: "admin@example.com",
-        role: "admin",
-        image: null,
-        twoFactorEnabled: false,
-        isSuperAdmin: true,
-      },
-      session: {
-        id: "session_1",
-        twoFactorVerified: true,
-      },
+    const db = createAdminGuardDb({
+      sessionId: "session_1",
+      userId: "user_1",
+      name: "Admin",
+      email: "admin@example.com",
+      role: "admin",
+      image: null,
+      twoFactorEnabled: 0,
+      twoFactorVerified: 1,
+      isSuperAdmin: 1,
     });
+    mocks.cfEnv.DB = db.db;
+    mocks.getRequestHeader.mockReturnValue("better-auth.session_token=token.signature");
     mocks.loadUserPermissions.mockResolvedValue({
       permissions: new Set(["orders.read"]),
       isSuperAdmin: true,
@@ -197,15 +205,15 @@ describe("admin setup guard cache", () => {
       "admin",
       true,
     );
+    expect(db.sessionBind).toHaveBeenCalledWith("token");
   });
 
-  it("returns no session without initializing auth when no cookie is present", async () => {
+  it("returns no session without querying session state when no cookie is present", async () => {
     const { getSessionInfo } = await import("./auth.fns");
 
     await expect(getSessionInfo()).resolves.toBeNull();
 
-    expect(mocks.initBindings).not.toHaveBeenCalled();
-    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(mocks.retryTransientD1).not.toHaveBeenCalled();
   });
 
   it("lets the login page render without session lookup when no cookie is present", async () => {
@@ -215,8 +223,7 @@ describe("admin setup guard cache", () => {
 
     await expect(loginPageGuard()).resolves.toBeNull();
 
-    expect(mocks.initBindings).not.toHaveBeenCalled();
-    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(db.prepare).toHaveBeenCalledTimes(1);
   });
 
   it("keeps setup recovery ahead of login no-cookie fast path", async () => {
@@ -228,8 +235,7 @@ describe("admin setup guard cache", () => {
       redirect: { to: "/auth/setup" },
     });
 
-    expect(mocks.initBindings).not.toHaveBeenCalled();
-    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(db.prepare).toHaveBeenCalledTimes(1);
   });
 
   it("redirects anonymous admin requests without session or RBAC reads", async () => {
@@ -241,8 +247,7 @@ describe("admin setup guard cache", () => {
       redirect: { to: "/auth/login" },
     });
 
-    expect(mocks.initBindings).not.toHaveBeenCalled();
-    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(db.prepare).toHaveBeenCalledTimes(1);
     expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
   });
 
@@ -255,8 +260,7 @@ describe("admin setup guard cache", () => {
       redirect: { to: "/auth/setup" },
     });
 
-    expect(mocks.initBindings).not.toHaveBeenCalled();
-    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(db.prepare).toHaveBeenCalledTimes(1);
     expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
   });
 
@@ -265,7 +269,6 @@ describe("admin setup guard cache", () => {
 
     await expect(redirectIfAuthenticated()).resolves.toBeNull();
 
-    expect(mocks.initBindings).not.toHaveBeenCalled();
-    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(mocks.retryTransientD1).not.toHaveBeenCalled();
   });
 });

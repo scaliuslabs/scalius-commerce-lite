@@ -1,9 +1,14 @@
 import { useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash2, Tag } from "lucide-react";
-import { createListSearchSchema, createDataSelector } from "~/lib/list-helpers";
+import {
+  createListSearchValidator,
+  createDataSelector,
+  normalizeOptionalSearchString,
+  type ListSearchParams,
+  type SearchValidatorInput,
+} from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -25,14 +30,32 @@ import {
   type DiscountItem,
 } from "~/components/admin/data-table/columns/discount-columns";
 
-const searchSchema = createListSearchSchema(
+const baseSearchValidator = createListSearchValidator(
   ["code", "type", "value", "startDate", "endDate", "createdAt", "updatedAt"] as const,
   { limit: 10, sort: "updatedAt" },
-).extend({
-  type: z.string().optional().catch(undefined),
-});
+);
 
-function mapParams(deps: z.infer<typeof searchSchema>) {
+type DiscountSort =
+  | "code"
+  | "type"
+  | "value"
+  | "startDate"
+  | "endDate"
+  | "createdAt"
+  | "updatedAt";
+
+type SearchParams = ListSearchParams<DiscountSort> & {
+  type?: string;
+};
+
+function validateDiscountSearch(search: SearchValidatorInput<SearchParams>): SearchParams {
+  return {
+    ...baseSearchValidator(search),
+    type: normalizeOptionalSearchString(search.type),
+  };
+}
+
+function mapParams(deps: SearchParams) {
   return {
     page: deps.page,
     limit: deps.limit,
@@ -45,7 +68,7 @@ function mapParams(deps: z.infer<typeof searchSchema>) {
 }
 
 export const Route = createFileRoute("/admin/discounts/")({
-  validateSearch: searchSchema,
+  validateSearch: validateDiscountSearch,
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
