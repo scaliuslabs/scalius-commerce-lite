@@ -75,6 +75,7 @@ describe("admin setup guard cache", () => {
     await expect(checkAdminExists()).resolves.toBe(true);
     await expect(checkAdminExists()).resolves.toBe(true);
 
+    expect(mocks.initBindings).not.toHaveBeenCalled();
     expect(db.prepare).toHaveBeenCalledTimes(1);
     expect(db.bind).toHaveBeenCalledWith("admin");
     expect(db.first).toHaveBeenCalledTimes(1);
@@ -144,5 +145,75 @@ describe("admin setup guard cache", () => {
       "admin",
       true,
     );
+  });
+
+  it("returns no session without initializing auth when no cookie is present", async () => {
+    const { getSessionInfo } = await import("./auth.fns");
+
+    await expect(getSessionInfo()).resolves.toBeNull();
+
+    expect(mocks.initBindings).not.toHaveBeenCalled();
+    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+  });
+
+  it("lets the login page render without session lookup when no cookie is present", async () => {
+    const db = createAdminExistsDb([1]);
+    mocks.cfEnv.DB = db.db;
+    const { loginPageGuard } = await import("./auth.fns");
+
+    await expect(loginPageGuard()).resolves.toBeNull();
+
+    expect(mocks.initBindings).not.toHaveBeenCalled();
+    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps setup recovery ahead of login no-cookie fast path", async () => {
+    const db = createAdminExistsDb([0]);
+    mocks.cfEnv.DB = db.db;
+    const { loginPageGuard } = await import("./auth.fns");
+
+    await expect(loginPageGuard()).rejects.toEqual({
+      redirect: { to: "/auth/setup" },
+    });
+
+    expect(mocks.initBindings).not.toHaveBeenCalled();
+    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+  });
+
+  it("redirects anonymous admin requests without session or RBAC reads", async () => {
+    const db = createAdminExistsDb([1]);
+    mocks.cfEnv.DB = db.db;
+    const { adminRouteGuard } = await import("./auth.fns");
+
+    await expect(adminRouteGuard()).rejects.toEqual({
+      redirect: { to: "/auth/login" },
+    });
+
+    expect(mocks.initBindings).not.toHaveBeenCalled();
+    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
+  });
+
+  it("keeps setup recovery ahead of admin no-cookie login redirects", async () => {
+    const db = createAdminExistsDb([0]);
+    mocks.cfEnv.DB = db.db;
+    const { adminRouteGuard } = await import("./auth.fns");
+
+    await expect(adminRouteGuard()).rejects.toEqual({
+      redirect: { to: "/auth/setup" },
+    });
+
+    expect(mocks.initBindings).not.toHaveBeenCalled();
+    expect(mocks.getAuthSession).not.toHaveBeenCalled();
+    expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
+  });
+
+  it("leaves forgot-password reachable without session lookup when no cookie is present", async () => {
+    const { redirectIfAuthenticated } = await import("./auth.fns");
+
+    await expect(redirectIfAuthenticated()).resolves.toBeNull();
+
+    expect(mocks.initBindings).not.toHaveBeenCalled();
+    expect(mocks.getAuthSession).not.toHaveBeenCalled();
   });
 });
