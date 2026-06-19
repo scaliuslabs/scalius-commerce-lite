@@ -119,11 +119,11 @@ A reservation is considered expired when:
 
 Existing orders are not expired by this cron. Stale order cancellation must update order status, `orders.inventoryAction`, variant counters, and movement logs through explicit order transition logic.
 
-The sweep groups by `(variantId, orderId)`, sums quantities, and for each expired group:
+The sweep groups by `(variantId, orderId)`, sums quantities, and processes a bounded batch per invocation (`limit` default `50`, max `200`). It reads one extra sentinel group and returns `hasMore` so cron logs can show whether more orphaned reservations remain for the next scheduled pass. For each processed expired group:
 - Decrements `reservedStock` on the variant (clamped to 0 via `MAX(0, ...)`)
 - Records a "released" movement with note `"expired reservation (age > 30min, order {orderId})"`
 
-The function is **idempotent** -- the "released" movement it creates excludes that reservation from future sweeps.
+The function is **idempotent** -- the "released" movement it creates excludes that reservation from future sweeps. Expiry releases use deterministic movement ids (`expiry_release:{orderId}:{variantId}`) and run the movement insert plus variant counter update in a single D1 batch, so overlapping cron invocations cannot both claim and apply the same expiry release.
 
 ## Files
 
@@ -135,7 +135,7 @@ The function is **idempotent** -- the "released" movement it creates excludes th
 | `deduct.ts`                | `deductStock()` -- single variant CAS deduction; `deductMultiple()` -- sequential with rollback via `restoreDeductedStock()` |
 | `restore.ts`               | `restoreDeductedStock()` -- restores deducted stock for a single variant (regular: increments `stock`, preorder: restores `preorderStock`, backorder: no-op); `restoreDeductedMultiple()` -- sequential restore with low stock alert check |
 | `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures, checks low stock alerts after release |
-| `expiry.ts`                | `releaseExpiredReservations()` -- cron sweep; `ExpiryResult` interface                             |
+| `expiry.ts`                | `releaseExpiredReservations()` -- bounded cron sweep; `ExpiryResult` interface                     |
 | `movements.ts`             | `recordMovement()` -- best-effort audit log insert (errors logged, not thrown)                      |
 | `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks alert as acknowledged |
 | `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
@@ -251,4 +251,3 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 ## Known Gaps
 
 - **Batch deduction not implemented** -- `deductMultiple()` is sequential (no batch equivalent like `reserveStockBatch()`)
-- **Expiry sweep has no batch limit** -- `releaseExpiredReservations()` processes all orphaned expired reservations in a single invocation with no cap, which could be slow if many reservations need cleanup simultaneously

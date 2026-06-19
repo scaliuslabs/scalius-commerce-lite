@@ -10,6 +10,8 @@ export { WidgetDesignAgent } from "./agents/widget-design-agent";
 
 export type { AppType } from "./app";
 
+const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
+
 export default class ApiWorker extends WorkerEntrypoint<Env> {
   // HTTP: Hono handles all requests
   async fetch(request: Request) {
@@ -24,7 +26,9 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
   // Cron: release orphaned reservation movements every 15 minutes
   async scheduled(_controller: ScheduledController): Promise<void> {
     const db = getDb(this.env);
-    const result = await releaseExpiredReservations(db, 30);
+    const result = await releaseExpiredReservations(db, 30, {
+      limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
+    });
     if (result.releasedVariantIds.length > 0) {
       await invalidateProductAvailabilityCaches(
         db,
@@ -35,6 +39,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
 
     console.log(
       `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
+        `, limit=${result.limit}, hasMore=${result.hasMore}` +
         (result.errors.length > 0 ? `, errors=${result.errors.length}` : "")
     );
 
