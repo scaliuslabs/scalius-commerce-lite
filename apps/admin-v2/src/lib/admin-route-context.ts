@@ -1,7 +1,10 @@
 import { adminRouteGuard } from "~/lib/auth.fns";
 
 export const ADMIN_ROUTE_CONTEXT_FRESH_MS = 60_000;
-export const ADMIN_ROUTE_CONTEXT_STALE_MS = 5 * 60_000;
+// Keep an already-rendered admin tab responsive after long idle/background periods.
+// Server APIs still enforce current auth/RBAC; this cache only avoids blocking
+// client route transitions before the background guard refresh completes.
+export const ADMIN_ROUTE_CONTEXT_STALE_MS = 4 * 60 * 60_000;
 
 type AdminRouteContext = Awaited<ReturnType<typeof adminRouteGuard>>;
 
