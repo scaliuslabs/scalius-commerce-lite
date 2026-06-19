@@ -7,50 +7,65 @@ import { getOrderReceipt, getLayoutData, type OrderReceipt, type OrderItem, type
 const orderId = Astro.url.searchParams.get("orderId");
 const receiptToken = Astro.url.searchParams.get("token");
 
-if (!orderId || !receiptToken) {
-  return Astro.redirect("/");
-}
-
 let order: OrderReceipt | null = null;
-let layoutData: LayoutData | null = null;
-let errorFetching = false;
+let recoveryState: {
+  title: string;
+  message: string;
+  status: number;
+  showRetry: boolean;
+} | null = null;
 
-try {
-  // Parallel fetch: layout + order details
-  const [fetchedLayoutData, fetchedOrder] = await Promise.all([
-    getLayoutData(),
-    getOrderReceipt(orderId, receiptToken),
-  ]);
-  layoutData = fetchedLayoutData;
-  order = fetchedOrder;
-  if (!order) {
-    errorFetching = true;
-    Astro.response.status = 404;
+const layoutData: LayoutData | null = await getLayoutData();
+
+if (!orderId || !receiptToken) {
+  recoveryState = {
+    title: "We could not open this receipt",
+    message: "This order link is missing its private receipt proof. Sign in to your account to check your order history before placing another order.",
+    status: 400,
+    showRetry: false,
+  };
+} else {
+  try {
+    order = await getOrderReceipt(orderId, receiptToken);
+    if (!order) {
+      recoveryState = {
+        title: "Receipt temporarily unavailable",
+        message: "We could not load this receipt from the private order link. If the order was placed, it may still appear in your account history.",
+        status: 200,
+        showRetry: true,
+      };
+    }
+  } catch (e: unknown) {
+    console.error(`Error fetching order receipt for ID ${orderId}:`, e);
+    recoveryState = {
+      title: "Receipt temporarily unavailable",
+      message: "We could not load this receipt right now. Please retry or check your account order history.",
+      status: 200,
+      showRetry: true,
+    };
   }
-} catch (e: unknown) {
-  console.error(`Error fetching order details for ID ${orderId}:`, e);
-  errorFetching = true;
-  Astro.response.status = 500;
 }
 
-if (errorFetching || !order) {
-  return Astro.redirect("/");
+if (recoveryState) {
+  Astro.response.status = recoveryState.status;
 }
 
-const orderItemsFromApi: OrderItem[] = order.items || [];
+const orderItemsFromApi: OrderItem[] = order?.items || [];
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 ---
 
-<Layout title="Order Successful" layoutData={layoutData}>
+<Layout title={order ? "Order Successful" : "Order Recovery"} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <main
+  <section
     class="container mx-auto px-4 py-8 max-w-2xl"
-    data-fb-order-details={JSON.stringify({
-      order: order,
+    data-fb-order-details={order ? JSON.stringify({
+      order,
       items: orderItemsFromApi,
-    })}
+    }) : undefined}
+    data-order-success-state={order ? "success" : "recovery"}
   >
+    {order ? (
     <div class="text-center mb-8 animate-fade-in">
       <div class="success-checkmark">
         <div class="check-icon">
@@ -239,7 +254,28 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
     </div>
 
     <OrderSuccessButtons client:load />
-  </main>
+    ) : (
+      <div class="mx-auto max-w-lg py-10 text-center">
+        <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <svg class="h-8 w-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z"></path></svg>
+        </div>
+        <h1 class="mb-3 text-2xl font-bold text-foreground">{recoveryState?.title}</h1>
+        <p class="mb-4 text-muted-foreground">{recoveryState?.message}</p>
+        {orderId && (
+          <p class="mb-6 rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            Reference: <span class="font-mono text-foreground">{orderId}</span>
+          </p>
+        )}
+        <div class="flex flex-col justify-center gap-3 sm:flex-row">
+          {recoveryState?.showRetry && (
+            <a href={Astro.url.pathname + Astro.url.search} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Retry Receipt</a>
+          )}
+          <a href="/account" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">View Account Orders</a>
+          <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Continue Shopping</a>
+        </div>
+      </div>
+    )}
+  </section>
 </Layout>
 
 <script>
@@ -250,16 +286,10 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
   import { clearCart } from "@/store/cart";
 
   document.addEventListener("DOMContentLoaded", () => {
-    clearCheckoutSession();
-    clearCart();
-
     const mainElement = document.querySelector(
-      "main[data-fb-order-details]"
+      "[data-order-success-state='success'][data-fb-order-details]"
     ) as HTMLElement | null;
     if (!mainElement) {
-      console.error(
-        "FB Purchase: Could not find main element with data attribute."
-      );
       return;
     }
 
@@ -268,6 +298,9 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
       console.error("FB Purchase: Missing data attribute on main element.");
       return;
     }
+
+    clearCheckoutSession();
+    clearCart();
 
     try {
       const parsedData: { order: OrderReceipt; items: OrderItem[] } =

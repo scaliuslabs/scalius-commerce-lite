@@ -28,6 +28,20 @@ import {
 } from "@/lib/api-functions/settings";
 
 const MASKED_VALUE = "••••••••••••";
+const AUTH_METHODS_WITH_SMS = new Set(["phone", "both", "sms_otp"]);
+
+function normalizeAuthVerificationMethod(method: unknown): string {
+    // `phone` is a legacy persisted value. The backend routes it through SMS.
+    return method === "phone" ? "sms_otp" : (typeof method === "string" && method ? method : "email");
+}
+
+function usesSmsProvider(method: string): boolean {
+    return AUTH_METHODS_WITH_SMS.has(method);
+}
+
+function usesWhatsAppProvider(method: string): boolean {
+    return method === "whatsapp_otp";
+}
 
 interface AuthAndSmsSettings {
     // Auth settings
@@ -69,7 +83,7 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
     const result: Partial<AuthAndSmsSettings> = {};
 
     const authData = await getAuthSettings() as Record<string, unknown>;
-    result.authVerificationMethod = (authData.authVerificationMethod as string) || "email";
+    result.authVerificationMethod = normalizeAuthVerificationMethod(authData.authVerificationMethod);
     result.whatsappAccessToken = (authData.whatsappAccessToken as string) || "";
     result.whatsappPhoneNumberId = (authData.whatsappPhoneNumberId as string) || "";
     result.whatsappTemplateName = (authData.whatsappTemplateName as string) || "auth_otp";
@@ -95,9 +109,11 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
 }
 
 async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
+    const authVerificationMethod = normalizeAuthVerificationMethod(v.authVerificationMethod);
+
     await updateAuthSettings({
         data: {
-            authVerificationMethod: v.authVerificationMethod,
+            authVerificationMethod,
             whatsappAccessToken: v.whatsappAccessToken,
             whatsappPhoneNumberId: v.whatsappPhoneNumberId,
             whatsappTemplateName: v.whatsappTemplateName,
@@ -105,7 +121,7 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
     });
 
     // Save SMS settings separately (different endpoint, different storage)
-    if (v.authVerificationMethod === "sms_otp" && v.smsProvider) {
+    if (usesSmsProvider(authVerificationMethod) && v.smsProvider) {
         await updateSmsSettings({
             data: {
                 activeProvider: v.smsProvider,
@@ -168,19 +184,18 @@ export default function AuthSettingsBuilder() {
                                 <SelectValue placeholder="Select verification method" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="email">Email OTP (Phone collected at signup)</SelectItem>
-                                <SelectItem value="phone">WhatsApp OTP (Phone verified, Email optional)</SelectItem>
-                                <SelectItem value="both">Both Options (Customer's Pick)</SelectItem>
-                                <SelectItem value="sms_otp">SMS OTP (Phone verified via SMS)</SelectItem>
+                                <SelectItem value="email">Email OTP</SelectItem>
+                                <SelectItem value="sms_otp">SMS OTP</SelectItem>
+                                <SelectItem value="whatsapp_otp">WhatsApp OTP</SelectItem>
+                                <SelectItem value="both">Email or SMS OTP</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                 </CardContent>
             </Card>
 
-            {(values.authVerificationMethod === "phone" ||
-                values.authVerificationMethod === "both") && (
-                    <Card className="border-green-500/20 dark:bg-green-950/10">
+            {usesWhatsAppProvider(values.authVerificationMethod) && (
+                <Card className="border-green-500/20 dark:bg-green-950/10">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">
                                 Meta WhatsApp Cloud API
@@ -253,10 +268,10 @@ export default function AuthSettingsBuilder() {
                                 </div>
                             </div>
                         </CardContent>
-                    </Card>
-                )}
+                </Card>
+            )}
 
-            {values.authVerificationMethod === "sms_otp" && (
+            {usesSmsProvider(values.authVerificationMethod) && (
                 <Card className="border-blue-500/20 dark:bg-blue-950/10">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">

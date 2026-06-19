@@ -210,6 +210,112 @@ export interface CustomerOrder {
   items: CustomerOrderItem[];
 }
 
+export interface CustomerOrderDetailPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string;
+  paymentType: string;
+  status: string;
+  codReceiptUrl: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerOrderDetailPaymentPlan {
+  totalAmount: number;
+  depositAmount: number;
+  balanceDue: number;
+  balanceDueDate: string | null;
+  status: string;
+  depositPaidAt: string | null;
+  balancePaidAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerOrderDetailCod {
+  codStatus: string;
+  deliveryAttempts: number;
+  failureReason: string | null;
+  collectedAmount: number | null;
+  receiptUrl: string | null;
+  lastAttemptAt: string | null;
+  collectedAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerOrderDetailNotification {
+  id: string;
+  notificationType: string;
+  channel: string;
+  status: string;
+  provider: string;
+  providerStatus: string | null;
+  acceptedAt: string | null;
+  deliveredAt: string | null;
+  failedAt: string | null;
+  skippedAt: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+}
+
+export interface CustomerOrderTimelineEvent {
+  id: string;
+  type: "order" | "payment" | "shipment" | "notification";
+  status: string;
+  label: string;
+  happenedAt: string | null;
+  details?: string | null;
+}
+
+export interface CustomerOrderDetailOrder {
+  id: string;
+  invoiceNumber: number | null;
+  status: string;
+  totalAmount: number;
+  paidAmount: number;
+  balanceDue: number;
+  shippingCharge: number;
+  discountAmount: number | null;
+  paymentStatus: string;
+  paymentMethod: string;
+  fulfillmentStatus: string;
+  expectedDelivery: string | null;
+  shippingAddress: string;
+  city: string;
+  zone: string;
+  area: string | null;
+  cityName: string | null;
+  zoneName: string | null;
+  areaName: string | null;
+  notes: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerOrderDetail {
+  order: CustomerOrderDetailOrder;
+  items: Array<CustomerOrderItem & {
+    id: string;
+    productSlug: string | null;
+    unitPrice: number;
+    lineTotal: number;
+    fulfillmentStatus: string;
+    createdAt: string | null;
+  }>;
+  shipments: Array<CustomerOrderShipment & {
+    note: string | null;
+    shipmentAmount: number | null;
+    isFinalShipment: boolean;
+  }>;
+  payments: CustomerOrderDetailPayment[];
+  paymentPlan: CustomerOrderDetailPaymentPlan | null;
+  cod: CustomerOrderDetailCod | null;
+  notifications: CustomerOrderDetailNotification[];
+  timeline: CustomerOrderTimelineEvent[];
+}
+
 export interface ProfileUpdateData {
   name?: string;
   address?: string;
@@ -268,5 +374,39 @@ export async function getCustomerOrders(): Promise<{
     return { success: true, orders: data.orders || [], customer: data.customer };
   } catch {
     return { success: false, orders: [], error: "Network error" };
+  }
+}
+
+/**
+ * Get one customer order detail/timeline. Requires active session (cs_tok cookie).
+ */
+export async function getCustomerOrderDetail(orderId: string): Promise<{
+  success: boolean;
+  detail?: CustomerOrderDetail;
+  error?: string;
+  status?: number;
+}> {
+  if (!orderId) {
+    return { success: false, error: "Order ID is required", status: 400 };
+  }
+
+  try {
+    const res = await fetch(authUrl(`orders/${encodeURIComponent(orderId)}`), {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const raw = (await res.json()) as AuthApiEnvelope;
+      return {
+        success: false,
+        error: extractError(raw),
+        status: res.status,
+      };
+    }
+    const raw = (await res.json()) as AuthApiEnvelope<CustomerOrderDetail>;
+    const detail = raw.data ?? (raw as unknown as CustomerOrderDetail);
+    return { success: true, detail };
+  } catch {
+    return { success: false, error: "Network error" };
   }
 }

@@ -1,8 +1,23 @@
 // src/modules/customers/customers.service.ts
 // All DB queries and business logic for the customers domain.
 
-import { customers, customerHistory, deliveryLocations, deliveryProviders, deliveryShipments, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
-import { sql, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm";
+import {
+    codTracking,
+    customers,
+    customerHistory,
+    deliveryLocations,
+    deliveryProviders,
+    deliveryShipments,
+    orderItems,
+    orderNotificationDeliveryReceipts,
+    orderPayments,
+    orders,
+    paymentPlans,
+    productImages,
+    products,
+    productVariants,
+} from "@scalius/database/schema";
+import { sql, isNull, inArray, asc, desc, eq, and, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
@@ -39,6 +54,22 @@ interface CustomerOrderShipmentSummary {
     updatedAt: string | null;
     createdAt: string | null;
 }
+
+export interface CustomerOrderDetailTimelineEvent {
+    id: string;
+    type: "order" | "payment" | "shipment" | "notification";
+    status: string;
+    label: string;
+    happenedAt: string | null;
+    details?: string | null;
+}
+
+const normalizeStatusLabel = (status: string): string =>
+    status
+        .split("_")
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
 
 export async function listCustomers(
     db: Database,
@@ -379,6 +410,7 @@ export async function getCustomerOrders(
     const customerOrders = await db
         .select({
             id: orders.id,
+            invoiceNumber: orders.invoiceNumber,
             status: orders.status,
             totalAmount: orders.totalAmount,
             paidAmount: orders.paidAmount,
@@ -387,6 +419,7 @@ export async function getCustomerOrders(
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             fulfillmentStatus: orders.fulfillmentStatus,
+            expectedDelivery: orders.expectedDelivery,
             shippingAddress: orders.shippingAddress,
             cityName: orders.cityName,
             zoneName: orders.zoneName,
@@ -394,7 +427,10 @@ export async function getCustomerOrders(
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
         })
         .from(orders)
-        .where(eq(orders.customerId, customerId))
+        .where(and(
+            eq(orders.customerId, customerId),
+            isNull(orders.deletedAt),
+        ))
         .orderBy(desc(orders.createdAt))
         .limit(50);
 
@@ -511,4 +547,361 @@ export async function getCustomerOrders(
     }));
 
     return { orders: formattedOrders, customerProfile };
+}
+
+export async function getCustomerOrderDetail(
+    db: Database,
+    customerId: string,
+    orderId: string,
+) {
+    const order = await db
+        .select({
+            id: orders.id,
+            invoiceNumber: orders.invoiceNumber,
+            status: orders.status,
+            totalAmount: orders.totalAmount,
+            paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
+            shippingCharge: orders.shippingCharge,
+            discountAmount: orders.discountAmount,
+            paymentStatus: orders.paymentStatus,
+            paymentMethod: orders.paymentMethod,
+            fulfillmentStatus: orders.fulfillmentStatus,
+            expectedDelivery: orders.expectedDelivery,
+            shippingAddress: orders.shippingAddress,
+            city: orders.city,
+            zone: orders.zone,
+            area: orders.area,
+            cityName: orders.cityName,
+            zoneName: orders.zoneName,
+            areaName: orders.areaName,
+            notes: orders.notes,
+            createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+            updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
+        })
+        .from(orders)
+        .where(and(
+            eq(orders.id, orderId),
+            eq(orders.customerId, customerId),
+            isNull(orders.deletedAt),
+        ))
+        .get();
+
+    if (!order) {
+        throw new NotFoundError("Order not found");
+    }
+
+    const [items, shipments, payments, plans, codRows, notificationReceipts] = await db.batch([
+        db
+            .select({
+                id: orderItems.id,
+                productId: orderItems.productId,
+                variantId: orderItems.variantId,
+                quantity: orderItems.quantity,
+                price: orderItems.price,
+                productName: products.name,
+                productSlug: products.slug,
+                productImage: sql<string>`(
+                    SELECT ${productImages.url}
+                    FROM ${productImages}
+                    WHERE ${productImages.productId} = ${products.id}
+                    AND ${productImages.isPrimary} = 1
+                    LIMIT 1
+                )`.as("productImage"),
+                variantSize: productVariants.size,
+                variantColor: productVariants.color,
+                unitPrice: orderItems.price,
+                lineTotal: sql<number>`${orderItems.quantity} * ${orderItems.price}`.as("lineTotal"),
+                fulfillmentStatus: orderItems.fulfillmentStatus,
+                createdAt: sql<number>`CAST(${orderItems.createdAt} AS INTEGER)`,
+            })
+            .from(orderItems)
+            .leftJoin(products, eq(products.id, orderItems.productId))
+            .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+            .where(eq(orderItems.orderId, orderId)),
+        db
+            .select({
+                id: deliveryShipments.id,
+                providerType: deliveryShipments.providerType,
+                providerName: deliveryProviders.name,
+                status: deliveryShipments.status,
+                rawStatus: deliveryShipments.rawStatus,
+                trackingId: deliveryShipments.trackingId,
+                trackingUrl: deliveryShipments.trackingUrl,
+                courierName: deliveryShipments.courierName,
+                note: deliveryShipments.note,
+                shipmentAmount: deliveryShipments.shipmentAmount,
+                isFinalShipment: deliveryShipments.isFinalShipment,
+                lastChecked: sql<number>`CAST(${deliveryShipments.lastChecked} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${deliveryShipments.updatedAt} AS INTEGER)`,
+                createdAt: sql<number>`CAST(${deliveryShipments.createdAt} AS INTEGER)`,
+            })
+            .from(deliveryShipments)
+            .leftJoin(deliveryProviders, eq(deliveryProviders.id, deliveryShipments.providerId))
+            .where(eq(deliveryShipments.orderId, orderId))
+            .orderBy(desc(deliveryShipments.createdAt)),
+        db
+            .select({
+                id: orderPayments.id,
+                amount: orderPayments.amount,
+                currency: orderPayments.currency,
+                paymentMethod: orderPayments.paymentMethod,
+                paymentType: orderPayments.paymentType,
+                status: orderPayments.status,
+                codReceiptUrl: orderPayments.codReceiptUrl,
+                createdAt: sql<number>`CAST(${orderPayments.createdAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${orderPayments.updatedAt} AS INTEGER)`,
+            })
+            .from(orderPayments)
+            .where(eq(orderPayments.orderId, orderId))
+            .orderBy(desc(orderPayments.createdAt)),
+        db
+            .select({
+                totalAmount: paymentPlans.totalAmount,
+                depositAmount: paymentPlans.depositAmount,
+                balanceDue: paymentPlans.balanceDue,
+                balanceDueDate: paymentPlans.balanceDueDate,
+                status: paymentPlans.status,
+                depositPaidAt: sql<number>`CAST(${paymentPlans.depositPaidAt} AS INTEGER)`,
+                balancePaidAt: sql<number>`CAST(${paymentPlans.balancePaidAt} AS INTEGER)`,
+                createdAt: sql<number>`CAST(${paymentPlans.createdAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${paymentPlans.updatedAt} AS INTEGER)`,
+            })
+            .from(paymentPlans)
+            .where(eq(paymentPlans.orderId, orderId))
+            .limit(1),
+        db
+            .select({
+                codStatus: codTracking.codStatus,
+                deliveryAttempts: codTracking.deliveryAttempts,
+                failureReason: codTracking.failureReason,
+                collectedAmount: codTracking.collectedAmount,
+                receiptUrl: codTracking.receiptUrl,
+                lastAttemptAt: sql<number>`CAST(${codTracking.lastAttemptAt} AS INTEGER)`,
+                collectedAt: sql<number>`CAST(${codTracking.collectedAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${codTracking.updatedAt} AS INTEGER)`,
+            })
+            .from(codTracking)
+            .where(eq(codTracking.orderId, orderId))
+            .limit(1),
+        db
+            .select({
+                id: orderNotificationDeliveryReceipts.id,
+                notificationType: orderNotificationDeliveryReceipts.notificationType,
+                channel: orderNotificationDeliveryReceipts.channel,
+                status: orderNotificationDeliveryReceipts.status,
+                provider: orderNotificationDeliveryReceipts.provider,
+                providerStatus: orderNotificationDeliveryReceipts.providerStatus,
+                acceptedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.acceptedAt} AS INTEGER)`,
+                deliveredAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.deliveredAt} AS INTEGER)`,
+                failedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.failedAt} AS INTEGER)`,
+                skippedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.skippedAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.updatedAt} AS INTEGER)`,
+                createdAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.createdAt} AS INTEGER)`,
+            })
+            .from(orderNotificationDeliveryReceipts)
+            .where(and(
+                eq(orderNotificationDeliveryReceipts.orderId, orderId),
+                inArray(orderNotificationDeliveryReceipts.channel, ["email", "sms", "whatsapp"]),
+            ))
+            .orderBy(desc(orderNotificationDeliveryReceipts.createdAt)),
+    ] as Parameters<Database["batch"]>[0]) as [
+        Array<{
+            id: string;
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            price: number;
+            productName: string | null;
+            productSlug: string | null;
+            productImage: string | null;
+            variantSize: string | null;
+            variantColor: string | null;
+            unitPrice: number;
+            lineTotal: number;
+            fulfillmentStatus: string;
+            createdAt: number | null;
+        }>,
+        Array<{
+            id: string;
+            providerType: string;
+            providerName: string | null;
+            status: string;
+            rawStatus: string | null;
+            trackingId: string | null;
+            trackingUrl: string | null;
+            courierName: string | null;
+            note: string | null;
+            shipmentAmount: number | null;
+            isFinalShipment: boolean;
+            lastChecked: number | null;
+            updatedAt: number | null;
+            createdAt: number | null;
+        }>,
+        Array<{
+            id: string;
+            amount: number;
+            currency: string;
+            paymentMethod: string;
+            paymentType: string;
+            status: string;
+            codReceiptUrl: string | null;
+            createdAt: number | null;
+            updatedAt: number | null;
+        }>,
+        Array<{
+            totalAmount: number;
+            depositAmount: number;
+            balanceDue: number;
+            balanceDueDate: string | null;
+            status: string;
+            depositPaidAt: number | null;
+            balancePaidAt: number | null;
+            createdAt: number | null;
+            updatedAt: number | null;
+        }>,
+        Array<{
+            codStatus: string;
+            deliveryAttempts: number;
+            failureReason: string | null;
+            collectedAmount: number | null;
+            receiptUrl: string | null;
+            lastAttemptAt: number | null;
+            collectedAt: number | null;
+            updatedAt: number | null;
+        }>,
+        Array<{
+            id: string;
+            notificationType: string;
+            channel: string;
+            status: string;
+            provider: string;
+            providerStatus: string | null;
+            acceptedAt: number | null;
+            deliveredAt: number | null;
+            failedAt: number | null;
+            skippedAt: number | null;
+            updatedAt: number | null;
+            createdAt: number | null;
+        }>,
+    ];
+
+    const formattedItems = items.map((item) => ({
+        ...item,
+        createdAt: timestampToIso(item.createdAt),
+    }));
+
+    const formattedShipments = shipments.map((shipment) => ({
+        ...shipment,
+        lastChecked: timestampToIso(shipment.lastChecked),
+        updatedAt: timestampToIso(shipment.updatedAt),
+        createdAt: timestampToIso(shipment.createdAt),
+    }));
+
+    const formattedPayments = payments.map((payment) => ({
+        ...payment,
+        createdAt: timestampToIso(payment.createdAt),
+        updatedAt: timestampToIso(payment.updatedAt),
+    }));
+
+    const paymentPlan = plans[0]
+        ? {
+            ...plans[0],
+            depositPaidAt: timestampToIso(plans[0].depositPaidAt),
+            balancePaidAt: timestampToIso(plans[0].balancePaidAt),
+            createdAt: timestampToIso(plans[0].createdAt),
+            updatedAt: timestampToIso(plans[0].updatedAt),
+        }
+        : null;
+
+    const cod = codRows[0]
+        ? {
+            ...codRows[0],
+            lastAttemptAt: timestampToIso(codRows[0].lastAttemptAt),
+            collectedAt: timestampToIso(codRows[0].collectedAt),
+            updatedAt: timestampToIso(codRows[0].updatedAt),
+        }
+        : null;
+
+    const notifications = notificationReceipts.map((receipt) => ({
+        ...receipt,
+        acceptedAt: timestampToIso(receipt.acceptedAt),
+        deliveredAt: timestampToIso(receipt.deliveredAt),
+        failedAt: timestampToIso(receipt.failedAt),
+        skippedAt: timestampToIso(receipt.skippedAt),
+        updatedAt: timestampToIso(receipt.updatedAt),
+        createdAt: timestampToIso(receipt.createdAt),
+    }));
+
+    const timeline: CustomerOrderDetailTimelineEvent[] = [
+        {
+            id: `order-created:${order.id}`,
+            type: "order",
+            status: order.status,
+            label: "Order placed",
+            happenedAt: timestampToIso(order.createdAt),
+            details: `Status: ${normalizeStatusLabel(order.status)}`,
+        },
+    ];
+
+    for (const payment of formattedPayments) {
+        timeline.push({
+            id: `payment:${payment.id}`,
+            type: "payment",
+            status: payment.status,
+            label: `Payment ${normalizeStatusLabel(payment.status)}`,
+            happenedAt: payment.updatedAt ?? payment.createdAt,
+            details: `${normalizeStatusLabel(payment.paymentMethod)} ${normalizeStatusLabel(payment.paymentType)} payment`,
+        });
+    }
+
+    for (const shipment of formattedShipments) {
+        timeline.push({
+            id: `shipment:${shipment.id}`,
+            type: "shipment",
+            status: shipment.status,
+            label: `Shipment ${normalizeStatusLabel(shipment.status)}`,
+            happenedAt: shipment.lastChecked ?? shipment.updatedAt ?? shipment.createdAt,
+            details: shipment.trackingId ? `Tracking ID: ${shipment.trackingId}` : shipment.courierName,
+        });
+    }
+
+    for (const notification of notifications) {
+        timeline.push({
+            id: `notification:${notification.id}`,
+            type: "notification",
+            status: notification.status,
+            label: `${normalizeStatusLabel(notification.channel)} notification ${normalizeStatusLabel(notification.status)}`,
+            happenedAt:
+                notification.deliveredAt ??
+                notification.acceptedAt ??
+                notification.failedAt ??
+                notification.skippedAt ??
+                notification.updatedAt ??
+                notification.createdAt,
+            details: normalizeStatusLabel(notification.notificationType),
+        });
+    }
+
+    timeline.sort((a, b) => {
+        if (!a.happenedAt && !b.happenedAt) return 0;
+        if (!a.happenedAt) return 1;
+        if (!b.happenedAt) return -1;
+        return new Date(a.happenedAt).getTime() - new Date(b.happenedAt).getTime();
+    });
+
+    return {
+        order: {
+            ...order,
+            createdAt: timestampToIso(order.createdAt),
+            updatedAt: timestampToIso(order.updatedAt),
+        },
+        items: formattedItems,
+        shipments: formattedShipments,
+        payments: formattedPayments,
+        paymentPlan,
+        cod,
+        notifications,
+        timeline,
+    };
 }

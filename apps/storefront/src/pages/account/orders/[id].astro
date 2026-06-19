@@ -1,0 +1,367 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { getLayoutData } from "@/lib/api";
+
+const layoutData = await getLayoutData();
+const orderId = Astro.params.id ?? "";
+---
+
+<Layout title="Order Details" layoutData={layoutData}>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  <section class="container mx-auto max-w-4xl px-4 py-8" data-order-detail-page data-order-id={orderId}>
+    <div id="orderLoading" class="flex min-h-[360px] items-center justify-center">
+      <div class="text-center">
+        <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary"></div>
+        <p class="text-sm text-muted-foreground">Loading order details...</p>
+      </div>
+    </div>
+
+    <section id="orderUnauthenticated" class="hidden min-h-[360px] items-center justify-center">
+      <div class="mx-auto max-w-md text-center">
+        <h1 class="mb-3 text-2xl font-bold text-foreground">Sign in to view this order</h1>
+        <p class="mb-6 text-muted-foreground">Your order timeline is protected by your customer account.</p>
+        <a href="/account" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Open Account</a>
+      </div>
+    </section>
+
+    <section id="orderError" class="hidden min-h-[360px] items-center justify-center">
+      <div class="mx-auto max-w-md text-center">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+          <svg class="h-7 w-7 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
+        </div>
+        <h1 id="orderErrorTitle" class="mb-2 text-2xl font-bold text-foreground">Order details unavailable</h1>
+        <p id="orderErrorMessage" class="mb-6 text-muted-foreground">We could not load this order right now.</p>
+        <div class="flex flex-col justify-center gap-3 sm:flex-row">
+          <button type="button" id="orderRetry" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Try Again</button>
+          <a href="/account" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Back to Account</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="orderContent" class="hidden space-y-6" aria-live="polite">
+      <div class="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <a href="/account" class="mb-3 inline-flex text-sm font-semibold text-primary hover:text-primary/80">Back to account</a>
+          <h1 id="orderTitle" class="text-3xl font-bold text-foreground">Order Details</h1>
+          <p id="orderSubtitle" class="mt-2 text-sm text-muted-foreground"></p>
+        </div>
+        <div class="flex flex-wrap gap-2" id="orderBadges"></div>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-3">
+        <div class="rounded-xl border border-border bg-card p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
+          <p id="orderTotal" class="mt-2 text-2xl font-bold text-foreground"></p>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Payment</p>
+          <p id="orderPayment" class="mt-2 text-lg font-bold capitalize text-foreground"></p>
+          <p id="orderBalance" class="mt-1 text-xs text-muted-foreground"></p>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fulfillment</p>
+          <p id="orderFulfillment" class="mt-2 text-lg font-bold capitalize text-foreground"></p>
+          <p id="orderExpectedDelivery" class="mt-1 text-xs text-muted-foreground"></p>
+        </div>
+      </div>
+
+      <section class="space-y-3">
+        <h2 class="text-xl font-bold text-foreground">Timeline</h2>
+        <div id="orderTimeline" class="space-y-3"></div>
+      </section>
+
+      <section class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div class="space-y-6">
+          <section class="rounded-xl border border-border bg-card p-5">
+            <h2 class="mb-4 text-lg font-bold text-foreground">Items</h2>
+            <div id="orderItems" class="space-y-4"></div>
+          </section>
+
+          <section class="rounded-xl border border-border bg-card p-5">
+            <h2 class="mb-4 text-lg font-bold text-foreground">Delivery</h2>
+            <div id="orderShipments" class="space-y-4"></div>
+          </section>
+        </div>
+
+        <div class="space-y-6">
+          <section class="rounded-xl border border-border bg-card p-5">
+            <h2 class="mb-4 text-lg font-bold text-foreground">Payment</h2>
+            <div id="orderPayments" class="space-y-4"></div>
+          </section>
+
+          <section class="rounded-xl border border-border bg-card p-5">
+            <h2 class="mb-4 text-lg font-bold text-foreground">Updates Sent</h2>
+            <div id="orderNotifications" class="space-y-3"></div>
+          </section>
+
+          <section class="rounded-xl border border-border bg-card p-5">
+            <h2 class="mb-4 text-lg font-bold text-foreground">Shipping Address</h2>
+            <div id="orderAddress" class="space-y-1 text-sm text-muted-foreground"></div>
+          </section>
+        </div>
+      </section>
+    </section>
+  </section>
+</Layout>
+
+<script>
+  import { getCustomerOrderDetail, getCustomerSession, type CustomerOrderDetail, type CustomerOrderShipment } from "@/lib/api/customer-auth";
+  import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+  import { escapeHtml } from "@scalius/shared/html-escape";
+  import { getProductImageUrl } from "@/lib/product-media";
+
+  type DetailWindow = Window & {
+    __CURRENCY_SYMBOL__?: string;
+    __scaliusOrderDetailBound?: boolean;
+    __scaliusOrderDetailRun?: number;
+    __scaliusLoadOrderDetail?: () => Promise<void>;
+  };
+  const detailWindow = window as DetailWindow;
+
+  function currentOrderId(): string {
+    const pageRoot = document.querySelector("[data-order-detail-page]") as HTMLElement | null;
+    return pageRoot?.dataset.orderId || "";
+  }
+
+  function formatDate(value: string | null): string {
+    if (!value) return "Pending";
+    return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function formatDateTime(value: string | null): string {
+    if (!value) return "Pending";
+    return new Date(value).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  function formatMoney(amount: number): string {
+    const symbol = detailWindow.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
+    return `${symbol}${amount.toFixed(0)}`;
+  }
+
+  function label(value: string): string {
+    return value.replace(/_/g, " ");
+  }
+
+  function badge(value: string): string {
+    const base = "inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide";
+    if (["cancelled", "failed", "returned", "refunded"].includes(value)) return `${base} bg-destructive/10 text-destructive`;
+    if (["paid", "confirmed", "succeeded", "delivered", "completed", "complete"].includes(value)) return `${base} bg-primary/15 text-primary`;
+    return `${base} bg-muted text-muted-foreground`;
+  }
+
+  function safeUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+      return parsed.href;
+    } catch {
+      return null;
+    }
+  }
+
+  function trackingUrl(shipment: CustomerOrderShipment): string | null {
+    const explicitUrl = safeUrl(shipment.trackingUrl);
+    if (explicitUrl) return explicitUrl;
+    if (!shipment.trackingId) return null;
+    if (shipment.providerType === "pathao") return `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`;
+    if (shipment.providerType === "steadfast") return `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId)}`;
+    return null;
+  }
+
+  function showOnly(state: "loading" | "unauth" | "error" | "content"): void {
+    document.getElementById("orderLoading")?.classList.toggle("hidden", state !== "loading");
+    document.getElementById("orderUnauthenticated")?.classList.toggle("hidden", state !== "unauth");
+    document.getElementById("orderError")?.classList.toggle("hidden", state !== "error");
+    document.getElementById("orderContent")?.classList.toggle("hidden", state !== "content");
+    document.getElementById("orderUnauthenticated")?.classList.toggle("flex", state === "unauth");
+    document.getElementById("orderError")?.classList.toggle("flex", state === "error");
+  }
+
+  function renderDetail(detail: CustomerOrderDetail): void {
+    const { order } = detail;
+    const title = document.getElementById("orderTitle");
+    const subtitle = document.getElementById("orderSubtitle");
+    const badges = document.getElementById("orderBadges");
+    const total = document.getElementById("orderTotal");
+    const payment = document.getElementById("orderPayment");
+    const balance = document.getElementById("orderBalance");
+    const fulfillment = document.getElementById("orderFulfillment");
+    const expectedDelivery = document.getElementById("orderExpectedDelivery");
+
+    if (title) title.textContent = `Order #${order.invoiceNumber ?? order.id}`;
+    if (subtitle) subtitle.textContent = `Placed ${formatDate(order.createdAt)}${order.updatedAt ? ` • Last updated ${formatDate(order.updatedAt)}` : ""}`;
+    if (badges) {
+      badges.innerHTML = `
+        <span class="${badge(order.status)}">${escapeHtml(label(order.status))}</span>
+        <span class="${badge(order.paymentStatus)}">${escapeHtml(label(order.paymentStatus))}</span>
+      `;
+    }
+    if (total) total.textContent = formatMoney(order.totalAmount);
+    if (payment) payment.textContent = `${label(order.paymentStatus)} via ${label(order.paymentMethod)}`;
+    if (balance) balance.textContent = order.balanceDue > 0 ? `${formatMoney(order.balanceDue)} balance due` : "No balance due";
+    if (fulfillment) fulfillment.textContent = label(order.fulfillmentStatus);
+    if (expectedDelivery) expectedDelivery.textContent = order.expectedDelivery ? `Expected ${order.expectedDelivery}` : "No delivery estimate yet";
+
+    const timeline = document.getElementById("orderTimeline");
+    if (timeline) {
+      timeline.innerHTML = detail.timeline.length
+        ? detail.timeline.map((event, index) => `
+          <article class="flex gap-3 rounded-xl border border-border bg-card p-4" ${index === detail.timeline.length - 1 ? "aria-current=\"step\"" : ""}>
+            <div class="mt-1 h-3 w-3 shrink-0 rounded-full bg-primary"></div>
+            <div class="min-w-0">
+              <h3 class="font-semibold text-foreground">${escapeHtml(event.label)}</h3>
+              <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(event.details || label(event.status))}</p>
+              ${event.happenedAt ? `<time class="mt-1 block text-xs text-muted-foreground" datetime="${escapeHtml(event.happenedAt)}">${escapeHtml(formatDateTime(event.happenedAt))}</time>` : ""}
+            </div>
+          </article>
+        `).join("")
+        : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Timeline updates will appear here as the merchant processes the order.</p>`;
+    }
+
+    const items = document.getElementById("orderItems");
+    if (items) {
+      items.innerHTML = detail.items.map((item) => {
+        const imageUrl = getProductImageUrl(item.productImage);
+        return `<article class="flex gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
+          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" class="h-16 w-16 rounded-lg object-cover">` : `<div class="h-16 w-16 rounded-lg bg-muted"></div>`}
+          <div class="min-w-0 flex-1">
+            <h3 class="font-semibold text-foreground">${escapeHtml(item.productName || "Product unavailable")}</h3>
+            <p class="mt-1 text-xs text-muted-foreground">${escapeHtml([item.variantSize, item.variantColor].filter(Boolean).join(" / ") || "Standard")}</p>
+            <p class="mt-1 text-sm text-muted-foreground">Qty ${item.quantity} × ${formatMoney(item.unitPrice)}</p>
+          </div>
+          <p class="font-semibold text-foreground">${formatMoney(item.lineTotal)}</p>
+        </article>`;
+      }).join("");
+    }
+
+    const shipments = document.getElementById("orderShipments");
+    if (shipments) {
+      shipments.innerHTML = detail.shipments.length
+        ? detail.shipments.map((shipment) => {
+          const url = trackingUrl(shipment);
+          return `<article class="rounded-xl border border-border bg-muted/20 p-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 class="font-semibold capitalize text-foreground">${escapeHtml(label(shipment.status))}</h3>
+                <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(shipment.providerName || shipment.courierName || shipment.providerType)}</p>
+                ${shipment.note ? `<p class="mt-2 text-sm text-muted-foreground">${escapeHtml(shipment.note)}</p>` : ""}
+              </div>
+              ${shipment.trackingId ? `<div class="text-left sm:text-right">
+                <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tracking ID</p>
+                <p class="mt-1 font-mono text-sm text-foreground">${escapeHtml(shipment.trackingId)}</p>
+                ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary/80">Open courier tracking</a>` : ""}
+              </div>` : ""}
+            </div>
+            <p class="mt-3 text-xs text-muted-foreground">Updated ${escapeHtml(formatDateTime(shipment.lastChecked || shipment.updatedAt || shipment.createdAt))}</p>
+          </article>`;
+        }).join("")
+        : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Tracking appears after the merchant creates a shipment.</p>`;
+    }
+
+    const payments = document.getElementById("orderPayments");
+    if (payments) {
+      const paymentRows = detail.payments.map((row) => `
+        <article class="rounded-xl border border-border bg-muted/20 p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="font-semibold capitalize text-foreground">${escapeHtml(label(row.status))}</h3>
+              <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(label(row.paymentMethod))} ${escapeHtml(label(row.paymentType))}</p>
+            </div>
+            <p class="font-semibold text-foreground">${formatMoney(row.amount)}</p>
+          </div>
+          <p class="mt-3 text-xs text-muted-foreground">${escapeHtml(formatDateTime(row.updatedAt || row.createdAt))}</p>
+        </article>
+      `).join("");
+      const plan = detail.paymentPlan
+        ? `<article class="rounded-xl border border-border bg-muted/20 p-4">
+            <h3 class="font-semibold capitalize text-foreground">Payment plan ${escapeHtml(label(detail.paymentPlan.status))}</h3>
+            <p class="mt-1 text-sm text-muted-foreground">Deposit ${formatMoney(detail.paymentPlan.depositAmount)} • Balance ${formatMoney(detail.paymentPlan.balanceDue)}</p>
+          </article>`
+        : "";
+      const cod = detail.cod
+        ? `<article class="rounded-xl border border-border bg-muted/20 p-4">
+            <h3 class="font-semibold capitalize text-foreground">COD ${escapeHtml(label(detail.cod.codStatus))}</h3>
+            <p class="mt-1 text-sm text-muted-foreground">${detail.cod.collectedAmount ? `${formatMoney(detail.cod.collectedAmount)} collected` : "Collection pending"}</p>
+          </article>`
+        : "";
+      payments.innerHTML = paymentRows || plan || cod ? `${paymentRows}${plan}${cod}` : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Payment updates will appear here.</p>`;
+    }
+
+    const notifications = document.getElementById("orderNotifications");
+    if (notifications) {
+      notifications.innerHTML = detail.notifications.length
+        ? detail.notifications.map((row) => `
+          <article class="rounded-xl border border-border bg-muted/20 p-4">
+            <h3 class="font-semibold capitalize text-foreground">${escapeHtml(label(row.channel))} ${escapeHtml(label(row.status))}</h3>
+            <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(label(row.notificationType))}</p>
+            <p class="mt-2 text-xs text-muted-foreground">${escapeHtml(formatDateTime(row.deliveredAt || row.acceptedAt || row.failedAt || row.skippedAt || row.updatedAt || row.createdAt))}</p>
+          </article>
+        `).join("")
+        : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Customer notification receipts will appear after updates are sent.</p>`;
+    }
+
+    const address = document.getElementById("orderAddress");
+    if (address) {
+      address.innerHTML = `
+        <p>${escapeHtml(order.shippingAddress)}</p>
+        <p>${escapeHtml([order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city].filter(Boolean).join(", "))}</p>
+      `;
+    }
+  }
+
+  async function loadOrder(): Promise<void> {
+    const run = (detailWindow.__scaliusOrderDetailRun ?? 0) + 1;
+    detailWindow.__scaliusOrderDetailRun = run;
+    showOnly("loading");
+    const orderId = currentOrderId();
+
+    if (!orderId) {
+      const title = document.getElementById("orderErrorTitle");
+      const message = document.getElementById("orderErrorMessage");
+      if (title) title.textContent = "Order not found";
+      if (message) message.textContent = "This order link is incomplete.";
+      showOnly("error");
+      return;
+    }
+
+    const session = await getCustomerSession();
+    if (detailWindow.__scaliusOrderDetailRun !== run) return;
+    if (!session.authenticated) {
+      showOnly("unauth");
+      return;
+    }
+
+    const result = await getCustomerOrderDetail(orderId);
+    if (detailWindow.__scaliusOrderDetailRun !== run) return;
+    if (!result.success || !result.detail) {
+      const title = document.getElementById("orderErrorTitle");
+      const message = document.getElementById("orderErrorMessage");
+      if (title) title.textContent = result.status === 404 ? "Order not found" : "Order details unavailable";
+      if (message) message.textContent = result.status === 404
+        ? "We could not find this order in your account."
+        : result.error || "We could not load this order right now.";
+      showOnly("error");
+      return;
+    }
+
+    renderDetail(result.detail);
+    showOnly("content");
+  }
+
+  detailWindow.__scaliusLoadOrderDetail = loadOrder;
+
+  if (!detailWindow.__scaliusOrderDetailBound) {
+    detailWindow.__scaliusOrderDetailBound = true;
+    document.addEventListener("astro:page-load", () => void detailWindow.__scaliusLoadOrderDetail?.());
+  }
+
+  const retryButton = document.getElementById("orderRetry");
+  if (retryButton) retryButton.onclick = () => void detailWindow.__scaliusLoadOrderDetail?.();
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => void detailWindow.__scaliusLoadOrderDetail?.(), { once: true });
+  } else {
+    void detailWindow.__scaliusLoadOrderDetail?.();
+  }
+</script>
