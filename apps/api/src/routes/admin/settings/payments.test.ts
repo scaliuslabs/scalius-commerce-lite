@@ -2,10 +2,12 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../../../utils/api-response";
+import { ServiceUnavailableError } from "../../../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
     getKv: vi.fn(),
     getEncryptionKey: vi.fn(),
+    requireEncryptionKey: vi.fn(),
     invalidateApiAndScheduleStorefrontGroups: vi.fn(),
     upsertSetting: vi.fn(),
     upsertEncryptedSetting: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("../../../utils/kv-cache", () => ({
 
 vi.mock("../../../utils/encryption-key", () => ({
     getEncryptionKey: mocks.getEncryptionKey,
+    requireEncryptionKey: mocks.requireEncryptionKey,
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
@@ -59,6 +62,7 @@ function createTestApp() {
 
     mocks.getKv.mockReturnValue(kv);
     mocks.getEncryptionKey.mockReturnValue("enc-key");
+    mocks.requireEncryptionKey.mockReturnValue("credential-key");
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
     mocks.upsertSetting.mockResolvedValue(undefined);
     mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
@@ -127,6 +131,33 @@ describe("payment settings cache invalidation", () => {
             ["checkout"],
             expect.objectContaining({ env }),
         );
+        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+    });
+
+    it("requires the credential encryption key before saving Stripe secrets", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/stripe", {
+            secretKey: "sk_live_new",
+            webhookSecret: "whsec_new",
+        });
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
+        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+            { id: "db" },
+            "stripe",
+            "secret_key",
+            "sk_live_new",
+            "credential-key",
+        );
+        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+            { id: "db" },
+            "stripe",
+            "webhook_secret",
+            "whsec_new",
+            "credential-key",
+        );
     });
 
     it("invalidates API and storefront checkout caches after SSLCommerz saves", async () => {
@@ -144,6 +175,25 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["checkout"],
             expect.objectContaining({ env }),
+        );
+        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+    });
+
+    it("requires the credential encryption key before saving SSLCommerz secrets", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/sslcommerz", {
+            storePassword: "ssl_secret",
+        });
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
+        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+            { id: "db" },
+            "sslcommerz",
+            "store_password",
+            "ssl_secret",
+            "credential-key",
         );
     });
 
@@ -163,5 +213,56 @@ describe("payment settings cache invalidation", () => {
             ["checkout"],
             expect.objectContaining({ env }),
         );
+        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+    });
+
+    it("requires the credential encryption key before saving Polar secrets", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/polar", {
+            accessToken: "polar_token",
+            webhookSecret: "polar_webhook",
+        });
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
+        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+            { id: "db" },
+            "polar",
+            "access_token",
+            "polar_token",
+            "credential-key",
+        );
+        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+            { id: "db" },
+            "polar",
+            "webhook_secret",
+            "polar_webhook",
+            "credential-key",
+        );
+    });
+
+    it.each([
+        ["/stripe", { secretKey: "sk_live_missing_key" }],
+        ["/sslcommerz", { storePassword: "ssl_secret_missing_key" }],
+        ["/polar", { accessToken: "polar_token_missing_key" }],
+    ])("fails closed before saving %s secrets when CREDENTIAL_ENCRYPTION_KEY is missing", async (path, body) => {
+        const { app, env } = createTestApp();
+        mocks.requireEncryptionKey.mockImplementationOnce(() => {
+            throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+        });
+
+        const response = await postJson(app, env, path, body);
+
+        expect(response.status, await response.clone().text()).toBe(503);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "SERVICE_UNAVAILABLE",
+                message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.",
+            },
+        });
+        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
     });
 });

@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
-import { getEncryptionKey } from "../../../utils/encryption-key";
+import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import {
     invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
@@ -195,8 +195,14 @@ const saveStripeRoute = createRoute({
 app.openapi(saveStripeRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
+        const hasSecretWrite = Boolean(
+            (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) ||
+            (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()),
+        );
+        const encKey = hasSecretWrite
+            ? requireEncryptionKey(c.env as Record<string, unknown>)
+            : undefined;
 
         if (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) ops.push(upsertEncryptedSetting(db, "stripe", "secret_key", body.secretKey.trim(), encKey));
         if (body.publishableKey !== undefined && body.publishableKey !== MASKED) ops.push(upsertSetting(db, "stripe", "publishable_key", body.publishableKey.trim()));
@@ -265,8 +271,11 @@ const saveSSLCommerzRoute = createRoute({
 app.openapi(saveSSLCommerzRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
+        const hasSecretWrite = Boolean(body.storePassword && body.storePassword !== MASKED && body.storePassword.trim());
+        const encKey = hasSecretWrite
+            ? requireEncryptionKey(c.env as Record<string, unknown>)
+            : undefined;
 
         if (body.storeId && body.storeId.trim()) ops.push(upsertSetting(db, "sslcommerz", "store_id", body.storeId.trim()));
         if (body.storePassword && body.storePassword !== MASKED && body.storePassword.trim()) ops.push(upsertEncryptedSetting(db, "sslcommerz", "store_password", body.storePassword.trim(), encKey));
@@ -337,8 +346,14 @@ const savePolarRoute = createRoute({
 app.openapi(savePolarRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const ops: Promise<void>[] = [];
+        const hasSecretWrite = Boolean(
+            (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ||
+            (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()),
+        );
+        const encKey = hasSecretWrite
+            ? requireEncryptionKey(c.env as Record<string, unknown>)
+            : undefined;
 
         if (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ops.push(upsertEncryptedSetting(db, "polar", "access_token", body.accessToken.trim(), encKey));
         if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertEncryptedSetting(db, "polar", "webhook_secret", body.webhookSecret.trim(), encKey));
