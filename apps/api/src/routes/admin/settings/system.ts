@@ -7,6 +7,10 @@ import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
+import {
+    normalizeFirebaseServiceAccountJson,
+    saveFirebaseServiceAccountJson,
+} from "@scalius/core/integrations/firebase/settings";
 import { getWhatsAppCloudApiSettings, saveWhatsAppAccessToken } from "@scalius/core/integrations/whatsapp";
 import { upsertEncryptedSetting, upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
 import {
@@ -361,17 +365,12 @@ app.openapi(saveFirebaseRoute, async (c) => {
     const { serviceAccount, publicConfig } = c.req.valid("json");
         const updates: Promise<unknown>[] = [];
 
-        if (serviceAccount && serviceAccount !== MASKED) {
-            try {
-                JSON.parse(serviceAccount);
-                updates.push(
-                    db.insert(settings)
-                        .values({ id: `set_${nanoid(10)}`, key: "service_account", value: serviceAccount, type: "json", category: "firebase" })
-                        .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: serviceAccount, updatedAt: sql`(unixepoch())` } })
-                );
-            } catch {
-                throw new ValidationError("Invalid Service Account JSON");
-            }
+        if (typeof serviceAccount === "string" && serviceAccount !== MASKED) {
+            const normalizedServiceAccount = normalizeFirebaseServiceAccountJson(serviceAccount);
+            const encKey = normalizedServiceAccount
+                ? requireEncryptionKey(c.env as Record<string, unknown>)
+                : undefined;
+            updates.push(saveFirebaseServiceAccountJson(db, normalizedServiceAccount, encKey));
         }
 
         if (publicConfig) {

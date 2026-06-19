@@ -3,6 +3,11 @@
 // Replaces firebase-admin SDK with direct HTTP calls
 
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import {
+  decryptCredentials,
+  decryptCredentialsGraceful,
+  encryptCredentials,
+} from "../../utils/credential-encryption";
 
 interface ServiceAccount {
   client_email: string;
@@ -13,6 +18,8 @@ interface ServiceAccount {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const DEFAULT_FCM_SEND_CONCURRENCY = 8;
 const MAX_FCM_SEND_CONCURRENCY = 20;
+const FCM_ACCESS_TOKEN_CACHE_TTL_SECONDS = 3300;
+const ENCRYPTED_VALUE_PREFIX = "enc:";
 
 function getEnv(contextEnv?: Record<string, unknown>) {
   if (contextEnv) {
@@ -24,6 +31,54 @@ function getEnv(contextEnv?: Record<string, unknown>) {
   throw new ServiceUnavailableError(
     "Environment variables not available - should be provided by runtime context",
   );
+}
+
+function getCredentialEncryptionKey(
+  env: Record<string, unknown>,
+): string | undefined {
+  return env.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
+}
+
+function getProjectCachePrefix(env: Record<string, unknown>): string {
+  const prefix = env.PROJECT_CACHE_PREFIX;
+  return typeof prefix === "string" && prefix.trim()
+    ? prefix.trim()
+    : "scalius";
+}
+
+async function readCachedAccessToken(
+  storedValue: string,
+  encryptionKey: string,
+): Promise<string | undefined> {
+  const trimmed = storedValue.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith(ENCRYPTED_VALUE_PREFIX)) {
+    try {
+      return await decryptCredentials(
+        trimmed.slice(ENCRYPTED_VALUE_PREFIX.length),
+        encryptionKey,
+      );
+    } catch (error: unknown) {
+      console.warn(
+        "[Firebase] Failed to decrypt cached FCM access token:",
+        error instanceof Error ? error.message : error,
+      );
+      return undefined;
+    }
+  }
+
+  return decryptCredentialsGraceful(trimmed, encryptionKey);
+}
+
+async function encodeCachedAccessToken(
+  accessToken: string,
+  encryptionKey: string,
+): Promise<string> {
+  return `${ENCRYPTED_VALUE_PREFIX}${await encryptCredentials(
+    accessToken,
+    encryptionKey,
+  )}`;
 }
 
 function base64UrlEncode(str: string): string {
@@ -336,6 +391,7 @@ export class FCMMessagingService {
   private projectId: string;
   private env: Record<string, unknown>;
   private sendConcurrency: number;
+  private accessTokenCache: { token: string; expiresAt: number } | null = null;
 
   constructor(environment: Record<string, unknown>, serviceAccountJson?: string) {
     const { serviceAccount, projectId } = initializeFCMService(
@@ -349,28 +405,57 @@ export class FCMMessagingService {
   }
 
   private async ensureValidAccessToken(): Promise<string> {
-    const cacheKey = `${this.env.PROJECT_CACHE_PREFIX}:fcm_access_token`;
+    const now = Date.now();
+    if (this.accessTokenCache && this.accessTokenCache.expiresAt > now) {
+      return this.accessTokenCache.token;
+    }
+
+    const cacheKey = `${getProjectCachePrefix(this.env)}:fcm_access_token:${this.projectId}`;
     const cache = this.env.SHARED_AUTH_CACHE as KVNamespace | undefined;
+    const encryptionKey = getCredentialEncryptionKey(this.env);
 
-    if (!cache) {
-      // Warn once per instance
-      // console.warn("SHARED_AUTH_CACHE KV namespace not bound. Bypassing cache.");
-      return getAccessToken(this.serviceAccount);
+    if (cache && encryptionKey) {
+      try {
+        const cachedToken = await cache.get(cacheKey);
+        if (cachedToken) {
+          const accessToken = await readCachedAccessToken(cachedToken, encryptionKey);
+          if (accessToken) {
+            this.rememberAccessToken(accessToken);
+            return accessToken;
+          }
+        }
+      } catch (error: unknown) {
+        console.warn(
+          "[Firebase] Failed to read cached FCM access token:",
+          error instanceof Error ? error.message : error,
+        );
+      }
     }
 
-    const cachedToken = await cache.get(cacheKey);
-    if (cachedToken) {
-      return cachedToken;
+    const newAccessToken = await getAccessToken(this.serviceAccount);
+    this.rememberAccessToken(newAccessToken);
+
+    if (cache && encryptionKey) {
+      try {
+        await cache.put(cacheKey, await encodeCachedAccessToken(newAccessToken, encryptionKey), {
+          expirationTtl: FCM_ACCESS_TOKEN_CACHE_TTL_SECONDS,
+        });
+      } catch (error: unknown) {
+        console.warn(
+          "[Firebase] Failed to write encrypted FCM access token cache:",
+          error instanceof Error ? error.message : error,
+        );
+      }
     }
 
-    try {
-      const newAccessToken = await getAccessToken(this.serviceAccount);
-      await cache.put(cacheKey, newAccessToken, { expirationTtl: 3300 });
-      return newAccessToken;
-    } catch (error: unknown) {
-      console.error("Failed to get or cache Firebase access token:", error);
-      throw error;
-    }
+    return newAccessToken;
+  }
+
+  private rememberAccessToken(accessToken: string): void {
+    this.accessTokenCache = {
+      token: accessToken,
+      expiresAt: Date.now() + FCM_ACCESS_TOKEN_CACHE_TTL_SECONDS * 1000,
+    };
   }
 
   // ... (keep sendEachForMulticast and mapErrorCode same)

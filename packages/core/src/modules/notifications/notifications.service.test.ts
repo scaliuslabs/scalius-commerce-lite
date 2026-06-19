@@ -54,6 +54,7 @@ vi.mock("./order-notification-delivery-receipts", () => ({
 
 import { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 import { ORDER_NOTIFICATION_TYPES } from "./notification-types";
+import { encryptCredentials } from "../../utils/credential-encryption";
 
 function createDb(input: string | {
     customerPhone?: string;
@@ -510,5 +511,60 @@ describe("order notification dispatch", () => {
                 notificationType: "order_delivered",
             }),
         }));
+    });
+
+    it("decrypts encrypted Firebase service accounts before sending admin push", async () => {
+        const credentialKey = Buffer.alloc(32, 19).toString("base64");
+        const serviceAccountJson = JSON.stringify({
+            client_email: "firebase-adminsdk@example.iam.gserviceaccount.com",
+            private_key: "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----\\n",
+            project_id: "scalius-test",
+        });
+        const tokenRows = [{ token: "fcm_token_1" }];
+        let selectCount = 0;
+        const db = {
+            select: vi.fn(() => {
+                selectCount += 1;
+                if (selectCount === 1) {
+                    return {
+                        from: vi.fn(() => ({
+                            where: vi.fn(() => ({
+                                get: vi.fn(async () => ({
+                                    value: `enc:${await encryptCredentials(serviceAccountJson, credentialKey)}`,
+                                })),
+                            })),
+                        })),
+                    };
+                }
+
+                return {
+                    from: vi.fn(() => ({
+                        where: vi.fn(() => ({
+                            then: (resolve: (value: typeof tokenRows) => void) => Promise.resolve(tokenRows).then(resolve),
+                        })),
+                    })),
+                };
+            }),
+        } as unknown as Database;
+        const env = {
+            PUBLIC_API_BASE_URL: "https://api.example.test",
+            CREDENTIAL_ENCRYPTION_KEY: credentialKey,
+        } as Env;
+
+        await sendOrderNotification(
+            db,
+            {
+                id: "order_2",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            env,
+            "https://api.example.test",
+        );
+
+        expect(mocks.getFirebaseAdminMessaging).toHaveBeenCalledWith(
+            env,
+            serviceAccountJson,
+        );
     });
 });
