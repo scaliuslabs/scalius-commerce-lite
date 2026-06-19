@@ -502,6 +502,78 @@ describe("admin route graph boundaries", () => {
     }
   });
 
+  it("keeps hero-slider drag-and-drop behind an explicit lazy boundary", () => {
+    const containerSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "hero-slider",
+        "HeroSliderContainer.tsx",
+      ),
+      "utf8",
+    );
+    const sliderTabSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "hero-slider",
+        "SliderTab.tsx",
+      ),
+      "utf8",
+    );
+    const sortableEditorSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "hero-slider",
+        "SortableSlidesEditor.tsx",
+      ),
+      "utf8",
+    );
+    const lazyMediaManagerSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "media-manager",
+        "LazyMediaManager.tsx",
+      ),
+      "utf8",
+    );
+    const mediaManagerBarrelSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "media-manager",
+        "index.ts",
+      ),
+      "utf8",
+    );
+
+    expect(containerSource).toContain('import("./SliderTab")');
+    expect(containerSource).not.toMatch(/import\s+\{\s*SliderTab\s*\}/);
+    expect(sliderTabSource).toContain('import("./SortableSlidesEditor")');
+    expect(sliderTabSource).not.toContain("@dnd-kit/");
+    expect(sliderTabSource).not.toContain("createPortal");
+    expect(sliderTabSource).not.toMatch(/from\s+["']\.\/SortableSlide["']/);
+    expect(sliderTabSource).not.toMatch(/from\s+["']\.\/SlideOverlay["']/);
+    expect(sliderTabSource).not.toContain("./MediaManager");
+    expect(sliderTabSource).not.toContain("~/components/ui/dialog");
+    expect(sliderTabSource).not.toContain("~/components/ui/alert-dialog");
+    expect(sortableEditorSource).toContain("@dnd-kit/core");
+    expect(sortableEditorSource).toContain("@dnd-kit/sortable");
+    expect(sortableEditorSource).toContain("createPortal");
+    expect(sortableEditorSource).toContain("./SortableSlide");
+    expect(sortableEditorSource).toContain("./SlideOverlay");
+    expect(lazyMediaManagerSource).toContain('import("./MediaManager")');
+    expect(mediaManagerBarrelSource).toContain("./LazyMediaManager");
+    expect(mediaManagerBarrelSource).not.toContain("./MediaManagerPage");
+  });
+
   it("keeps abandoned checkouts route entry independent from its self-loading list", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "abandoned-checkouts.tsx"),
