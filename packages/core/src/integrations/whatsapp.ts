@@ -63,6 +63,8 @@ export interface WhatsAppCloudApiSettings {
 
 interface WhatsAppCloudApiSettingsOptions {
   migrateLegacy?: boolean;
+  /** Must be the dedicated CREDENTIAL_ENCRYPTION_KEY, never the JWT fallback read key. */
+  migrationEncryptionKey?: string;
 }
 
 const WHATSAPP_SETTINGS_CATEGORY = "whatsapp";
@@ -105,9 +107,9 @@ export async function getWhatsAppCloudApiSettings(
       ? "legacy"
       : "none";
 
-  if (site?.id && legacyAccessToken && encryptionKey && options.migrateLegacy && !tokenRow?.value) {
-    await migrateLegacyWhatsAppAccessToken(db, site.id, legacyAccessToken, encryptionKey);
-  } else if (site?.id && legacyAccessToken && encryptedAccessToken && options.migrateLegacy) {
+  if (site?.id && legacyAccessToken && options.migrationEncryptionKey && options.migrateLegacy && !tokenRow?.value) {
+    await migrateLegacyWhatsAppAccessToken(db, site.id, legacyAccessToken, options.migrationEncryptionKey);
+  } else if (site?.id && legacyAccessToken && encryptedAccessToken && options.migrateLegacy && options.migrationEncryptionKey) {
     await clearLegacyWhatsAppAccessToken(db, site.id);
   }
 

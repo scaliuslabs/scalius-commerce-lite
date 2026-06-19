@@ -329,6 +329,7 @@ describe("order notification dispatch", () => {
             db,
             {
                 encryptionKey: "credential-key",
+                migrationEncryptionKey: "dedicated-key",
                 outboxId: "outbox_wa_1",
             },
         );
@@ -346,7 +347,10 @@ describe("order notification dispatch", () => {
         expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
             db,
             "credential-key",
-            { migrateLegacy: true },
+            {
+                migrateLegacy: true,
+                migrationEncryptionKey: "dedicated-key",
+            },
         );
         expect(mocks.sendWhatsAppTemplateMessage).toHaveBeenCalledWith({
             accessToken: "wa_token",

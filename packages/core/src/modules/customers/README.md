@@ -50,7 +50,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 ### OTP Authentication (`customer-auth.service.ts`)
 
 **Flow:**
-1. `sendOtp()` -- validates identifier format, normalizes phone to E.164, checks site settings for allowed auth method, resolves/validates the transport before mutating KV, verifies encrypted WhatsApp credentials when `authVerificationMethod = "whatsapp_otp"`, enforces IP rate limiting (5 requests/10 min via KV), enforces per-identifier cooldown (2 min), generates 6-digit cryptographic OTP, stores in KV with 5-min TTL and 0 attempts counter, and returns a queue payload with `deliveryKey` + `otpExpiresAt`
+1. `sendOtp()` -- validates identifier format, normalizes phone to E.164, checks site settings for allowed auth method, resolves/validates the transport before mutating KV, verifies encrypted WhatsApp credentials when `authVerificationMethod = "whatsapp_otp"`, passes a tolerant read key plus a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min via KV), enforces per-identifier cooldown (2 min), generates 6-digit cryptographic OTP, stores in KV with 5-min TTL and 0 attempts counter, and returns a queue payload with `deliveryKey` + `otpExpiresAt`
 2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after KV write, it deletes the exact `cust_otp:*` key and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
@@ -76,7 +76,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 - `"phone"` or `"sms_otp"` -> only phone (SMS) allowed
 - `"whatsapp_otp"` -> only phone (WhatsApp) allowed
 - `"both"` -> email and phone allowed
-- WhatsApp OTP validates encrypted Meta credentials before KV mutation, but the queue payload carries no provider secrets; the API queue consumer resolves/decrypts the token and phone-number ID at send time
+- WhatsApp OTP validates encrypted Meta credentials before KV mutation, but the queue payload carries no provider secrets; the API queue consumer resolves/decrypts the token and phone-number ID at send time. Legacy WhatsApp token migration/cleanup requires the dedicated `migrationEncryptionKey`; `getEncryptionKey()` fallback output is read-only.
 
 **Auto-registration:**
 - If `verifyOtp()` finds no existing customer, it creates one automatically

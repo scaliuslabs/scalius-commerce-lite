@@ -72,6 +72,7 @@ export interface SendOtpInput {
     name: string;
     ip: string;
     encryptionKey?: string;
+    migrationEncryptionKey?: string;
 }
 
 export interface SendOtpResult {
@@ -229,7 +230,10 @@ export async function sendOtp(
         throw new ServiceUnavailableError("Customer authentication settings are not initialized.");
     }
     if (method === "phone" && allowedMethod === "whatsapp_otp") {
-        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.encryptionKey, { migrateLegacy: true });
+        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.encryptionKey, {
+            migrateLegacy: true,
+            migrationEncryptionKey: input.migrationEncryptionKey,
+        });
         if (!whatsAppSettings.accessToken || !whatsAppSettings.phoneNumberId) {
             throw new ServiceUnavailableError("WhatsApp verification is currently unavailable. Contact store support.");
         }

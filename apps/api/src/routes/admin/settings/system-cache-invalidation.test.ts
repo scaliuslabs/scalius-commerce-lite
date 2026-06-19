@@ -199,6 +199,50 @@ describe("system settings cache invalidation", () => {
     );
   });
 
+  it("does not pass JWT fallback as the WhatsApp migration write key", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
+    (env as Record<string, unknown>).JWT_SECRET = "jwt-fallback-key";
+
+    const response = await app.request(
+      "/api/v1/admin/settings/auth",
+      { method: "GET" },
+      env,
+      executionCtx as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
+      expect.anything(),
+      "jwt-fallback-key",
+      {
+        migrateLegacy: true,
+        migrationEncryptionKey: undefined,
+      },
+    );
+  });
+
+  it("passes the dedicated WhatsApp migration key on auth settings reads", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/auth",
+      { method: "GET" },
+      env,
+      executionCtx as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
+      expect.anything(),
+      "credential-key",
+      {
+        migrateLegacy: true,
+        migrationEncryptionKey: "credential-key",
+      },
+    );
+  });
+
   it("does not resave a masked WhatsApp access token", async () => {
     const { app, env, executionCtx } = createTestApp();
 

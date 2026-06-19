@@ -122,7 +122,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 ## Data Model
 
 ### `siteSettings` (singleton row)
-Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, and non-secret WhatsApp OTP fields such as phone-number ID and auth template name. `whatsapp_access_token` is legacy fallback only; new token saves go to encrypted `settings.whatsapp/access_token`. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
+Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, and non-secret WhatsApp OTP fields such as phone-number ID and auth template name. `whatsapp_access_token` is legacy fallback only; new token saves go to encrypted `settings.whatsapp/access_token`, and legacy migration/cleanup requires a dedicated `migrationEncryptionKey` rather than the JWT-tolerant read key. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
 Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
@@ -165,7 +165,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 ### `system.ts` -- System integrations & auth
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/auth` | Get auth/checkout settings (verification method, guest checkout, checkout mode, partial payment, WhatsApp config). Masks encrypted or legacy `whatsappAccessToken` |
+| GET | `/auth` | Get auth/checkout settings (verification method, guest checkout, checkout mode, partial payment, WhatsApp config). Masks encrypted or legacy `whatsappAccessToken`; uses tolerant reads but only migrates/clears legacy WhatsApp tokens when `CREDENTIAL_ENCRYPTION_KEY` is present |
 | POST | `/auth` | Save auth/checkout settings. Skips masked WhatsApp token values, encrypts new token values with `CREDENTIAL_ENCRYPTION_KEY`, and clears encrypted/legacy token storage when the token is set to an empty string |
 | GET | `/security` | Get CSP allowed domains |
 | POST | `/security` | Save CSP allowed domains. Also writes to KV at `security:csp_allowed_domains` |
@@ -193,6 +193,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/polar` | Save Polar credentials. Invalidates polar, payment methods, and checkout config/cache |
 
 Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Reads keep graceful legacy fallback so existing plaintext/JWT-encrypted rows can still be migrated.
+
+WhatsApp access-token saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY`. Runtime reads may pass the tolerant `getEncryptionKey()` output so old plaintext/JWT-era rows continue to work, but legacy migration and legacy-column cleanup must also receive `migrationEncryptionKey` from `getCredentialEncryptionKey()`; without that dedicated key, reads do not create encrypted rows and do not clear `site_settings.whatsapp_access_token`.
 
 Firebase service-account saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes when that secret is missing. Runtime notification reads decrypt `enc:` rows, tolerate legacy plaintext/bare encrypted rows for migration, and never pass unreadable ciphertext to the FCM client. FCM OAuth access tokens are persisted in `SHARED_AUTH_CACHE` only as encrypted `enc:` values when the dedicated key is available; otherwise the FCM client uses per-instance memory/fresh OAuth exchange.
 

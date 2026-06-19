@@ -36,6 +36,7 @@ interface OrderNotificationData {
 
 interface OrderNotificationOptions {
     encryptionKey?: string;
+    migrationEncryptionKey?: string;
     env?: EmailRuntimeContext["env"];
     outboxId?: string;
 }
@@ -537,7 +538,9 @@ export async function sendOrderNotificationEmail(
                 }
 
                 if (whatsappRecipient) {
-                    const sendConfig = db ? await resolveOrderWhatsAppSendConfig(db, options.encryptionKey) : null;
+                    const sendConfig = db
+                        ? await resolveOrderWhatsAppSendConfig(db, options.encryptionKey, options.migrationEncryptionKey)
+                        : null;
                     if (!sendConfig) {
                         if (receiptDb && outboxId) {
                             outcomes.push(await recordSkippedDelivery({
@@ -634,8 +637,15 @@ interface OrderWhatsAppSendConfig {
     languageCode: string;
 }
 
-async function resolveOrderWhatsAppSendConfig(db: Database, encryptionKey?: string): Promise<OrderWhatsAppSendConfig | null> {
-    const whatsapp = await getWhatsAppCloudApiSettings(db, encryptionKey, { migrateLegacy: true });
+async function resolveOrderWhatsAppSendConfig(
+    db: Database,
+    encryptionKey?: string,
+    migrationEncryptionKey?: string,
+): Promise<OrderWhatsAppSendConfig | null> {
+    const whatsapp = await getWhatsAppCloudApiSettings(db, encryptionKey, {
+        migrateLegacy: true,
+        migrationEncryptionKey,
+    });
     if (!whatsapp.accessToken || !whatsapp.phoneNumberId) {
         return null;
     }
