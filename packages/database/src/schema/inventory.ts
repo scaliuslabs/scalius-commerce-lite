@@ -4,7 +4,6 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { products, productVariants } from "./products";
-import { orders } from "./orders";
 import { UNIX_NOW } from "./shared";
 import { AlertStatus } from "./enums";
 
@@ -18,7 +17,10 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     variantId: text("variant_id")
         .notNull()
         .references(() => productVariants.id, { onDelete: "restrict" }),
-    orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+    // Checkout reserves inventory before the order row is committed. Keep this
+    // nullable/non-enforced so reservation movements can be durable claims for
+    // queued order ingestion and later reconciliation.
+    orderId: text("order_id"),
     type: text("type").notNull(),
     quantity: integer("quantity").notNull(),
     previousStock: integer("previous_stock").notNull(),

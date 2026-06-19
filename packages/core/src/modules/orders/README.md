@@ -78,9 +78,9 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 3. **Queue consumer** -- `handleOrderIngestBatch()` processes the batch:
    - Phase 1: Accumulate DB write statements (customer, order, items, discount usage, durable `order_created` notification outbox row) and reservation entries
    - Phase 1b: Re-check discount usage limits to narrow race window
-   - Phase 2: `reserveStockBatch()` per order/pool -- if one order cannot reserve, retry only that message
+   - Phase 2: classify active reservation movements for the order, reuse exact active reservations from prior delivery/crash, then call `reserveStockBatch(..., { reservationKey: "checkout-ingest:v1" })` only for missing entries. If one order cannot reserve, retry only that message; quantity/stray reservation mismatches fail closed for manual inventory reconciliation.
    - Phase 3: `db.batch()` atomic write -- if succeeds, init COD tracking for COD orders, write "completed" to KV, ack messages
-   - Phase 4: On shared DB failure, re-check each order for ambiguous commit, then replay isolated writes with the reservation already held. If isolated writes fail, release only that order's original reservation and retry only after `releaseMultiple()` confirms success; uncertain release fails the checkout closed for manual reconciliation.
+   - Phase 4: On shared DB failure, re-check each order for ambiguous commit, then replay isolated writes with the reservation already held or reused. If isolated writes fail, release only that order's known reservations and retry only after `releaseMultiple()` confirms success; uncertain release fails the checkout closed for manual reconciliation.
 4. **Storefront polls** -- `GET /orders/status/:token` reads KV until "completed" or "failed"
 
 ### Admin Order Creation (synchronous, reserve then deduct)
