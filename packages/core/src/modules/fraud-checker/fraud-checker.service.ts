@@ -6,6 +6,7 @@ import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { decryptCredentialsGraceful, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import {
   NotFoundError,
   ValidationError,
@@ -60,34 +61,49 @@ export interface FraudCheckResult {
 
 const CATEGORY = "fraud-checker";
 
+async function parseStoredProvider(
+  value: string,
+  encryptionKey?: string,
+): Promise<Omit<FraudCheckerProvider, "id"> | null> {
+  try {
+    return JSON.parse(await decryptCredentialsGraceful(value, encryptionKey));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Get all fraud checker providers
  */
-export async function getFraudProviders(db: Database): Promise<FraudCheckerProvider[]> {
+export async function getFraudProviders(
+  db: Database,
+  encryptionKey?: string,
+): Promise<FraudCheckerProvider[]> {
   const providerSettings = await db
     .select()
     .from(settings)
     .where(eq(settings.category, CATEGORY));
 
-  return providerSettings
-    .map((setting) => {
-      try {
-        const data = JSON.parse(setting.value);
-        return {
-          id: setting.key,
-          ...data,
-        };
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean) as FraudCheckerProvider[];
+  const providers = await Promise.all(providerSettings.map(async (setting) => {
+    const data = await parseStoredProvider(setting.value, encryptionKey);
+    if (!data) return null;
+    return {
+      id: setting.key,
+      ...data,
+    };
+  }));
+
+  return providers.filter(Boolean) as FraudCheckerProvider[];
 }
 
 /**
  * Get a specific provider by ID
  */
-export async function getFraudProvider(db: Database, id: string): Promise<FraudCheckerProvider | null> {
+export async function getFraudProvider(
+  db: Database,
+  id: string,
+  encryptionKey?: string,
+): Promise<FraudCheckerProvider | null> {
   const [setting] = await db
     .select()
     .from(settings)
@@ -95,15 +111,12 @@ export async function getFraudProvider(db: Database, id: string): Promise<FraudC
 
   if (!setting) return null;
 
-  try {
-    const data = JSON.parse(setting.value);
-    return {
-      id: setting.key,
-      ...data,
-    };
-  } catch {
-    return null;
-  }
+  const data = await parseStoredProvider(setting.value, encryptionKey);
+  if (!data) return null;
+  return {
+    id: setting.key,
+    ...data,
+  };
 }
 
 /**
@@ -112,7 +125,12 @@ export async function getFraudProvider(db: Database, id: string): Promise<FraudC
 export async function saveFraudProvider(
   db: Database,
   provider: Omit<FraudCheckerProvider, "id"> & { id?: string },
+  encryptionKey: string,
 ): Promise<FraudCheckerProvider> {
+  if (!encryptionKey) {
+    throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+  }
+
   const providerType = provider.providerType ?? "default";
   if (!isFraudCheckProviderType(providerType)) {
     throw new ValidationError(`Unsupported fraud checker provider type: ${providerType}`);
@@ -145,16 +163,21 @@ export async function saveFraudProvider(
     isActive: provider.isActive,
     providerType,
   };
+  const storedValue = await encryptCredentials(JSON.stringify(providerData), encryptionKey);
 
   // Check if provider exists
-  const existing = await getFraudProvider(db, providerId);
+  const existing = await db
+    .select({ key: settings.key })
+    .from(settings)
+    .where(and(eq(settings.category, CATEGORY), eq(settings.key, providerId)))
+    .get();
 
   if (existing) {
     // Update
     await db
       .update(settings)
       .set({
-        value: JSON.stringify(providerData),
+        value: storedValue,
         updatedAt: sql`unixepoch()`,
       })
       .where(
@@ -167,7 +190,7 @@ export async function saveFraudProvider(
       key: providerId,
       category: CATEGORY,
       type: "json",
-      value: JSON.stringify(providerData),
+      value: storedValue,
       updatedAt: sql`unixepoch()`,
     });
   }
@@ -182,7 +205,11 @@ export async function saveFraudProvider(
  * Delete a fraud checker provider
  */
 export async function deleteFraudProvider(db: Database, id: string): Promise<boolean> {
-  const existing = await getFraudProvider(db, id);
+  const existing = await db
+    .select({ key: settings.key })
+    .from(settings)
+    .where(and(eq(settings.category, CATEGORY), eq(settings.key, id)))
+    .get();
   if (!existing) {
     throw new NotFoundError(`Fraud checker provider "${id}" not found`);
   }
@@ -199,8 +226,9 @@ export async function deleteFraudProvider(db: Database, id: string): Promise<boo
 export async function testFraudProvider(
   db: Database,
   id: string,
+  encryptionKey?: string,
 ): Promise<{ success: boolean; message: string }> {
-  const provider = await getFraudProvider(db, id);
+  const provider = await getFraudProvider(db, id, encryptionKey);
   if (!provider) {
     throw new NotFoundError(`Fraud checker provider "${id}" not found`);
   }
@@ -259,8 +287,12 @@ export async function fraudLookup(
 /**
  * Lookup fraud data using the first active provider
  */
-export async function fraudLookupWithActiveProvider(db: Database, phone: string): Promise<FraudCheckResult> {
-  const providers = await getFraudProviders(db);
+export async function fraudLookupWithActiveProvider(
+  db: Database,
+  phone: string,
+  encryptionKey?: string,
+): Promise<FraudCheckResult> {
+  const providers = await getFraudProviders(db, encryptionKey);
   const activeProvider = providers.find((p) => p.isActive);
 
   if (!activeProvider) {

@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
 import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/provider";
+import { getEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
 
 import { ok, created } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
@@ -45,7 +46,7 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
-    const providers = await getFraudProviders(db);
+    const providers = await getFraudProviders(db, getEncryptionKey(c.env as Record<string, unknown>));
 
     const maskedProviders = providers.map(maskProviderSecrets);
 
@@ -81,8 +82,9 @@ const createProviderRoute = createRoute({
 app.openapi(createProviderRoute, async (c) => {
     const db = c.get("db");
     const provider = c.req.valid("json");
+    const encryptionKey = requireEncryptionKey(c.env as Record<string, unknown>);
 
-    const savedProvider = await saveFraudProvider(db, provider);
+    const savedProvider = await saveFraudProvider(db, provider, encryptionKey);
 
     const maskedResponse = maskProviderSecrets(savedProvider);
 
@@ -119,24 +121,27 @@ const updateProviderRoute = createRoute({
 app.openapi(updateProviderRoute, async (c) => {
     const db = c.get("db");
     const validated = c.req.valid("json");
+    const env = c.env as Record<string, unknown>;
+    const readKey = getEncryptionKey(env);
+    const encryptionKey = requireEncryptionKey(env);
     let apiKey = validated.apiKey;
     let apiSecret = validated.apiSecret;
 
     if (apiKey === MASKED_VALUE) {
-        const existingProvider = await getFraudProvider(db, validated.id);
+        const existingProvider = await getFraudProvider(db, validated.id, readKey);
         if (existingProvider?.apiKey) {
             apiKey = existingProvider.apiKey;
         }
     }
 
     if (apiSecret === MASKED_VALUE) {
-        const existingProvider = await getFraudProvider(db, validated.id);
+        const existingProvider = await getFraudProvider(db, validated.id, readKey);
         if (existingProvider?.apiSecret) {
             apiSecret = existingProvider.apiSecret;
         }
     }
 
-    const savedProvider = await saveFraudProvider(db, { ...validated, apiKey, apiSecret });
+    const savedProvider = await saveFraudProvider(db, { ...validated, apiKey, apiSecret }, encryptionKey);
 
     const maskedResponse = maskProviderSecrets(savedProvider);
 
@@ -185,7 +190,7 @@ const testProviderRoute = createRoute({
 app.openapi(testProviderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const result = await testFraudProvider(db, id);
+    const result = await testFraudProvider(db, id, getEncryptionKey(c.env as Record<string, unknown>));
     return ok(c, result);
 });
 
@@ -230,7 +235,7 @@ const lookupRoute = createRoute({
 app.openapi(lookupRoute, async (c) => {
     const db = c.get("db");
     const { phone } = c.req.valid("json");
-    const result = await fraudLookupWithActiveProvider(db, phone);
+    const result = await fraudLookupWithActiveProvider(db, phone, getEncryptionKey(c.env as Record<string, unknown>));
     return ok(c, {
         ...(result.data ?? {}),
         ...(result.riskLevel ? { riskLevel: result.riskLevel } : {}),

@@ -59,17 +59,19 @@ In-memory `Map<string, FraudCheckProvider>`. The `"default"` provider is registe
 
 ## Service Functions (`fraud-checker.service.ts`)
 
-Stores provider configurations in the `settings` table with `category = "fraud-checker"`. Each provider is a JSON blob keyed by a nanoid.
+Stores provider configurations in the `settings` table with `category = "fraud-checker"`. Each provider is keyed by a nanoid; new writes encrypt the provider JSON blob with `CREDENTIAL_ENCRYPTION_KEY`, while read paths keep graceful plaintext/JWT-era tolerance for legacy rows.
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `getFraudProviders` | `(db)` | List all configured providers from settings table. Parses JSON values, filters out parse failures. |
-| `getFraudProvider` | `(db, id)` | Get single provider by settings key. Returns null if not found or parse fails. |
-| `saveFraudProvider` | `(db, provider)` | Create or update. Validates `name`, `apiUrl`, and provider-specific credentials from `FRAUD_CHECK_PROVIDER_DEFINITIONS`. Defaults `providerType` to `"default"`. Uses `unixepoch()` for timestamps. |
+| `getFraudProviders` | `(db, encryptionKey?)` | List all configured providers from settings table. Decrypts when needed, parses JSON values, filters out parse failures. |
+| `getFraudProvider` | `(db, id, encryptionKey?)` | Get single provider by settings key. Decrypts when needed; returns null if not found or parse fails. |
+| `saveFraudProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`, validates `name`, `apiUrl`, and provider-specific credentials from `FRAUD_CHECK_PROVIDER_DEFINITIONS`, encrypts the stored provider blob, defaults `providerType` to `"default"`, and uses `unixepoch()` for timestamps. |
 | `deleteFraudProvider` | `(db, id)` | Hard-delete. Throws `NotFoundError` if missing. |
-| `testFraudProvider` | `(db, id)` | Tests connection by looking up phone `"+8801700000000"`. Throws `NotFoundError` if provider missing. |
+| `testFraudProvider` | `(db, id, encryptionKey?)` | Tests connection by looking up phone `"+8801700000000"`. Throws `NotFoundError` if provider missing. |
 | `fraudLookup` | `(provider, phone)` | Look up a phone number using a specific provider config. Resolves provider implementation via `getFraudCheckProvider(providerType)`. Throws `ServiceUnavailableError` on failure. |
-| `fraudLookupWithActiveProvider` | `(db, phone)` | Look up using the first provider where `isActive === true`. Throws `NotFoundError` if no active provider. |
+| `fraudLookupWithActiveProvider` | `(db, phone, encryptionKey?)` | Look up using the first provider where `isActive === true`. Throws `NotFoundError` if no active provider. |
+
+Admin create/update routes call `requireEncryptionKey()` before saving provider credentials and mask `apiKey`/`apiSecret` in responses. List, test, and lookup routes pass `getEncryptionKey()` so encrypted and legacy plaintext rows can be read without exposing raw credentials to the dashboard.
 
 ### Exported Types
 

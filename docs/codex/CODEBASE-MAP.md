@@ -24,7 +24,8 @@ Scalius Commerce is a pnpm/Turborepo monorepo with three Cloudflare Worker appli
 - API errors must use the standardized JSON error envelope via `ApiError`/global handlers.
 - 202 responses still need `{ success: true, data: ... }` at top level.
 - Runtime secrets must come from Cloudflare `env`, not `import.meta.env`.
-- New provider credential writes require `CREDENTIAL_ENCRYPTION_KEY`; legacy/JWT/plaintext tolerance belongs only on read paths for existing data. Delivery-provider saves are write-strict through `saveDeliveryProvider()` and decrypt-before-mask/merge existing credential rows, including `webhookSecret`.
+- New provider credential writes require `CREDENTIAL_ENCRYPTION_KEY`; legacy/JWT/plaintext tolerance belongs only on read paths for existing data. Delivery-provider saves are write-strict through `saveDeliveryProvider()` and decrypt-before-mask/merge existing credential rows, including `webhookSecret`. Fraud-checker provider configs are encrypted JSON blobs under `settings.fraud-checker` and route writes use `requireEncryptionKey()`.
+- Credential-hardening backlog from the 2026-06-19 audit: Firebase service-account JSON still needs encrypted D1 storage, FCM OAuth token KV caching should avoid plaintext bearer persistence, and WhatsApp legacy-token migration must not write encrypted rows with JWT fallback.
 - Meta WhatsApp Cloud API access tokens live in encrypted `settings.whatsapp/access_token`; `site_settings.whatsapp_access_token` is legacy fallback only, and auth OTP queue messages must not carry provider secrets.
 - Storefront must not import `@scalius/core` or `@scalius/database` directly.
 - Schema changes require matching Drizzle migrations.
