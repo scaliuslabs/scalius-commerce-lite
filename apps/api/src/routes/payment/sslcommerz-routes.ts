@@ -9,7 +9,10 @@ import {
   initSSLCommerzSession,
   parseSSLCommerzTranId,
 } from "@scalius/core/modules/payments/sslcommerz";
-import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
+import {
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+  getSSLCommerzSettings,
+} from "@scalius/core/modules/payments/gateway-settings";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
@@ -17,6 +20,7 @@ import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
+import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -111,7 +115,13 @@ app.openapi(createSessionRoute, async (c) => {
   const transactionId = buildSSLCommerzTranId(body.orderId, policy.paymentType);
 
   const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
+  await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "sslcommerz");
+  const ssl = await getSSLCommerzSettings(
+    db,
+    c.env.CACHE,
+    encryptionKey,
+    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+  );
 
   if (!ssl) {
     throw new ServiceUnavailableError("SSLCommerz is not configured. Please set credentials in the admin dashboard.");

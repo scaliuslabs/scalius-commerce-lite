@@ -5,7 +5,10 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
 import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
-import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
+import {
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+  getStripeSettings,
+} from "@scalius/core/modules/payments/gateway-settings";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -14,6 +17,7 @@ import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
+import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -98,7 +102,13 @@ app.openapi(createIntentRoute, async (c) => {
   });
 
   const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const stripe = await getStripeSettings(db, c.env.CACHE, encryptionKey);
+  await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "stripe");
+  const stripe = await getStripeSettings(
+    db,
+    c.env.CACHE,
+    encryptionKey,
+    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+  );
 
   if (!stripe) {
     throw new ServiceUnavailableError("Stripe is not configured. Please set credentials in the admin dashboard.");

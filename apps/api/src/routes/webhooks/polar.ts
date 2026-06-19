@@ -3,9 +3,11 @@
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { verifyPolarWebhook } from "@scalius/core/modules/payments/polar";
-import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
+import {
+    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+    getPolarSettings,
+} from "@scalius/core/modules/payments/gateway-settings";
 import { type Database } from "@scalius/database/client";
-import { getKv } from "../../utils/kv-cache";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import {
@@ -62,10 +64,24 @@ polarWebhookRoutes.post("/", async (c) => {
         });
 
         const db: Database = c.get("db");
-        const kv = getKv();
+        const kv = c.env.CACHE;
         const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
 
-        const polarSettings = await getPolarSettings(db, kv, encryptionKey);
+        let polarSettings: Awaited<ReturnType<typeof getPolarSettings>>;
+        try {
+            polarSettings = await getPolarSettings(
+                db,
+                kv,
+                encryptionKey,
+                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+            );
+        } catch (error) {
+            console.error(
+                "[Polar Webhook] Polar settings read failed:",
+                error instanceof Error ? error.message : error,
+            );
+            return c.json({ error: "Webhook settings unavailable" }, 503);
+        }
         if (!polarSettings || !polarSettings.webhookSecret) {
             console.error("[Polar Webhook] No webhook secret configured");
             return c.json({ error: "Webhook not configured" }, 503);

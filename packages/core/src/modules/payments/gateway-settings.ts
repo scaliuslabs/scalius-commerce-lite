@@ -19,6 +19,10 @@ import { encryptCredentials, decryptCredentialsGraceful } from "@scalius/core/ut
 // In-memory credential cache (per-isolate, lost on cold start)
 // ---------------------------------------------------------------------------
 
+export const FRESH_GATEWAY_SETTINGS_READ_OPTIONS = {
+  bypassMemoryCache: true,
+} as const satisfies GatewaySettingsReadOptions;
+
 const credentialCache = new Map<string, { data: unknown; expiry: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 

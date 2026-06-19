@@ -29,19 +29,22 @@ import { roundPrice } from "@scalius/shared/price-utils";
 // ---------------------------------------------------------------------------
 
 let _cachedClient: Polar | null = null;
-let _cachedToken: string | null = null;
+let _cachedClientKey: string | null = null;
 
 function getPolarClient(settings: PolarSettings): Polar {
+    const server = settings.sandbox ? "sandbox" : "production";
+    const clientKey = `${server}:${settings.accessToken}`;
+
     // Reuse client if credentials haven't changed
-    if (_cachedClient && _cachedToken === settings.accessToken) {
+    if (_cachedClient && _cachedClientKey === clientKey) {
         return _cachedClient;
     }
 
     _cachedClient = new Polar({
         accessToken: settings.accessToken,
-        server: settings.sandbox ? "sandbox" : "production",
+        server,
     });
-    _cachedToken = settings.accessToken;
+    _cachedClientKey = clientKey;
     return _cachedClient;
 }
 

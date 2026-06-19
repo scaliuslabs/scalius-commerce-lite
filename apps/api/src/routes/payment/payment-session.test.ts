@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createPaymentIntent: vi.fn(),
   initSSLCommerzSession: vi.fn(),
   createPolarCheckout: vi.fn(),
+  getActivePaymentMethods: vi.fn(),
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
   getPolarSettings: vi.fn(),
@@ -27,6 +28,8 @@ vi.mock("@scalius/core/modules/payments/polar", () => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
+  getActivePaymentMethods: mocks.getActivePaymentMethods,
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
   getPolarSettings: mocks.getPolarSettings,
@@ -163,6 +166,10 @@ function envFor(kv: ReturnType<typeof createKvMock>) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", usdExchangeRate: 110 });
+  mocks.getActivePaymentMethods.mockResolvedValue({
+    enabledMethods: ["stripe", "sslcommerz", "polar", "cod"],
+    defaultMethod: "cod",
+  });
   mocks.getStripeSettings.mockResolvedValue({
     enabled: true,
     secretKey: "sk_test",
@@ -433,6 +440,18 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.getStripeSettings).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
     expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
       amount: 5000,
       currency: "bdt",
@@ -448,7 +467,7 @@ describe("payment session receipt-token proof", () => {
   });
 
   it("creates SSLCommerz deposit sessions from configured amount and currency", async () => {
-    const { app, kv } = createTestApp("valid", {
+    const { app, db, kv } = createTestApp("valid", {
       paymentMethod: "sslcommerz",
       partialPaymentEnabled: true,
       partialPaymentAmount: 60,
@@ -471,6 +490,18 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.getSSLCommerzSettings).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
       "password",
@@ -544,7 +575,7 @@ describe("payment session receipt-token proof", () => {
   });
 
   it("creates Polar deposit sessions with original store-currency metadata", async () => {
-    const { app, kv } = createTestApp("valid", {
+    const { app, db, kv } = createTestApp("valid", {
       paymentMethod: "polar",
       partialPaymentEnabled: true,
       partialPaymentAmount: 55,
@@ -567,6 +598,18 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.getPolarSettings).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
     expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
       expect.objectContaining({ productId: "polar_product" }),
       expect.objectContaining({
@@ -582,6 +625,61 @@ describe("payment session receipt-token proof", () => {
         }),
       }),
     );
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      settings: mocks.getStripeSettings,
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      settings: mocks.getSSLCommerzSettings,
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      settings: mocks.getPolarSettings,
+      gateway: mocks.createPolarCheckout,
+    },
+  ])("rejects stale $label checkout sessions when the payment-method allowlist is disabled", async ({
+    paymentMethod,
+    path,
+    settings,
+    gateway,
+  }) => {
+    mocks.getActivePaymentMethods.mockResolvedValue({
+      enabledMethods: ["cod"],
+      defaultMethod: "cod",
+    });
+    const { app, db, kv } = createTestApp("valid", paymentMethod);
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(settings).not.toHaveBeenCalled();
+    expect(gateway).not.toHaveBeenCalled();
   });
 
   it("uses trusted API config for SSLCommerz callbacks instead of caller baseUrl", async () => {

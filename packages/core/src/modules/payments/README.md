@@ -163,7 +163,7 @@ Dispatches `PaymentQueueMessage` types:
 ### Polar
 
 - **SDK**: `@polar-sh/sdk` (`Polar` class) + `standardwebhooks` (`Webhook` class for signature verification)
-- **Client singleton**: Module-level `_cachedClient` with token change detection
+- **Client singleton**: Module-level `_cachedClient` keyed by access token and sandbox/production server so credential or environment rotation takes effect in warm isolates
 - **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`.
 - **Webhook verification**: `verifyPolarWebhook()` base64-encodes the webhook secret before passing to `standardwebhooks`. Synchronous verification (not async).
 - **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (enqueue refund -> update payment and allowed order status + pre-fulfillment inventory)
@@ -216,7 +216,7 @@ Before any writes, `processPaymentConfirmed()` calls `validateTransition()` for 
 
 ### Public Session Policy
 
-Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and site settings, and keeps public Stripe sessions on automatic capture.
+Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and site settings, and keeps public Stripe sessions on automatic capture. Session creation fresh-reads `payment_methods.enabled_methods` and gateway credentials with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`; this blocks stale checkout tabs from creating new external sessions after a merchant disables or rotates a gateway.
 
 ### Partial Payments (Deposit/Balance)
 
@@ -233,7 +233,7 @@ Payment types: `full`, `deposit`, `balance`.
 1. Validates: order exists, has payments, not already fully refunded
 2. Validates amount: positive, does not exceed `paidAmount`, cumulative refunds (existing refunded `orderPayments` + new) do not exceed `paidAmount`
 3. Finds latest successful payment record to determine gateway
-4. Dispatches to gateway-specific refund API (Stripe: by charge ID with `Math.round(refundAmount * 100)`; SSLCommerz: by bank_tran_id; Polar: by checkout ID with `Math.round(refundAmount * 100)`; COD: marker ID only)
+4. Dispatches to gateway-specific refund API after fresh-reading gateway settings with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS` (Stripe: by charge ID with `Math.round(refundAmount * 100)`; SSLCommerz: by bank_tran_id; Polar: by checkout ID with `Math.round(refundAmount * 100)`; COD: marker ID only). If fresh settings are missing/unavailable after the local refund claim, the claim is released and the prior order payment state is restored before the error surfaces.
 5. Updates `orders.paidAmount` (subtracts refund) and `orders.paymentStatus` (REFUNDED for full, PARTIAL for partial)
 6. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
 7. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
@@ -251,7 +251,7 @@ All gateway credentials are stored in the `settings` DB table with a `category` 
 | `polar` | `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` |
 | `payment_methods` | `enabled_methods` (JSON array), `default_method` |
 
-Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods` are in-memory cache keys, not persistent credential storage). Admin save operations clear the specific gateway cache, clear the payment methods cache, best-effort delete any legacy KV entries with the same keys, invalidate API checkout config cache (`api:checkout:config:` and the current `api:checkout:config:v2:` prefix), and purge storefront checkout prefixes. Public checkout config assembly passes `bypassMemoryCache: true` to payment-method and gateway reads because the assembled public response is already cached by API KV and storefront L1/L2 caches; using per-isolate gateway memory there can repopulate fresh public caches with stale payment settings.
+Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods` are in-memory cache keys, not persistent credential storage). Admin save operations clear the specific gateway cache, clear the payment methods cache, best-effort delete any legacy KV entries with the same keys, invalidate API checkout config cache (`api:checkout:config:` and the current `api:checkout:config:v2:` prefix), and purge storefront checkout prefixes. Public checkout config assembly, public session creation, webhook auth/IPN validation, admin payment-method status reads, and refund dispatch pass `FRESH_GATEWAY_SETTINGS_READ_OPTIONS` / `bypassMemoryCache: true` to payment-method and gateway reads because these provider-boundary decisions must honor recent merchant settings across warm Cloudflare Worker isolates.
 
 ### Gateway Registry
 

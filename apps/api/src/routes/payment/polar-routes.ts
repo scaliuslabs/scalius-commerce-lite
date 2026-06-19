@@ -5,10 +5,12 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { type Database } from "@scalius/database/client";
 import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
-import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
+import {
+    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+    getPolarSettings,
+} from "@scalius/core/modules/payments/gateway-settings";
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
-import { getKv } from "../../utils/kv-cache";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ServiceUnavailableError, ApiError, ValidationError } from "../../utils/api-error";
@@ -16,6 +18,7 @@ import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
+import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -67,7 +70,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const orderId = body.orderId;
 
     const db: Database = c.get("db");
-    const kv = getKv();
+    const kv = c.env.CACHE;
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     await validateReceiptToken(c.env.CACHE, orderId, body.receiptToken);
 
@@ -106,7 +109,13 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     let paymentAmount = policy.chargeAmount;
 
     // Get Polar credentials from DB
-    const polarSettings = await getPolarSettings(db, kv, encryptionKey);
+    await assertGatewayEnabledForCheckout(db, kv, encryptionKey, "polar");
+    const polarSettings = await getPolarSettings(
+        db,
+        kv,
+        encryptionKey,
+        FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+    );
     if (!polarSettings || !polarSettings.enabled) {
         throw new ServiceUnavailableError("Polar is not configured or disabled");
     }

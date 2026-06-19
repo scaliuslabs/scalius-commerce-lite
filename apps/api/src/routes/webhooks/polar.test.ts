@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   },
   getPolarSettings: vi.fn(),
   verifyPolarWebhook: vi.fn(),
-  getKv: vi.fn(),
   claimWebhookEvent: vi.fn(),
   markWebhookEventQueued: vi.fn(),
   markWebhookEventProcessed: vi.fn(),
@@ -23,15 +22,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getPolarSettings: mocks.getPolarSettings,
 }));
 
 vi.mock("@scalius/core/modules/payments/polar", () => ({
   verifyPolarWebhook: mocks.verifyPolarWebhook,
-}));
-
-vi.mock("../../utils/kv-cache", () => ({
-  getKv: mocks.getKv,
 }));
 
 vi.mock("../../utils/encryption-key", () => ({
@@ -93,7 +89,6 @@ describe("Polar webhook route", () => {
     };
     mocks.getPolarSettings.mockResolvedValue({ webhookSecret: "polar_whs_test" });
     mocks.verifyPolarWebhook.mockImplementation(() => ({ verified: true, payload: mocks.payload }));
-    mocks.getKv.mockReturnValue(null);
     mocks.claimWebhookEvent.mockResolvedValue({ claimed: true });
     mocks.markWebhookEventQueued.mockResolvedValue(undefined);
     mocks.markWebhookEventProcessed.mockResolvedValue(undefined);
@@ -102,11 +97,26 @@ describe("Polar webhook route", () => {
 
   it("claims a durable event before enqueueing and marks it queued after queue send", async () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const kv = { id: "kv" } as unknown as KVNamespace;
     const app = createApp({ id: "db" }, queue);
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, {
+      CACHE: kv,
+      PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+    });
 
     expect(response.status).toBe(200);
+    expect(mocks.getPolarSettings).toHaveBeenCalledWith(
+      { id: "db" },
+      kv,
+      "test-key",
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.verifyPolarWebhook).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      "polar_whs_test",
+    );
     expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
       { id: "db" },
       expect.objectContaining({
@@ -128,6 +138,31 @@ describe("Polar webhook route", () => {
       expect.objectContaining({ eventType: "order.paid" }),
     );
     expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+  });
+
+  it("returns retryable failure without claiming when fresh settings cannot be read", async () => {
+    mocks.getPolarSettings.mockRejectedValue(new Error("d1 overloaded"));
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" }, queue);
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(503);
+    expect(mocks.verifyPolarWebhook).not.toHaveBeenCalled();
+    expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid signatures before claiming an event", async () => {
+    mocks.verifyPolarWebhook.mockReturnValue({ verified: false, error: "bad sig" });
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" }, queue);
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(403);
+    expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
   });
 
   it("does not enqueue duplicate durable events", async () => {
