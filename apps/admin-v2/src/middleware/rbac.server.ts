@@ -33,6 +33,15 @@ export async function loadUserPermissions(
 
   await retryTransientD1(() => autoSeedRbacIfNeeded(db));
 
+  if (knownIsSuperAdmin === true) {
+    const permissions = new Set<string>();
+    return {
+      permissions,
+      isSuperAdmin: true,
+      hasAdminAccess: hasRbacAdminAccess({ isSuperAdmin: true, permissions }),
+    };
+  }
+
   const permissions = await retryTransientD1(() => getUserPermissions(db, userId, kv));
   const superAdmin =
     typeof knownIsSuperAdmin === "boolean"

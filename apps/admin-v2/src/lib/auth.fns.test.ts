@@ -39,7 +39,9 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 function createAdminExistsDb(counts: number[]) {
-  const first = vi.fn(async () => ({ count: counts.shift() ?? 0 }));
+  const first = vi.fn(async () =>
+    (counts.shift() ?? 0) > 0 ? { found: 1 } : null,
+  );
   const bind = vi.fn(() => ({ first }));
   const prepare = vi.fn(() => ({ bind }));
 
@@ -48,6 +50,26 @@ function createAdminExistsDb(counts: number[]) {
     first,
     bind,
     prepare,
+  };
+}
+
+function createDeferredAdminExistsDb() {
+  let resolveFirst: (value: { found: number }) => void = () => {};
+  const first = vi.fn(
+    () =>
+      new Promise<{ found: number }>((resolve) => {
+        resolveFirst = resolve;
+      }),
+  );
+  const bind = vi.fn(() => ({ first }));
+  const prepare = vi.fn(() => ({ bind }));
+
+  return {
+    db: { prepare },
+    first,
+    bind,
+    prepare,
+    resolveFirst: (value: { found: number }) => resolveFirst(value),
   };
 }
 
@@ -77,6 +99,9 @@ describe("admin setup guard cache", () => {
 
     expect(mocks.initBindings).not.toHaveBeenCalled();
     expect(db.prepare).toHaveBeenCalledTimes(1);
+    expect(db.prepare).toHaveBeenCalledWith(
+      "SELECT 1 as found FROM user WHERE role = ? OR is_super_admin = 1 LIMIT 1",
+    );
     expect(db.bind).toHaveBeenCalledWith("admin");
     expect(db.first).toHaveBeenCalledTimes(1);
   });
@@ -91,6 +116,33 @@ describe("admin setup guard cache", () => {
 
     expect(db.prepare).toHaveBeenCalledTimes(2);
     expect(db.first).toHaveBeenCalledTimes(2);
+  });
+
+  it("deduplicates concurrent cold admin-exists reads inside one isolate", async () => {
+    const warmupDb = createAdminExistsDb([0]);
+    mocks.cfEnv.DB = warmupDb.db;
+    const { checkAdminExists, clearAdminExistsCache } = await import("./auth.fns");
+
+    await expect(checkAdminExists()).resolves.toBe(false);
+    clearAdminExistsCache();
+
+    const db = createDeferredAdminExistsDb();
+    mocks.cfEnv.DB = db.db;
+
+    const firstCheck = checkAdminExists();
+    const secondCheck = checkAdminExists();
+
+    await vi.waitFor(() => {
+      expect(db.prepare).toHaveBeenCalledTimes(1);
+      expect(db.first).toHaveBeenCalledTimes(1);
+    });
+
+    db.resolveFirst({ found: 1 });
+
+    await expect(Promise.all([firstCheck, secondCheck])).resolves.toEqual([
+      true,
+      true,
+    ]);
   });
 
   it("expires the hot admin-exists cache after the short isolate TTL", async () => {

@@ -126,7 +126,9 @@ function createAdminUserListDbMock() {
 }
 
 function createSetupDbMock() {
-  const countWhere = vi.fn(async () => [{ count: 0 }]);
+  const adminExistsGet = vi.fn(async () => null);
+  const adminExistsLimit = vi.fn(() => ({ get: adminExistsGet }));
+  const adminExistsWhere = vi.fn(() => ({ limit: adminExistsLimit }));
   const existingUserGet = vi.fn(async () => ({ id: "existing_user" }));
   const existingUserWhere = vi.fn(() => ({ get: existingUserGet }));
   const updateWhere = vi.fn(async () => undefined);
@@ -134,6 +136,9 @@ function createSetupDbMock() {
   const deleteWhere = vi.fn(async () => undefined);
 
   return {
+    __adminExistsGet: adminExistsGet,
+    __adminExistsLimit: adminExistsLimit,
+    __adminExistsWhere: adminExistsWhere,
     __deleteWhere: deleteWhere,
     __existingUserGet: existingUserGet,
     __updateSet: updateSet,
@@ -141,8 +146,8 @@ function createSetupDbMock() {
     delete: vi.fn(() => ({ where: deleteWhere })),
     select: vi.fn((selection: Record<string, unknown>) => ({
       from: vi.fn(() =>
-        "count" in selection
-          ? { where: countWhere }
+        "found" in selection
+          ? { where: adminExistsWhere }
           : { where: existingUserWhere },
       ),
     })),

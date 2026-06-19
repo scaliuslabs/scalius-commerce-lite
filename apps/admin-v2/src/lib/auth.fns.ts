@@ -12,6 +12,9 @@ type AdminDb = Pick<D1Database, "prepare">;
 const ADMIN_EXISTS_CACHE_TTL_MS = 5 * 60_000;
 
 let adminExistsCache: { value: true; expiresAt: number } | null = null;
+let adminExistsInFlight: Promise<boolean> | null = null;
+let adminExistsCacheEpoch = 0;
+let workerEnvInFlight: Promise<Env> | null = null;
 
 function buildCookieHeaders(cookieHeader: string | null | undefined): Headers | null {
   const cookie = cookieHeader?.trim();
@@ -21,21 +24,37 @@ function buildCookieHeaders(cookieHeader: string | null | undefined): Headers | 
   return headers;
 }
 
+async function getWorkerEnv(): Promise<Env> {
+  const inFlight =
+    workerEnvInFlight ??
+    import("cloudflare:workers").then(({ env }) => env as Env);
+  workerEnvInFlight = inFlight;
+
+  try {
+    return await inFlight;
+  } catch (error) {
+    if (workerEnvInFlight === inFlight) workerEnvInFlight = null;
+    throw error;
+  }
+}
+
 async function queryAdminExists(db: AdminDb): Promise<boolean> {
   const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
   const result = await retryTransientD1(() =>
     db
       .prepare(
-        "SELECT COUNT(*) as count FROM user WHERE role = ? OR is_super_admin = 1",
+        "SELECT 1 as found FROM user WHERE role = ? OR is_super_admin = 1 LIMIT 1",
       )
       .bind("admin")
-      .first<{ count: number }>(),
+      .first<{ found: number }>(),
   );
-  return (result?.count ?? 0) > 0;
+  return result !== null;
 }
 
 export function clearAdminExistsCache() {
   adminExistsCache = null;
+  adminExistsInFlight = null;
+  adminExistsCacheEpoch += 1;
 }
 
 async function getCachedAdminExists(db: AdminDb): Promise<boolean> {
@@ -44,16 +63,30 @@ async function getCachedAdminExists(db: AdminDb): Promise<boolean> {
     return adminExistsCache.value;
   }
 
-  const adminExists = await queryAdminExists(db);
-  if (adminExists) {
+  const cacheEpoch = adminExistsCacheEpoch;
+  const inFlight = adminExistsInFlight ?? queryAdminExists(db);
+  adminExistsInFlight = inFlight;
+
+  try {
+    const adminExists = await inFlight;
+    if (cacheEpoch !== adminExistsCacheEpoch) {
+      return adminExists;
+    }
+    if (!adminExists) {
+      adminExistsCache = null;
+      return false;
+    }
+
     adminExistsCache = {
       value: true,
       expiresAt: now + ADMIN_EXISTS_CACHE_TTL_MS,
     };
-  } else {
-    clearAdminExistsCache();
+    return true;
+  } finally {
+    if (adminExistsInFlight === inFlight) {
+      adminExistsInFlight = null;
+    }
   }
-  return adminExists;
 }
 
 /**
@@ -90,7 +123,7 @@ export const getSessionInfo = createServerFn().handler(async () => {
  * Check if any admin user exists in the shared Better Auth D1 database.
  */
 export const checkAdminExists = createServerFn().handler(async () => {
-  const { env } = await import("cloudflare:workers");
+  const env = await getWorkerEnv();
   try {
     return await getCachedAdminExists(env.DB);
   } catch (e: unknown) {
@@ -111,7 +144,7 @@ export const loginPageGuard = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
 
   // Check if any admin exists in the shared Better Auth D1 database.
-  const { env } = await import("cloudflare:workers");
+  const env = await getWorkerEnv();
   let adminExists = true; // fail-closed: assume admin exists unless proven otherwise
   try {
     adminExists = await getCachedAdminExists(env.DB);
@@ -153,7 +186,7 @@ export const loginPageGuard = createServerFn().handler(async () => {
  */
 export const adminRouteGuard = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
-  const { env } = await import("cloudflare:workers");
+  const env = await getWorkerEnv();
 
   // Check if any admin exists in the shared Better Auth D1 database.
   let adminExists = true; // fail-closed

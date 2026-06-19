@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { and, eq, count, or } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import type { Database } from "@scalius/database/client";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
@@ -705,6 +705,17 @@ app.openapi(getAccountSecurityRoute, async (c) => {
 
 const setupApp = new OpenAPIHono<{ Bindings: Env }>();
 
+async function firstAdminExists(db: Database): Promise<boolean> {
+    const row = await db
+        .select({ found: sql<number>`1` })
+        .from(user)
+        .where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)))
+        .limit(1)
+        .get();
+
+    return row !== null;
+}
+
 // ── Admin Exists Check (for setup page) ──
 
 const adminExistsRoute = createRoute({
@@ -719,8 +730,7 @@ const adminExistsRoute = createRoute({
 
 setupApp.openapi(adminExistsRoute, async (c) => {
     const db = c.get("db");
-    const adminResult = await db.select({ count: count() }).from(user).where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)));
-    const adminExists = (adminResult[0]?.count ?? 0) > 0;
+    const adminExists = await firstAdminExists(db);
     return ok(c, { adminExists });
 });
 
@@ -781,8 +791,7 @@ setupApp.openapi(setupRoute, async (c) => {
     const env = c.env as Env;
 
     // Check admin exists FIRST (before rate limiting) — this is the primary guard
-    const adminResult = await db.select({ count: count() }).from(user).where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)));
-    const adminExists = (adminResult[0]?.count ?? 0) > 0;
+    const adminExists = await firstAdminExists(db);
 
     if (adminExists) {
         const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
@@ -846,8 +855,7 @@ setupApp.openapi(setupRoute, async (c) => {
             throw error;
         }
 
-        const currentAdminResult = await db.select({ count: count() }).from(user).where(or(eq(user.role, "admin"), eq(user.isSuperAdmin, true)));
-        const currentAdminExists = (currentAdminResult[0]?.count ?? 0) > 0;
+        const currentAdminExists = await firstAdminExists(db);
         if (currentAdminExists) {
             throw new ForbiddenError("An admin user already exists. Please use the login page.");
         }
