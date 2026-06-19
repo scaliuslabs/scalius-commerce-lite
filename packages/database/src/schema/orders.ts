@@ -1,6 +1,7 @@
 // src/db/schema/orders.ts
 // Order domain tables: orders, orderItems, orderPayments, paymentPlans,
-// codTracking, webhookEvents, orderNotificationOutbox, abandonedCheckouts.
+// codTracking, webhookEvents, orderNotificationOutbox,
+// orderNotificationDeliveryReceipts, abandonedCheckouts.
 
 import { sqliteTable, text, integer, real, unique, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -220,6 +221,46 @@ export const orderNotificationOutbox = sqliteTable("order_notification_outbox", 
     index("order_notification_outbox_order_id_idx").on(table.orderId),
 ]);
 
+export const orderNotificationDeliveryReceipts = sqliteTable("order_notification_delivery_receipts", {
+    id: text("id").primaryKey(),
+    receiptKey: text("receipt_key").notNull(),
+    outboxId: text("outbox_id")
+        .notNull()
+        .references(() => orderNotificationOutbox.id, { onDelete: "cascade" }),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    notificationType: text("notification_type").notNull(),
+    channel: text("channel").notNull(),
+    provider: text("provider").notNull(),
+    recipientHash: text("recipient_hash").notNull(),
+    recipientMasked: text("recipient_masked"),
+    status: text("status").notNull().default("pending"),
+    providerMessageId: text("provider_message_id"),
+    providerStatus: text("provider_status"),
+    rawResponse: text("raw_response"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    lastAttemptAt: integer("last_attempt_at"),
+    acceptedAt: integer("accepted_at"),
+    deliveredAt: integer("delivered_at"),
+    failedAt: integer("failed_at"),
+    skippedAt: integer("skipped_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_notification_delivery_receipts_receipt_key_unique").on(table.receiptKey),
+    index("order_notification_delivery_receipts_outbox_id_idx").on(table.outboxId),
+    index("order_notification_delivery_receipts_outbox_status_idx").on(table.outboxId, table.status),
+    index("order_notification_delivery_receipts_order_id_created_at_idx").on(table.orderId, table.createdAt),
+    index("order_notification_delivery_receipts_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
+    index("order_notification_delivery_receipts_claim_idx").on(table.status, table.claimExpiresAt, table.createdAt),
+    index("order_notification_delivery_receipts_provider_message_idx").on(table.provider, table.providerMessageId),
+]);
+
 export const abandonedCheckouts = sqliteTable(
     "abandoned_checkouts",
     {
@@ -244,4 +285,5 @@ export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;
 export type WebhookEvent = InferSelectModel<typeof webhookEvents>;
 export type OrderNotificationOutbox = InferSelectModel<typeof orderNotificationOutbox>;
+export type OrderNotificationDeliveryReceipt = InferSelectModel<typeof orderNotificationDeliveryReceipts>;
 export type AbandonedCheckout = InferSelectModel<typeof abandonedCheckouts>;

@@ -316,6 +316,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         env: {
           CREDENTIAL_ENCRYPTION_KEY: "credential-key",
         },
+        outboxId: undefined,
       },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
@@ -388,6 +389,40 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
+  it("marks durable order notifications failed when receipt outcomes need retry", async () => {
+    mocks.sendOrderNotificationEmail.mockResolvedValue({
+      outcomes: [{
+        channel: "email",
+        provider: "cloudflare",
+        recipientMasked: "b***@example.com",
+        status: "failed",
+        error: "provider timeout",
+        retryable: true,
+      }],
+      hasRetryableFailure: true,
+    });
+    const message = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_retry",
+      orderId: "order-retry",
+      customerName: "Retry Customer",
+      notificationType: "order_created",
+      customerEmail: "buyer@example.com",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.markOrderNotificationOutboxProcessingFailed).toHaveBeenCalledWith(
+      { id: "db" },
+      "outbox_1",
+      "claim_1",
+      2,
+      expect.any(Error),
+    );
+    expect(mocks.markOrderNotificationOutboxSent).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  });
+
   it("passes notification type to admin push dispatch when push is enabled", async () => {
     mocks.getAdminNotificationChannels.mockResolvedValue({
       order_shipped: ["push"],
@@ -413,6 +448,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       },
       { PUBLIC_API_BASE_URL: "https://api.example.test" },
       "https://api.example.test",
+      { outboxId: undefined },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
   });

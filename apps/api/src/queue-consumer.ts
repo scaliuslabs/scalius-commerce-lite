@@ -449,7 +449,7 @@ async function processQueueMessage(
       try {
         // Customer notifications (email, SMS, etc.)
         const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
-        await sendOrderNotificationEmail(
+        const customerNotificationResult = await sendOrderNotificationEmail(
           payload.customerEmail,
           payload.customerName,
           payload.orderId,
@@ -459,8 +459,12 @@ async function processQueueMessage(
           {
             encryptionKey,
             env: env as unknown as Record<string, unknown>,
+            outboxId: payload.outboxId,
           },
         );
+        const retryableFailures: string[] = customerNotificationResult?.hasRetryableFailure
+          ? [`customer channels: ${summarizeNotificationFailures(customerNotificationResult.outcomes)}`]
+          : [];
 
         // Admin push notification — check admin channel settings before sending
         try {
@@ -470,14 +474,24 @@ async function processQueueMessage(
 
           if (enabledAdminChannels.includes("push")) {
             const requestUrl = env.PUBLIC_API_BASE_URL || "https://api.scalius.com";
-            await sendOrderNotification(db, {
+            const adminPushResult = await sendOrderNotification(db, {
               id: payload.orderId,
               customerName: payload.customerName,
               notificationType: payload.notificationType,
-            }, env, requestUrl);
+            }, env, requestUrl, {
+              outboxId: payload.outboxId,
+            });
+            if (adminPushResult?.hasRetryableFailure) {
+              retryableFailures.push(`admin push: ${summarizeNotificationFailures(adminPushResult.outcomes)}`);
+            }
           }
         } catch (fcmError) {
           console.error(`[Queue] Admin notification check/send failed for ${payload.orderId}:`, fcmError);
+          retryableFailures.push(`admin push: ${fcmError instanceof Error ? fcmError.message : String(fcmError)}`);
+        }
+
+        if (retryableFailures.length > 0) {
+          throw new Error(`Order notification delivery failed for ${payload.orderId}: ${retryableFailures.join("; ")}`);
         }
 
         if (outboxClaim?.claimed) {
@@ -504,4 +518,14 @@ async function processQueueMessage(
       console.warn(`[Queue] Unknown message type:`, (payload as Record<string, unknown>).type);
     }
   }
+}
+
+function summarizeNotificationFailures(
+  outcomes: Array<{ channel: string; provider: string; error?: string; providerStatus?: string | null; retryable: boolean }>,
+): string {
+  const failures = outcomes
+    .filter((outcome) => outcome.retryable)
+    .map((outcome) => `${outcome.channel}/${outcome.provider}:${outcome.error ?? outcome.providerStatus ?? "retryable"}`);
+
+  return failures.length > 0 ? failures.join(", ") : "retryable failure";
 }

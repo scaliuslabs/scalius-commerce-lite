@@ -387,6 +387,7 @@ export class FCMMessagingService {
     failureCount: number;
     responses: Array<{
       success: boolean;
+      messageId?: string;
       error?: { code: string; message: string };
     }>;
   }> {
@@ -418,7 +419,7 @@ export class FCMMessagingService {
             };
           }
 
-          return { success: true };
+          return { success: true, messageId: response.name };
         } catch (error: unknown) {
           return {
             success: false,

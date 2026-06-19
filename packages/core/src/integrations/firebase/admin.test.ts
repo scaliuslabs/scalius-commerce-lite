@@ -107,6 +107,7 @@ describe("FCMMessagingService", () => {
       true,
       true,
     ]);
+    expect(result.responses[0]?.messageId).toBe("projects/scalius-test/messages/token-1");
     expect(result.responses[1]?.error?.code).toBe(
       "messaging/registration-token-not-registered",
     );

@@ -7,6 +7,7 @@
 export interface SendSmsOptions {
   to: string; // E.164 format: +8801XXXXXXXXX
   message: string; // Plain text SMS body
+  clientReference?: string; // Deterministic caller reference for providers that support idempotency
 }
 
 export interface SendSmsResult {

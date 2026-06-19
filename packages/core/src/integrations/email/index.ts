@@ -3,6 +3,7 @@
 
 export type {
   SendEmailOptions,
+  SendEmailResult,
   EmailProvider,
   EmailRuntimeContext,
   EmailRuntimeSettings,
@@ -29,7 +30,7 @@ registerEmailProvider("resend", new ResendEmailProvider());
 
 // ── Convenience functions (preserve existing public API) ────────────
 
-import type { EmailRuntimeContext, EmailRuntimeSettings, SendEmailOptions } from "./provider";
+import type { EmailRuntimeContext, EmailRuntimeSettings, SendEmailOptions, SendEmailResult } from "./provider";
 import { getEmailProvider } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -37,7 +38,7 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 function logEmailFallback(
   { to, subject, html, from, text }: SendEmailOptions,
   settings: EmailRuntimeSettings,
-): void {
+): SendEmailResult {
   const fromAddress = from || settings.sender;
   console.log("=".repeat(60));
   console.log("EMAIL (no configured provider available - logging only)");
@@ -53,6 +54,11 @@ function logEmailFallback(
     console.log(text);
   }
   console.log("=".repeat(60));
+  return {
+    success: false,
+    provider: "log",
+    rawStatus: "No configured email provider available; logged locally only",
+  };
 }
 
 function providerOrder(settings: EmailRuntimeSettings): Array<EmailRuntimeSettings["provider"]> {
@@ -77,7 +83,7 @@ function isProviderConfigured(
 export async function sendEmail(
   options: SendEmailOptions,
   context?: EmailRuntimeContext,
-): Promise<void> {
+): Promise<SendEmailResult> {
   const settings = await getEmailRuntimeSettings(context);
   const runtimeContext: EmailRuntimeContext = { ...context, settings };
 
@@ -85,11 +91,10 @@ export async function sendEmail(
     if (!isProviderConfigured(providerName, settings, runtimeContext)) continue;
     const provider = getEmailProvider(providerName);
     if (!provider) continue;
-    await provider.sendEmail(options, runtimeContext);
-    return;
+    return await provider.sendEmail(options, runtimeContext);
   }
 
-  logEmailFallback(options, settings);
+  return logEmailFallback(options, settings);
 }
 
 /**

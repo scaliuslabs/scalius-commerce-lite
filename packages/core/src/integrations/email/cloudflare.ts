@@ -2,7 +2,7 @@
 // Cloudflare Email Service provider using the Workers send_email binding.
 
 import { ServiceUnavailableError } from "@scalius/core/errors";
-import type { EmailProvider, EmailRuntimeContext, SendEmailOptions } from "./provider";
+import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 
 export class CloudflareEmailProvider implements EmailProvider {
@@ -11,7 +11,7 @@ export class CloudflareEmailProvider implements EmailProvider {
   async sendEmail(
     { to, subject, html, from, text }: SendEmailOptions,
     context?: EmailRuntimeContext,
-  ): Promise<void> {
+  ): Promise<SendEmailResult> {
     const binding = context?.env?.EMAIL;
     if (!binding) {
       throw new ServiceUnavailableError("Cloudflare Email binding EMAIL is not configured");
@@ -28,5 +28,11 @@ export class CloudflareEmailProvider implements EmailProvider {
     });
 
     console.log(`[Email] Sent via Cloudflare to ${to} (${result.messageId})`);
+    return {
+      success: true,
+      provider: "cloudflare",
+      providerRef: result.messageId,
+      rawStatus: "accepted",
+    };
   }
 }

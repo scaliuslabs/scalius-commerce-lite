@@ -15,11 +15,12 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 
 ### FCM Push: Connected
 
-`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled.
+`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled. When the queue message carries an `outboxId`, each active FCM token is guarded by an `order_notification_delivery_receipts` row so retries skip tokens already accepted by FCM.
 
 - Reads Firebase service account from `settings` table (category `firebase`, key `service_account`), falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
 - `getFirebaseAdminMessaging(env, serviceAccountJson?)` creates a new `FCMMessagingService` instance when DB credentials are provided, or returns a singleton for env-var credentials
 - Uses `escapeHtml()` from `@scalius/shared/html-escape` to sanitize customer names in notification payloads
+- Stores FCM REST message `name` values on accepted delivery receipts; invalid tokens become skipped receipts before deactivation
 
 ### Order Emails: Connected
 
@@ -29,10 +30,11 @@ The order email flow is fully connected:
 3. Route or queue producer enqueues `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
 4. Queue consumer (`queue-consumer.ts`) matches `order.notification` and calls `sendOrderNotificationEmail()`
 5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via the active email provider. Cloudflare Email is the native default, with Resend available as the external fallback.
+6. When the queue message carries `outboxId`, customer email/SMS/WhatsApp-skip targets create deterministic delivery receipts before provider work. Accepted/skipped receipts are terminal and are not resent on queue/outbox retry.
 
 ## Functions
 
-### `sendOrderNotification(db, order, env, requestUrl)`
+### `sendOrderNotification(db, order, env, requestUrl, options?)`
 
 Sends FCM push notifications to all active admin devices about a new order.
 
@@ -41,10 +43,10 @@ Sends FCM push notifications to all active admin devices about a new order.
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
 - Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.
 - Auto-deactivates invalid tokens (unregistered or invalid registration) in the database
-- Catches all errors internally so admin push failures do not make an otherwise successful customer notification queue message retry
+- Returns per-target outcomes; receipt-mode retryable failures keep the parent outbox retryable instead of marking it sent
 - All catch blocks use typed `error: unknown` with `instanceof Error` checks
 
-### `sendOrderNotificationEmail(email, name, orderId, type, data?, db?)`
+### `sendOrderNotificationEmail(email, name, orderId, type, data?, db?, options?)`
 
 Sends transactional order emails to customers. Connected via queue.
 
@@ -61,11 +63,11 @@ Sends transactional order emails to customers. Connected via queue.
 - `order_returned` -- "Your order return has been processed"
 - `order_refunded` -- "Your refund has been processed"
 
-Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Cloudflare Email by default, Resend fallback).
+Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Cloudflare Email by default, Resend fallback). Receipt-mode email sends pass the deterministic receipt key to Resend as `Idempotency-Key`; Cloudflare Email returns `messageId`, which is stored on the receipt.
 
-**SMS channel dispatch**: When SMS is enabled for a status, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. SMS failures are caught and logged but do not affect email delivery.
+**SMS channel dispatch**: When SMS is enabled for a status, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. Receipt-mode SMS stores provider refs; GenNet receives a deterministic receipt-derived `csms_id` so provider retries can dedupe.
 
-**WhatsApp channel**: When WhatsApp is enabled for a status, the function logs a placeholder message. Push notifications are handled separately by `sendOrderNotification()`.
+**WhatsApp channel**: When WhatsApp is enabled for a status, the function records a skipped/not-implemented receipt and logs a placeholder message. Push notifications are handled separately by `sendOrderNotification()`.
 
 **Current provider gaps**: Email has a Cloudflare-native default and external fallback. Admin push is still Firebase-only, SMS is Bangladesh-provider-only, and order WhatsApp is channel-visible but not implemented. Keep those as explicit gaps until first-party Web Push and manual/own-channel alternatives are added.
 
@@ -75,10 +77,10 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 
 ### `order.notification`
 - Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
-- Handler: Calls `sendOrderNotificationEmail()` if `customerEmail` is present (with `db` for channel checking -- dispatches independently to email, SMS, WhatsApp, push), and `sendOrderNotification()` for FCM push to admin devices
+- Handler: Calls `sendOrderNotificationEmail()` with `db` for channel checking and delivery receipts, and `sendOrderNotification()` for FCM push to admin devices when push is enabled
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: Cloudflare auto-retry up to 3 times, 30s delay on failure
-- Channel independence: each channel (email, SMS, WhatsApp, push) is dispatched independently -- failure in one does not affect others
+- Channel receipts: email, SMS, WhatsApp skip markers, and FCM push create one receipt per logical target. Accepted/skipped receipts are terminal; retryable failures keep the parent outbox retryable.
 
 Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
 
@@ -93,6 +95,8 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 
 - `index.ts` -- barrel exports: `sendOrderNotification`, `sendOrderNotificationEmail`
 - `notifications.service.ts` -- both functions
+- `order-notification-outbox.ts` -- parent queue handoff/replay state
+- `order-notification-delivery-receipts.ts` -- per-channel receipt claims and accepted/failed/skipped marks
 
 ## Dependencies
 

@@ -127,7 +127,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 | `returned` | `order_returned` |
 | `refunded` | `order_refunded` |
 
-All 9 statuses that trigger notifications are covered. Each dispatches to enabled channels (email, SMS, WhatsApp, push) independently via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel delivery remains at-least-once until individual providers expose idempotent send receipts.
+All 9 statuses that trigger notifications are covered. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `order_notification_delivery_receipts` so accepted/skipped email, SMS, order WhatsApp skip markers, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
 
 ### Fulfillment Flow
 
@@ -168,7 +168,7 @@ Two queues are relevant:
 | `ORDER_INGEST_QUEUE` | `order.ingest` | `handleOrderIngestBatch()` -- batched DB writes + inventory reservation |
 | `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | Outbox-backed `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
 
-The `order.notification` handler in `queue-consumer.ts` claims `order_notification_outbox` rows by `outboxId`, sends email/SMS/WhatsApp through `sendOrderNotificationEmail()` with `db` for channel preference checking, optionally sends FCM push notifications through `sendOrderNotification()`, then marks the row `sent`. FCM failures are caught and logged but do not affect customer channel delivery. Customer-channel failures mark the row retryable before the Cloudflare Queue message is retried.
+The `order.notification` handler in `queue-consumer.ts` claims `order_notification_outbox` rows by `outboxId`, sends email/SMS/WhatsApp through `sendOrderNotificationEmail()` with `db` for channel preference checking, optionally sends FCM push notifications through `sendOrderNotification()`, then marks the row `sent` only if enabled receipt targets are accepted or skipped. Retryable customer-channel or admin-push failures mark the parent row retryable before the Cloudflare Queue message is retried.
 
 Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.confirmed`, `payment.polar.confirmed`, etc.) are handled in `queue-consumer.ts` and call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module.
 
