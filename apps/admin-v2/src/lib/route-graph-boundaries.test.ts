@@ -257,7 +257,7 @@ describe("admin route graph boundaries", () => {
     );
   });
 
-  it("keeps dashboard client transitions from blocking on summary data", () => {
+  it("keeps dashboard route entry from blocking on summary data", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "index.tsx"),
       "utf8",
@@ -267,12 +267,14 @@ describe("admin route graph boundaries", () => {
       source.indexOf("head: ()"),
     );
 
+    expect(loaderSource).toContain('typeof window === "undefined"');
     expect(loaderSource).toContain(
-      "await warmRouteQuery(queryClient, dashboardSummaryQueryOptions())",
+      "void queryClient.prefetchQuery(dashboardSummaryQueryOptions())",
     );
     expect(loaderSource).not.toContain(
       "await queryClient.ensureQueryData(dashboardSummaryQueryOptions())",
     );
+    expect(loaderSource).not.toContain("await warmRouteQuery");
     expect(source).toContain("isSummaryInitialLoading");
     expect(source).toContain("DashboardSummaryLoading");
   });
