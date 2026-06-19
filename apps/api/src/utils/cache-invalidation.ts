@@ -249,6 +249,27 @@ export const CATALOG_CACHE_GROUPS = {
 
 export type CatalogCacheDomain = keyof typeof CATALOG_CACHE_GROUPS;
 
+export interface CatalogCacheInvalidationOptions {
+  htmlPaths?: readonly string[];
+}
+
+const CATALOG_DEFAULT_HTML_PATHS: Record<CatalogCacheDomain, readonly string[]> = {
+  products: ["/search"],
+  categories: ["/search"],
+  collections: [],
+  discounts: ["/search"],
+};
+
+export function getCatalogStorefrontHtmlPaths(
+  domain: CatalogCacheDomain,
+  paths: readonly string[] = [],
+): string[] {
+  return normalizeStorefrontHtmlPaths([
+    ...CATALOG_DEFAULT_HTML_PATHS[domain],
+    ...paths,
+  ]);
+}
+
 export const WIDGET_CACHE_GROUPS = [
   "widgets",
 ] as const;
@@ -553,12 +574,18 @@ export function getOptionalExecutionContext(c: {
 export async function invalidateApiAndScheduleStorefrontGroups(
   groups: readonly string[],
   c: { env?: Env; executionCtx?: ExecutionContext },
+  options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
   const normalizedGroups = [...groups];
   await invalidateGroups(normalizedGroups, c.env?.CACHE);
-  triggerStorefrontPurgeForGroups(
-    normalizedGroups,
+  triggerStorefrontPurgeForPrefixes(
+    getStorefrontPrefixesForGroups(normalizedGroups),
     c.env,
+    {
+      groups: normalizedGroups,
+      bumpVersion: shouldBumpStorefrontVersion(normalizedGroups),
+      htmlPaths: options.htmlPaths,
+    },
     getOptionalExecutionContext(c),
   );
 }
@@ -954,10 +981,20 @@ export async function invalidateProductAvailabilityCaches(
 export async function invalidateCatalogCaches(
   domain: CatalogCacheDomain,
   c: { env?: Env; executionCtx?: ExecutionContext },
+  options: CatalogCacheInvalidationOptions = {},
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];
   await invalidateGroups(groups, c.env?.CACHE);
-  triggerStorefrontPurgeForGroups(groups, c.env, getOptionalExecutionContext(c));
+  triggerStorefrontPurgeForPrefixes(
+    getStorefrontPrefixesForGroups(groups),
+    c.env,
+    {
+      groups,
+      bumpVersion: shouldBumpStorefrontVersion(groups),
+      htmlPaths: getCatalogStorefrontHtmlPaths(domain, options.htmlPaths),
+    },
+    getOptionalExecutionContext(c),
+  );
 }
 
 /**

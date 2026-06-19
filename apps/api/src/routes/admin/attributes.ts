@@ -37,6 +37,16 @@ import { attributeSchema } from "../../schemas/entities";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ATTRIBUTE_CACHE_GROUPS = ["attributes", "products"] as const;
+const ATTRIBUTE_STOREFRONT_HTML_PATHS = ["/search"] as const;
+
+async function invalidateAttributeCaches(c: {
+    env?: Env;
+    executionCtx?: ExecutionContext;
+}) {
+    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c, {
+        htmlPaths: ATTRIBUTE_STOREFRONT_HTML_PATHS,
+    });
+}
 
 // ── List Attributes ──
 
@@ -101,7 +111,7 @@ app.openapi(createAttributeRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createAttribute(db, data);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return created(c, result);
 });
 
@@ -130,7 +140,7 @@ app.openapi(updateAttributeRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     const result = await updateAttribute(db, id, data);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return ok(c, result);
 });
 
@@ -154,7 +164,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteAttribute(db, id);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return noContent(c);
 });
 
@@ -178,7 +188,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await permanentlyDeleteAttribute(db, id);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return noContent(c);
 });
 
@@ -202,7 +212,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { ids, permanent } = c.req.valid("json");
     await bulkDeleteAttributes(db, ids, permanent);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return noContent(c);
 });
 
@@ -226,7 +236,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkRestoreAttributes(db, ids);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return noContent(c);
 });
 
@@ -253,7 +263,7 @@ app.openapi(restoreRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreAttribute(db, id);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return ok(c, { message: "Attribute restored" });
 });
 
@@ -333,7 +343,7 @@ app.openapi(addValueRoute, async (c) => {
     const { id: attributeId } = c.req.valid("param");
     const { value } = c.req.valid("json");
     await addAttributeValue(db, attributeId, value);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return ok(c, {});
 });
 
@@ -362,7 +372,7 @@ app.openapi(updateValueRoute, async (c) => {
     const { id: attributeId } = c.req.valid("param");
     const { oldValue, newValue } = c.req.valid("json");
     await renameAttributeValue(db, attributeId, oldValue, newValue);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return ok(c, {
         message: `Value "${oldValue}" renamed to "${newValue}"`
     });
@@ -393,7 +403,7 @@ app.openapi(deleteValueRoute, async (c) => {
     const { id: attributeId } = c.req.valid("param");
     const { value } = c.req.valid("json");
     await deleteAttributeValue(db, attributeId, value);
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
+    await invalidateAttributeCaches(c);
     return ok(c, {
         message: `Value "${value}" deleted from all products`
     });
