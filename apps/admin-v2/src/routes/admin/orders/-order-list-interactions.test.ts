@@ -65,6 +65,25 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("void refetchOrders()");
   });
 
+  it("keeps order auto-refresh scoped to the active list query", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const refreshBlock = routeSource.slice(
+      routeSource.indexOf("// ── Active-query refresh"),
+      routeSource.indexOf("// ── Auto-refresh"),
+    );
+
+    expect(refreshBlock).toContain("activeOrderListRefreshRef");
+    expect(refreshBlock).toContain("orderListFetchingRef");
+    expect(refreshBlock).toContain("orderListRefreshInFlightRef");
+    expect(refreshBlock).toContain("ORDER_AUTO_REFRESH_DEBOUNCE_MS");
+    expect(refreshBlock).toContain("void Promise.resolve(refetchActiveOrders()).finally");
+    expect(refreshBlock).not.toContain("invalidateQueries");
+    expect(refreshBlock).not.toContain("queryKeys.orders.list()");
+
+    // Mutations may still invalidate all order-list variants; idle resume must not.
+    expect(routeSource).toContain("void queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() })");
+  });
+
   it("serializes order date filters as date-only values", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
 

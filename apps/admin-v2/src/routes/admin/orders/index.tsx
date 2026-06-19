@@ -105,6 +105,7 @@ interface ShipmentStatus {
 }
 
 const ORDER_AUTO_REFRESH_SECONDS = 60;
+const ORDER_AUTO_REFRESH_DEBOUNCE_MS = 5_000;
 
 function isDocumentHidden() {
   return typeof document !== "undefined" && document.hidden;
@@ -172,6 +173,12 @@ function OrdersPage() {
   });
   const [countdown, setCountdown] = useState(ORDER_AUTO_REFRESH_SECONDS);
   const countdownIntervalRef = useRef<number | undefined>(undefined);
+  const activeOrderListRefreshRef = useRef<(() => Promise<unknown>) | null>(
+    null,
+  );
+  const orderListFetchingRef = useRef(false);
+  const orderListRefreshInFlightRef = useRef(false);
+  const lastOrderListRefreshAtRef = useRef(0);
 
   // ── Mutations ─────────────────────────────────────────────────
   const statusMutation = useUpdateOrderStatus();
@@ -325,58 +332,6 @@ function OrdersPage() {
   // NOTE: handleBulkDeleteConfirm and handleBulkShipmentSubmit are defined
   // after useServerTable to avoid using selectedIds/clearSelection before declaration.
 
-  // ── Refresh ───────────────────────────────────────────────────
-
-  const handleRefresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-  }, [queryClient]);
-
-  // ── Auto-refresh ──────────────────────────────────────────────
-
-  const toggleAutoRefresh = useCallback(() => {
-    const newValue = !autoRefreshEnabled;
-    setAutoRefreshEnabled(newValue);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("orderlist-auto-refresh", String(newValue));
-    }
-    if (newValue) {
-      handleRefresh();
-      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
-    }
-  }, [autoRefreshEnabled, handleRefresh]);
-
-  useEffect(() => {
-    if (autoRefreshEnabled) {
-      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
-      countdownIntervalRef.current = window.setInterval(() => {
-        if (isDocumentHidden()) return;
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            handleRefresh();
-            return ORDER_AUTO_REFRESH_SECONDS;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      const handleVisibilityChange = () => {
-        if (isDocumentHidden()) return;
-        handleRefresh();
-        setCountdown(ORDER_AUTO_REFRESH_SECONDS);
-      };
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-
-      return () => {
-        if (countdownIntervalRef.current)
-          window.clearInterval(countdownIntervalRef.current);
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
-      };
-    } else {
-      if (countdownIntervalRef.current)
-        window.clearInterval(countdownIntervalRef.current);
-    }
-  }, [autoRefreshEnabled, handleRefresh]);
-
   // ── Initialize shipment statuses from query data ──────────────
 
   const dataSelector = useMemo(() => createDataSelector<OrderListItem>("orders"), []);
@@ -438,6 +393,88 @@ function OrdersPage() {
     defaultPageSize: 10,
   });
   const ordersError = isOrdersError ? rawOrdersError : null;
+
+  // ── Active-query refresh ──────────────────────────────────────
+
+  useEffect(() => {
+    activeOrderListRefreshRef.current = refetchOrders;
+  }, [refetchOrders]);
+
+  useEffect(() => {
+    orderListFetchingRef.current = isFetching;
+  }, [isFetching]);
+
+  const refreshActiveOrderList = useCallback(() => {
+    const refetchActiveOrders = activeOrderListRefreshRef.current;
+    if (!refetchActiveOrders || isDocumentHidden()) return false;
+    if (orderListFetchingRef.current || orderListRefreshInFlightRef.current) {
+      return false;
+    }
+
+    const now = Date.now();
+    if (now - lastOrderListRefreshAtRef.current < ORDER_AUTO_REFRESH_DEBOUNCE_MS) {
+      return false;
+    }
+
+    lastOrderListRefreshAtRef.current = now;
+    orderListRefreshInFlightRef.current = true;
+    try {
+      void Promise.resolve(refetchActiveOrders()).finally(() => {
+        orderListRefreshInFlightRef.current = false;
+      });
+    } catch (error) {
+      orderListRefreshInFlightRef.current = false;
+      console.warn("Failed to start active order list refresh", error);
+      return false;
+    }
+    return true;
+  }, []);
+
+  // ── Auto-refresh ──────────────────────────────────────────────
+
+  const toggleAutoRefresh = useCallback(() => {
+    const newValue = !autoRefreshEnabled;
+    setAutoRefreshEnabled(newValue);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("orderlist-auto-refresh", String(newValue));
+    }
+    if (newValue) {
+      refreshActiveOrderList();
+      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
+    }
+  }, [autoRefreshEnabled, refreshActiveOrderList]);
+
+  useEffect(() => {
+    if (autoRefreshEnabled) {
+      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
+      countdownIntervalRef.current = window.setInterval(() => {
+        if (isDocumentHidden()) return;
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            refreshActiveOrderList();
+            return ORDER_AUTO_REFRESH_SECONDS;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      const handleVisibilityChange = () => {
+        if (isDocumentHidden()) return;
+        refreshActiveOrderList();
+        setCountdown(ORDER_AUTO_REFRESH_SECONDS);
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
+      return () => {
+        if (countdownIntervalRef.current)
+          window.clearInterval(countdownIntervalRef.current);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+    } else {
+      if (countdownIntervalRef.current)
+        window.clearInterval(countdownIntervalRef.current);
+    }
+  }, [autoRefreshEnabled, refreshActiveOrderList]);
 
   useEffect(() => {
     if (!ordersRawData) return;
