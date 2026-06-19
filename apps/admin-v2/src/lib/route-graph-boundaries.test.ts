@@ -116,6 +116,10 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
       "utf8",
     );
+    const adminHeaderSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
+      "utf8",
+    );
     const userMenuSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "auth", "UserMenu.tsx"),
       "utf8",
@@ -124,13 +128,31 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "deferred-toaster.tsx"),
       "utf8",
     );
+    const sidebarSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "sidebar.tsx"),
+      "utf8",
+    );
+    const sidebarMobileSheetSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "sidebar-mobile-sheet.tsx"),
+      "utf8",
+    );
 
     expect(adminRouteSource).toContain("@/components/ui/deferred-toaster");
     expect(adminRouteSource).not.toContain("@/components/ui/sonner");
+    expect(adminHeaderSource).toContain('import("@/components/auth/UserMenu")');
+    expect(adminHeaderSource).toContain("function DeferredUserMenu");
+    expect(adminHeaderSource).not.toMatch(
+      /import\s+\{\s*UserMenu\s*\}\s+from/,
+    );
+    expect(adminHeaderSource).not.toContain("@/components/ui/dropdown-menu");
+    expect(adminHeaderSource).not.toContain("@/components/ui/avatar");
     expect(userMenuSource).not.toMatch(/import\s+\{\s*authClient\s*\}/);
     expect(userMenuSource).toContain('await import("@/lib/auth-client")');
     expect(deferredToasterSource).toContain("lazy(() =>");
     expect(deferredToasterSource).toContain('import("./sonner")');
+    expect(sidebarSource).toContain('import("./sidebar-mobile-sheet")');
+    expect(sidebarSource).not.toContain("@/components/ui/sheet");
+    expect(sidebarMobileSheetSource).toContain("@/components/ui/sheet");
   });
 
   it("keeps admin shell nav data local and aligned with core RBAC names", () => {
