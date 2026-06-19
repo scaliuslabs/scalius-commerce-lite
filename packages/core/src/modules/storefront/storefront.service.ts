@@ -24,6 +24,7 @@ import {
 } from "../../integrations/analytics";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
+import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import {
   getActiveHomepageWidgets,
@@ -504,7 +505,7 @@ export async function getLayoutData(db: Database) {
   const themeRow = (themeResults as { value?: string }[])[0];
   if (themeRow?.value) {
     try {
-      themeColors = JSON.parse(themeRow.value);
+      themeColors = sanitizeStorefrontThemeColors(JSON.parse(themeRow.value));
     } catch (e: unknown) {
       console.warn(
         "[Storefront] Failed to parse theme colors JSON:",

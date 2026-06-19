@@ -3,6 +3,7 @@ import { getProductBySlug } from "@/lib/api";
 import { getLayoutData } from "@/lib/api/storefront";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartItem } from "@/store/cart";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
@@ -143,6 +144,9 @@ export const GET: APIRoute = async ({ params, url }) => {
       addToCartEvent: addToCartEventData,
       initiateCheckoutEvent: initiateCheckoutEventData,
     };
+    const quickBuyStorageValue = serializeJsonForInlineScript(
+      JSON.stringify(dataToStore),
+    );
 
     const html = `
       <!DOCTYPE html>
@@ -174,7 +178,7 @@ export const GET: APIRoute = async ({ params, url }) => {
 
         <script>
           try {
-            sessionStorage.setItem('quickBuyData', JSON.stringify(${JSON.stringify(dataToStore)}));
+            sessionStorage.setItem('quickBuyData', ${quickBuyStorageValue});
           } catch (e) {
             console.error('Could not save quick-buy data to session storage.', e);
           } finally {

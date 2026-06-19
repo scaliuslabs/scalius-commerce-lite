@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
+import { listInvalidStorefrontThemeColorEntries } from "@scalius/shared/storefront-theme";
 import {
   getCurrencySettings,
   saveCurrencySettings,
@@ -292,7 +293,7 @@ const getThemeRoute = createRoute({
         "application/json": {
           schema: successEnvelope(
             z
-              .object({ colors: z.record(z.string(), z.unknown()) })
+              .object({ colors: z.record(z.string(), z.string()) })
               .passthrough(),
           ),
         },
@@ -309,7 +310,14 @@ app.openapi(getThemeRoute, async (c) => {
 });
 
 const saveThemeSchema = z.object({
-  colors: z.record(z.string(), z.unknown()),
+  colors: z.record(z.string(), z.string()).superRefine((colors, ctx) => {
+    const invalidEntries = listInvalidStorefrontThemeColorEntries(colors);
+    if (invalidEntries.length === 0) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Invalid theme color keys or values: ${invalidEntries.join(", ")}`,
+    });
+  }),
 });
 
 const saveThemeRoute = createRoute({

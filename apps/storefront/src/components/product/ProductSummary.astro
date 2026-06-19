@@ -6,6 +6,7 @@ import {
   getVariantDiscountedPrice,
   formatDiscountBadge,
 } from "./lib/pricing-engine";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
@@ -54,6 +55,41 @@ const discountBadgeText = formatDiscountBadge(
   product.discountType,
   product.discountPercentage,
   product.discountAmount
+);
+
+const productVariantsJson = serializeJsonForInlineScript(
+  variants.map((variant) => {
+    const variantPrice = variant.price ?? product.price;
+    const discountedVariantPrice = getVariantDiscountedPrice(
+      variant.price,
+      product.price,
+      variant.discountType,
+      variant.discountPercentage,
+      variant.discountAmount,
+      product.discountType,
+      product.discountPercentage,
+      product.discountAmount
+    );
+    const variantDiscountPercent =
+      variantPrice > 0
+        ? Math.round(
+            ((variantPrice - discountedVariantPrice) / variantPrice) * 100
+          )
+        : 0;
+    return {
+      ...variant,
+      price: variantPrice,
+      discountedPrice: discountedVariantPrice,
+      discount: variantDiscountPercent,
+      // Fallbacks for missing fields if any
+      discountType:
+        variant.discountType || product.discountType || "percentage",
+      discountPercentage:
+        variant.discountPercentage ?? product.discountPercentage ?? 0,
+      discountAmount:
+        variant.discountAmount ?? product.discountAmount ?? 0,
+    };
+  })
 );
 ---
 
@@ -149,40 +185,7 @@ const discountBadgeText = formatDiscountBadge(
       is:inline
       type="application/json"
       id="product-variants-data"
-      set:html={JSON.stringify(
-        variants.map((variant) => {
-          const variantPrice = variant.price ?? product.price;
-          const discountedVariantPrice = getVariantDiscountedPrice(
-            variant.price,
-            product.price,
-            variant.discountType,
-            variant.discountPercentage,
-            variant.discountAmount,
-            product.discountType,
-            product.discountPercentage,
-            product.discountAmount
-          );
-          const variantDiscountPercent =
-            variantPrice > 0
-              ? Math.round(
-                  ((variantPrice - discountedVariantPrice) / variantPrice) * 100
-                )
-              : 0;
-          return {
-            ...variant,
-            price: variantPrice,
-            discountedPrice: discountedVariantPrice,
-            discount: variantDiscountPercent,
-            // Fallbacks for missing fields if any
-            discountType:
-              variant.discountType || product.discountType || "percentage",
-            discountPercentage:
-              variant.discountPercentage ?? product.discountPercentage ?? 0,
-            discountAmount:
-              variant.discountAmount ?? product.discountAmount ?? 0,
-          };
-        })
-      )}
+      set:html={productVariantsJson}
     />
 
     <div id="product-actions" class="space-y-2 lg:space-y-3 pt-1 lg:pt-2">

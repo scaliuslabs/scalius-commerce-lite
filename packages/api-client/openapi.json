@@ -54586,7 +54586,7 @@
                         "colors": {
                           "type": "object",
                           "additionalProperties": {
-                            "nullable": true
+                            "type": "string"
                           }
                         }
                       },
@@ -54862,7 +54862,7 @@
                   "colors": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "type": "string"
                     }
                   }
                 },

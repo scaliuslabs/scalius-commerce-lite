@@ -52,8 +52,8 @@ Admin-facing DB operations for site settings. Cache invalidation stays in route 
 | `getGeneralSettings` | `(db) => { headerConfig, footerConfig }` | Returns parsed JSON from `siteSettings` singleton |
 | `saveHeaderConfig` | `(db, config) => void` | Upserts headerConfig on `siteSettings` singleton (insert with `onConflictDoUpdate` on `singletonKey`) |
 | `saveFooterConfig` | `(db, config) => void` | Upserts footerConfig on `siteSettings` singleton |
-| `getThemeSettings` | `(db) => { colors }` | Reads storefront color overrides from `settings` (category=theme, key=storefront_colors) |
-| `saveThemeSettings` | `(db, colors) => void` | Saves storefront color overrides via `upsertSetting()` |
+| `getThemeSettings` | `(db) => { colors }` | Reads storefront color overrides from `settings` (category=theme, key=storefront_colors) and sanitizes legacy rows through `@scalius/shared/storefront-theme` |
+| `saveThemeSettings` | `(db, colors) => void` | Sanitizes and saves storefront color overrides via `upsertSetting()` |
 | `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt }` | Reads SEO fields from `siteSettings` singleton |
 | `saveSeoSettings` | `(db, data) => void` | Upserts SEO fields. Only updates provided fields (undefined values are skipped to avoid NULLing existing data) |
 | `getStorefrontUrlSetting` | `(db) => { storefrontUrl }` | Reads storefrontUrl from `siteSettings` |
