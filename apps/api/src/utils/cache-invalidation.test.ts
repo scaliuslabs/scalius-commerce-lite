@@ -6,6 +6,7 @@ import {
   WIDGET_CACHE_GROUPS,
   collectCmsShortcodePageInvalidation,
   collectProductAvailabilityCacheInvalidation,
+  getCatalogStorefrontHtmlPaths,
   getGroupsForPath,
   getProductAvailabilityApiCacheKeys,
   getProductAvailabilityApiCachePatterns,
@@ -90,6 +91,19 @@ describe("catalog cache groups", () => {
         "global_seo_settings",
       ]),
     );
+  });
+
+  it("builds bounded canonical storefront listing warm paths for catalog writes", () => {
+    expect(getCatalogStorefrontHtmlPaths("products")).toEqual(["/search"]);
+    expect(getCatalogStorefrontHtmlPaths("discounts")).toEqual(["/search"]);
+    expect(getCatalogStorefrontHtmlPaths("collections")).toEqual([]);
+    expect(
+      getCatalogStorefrontHtmlPaths("categories", [
+        "/categories/fish?page=1&sortBy=newest&utm_source=ad",
+        "/categories/fish",
+        "https://external.example/categories/rice",
+      ]),
+    ).toEqual(["/search", "/categories/fish"]);
   });
 });
 
@@ -504,6 +518,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(String(init?.body))).toMatchObject({
       groups: ["layout"],
+      prefixes: expect.arrayContaining(["storefront_layout_", "global_header_data"]),
       bumpVersion: true,
     });
   });
@@ -593,7 +608,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
     await expect(purgePromise).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith(
-      "[Cache] Storefront group purge failed:",
+      "[Cache] Storefront prefix purge failed:",
       expect.any(Error),
     );
   });
@@ -657,6 +672,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(body).toMatchObject({
       groups: ["products", "search", "collections", "attributes"],
       bumpVersion: true,
+      htmlPaths: ["/search"],
     });
     expect(body.prefixes).toEqual(
       expect.arrayContaining([
@@ -668,6 +684,42 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "widgets_scope_",
       ]),
     );
+  });
+
+  it("schedules category catalog purges with canonical listing HTML warm paths", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await invalidateCatalogCaches("categories", {
+      env: {
+        CACHE: kv,
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as unknown as Env,
+      executionCtx: { waitUntil } as unknown as ExecutionContext,
+    }, {
+      htmlPaths: [
+        "/categories/fish?page=1&sortBy=newest&utm_source=ad",
+        "/categories/fish",
+      ],
+    });
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      groups: ["categories", "products", "search", "collections", "layout"],
+      bumpVersion: true,
+      htmlPaths: ["/search", "/categories/fish"],
+    });
   });
 
   it("does not fail catalog writes when the scheduled storefront purge rejects", async () => {
@@ -691,7 +743,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
     await expect(purgePromise).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith(
-      "[Cache] Storefront group purge failed:",
+      "[Cache] Storefront prefix purge failed:",
       expect.any(Error),
     );
   });

@@ -271,6 +271,8 @@ Admin inventory stock edits are availability-only changes. They should pass the 
 
 Search facet caching uses `api:attributes:search-filters` and must stay in both the `search` and `attributes` invalidation groups: product/search changes alter matching category neighborhoods, while attribute writes alter available filter values.
 
+Catalog invalidation also owns bounded storefront listing rewarm hints. `invalidateCatalogCaches()` sends the normal group prefixes and HTML-version bump, then includes canonical exact `htmlPaths`: product/category/discount writes always warm `/search`, category writes should include affected `/categories/{slug}`, and product writes should include old/new affected category pages when the route already has or can cheaply resolve category IDs. Attribute metadata/value writes use `invalidateApiAndScheduleStorefrontGroups(["attributes", "products"], c, { htmlPaths: ["/search"] })` so filter sidebar changes do not leave the search listing cold. All paths are canonicalized through the shared storefront cache-path helper and capped at `MAX_STOREFRONT_EXACT_HTML_PATHS`.
+
 ### Hero and Widget Cache Rules
 
 `cacheMiddleware({ varyByQuery: true })` sorts query params before building KV keys, and routes with schema defaults should pass `queryDefaults` so explicit defaults do not fragment public caches. Use path-aware defaults when one router has multiple routes with different query defaults, such as `/products` and `/products/search`.

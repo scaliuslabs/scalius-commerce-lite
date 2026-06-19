@@ -192,6 +192,75 @@ describe("storefront cache purge route", () => {
     );
   });
 
+  it("warms canonical exact listing paths after a bumped catalog purge", async () => {
+    mocks.cacheDelete.mockResolvedValue(true);
+    const { POST } = await import("./purge-cache");
+    const request = new Request("https://storefront.example.com/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        groups: ["categories", "products", "search"],
+        prefixes: ["category_products_", "all_products_", "filterable_attrs_"],
+        htmlPaths: [
+          "/search?page=1&sortBy=newest&utm_source=ad",
+          "/categories/fish?page=1&sortBy=newest&utm_source=ad",
+          "/categories/fish",
+        ],
+        bumpVersion: true,
+      }),
+    });
+
+    const response = await POST({
+      request,
+      url: new URL(request.url),
+      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+    } as unknown as Parameters<typeof POST>[0]);
+    const body = (await response.json()) as {
+      success?: boolean;
+      details?: {
+        newVersion?: number | null;
+        htmlPathsCleared?: number;
+        htmlPathsDeleted?: number;
+        exactGenerationsBumped?: number;
+        cacheWarmingStarted?: boolean;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.details).toMatchObject({
+      newVersion: 5,
+      htmlPathsCleared: 2,
+      htmlPathsDeleted: 0,
+      exactGenerationsBumped: 0,
+      cacheWarmingStarted: true,
+    });
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith("v_storefront.example.com", "5");
+    expect(mocks.cfEnv.CACHE_CONTROL.put).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^g:/),
+      expect.any(String),
+    );
+    expect(mocks.cacheDelete).not.toHaveBeenCalled();
+    expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith([
+      "category_products_",
+      "all_products_",
+      "filterable_attrs_",
+      "html_path_/categories/fish",
+    ]);
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(2);
+
+    await Promise.all(mocks.waitUntil.mock.calls.map(([promise]) => promise));
+
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url))).toEqual([
+      "https://storefront.example.com/",
+      "https://storefront.example.com/search",
+      "https://storefront.example.com/categories/fish",
+    ]);
+  });
+
   it("preserves the local port when warming critical caches", async () => {
     const { POST } = await import("./purge-cache");
     const request = new Request("http://localhost:4322/api/purge-cache", {

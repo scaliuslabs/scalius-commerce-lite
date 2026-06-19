@@ -17,8 +17,9 @@ import {
     createCategorySchema,
     updateCategorySchema
 } from "@scalius/core/modules/categories";
+import type { Database } from "@scalius/database/client";
 import { categories } from "@scalius/database/schema";
-import { isNull } from "drizzle-orm";
+import { inArray, isNull } from "drizzle-orm";
 import {
     successEnvelope,
     paginatedEnvelope,
@@ -27,9 +28,32 @@ import {
     noContentResponse,
 } from "../../schemas/responses";
 import { categoryDetailSchema, categorySummarySchema } from "../../schemas/entities";
-import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import {
+    invalidateCatalogCaches,
+    MAX_STOREFRONT_EXACT_HTML_PATHS,
+} from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+function categoryHtmlPath(slug: string | null | undefined): string[] {
+    return slug ? [`/categories/${slug}`] : [];
+}
+
+async function categoryHtmlPathsByIds(
+    db: Database,
+    categoryIds: readonly string[],
+): Promise<string[]> {
+    const ids = [...new Set(categoryIds.filter(Boolean))]
+        .slice(0, MAX_STOREFRONT_EXACT_HTML_PATHS);
+    if (ids.length === 0) return [];
+
+    const rows = await db
+        .select({ slug: categories.slug })
+        .from(categories)
+        .where(inArray(categories.id, ids));
+
+    return rows.flatMap((category) => categoryHtmlPath(category.slug));
+}
 
 // ── Form Options (lightweight for dropdowns) ──
 
@@ -148,7 +172,9 @@ app.openapi(createCategoryRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createCategory(db, data);
-    await invalidateCatalogCaches("categories", c);
+    await invalidateCatalogCaches("categories", c, {
+        htmlPaths: categoryHtmlPath(data.slug),
+    });
     return created(c, result);
 });
 
@@ -181,8 +207,9 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { categoryIds, permanent } = c.req.valid("json");
     if (categoryIds.length === 0) throw new ValidationError("No category IDs provided");
+    const htmlPaths = await categoryHtmlPathsByIds(db, categoryIds);
     await bulkDeleteCategories(db, categoryIds, permanent);
-    await invalidateCatalogCaches("categories", c);
+    await invalidateCatalogCaches("categories", c, { htmlPaths });
     return noContent(c);
 });
 
@@ -212,8 +239,9 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { categoryIds } = c.req.valid("json");
     if (categoryIds.length === 0) throw new ValidationError("No category IDs provided");
+    const htmlPaths = await categoryHtmlPathsByIds(db, categoryIds);
     await restoreCategories(db, categoryIds);
-    await invalidateCatalogCaches("categories", c);
+    await invalidateCatalogCaches("categories", c, { htmlPaths });
     return noContent(c);
 });
 
@@ -241,8 +269,14 @@ app.openapi(updateCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
+    const existing = await getCategoryById(db, id);
     await updateCategory(db, id, data);
-    await invalidateCatalogCaches("categories", c);
+    await invalidateCatalogCaches("categories", c, {
+        htmlPaths: [
+            ...categoryHtmlPath(existing?.slug),
+            ...categoryHtmlPath(data.slug),
+        ],
+    });
     return ok(c, {});
 });
 
@@ -265,8 +299,9 @@ const deleteCategoryRoute = createRoute({
 app.openapi(deleteCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const htmlPaths = await categoryHtmlPathsByIds(db, [id]);
     await deleteCategory(db, id);
-    await invalidateCatalogCaches("categories", c);
+    await invalidateCatalogCaches("categories", c, { htmlPaths });
     return noContent(c);
 });
 
@@ -289,8 +324,9 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const htmlPaths = await categoryHtmlPathsByIds(db, [id]);
     await permanentlyDeleteCategory(db, id);
-    await invalidateCatalogCaches("categories", c);
+    await invalidateCatalogCaches("categories", c, { htmlPaths });
     return noContent(c);
 });
 
@@ -316,8 +352,9 @@ const restoreCategoryRoute = createRoute({
 app.openapi(restoreCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const htmlPaths = await categoryHtmlPathsByIds(db, [id]);
     await restoreCategories(db, [id]);
-    await invalidateCatalogCaches("categories", c);
+    await invalidateCatalogCaches("categories", c, { htmlPaths });
     return ok(c, {});
 });
 
