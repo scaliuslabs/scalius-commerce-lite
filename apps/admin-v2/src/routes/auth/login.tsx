@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AuthCard } from "~/components/auth/AuthCard";
+import { LoginForm } from "~/components/auth/LoginForm";
 import { loginPageGuard } from "~/lib/auth.fns";
 
 export const Route = createFileRoute("/auth/login")({
@@ -11,5 +11,5 @@ export const Route = createFileRoute("/auth/login")({
 });
 
 function LoginPage() {
-  return <AuthCard view="SIGN_IN" redirectTo="/admin" />;
+  return <LoginForm />;
 }

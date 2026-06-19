@@ -2,7 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ExternalLink } from "lucide-react";
-import { getStorefrontUrl, updateStorefrontUrl } from "@/lib/api-functions/settings";
+import {
+  getStorefrontUrl,
+  updateStorefrontUrl,
+} from "@/lib/api-functions/storefront-url";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 

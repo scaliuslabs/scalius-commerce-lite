@@ -28,6 +28,20 @@ export const Route = createFileRoute("/auth")({
  */
 function useTabOrderFix() {
   useEffect(() => {
+    let activeEmailInput: HTMLElement | null = null;
+
+    function handleEmailKeydown(e: KeyboardEvent) {
+      if (e.key !== "Tab" || e.shiftKey) return;
+
+      const passwordInput = document.querySelector(
+        'input[type="password"], input[name="password"]',
+      ) as HTMLElement | null;
+
+      if (!passwordInput) return;
+      e.preventDefault();
+      passwordInput.focus();
+    }
+
     function fixTabOrder() {
       const emailInput = document.querySelector(
         'input[type="email"], input[name="email"]',
@@ -43,27 +57,24 @@ function useTabOrderFix() {
       if (passwordInput) passwordInput.setAttribute("tabindex", "2");
       if (forgotLink) forgotLink.setAttribute("tabindex", "4");
 
-      // Handle Tab key on email to focus password directly
-      if (emailInput && passwordInput) {
-        emailInput.addEventListener("keydown", function (e: KeyboardEvent) {
-          if (e.key === "Tab" && !e.shiftKey) {
-            e.preventDefault();
-            passwordInput.focus();
-          }
-        });
+      if (emailInput !== activeEmailInput) {
+        activeEmailInput?.removeEventListener("keydown", handleEmailKeydown);
+        activeEmailInput = emailInput;
+        activeEmailInput?.addEventListener("keydown", handleEmailKeydown);
       }
     }
 
     // Wait for React to render the form
     const timeout = setTimeout(fixTabOrder, 100);
 
-    // Observe for dynamic changes (view switching in AuthCard)
+    // Observe for dynamic changes across auth forms.
     const observer = new MutationObserver(fixTabOrder);
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       clearTimeout(timeout);
       observer.disconnect();
+      activeEmailInput?.removeEventListener("keydown", handleEmailKeydown);
     };
   }, []);
 }

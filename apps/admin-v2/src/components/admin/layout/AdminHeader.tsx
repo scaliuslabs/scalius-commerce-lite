@@ -1,13 +1,24 @@
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
-import { CacheNukeButton } from "@/components/admin/CacheNukeButton";
-import { NotificationDropdown } from "@/components/admin/NotificationDropdown";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
+
+const CacheNukeButton = lazy(() =>
+  import("@/components/admin/CacheNukeButton").then((module) => ({
+    default: module.CacheNukeButton,
+  })),
+);
+
+const NotificationDropdown = lazy(() =>
+  import("@/components/admin/NotificationDropdown").then((module) => ({
+    default: module.NotificationDropdown,
+  })),
+);
 
 interface AdminHeaderProps {
   user: {
@@ -19,6 +30,75 @@ interface AdminHeaderProps {
     twoFactorEnabled: boolean;
     isSuperAdmin: boolean;
   };
+}
+
+type IdleSchedulerWindow = Window & {
+  requestIdleCallback?: (
+    callback: () => void,
+    options?: { timeout?: number },
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+function useDeferredHeaderActions() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    const markReady = () => {
+      if (!cancelled) setReady(true);
+    };
+
+    const idleWindow = window as IdleSchedulerWindow;
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(markReady, {
+        timeout: 2_000,
+      });
+      return () => {
+        cancelled = true;
+        idleWindow.cancelIdleCallback?.(handle);
+      };
+    }
+
+    const timeout = window.setTimeout(markReady, 1_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  return ready;
+}
+
+function HeaderActionsSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-9 items-center gap-2 px-1 text-muted-foreground/40"
+    >
+      <div className="h-8 w-8 rounded-md bg-muted/60" />
+      <div className="h-5 w-px bg-border" />
+      <div className="h-8 w-8 rounded-md bg-muted/60" />
+      <div className="h-5 w-px bg-border" />
+    </div>
+  );
+}
+
+function DeferredAdminHeaderActions({ userId }: { userId: string }) {
+  const ready = useDeferredHeaderActions();
+
+  if (!ready) return <HeaderActionsSkeleton />;
+
+  return (
+    <Suspense fallback={<HeaderActionsSkeleton />}>
+      <CacheNukeButton />
+      <div className="h-5 w-px bg-border mx-2.5" />
+      <NotificationDropdown userId={userId} />
+      <div className="h-5 w-px bg-border mx-2.5" />
+    </Suspense>
+  );
 }
 
 export function AdminHeader({ user }: AdminHeaderProps) {
@@ -35,11 +115,8 @@ export function AdminHeader({ user }: AdminHeaderProps) {
 
       <TooltipProvider>
         <div className="flex items-center">
-          <div className="hidden md:flex items-center">
-            <CacheNukeButton />
-            <div className="h-5 w-px bg-border mx-2.5" />
-            <NotificationDropdown userId={user.id} />
-            <div className="h-5 w-px bg-border mx-2.5" />
+          <div className="hidden min-w-[5.75rem] items-center justify-end md:flex">
+            <DeferredAdminHeaderActions userId={user.id} />
           </div>
           <DarkModeToggle />
           <div className="h-5 w-px bg-border mx-2.5" />

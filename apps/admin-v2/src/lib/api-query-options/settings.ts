@@ -7,10 +7,10 @@ import {
   getMetaConversionsLogs,
   getMetaConversionsSettings,
   getPaymentMethods,
-  getStorefrontUrl,
   getThemeSettings,
 } from "../api-functions/settings";
 import { queryKeys } from "../query-keys";
+export { storefrontUrlQueryOptions } from "./storefront-url";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
@@ -19,13 +19,6 @@ export const generalSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.general(),
     queryFn: () => getGeneralSettings(),
-    staleTime: CONFIG_STALE_TIME_MS,
-  });
-
-export const storefrontUrlQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.storefrontUrl(),
-    queryFn: () => getStorefrontUrl(),
     staleTime: CONFIG_STALE_TIME_MS,
   });
 

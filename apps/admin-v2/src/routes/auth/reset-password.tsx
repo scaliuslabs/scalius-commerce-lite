@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AuthCard } from "~/components/auth/AuthCard";
+import { ResetPasswordForm } from "~/components/auth/ResetPasswordForm";
 
 export const Route = createFileRoute("/auth/reset-password")({
   head: () => ({
@@ -9,5 +9,5 @@ export const Route = createFileRoute("/auth/reset-password")({
 });
 
 function ResetPasswordPage() {
-  return <AuthCard view="RESET_PASSWORD" redirectTo="/auth/login" />;
+  return <ResetPasswordForm />;
 }

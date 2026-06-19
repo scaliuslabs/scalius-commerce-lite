@@ -1,5 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+export {
+  getStorefrontUrl,
+  updateStorefrontUrl,
+  type StorefrontUrlPayload,
+  type UpdateStorefrontUrlInput,
+} from "./storefront-url";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -67,12 +73,6 @@ export interface FooterConfigInput {
 export interface GeneralSettingsPayload {
   headerConfig: SettingsPayload;
   footerConfig: SettingsPayload;
-}
-export interface StorefrontUrlPayload {
-  storefrontUrl: string;
-}
-export interface UpdateStorefrontUrlInput {
-  storefrontUrl?: string;
 }
 export interface CurrencySettingsPayload {
   currencyCode: string;
@@ -200,18 +200,6 @@ export const saveFooterConfig = createServerFn({ method: "POST" })
   .validator((data: FooterConfigInput) => data)
   .handler(async ({ data }) => {
     return apiPost<EmptyPayload>("/settings/footer", data);
-  });
-
-export const getStorefrontUrl = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<StorefrontUrlPayload>("/settings/storefront-url");
-  },
-);
-
-export const updateStorefrontUrl = createServerFn({ method: "POST" })
-  .validator((data: UpdateStorefrontUrlInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MessagePayload>("/settings/storefront-url", data);
   });
 
 export const getCurrencySettings = createServerFn({ method: "GET" }).handler(
