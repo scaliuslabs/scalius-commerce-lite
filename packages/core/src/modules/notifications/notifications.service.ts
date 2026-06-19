@@ -2,12 +2,17 @@
 // Centralized notification service for admin push + order notifications.
 
 import type { Database } from "@scalius/database/client";
-import { adminFcmTokens, settings } from "@scalius/database/schema";
+import { adminFcmTokens, orders, settings, siteSettings } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
+import {
+    normalizeWhatsAppRecipient,
+    sendWhatsAppTemplateMessage,
+    type SendWhatsAppTemplateMessageResult,
+} from "../../integrations/whatsapp";
 import {
     claimOrderNotificationDeliveryReceipt,
     createOrderNotificationDeliveryTarget,
@@ -59,6 +64,7 @@ interface DeliverySendResult {
     providerMessageId?: string | null;
     providerStatus?: string | null;
     rawResponse?: string | null;
+    retryable?: boolean;
 }
 
 const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
@@ -403,10 +409,8 @@ export async function sendOrderNotificationEmail(
     if (enabledChannels.includes("sms")) {
         try {
             const { getActiveSmsProvider } = await import("../../integrations/sms");
-            const { orders } = await import("@scalius/database/schema");
-            const { eq: eqOp } = await import("drizzle-orm");
             const orderRow = db
-                ? await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eqOp(orders.id, orderId)).get()
+                ? await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get()
                 : undefined;
             const customerPhone = orderRow?.customerPhone;
 
@@ -493,23 +497,200 @@ export async function sendOrderNotificationEmail(
     }
 
     if (enabledChannels.includes("whatsapp")) {
-        if (receiptDb && outboxId) {
-            outcomes.push(await recordSkippedDelivery({
-                db: receiptDb,
-                outboxId,
-                orderId,
-                notificationType: type,
-                channel: "whatsapp",
-                provider: "whatsapp",
-                recipient: `whatsapp:${orderId}`,
-                recipientMasked: "whatsapp",
-                reason: "order_whatsapp_not_implemented",
-            }));
+        try {
+            const orderRow = db
+                ? await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get()
+                : undefined;
+            const customerPhone = orderRow?.customerPhone;
+
+            if (!customerPhone) {
+                if (receiptDb && outboxId) {
+                    outcomes.push(await recordSkippedDelivery({
+                        db: receiptDb,
+                        outboxId,
+                        orderId,
+                        notificationType: type,
+                        channel: "whatsapp",
+                        provider: "whatsapp",
+                        recipient: `missing-whatsapp-phone:${orderId}`,
+                        recipientMasked: "missing-phone",
+                        reason: "missing_whatsapp_recipient",
+                    }));
+                }
+            } else {
+                let whatsappRecipient: string | null = null;
+                try {
+                    whatsappRecipient = normalizeWhatsAppRecipient(customerPhone);
+                } catch {
+                    if (receiptDb && outboxId) {
+                        outcomes.push(await recordSkippedDelivery({
+                            db: receiptDb,
+                            outboxId,
+                            orderId,
+                            notificationType: type,
+                            channel: "whatsapp",
+                            provider: "whatsapp",
+                            recipient: `invalid-whatsapp-phone:${orderId}`,
+                            recipientMasked: maskPhone(customerPhone),
+                            reason: "invalid_whatsapp_recipient",
+                        }));
+                    }
+                }
+
+                if (whatsappRecipient) {
+                    const sendConfig = db ? await resolveOrderWhatsAppSendConfig(db) : null;
+                    if (!sendConfig) {
+                        if (receiptDb && outboxId) {
+                            outcomes.push(await recordSkippedDelivery({
+                                db: receiptDb,
+                                outboxId,
+                                orderId,
+                                notificationType: type,
+                                channel: "whatsapp",
+                                provider: "whatsapp",
+                                recipient: `whatsapp:${whatsappRecipient}`,
+                                recipientMasked: maskPhone(customerPhone),
+                                reason: "missing_whatsapp_credentials",
+                            }));
+                        } else {
+                            console.warn(`[Notifications] WhatsApp channel enabled for ${type} but Meta credentials are not configured`);
+                        }
+                    } else {
+                        const send = async (): Promise<DeliverySendResult> => sendOrderWhatsAppTemplate({
+                            config: sendConfig,
+                            orderId,
+                            notificationType: type,
+                            customerName: name,
+                            customerPhone,
+                            data,
+                        });
+
+                        if (receiptDb && outboxId) {
+                            outcomes.push(await dispatchWithReceipt({
+                                db: receiptDb,
+                                outboxId,
+                                orderId,
+                                notificationType: type,
+                                channel: "whatsapp",
+                                provider: "whatsapp",
+                                recipient: `whatsapp:${whatsappRecipient}`,
+                                recipientMasked: maskPhone(customerPhone),
+                                send,
+                            }));
+                        } else if (db) {
+                            const result = await send();
+                            if (result.success) {
+                                console.log(`[Notifications] WhatsApp sent for ${type} (order ${orderId}), ref=${result.providerMessageId}`);
+                            } else {
+                                console.error(`[Notifications] WhatsApp failed for ${type} (order ${orderId}): ${result.rawResponse ?? result.providerStatus}`);
+                            }
+                        } else {
+                            console.warn(`[Notifications] WhatsApp channel enabled for ${type} without a database connection`);
+                        }
+                    }
+                }
+            }
+        } catch (whatsappError: unknown) {
+            console.error(`[Notifications] WhatsApp dispatch failed for ${type} (order ${orderId}):`, whatsappError);
+            if (receiptDb && outboxId) {
+                outcomes.push({
+                    channel: "whatsapp",
+                    provider: "whatsapp",
+                    recipientMasked: "unknown",
+                    status: "failed",
+                    error: normalizeError(whatsappError),
+                    retryable: true,
+                });
+            }
         }
-        console.log(`[Notifications] WhatsApp order notifications not yet implemented for ${type} (order ${orderId})`);
     }
 
     return buildDispatchResult(outcomes);
+}
+
+async function sendOrderWhatsAppTemplate(options: {
+    config: OrderWhatsAppSendConfig;
+    orderId: string;
+    notificationType: OrderNotificationType;
+    customerName: string;
+    customerPhone: string;
+    data?: Record<string, unknown>;
+}): Promise<DeliverySendResult> {
+    const result = await sendWhatsAppTemplateMessage({
+        accessToken: options.config.accessToken,
+        phoneNumberId: options.config.phoneNumberId,
+        to: options.customerPhone,
+        templateName: options.config.templateName,
+        languageCode: options.config.languageCode,
+        bodyParameters: buildOrderWhatsAppBodyParameters(options),
+    });
+
+    return whatsAppResultToDeliveryResult(result);
+}
+
+interface OrderWhatsAppSendConfig {
+    accessToken: string;
+    phoneNumberId: string;
+    templateName: string;
+    languageCode: string;
+}
+
+async function resolveOrderWhatsAppSendConfig(db: Database): Promise<OrderWhatsAppSendConfig | null> {
+    const site = await db
+        .select({
+            whatsappAccessToken: siteSettings.whatsappAccessToken,
+            whatsappPhoneNumberId: siteSettings.whatsappPhoneNumberId,
+        })
+        .from(siteSettings)
+        .limit(1)
+        .get();
+
+    if (!site?.whatsappAccessToken || !site.whatsappPhoneNumberId) {
+        return null;
+    }
+
+    const { getOrderWhatsAppTemplateSettings } = await import("../settings/settings.service");
+    const template = await getOrderWhatsAppTemplateSettings(db);
+    return {
+        accessToken: site.whatsappAccessToken,
+        phoneNumberId: site.whatsappPhoneNumberId,
+        templateName: template.templateName,
+        languageCode: template.languageCode,
+    };
+}
+
+function buildOrderWhatsAppBodyParameters(options: {
+    orderId: string;
+    notificationType: OrderNotificationType;
+    customerName: string;
+    data?: Record<string, unknown>;
+}): string[] {
+    const label = ORDER_NOTIFICATION_LABELS[options.notificationType] ?? "Order Update";
+    return [
+        templateText(options.customerName, "Customer", 80),
+        templateText(options.orderId, "order", 80),
+        templateText(label, "Order Update", 80),
+        templateText(options.data?.trackingId, "-", 120),
+    ];
+}
+
+function whatsAppResultToDeliveryResult(result: SendWhatsAppTemplateMessageResult): DeliverySendResult {
+    return {
+        success: result.success,
+        provider: "whatsapp",
+        providerMessageId: result.providerRef,
+        providerStatus: result.rawStatus,
+        rawResponse: result.rawResponse ?? result.rawStatus,
+        retryable: result.retryable,
+    };
+}
+
+function templateText(value: unknown, fallback: string, maxLength: number): string {
+    const text = String(value ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const resolved = text || fallback;
+    return resolved.length > maxLength ? resolved.slice(0, maxLength) : resolved;
 }
 
 async function dispatchWithReceipt(options: {
@@ -532,6 +713,15 @@ async function dispatchWithReceipt(options: {
     try {
         const result = await options.send(target);
         if (!result.success) {
+            if (result.retryable === false) {
+                return await markSkippedOutcome(
+                    options.db,
+                    target,
+                    claim.receipt,
+                    result.providerStatus ?? "provider_non_retryable_failure",
+                    result,
+                );
+            }
             return await markFailedOutcome(options.db, target, claim.receipt, new Error(result.rawResponse ?? result.providerStatus ?? "Provider send failed"), result);
         }
         return await markAcceptedOutcome(options.db, target, claim.receipt, result);

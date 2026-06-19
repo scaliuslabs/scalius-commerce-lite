@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
+import { ValidationError } from "@scalius/core/errors";
 import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
 
 // ─────────────────────────────────────────
@@ -195,7 +196,18 @@ export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Prom
 // Notification Channel Preferences
 // ─────────────────────────────────────────
 
+const NOTIFICATIONS_CATEGORY = "notifications";
 const VALID_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
+
+export interface OrderWhatsAppTemplateSettings {
+    templateName: string;
+    languageCode: string;
+}
+
+export const DEFAULT_ORDER_WHATSAPP_TEMPLATE_SETTINGS: OrderWhatsAppTemplateSettings = {
+    templateName: "order_status_update",
+    languageCode: "en_US",
+};
 
 const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = Object.fromEntries(
     ORDER_NOTIFICATION_TYPES.map((type) => [type, ["email"]]),
@@ -215,7 +227,7 @@ export async function getNotificationChannels(
     const row = await db
         .select({ value: settings.value })
         .from(settings)
-        .where(and(eq(settings.category, "notifications"), eq(settings.key, "order_channels")))
+        .where(and(eq(settings.category, NOTIFICATIONS_CATEGORY), eq(settings.key, "order_channels")))
         .get();
 
     if (!row?.value) return DEFAULT_NOTIFICATION_CHANNELS;
@@ -276,10 +288,86 @@ export async function updateNotificationChannels(
         );
     }
 
+    if (channelsRequireWhatsApp(channels) && !(await isWhatsAppCloudApiConfigured(db))) {
+        throw new ValidationError("Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.");
+    }
+
     // Import upsertSetting from gateway-settings (same pattern used by site-settings.service.ts)
     const { upsertSetting } = await import("../payments/gateway-settings");
-    await upsertSetting(db, "notifications", "order_channels", JSON.stringify(channels));
+    await upsertSetting(db, NOTIFICATIONS_CATEGORY, "order_channels", JSON.stringify(channels));
     return channels;
+}
+
+export async function isWhatsAppCloudApiConfigured(db: Database): Promise<boolean> {
+    const row = await db
+        .select({
+            whatsappAccessToken: siteSettings.whatsappAccessToken,
+            whatsappPhoneNumberId: siteSettings.whatsappPhoneNumberId,
+        })
+        .from(siteSettings)
+        .limit(1)
+        .get();
+
+    return Boolean(row?.whatsappAccessToken && row.whatsappPhoneNumberId);
+}
+
+export async function getOrderWhatsAppTemplateSettings(
+    db: Database,
+): Promise<OrderWhatsAppTemplateSettings> {
+    const rows = await db
+        .select({ key: settings.key, value: settings.value })
+        .from(settings)
+        .where(eq(settings.category, NOTIFICATIONS_CATEGORY));
+
+    const map = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    return normalizeOrderWhatsAppTemplateSettings({
+        templateName: map.whatsapp_order_template_name,
+        languageCode: map.whatsapp_order_template_language,
+    });
+}
+
+export async function updateOrderWhatsAppTemplateSettings(
+    db: Database,
+    input: Partial<OrderWhatsAppTemplateSettings>,
+): Promise<OrderWhatsAppTemplateSettings> {
+    const normalized = normalizeOrderWhatsAppTemplateSettings(input);
+    const { upsertSetting } = await import("../payments/gateway-settings");
+    await upsertSetting(
+        db,
+        NOTIFICATIONS_CATEGORY,
+        "whatsapp_order_template_name",
+        normalized.templateName,
+    );
+    await upsertSetting(
+        db,
+        NOTIFICATIONS_CATEGORY,
+        "whatsapp_order_template_language",
+        normalized.languageCode,
+    );
+    return normalized;
+}
+
+function normalizeOrderWhatsAppTemplateSettings(
+    input: Partial<OrderWhatsAppTemplateSettings>,
+): OrderWhatsAppTemplateSettings {
+    const templateName = (input.templateName ?? DEFAULT_ORDER_WHATSAPP_TEMPLATE_SETTINGS.templateName).trim();
+    const languageCode = (input.languageCode ?? DEFAULT_ORDER_WHATSAPP_TEMPLATE_SETTINGS.languageCode).trim();
+
+    if (!/^[a-z0-9_]{1,512}$/.test(templateName)) {
+        throw new ValidationError("WhatsApp order template name must use lowercase letters, numbers, and underscores.");
+    }
+
+    if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(languageCode)) {
+        throw new ValidationError("WhatsApp order template language must look like en_US or bn.");
+    }
+
+    return { templateName, languageCode };
+}
+
+function channelsRequireWhatsApp(channels: Record<string, string[]>): boolean {
+    return Object.values(channels).some((statusChannels) =>
+        statusChannels.includes("whatsapp"),
+    );
 }
 
 // ─────────────────────────────────────────
@@ -306,7 +394,7 @@ export async function getAdminNotificationChannels(
     const row = await db
         .select({ value: settings.value })
         .from(settings)
-        .where(and(eq(settings.category, "notifications"), eq(settings.key, "admin_channels")))
+        .where(and(eq(settings.category, NOTIFICATIONS_CATEGORY), eq(settings.key, "admin_channels")))
         .get();
 
     if (!row?.value) return DEFAULT_ADMIN_CHANNELS;
@@ -364,6 +452,6 @@ export async function updateAdminNotificationChannels(
     }
 
     const { upsertSetting } = await import("../payments/gateway-settings");
-    await upsertSetting(db, "notifications", "admin_channels", JSON.stringify(channels));
+    await upsertSetting(db, NOTIFICATIONS_CATEGORY, "admin_channels", JSON.stringify(channels));
     return channels;
 }

@@ -9,6 +9,7 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 | FCM push to admin (new order) | Yes | Yes -- called from queue consumer via `sendOrderNotification()` |
 | Order email to customer | Yes | Yes -- via Cloudflare Queue with channel preference check |
 | SMS to customer | Yes | Yes -- 4 providers (smsnetbd, bdbulksms, mimsms, gennet) via `getActiveSmsProvider()` |
+| Order WhatsApp to customer | Yes | Yes -- Meta Cloud API template messages via Cloudflare Queue |
 | OTP email to customer | Yes | Yes -- via Cloudflare Queue |
 | OTP via WhatsApp | Yes | Yes -- via Cloudflare Queue |
 | OTP via SMS | Yes | Yes -- via same 4 SMS providers |
@@ -29,8 +30,8 @@ The order email flow is fully connected:
 2. `updateOrderStatus()` returns a `notification` object with email/name/type
 3. Route or queue producer enqueues `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
 4. Queue consumer (`queue-consumer.ts`) matches `order.notification` and calls `sendOrderNotificationEmail()`
-5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via the active email provider. Cloudflare Email is the native default, with Resend available as the external fallback.
-6. When the queue message carries `outboxId`, customer email/SMS/WhatsApp-skip targets create deterministic delivery receipts before provider work. Accepted/skipped receipts are terminal and are not resent on queue/outbox retry.
+5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via enabled customer providers. Cloudflare Email is the native default, with Resend available as the external fallback.
+6. When the queue message carries `outboxId`, customer email/SMS/WhatsApp targets create deterministic delivery receipts before provider work. Accepted/skipped receipts are terminal and are not resent on queue/outbox retry.
 
 ## Functions
 
@@ -67,9 +68,9 @@ Uses inline HTML templates with basic responsive styling. Customer names and tra
 
 **SMS channel dispatch**: When SMS is enabled for a status, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. Receipt-mode SMS stores provider refs; GenNet receives a deterministic receipt-derived `csms_id` so provider retries can dedupe.
 
-**WhatsApp channel**: When WhatsApp is enabled for a status, the function records a skipped/not-implemented receipt and logs a placeholder message. Push notifications are handled separately by `sendOrderNotification()`.
+**WhatsApp channel dispatch**: When WhatsApp is enabled for a status, the function reads the order's normalized `customerPhone`, checks the shared Meta Cloud API credentials from `site_settings`, reads the order template settings from `settings.notifications`, and sends a template message through `sendWhatsAppTemplateMessage()`. The reusable order template receives 4 body variables: customer name, order ID, order status label, and tracking ID or `-`. Missing/invalid order phones, missing Meta credentials, paused templates, and non-retryable provider validation errors become skipped receipts; malformed 200 responses, 5xx, 408/409/429, and network failures remain retryable.
 
-**Current provider gaps**: Email has a Cloudflare-native default and external fallback. Admin push is still Firebase-only, SMS is Bangladesh-provider-only, and order WhatsApp is channel-visible but not implemented. Keep those as explicit gaps until first-party Web Push and manual/own-channel alternatives are added.
+**Current provider gaps**: Email has a Cloudflare-native default and external fallback. Admin push is still Firebase-only, SMS is Bangladesh-provider-only, and Meta WhatsApp has no first-class upstream idempotency key; local D1 receipts fence retries but a Worker crash after provider acceptance and before receipt persistence can still duplicate on Meta.
 
 ## Queue Processing
 
@@ -80,7 +81,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 - Handler: Calls `sendOrderNotificationEmail()` with `db` for channel checking and delivery receipts, and `sendOrderNotification()` for FCM push to admin devices when push is enabled
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: Cloudflare auto-retry up to 3 times, 30s delay on failure
-- Channel receipts: email, SMS, WhatsApp skip markers, and FCM push create one receipt per logical target. Accepted/skipped receipts are terminal; retryable failures keep the parent outbox retryable.
+- Channel receipts: email, SMS, WhatsApp, and FCM push create one receipt per logical target. Accepted/skipped receipts are terminal; retryable failures keep the parent outbox retryable.
 
 Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
 
@@ -107,5 +108,6 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 - `@scalius/core/integrations/firebase/admin` -- `getFirebaseAdminMessaging()` for FCM REST API
 - `@scalius/core/integrations/email` -- `sendEmail()` for transactional emails
 - `@scalius/core/integrations/sms` -- `getActiveSmsProvider()` for SMS channel dispatch (4 providers: smsnetbd, bdbulksms, mimsms, gennet)
-- `@scalius/core/modules/settings/settings.service` -- `getNotificationChannels()` for channel preference checking
+- `@scalius/core/integrations/whatsapp` -- Meta Cloud API template sender for order WhatsApp notifications
+- `@scalius/core/modules/settings/settings.service` -- `getNotificationChannels()`, `getOrderWhatsAppTemplateSettings()`, and `isWhatsAppCloudApiConfigured()`
 - `@scalius/shared/html-escape` -- `escapeHtml()` for XSS prevention in notification content

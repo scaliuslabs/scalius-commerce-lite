@@ -3,9 +3,12 @@ import type { Database } from "@scalius/database/client";
 
 const mocks = vi.hoisted(() => ({
     getNotificationChannels: vi.fn(),
+    getOrderWhatsAppTemplateSettings: vi.fn(),
     getActiveSmsProvider: vi.fn(),
     sendEmail: vi.fn(),
     sendSms: vi.fn(),
+    sendWhatsAppTemplateMessage: vi.fn(),
+    normalizeWhatsAppRecipient: vi.fn(),
     getFirebaseAdminMessaging: vi.fn(),
     sendEachForMulticast: vi.fn(),
     createOrderNotificationDeliveryTarget: vi.fn(),
@@ -18,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../settings/settings.service", () => ({
     getNotificationChannels: mocks.getNotificationChannels,
+    getOrderWhatsAppTemplateSettings: mocks.getOrderWhatsAppTemplateSettings,
 }));
 
 vi.mock("../../integrations/sms", () => ({
@@ -26,6 +30,11 @@ vi.mock("../../integrations/sms", () => ({
 
 vi.mock("../../integrations/email", () => ({
     sendEmail: mocks.sendEmail,
+}));
+
+vi.mock("../../integrations/whatsapp", () => ({
+    sendWhatsAppTemplateMessage: mocks.sendWhatsAppTemplateMessage,
+    normalizeWhatsAppRecipient: mocks.normalizeWhatsAppRecipient,
 }));
 
 vi.mock("../../integrations/firebase/admin", () => ({
@@ -44,12 +53,31 @@ vi.mock("./order-notification-delivery-receipts", () => ({
 import { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 import { ORDER_NOTIFICATION_TYPES } from "./notification-types";
 
-function createDb(customerPhone = "+8801700000000"): Database {
+function createDb(input: string | {
+    customerPhone?: string;
+    siteSettings?: {
+        whatsappAccessToken?: string | null;
+        whatsappPhoneNumberId?: string | null;
+    } | null;
+} = "+8801700000000"): Database {
+    const customerPhone = typeof input === "string" ? input : (input.customerPhone ?? "+8801700000000");
+    const siteSettings = typeof input === "string"
+        ? { whatsappAccessToken: "wa_token", whatsappPhoneNumberId: "phone_id_1" }
+        : (input.siteSettings ?? { whatsappAccessToken: "wa_token", whatsappPhoneNumberId: "phone_id_1" });
+
     return {
-        select: vi.fn(() => ({
+        select: vi.fn((selection?: Record<string, unknown>) => ({
             from: vi.fn(() => ({
                 where: vi.fn(() => ({
                     get: vi.fn(async () => ({ customerPhone })),
+                })),
+                limit: vi.fn(() => ({
+                    get: vi.fn(async () => {
+                        if (selection && "whatsappAccessToken" in selection) {
+                            return siteSettings;
+                        }
+                        return { customerPhone };
+                    }),
                 })),
             })),
         })),
@@ -74,6 +102,17 @@ describe("order notification dispatch", () => {
             provider: "cloudflare",
             providerRef: "cf_msg_1",
             rawStatus: "accepted",
+        });
+        mocks.sendWhatsAppTemplateMessage.mockResolvedValue({
+            success: true,
+            providerRef: "wamid.order.1",
+            rawStatus: "accepted",
+            rawResponse: JSON.stringify({ messageId: "wamid.order.1", messageStatus: "accepted" }),
+        });
+        mocks.normalizeWhatsAppRecipient.mockImplementation((phone: string) => phone.replace(/^\+/, ""));
+        mocks.getOrderWhatsAppTemplateSettings.mockResolvedValue({
+            templateName: "order_status_update",
+            languageCode: "en_US",
         });
         mocks.createOrderNotificationDeliveryTarget.mockImplementation(async (input: Record<string, unknown>) => ({
             ...input,
@@ -273,6 +312,162 @@ describe("order notification dispatch", () => {
                 "Hi SMS Customer, your order #order_4 has been refunded. Contact us if you have questions.",
             clientReference: "client_ref_1",
         });
+    });
+
+    it("sends WhatsApp order templates through durable receipts", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_shipped: ["whatsapp"],
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "WhatsApp Customer",
+            "order_wa_1",
+            "order_shipped",
+            { trackingId: "TRACK123" },
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_wa_1",
+            },
+        );
+
+        expect(mocks.createOrderNotificationDeliveryTarget).toHaveBeenCalledWith(
+            expect.objectContaining({
+                outboxId: "outbox_wa_1",
+                orderId: "order_wa_1",
+                notificationType: "order_shipped",
+                channel: "whatsapp",
+                provider: "whatsapp",
+                recipient: "whatsapp:8801700000000",
+            }),
+        );
+        expect(mocks.sendWhatsAppTemplateMessage).toHaveBeenCalledWith({
+            accessToken: "wa_token",
+            phoneNumberId: "phone_id_1",
+            to: "+8801700000000",
+            templateName: "order_status_update",
+            languageCode: "en_US",
+            bodyParameters: [
+                "WhatsApp Customer",
+                "order_wa_1",
+                "Order Shipped",
+                "TRACK123",
+            ],
+        });
+        expect(mocks.markOrderNotificationDeliveryReceiptAccepted).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            expect.objectContaining({
+                provider: "whatsapp",
+                providerMessageId: "wamid.order.1",
+                providerStatus: "accepted",
+            }),
+        );
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("records skipped WhatsApp receipts without sending when Meta credentials are missing", async () => {
+        const db = createDb({
+            siteSettings: {
+                whatsappAccessToken: null,
+                whatsappPhoneNumberId: null,
+            },
+        });
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["whatsapp"],
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "WhatsApp Customer",
+            "order_wa_2",
+            "order_created",
+            {},
+            db,
+            { outboxId: "outbox_wa_2" },
+        );
+
+        expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "missing_whatsapp_credentials",
+            expect.objectContaining({
+                provider: "whatsapp",
+                providerStatus: "missing_whatsapp_credentials",
+            }),
+        );
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("records skipped WhatsApp receipts for invalid order phone data", async () => {
+        const db = createDb("not-a-phone");
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["whatsapp"],
+        });
+        mocks.normalizeWhatsAppRecipient.mockImplementationOnce(() => {
+            throw new Error("Invalid phone number format");
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "WhatsApp Customer",
+            "order_wa_3",
+            "order_created",
+            {},
+            db,
+            { outboxId: "outbox_wa_3" },
+        );
+
+        expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "invalid_whatsapp_recipient",
+            expect.objectContaining({
+                provider: "whatsapp",
+                providerStatus: "invalid_whatsapp_recipient",
+            }),
+        );
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("records non-retryable WhatsApp provider rejections as skipped receipts", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["whatsapp"],
+        });
+        mocks.sendWhatsAppTemplateMessage.mockResolvedValueOnce({
+            success: false,
+            providerRef: "wamid.paused.1",
+            rawStatus: "paused",
+            rawResponse: JSON.stringify({ messageId: "wamid.paused.1", messageStatus: "paused" }),
+            retryable: false,
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "WhatsApp Customer",
+            "order_wa_4",
+            "order_created",
+            {},
+            db,
+            { outboxId: "outbox_wa_4" },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "paused",
+            expect.objectContaining({
+                provider: "whatsapp",
+                providerMessageId: "wamid.paused.1",
+                providerStatus: "paused",
+            }),
+        );
+        expect(result.hasRetryableFailure).toBe(false);
     });
 
     it("labels admin push payloads by notification type", async () => {
