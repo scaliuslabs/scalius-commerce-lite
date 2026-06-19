@@ -4,8 +4,9 @@ import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from 
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
-import { NotFoundError } from "../../../utils/api-error";
-import { getEncryptionKey } from "../../../utils/encryption-key";
+import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import { NotFoundError, ValidationError } from "../../../utils/api-error";
+import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 
 import { ok, created } from "../../../utils/api-response";
@@ -13,45 +14,114 @@ import { successEnvelope, errorResponses } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const MASKED_VALUE = "••••••••••••";
+const SENSITIVE_CREDENTIAL_KEYS = [
+    "clientSecret",
+    "password",
+    "apiKey",
+    "secretKey",
+    "webhookSecret",
+] as const;
 const DELIVERY_PROVIDER_CACHE_GROUPS = ["checkout"] as const;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
 
-function unmaskedCredentials(
+function parseJsonObject(value: string): Record<string, unknown> {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Expected a JSON object");
+    }
+    return parsed as Record<string, unknown>;
+}
+
+function stringifyJsonInput(value: string | Record<string, unknown> | undefined): string | undefined {
+    if (value === undefined) return undefined;
+    return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+async function decryptStoredCredentials(
+    credentialsJson: string,
+    env: Record<string, unknown>,
+): Promise<string> {
+    const primaryKey = getEncryptionKey(env);
+    const primary = await decryptCredentialsGraceful(credentialsJson, primaryKey);
+    try {
+        parseJsonObject(primary);
+        return primary;
+    } catch {
+        const legacyJwtKey = env.JWT_SECRET as string | undefined;
+        if (legacyJwtKey && legacyJwtKey !== primaryKey) {
+            const legacy = await decryptCredentialsGraceful(credentialsJson, legacyJwtKey);
+            try {
+                parseJsonObject(legacy);
+                return legacy;
+            } catch {
+                return primary;
+            }
+        }
+        return primary;
+    }
+}
+
+function hasMaskedCredential(credentials: Record<string, unknown>): boolean {
+    return SENSITIVE_CREDENTIAL_KEYS.some((key) => credentials[key] === MASKED_VALUE);
+}
+
+async function credentialsForSave(
     newCredentials: string,
     existingCredentials?: string,
-): string {
+    env?: Record<string, unknown>,
+): Promise<string> {
     try {
-        const newCreds = JSON.parse(newCredentials);
-        if (!existingCredentials) return newCredentials;
+        const newCreds = parseJsonObject(newCredentials);
+        if (!existingCredentials || !hasMaskedCredential(newCreds)) {
+            return JSON.stringify(newCreds);
+        }
 
-        const existingCreds = JSON.parse(existingCredentials);
+        if (!env) {
+            throw new ValidationError("Existing delivery provider credentials could not be read. Re-enter credentials before saving.");
+        }
+        const existingCreds = parseJsonObject(await decryptStoredCredentials(existingCredentials, env));
         const unmasked = { ...newCreds };
 
-        if (unmasked.clientSecret === MASKED_VALUE && existingCreds.clientSecret) unmasked.clientSecret = existingCreds.clientSecret;
-        if (unmasked.password === MASKED_VALUE && existingCreds.password) unmasked.password = existingCreds.password;
-        if (unmasked.apiKey === MASKED_VALUE && existingCreds.apiKey) unmasked.apiKey = existingCreds.apiKey;
-        if (unmasked.secretKey === MASKED_VALUE && existingCreds.secretKey) unmasked.secretKey = existingCreds.secretKey;
+        for (const key of SENSITIVE_CREDENTIAL_KEYS) {
+            if (unmasked[key] !== MASKED_VALUE) continue;
+            const existingValue = existingCreds[key];
+            if (typeof existingValue !== "string" || !existingValue) {
+                throw new ValidationError("Masked delivery provider credentials could not be restored. Re-enter credentials before saving.");
+            }
+            unmasked[key] = existingValue;
+        }
 
         return JSON.stringify(unmasked);
-    } catch {
+    } catch (error) {
+        if (error instanceof ValidationError) throw error;
         return newCredentials;
     }
 }
 
-function maskCredentialsForClient(credentialsJson: string): string {
+async function existingCredentialsForSave(
+    credentialsJson: string,
+    env: Record<string, unknown>,
+): Promise<string> {
     try {
-        const credentials = JSON.parse(credentialsJson);
+        return JSON.stringify(parseJsonObject(await decryptStoredCredentials(credentialsJson, env)));
+    } catch {
+        throw new ValidationError("Existing delivery provider credentials could not be read. Re-enter credentials before saving.");
+    }
+}
+
+async function maskCredentialsForClient(credentialsJson: string, env: Record<string, unknown>): Promise<string> {
+    try {
+        const credentials = parseJsonObject(await decryptStoredCredentials(credentialsJson, env));
         const masked = { ...credentials };
 
-        if (masked.clientSecret) masked.clientSecret = MASKED_VALUE;
-        if (masked.password) masked.password = MASKED_VALUE;
-        if (masked.apiKey) masked.apiKey = MASKED_VALUE;
-        if (masked.secretKey) masked.secretKey = MASKED_VALUE;
+        for (const key of SENSITIVE_CREDENTIAL_KEYS) {
+            if (masked[key]) masked[key] = MASKED_VALUE;
+        }
 
         return JSON.stringify(masked);
     } catch {
-        return credentialsJson;
+        return "{}";
     }
 }
 
@@ -82,10 +152,11 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const providers = await getDeliveryProviders(db);
-    const maskedProviders = providers.map((provider) => ({
+    const env = c.env as Record<string, unknown>;
+    const maskedProviders = await Promise.all(providers.map(async (provider) => ({
         ...provider,
-        credentials: maskCredentialsForClient(provider.credentials)
-    }));
+        credentials: await maskCredentialsForClient(provider.credentials, env)
+    })));
 
     return ok(c, maskedProviders);
 });
@@ -117,12 +188,10 @@ const createProviderRoute = createRoute({
 app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProviderRoute>) => {
     const db = c.get("db");
     const validated = c.req.valid("json");
-    const credentials = typeof validated.credentials !== "string"
-        ? JSON.stringify(validated.credentials)
-        : validated.credentials;
-    const config = typeof validated.config !== "string"
-        ? JSON.stringify(validated.config)
-        : validated.config;
+    const env = c.env as Record<string, unknown>;
+    const encryptionKey = requireEncryptionKey(env);
+    const credentials = stringifyJsonInput(validated.credentials) ?? "{}";
+    const config = stringifyJsonInput(validated.config) ?? "{}";
 
     const provider = {
         id: "",
@@ -133,13 +202,13 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
         config,
     };
 
-    const savedProvider = await saveDeliveryProvider(db, provider, getEncryptionKey(c.env as Record<string, unknown>));
+    const savedProvider = await saveDeliveryProvider(db, provider, encryptionKey);
     const savedCredentials = typeof savedProvider.credentials === 'string'
         ? savedProvider.credentials
         : JSON.stringify(savedProvider.credentials);
     const maskedResponse = {
         ...savedProvider,
-        credentials: maskCredentialsForClient(savedCredentials)
+        credentials: await maskCredentialsForClient(savedCredentials, env)
     };
 
     await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
@@ -174,12 +243,10 @@ const updateProviderRoute = createRoute({
 app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProviderRoute>) => {
     const db = c.get("db");
     const validated = c.req.valid("json");
-    const credentials = validated.credentials && typeof validated.credentials !== "string"
-        ? JSON.stringify(validated.credentials)
-        : (validated.credentials as string | undefined);
-    const config = validated.config && typeof validated.config !== "string"
-        ? JSON.stringify(validated.config)
-        : (validated.config as string | undefined);
+    const env = c.env as Record<string, unknown>;
+    const encryptionKey = requireEncryptionKey(env);
+    const credentials = stringifyJsonInput(validated.credentials);
+    const config = stringifyJsonInput(validated.config);
 
     const existingProvider = await getDeliveryProvider(db, validated.id);
     if (!existingProvider) {
@@ -190,23 +257,23 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
             isActive: validated.isActive ?? true,
             credentials: credentials || "{}",
             config: config || "{}",
-        }, getEncryptionKey(c.env as Record<string, unknown>));
+        }, encryptionKey);
         const newCredentials = typeof savedProvider.credentials === 'string'
             ? savedProvider.credentials
             : JSON.stringify(savedProvider.credentials);
         const maskedResponse = {
             ...savedProvider,
-            credentials: maskCredentialsForClient(newCredentials)
+            credentials: await maskCredentialsForClient(newCredentials, env)
         };
         await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
         return created(c, maskedResponse);
     }
 
-    const providerCredentials = credentials || JSON.stringify(existingProvider.credentials);
+    const providerCredentials = credentials ?? await existingCredentialsForSave(existingProvider.credentials, env);
     const existingCredentials = typeof existingProvider.credentials === 'string'
         ? existingProvider.credentials
         : JSON.stringify(existingProvider.credentials);
-    const unmaskedCreds = unmaskedCredentials(providerCredentials, existingCredentials);
+    const unmaskedCreds = await credentialsForSave(providerCredentials, existingCredentials, env);
 
     const savedProvider = await saveDeliveryProvider(db, {
         id: validated.id,
@@ -215,14 +282,14 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
         isActive: validated.isActive !== undefined ? validated.isActive : existingProvider.isActive,
         credentials: unmaskedCreds,
         config: config || (typeof existingProvider.config === 'string' ? existingProvider.config : JSON.stringify(existingProvider.config)),
-    }, getEncryptionKey(c.env as Record<string, unknown>));
+    }, encryptionKey);
 
     const updatedCredentials = typeof savedProvider.credentials === 'string'
         ? savedProvider.credentials
         : JSON.stringify(savedProvider.credentials);
     const maskedResponse = {
         ...savedProvider,
-        credentials: maskCredentialsForClient(updatedCredentials)
+        credentials: await maskCredentialsForClient(updatedCredentials, env)
     };
 
     await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
@@ -310,7 +377,7 @@ app.openapi(getProviderRoute, async (c) => {
     if (!provider) throw new NotFoundError("Provider not found");
     return ok(c, {
         ...provider,
-        credentials: maskCredentialsForClient(provider.credentials),
+        credentials: await maskCredentialsForClient(provider.credentials, c.env as Record<string, unknown>),
     });
 });
 
