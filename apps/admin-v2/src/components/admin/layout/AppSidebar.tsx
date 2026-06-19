@@ -1,8 +1,6 @@
-import { useRef, useCallback } from "react";
+import { lazy, Suspense, useEffect, useRef, useCallback, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Globe, ExternalLink } from "lucide-react";
-import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
+import { ChevronDown, Globe } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -30,9 +28,55 @@ import faviconImg from "@/assets/favicon.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import logoLightImg from "@/assets/logo-light.png";
 
+const StorefrontFooterLink = lazy(() =>
+  import("./StorefrontFooterLink").then((module) => ({
+    default: module.StorefrontFooterLink,
+  })),
+);
+
+type IdleSchedulerWindow = Window & {
+  requestIdleCallback?: (
+    callback: () => void,
+    options?: { timeout?: number },
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
 function isRouteActive(currentPath: string, href: string): boolean {
   if (href === "/admin") return currentPath === href;
   return currentPath === href || currentPath.startsWith(href + "/");
+}
+
+function useDeferredSidebarFooter() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    const markReady = () => {
+      if (!cancelled) setReady(true);
+    };
+
+    const idleWindow = window as IdleSchedulerWindow;
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(markReady, {
+        timeout: 2_000,
+      });
+      return () => {
+        cancelled = true;
+        idleWindow.cancelIdleCallback?.(handle);
+      };
+    }
+
+    const timeout = window.setTimeout(markReady, 1_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  return ready;
 }
 
 /**
@@ -62,12 +106,12 @@ function getActiveSubItemHref(
 
 export function AppSidebar() {
   const { permissions, isSuperAdmin } = usePermissions();
-  const { data: storefrontData } = useQuery(storefrontUrlQueryOptions());
   const location = useLocation();
   const currentPath = location.pathname;
   const { state, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const sidebarContentRef = useRef<HTMLDivElement>(null);
+  const footerReady = useDeferredSidebarFooter();
 
   const navSections = getFilteredNavSections(permissions, isSuperAdmin);
 
@@ -164,22 +208,30 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Visit Storefront">
-              <a
-                href={(storefrontData as Record<string, string> | undefined)?.storefrontUrl || "/"}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={closeMobileSidebar}
-              >
-                <Globe className="shrink-0" strokeWidth={1.8} />
-                <span className="flex-1 truncate">Visit Storefront</span>
-                <ExternalLink className="!size-3.5 text-sidebar-foreground/50" />
-              </a>
-            </SidebarMenuButton>
+            {footerReady ? (
+              <Suspense fallback={<StorefrontFooterLinkFallback />}>
+                <StorefrontFooterLink onNavigate={closeMobileSidebar} />
+              </Suspense>
+            ) : (
+              <StorefrontFooterLinkFallback />
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+function StorefrontFooterLinkFallback() {
+  return (
+    <SidebarMenuButton
+      disabled
+      tooltip="Visit Storefront"
+      className="opacity-70"
+    >
+      <Globe className="shrink-0" strokeWidth={1.8} />
+      <span className="flex-1 truncate">Visit Storefront</span>
+    </SidebarMenuButton>
   );
 }
 

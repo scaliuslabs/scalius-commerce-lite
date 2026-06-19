@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { getPagePermission as getCorePagePermission } from "@scalius/core/auth/rbac/page-permissions";
 import {
   canAccessAdminPath,
+  getAdminPagePermission,
   getDefaultAdminPath,
   hasRbacAdminAccess,
   shouldAllowAdminPath,
@@ -84,5 +86,31 @@ describe("admin shell access", () => {
         permissions: new Set(),
       }),
     ).toBe(true);
+  });
+
+  it("mirrors the canonical core page-permission map for admin shell routes", () => {
+    const representativePaths = [
+      "/admin",
+      "/admin/products",
+      "/admin/products/new",
+      "/admin/products/sku-123",
+      "/admin/products/sku-123/edit",
+      "/admin/categories/category-123/edit",
+      "/admin/collections/collection-123/edit",
+      "/admin/orders/order-123",
+      "/admin/orders/order-123/edit",
+      "/admin/customers/customer-123/history",
+      "/admin/discounts/discount-123/edit",
+      "/admin/analytics/report-123/edit",
+      "/admin/pages/page-123/edit",
+      "/admin/widgets/widget-123",
+      "/admin/settings/account",
+      "/admin/settings/cache",
+      "/admin/experimental",
+    ];
+
+    for (const path of representativePaths) {
+      expect(getAdminPagePermission(path)).toEqual(getCorePagePermission(path));
+    }
   });
 });

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, relative } from "node:path";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { ADMIN_PERMISSIONS } from "./admin-permissions";
+import { NAV_PERMISSIONS } from "../components/admin/layout/AdminNav";
 
 const ADMIN_SRC_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -130,6 +133,39 @@ describe("admin route graph boundaries", () => {
     expect(deferredToasterSource).toContain('import("./sonner")');
   });
 
+  it("keeps admin shell nav data local and aligned with core RBAC names", () => {
+    const adminNavSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminNav.ts"),
+      "utf8",
+    );
+    const adminAccessSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-access.ts"),
+      "utf8",
+    );
+    const adminPermissionsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-permissions.ts"),
+      "utf8",
+    );
+    const corePermissionValues = new Set(Object.values(PERMISSIONS));
+    const localPermissionValues = new Set(Object.values(ADMIN_PERMISSIONS));
+
+    expect(adminNavSource).not.toContain("@scalius/core/auth/rbac/permissions");
+    expect(adminAccessSource).not.toContain("@scalius/core/auth/rbac");
+    expect(adminPermissionsSource).not.toContain("@scalius/core/auth/rbac");
+    expect(Object.values(ADMIN_PERMISSIONS).length).toBeGreaterThan(0);
+    expect(
+      Object.values(ADMIN_PERMISSIONS).every((permission) =>
+        corePermissionValues.has(permission),
+      ),
+    ).toBe(true);
+    expect(Object.values(NAV_PERMISSIONS).length).toBeGreaterThan(0);
+    expect(
+      Object.values(NAV_PERMISSIONS).every((permission) =>
+        localPermissionValues.has(permission),
+      ),
+    ).toBe(true);
+  });
+
   it("keeps customer form writes invalidating dashboard aggregates", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "CustomerForm.tsx"),
@@ -238,6 +274,16 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AppSidebar.tsx"),
       "utf8",
     );
+    const storefrontFooterLinkSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "layout",
+        "StorefrontFooterLink.tsx",
+      ),
+      "utf8",
+    );
     const settingsQueryOptionsSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "api-query-options", "settings.ts"),
       "utf8",
@@ -278,7 +324,11 @@ describe("admin route graph boundaries", () => {
     expect(adminHeaderSource).not.toMatch(
       /import\s+\{\s*NotificationDropdown\s*\}\s+from/,
     );
-    expect(appSidebarSource).toContain(
+    expect(appSidebarSource).toContain('import("./StorefrontFooterLink")');
+    expect(appSidebarSource).not.toContain(
+      "~/lib/api-query-options/storefront-url",
+    );
+    expect(storefrontFooterLinkSource).toContain(
       "~/lib/api-query-options/storefront-url",
     );
     expect(appSidebarSource).not.toContain(
