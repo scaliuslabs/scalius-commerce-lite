@@ -13,6 +13,14 @@ const ADMIN_EXISTS_CACHE_TTL_MS = 5 * 60_000;
 
 let adminExistsCache: { value: true; expiresAt: number } | null = null;
 
+function buildCookieHeaders(cookieHeader: string | null | undefined): Headers | null {
+  const cookie = cookieHeader?.trim();
+  if (!cookie) return null;
+  const headers = new Headers();
+  headers.set("cookie", cookie);
+  return headers;
+}
+
 async function queryAdminExists(db: AdminDb): Promise<boolean> {
   const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
   const result = await retryTransientD1(() =>
@@ -53,15 +61,12 @@ async function getCachedAdminExists(db: AdminDb): Promise<boolean> {
  * Used by auth pages to redirect already-logged-in users.
  */
 export const getSessionInfo = createServerFn().handler(async () => {
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
   const { getRequestHeader } = await import("@tanstack/react-start/server");
+  const headers = buildCookieHeaders(getRequestHeader("cookie"));
+  if (!headers) return null;
 
+  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
   initBindings();
-
-  // Extract cookies from the current request
-  const cookieHeader = getRequestHeader("cookie") ?? "";
-  const headers = new Headers();
-  if (cookieHeader) headers.set("cookie", cookieHeader);
 
   const authResult = await getAuthSession(headers);
   if (!authResult) return null;
@@ -85,9 +90,7 @@ export const getSessionInfo = createServerFn().handler(async () => {
  * Check if any admin user exists in the shared Better Auth D1 database.
  */
 export const checkAdminExists = createServerFn().handler(async () => {
-  const { initBindings } = await import("~/lib/auth.server");
   const { env } = await import("cloudflare:workers");
-  initBindings();
   try {
     return await getCachedAdminExists(env.DB);
   } catch (e: unknown) {
@@ -105,9 +108,7 @@ export const checkAdminExists = createServerFn().handler(async () => {
  * 3. If user has session but 2FA not verified -> redirect to /auth/two-factor
  */
 export const loginPageGuard = createServerFn().handler(async () => {
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
   const { getRequestHeader } = await import("@tanstack/react-start/server");
-  initBindings();
 
   // Check if any admin exists in the shared Better Auth D1 database.
   const { env } = await import("cloudflare:workers");
@@ -125,9 +126,11 @@ export const loginPageGuard = createServerFn().handler(async () => {
   }
 
   // Check session
-  const cookieHeader = getRequestHeader("cookie") ?? "";
-  const headers = new Headers();
-  if (cookieHeader) headers.set("cookie", cookieHeader);
+  const headers = buildCookieHeaders(getRequestHeader("cookie"));
+  if (!headers) return null;
+
+  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
+  initBindings();
 
   const authResult = await getAuthSession(headers);
   if (authResult?.session && authResult?.user) {
@@ -149,11 +152,8 @@ export const loginPageGuard = createServerFn().handler(async () => {
  * 4. Loads RBAC permissions and returns user context
  */
 export const adminRouteGuard = createServerFn().handler(async () => {
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
   const { getRequestHeader } = await import("@tanstack/react-start/server");
-  const { loadUserPermissions } = await import("~/middleware/rbac.server");
   const { env } = await import("cloudflare:workers");
-  initBindings();
 
   // Check if any admin exists in the shared Better Auth D1 database.
   let adminExists = true; // fail-closed
@@ -168,9 +168,13 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   }
 
   // Check session
-  const cookieHeader = getRequestHeader("cookie") ?? "";
-  const headers = new Headers();
-  if (cookieHeader) headers.set("cookie", cookieHeader);
+  const headers = buildCookieHeaders(getRequestHeader("cookie"));
+  if (!headers) {
+    throw redirect({ to: "/auth/login" });
+  }
+
+  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
+  initBindings();
 
   const authResult = await getAuthSession(headers);
   if (!authResult?.session || !authResult?.user) {
@@ -186,6 +190,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   }
 
   // Load RBAC permissions
+  const { loadUserPermissions } = await import("~/middleware/rbac.server");
   const rbac = await loadUserPermissions(
     authResult.user.id,
     authResult.user.role,
@@ -213,13 +218,12 @@ export const adminRouteGuard = createServerFn().handler(async () => {
  * Used in beforeLoad of forgot-password page.
  */
 export const redirectIfAuthenticated = createServerFn().handler(async () => {
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
   const { getRequestHeader } = await import("@tanstack/react-start/server");
-  initBindings();
+  const headers = buildCookieHeaders(getRequestHeader("cookie"));
+  if (!headers) return null;
 
-  const cookieHeader = getRequestHeader("cookie") ?? "";
-  const headers = new Headers();
-  if (cookieHeader) headers.set("cookie", cookieHeader);
+  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
+  initBindings();
 
   const authResult = await getAuthSession(headers);
   if (authResult?.session) {
