@@ -6,7 +6,12 @@
 import { eq, sql, desc, and } from "drizzle-orm";
 import { orders, orderPayments, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { createPaymentProvider } from "./factory";
-import { getStripeSettings, getSSLCommerzSettings, getPolarSettings } from "./gateway-settings";
+import {
+    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+    getStripeSettings,
+    getSSLCommerzSettings,
+    getPolarSettings,
+} from "./gateway-settings";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
 import type { PaymentGateway } from "./types";
@@ -194,17 +199,32 @@ async function resolveProvider(
 ) {
     switch (gateway) {
         case "stripe": {
-            const settings = await getStripeSettings(db, kv, encryptionKey);
+            const settings = await getStripeSettings(
+                db,
+                kv,
+                encryptionKey,
+                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+            );
             if (!settings) throw new ServiceUnavailableError("Stripe is not configured");
             return createPaymentProvider({ type: "stripe", settings });
         }
         case "sslcommerz": {
-            const settings = await getSSLCommerzSettings(db, kv, encryptionKey);
+            const settings = await getSSLCommerzSettings(
+                db,
+                kv,
+                encryptionKey,
+                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+            );
             if (!settings) throw new ServiceUnavailableError("SSLCommerz is not configured");
             return createPaymentProvider({ type: "sslcommerz", settings });
         }
         case "polar": {
-            const settings = await getPolarSettings(db, kv, encryptionKey);
+            const settings = await getPolarSettings(
+                db,
+                kv,
+                encryptionKey,
+                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+            );
             if (!settings) throw new ServiceUnavailableError("Polar is not configured");
             return createPaymentProvider({ type: "polar", settings });
         }

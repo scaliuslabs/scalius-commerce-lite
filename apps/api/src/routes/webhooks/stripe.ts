@@ -4,7 +4,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type Stripe from "stripe";
 import { verifyStripeWebhook } from "@scalius/core/modules/payments/stripe";
-import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
+import {
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+  getStripeSettings,
+} from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import {
@@ -20,7 +23,21 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.post("/", async (c) => {
   const db = c.get("db");
   const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const stripeSettings = await getStripeSettings(db, c.env.CACHE, encryptionKey);
+  let stripeSettings: Awaited<ReturnType<typeof getStripeSettings>>;
+  try {
+    stripeSettings = await getStripeSettings(
+      db,
+      c.env.CACHE,
+      encryptionKey,
+      FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+    );
+  } catch (error) {
+    console.error(
+      "[stripe-webhook] Stripe settings read failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return c.json({ error: "Webhook settings unavailable" }, 503);
+  }
 
   if (!stripeSettings) {
     console.warn("[stripe-webhook] Stripe not configured — ignoring event");

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
 }));
 
@@ -135,17 +136,33 @@ describe("SSLCommerz webhook route", () => {
 
   it("claims a durable event before enqueueing and marks it queued after queue send", async () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const kv = { id: "kv" } as unknown as KVNamespace;
     const db = createDb();
     const app = createApp(db);
 
     const response = await postWebhook(
       app,
-      { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue },
+      {
+        CACHE: kv,
+        PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+      },
       { tran_id: "form_ord", bank_tran_id: "form_bank", value_a: "deposit" },
     );
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("OK");
+    expect(mocks.getSSLCommerzSettings).toHaveBeenCalledWith(
+      db,
+      kv,
+      "test-key",
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.validateSSLCommerzIPN).toHaveBeenCalledWith(
+      "store_test",
+      "password_test",
+      true,
+      "val_1",
+    );
     expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "db" }),
       expect.objectContaining({
@@ -177,6 +194,21 @@ describe("SSLCommerz webhook route", () => {
       expect.objectContaining({ status: "VALID" }),
     );
     expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+  });
+
+  it("returns RETRY without validating or claiming when fresh settings cannot be read", async () => {
+    mocks.getSSLCommerzSettings.mockRejectedValue(new Error("d1 overloaded"));
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const db = createDb();
+    const app = createApp(db);
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("RETRY");
+    expect(mocks.validateSSLCommerzIPN).not.toHaveBeenCalled();
+    expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
   });
 
   it("does not validate or enqueue duplicate durable events", async () => {

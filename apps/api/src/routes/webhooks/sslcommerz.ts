@@ -4,7 +4,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { parseSSLCommerzTranId, validateSSLCommerzIPN } from "@scalius/core/modules/payments/sslcommerz";
-import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
+import {
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+  getSSLCommerzSettings,
+} from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentType, SSLCommerzIPNPayload, SSLCommerzValidationResult } from "@scalius/core/modules/payments/types";
 import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
@@ -129,7 +132,21 @@ function resolvePaymentType(
 app.post("/", async (c) => {
   const db = c.get("db") as Database;
   const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const ssl = await getSSLCommerzSettings(db, c.env.CACHE, encryptionKey);
+  let ssl: Awaited<ReturnType<typeof getSSLCommerzSettings>>;
+  try {
+    ssl = await getSSLCommerzSettings(
+      db,
+      c.env.CACHE,
+      encryptionKey,
+      FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+    );
+  } catch (error) {
+    console.error(
+      "[ssl-webhook] SSLCommerz settings read failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return c.text("RETRY", 503);
+  }
 
   if (!ssl) {
     console.warn("[ssl-webhook] SSLCommerz not configured — ignoring IPN");

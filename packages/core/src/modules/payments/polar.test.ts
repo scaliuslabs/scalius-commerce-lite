@@ -3,13 +3,26 @@ import { OrderStatus, PaymentStatus } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
+  polarConstructor: vi.fn(),
+  polarCheckoutCreate: vi.fn(),
+  polarRefundCreate: vi.fn(),
+}));
+
+vi.mock("@polar-sh/sdk", () => ({
+  Polar: vi.fn(function PolarMock(options: unknown) {
+    mocks.polarConstructor(options);
+    return {
+      checkouts: { create: mocks.polarCheckoutCreate },
+      refunds: { create: mocks.polarRefundCreate },
+    };
+  }),
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { processPolarWebhookRefund } from "./polar";
+import { createPolarCheckout, processPolarWebhookRefund } from "./polar";
 
 function createDbMock({
   order,
@@ -236,5 +249,55 @@ describe("Polar webhook refund processing", () => {
     expect(result).toEqual({ success: true });
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("Polar client cache", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.polarCheckoutCreate.mockResolvedValue({ url: "https://polar.example/checkout", id: "co_1" });
+  });
+
+  it("creates a new SDK client when sandbox changes with the same access token", async () => {
+    const params = {
+      orderId: "order_1",
+      amount: 1000,
+      currency: "usd",
+      productId: "product_1",
+      paymentType: "full" as const,
+      successUrl: "https://shop.example/success",
+      cancelUrl: "https://shop.example/cancel",
+    };
+
+    await createPolarCheckout(
+      {
+        enabled: true,
+        accessToken: "polar_token_same",
+        webhookSecret: "polar_whs_test",
+        productId: "product_1",
+        sandbox: true,
+      },
+      params,
+    );
+    await createPolarCheckout(
+      {
+        enabled: true,
+        accessToken: "polar_token_same",
+        webhookSecret: "polar_whs_test",
+        productId: "product_1",
+        sandbox: false,
+      },
+      params,
+    );
+
+    expect(mocks.polarConstructor).toHaveBeenCalledTimes(2);
+    expect(mocks.polarConstructor).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      accessToken: "polar_token_same",
+      server: "sandbox",
+    }));
+    expect(mocks.polarConstructor).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      accessToken: "polar_token_same",
+      server: "production",
+    }));
   });
 });

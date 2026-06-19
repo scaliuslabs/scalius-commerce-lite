@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
+  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getStripeSettings: mocks.getStripeSettings,
 }));
 
@@ -105,11 +106,27 @@ describe("Stripe webhook route", () => {
 
   it("claims a durable event before enqueueing and marks it queued after queue send", async () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const kv = { id: "kv" } as unknown as KVNamespace;
     const app = createApp({ id: "db" });
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, {
+      CACHE: kv,
+      PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+    });
 
     expect(response.status).toBe(200);
+    expect(mocks.getStripeSettings).toHaveBeenCalledWith(
+      { id: "db" },
+      kv,
+      "test-key",
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.verifyStripeWebhook).toHaveBeenCalledWith(
+      "sk_test",
+      "whsec_test",
+      expect.any(String),
+      "sig_test",
+    );
     expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
       { id: "db" },
       expect.objectContaining({
@@ -135,6 +152,31 @@ describe("Stripe webhook route", () => {
       expect.objectContaining({ eventType: "payment_intent.succeeded" }),
     );
     expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+  });
+
+  it("returns retryable failure without claiming when fresh settings cannot be read", async () => {
+    mocks.getStripeSettings.mockRejectedValue(new Error("d1 overloaded"));
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" });
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(503);
+    expect(mocks.verifyStripeWebhook).not.toHaveBeenCalled();
+    expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid signatures before claiming an event", async () => {
+    mocks.verifyStripeWebhook.mockResolvedValue(null);
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" });
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(400);
+    expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
   });
 
   it("does not enqueue duplicate durable events", async () => {
