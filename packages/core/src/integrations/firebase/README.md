@@ -32,7 +32,7 @@ The queue consumer calls `sendOrderNotification()` on new orders, which sends FC
 A custom FCM implementation for Cloudflare Workers (no Node.js `firebase-admin` SDK). Handles:
 
 - **JWT creation**: Builds RS256 JWTs using Web Crypto API (`crypto.subtle`) for Google OAuth2 token exchange
-- **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Caches access tokens in `SHARED_AUTH_CACHE` KV namespace (3300s TTL) with fallback to uncached if KV not bound.
+- **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Uses per-instance memory for the current token and writes to `SHARED_AUTH_CACHE` only when `CREDENTIAL_ENCRYPTION_KEY` is present; persisted values are `enc:` AES-GCM strings with a 3300s TTL. Legacy plaintext KV reads remain tolerated when the dedicated key is available, but new writes never persist raw bearer tokens.
 - **FCM v1 API**: Sends messages via `https://fcm.googleapis.com/v1/projects/{projectId}/messages:send`
 - **Bounded fanout**: Sends one FCM v1 request per token with bounded concurrency. Default concurrency is 8; optional runtime var `FCM_SEND_CONCURRENCY` is clamped to 1-20. Response order is preserved so invalid-token cleanup can safely map responses back to the original token list.
 - **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + Web Crypto jitter. Respects `Retry-After` header.
@@ -60,9 +60,10 @@ interface FCMMessage {
 Key exports:
 - `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Sends with bounded concurrency and maps error codes to `messaging/*` format (e.g., `UNREGISTERED` -> `messaging/registration-token-not-registered`). All catch blocks use typed `error: unknown`.
 - `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function. When `serviceAccountJson` is provided (e.g., from DB settings), creates a new instance. Otherwise returns a singleton for env-var credentials.
+- `settings.ts` -- `saveFirebaseServiceAccountJson()` validates required service-account fields and writes encrypted `enc:` settings; `readFirebaseServiceAccountJson()` decrypts `enc:` rows, tolerates legacy plaintext/bare AES-GCM rows on read, and returns `undefined` for unreadable ciphertext so runtime falls back to env credentials.
 
 Credential resolution order:
-1. `serviceAccountJson` parameter (from DB `settings` table, category `firebase`, key `service_account`)
+1. `serviceAccountJson` parameter (decrypted from DB `settings` table, category `firebase`, key `service_account`)
 2. `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` environment variable
 
 Required fields in service account JSON: `client_email`, `private_key`, `project_id`.
@@ -126,7 +127,7 @@ Deactivates invalid tokens and tokens unused for 30+ days.
 Returns Firebase config status: masked service account presence and public config object.
 
 ### `POST /api/v1/admin/settings/firebase`
-Saves service account JSON (validated as parseable JSON) and/or public config. Invalidates `layoutCache` for `FIREBASE_CONFIG` key.
+Saves service account JSON and/or public config. Non-empty service-account saves require `CREDENTIAL_ENCRYPTION_KEY`, validate `client_email`, `private_key`, and `project_id`, then store an encrypted `enc:` value. Masked service-account values are skipped; empty values clear the stored credential. Invalidates `layoutCache` for `FIREBASE_CONFIG` key.
 
 ## Database
 
@@ -140,14 +141,14 @@ Saves service account JSON (validated as parseable JSON) and/or public config. I
 - `createdAt` / `updatedAt` (timestamps)
 
 Firebase settings in `settings` table:
-- `service_account` (category `firebase`) -- Full service account JSON
+- `service_account` (category `firebase`) -- Encrypted `enc:` AES-GCM service account JSON for new writes; legacy plaintext rows remain read-compatible only
 - `public_config` (category `firebase`) -- JSON with apiKey, authDomain, projectId, etc.
 
 ## Dependencies
 
 - `firebase/app`, `firebase/messaging` -- Client-side SDK (imported dynamically in browser)
 - Web Crypto API (`crypto.subtle`) -- JWT signing on server (available in Cloudflare Workers)
-- `SHARED_AUTH_CACHE` KV namespace -- Optional, for caching Google OAuth tokens
+- `SHARED_AUTH_CACHE` KV namespace -- Optional, for encrypted Google OAuth token caching when `CREDENTIAL_ENCRYPTION_KEY` is configured
 
 ## Operations
 

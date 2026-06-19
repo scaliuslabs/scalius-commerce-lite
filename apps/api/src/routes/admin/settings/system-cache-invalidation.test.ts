@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ValidationError } from "../../../utils/api-error";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   readEmailSetting: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
   saveWhatsAppAccessToken: vi.fn(),
+  normalizeFirebaseServiceAccountJson: vi.fn(),
+  saveFirebaseServiceAccountJson: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
     try {
       return c.executionCtx;
@@ -48,6 +51,11 @@ vi.mock("@scalius/core/integrations/email", () => ({
 vi.mock("@scalius/core/integrations/whatsapp", () => ({
   getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
   saveWhatsAppAccessToken: mocks.saveWhatsAppAccessToken,
+}));
+
+vi.mock("@scalius/core/integrations/firebase/settings", () => ({
+  normalizeFirebaseServiceAccountJson: mocks.normalizeFirebaseServiceAccountJson,
+  saveFirebaseServiceAccountJson: mocks.saveFirebaseServiceAccountJson,
 }));
 
 import { systemSettingsRoutes } from "./system";
@@ -114,6 +122,8 @@ function createTestApp() {
     accessTokenSource: "none",
   });
   mocks.saveWhatsAppAccessToken.mockResolvedValue(undefined);
+  mocks.normalizeFirebaseServiceAccountJson.mockImplementation((value: string) => value.trim());
+  mocks.saveFirebaseServiceAccountJson.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -299,5 +309,69 @@ describe("system settings cache invalidation", () => {
       "re_secret_key",
       "credential-key",
     );
+  });
+
+  it("saves a new Firebase service account through encrypted credential storage", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    const serviceAccount = JSON.stringify({
+      client_email: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      private_key: "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----\\n",
+      project_id: "scalius-test",
+    });
+
+    const response = await requestJson(app, env, executionCtx, "/firebase", {
+      serviceAccount,
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.normalizeFirebaseServiceAccountJson).toHaveBeenCalledWith(serviceAccount);
+    expect(mocks.saveFirebaseServiceAccountJson).toHaveBeenCalledWith(
+      expect.anything(),
+      serviceAccount,
+      "credential-key",
+    );
+  });
+
+  it("does not resave a masked Firebase service account", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/firebase", {
+      serviceAccount: "••••••••••••",
+      publicConfig: { projectId: "scalius-test" },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.normalizeFirebaseServiceAccountJson).not.toHaveBeenCalled();
+    expect(mocks.saveFirebaseServiceAccountJson).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before saving Firebase credentials when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
+
+    const response = await requestJson(app, env, executionCtx, "/firebase", {
+      serviceAccount: JSON.stringify({
+        client_email: "firebase-adminsdk@example.iam.gserviceaccount.com",
+        private_key: "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----\\n",
+        project_id: "scalius-test",
+      }),
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    expect(mocks.saveFirebaseServiceAccountJson).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid Firebase service account JSON before saving", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    mocks.normalizeFirebaseServiceAccountJson.mockImplementationOnce(() => {
+      throw new ValidationError("Invalid Service Account JSON");
+    });
+
+    const response = await requestJson(app, env, executionCtx, "/firebase", {
+      serviceAccount: "{not-json",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.saveFirebaseServiceAccountJson).not.toHaveBeenCalled();
   });
 });

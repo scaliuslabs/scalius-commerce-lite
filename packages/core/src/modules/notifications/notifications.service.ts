@@ -2,12 +2,13 @@
 // Centralized notification service for admin push + order notifications.
 
 import type { Database } from "@scalius/database/client";
-import { adminFcmTokens, orders, settings } from "@scalius/database/schema";
+import { adminFcmTokens, orders } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
+import { readFirebaseServiceAccountJson } from "../../integrations/firebase/settings";
 import {
     getWhatsAppCloudApiSettings,
     normalizeWhatsAppRecipient,
@@ -73,6 +74,12 @@ const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
     hasRetryableFailure: false,
 };
 
+function credentialEncryptionKeyFromEnv(env: Env): string | undefined {
+    const source = env as unknown as Record<string, unknown>;
+    return (source.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
+        ?? (source.JWT_SECRET as string | undefined);
+}
+
 /**
  * Sends push notifications to active admin devices about an order.
  * When an outbox id is provided, each FCM token is guarded by a durable
@@ -91,19 +98,10 @@ export async function sendOrderNotification(
     try {
         let serviceAccountJson: string | undefined;
         try {
-            const result = await db
-                .select({ value: settings.value })
-                .from(settings)
-                .where(
-                    and(
-                        eq(settings.key, "service_account"),
-                        eq(settings.category, "firebase"),
-                    ),
-                )
-                .get();
-            if (result?.value) {
-                serviceAccountJson = result.value;
-            }
+            serviceAccountJson = await readFirebaseServiceAccountJson(
+                db,
+                credentialEncryptionKeyFromEnv(env),
+            );
         } catch (e: unknown) {
             console.warn(
                 "Failed to fetch custom Firebase credentials from DB, falling back to env:",

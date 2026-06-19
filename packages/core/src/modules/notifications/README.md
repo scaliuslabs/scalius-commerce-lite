@@ -18,7 +18,7 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 
 `sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled. When the queue message carries an `outboxId`, each active FCM token is guarded by an `order_notification_delivery_receipts` row so retries skip tokens already accepted by FCM.
 
-- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`), falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
+- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) through the Firebase settings helper. New rows are encrypted `enc:` AES-GCM values, legacy plaintext rows remain read-compatible, and unreadable ciphertext falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` instead of being passed to FCM.
 - `getFirebaseAdminMessaging(env, serviceAccountJson?)` creates a new `FCMMessagingService` instance when DB credentials are provided, or returns a singleton for env-var credentials
 - Uses `escapeHtml()` from `@scalius/shared/html-escape` to sanitize customer names in notification payloads
 - Stores FCM REST message `name` values on accepted delivery receipts; invalid tokens become skipped receipts before deactivation
@@ -39,7 +39,7 @@ The order email flow is fully connected:
 
 Sends FCM push notifications to all active admin devices about a new order.
 
-- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`), falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
+- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) with `CREDENTIAL_ENCRYPTION_KEY`/legacy `JWT_SECRET` read tolerance, then falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
 - Queries all active tokens from `adminFcmTokens` table
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
 - Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.

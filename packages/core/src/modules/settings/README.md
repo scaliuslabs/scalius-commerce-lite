@@ -125,7 +125,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, and non-secret WhatsApp OTP fields such as phone-number ID and auth template name. `whatsapp_access_token` is legacy fallback only; new token saves go to encrypted `settings.whatsapp/access_token`. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 ## API Endpoints (Admin)
 
@@ -172,7 +172,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/email` | Get transactional email provider settings: Cloudflare binding status, Resend key status, selected provider, and sender |
 | POST | `/email` | Save selected email provider + sender. Skips masked Resend key values and encrypts new Resend keys |
 | GET | `/firebase` | Get Firebase settings (masks service account) |
-| POST | `/firebase` | Save Firebase service account + public config. Validates JSON. Invalidates `FIREBASE_CONFIG` layout cache |
+| POST | `/firebase` | Save Firebase service account + public config. Service-account saves validate required fields, require `CREDENTIAL_ENCRYPTION_KEY`, store encrypted `enc:` values, and invalidate `FIREBASE_CONFIG` layout cache |
 
 ### `ai.ts` -- Widget AI providers and prompts
 | Method | Path | Description |
@@ -193,6 +193,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/polar` | Save Polar credentials. Invalidates polar, payment methods, and checkout config/cache |
 
 Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Reads keep graceful legacy fallback so existing plaintext/JWT-encrypted rows can still be migrated.
+
+Firebase service-account saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes when that secret is missing. Runtime notification reads decrypt `enc:` rows, tolerate legacy plaintext/bare encrypted rows for migration, and never pass unreadable ciphertext to the FCM client. FCM OAuth access tokens are persisted in `SHARED_AUTH_CACHE` only as encrypted `enc:` values when the dedicated key is available; otherwise the FCM client uses per-instance memory/fresh OAuth exchange.
 
 ### `shipping.ts` -- Shipping methods CRUD
 Full CRUD with soft-delete, restore, permanent delete, pagination, search, sort.
