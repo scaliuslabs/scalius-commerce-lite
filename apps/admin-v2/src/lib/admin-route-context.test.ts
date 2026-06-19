@@ -95,6 +95,28 @@ describe("admin route context cache", () => {
     expect(guard).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a long-idle tab responsive by serving cached context while refreshing", async () => {
+    const idleContext = makeContext("idle");
+    const refreshedContext = makeContext("idle-refreshed");
+    let resolveRefresh: (context: AdminRouteContext) => void = () => {};
+    const refreshPromise = new Promise<AdminRouteContext>((resolve) => {
+      resolveRefresh = resolve;
+    });
+
+    guard.mockReturnValue(refreshPromise);
+    primeAdminRouteContextCache(idleContext);
+    vi.advanceTimersByTime(30 * 60_000);
+
+    await expect(getAdminRouteContext()).resolves.toBe(idleContext);
+    expect(guard).toHaveBeenCalledTimes(1);
+
+    resolveRefresh(refreshedContext);
+    await refreshPromise;
+    await flushMicrotasks();
+
+    await expect(getAdminRouteContext()).resolves.toBe(refreshedContext);
+  });
+
   it("blocks on the server guard once cached context hard-expires", async () => {
     const staleContext = makeContext("expired");
     const reloadedContext = makeContext("reloaded");

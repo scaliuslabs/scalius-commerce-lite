@@ -34,7 +34,7 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **Loader Boundaries**: Route loaders should wait only for data needed to make the first paint correct. Products waits for the primary list, while category options and stats prefetch in the browser. Cache settings and inventory render stable loading states and use client-only prefetches for default reads instead of blocking navigation.
 
-**Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus or network reconnect. Only truly realtime screens opt in to `refetchOnWindowFocus` / `refetchOnReconnect`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns. Orders list auto-refresh is merchant-controlled and pauses while `document.hidden`; when the tab becomes visible again it performs one explicit refresh and resets the countdown.
+**Idle Tab Behavior**: The global QueryClient keeps warm data for 30 minutes but does not refetch every stale active query on window focus or network reconnect. The `/admin` route-context cache keeps already-verified auth/RBAC shell context fresh for 1 minute and stale-while-revalidated for up to 4 hours, so returning to an idle tab does not block the first in-app navigation on guard reads. UI paths that change the current user's profile, 2FA/security state, session, or permissions must call `refreshAdminRouteContext(router)`. Only truly realtime screens opt in to `refetchOnWindowFocus` / `refetchOnReconnect`, which prevents long-idle dashboard tabs from stampeding the API when the merchant returns. Orders list auto-refresh is merchant-controlled and pauses while `document.hidden`; when the tab becomes visible again it performs one explicit refresh and resets the countdown.
 
 **Order Detail Polling**: Order detail polls order and shipment data every 30 seconds for webhook-driven updates, but it intentionally inherits the global focus/reconnect defaults. Do not re-add focus or reconnect refetches there; the interval is enough, and idle-tab resume should not refresh the old order while the merchant navigates away.
 
@@ -78,6 +78,7 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 |------|---------|
 | `src/router.tsx` | Router config + SSR integration |
 | `src/lib/admin-query-client.ts` | QueryClient defaults for idle-tab/reconnect policy |
+| `src/lib/admin-route-context.ts` | Stale-while-revalidate admin shell auth/RBAC context |
 | `src/routes/__root.tsx` | Root route (HTML shell, CSS, providers) |
 | `src/routes/admin.tsx` | Admin layout (sidebar, SSR auth guard, RBAC context) |
 | `src/lib/api-functions/` | Typed domain server-function slices |
