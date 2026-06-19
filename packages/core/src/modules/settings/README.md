@@ -145,7 +145,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/allowed-countries` | Get allowed countries list and mode (include/exclude). Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
 | PUT | `/allowed-countries` | Save allowed countries with mode. Stores as JSON `{ countries: string[], mode: "include" | "exclude" }` in settings table (category=phone, key=allowed_countries) |
 | GET | `/notification-channels` | Get notification channel preferences per order status |
-| POST | `/notification-channels` | Save notification channel preferences. Normalizes and validates channels |
+| PUT | `/notification-channels` | Save notification channel preferences. Normalizes and validates channels |
 
 ### `business.ts` -- Business info & invoice settings
 | Method | Path | Description |

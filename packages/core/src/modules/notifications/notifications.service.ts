@@ -8,7 +8,7 @@ import { eq, sql, and, inArray } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext } from "../../integrations/email";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import type { OrderNotificationType } from "./notification-types";
+import { ORDER_NOTIFICATION_LABELS, type OrderNotificationType } from "./notification-types";
 
 // ─────────────────────────────────────────
 // Admin push notification
@@ -17,6 +17,7 @@ import type { OrderNotificationType } from "./notification-types";
 interface OrderNotificationData {
     id: string;
     customerName: string;
+    notificationType?: OrderNotificationType;
 }
 
 /**
@@ -70,10 +71,15 @@ export async function sendOrderNotification(
         const orderViewLink = `${baseUrl}/admin/orders/${order.id}`;
 
         const safeName = escapeHtml(order.customerName || "Unknown Customer");
+        const notificationType = order.notificationType ?? "order_created";
+        const label = ORDER_NOTIFICATION_LABELS[notificationType] ?? "Order Update";
+        const title = notificationType === "order_created"
+            ? "New Order Created!"
+            : label;
         const messagePayload = {
             notification: {
-                title: "New Order Created!",
-                body: `Order ${order.id} from ${safeName}. Click to view.`,
+                title,
+                body: `${label}: Order ${order.id} from ${safeName}. Click to view.`,
             },
             webpush: {
                 fcmOptions: {
@@ -83,6 +89,7 @@ export async function sendOrderNotification(
             data: {
                 orderId: order.id,
                 customerName: safeName,
+                notificationType,
                 link: orderViewLink,
             },
             tokens,

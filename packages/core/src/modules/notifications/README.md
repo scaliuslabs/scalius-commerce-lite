@@ -15,7 +15,7 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 
 ### FCM Push: Connected
 
-`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler calls it with `ctx.waitUntil()` for background execution.
+`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled.
 
 - Reads Firebase service account from `settings` table (category `firebase`, key `service_account`), falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
 - `getFirebaseAdminMessaging(env, serviceAccountJson?)` creates a new `FCMMessagingService` instance when DB credentials are provided, or returns a singleton for env-var credentials
@@ -24,9 +24,9 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 ### Order Emails: Connected
 
 The order email flow is fully connected:
-1. Admin updates order status via `PATCH /admin/orders/:id/status`
+1. Admin, storefront, payment, COD, or delivery webhook code commits an order lifecycle change
 2. `updateOrderStatus()` returns a `notification` object with email/name/type
-3. Route enqueues `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
+3. Route or queue producer enqueues `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
 4. Queue consumer (`queue-consumer.ts`) matches `order.notification` and calls `sendOrderNotificationEmail()`
 5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via the active email provider. Cloudflare Email is the native default, with Resend available as the external fallback.
 
@@ -41,7 +41,7 @@ Sends FCM push notifications to all active admin devices about a new order.
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
 - Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.
 - Auto-deactivates invalid tokens (unregistered or invalid registration) in the database
-- Designed for `ctx.waitUntil()` -- catches all errors internally to prevent unhandled rejections
+- Catches all errors internally so admin push failures do not make an otherwise successful customer notification queue message retry
 - All catch blocks use typed `error: unknown` with `instanceof Error` checks
 
 ### `sendOrderNotificationEmail(email, name, orderId, type, data?, db?)`
@@ -74,11 +74,13 @@ Uses inline HTML templates with basic responsive styling. Customer names and tra
 The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification-related message types:
 
 ### `order.notification`
-- Enqueued by: `updateOrderStatus()` for all 9 notification statuses (pending, confirmed, processing, shipped, delivered, completed, cancelled, returned, refunded)
+- Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
 - Handler: Calls `sendOrderNotificationEmail()` if `customerEmail` is present (with `db` for channel checking -- dispatches independently to email, SMS, WhatsApp, push), and `sendOrderNotification()` for FCM push to admin devices
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: Cloudflare auto-retry up to 3 times, 30s delay on failure
 - Channel independence: each channel (email, SMS, WhatsApp, push) is dispatched independently -- failure in one does not affect others
+
+Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
 
 ### `auth.send_otp`
 - Enqueued by: Customer auth flow

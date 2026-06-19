@@ -2,7 +2,7 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { getShipment, deleteShipmentRecord, checkShipmentStatus } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { deliveryShipments, orders } from "@scalius/database/schema";
+import { deliveryShipments } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 
@@ -11,6 +11,7 @@ import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import { enqueueOrderStatusChangeNotification } from "../../utils/order-notification-queue";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -142,37 +143,13 @@ app.openapi(checkStatusRoute, (async (c: AdminRouteContext<typeof checkStatusRou
     );
     await invalidateProductAvailabilityCaches(db, { orderIds: [currentShipment.orderId] }, c);
 
-    // Enqueue customer notification only for actual order status changes.
-    if (orderStatusUpdate && orderStatusUpdate.newStatus && c.env.ORDER_NOTIFICATIONS_QUEUE) {
-        const DELIVERY_NOTIFICATION_MAP: Record<string, string> = {
-            shipped: "order_shipped",
-            delivered: "order_delivered",
-            returned: "order_returned",
-            cancelled: "order_cancelled",
-        };
-        const notifType = DELIVERY_NOTIFICATION_MAP[orderStatusUpdate.newStatus];
-        if (notifType) {
-            try {
-                const order = await db.select({
-                    customerEmail: orders.customerEmail,
-                    customerName: orders.customerName,
-                }).from(orders).where(eq(orders.id, orderStatusUpdate.orderId)).get();
-
-                if (order) {
-                    await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
-                        type: "order.notification",
-                        orderId: orderStatusUpdate.orderId,
-                        customerEmail: order.customerEmail ?? undefined,
-                        customerName: order.customerName,
-                        notificationType: notifType,
-                        data: currentShipment.trackingId ? { trackingId: currentShipment.trackingId } : undefined,
-                    });
-                }
-            } catch (notifErr) {
-                console.error(`[shipments] Failed to enqueue notification:`, notifErr);
-            }
-        }
-    }
+    await enqueueOrderStatusChangeNotification({
+        db,
+        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        statusChange: orderStatusUpdate,
+        trackingId: result.trackingId ?? currentShipment.trackingId,
+        source: "shipments",
+    });
 
     if (result.status !== previousStatus) {
         return ok(c, {

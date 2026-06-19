@@ -175,64 +175,6 @@ export async function updateOrderStatusFromShipment(
 }
 
 /**
- * Sends a notification about a shipment status change (placeholder for future implementation)
- * @param db - The database instance
- * @param shipmentId - The ID of the shipment
- * @param previousStatus - The previous status
- * @param newStatus - The new status
- */
-export async function notifyShipmentStatusChange(
-  db: Database,
-  shipmentId: string,
-  previousStatus: string,
-  newStatus: string,
-) {
-  try {
-    // Get the shipment
-    const [shipment] = await db
-      .select()
-      .from(deliveryShipments)
-      .where(eq(deliveryShipments.id, shipmentId));
-
-    if (!shipment) {
-      console.error(`Shipment with ID ${shipmentId} not found`);
-      return;
-    }
-
-    // Get the order
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, shipment.orderId));
-
-    if (!order) {
-      console.error(`Order with ID ${shipment.orderId} not found`);
-      return;
-    }
-
-    // This is a placeholder for future notification implementation
-    // Here you would integrate with a notification service like SMS, email, etc.
-    console.log(
-      `Status change notification for shipment ${shipmentId} (Order #${order.id}): ${previousStatus} -> ${newStatus}`,
-    );
-
-    // Return notification info
-    return {
-      shipmentId,
-      orderId: order.id,
-      customerPhone: order.customerPhone,
-      customerEmail: order.customerEmail,
-      previousStatus,
-      newStatus,
-      timestamp: new Date(),
-    };
-  } catch (error: unknown) {
-    console.error("Error sending status change notification:", error);
-    return null;
-  }
-}
-
-/**
  * Get the public tracking URL for a shipment.
  *
  * @param providerType - The courier provider type (pathao, steadfast)

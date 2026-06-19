@@ -11,7 +11,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `factory.ts` | `createProvider()` -- factory that parses credentials (with optional AES-GCM decryption via `decryptCredentialsGraceful()`) and config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
-| `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`), `notifyShipmentStatusChange()` placeholder, `getTrackingUrl()` |
+| `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`), `getTrackingUrl()` |
 | `status-mapper.ts` | `mapProviderStatus()` + `ShipmentStatusCode` enum -- normalizes provider-specific statuses to 14 canonical codes |
 | `locations.ts` | Location CRUD and external ID resolution functions |
 | `pathao-location-import.ts` | Chunked bulk import of Pathao cities/zones/areas (excluded from barrel exports) |
@@ -40,7 +40,6 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | Function | Signature | Notes |
 |----------|-----------|-------|
 | `updateOrderStatusFromShipment` | `(db, shipmentId, newStatus)` | Maps shipment status to order status, CAS update on `orders.version` first when status changes, then applies inventory side-effects via `applyInventoryForStatusChange()`. Same-status retries still reconcile stale inventory. Concurrent admin changes take priority (CAS conflict is logged and skipped). |
-| `notifyShipmentStatusChange` | `(db, shipmentId, previousStatus, newStatus)` | Placeholder -- logs to console |
 | `getTrackingUrl` | `(providerType, trackingId)` | Returns tracking URL for Pathao or Steadfast, null for others |
 
 ## Location Functions (`locations.ts`)
@@ -106,6 +105,8 @@ Single format: 11 mappings including `_approval_pending` suffixes. Normalized to
 | `pending`, `on_hold`, `unknown` | No order change | Shipment-only state |
 
 Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries can repair stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
+
+Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `ORDER_NOTIFICATIONS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added.
 
 ### Tracking URLs
 - Pathao: `https://merchant.pathao.com/tracking?consignment_id={trackingId}`

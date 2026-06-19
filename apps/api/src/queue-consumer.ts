@@ -457,6 +457,7 @@ async function processQueueMessage(
           await sendOrderNotification(db, {
             id: payload.orderId,
             customerName: payload.customerName,
+            notificationType: payload.notificationType,
           }, env, requestUrl);
         }
       } catch (fcmError) {
