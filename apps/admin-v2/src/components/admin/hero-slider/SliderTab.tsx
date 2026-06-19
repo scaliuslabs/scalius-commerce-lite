@@ -1,35 +1,20 @@
-import { useState } from "react";
-import { createPortal } from "react-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import { Card, CardContent } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
-import { Image as ImageIcon, Plus } from "lucide-react";
+import { GripVertical, Image as ImageIcon, Plus } from "lucide-react";
 import { MediaManager } from "../media-manager";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  defaultDropAnimationSideEffects,
-  type DragStartEvent,
-  type DragEndEvent,
-  type DragOverEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { SortableSlide } from "./SortableSlide";
-import { SlideOverlay } from "./SlideOverlay";
+import { SlideRow } from "./SlideRow";
 import type { HeroSlider, SliderImage, MediaFile } from "./helpers";
 import { generateImageId } from "./helpers";
+
+const SortableSlidesEditor = lazy(() =>
+  import("./SortableSlidesEditor").then((module) => ({
+    default: module.SortableSlidesEditor,
+  })),
+);
 
 interface SliderTabProps {
   type: "desktop" | "mobile";
@@ -48,14 +33,13 @@ export function SliderTab({
   onUpdateImageLocal,
   setSlider,
 }: SliderTabProps) {
-  const [activeDragItem, setActiveDragItem] = useState<SliderImage | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
+  useEffect(() => {
+    if ((slider?.images.length ?? 0) < 2 && isReordering) {
+      setIsReordering(false);
+    }
+  }, [isReordering, slider?.images.length]);
 
   const handleAddImages = (files: MediaFile[]) => {
     if (!slider) return;
@@ -78,32 +62,6 @@ export function SliderTab({
     onUpdate(type, {
       images: slider.images.filter((img) => img.id !== imageId),
     });
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const item = slider?.images.find((i) => i.id === event.active.id);
-    if (item) {
-      setActiveDragItem(item);
-    }
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id || !slider) return;
-
-    const activeIndex = slider.images.findIndex((i) => i.id === active.id);
-    const overIndex = slider.images.findIndex((i) => i.id === over.id);
-
-    if (activeIndex !== overIndex) {
-      const newImages = arrayMove(slider.images, activeIndex, overIndex);
-      setSlider({ ...slider, images: newImages });
-    }
-  };
-
-  const handleDragEnd = (_event: DragEndEvent) => {
-    setActiveDragItem(null);
-    if (!slider) return;
-    onUpdate(type, { images: slider.images });
   };
 
   if (!slider) {
@@ -157,72 +115,94 @@ export function SliderTab({
           </Badge>
         </div>
 
-        <MediaManager
-          onSelect={(file) => handleAddImages([file])}
-          onSelectMultiple={(files) => handleAddImages(files)}
-          trigger={
-            <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Slide Image
+        <div className="flex flex-wrap items-center gap-2">
+          {slider.images.length > 1 && (
+            <Button
+              type="button"
+              size="sm"
+              variant={isReordering ? "secondary" : "outline"}
+              className="gap-2"
+              onClick={() => setIsReordering((value) => !value)}
+            >
+              <GripVertical className="h-4 w-4" />
+              {isReordering ? "Done" : "Reorder"}
             </Button>
-          }
-        />
+          )}
+
+          <MediaManager
+            onSelect={(file) => handleAddImages([file])}
+            onSelectMultiple={(files) => handleAddImages(files)}
+            trigger={
+              <Button size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Slide Image
+              </Button>
+            }
+          />
+        </div>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={slider.images.map((img) => img.id)}
-          strategy={verticalListSortingStrategy}
+      {slider.images.length === 0 ? (
+        <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/10">
+          <p className="text-muted-foreground text-sm">
+            No images added yet. Click &quot;Add Slide Image&quot; to begin.
+          </p>
+        </div>
+      ) : isReordering ? (
+        <Suspense
+          fallback={
+            <SlideRows
+              images={slider.images}
+              type={type}
+              onRemove={handleRemoveImage}
+              onUpdate={(id, u) => onUpdateImageLocal(type, id, u)}
+            />
+          }
         >
-          <div className="space-y-3">
-            {slider.images.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/10">
-                <p className="text-muted-foreground text-sm">
-                  No images added yet. Click &quot;Add Slide Image&quot; to
-                  begin.
-                </p>
-              </div>
-            ) : (
-              slider.images.map((image, index) => (
-                <SortableSlide
-                  key={image.id}
-                  image={image}
-                  index={index}
-                  type={type}
-                  onRemove={handleRemoveImage}
-                  onUpdate={(id, u) => onUpdateImageLocal(type, id, u)}
-                />
-              ))
-            )}
-          </div>
-        </SortableContext>
+          <SortableSlidesEditor
+            type={type}
+            slider={slider}
+            onUpdate={onUpdate}
+            onUpdateImageLocal={onUpdateImageLocal}
+            onRemove={handleRemoveImage}
+            setSlider={setSlider}
+          />
+        </Suspense>
+      ) : (
+        <SlideRows
+          images={slider.images}
+          type={type}
+          onRemove={handleRemoveImage}
+          onUpdate={(id, u) => onUpdateImageLocal(type, id, u)}
+        />
+      )}
+    </div>
+  );
+}
 
-        {typeof document !== "undefined" &&
-          createPortal(
-            <DragOverlay
-              dropAnimation={{
-                sideEffects: defaultDropAnimationSideEffects({
-                  styles: {
-                    active: {
-                      opacity: "0.4",
-                    },
-                  },
-                }),
-              }}
-            >
-              {activeDragItem && (
-                <SlideOverlay image={activeDragItem} type={type} />
-              )}
-            </DragOverlay>,
-            document.body,
-          )}
-      </DndContext>
+function SlideRows({
+  images,
+  type,
+  onRemove,
+  onUpdate,
+}: {
+  images: SliderImage[];
+  type: "desktop" | "mobile";
+  onRemove: (id: string) => void;
+  onUpdate: (id: string, updates: Partial<SliderImage>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {images.map((image, index) => (
+        <SlideRow
+          key={image.id}
+          image={image}
+          index={index}
+          type={type}
+          onRemove={onRemove}
+          onUpdate={onUpdate}
+        />
+      ))}
     </div>
   );
 }

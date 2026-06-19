@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Image as ImageIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDebouncedCallback } from "~/hooks/use-debounced-callback";
-import { SliderTab } from "./SliderTab";
 import type { HeroSlider, SliderImage } from "./helpers";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
@@ -11,6 +10,12 @@ import {
   createHeroSlider,
   updateHeroSlider,
 } from "~/lib/api-functions/hero-sliders";
+
+const SliderTab = lazy(() =>
+  import("./SliderTab").then((module) => ({
+    default: module.SliderTab,
+  })),
+);
 
 export function HeroSliderContainer() {
   const [desktopSlider, setDesktopSlider] = useState<HeroSlider | null>(null);
@@ -163,30 +168,46 @@ export function HeroSliderContainer() {
           value="desktop"
           className="animate-in fade-in-50 slide-in-from-bottom-2 duration-300"
         >
-          <SliderTab
-            type="desktop"
-            slider={desktopSlider}
-            onCreate={handleCreate}
-            onUpdate={handleUpdate}
-            onUpdateImageLocal={handleUpdateImageLocal}
-            setSlider={setDesktopSlider}
-          />
+          <Suspense fallback={<SliderTabFallback />}>
+            <SliderTab
+              type="desktop"
+              slider={desktopSlider}
+              onCreate={handleCreate}
+              onUpdate={handleUpdate}
+              onUpdateImageLocal={handleUpdateImageLocal}
+              setSlider={setDesktopSlider}
+            />
+          </Suspense>
         </TabsContent>
 
         <TabsContent
           value="mobile"
           className="animate-in fade-in-50 slide-in-from-bottom-2 duration-300"
         >
-          <SliderTab
-            type="mobile"
-            slider={mobileSlider}
-            onCreate={handleCreate}
-            onUpdate={handleUpdate}
-            onUpdateImageLocal={handleUpdateImageLocal}
-            setSlider={setMobileSlider}
-          />
+          <Suspense fallback={<SliderTabFallback />}>
+            <SliderTab
+              type="mobile"
+              slider={mobileSlider}
+              onCreate={handleCreate}
+              onUpdate={handleUpdate}
+              onUpdateImageLocal={handleUpdateImageLocal}
+              setSlider={setMobileSlider}
+            />
+          </Suspense>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function SliderTabFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="rounded-lg border bg-muted/10 p-4 space-y-4"
+    >
+      <div className="h-9 w-48 rounded-md bg-muted/60" />
+      <div className="h-28 rounded-xl border border-dashed bg-background/60" />
     </div>
   );
 }
