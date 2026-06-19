@@ -13,6 +13,10 @@ import { successEnvelope, messageResponse, errorResponses } from "../../schemas/
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import {
+    enqueueOrderNotificationsForStatus,
+    enqueueOrderStatusChangeNotification,
+} from "../../utils/order-notification-queue";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -401,6 +405,19 @@ app.openapi(createShipmentRoute, async (c) => {
     const now = new Date();
     await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, createdShipmentRecord.id));
 
+    if (shipmentResult.shipment) {
+        await enqueueOrderNotificationsForStatus({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            orderIds: [orderId],
+            newStatus: "shipped",
+            trackingByOrderId: createdShipmentRecord.trackingId
+                ? { [orderId]: createdShipmentRecord.trackingId }
+                : undefined,
+            source: "orders-shipment-create",
+        });
+    }
+
     const enhancedShipment = {
         ...createdShipmentRecord,
         providerName: provider?.name || createdShipmentRecord.providerType,
@@ -552,6 +569,13 @@ app.openapi(refreshShipmentRoute, async (c) => {
     try {
         const orderUpdate = await updateOrderStatusFromShipment(db, shipmentId, updatedShipment.status);
         await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
+        await enqueueOrderStatusChangeNotification({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            statusChange: orderUpdate,
+            trackingId: updatedShipment.trackingId,
+            source: "orders-shipment-refresh",
+        });
         orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
     } catch (e: unknown) {
         console.error("Error updating order status:", e);

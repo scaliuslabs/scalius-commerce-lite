@@ -23,6 +23,7 @@ import {
     tryResolveProductAvailabilityCacheSubjects,
 } from "../../utils/cache-invalidation";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
+import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -35,6 +36,16 @@ function isSuccessfulOrderResult(result: unknown): result is { success: true; or
         && result !== null
         && (result as Record<string, unknown>).success === true
         && typeof (result as Record<string, unknown>).orderId === "string";
+}
+
+function isNewShipmentResult(result: unknown): result is {
+    success: true;
+    orderId: string;
+    shipment: { data?: { trackingId?: string | null } };
+} {
+    return isSuccessfulOrderResult(result)
+        && typeof (result as Record<string, unknown>).shipment === "object"
+        && (result as Record<string, unknown>).shipment !== null;
 }
 
 // Mount sub-routers
@@ -268,32 +279,21 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
     const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
     const successCount = results.filter((r) => r.success).length;
     const successfulOrderIds = results.filter(isSuccessfulOrderResult).map((r) => r.orderId);
+    const newlyShippedResults = results.filter(isNewShipmentResult);
     await invalidateProductAvailabilityCaches(db, { orderIds: successfulOrderIds }, c);
 
-    // Enqueue order_shipped notifications for each successfully shipped order
-    if (c.env.ORDER_NOTIFICATIONS_QUEUE) {
-        if (successfulOrderIds.length > 0) {
-            const orderRows = await db.select({
-                id: orders.id,
-                customerEmail: orders.customerEmail,
-                customerName: orders.customerName,
-            }).from(orders).where(inArray(orders.id, successfulOrderIds)).all();
-
-            for (const order of orderRows) {
-                try {
-                    await c.env.ORDER_NOTIFICATIONS_QUEUE.send({
-                        type: "order.notification",
-                        orderId: order.id,
-                        customerEmail: order.customerEmail ?? undefined,
-                        customerName: order.customerName,
-                        notificationType: "order_shipped",
-                    });
-                } catch (notifErr: unknown) {
-                    console.error(`[bulk-ship] Failed to enqueue notification for ${order.id}:`, notifErr);
-                }
-            }
-        }
-    }
+    await enqueueOrderNotificationsForStatus({
+        db,
+        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        orderIds: newlyShippedResults.map((result) => result.orderId),
+        newStatus: "shipped",
+        trackingByOrderId: Object.fromEntries(
+            newlyShippedResults
+                .map((result) => [result.orderId, result.shipment.data?.trackingId] as const)
+                .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0),
+        ),
+        source: "bulk-ship",
+    });
 
     return ok(c, {
         totalProcessed: results.length,

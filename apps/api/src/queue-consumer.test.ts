@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getActiveSmsProvider: vi.fn(),
   getEncryptionKey: vi.fn(() => "test-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
+  getAdminNotificationChannels: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -57,6 +58,10 @@ vi.mock("./utils/encryption-key", () => ({
 
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+}));
+
+vi.mock("@scalius/core/modules/settings/settings.service", () => ({
+  getAdminNotificationChannels: mocks.getAdminNotificationChannels,
 }));
 
 import { handleQueueBatch, type PaymentQueueMessage } from "./queue-consumer";
@@ -139,6 +144,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.getAdminNotificationChannels.mockResolvedValue({});
   });
 
   it("retries confirmed payment messages when processing returns an unsuccessful result", async () => {
@@ -291,6 +297,35 @@ describe("handleQueueBatch payment confirmation retries", () => {
           CREDENTIAL_ENCRYPTION_KEY: "credential-key",
         },
       },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes notification type to admin push dispatch when push is enabled", async () => {
+    mocks.getAdminNotificationChannels.mockResolvedValue({
+      order_shipped: ["push"],
+    });
+    const message = createMessage({
+      type: "order.notification",
+      orderId: "order-shipped",
+      customerName: "Push Customer",
+      notificationType: "order_shipped",
+      data: { trackingId: "TRK-1" },
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      PUBLIC_API_BASE_URL: "https://api.example.test",
+    } as Env);
+
+    expect(mocks.sendOrderNotification).toHaveBeenCalledWith(
+      { id: "db" },
+      {
+        id: "order-shipped",
+        customerName: "Push Customer",
+        notificationType: "order_shipped",
+      },
+      { PUBLIC_API_BASE_URL: "https://api.example.test" },
+      "https://api.example.test",
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
   });

@@ -51,6 +51,23 @@ function timingSafeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
+function parseWebhookObject(value: string, label: string, providerType: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      console.warn(`[webhook-auth] [${providerType}] ${label} must be a JSON object`);
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch (error: unknown) {
+    console.warn(
+      `[webhook-auth] [${providerType}] Invalid ${label} JSON:`,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
 /**
  * Verify a delivery webhook request against the stored provider credentials.
  *
@@ -86,10 +103,27 @@ export async function verifyDeliveryWebhook(
   const rawCreds = provider.credentials
     ? await decryptCredentialsGraceful(provider.credentials, encryptionKey)
     : "{}";
-  const credentials: Record<string, unknown> = JSON.parse(rawCreds);
-  const config: Record<string, unknown> = provider.config
-    ? JSON.parse(provider.config)
+  const credentials = parseWebhookObject(rawCreds, "credentials", providerType);
+  if (!credentials) {
+    return {
+      verified: false,
+      credentials: null,
+      config: null,
+      reason: "Invalid provider credentials",
+    };
+  }
+
+  const config = provider.config
+    ? parseWebhookObject(provider.config, "config", providerType)
     : {};
+  if (!config) {
+    return {
+      verified: false,
+      credentials,
+      config: null,
+      reason: "Invalid provider config",
+    };
+  }
 
   // --- Strategy 1: Provider-specific signature/token verification ---
   const webhookSecret = (credentials.webhookSecret ?? credentials.secretKey) as string | undefined;

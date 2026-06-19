@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
     getActiveSmsProvider: vi.fn(),
     sendEmail: vi.fn(),
     sendSms: vi.fn(),
+    getFirebaseAdminMessaging: vi.fn(),
+    sendEachForMulticast: vi.fn(),
 }));
 
 vi.mock("../settings/settings.service", () => ({
@@ -20,7 +22,11 @@ vi.mock("../../integrations/email", () => ({
     sendEmail: mocks.sendEmail,
 }));
 
-import { sendOrderNotificationEmail } from "./notifications.service";
+vi.mock("../../integrations/firebase/admin", () => ({
+    getFirebaseAdminMessaging: mocks.getFirebaseAdminMessaging,
+}));
+
+import { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 import { ORDER_NOTIFICATION_TYPES } from "./notification-types";
 
 function createDb(customerPhone = "+8801700000000"): Database {
@@ -40,6 +46,14 @@ describe("order notification dispatch", () => {
         vi.clearAllMocks();
         vi.spyOn(console, "log").mockImplementation(() => undefined);
         vi.spyOn(console, "error").mockImplementation(() => undefined);
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        mocks.getFirebaseAdminMessaging.mockReturnValue({
+            sendEachForMulticast: mocks.sendEachForMulticast,
+        });
+        mocks.sendEachForMulticast.mockResolvedValue({
+            failureCount: 0,
+            responses: [],
+        });
     });
 
     it("keeps the shared notification type list complete", () => {
@@ -124,5 +138,41 @@ describe("order notification dispatch", () => {
                 encryptionKey: "credential-key",
             },
         );
+    });
+
+    it("labels admin push payloads by notification type", async () => {
+        const tokenRows = [{ token: "fcm_token_1" }];
+        const db = {
+            select: vi.fn(() => ({
+                from: vi.fn(() => ({
+                    where: vi.fn(() => ({
+                        get: vi.fn(async () => null),
+                        then: (resolve: (value: typeof tokenRows) => void) => Promise.resolve(tokenRows).then(resolve),
+                    })),
+                })),
+            })),
+        } as unknown as Database;
+
+        await sendOrderNotification(
+            db,
+            {
+                id: "order_1",
+                customerName: "Push Customer",
+                notificationType: "order_delivered",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+        );
+
+        expect(mocks.sendEachForMulticast).toHaveBeenCalledWith(expect.objectContaining({
+            notification: {
+                title: "Order Delivered",
+                body: "Order Delivered: Order order_1 from Push Customer. Click to view.",
+            },
+            data: expect.objectContaining({
+                orderId: "order_1",
+                notificationType: "order_delivered",
+            }),
+        }));
     });
 });

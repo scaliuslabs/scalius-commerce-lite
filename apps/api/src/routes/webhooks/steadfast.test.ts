@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventFailed: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
   invalidateProductAvailabilityCaches: vi.fn(),
+  enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
 vi.mock("../../middleware/webhook-auth", () => ({
@@ -30,6 +31,10 @@ vi.mock("@scalius/core/modules/delivery/tracking", () => ({
 
 vi.mock("../../utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+}));
+
+vi.mock("../../utils/order-notification-queue", () => ({
+  enqueueOrderStatusChangeNotification: mocks.enqueueOrderStatusChangeNotification,
 }));
 
 import { buildSteadfastWebhookDedupKey, steadfastWebhookRoutes } from "./steadfast";
@@ -90,6 +95,7 @@ describe("Steadfast webhook idempotency keys", () => {
     mocks.markWebhookEventProcessed.mockResolvedValue(undefined);
     mocks.markWebhookEventFailed.mockResolvedValue(undefined);
     mocks.updateOrderStatusFromShipment.mockResolvedValue(null);
+    mocks.enqueueOrderStatusChangeNotification.mockResolvedValue(null);
   });
 
   it("includes delivery status so later status changes are not deduplicated", () => {
@@ -173,6 +179,55 @@ describe("Steadfast webhook idempotency keys", () => {
       { orderIds: ["order_1"] },
       expect.anything(),
     );
+    expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
+      db,
+      queue: undefined,
+      statusChange: null,
+      trackingId: "INV-1",
+      source: "steadfast-webhook",
+    });
+  });
+
+  it("enqueues a customer notification after a real order status change", async () => {
+    const statusChange = {
+      orderId: "order_1",
+      previousStatus: "shipped",
+      newStatus: "delivered",
+    };
+    mocks.updateOrderStatusFromShipment.mockResolvedValue(statusChange);
+    const queue = { send: vi.fn() };
+    const { db } = createDbMock({
+      id: "shipment_1",
+      orderId: "order_1",
+      externalId: "123",
+      trackingId: "INV-1",
+      status: "in_transit",
+      metadata: "{}",
+    });
+    const app = createApp(db);
+
+    const response = await app.request(
+      "/",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          notification_type: "delivery_status",
+          consignment_id: 123,
+          invoice: "INV-1",
+          status: "delivered",
+        }),
+      },
+      { ORDER_NOTIFICATIONS_QUEUE: queue } as unknown as Env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
+      db,
+      queue,
+      statusChange,
+      trackingId: "INV-1",
+      source: "steadfast-webhook",
+    });
   });
 
   it("skips duplicate durable delivery-status events before shipment updates", async () => {
