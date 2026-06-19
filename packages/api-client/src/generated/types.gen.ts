@@ -22063,6 +22063,11 @@ export type GetApiV1AdminSettingsNotificationChannelsResponses = {
             channels: {
                 [key: string]: Array<string>;
             };
+            whatsappTemplate: {
+                templateName: string;
+                languageCode: string;
+            };
+            whatsappConfigured: boolean;
         };
     };
 };
@@ -22073,6 +22078,10 @@ export type PutApiV1AdminSettingsNotificationChannelsData = {
     body?: {
         channels: {
             [key: string]: Array<string>;
+        };
+        whatsappTemplate?: {
+            templateName: string;
+            languageCode: string;
         };
     };
     path?: never;
@@ -22161,6 +22170,11 @@ export type PutApiV1AdminSettingsNotificationChannelsResponses = {
             channels: {
                 [key: string]: Array<string>;
             };
+            whatsappTemplate: {
+                templateName: string;
+                languageCode: string;
+            };
+            whatsappConfigured: boolean;
         };
     };
 };

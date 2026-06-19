@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Save, Bell, ShieldCheck } from "lucide-react";
 import {
@@ -40,9 +42,15 @@ const ADMIN_CHANNELS = [
   { key: "push", label: "Push" },
 ] as const;
 
+const DEFAULT_WHATSAPP_TEMPLATE = {
+  templateName: "order_status_update",
+  languageCode: "en_US",
+};
+
 type StatusKey = OrderNotificationType;
 type ChannelKey = (typeof CHANNELS)[number]["key"];
 type ChannelConfig = Record<StatusKey, Record<ChannelKey, boolean>>;
+type WhatsAppTemplateConfig = typeof DEFAULT_WHATSAPP_TEMPLATE;
 
 type AdminStatusKey = OrderNotificationType;
 type AdminChannelKey = (typeof ADMIN_CHANNELS)[number]["key"];
@@ -73,6 +81,8 @@ function getDefaultAdminConfig(): AdminChannelConfig {
 
 export function NotificationChannelsBuilder() {
   const [channels, setChannels] = useState<ChannelConfig>(getDefaultConfig());
+  const [whatsAppTemplate, setWhatsAppTemplate] = useState<WhatsAppTemplateConfig>(DEFAULT_WHATSAPP_TEMPLATE);
+  const [isWhatsAppConfigured, setIsWhatsAppConfigured] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -83,7 +93,13 @@ export function NotificationChannelsBuilder() {
   useEffect(() => {
     async function loadCustomerChannels() {
       try {
-        const data = await getNotificationChannels() as { channels?: Record<string, string[]> };
+        const data = await getNotificationChannels() as {
+          channels?: Record<string, string[]>;
+          whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
+          whatsappConfigured?: boolean;
+        };
+        const whatsappConfigured = Boolean(data?.whatsappConfigured);
+        setIsWhatsAppConfigured(whatsappConfigured);
         const channelData = data?.channels;
         if (channelData && typeof channelData === "object") {
           const config = getDefaultConfig();
@@ -91,11 +107,19 @@ export function NotificationChannelsBuilder() {
             const enabledChannels = channelData[status.key];
             if (Array.isArray(enabledChannels)) {
               for (const ch of CHANNELS) {
-                config[status.key][ch.key] = enabledChannels.includes(ch.key);
+                config[status.key][ch.key] = ch.key === "whatsapp" && !whatsappConfigured
+                  ? false
+                  : enabledChannels.includes(ch.key);
               }
             }
           }
           setChannels(config);
+        }
+        if (data?.whatsappTemplate) {
+          setWhatsAppTemplate({
+            templateName: data.whatsappTemplate.templateName || DEFAULT_WHATSAPP_TEMPLATE.templateName,
+            languageCode: data.whatsappTemplate.languageCode || DEFAULT_WHATSAPP_TEMPLATE.languageCode,
+          });
         }
       } catch {
         // Use defaults on error
@@ -136,7 +160,9 @@ export function NotificationChannelsBuilder() {
       ...prev,
       [status]: {
         ...prev[status],
-        [channel]: !prev[status][channel],
+        [channel]: channel === "whatsapp" && !isWhatsAppConfigured
+          ? false
+          : !prev[status][channel],
       },
     }));
   };
@@ -163,7 +189,15 @@ export function NotificationChannelsBuilder() {
           .filter((ch) => statusChannels?.[ch.key])
           .map((ch) => ch.key);
       }
-      await updateNotificationChannels({ data: { channels: apiChannels } });
+      await updateNotificationChannels({
+        data: {
+          channels: apiChannels,
+          whatsappTemplate: {
+            templateName: whatsAppTemplate.templateName.trim() || DEFAULT_WHATSAPP_TEMPLATE.templateName,
+            languageCode: whatsAppTemplate.languageCode.trim() || DEFAULT_WHATSAPP_TEMPLATE.languageCode,
+          },
+        },
+      });
       toast.success("Notification channels saved");
     } catch (error: unknown) {
       toast.error("Failed to save", {
@@ -219,6 +253,39 @@ export function NotificationChannelsBuilder() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
+            <div className="space-y-2">
+              <Label htmlFor="order-whatsapp-template">WhatsApp order template</Label>
+              <Input
+                id="order-whatsapp-template"
+                value={whatsAppTemplate.templateName}
+                onChange={(event) =>
+                  setWhatsAppTemplate((prev) => ({
+                    ...prev,
+                    templateName: event.target.value,
+                  }))
+                }
+                placeholder="order_status_update"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="order-whatsapp-language">Language</Label>
+              <Input
+                id="order-whatsapp-language"
+                value={whatsAppTemplate.languageCode}
+                onChange={(event) =>
+                  setWhatsAppTemplate((prev) => ({
+                    ...prev,
+                    languageCode: event.target.value,
+                  }))
+                }
+                placeholder="en_US"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -247,6 +314,7 @@ export function NotificationChannelsBuilder() {
                       <td key={ch.key} className="text-center py-3 px-4">
                         <Checkbox
                           checked={channels[status.key]?.[ch.key] ?? false}
+                          disabled={ch.key === "whatsapp" && !isWhatsAppConfigured}
                           onCheckedChange={() =>
                             handleToggle(status.key, ch.key)
                           }

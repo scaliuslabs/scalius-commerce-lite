@@ -20,7 +20,10 @@ Central store configuration: site settings (singleton row), key-value settings, 
 | `getSiteSettings` | `(db, kv?) => Promise<row>` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
 | `invalidateSiteSettingsCache` | `(kv?) => Promise<void>` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
 | `getNotificationChannels` | `(db) => Promise<Record<string, string[]>>` | Returns notification channel preferences per order status. Normalizes both string-array format (canonical) and boolean-map format (from UI). Defaults to email-only for all 9 shared order notification types |
-| `updateNotificationChannels` | `(db, input) => Promise<Record<string, string[]>>` | Saves notification channel preferences. Accepts both UI format (boolean maps, possibly wrapped in `{ channels }`) and canonical format (string arrays). Validates channels against known set (`email`, `sms`, `whatsapp`, `push`). Stores via `upsertSetting()` under category `notifications`, key `order_channels` |
+| `updateNotificationChannels` | `(db, input) => Promise<Record<string, string[]>>` | Saves notification channel preferences. Accepts both UI format (boolean maps, possibly wrapped in `{ channels }`) and canonical format (string arrays). Validates channels against known set (`email`, `sms`, `whatsapp`, `push`) and rejects WhatsApp enables unless Meta Cloud API credentials are configured. Stores via `upsertSetting()` under category `notifications`, key `order_channels` |
+| `getOrderWhatsAppTemplateSettings` | `(db) => Promise<OrderWhatsAppTemplateSettings>` | Reads order WhatsApp template name/language from `settings.notifications`, defaulting to `order_status_update` / `en_US` |
+| `updateOrderWhatsAppTemplateSettings` | `(db, input) => Promise<OrderWhatsAppTemplateSettings>` | Validates and saves order WhatsApp template name/language under `whatsapp_order_template_name` and `whatsapp_order_template_language` |
+| `isWhatsAppCloudApiConfigured` | `(db) => Promise<boolean>` | Checks whether `site_settings.whatsapp_access_token` and `whatsapp_phone_number_id` are present before WhatsApp order channels can be enabled |
 
 ### Default Notification Channels
 
@@ -122,7 +125,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, whatsapp OTP fields. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `notifications` (order_channels), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 ## API Endpoints (Admin)
 
@@ -144,8 +147,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/storefront-url` | Save storefrontUrl. Invalidates layout cache + site settings KV |
 | GET | `/allowed-countries` | Get allowed countries list and mode (include/exclude). Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
 | PUT | `/allowed-countries` | Save allowed countries with mode. Stores as JSON `{ countries: string[], mode: "include" | "exclude" }` in settings table (category=phone, key=allowed_countries) |
-| GET | `/notification-channels` | Get notification channel preferences per order status |
-| PUT | `/notification-channels` | Save notification channel preferences. Normalizes and validates channels |
+| GET | `/notification-channels` | Get notification channel preferences per order status, order WhatsApp template settings, and `whatsappConfigured` |
+| PUT | `/notification-channels` | Save notification channel preferences and optional order WhatsApp template settings. Normalizes channels, validates template names/language codes, and rejects WhatsApp channels until Meta credentials exist |
 
 ### `business.ts` -- Business info & invoice settings
 | Method | Path | Description |

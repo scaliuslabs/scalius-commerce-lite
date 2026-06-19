@@ -167,6 +167,11 @@ export type UpdatePaymentGatewaySettingsInput = PaymentGatewaySettingsInput & {
 };
 export interface NotificationChannelsPayload {
   channels: Record<string, string[]>;
+  whatsappTemplate?: {
+    templateName: string;
+    languageCode: string;
+  };
+  whatsappConfigured?: boolean;
 }
 export type UpdateNotificationChannelsInput = NotificationChannelsPayload;
 export type AdminNotificationChannelsPayload = NotificationChannelsPayload;
