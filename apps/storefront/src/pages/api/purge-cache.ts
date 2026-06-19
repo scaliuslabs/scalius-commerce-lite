@@ -1,6 +1,7 @@
 // src/pages/api/purge-cache.ts
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
+import { normalizeStorefrontHtmlCachePaths } from "@scalius/shared/storefront-cache-path";
 import { smartCache } from "@/lib/smart-cache";
 import { clearL1ByPrefixes } from "@/lib/edge-cache";
 import { getPurgeTokenFromHeaders, PURGE_TOKEN_HEADER } from "@/lib/purge-auth";
@@ -176,18 +177,7 @@ async function warmExactHtmlPaths(baseUrl: string, paths: readonly string[]): Pr
 }
 
 function normalizeExactHtmlPaths(paths: readonly string[]): string[] {
-  const uniquePaths: string[] = [];
-  const seen = new Set<string>();
-
-  for (const path of paths) {
-    if (!path || !path.startsWith("/") || path.startsWith("//")) continue;
-    if (seen.has(path)) continue;
-    seen.add(path);
-    uniquePaths.push(path);
-    if (uniquePaths.length >= MAX_EXACT_HTML_WARM_PATHS) break;
-  }
-
-  return uniquePaths;
+  return normalizeStorefrontHtmlCachePaths(paths, MAX_EXACT_HTML_WARM_PATHS);
 }
 
 function buildL2CacheKeyUrl(

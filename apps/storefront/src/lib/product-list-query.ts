@@ -78,6 +78,30 @@ function normalizeSort(value: string | null): {
   return { sortBy: "newest", changed: true };
 }
 
+function getLastParam(params: URLSearchParams, key: string): string | null {
+  const values = params.getAll(key);
+  return values.length > 0 ? values[values.length - 1] : null;
+}
+
+function collectRenderableParams(params: URLSearchParams): Map<string, string> {
+  const valuesByKey = new Map<string, string>();
+  for (const [key, value] of params.entries()) {
+    if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
+    valuesByKey.set(key, value);
+  }
+  return valuesByKey;
+}
+
+function hasRepeatedRenderableParams(params: URLSearchParams): boolean {
+  const seen = new Set<string>();
+  for (const [key] of params.entries()) {
+    if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
+}
+
 function buildAttributeValueMap(
   attributes: readonly FilterableAttribute[],
 ): Map<string, Set<string>> {
@@ -112,9 +136,11 @@ export function resolveProductListQueryState({
   attributes?: readonly FilterableAttribute[];
 }): ProductListQueryState {
   const params = url.searchParams;
-  const query = normalizeSearchQuery(params.get("q"));
-  const { page, changed: pageChanged } = normalizePage(params.get("page"));
-  const { sortBy, changed: sortChanged } = normalizeSort(params.get("sortBy"));
+  const rawQuery = getLastParam(params, "q");
+  const query = normalizeSearchQuery(rawQuery);
+  const { page, changed: pageChanged } = normalizePage(getLastParam(params, "page"));
+  const { sortBy, changed: sortChanged } = normalizeSort(getLastParam(params, "sortBy"));
+  const renderParams = collectRenderableParams(params);
   const attributeValues = buildAttributeValueMap(attributes);
   const options: ProductListOptions = {
     page,
@@ -122,12 +148,15 @@ export function resolveProductListQueryState({
     sort: sortBy,
   };
   const currentFilters: Record<string, string> = {};
-  let shouldRedirect = pageChanged || sortChanged;
+  let shouldRedirect =
+    pageChanged ||
+    sortChanged ||
+    hasRepeatedRenderableParams(params);
 
   if (query) {
     options.search = query;
     currentFilters.q = query;
-  } else if (params.has("q") && params.get("q")) {
+  } else if (params.has("q")) {
     shouldRedirect = true;
   }
   if (page > 1) {
@@ -138,11 +167,11 @@ export function resolveProductListQueryState({
   }
 
   const minPrice = parsePriceFilterValue(
-    params.get("minPrice") ?? undefined,
+    getLastParam(params, "minPrice") ?? undefined,
     DEFAULT_MIN_PRICE,
   );
   const maxPrice = parsePriceFilterValue(
-    params.get("maxPrice") ?? undefined,
+    getLastParam(params, "maxPrice") ?? undefined,
     DEFAULT_MAX_PRICE,
   );
   if (params.has("minPrice") && minPrice <= DEFAULT_MIN_PRICE) {
@@ -164,9 +193,8 @@ export function resolveProductListQueryState({
     currentFilters.maxPrice = String(maxPrice);
   }
 
-  for (const [key, value] of params.entries()) {
+  for (const [key, value] of renderParams.entries()) {
     if (!value) continue;
-    if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
     if (NAVIGATION_PARAM_SET.has(key) || PRICE_FILTER_SET.has(key)) continue;
 
     if (BOOLEAN_FILTER_SET.has(key)) {

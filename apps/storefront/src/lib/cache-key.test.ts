@@ -90,6 +90,20 @@ describe("storefront cache key canonicalization", () => {
     );
   });
 
+  it("collapses repeated HTML query params to the last rendered value", () => {
+    expect(
+      buildHtmlCacheBaseUrl(
+        new URL("https://storefront.example.com/search?q=apple&q=banana&page=2&page=1&sortBy=price-desc&sortBy=newest"),
+      ).toString(),
+    ).toBe("https://storefront.example.com/search?q=banana");
+
+    expect(
+      buildHtmlCacheBaseUrl(
+        new URL("https://storefront.example.com/categories/fish?size=M&size=L&color=Red&color=Blue"),
+      ).toString(),
+    ).toBe("https://storefront.example.com/categories/fish?color=Blue&size=L");
+  });
+
   it("can preserve empty values when a caller needs exact query semantics", () => {
     const url = new URL("https://storefront.example.com/search?q=&page=1");
 
