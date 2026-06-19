@@ -53,6 +53,10 @@ function categoryHtmlPath(slug: string | null | undefined): string[] {
     return slug ? [`/categories/${slug}`] : [];
 }
 
+function productHtmlPath(slug: string | null | undefined): string[] {
+    return slug ? [`/products/${slug}`] : [];
+}
+
 async function categoryHtmlPathsByIds(
     db: Database,
     categoryIds: readonly string[],
@@ -69,7 +73,7 @@ async function categoryHtmlPathsByIds(
     return rows.flatMap((category) => categoryHtmlPath(category.slug));
 }
 
-async function productCategoryHtmlPathsByIds(
+async function productStorefrontHtmlPathsByIds(
     db: Database,
     productIds: readonly string[],
 ): Promise<string[]> {
@@ -78,21 +82,31 @@ async function productCategoryHtmlPathsByIds(
     if (ids.length === 0) return [];
 
     const rows = await db
-        .select({ slug: categories.slug })
+        .select({
+            productSlug: products.slug,
+            categorySlug: categories.slug,
+        })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
         .where(inArray(products.id, ids));
 
-    return rows.flatMap((row) => categoryHtmlPath(row.slug));
+    return [
+        ...rows.flatMap((row) => productHtmlPath(row.productSlug)),
+        ...rows.flatMap((row) => categoryHtmlPath(row.categorySlug)),
+    ];
 }
 
 async function invalidateProductCatalogCaches(
     db: Database,
     c: { env?: Env; executionCtx?: ExecutionContext },
     productIds: readonly string[],
+    htmlPaths: readonly string[] = [],
 ) {
     await invalidateCatalogCaches("products", c, {
-        htmlPaths: await productCategoryHtmlPathsByIds(db, productIds),
+        htmlPaths: [
+            ...(await productStorefrontHtmlPathsByIds(db, productIds)),
+            ...htmlPaths,
+        ],
     });
 }
 
@@ -277,7 +291,10 @@ app.openapi(createProductRoute, async (c) => {
     try {
         const result = await ProductsAdmin.createProduct(db, data);
         await invalidateCatalogCaches("products", c, {
-            htmlPaths: await categoryHtmlPathsByIds(db, [data.categoryId]),
+            htmlPaths: [
+                ...productHtmlPath(data.slug),
+                ...(await categoryHtmlPathsByIds(db, [data.categoryId])),
+            ],
         });
         return created(c, result);
     } catch (error: unknown) {
@@ -308,7 +325,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     try {
-        const htmlPaths = await productCategoryHtmlPathsByIds(db, data.productIds);
+        const htmlPaths = await productStorefrontHtmlPathsByIds(db, data.productIds);
         await ProductsAdmin.bulkDeleteProducts(db, data.productIds, data.permanent);
         await invalidateCatalogCaches("products", c, { htmlPaths });
         return noContent(c);
@@ -373,7 +390,8 @@ app.openapi(updateProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const htmlPaths = [
-            ...(await productCategoryHtmlPathsByIds(db, [id])),
+            ...(await productStorefrontHtmlPathsByIds(db, [id])),
+            ...productHtmlPath(data.slug),
             ...(await categoryHtmlPathsByIds(db, [data.categoryId])),
         ];
         await ProductsAdmin.updateProduct(db, id, data);
@@ -407,7 +425,7 @@ const deleteProductRoute = createRoute({
 app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const htmlPaths = await productCategoryHtmlPathsByIds(db, [id]);
+    const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
     await ProductsAdmin.deleteProduct(db, id);
     await invalidateCatalogCaches("products", c, { htmlPaths });
     return noContent(c);
@@ -435,7 +453,7 @@ const restoreProductRoute = createRoute({
 app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const htmlPaths = await productCategoryHtmlPathsByIds(db, [id]);
+    const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
     await ProductsAdmin.restoreProduct(db, id);
     await invalidateCatalogCaches("products", c, { htmlPaths });
     return ok(c, {});
@@ -461,7 +479,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     try {
-        const htmlPaths = await productCategoryHtmlPathsByIds(db, [id]);
+        const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
         await ProductsAdmin.permanentlyDeleteProduct(db, id);
         await invalidateCatalogCaches("products", c, { htmlPaths });
         return noContent(c);

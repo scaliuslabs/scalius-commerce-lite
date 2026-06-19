@@ -98,6 +98,12 @@ describe("catalog cache groups", () => {
     expect(getCatalogStorefrontHtmlPaths("discounts")).toEqual(["/search"]);
     expect(getCatalogStorefrontHtmlPaths("collections")).toEqual([]);
     expect(
+      getCatalogStorefrontHtmlPaths("products", [
+        "/products/fish?size=m&color=red&utm_source=ad",
+        "/products/fish",
+      ]),
+    ).toEqual(["/search", "/products/fish"]);
+    expect(
       getCatalogStorefrontHtmlPaths("categories", [
         "/categories/fish?page=1&sortBy=newest&utm_source=ad",
         "/categories/fish",
