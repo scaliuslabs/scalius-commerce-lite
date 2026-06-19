@@ -12,9 +12,13 @@ import {
     bulkPublishPages,
     bulkUnpublishPages,
     restorePages,
+    publicPageVisibilityCondition,
     createPageSchema,
     updatePageSchema
 } from "@scalius/core/modules/pages";
+import type { Database } from "@scalius/database/client";
+import { pages } from "@scalius/database/schema";
+import { and, inArray } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 import {
     successEnvelope,
@@ -27,6 +31,7 @@ import {
 import { pageSchema } from "../../schemas/entities";
 import {
     invalidateApiAndScheduleStorefrontGroups,
+    MAX_STOREFRONT_EXACT_HTML_PATHS,
 } from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -34,8 +39,31 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PAGE_CACHE_GROUPS = ["pages", "layout"] as const;
 
-async function invalidatePageCaches(c: { env: Env; executionCtx?: ExecutionContext }): Promise<void> {
-    await invalidateApiAndScheduleStorefrontGroups([...PAGE_CACHE_GROUPS], c);
+function pageHtmlPath(slug: string | null | undefined): string[] {
+    return slug ? [`/${slug}`] : [];
+}
+
+async function publicPageHtmlPathsByIds(
+    db: Database,
+    pageIds: readonly string[],
+): Promise<string[]> {
+    const ids = [...new Set(pageIds.filter(Boolean))]
+        .slice(0, MAX_STOREFRONT_EXACT_HTML_PATHS);
+    if (ids.length === 0) return [];
+
+    const rows = await db
+        .select({ slug: pages.slug })
+        .from(pages)
+        .where(and(inArray(pages.id, ids), publicPageVisibilityCondition()));
+
+    return rows.flatMap((page) => pageHtmlPath(page.slug));
+}
+
+async function invalidatePageCaches(
+    c: { env: Env; executionCtx?: ExecutionContext },
+    options: { htmlPaths?: readonly string[] } = {},
+): Promise<void> {
+    await invalidateApiAndScheduleStorefrontGroups([...PAGE_CACHE_GROUPS], c, options);
 }
 
 // ── List Pages ──
@@ -100,7 +128,9 @@ const createPageRoute = createRoute({
 app.openapi(createPageRoute, async (c) => {
     const db = c.get("db");
     const result = await createPage(db, c.req.valid("json"));
-    await invalidatePageCaches(c);
+    await invalidatePageCaches(c, {
+        htmlPaths: await publicPageHtmlPathsByIds(db, [result.id]),
+    });
     return created(c, result);
 });
 
@@ -155,8 +185,11 @@ const bulkPublishRoute = createRoute({
 
 app.openapi(bulkPublishRoute, async (c) => {
     const db = c.get("db");
-    await bulkPublishPages(db, c.req.valid("json").ids);
-    await invalidatePageCaches(c);
+    const { ids } = c.req.valid("json");
+    await bulkPublishPages(db, ids);
+    await invalidatePageCaches(c, {
+        htmlPaths: await publicPageHtmlPathsByIds(db, ids),
+    });
     return noContent(c);
 });
 
@@ -201,8 +234,11 @@ const bulkRestoreRoute = createRoute({
 
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
-    await restorePages(db, c.req.valid("json").ids);
-    await invalidatePageCaches(c);
+    const { ids } = c.req.valid("json");
+    await restorePages(db, ids);
+    await invalidatePageCaches(c, {
+        htmlPaths: await publicPageHtmlPathsByIds(db, ids),
+    });
     return noContent(c);
 });
 
@@ -231,7 +267,9 @@ app.openapi(restoreRoute, async (c) => {
     // Note: do NOT call getPageById here — it filters deletedAt IS NULL,
     // which would always 404 for soft-deleted pages being restored
     await restorePages(db, [id]);
-    await invalidatePageCaches(c);
+    await invalidatePageCaches(c, {
+        htmlPaths: await publicPageHtmlPathsByIds(db, [id]),
+    });
     return ok(c, { message: "Page restored" });
 });
 
@@ -286,7 +324,9 @@ app.openapi(updatePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await updatePage(db, id, c.req.valid("json"));
-    await invalidatePageCaches(c);
+    await invalidatePageCaches(c, {
+        htmlPaths: await publicPageHtmlPathsByIds(db, [id]),
+    });
     return ok(c, {});
 });
 

@@ -276,7 +276,7 @@ The storefront is an **Astro 6 SSR** application with React 19 islands for inter
 
 - **L1**: In-memory Map (max 1000 entries, LRU eviction, per-isolate)
 - **L2**: Cloudflare Cache API with KV version control (survives cold starts)
-- **Invalidation**: `POST /api/purge-cache` bumps KV version; all edge caches become stale. `GET /api/purge-cache` is intentionally non-mutating and returns `405 Allow: POST`. Checkout-affecting admin writes, including delivery providers, invalidate the checkout cache group and purge matching storefront prefixes.
+- **Invalidation**: `POST /api/purge-cache` bumps KV or exact-path generations; affected edge caches become stale. `GET /api/purge-cache` is intentionally non-mutating and returns `405 Allow: POST`. Catalog and CMS writes send bounded exact `htmlPaths` so affected product/category/search/CMS pages are rewarmed immediately; checkout-affecting admin writes, including delivery providers, invalidate the checkout cache group and purge matching storefront prefixes.
 - **Cache busting**: `BUILD_ID` in cache key ensures new deploys never serve stale HTML
 
 ### SEO
