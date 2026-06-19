@@ -83,6 +83,36 @@ describe("admin route graph boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps notification settings UI off the backend notifications barrel", () => {
+    const notificationSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "NotificationChannelsBuilder.tsx",
+      ),
+      "utf8",
+    );
+    const offenders = [
+      ...listSourceFiles(join(ADMIN_SRC_ROOT, "components")),
+      ...listSourceFiles(join(ADMIN_SRC_ROOT, "routes")),
+    ]
+      .map((path) => ({
+        path: relative(ADMIN_SRC_ROOT, path),
+        source: readFileSync(path, "utf8"),
+      }))
+      .filter(({ source }) =>
+        /(?:from\s+|import\()\s*["']@scalius\/core\/modules\/notifications["']/.test(source),
+      )
+      .map(({ path }) => path);
+
+    expect(notificationSource).toContain(
+      "@scalius/core/modules/notifications/notification-types",
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps admin route guards off the full Better Auth runtime", () => {
     const authFunctionsSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "auth.fns.ts"),

@@ -22,7 +22,7 @@ import {
   ORDER_NOTIFICATION_LABELS,
   ORDER_NOTIFICATION_TYPES,
   type OrderNotificationType,
-} from "@scalius/core/modules/notifications";
+} from "@scalius/core/modules/notifications/notification-types";
 
 const ORDER_STATUSES = ORDER_NOTIFICATION_TYPES.map((key) => ({
   key,
