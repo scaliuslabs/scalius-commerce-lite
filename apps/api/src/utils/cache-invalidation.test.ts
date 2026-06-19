@@ -318,7 +318,10 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const checkoutGroup = INVALIDATION_GROUPS.checkout;
     expect(checkoutGroup).toBeDefined();
     expect(checkoutGroup!.kvPrefixes).toEqual(
-      expect.arrayContaining(["api:checkout:config:"]),
+      expect.arrayContaining([
+        "api:checkout:config:",
+        "api:checkout:config:v2:",
+      ]),
     );
   });
 

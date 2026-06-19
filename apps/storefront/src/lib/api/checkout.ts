@@ -23,22 +23,27 @@ export interface CheckoutConfig {
   partialPaymentAmount?: number;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
+  unavailable?: boolean;
+  unavailableMessage?: string;
 }
 
-const COD_FALLBACK: CheckoutConfig = {
-  gateways: [{ id: "cod", name: "Cash on Delivery", currencies: ["bdt"] }],
-  guestCheckoutEnabled: true,
+const CHECKOUT_UNAVAILABLE: CheckoutConfig = {
+  gateways: [],
+  guestCheckoutEnabled: false,
   authVerificationMethod: "email",
   checkoutMode: "all",
   partialPaymentEnabled: false,
   partialPaymentAmount: 0,
+  unavailable: true,
+  unavailableMessage: "Checkout is temporarily unavailable. Please try again shortly.",
 };
 
-/**
- * Get active payment gateway configuration from backend.
- * Uses the shared edge cache (L1 + L2) so it is properly invalidated
- * when /api/purge-cache bumps the KV version.
- */
+  /**
+   * Get active payment gateway configuration from backend.
+   * Uses the shared edge cache (L1 + L2) so it is properly invalidated
+   * when /api/purge-cache bumps the KV version.
+   * Backend/API failures fail closed instead of guessing COD availability.
+   */
 export async function getCheckoutConfig(): Promise<CheckoutConfig> {
   const result = await withEdgeCache<CheckoutConfig>(
     "checkout_config",
@@ -55,7 +60,7 @@ export async function getCheckoutConfig(): Promise<CheckoutConfig> {
     },
     { ttlSeconds: CACHE_TTL.SHORT },
   );
-  return result ?? COD_FALLBACK;
+  return result ?? CHECKOUT_UNAVAILABLE;
 }
 
 /**
@@ -63,6 +68,7 @@ export async function getCheckoutConfig(): Promise<CheckoutConfig> {
  * If advance partial payments are enabled, this flow is disabled because a gateway is required.
  */
 export function isCodOnly(config: CheckoutConfig): boolean {
+  if (config.unavailable) return false;
   if (config.partialPaymentEnabled) return false;
   return config.gateways.length === 1 && config.gateways[0].id === "cod";
 }

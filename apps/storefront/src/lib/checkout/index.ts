@@ -174,6 +174,15 @@ function renderGateways(): void {
   if (!container) return;
   container.innerHTML = "";
 
+  if (checkoutConfig.unavailable || gateways.length === 0) {
+    showError(
+      checkoutConfig.unavailableMessage ||
+        "Checkout is temporarily unavailable. Please try again shortly.",
+    );
+    setPayButton("Checkout unavailable", true);
+    return;
+  }
+
   for (const gw of gateways) {
     // If partial payment is active, skip COD since online payment is mandatory
     if (checkoutConfig.partialPaymentEnabled && gw.id === "cod") continue;

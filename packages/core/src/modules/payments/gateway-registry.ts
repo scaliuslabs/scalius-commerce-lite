@@ -4,11 +4,24 @@
 
 import type { Database } from "@scalius/database/client";
 
+export interface GatewaySettingsReadOptions {
+  /**
+   * Public cacheable config assembly must read fresh settings from D1 because
+   * the assembled response is already cached by API/storefront cache layers.
+   */
+  bypassMemoryCache?: boolean;
+}
+
 export interface GatewayMeta {
   id: string;
   name: string;
   settingsCategory: string;
-  getSettings: (db: Database, kv?: KVNamespace, encryptionKey?: string) => Promise<{ enabled: boolean; [key: string]: unknown } | null>;
+  getSettings: (
+    db: Database,
+    kv?: KVNamespace,
+    encryptionKey?: string,
+    options?: GatewaySettingsReadOptions,
+  ) => Promise<{ enabled: boolean; [key: string]: unknown } | null>;
   getPublicConfig?: (settings: Record<string, unknown>) => Record<string, unknown>;
   getCurrencies?: (localCurrency: string) => string[];
 }

@@ -40,4 +40,6 @@ export interface CheckoutConfig {
   partialPaymentAmount: number;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
+  unavailable?: boolean;
+  unavailableMessage?: string;
 }

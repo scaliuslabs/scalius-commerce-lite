@@ -251,7 +251,7 @@ All gateway credentials are stored in the `settings` DB table with a `category` 
 | `polar` | `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` |
 | `payment_methods` | `enabled_methods` (JSON array), `default_method` |
 
-Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods` are in-memory cache keys, not persistent credential storage). Admin save operations clear the specific gateway cache, clear the payment methods cache, best-effort delete any legacy KV entries with the same keys, invalidate API checkout config cache (`api:checkout:config:`), and purge storefront checkout prefixes.
+Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods` are in-memory cache keys, not persistent credential storage). Admin save operations clear the specific gateway cache, clear the payment methods cache, best-effort delete any legacy KV entries with the same keys, invalidate API checkout config cache (`api:checkout:config:` and the current `api:checkout:config:v2:` prefix), and purge storefront checkout prefixes. Public checkout config assembly passes `bypassMemoryCache: true` to payment-method and gateway reads because the assembled public response is already cached by API KV and storefront L1/L2 caches; using per-isolate gateway memory there can repopulate fresh public caches with stale payment settings.
 
 ### Gateway Registry
 
@@ -268,8 +268,8 @@ The `GET /checkout/config` endpoint returns:
 - `currency` -- `{ code, symbol, decimalPlaces }` using `getDecimalPlaces()` for ISO 4217 lookup
 - `allowedCountries` + `allowedCountriesMode` -- phone number country restrictions (include/exclude list)
 - `guestCheckoutEnabled`, `authVerificationMethod`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount`
-- Cached 60 seconds via `cacheMiddleware`
-- On error: falls back to COD-only with default settings
+- Cached 60 seconds via `cacheMiddleware` under `api:checkout:config:v2:`
+- On assembly/read error: returns a non-cacheable `503 CHECKOUT_CONFIG_UNAVAILABLE`; the storefront fails closed with a temporary checkout-unavailable state instead of guessing COD availability
 
 ### Storefront Proxy Pattern
 

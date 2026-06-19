@@ -180,7 +180,12 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   checkout: {
     label: "Checkout",
     description: "Shipping methods, delivery locations, payment settings",
-    kvPrefixes: ["api:checkout:config:", "api:shipping-methods:", "api:locations:"],
+    kvPrefixes: [
+      "api:checkout:config:",
+      "api:checkout:config:v2:",
+      "api:shipping-methods:",
+      "api:locations:",
+    ],
     bumpsHtml: false,
     storefrontPrefixes: [
       "global_shipping_cities",

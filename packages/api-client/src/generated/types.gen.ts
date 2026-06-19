@@ -2314,6 +2314,17 @@ export type GetApiV1CheckoutConfigErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Checkout configuration temporarily unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type GetApiV1CheckoutConfigError = GetApiV1CheckoutConfigErrors[keyof GetApiV1CheckoutConfigErrors];
