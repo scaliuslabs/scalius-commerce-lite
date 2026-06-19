@@ -1,24 +1,16 @@
-import { normalizeSearchQuery } from "./search-query";
+import {
+  STOREFRONT_HTML_CACHE_IGNORED_QUERY_PARAMS,
+  canonicalizeStorefrontHtmlCachePath,
+  normalizeStorefrontCacheQueryValue,
+} from "@scalius/shared/storefront-cache-path";
 
-export const HTML_CACHE_IGNORED_QUERY_PARAMS = [
-  "fbclid",
-  "gclid",
-  "msclkid",
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_term",
-  "utm_content",
-  "ref",
-] as const;
-
-const PRODUCT_HTML_IGNORED_QUERY_PARAMS = ["size", "color"] as const;
+export const HTML_CACHE_IGNORED_QUERY_PARAMS = STOREFRONT_HTML_CACHE_IGNORED_QUERY_PARAMS;
 
 type QueryValue = string | number | boolean | readonly string[] | null | undefined;
 type QueryDefaults = Record<string, string | number | boolean>;
 
 function normalizeCanonicalQueryValue(key: string, value: string): string {
-  return key === "q" || key === "search" ? normalizeSearchQuery(value) : value;
+  return normalizeStorefrontCacheQueryValue(key, value);
 }
 
 function appendSortedParams(
@@ -47,36 +39,34 @@ export function canonicalizeUrlSearchParams(
 ): URL {
   const canonicalUrl = new URL(url.toString());
   const ignored = new Set(ignoredParams);
-  const entries: Array<[string, string]> = [];
+  const valuesByKey = new Map<string, string>();
 
   for (const [key, rawValue] of canonicalUrl.searchParams.entries()) {
     const value = normalizeCanonicalQueryValue(key, rawValue);
     if (ignored.has(key)) continue;
-    if (dropEmptyValues && value === "") continue;
-    if (Object.hasOwn(defaultParams, key) && value === String(defaultParams[key])) {
-      continue;
-    }
-    entries.push([key, value]);
+    valuesByKey.set(key, value);
   }
 
+  const entries = [...valuesByKey.entries()].filter(([key, value]) => (
+    !(dropEmptyValues && value === "") &&
+    !(Object.hasOwn(defaultParams, key) && value === String(defaultParams[key]))
+  ));
   const canonicalParams = new URLSearchParams();
   appendSortedParams(canonicalParams, entries);
   canonicalUrl.search = canonicalParams.toString();
+  canonicalUrl.hash = "";
   return canonicalUrl;
 }
 
 export function buildHtmlCacheBaseUrl(url: URL): URL {
-  const ignoredParams: string[] = [...HTML_CACHE_IGNORED_QUERY_PARAMS];
-  const defaultParams: QueryDefaults = {};
-  if (/^\/products\/[^/]+$/.test(url.pathname)) {
-    ignoredParams.push(...PRODUCT_HTML_IGNORED_QUERY_PARAMS);
-  }
-  if (/^\/categories\/[^/]+$/.test(url.pathname) || /^\/search\/?$/.test(url.pathname)) {
-    defaultParams.page = 1;
-    defaultParams.sortBy = "newest";
+  const canonicalPath = canonicalizeStorefrontHtmlCachePath(url.pathname + url.search);
+  if (canonicalPath) {
+    return new URL(canonicalPath, url.origin);
   }
 
-  return canonicalizeUrlSearchParams(url, { defaultParams, ignoredParams });
+  return canonicalizeUrlSearchParams(url, {
+    ignoredParams: HTML_CACHE_IGNORED_QUERY_PARAMS,
+  });
 }
 
 export function buildCanonicalQueryString(

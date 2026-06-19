@@ -108,4 +108,40 @@ describe("product list query canonicalization", () => {
     expect(state.currentFilters).toEqual({});
     expect(state.redirectPath).toBe("/search");
   });
+
+  it("uses the last repeated render param and redirects to a single-value URL", () => {
+    const url = new URL(
+      "https://storefront.example.com/search?q=apple&q=banana&page=2&page=1&sortBy=price-desc&sortBy=name-asc&freeDelivery=false&freeDelivery=true",
+    );
+
+    const state = resolveProductListQueryState({ url });
+
+    expect(state.options).toMatchObject({
+      page: 1,
+      limit: 20,
+      sort: "name-asc",
+      search: "banana",
+      freeDelivery: true,
+    });
+    expect(state.redirectPath).toBe(
+      "/search?freeDelivery=true&q=banana&sortBy=name-asc",
+    );
+  });
+
+  it("uses the last repeated attribute value before canonicalizing filters", () => {
+    const url = new URL(
+      "https://storefront.example.com/categories/shoes?size=M&size=L&color=Blue&color=Green",
+    );
+
+    const state = resolveProductListQueryState({ url, attributes });
+
+    expect(state.options).toMatchObject({
+      page: 1,
+      limit: 20,
+      sort: "newest",
+      size: "L",
+    });
+    expect(state.options).not.toHaveProperty("color");
+    expect(state.redirectPath).toBe("/categories/shoes?size=L");
+  });
 });

@@ -1,6 +1,7 @@
 // src/server/utils/cache-invalidation.ts
 import type { Database } from "@scalius/database/client";
 import { orderItems, products, productVariants } from "@scalius/database/schema";
+import { normalizeStorefrontHtmlCachePaths } from "@scalius/shared/storefront-cache-path";
 import { eq, inArray } from "drizzle-orm";
 import { deleteCacheByPattern } from "./kv-cache";
 import {
@@ -47,18 +48,7 @@ export function normalizeStorefrontHtmlPaths(
   paths: readonly string[],
   maxPaths = MAX_STOREFRONT_EXACT_HTML_PATHS,
 ): string[] {
-  const uniquePaths: string[] = [];
-  const seen = new Set<string>();
-
-  for (const path of paths) {
-    if (!path || !path.startsWith("/") || path.startsWith("//")) continue;
-    if (seen.has(path)) continue;
-    seen.add(path);
-    uniquePaths.push(path);
-    if (uniquePaths.length >= maxPaths) break;
-  }
-
-  return uniquePaths;
+  return normalizeStorefrontHtmlCachePaths(paths, maxPaths);
 }
 
 // ---------------------------------------------------------------------------

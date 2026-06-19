@@ -492,20 +492,87 @@ describe("storefront cache purge route", () => {
     expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
     const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
     await warmPromise;
-    const warmUrl = vi.mocked(fetch).mock.calls[0]?.[0] as URL;
-    expect(warmUrl.toString()).toBe("https://storefront.example.com/products/fish?size=m");
-    expect(fetch).toHaveBeenCalledWith(
-      expect.any(URL),
-      expect.objectContaining({
-        headers: expect.objectContaining({
+	    const warmUrl = vi.mocked(fetch).mock.calls[0]?.[0] as URL;
+	    expect(warmUrl.toString()).toBe("https://storefront.example.com/products/fish");
+	    expect(fetch).toHaveBeenCalledWith(
+	      expect.any(URL),
+	      expect.objectContaining({
+	        headers: expect.objectContaining({
           "Cache-Control": "no-cache",
           "X-Cache-Warm": "true",
         }),
       }),
     );
-  });
+	  });
 
-  it("caps exact HTML paths and rejects absolute warm URLs", async () => {
+	  it("canonicalizes exact HTML paths before deleting and warming", async () => {
+	    mocks.cacheDelete.mockResolvedValue(true);
+	    const { POST } = await import("./purge-cache");
+	    const request = new Request("https://storefront.example.com/api/purge-cache", {
+	      method: "POST",
+	      headers: {
+	        Authorization: "Bearer secret",
+	        "Content-Type": "application/json",
+	      },
+	      body: JSON.stringify({
+	        groups: ["products"],
+	        htmlPaths: [
+	          "/products/fish?size=m",
+	          "/products/fish?color=red",
+	          "/products/fish?utm_source=ad",
+	          "/products/phone",
+	        ],
+	        bumpVersion: false,
+	      }),
+	    });
+
+	    const response = await POST({
+	      request,
+	      url: new URL(request.url),
+	      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+	    } as unknown as Parameters<typeof POST>[0]);
+	    const body = (await response.json()) as {
+	      details?: {
+	        htmlPathsCleared?: number;
+	        htmlPathsDeleted?: number;
+	        exactGenerationsBumped?: number;
+	      };
+	    };
+
+	    expect(response.status).toBe(200);
+	    expect(body.details).toMatchObject({
+	      htmlPathsCleared: 2,
+	      htmlPathsDeleted: 2,
+	      exactGenerationsBumped: 2,
+	    });
+	    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+	      "g:storefront.example.com:product_slug_fish",
+	      expect.any(String),
+	    );
+	    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
+	      "g:storefront.example.com:product_slug_phone",
+	      expect.any(String),
+	    );
+
+	    const htmlDeleteUrls = mocks.cacheDelete.mock.calls
+	      .map(([arg]) => arg)
+	      .filter((arg): arg is Request => arg instanceof Request)
+	      .map((requestArg) => requestArg.url);
+	    expect(htmlDeleteUrls).toEqual([
+	      `https://storefront.example.com/products/fish?cache_v=4-${BUILD_ID}&cache_gen=4`,
+	      `https://storefront.example.com/products/phone?cache_v=4-${BUILD_ID}&cache_gen=4`,
+	    ]);
+
+	    const warmPromise = mocks.waitUntil.mock.calls[0]?.[0] as Promise<void>;
+	    await warmPromise;
+	    const warmedUrls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+	    expect(warmedUrls).toEqual([
+	      "https://storefront.example.com/products/fish",
+	      "https://storefront.example.com/products/phone",
+	    ]);
+	  });
+
+	  it("caps exact HTML paths and rejects absolute warm URLs", async () => {
     mocks.cacheDelete.mockResolvedValue(true);
     const { MAX_EXACT_HTML_WARM_PATHS, POST } = await import("./purge-cache");
     const noisyPaths = [
