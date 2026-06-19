@@ -131,7 +131,7 @@ The function is **idempotent** -- the "released" movement it creates excludes th
 |----------------------------|----------------------------------------------------------------------------------------------------|
 | `index.ts`                 | Barrel re-exports for all public API                                                               |
 | `types.ts`                 | `StockOperationResult`, `ReservationEntry`, `MovementEntry` interfaces                             |
-| `reserve.ts`               | `reserveStock()` -- single variant CAS reservation; `reserveMultiple()` -- sequential with rollback; `reserveStockBatch()` -- atomic D1 batch with CAS verification and batch rollback |
+| `reserve.ts`               | `reserveStock()` -- single variant CAS reservation; `reserveMultiple()` -- sequential with rollback; `reserveStockBatch()` -- strict D1 batch movement-claim + counter reservation with CAS verification and rollback |
 | `deduct.ts`                | `deductStock()` -- single variant CAS deduction; `deductMultiple()` -- sequential with rollback via `restoreDeductedStock()` |
 | `restore.ts`               | `restoreDeductedStock()` -- restores deducted stock for a single variant (regular: increments `stock`, preorder: restores `preorderStock`, backorder: no-op); `restoreDeductedMultiple()` -- sequential restore with low stock alert check |
 | `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures, checks low stock alerts after release |
@@ -169,9 +169,9 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 
 | Column          | Type      | Notes                                                         |
 |-----------------|-----------|---------------------------------------------------------------|
-| `id`            | text PK   | UUID                                                          |
-| `variant_id`    | text FK   | References `product_variants.id` (on delete: set null)        |
-| `order_id`      | text FK   | References `orders.id` (on delete: set null), nullable        |
+| `id`            | text PK   | UUID or deterministic reservation/release claim id             |
+| `variant_id`    | text FK   | References `product_variants.id` (restrict)                   |
+| `order_id`      | text      | Nullable order id, intentionally not FK-enforced because checkout reservation claims are written before the queued order row commits |
 | `type`          | text      | `reserved`, `deducted`, `released`, `adjusted`, `preorder_reserved`, `preorder_deducted` |
 | `quantity`      | integer   | Positive = added, negative = removed                          |
 | `previous_stock`| integer   | Stock level before operation                                  |
@@ -224,7 +224,7 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 1. **`reserveMultiple()`** -- Sequential. Reserves one variant at a time with individual CAS. On any failure, rolls back all previously successful reservations. Suitable for small order sizes.
 
-2. **`reserveStockBatch()`** -- Atomic. Reads all variant states upfront, validates ALL availability before writing, batches all CAS updates into a single `db.batch()` call. If any CAS update fails (empty return), rolls back successful ones via a second `db.batch()` and retries the entire operation. Deduplicates variant IDs for stock counter updates while keeping per-order audit movements. Prevents orphaned reservations.
+2. **`reserveStockBatch()`** -- Atomic for batch reservations. Reads all variant states upfront, validates ALL availability before writing, inserts strict reservation movement claims and variant CAS counter updates in one D1 `safeBatch()`, then verifies every movement insert and update returned a row. Movement inserts are `INSERT ... SELECT` gated on the same pre-read `stockVersion`, so stale versions create neither audit rows nor counter updates. If any insert/update returns empty, successful movement claims are deleted, successful counter updates are reversed, and the whole operation retries. Callers may pass `reservationKey` (queued checkout uses `checkout-ingest:v1`) or explicit `movementId` for deterministic replay; exact duplicate deterministic claims are treated as idempotent success, while mismatches return `manualReconciliationRequired`.
 
 ### Deduct
 

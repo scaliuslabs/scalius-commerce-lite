@@ -9,7 +9,7 @@
 //   - Cloudflare KV checkout status updates
 
 import { sql, eq, and } from "drizzle-orm";
-import { orders, orderItems, customers, customerHistory, discounts, discountUsage, orderNotificationOutbox } from "@scalius/database/schema";
+import { orders, orderItems, customers, customerHistory, discounts, discountUsage, orderNotificationOutbox, inventoryMovements } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 import { reserveStockBatch, releaseMultiple } from "../inventory";
 import { initCODTracking } from "../payments/cod";
@@ -44,6 +44,7 @@ type ReservationReleaseResult = { success: true } | { success: false; error: str
 
 const CHECKOUT_RETRY_DATABASE_ERROR = "Database write error during heavy traffic. Retrying.";
 const CHECKOUT_RETRY_RESERVATION_ERROR = "Insufficient stock preventing batch ingestion.";
+const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 
 // ── KV checkout status helper ───────────────────────────────────────────────
 
@@ -125,6 +126,151 @@ async function releaseReservationsByOrder(
         : { success: true };
 }
 
+type QueuedReservationMovementType = "reserved" | "preorder_reserved";
+type QueuedReservationReuseResult =
+    | {
+        success: true;
+        reusedEntries: QueuedReservationEntry[];
+        missingEntries: QueuedReservationEntry[];
+    }
+    | { success: false; error: string };
+
+function queuedReservationMovementType(pool: QueuedReservationEntry["pool"]): QueuedReservationMovementType {
+    return pool === "preorder" ? "preorder_reserved" : "reserved";
+}
+
+function queuedReservationMovementKey(
+    variantId: string,
+    type: QueuedReservationMovementType,
+): string {
+    return `${type}\0${variantId}`;
+}
+
+function mergeQueuedReservationEntries(entries: QueuedReservationEntry[]): QueuedReservationEntry[] {
+    const merged = new Map<string, QueuedReservationEntry>();
+    for (const entry of entries) {
+        const key = `${entry.pool}\0${entry.variantId}`;
+        const existing = merged.get(key);
+        if (existing) {
+            existing.quantity += entry.quantity;
+        } else {
+            merged.set(key, { ...entry });
+        }
+    }
+    return Array.from(merged.values());
+}
+
+async function classifyQueuedReservationReuse(
+    db: ReturnType<typeof getDb>,
+    orderId: string,
+    entries: QueuedReservationEntry[],
+): Promise<QueuedReservationReuseResult> {
+    const expectedEntries = mergeQueuedReservationEntries(entries);
+    const expectedByMovementKey = new Map<string, QueuedReservationEntry>();
+    for (const entry of expectedEntries) {
+        expectedByMovementKey.set(
+            queuedReservationMovementKey(entry.variantId, queuedReservationMovementType(entry.pool)),
+            entry,
+        );
+    }
+
+    const rows = await db
+        .select({
+            variantId: inventoryMovements.variantId,
+            type: inventoryMovements.type,
+            quantity: inventoryMovements.quantity,
+        })
+        .from(inventoryMovements)
+        .where(
+            and(
+                eq(inventoryMovements.orderId, orderId),
+                sql`${inventoryMovements.type} IN ('reserved', 'preorder_reserved', 'released')`,
+            ),
+        )
+        .all();
+
+    if (rows.length === 0) {
+        return { success: true, reusedEntries: [], missingEntries: expectedEntries };
+    }
+
+    const reservedTotals = new Map<string, number>();
+    const releaseTotalsByVariant = new Map<string, number>();
+    const reserveTypesByVariant = new Map<string, Set<QueuedReservationMovementType>>();
+
+    for (const row of rows) {
+        if (row.type === "reserved" || row.type === "preorder_reserved") {
+            const key = queuedReservationMovementKey(row.variantId, row.type);
+            reservedTotals.set(key, (reservedTotals.get(key) ?? 0) + row.quantity);
+            const types = reserveTypesByVariant.get(row.variantId) ?? new Set<QueuedReservationMovementType>();
+            types.add(row.type);
+            reserveTypesByVariant.set(row.variantId, types);
+            continue;
+        }
+
+        if (row.type === "released") {
+            releaseTotalsByVariant.set(
+                row.variantId,
+                (releaseTotalsByVariant.get(row.variantId) ?? 0) + row.quantity,
+            );
+        }
+    }
+
+    for (const [variantId, releaseTotal] of releaseTotalsByVariant) {
+        const reserveTypes = reserveTypesByVariant.get(variantId);
+        if (releaseTotal !== 0 && reserveTypes && reserveTypes.size > 1) {
+            return {
+                success: false,
+                error: `Ambiguous active reservation history for order ${orderId}, variant ${variantId}`,
+            };
+        }
+    }
+
+    const reusedEntries: QueuedReservationEntry[] = [];
+    const missingEntries: QueuedReservationEntry[] = [];
+    const seenMovementKeys = new Set<string>();
+
+    for (const expected of expectedEntries) {
+        const movementKey = queuedReservationMovementKey(
+            expected.variantId,
+            queuedReservationMovementType(expected.pool),
+        );
+        seenMovementKeys.add(movementKey);
+        const activeQuantity = Math.max(
+            0,
+            (reservedTotals.get(movementKey) ?? 0) +
+                (releaseTotalsByVariant.get(expected.variantId) ?? 0),
+        );
+
+        if (activeQuantity === 0) {
+            missingEntries.push(expected);
+            continue;
+        }
+
+        if (activeQuantity !== expected.quantity) {
+            return {
+                success: false,
+                error: `Active reservation quantity mismatch for order ${orderId}, variant ${expected.variantId}`,
+            };
+        }
+
+        reusedEntries.push(expected);
+    }
+
+    for (const [movementKey, quantity] of reservedTotals) {
+        if (seenMovementKeys.has(movementKey)) continue;
+        const [, variantId] = movementKey.split("\0");
+        const activeQuantity = Math.max(0, quantity + (releaseTotalsByVariant.get(variantId ?? "") ?? 0));
+        if (activeQuantity > 0) {
+            return {
+                success: false,
+                error: `Unexpected active reservation for order ${orderId}, variant ${variantId}`,
+            };
+        }
+    }
+
+    return { success: true, reusedEntries, missingEntries };
+}
+
 async function reserveQueuedEntriesForOrder(
     db: ReturnType<typeof getDb>,
     orderId: string,
@@ -134,8 +280,24 @@ async function reserveQueuedEntriesForOrder(
     | { success: false; error: string; retryable: boolean }
 > {
     const reservedEntries: QueuedReservationEntry[] = [];
+    const reuseResult = await classifyQueuedReservationReuse(db, orderId, entries);
+    if (!reuseResult.success) {
+        console.error(`[Queue] Active reservation reuse failed for order ${orderId}:`, reuseResult.error);
+        return {
+            success: false,
+            error: reuseResult.error,
+            retryable: false,
+        };
+    }
+
+    reservedEntries.push(...reuseResult.reusedEntries);
+    const entriesToReserve = reuseResult.missingEntries;
+    if (entriesToReserve.length === 0) {
+        return { success: true, reservedEntries };
+    }
+
     const byPool = new Map<"regular" | "preorder" | "backorder", QueuedReservationEntry[]>();
-    for (const entry of entries) {
+    for (const entry of entriesToReserve) {
         const poolEntries = byPool.get(entry.pool) ?? [];
         poolEntries.push(entry);
         byPool.set(entry.pool, poolEntries);
@@ -147,7 +309,12 @@ async function reserveQueuedEntriesForOrder(
             quantity: entry.quantity,
             orderId: entry.orderId,
         }));
-        const reserveResult = await reserveStockBatch(db, batchItems, pool);
+        const reserveResult = await reserveStockBatch(
+            db,
+            batchItems,
+            pool,
+            { reservationKey: CHECKOUT_RESERVATION_KEY },
+        );
         if (!reserveResult.success) {
             console.error(`[Queue] reserveStockBatch failed for order ${orderId}, pool ${pool}:`, reserveResult.results);
             if (reservedEntries.length > 0) {
@@ -173,7 +340,7 @@ async function reserveQueuedEntriesForOrder(
             return {
                 success: false,
                 error: reserveResult.error ?? "Insufficient stock preventing order ingestion.",
-                retryable: true,
+                retryable: !reserveResult.manualReconciliationRequired,
             };
         }
         reservedEntries.push(...poolEntries);

@@ -129,6 +129,7 @@ function createDbMock(options: {
   discount?: { maxUses: number | null; limitOnePerCustomer: boolean | null };
   totalDiscountUsage?: number;
   orderLookupResults?: Array<{ id: string; inventoryAction: string | null } | null>;
+  reservationMovementRows?: Array<{ variantId: string; type: string; quantity: number }>;
 } = {}) {
   const db = {
     select(projection?: Record<string, unknown>) {
@@ -137,6 +138,12 @@ function createDbMock(options: {
           return {
             where() {
               return {
+                all: async () => {
+                  if (projection && "variantId" in projection && "type" in projection) {
+                    return options.reservationMovementRows ?? [];
+                  }
+                  return [];
+                },
                 get: async () => {
                   if (projection && "inventoryAction" in projection) {
                     return options.orderLookupResults?.length
@@ -322,7 +329,101 @@ describe("handleOrderIngestBatch isolation", () => {
     expect(msg.ack).toHaveBeenCalledTimes(1);
     expect(msg.retry).not.toHaveBeenCalled();
     expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(1);
+    expect(mocks.reserveStockBatch).toHaveBeenCalledWith(
+      expect.anything(),
+      [{ variantId: "variant_order_replay", quantity: 1, orderId: "order_replay" }],
+      "regular",
+      { reservationKey: "checkout-ingest:v1" },
+    );
     expect(mocks.releaseMultiple).not.toHaveBeenCalled();
+  });
+
+  it("reuses an active reservation on redelivery after a crash before order insert", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+
+    const msg = createMessage(createPayload("order_reuse"));
+    const { env } = createEnvMock();
+    const db = createDbMock({
+      orderLookupResults: [null],
+      reservationMovementRows: [
+        { variantId: "variant_order_reuse", type: "reserved", quantity: 1 },
+      ],
+    });
+
+    await handleOrderIngestBatch(
+      createBatch([msg]) as never,
+      db as never,
+      env as never,
+    );
+
+    expect(msg.ack).toHaveBeenCalledTimes(1);
+    expect(msg.retry).not.toHaveBeenCalled();
+    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(db.batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases a reused reservation before retrying when redelivered order insert still fails", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+
+    const msg = createMessage(createPayload("order_reuse_fail"));
+    const { env } = createEnvMock();
+
+    await handleOrderIngestBatch(
+      createBatch([msg]) as never,
+      createDbMock({
+        batchOutcomes: [
+          "reject", // shared batch fails
+          "reject", // isolated replay also fails
+        ],
+        orderLookupResults: [null, null],
+        reservationMovementRows: [
+          { variantId: "variant_order_reuse_fail", type: "reserved", quantity: 1 },
+        ],
+      }) as never,
+      env as never,
+    );
+
+    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(mocks.releaseMultiple).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        {
+          orderId: "order_reuse_fail",
+          variantId: "variant_order_reuse_fail",
+          quantity: 1,
+          pool: "regular",
+        },
+      ],
+      "order_reuse_fail",
+    );
+    expect(msg.ack).not.toHaveBeenCalled();
+    expect(msg.retry).toHaveBeenCalledWith({ delaySeconds: 15 });
+  });
+
+  it("fails closed on active reservation quantity mismatch", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+
+    const msg = createMessage(createPayload("order_mismatch"));
+    const { env, writes } = createEnvMock();
+
+    await handleOrderIngestBatch(
+      createBatch([msg]) as never,
+      createDbMock({
+        orderLookupResults: [null],
+        reservationMovementRows: [
+          { variantId: "variant_order_mismatch", type: "reserved", quantity: 2 },
+        ],
+      }) as never,
+      env as never,
+    );
+
+    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(msg.retry).not.toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(writes.at(-1)!.value)).toMatchObject({
+      status: "failed",
+      error: "Order ingestion needs manual inventory reconciliation before retry.",
+    });
   });
 
   it("acks an ambiguous shared batch commit without releasing or reserving again", async () => {

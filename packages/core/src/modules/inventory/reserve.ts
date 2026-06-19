@@ -3,14 +3,15 @@
 // Reserves stock by incrementing reservedStock WITHOUT decrementing stock.
 // Stock is permanently deducted only on payment confirmation.
 
-import { eq, and, sql } from "drizzle-orm";
-import { productVariants } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { eq, and, sql, inArray } from "drizzle-orm";
+import { inventoryMovements, productVariants } from "@scalius/database/schema";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
+type ReservationPool = "regular" | "preorder" | "backorder";
 
 /**
  * Reserve stock for a single variant using optimistic locking.
@@ -204,6 +205,50 @@ export async function reserveMultiple(
   return { success: true, results };
 }
 
+export type ReservationBatchItem = {
+  variantId: string;
+  quantity: number;
+  orderId?: string;
+  /**
+   * Stable idempotency namespace for strict reservation movement claims.
+   * Existing callers omit this and keep legacy random movement IDs.
+   */
+  reservationKey?: string;
+  /**
+   * Explicit movement claim ID. Prefer reservationKey for normal callers so
+   * releases can advance the generated claim generation.
+   */
+  movementId?: string;
+};
+
+export interface ReserveStockBatchOptions {
+  /**
+   * Stable idempotency namespace for callers that need replay-safe reservation
+   * claims. Queued checkout ingest uses this; admin/order-edit flows remain
+   * non-deterministic unless they explicitly opt in.
+   */
+  reservationKey?: string;
+}
+
+type ReserveStockBatchResult = {
+  success: boolean;
+  results: StockOperationResult[];
+  error?: string;
+  manualReconciliationRequired?: boolean;
+};
+
+type ReservationMovementClaim = {
+  id: string;
+  deterministic: boolean;
+  variantId: string;
+  orderId?: string;
+  type: "reserved" | "preorder_reserved";
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  notes: string;
+};
+
 /**
  * Atomically reserve stock for multiple variants using D1 batch.
  *
@@ -220,9 +265,10 @@ export async function reserveMultiple(
  */
 export async function reserveStockBatch(
   db: Database,
-  items: { variantId: string; quantity: number; orderId?: string }[],
-  pool: "regular" | "preorder" | "backorder" = "regular"
-): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
+  items: ReservationBatchItem[],
+  pool: ReservationPool = "regular",
+  options: ReserveStockBatchOptions = {},
+): Promise<ReserveStockBatchResult> {
   if (items.length === 0) {
     return { success: true, results: [] };
   }
@@ -249,7 +295,17 @@ export async function reserveStockBatch(
       };
     }
 
-    // Phase 3: Build all CAS update queries
+    // Phase 3: Build strict movement claims and all CAS update queries.
+    const movementClaims = await buildReservationMovementClaims(
+      db,
+      movementEntries,
+      variants,
+      pool,
+      options,
+    );
+    const movementQueries = movementClaims.map((claim) =>
+      buildReservationMovementInsert(db, claim, variants.get(claim.variantId)!)
+    );
     const updateQueries = entries.map((entry) => {
       const variant = variants.get(entry.variantId)!;
       const updateSet =
@@ -278,12 +334,21 @@ export async function reserveStockBatch(
         .returning({ id: productVariants.id });
     });
 
-    // Phase 4: Execute all updates atomically via D1 batch
+    // Phase 4: Execute all movement claims and updates atomically via D1 batch
     let batchResults: { id: string }[][];
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-      batchResults = await db.batch(updateQueries as any) as any;
+      batchResults = await safeBatch(db, [...movementQueries, ...updateQueries] as never) as { id: string }[][];
     } catch (err: unknown) {
+      const idempotentResult = await resolveDuplicateReservationBatch(
+        db,
+        movementClaims,
+        entries,
+        variants,
+        pool,
+        err,
+      );
+      if (idempotentResult) return idempotentResult;
+
       console.error("[inventory/reserve] Batch execution failed:", err);
       return {
         success: false,
@@ -298,19 +363,30 @@ export async function reserveStockBatch(
       };
     }
 
-    // Phase 5: Verify all CAS updates succeeded
-    const failedIndices: number[] = [];
-    for (let i = 0; i < batchResults.length; i++) {
+    // Phase 5: Verify all movement claims and CAS updates succeeded
+    const failedMovementIndices: number[] = [];
+    const insertedMovementIds: string[] = [];
+    for (let i = 0; i < movementClaims.length; i++) {
       const batchResult = batchResults[i];
       if (!batchResult || batchResult.length === 0) {
-        failedIndices.push(i);
+        failedMovementIndices.push(i);
+      } else {
+        insertedMovementIds.push(movementClaims[i]!.id);
       }
     }
 
-    if (failedIndices.length > 0) {
-      // CAS conflict on some variants — roll back all successful ones
+    const failedUpdateIndices: number[] = [];
+    for (let i = 0; i < updateQueries.length; i++) {
+      const batchResult = batchResults[movementQueries.length + i];
+      if (!batchResult || batchResult.length === 0) {
+        failedUpdateIndices.push(i);
+      }
+    }
+
+    if (failedMovementIndices.length > 0 || failedUpdateIndices.length > 0) {
+      // CAS conflict on some variants — roll back all successful claims/updates
       const rollbackQueries = entries
-        .filter((_, i) => !failedIndices.includes(i))
+        .filter((_, i) => !failedUpdateIndices.includes(i))
         .map((entry) => {
           return db
             .update(productVariants)
@@ -325,10 +401,13 @@ export async function reserveStockBatch(
             .where(eq(productVariants.id, entry.variantId));
         });
 
-      if (rollbackQueries.length > 0) {
+      const movementRollbackQueries = insertedMovementIds.map((id) =>
+        db.delete(inventoryMovements).where(eq(inventoryMovements.id, id))
+      );
+
+      if (rollbackQueries.length > 0 || movementRollbackQueries.length > 0) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-          await db.batch(rollbackQueries as any);
+          await safeBatch(db, [...movementRollbackQueries, ...rollbackQueries] as never);
         } catch (rollbackErr: unknown) {
           console.error("[inventory/reserve] Batch rollback failed:", rollbackErr);
         }
@@ -343,20 +422,28 @@ export async function reserveStockBatch(
 
       return {
         success: false,
-        results: entries.map((e, i) => ({
-          success: !failedIndices.includes(i),
-          variantId: e.variantId,
-          previousStock: 0,
-          newStock: 0,
-          error: failedIndices.includes(i)
-            ? `CAS conflict for variant ${e.variantId}`
-            : undefined,
-        })),
+        results: entries.map((e, i) => {
+          const movementFailed = failedMovementIndices.some(
+            (movementIndex) => movementClaims[movementIndex]?.variantId === e.variantId,
+          );
+          const updateFailed = failedUpdateIndices.includes(i);
+          return {
+            success: !movementFailed && !updateFailed,
+            variantId: e.variantId,
+            previousStock: 0,
+            newStock: 0,
+            error: updateFailed
+              ? `CAS conflict for variant ${e.variantId}`
+              : movementFailed
+                ? `Reservation claim conflict for variant ${e.variantId}`
+                : undefined,
+          };
+        }),
         error: `Failed to reserve stock batch after ${MAX_RETRIES} retries due to concurrent modifications`,
       };
     }
 
-    // Phase 6: All succeeded — record movements (best-effort via recordMovement)
+    // Phase 6: All succeeded
     const results: StockOperationResult[] = [];
     for (const entry of entries) {
       const variant = variants.get(entry.variantId)!;
@@ -366,29 +453,6 @@ export async function reserveStockBatch(
         : variant.stock;
 
       results.push({ success: true, variantId: entry.variantId, previousStock, newStock });
-    }
-
-    const preorderRunningStock = new Map<string, number>();
-    for (const entry of movementEntries) {
-      const variant = variants.get(entry.variantId)!;
-      const previousStock = pool === "preorder"
-        ? preorderRunningStock.get(entry.variantId) ?? variant.preorderStock
-        : variant.stock;
-      const newStock = pool === "preorder" ? previousStock - entry.quantity : variant.stock;
-
-      if (pool === "preorder") {
-        preorderRunningStock.set(entry.variantId, newStock);
-      }
-
-      await recordMovement(db, {
-        variantId: entry.variantId,
-        orderId: entry.orderId,
-        type: pool === "preorder" ? "preorder_reserved" : "reserved",
-        quantity: entry.quantity,
-        previousStock,
-        newStock,
-        notes: `Reserved ${entry.quantity} units (batch)${entry.orderId ? ` for order ${entry.orderId}` : ""}`,
-      });
     }
 
     return { success: true, results };
@@ -402,8 +466,6 @@ export async function reserveStockBatch(
   };
 }
 
-type ReservationBatchItem = { variantId: string; quantity: number; orderId?: string };
-
 type ReservationVariantState = {
   id: string;
   stock: number;
@@ -415,10 +477,215 @@ type ReservationVariantState = {
   stockVersion: number;
 };
 
+function reservationMovementType(pool: ReservationPool): "reserved" | "preorder_reserved" {
+  return pool === "preorder" ? "preorder_reserved" : "reserved";
+}
+
+async function createReservationMovementId(input: {
+  reservationKey: string;
+  orderId: string;
+  variantId: string;
+  pool: ReservationPool;
+  generation: number;
+}): Promise<string> {
+  const payload = [
+    input.reservationKey,
+    input.orderId,
+    input.variantId,
+    input.pool,
+    String(input.generation),
+  ].join("\0");
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(payload),
+  );
+  const hex = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+  return `reservation:${hex}`;
+}
+
+async function loadReservationReleaseGeneration(
+  db: Database,
+  orderId: string,
+  variantId: string,
+): Promise<number> {
+  const result = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(inventoryMovements)
+    .where(
+      and(
+        eq(inventoryMovements.orderId, orderId),
+        eq(inventoryMovements.variantId, variantId),
+        eq(inventoryMovements.type, "released"),
+      ),
+    )
+    .get();
+
+  return result?.count ?? 0;
+}
+
+async function buildReservationMovementClaims(
+  db: Database,
+  movementEntries: ReservationBatchItem[],
+  variants: Map<string, ReservationVariantState>,
+  pool: ReservationPool,
+  options: ReserveStockBatchOptions,
+): Promise<ReservationMovementClaim[]> {
+  const claims: ReservationMovementClaim[] = [];
+  const type = reservationMovementType(pool);
+  const preorderRunningStock = new Map<string, number>();
+
+  for (const entry of movementEntries) {
+    const variant = variants.get(entry.variantId)!;
+    const previousStock = pool === "preorder"
+      ? preorderRunningStock.get(entry.variantId) ?? variant.preorderStock
+      : variant.stock;
+    const newStock = pool === "preorder" ? previousStock - entry.quantity : variant.stock;
+    const reservationKey = entry.reservationKey ?? options.reservationKey;
+    const deterministic = Boolean(entry.movementId || (reservationKey && entry.orderId));
+    const generation = reservationKey && entry.orderId && !entry.movementId
+      ? await loadReservationReleaseGeneration(db, entry.orderId, entry.variantId)
+      : 0;
+    const id = entry.movementId
+      ?? (reservationKey && entry.orderId
+        ? await createReservationMovementId({
+            reservationKey,
+            orderId: entry.orderId,
+            variantId: entry.variantId,
+            pool,
+            generation,
+          })
+        : crypto.randomUUID());
+
+    if (pool === "preorder") {
+      preorderRunningStock.set(entry.variantId, newStock);
+    }
+
+    claims.push({
+      id,
+      deterministic,
+      variantId: entry.variantId,
+      orderId: entry.orderId,
+      type,
+      quantity: entry.quantity,
+      previousStock,
+      newStock,
+      notes: `Reserved ${entry.quantity} units (batch)${entry.orderId ? ` for order ${entry.orderId}` : ""}`,
+    });
+  }
+
+  return claims;
+}
+
+function buildReservationMovementInsert(
+  db: Database,
+  claim: ReservationMovementClaim,
+  variant: ReservationVariantState,
+) {
+  return db
+    .insert(inventoryMovements)
+    .select(sql`
+      SELECT
+        ${claim.id},
+        ${claim.variantId},
+        ${claim.orderId ?? null},
+        ${claim.type},
+        ${claim.quantity},
+        ${claim.previousStock},
+        ${claim.newStock},
+        ${claim.notes},
+        NULL,
+        unixepoch()
+      FROM ${productVariants}
+      WHERE ${productVariants.id} = ${claim.variantId}
+        AND ${productVariants.stockVersion} = ${variant.stockVersion}
+    `)
+    .returning({ id: inventoryMovements.id });
+}
+
+function isDuplicateReservationMovementClaimError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes("reservation:") ||
+    (message.includes("UNIQUE constraint failed") &&
+      message.includes("inventory_movements"))
+  );
+}
+
+async function resolveDuplicateReservationBatch(
+  db: Database,
+  movementClaims: ReservationMovementClaim[],
+  entries: ReservationBatchItem[],
+  variants: Map<string, ReservationVariantState>,
+  pool: ReservationPool,
+  err: unknown,
+): Promise<ReserveStockBatchResult | null> {
+  const deterministicClaims = movementClaims.filter((claim) => claim.deterministic);
+  if (
+    deterministicClaims.length === 0 ||
+    deterministicClaims.length !== movementClaims.length ||
+    !isDuplicateReservationMovementClaimError(err)
+  ) {
+    return null;
+  }
+
+  const existingRows = await db
+    .select({
+      id: inventoryMovements.id,
+      variantId: inventoryMovements.variantId,
+      orderId: inventoryMovements.orderId,
+      type: inventoryMovements.type,
+      quantity: inventoryMovements.quantity,
+    })
+    .from(inventoryMovements)
+    .where(inArray(inventoryMovements.id, deterministicClaims.map((claim) => claim.id)))
+    .all();
+  const existingById = new Map(existingRows.map((row) => [row.id, row]));
+  const mismatched = deterministicClaims.find((claim) => {
+    const row = existingById.get(claim.id);
+    return !row ||
+      row.variantId !== claim.variantId ||
+      row.orderId !== (claim.orderId ?? null) ||
+      row.type !== claim.type ||
+      row.quantity !== claim.quantity;
+  });
+
+  if (mismatched) {
+    return {
+      success: false,
+      results: entries.map((entry) => ({
+        success: false,
+        variantId: entry.variantId,
+        previousStock: 0,
+        newStock: 0,
+        error: "Reservation claim mismatch requires manual inventory reconciliation",
+      })),
+      error: "Reservation claim mismatch requires manual inventory reconciliation",
+      manualReconciliationRequired: true,
+    };
+  }
+
+  return {
+    success: true,
+    results: entries.map((entry) => {
+      const variant = variants.get(entry.variantId)!;
+      return {
+        success: true,
+        variantId: entry.variantId,
+        previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
+        newStock: pool === "preorder"
+          ? variant.preorderStock - entry.quantity
+          : variant.stock,
+      };
+    }),
+  };
+}
+
 export async function validateStockBatchAvailability(
   db: Database,
   items: ReservationBatchItem[],
-  pool: "regular" | "preorder" | "backorder" = "regular",
+  pool: ReservationPool = "regular",
 ): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
   if (items.length === 0) {
     return { success: true, results: [] };
@@ -534,9 +801,9 @@ function getStockAvailabilityErrors(
 }
 
 export function groupReservationMovementsForAudit(
-  items: { variantId: string; quantity: number; orderId?: string }[],
-): { variantId: string; quantity: number; orderId?: string }[] {
-  const grouped = new Map<string, { variantId: string; quantity: number; orderId?: string }>();
+  items: ReservationBatchItem[],
+): ReservationBatchItem[] {
+  const grouped = new Map<string, ReservationBatchItem>();
 
   for (const item of items) {
     const orderKey = item.orderId ?? "";

@@ -84,7 +84,10 @@ function createStatementDb(batch: () => Promise<unknown> = vi.fn().mockResolvedV
     })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({ get: vi.fn().mockResolvedValue(undefined) })),
+        where: vi.fn(() => ({
+          all: vi.fn().mockResolvedValue([]),
+          get: vi.fn().mockResolvedValue(undefined),
+        })),
       })),
     })),
     batch,
