@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 
 import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
-import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
 import {
     normalizeFirebaseServiceAccountJson,
@@ -59,7 +59,10 @@ app.openapi(getAuthRoute, async (c) => {
         const whatsapp = await getWhatsAppCloudApiSettings(
             db,
             getEncryptionKey(c.env as Record<string, unknown>),
-            { migrateLegacy: true },
+            {
+                migrateLegacy: true,
+                migrationEncryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+            },
         );
 
         return ok(c, {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "./whatsapp";
+import { decryptCredentials, encryptCredentials } from "../utils/credential-encryption";
 
 describe("WhatsApp Cloud API integration", () => {
   it("sends template messages with normalized recipients and body parameters", async () => {
@@ -209,6 +210,83 @@ describe("WhatsApp Cloud API integration", () => {
     expect(db.update).not.toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  it("does not migrate a legacy token when only the read fallback key is provided", async () => {
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: "legacy_token",
+        whatsappPhoneNumberId: "phone_id_1",
+        whatsappTemplateName: "auth_otp",
+      },
+      tokenRow: null,
+    });
+
+    const result = await getWhatsAppCloudApiSettings(db, "jwt-fallback-key", {
+      migrateLegacy: true,
+    });
+
+    expect(result).toMatchObject({
+      accessToken: "legacy_token",
+      accessTokenConfigured: true,
+      accessTokenSource: "legacy",
+    });
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("does not clear legacy plaintext after fallback-key decrypt without a dedicated migration key", async () => {
+    const fallbackKey = Buffer.alloc(32, 26).toString("base64");
+    const encryptedToken = `enc:${await encryptCredentials("encrypted_token", fallbackKey)}`;
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: "legacy_token",
+        whatsappPhoneNumberId: "phone_id_1",
+        whatsappTemplateName: "auth_otp",
+      },
+      tokenRow: { value: encryptedToken },
+    });
+
+    const result = await getWhatsAppCloudApiSettings(db, fallbackKey, {
+      migrateLegacy: true,
+    });
+
+    expect(result).toMatchObject({
+      accessToken: "encrypted_token",
+      accessTokenConfigured: true,
+      accessTokenSource: "encrypted",
+    });
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("migrates legacy plaintext only with a dedicated credential encryption key", async () => {
+    const migrationKey = Buffer.alloc(32, 27).toString("base64");
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: "legacy_token",
+        whatsappPhoneNumberId: "phone_id_1",
+        whatsappTemplateName: "auth_otp",
+      },
+      tokenRow: null,
+    });
+
+    await getWhatsAppCloudApiSettings(db, "jwt-fallback-key", {
+      migrateLegacy: true,
+      migrationEncryptionKey: migrationKey,
+    });
+
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    const storedValue = db.getInsertedValues()[0]?.value;
+    expect(storedValue).toMatch(/^enc:/);
+    expect(storedValue).not.toContain("legacy_token");
+    await expect(
+      decryptCredentials(String(storedValue).slice("enc:".length), migrationKey),
+    ).resolves.toBe("legacy_token");
+    expect(db.update).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createSettingsDb(input: {
@@ -220,6 +298,7 @@ function createSettingsDb(input: {
   } | null;
   tokenRow: { value: string } | null;
 }) {
+  const insertedValues: Array<{ value: string }> = [];
   const db = {
     select: vi.fn((selection?: Record<string, unknown>) => {
       const selectedToken = Boolean(selection && "value" in selection && Object.keys(selection).length === 1);
@@ -234,14 +313,22 @@ function createSettingsDb(input: {
             limit: vi.fn(() => ({
               get: vi.fn(async () => input.site),
             })),
-          }),
+        }),
       };
     }),
+    insert: vi.fn(() => ({
+      values: vi.fn((row: { value: string }) => ({
+        onConflictDoUpdate: vi.fn(async () => {
+          insertedValues.push(row);
+        }),
+      })),
+    })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
         where: vi.fn(async () => undefined),
       })),
     })),
+    getInsertedValues: () => insertedValues,
   };
 
   return db as typeof db & Parameters<typeof getWhatsAppCloudApiSettings>[0];

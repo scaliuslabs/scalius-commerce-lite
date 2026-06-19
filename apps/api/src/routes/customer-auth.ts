@@ -33,7 +33,7 @@ import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, Ser
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
 import { ok } from "../utils/api-response";
-import { getEncryptionKey } from "../utils/encryption-key";
+import { getCredentialEncryptionKey, getEncryptionKey } from "../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -96,6 +96,7 @@ app.openapi(sendOtpRoute, async (c) => {
     name,
     ip,
     encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
 
   if (!result.success) {

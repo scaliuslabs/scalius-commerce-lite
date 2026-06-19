@@ -44,7 +44,7 @@ import {
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { getEncryptionKey } from "./utils/encryption-key";
+import { getCredentialEncryptionKey, getEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
@@ -403,6 +403,7 @@ async function processQueueMessage(
           db,
           {
             encryptionKey,
+            migrationEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
             env: env as unknown as Record<string, unknown>,
             outboxId: payload.outboxId,
           },
@@ -586,7 +587,10 @@ async function sendAuthOtpWhatsApp(
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
   const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
-  const config = await getWhatsAppCloudApiSettings(db, encryptionKey, { migrateLegacy: true });
+  const config = await getWhatsAppCloudApiSettings(db, encryptionKey, {
+    migrateLegacy: true,
+    migrationEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+  });
   if (!config.accessToken || !config.phoneNumberId) {
     throw createAuthOtpDeliveryError("WhatsApp credentials are not configured", {
       provider: "whatsapp",

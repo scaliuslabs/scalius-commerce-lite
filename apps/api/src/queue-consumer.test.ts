@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getDecimalPlaces: vi.fn(() => 2),
   getActiveSmsProvider: vi.fn(),
   getEncryptionKey: vi.fn(() => "test-key"),
+  getCredentialEncryptionKey: vi.fn(() => "credential-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
   getAdminNotificationChannels: vi.fn(),
   claimOrderNotificationOutboxForProcessing: vi.fn(),
@@ -85,6 +86,7 @@ vi.mock("@scalius/core/integrations/sms", () => ({
 
 vi.mock("./utils/encryption-key", () => ({
   getEncryptionKey: mocks.getEncryptionKey,
+  getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
 }));
 
 vi.mock("./utils/cache-invalidation", () => ({
@@ -378,6 +380,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       {
         encryptionKey: "test-key",
+        migrationEncryptionKey: "credential-key",
         env: {
           CREDENTIAL_ENCRYPTION_KEY: "credential-key",
         },
@@ -660,7 +663,10 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
       { id: "db" },
       "test-key",
-      { migrateLegacy: true },
+      {
+        migrateLegacy: true,
+        migrationEncryptionKey: "credential-key",
+      },
     );
     expect(mocks.sendWhatsAppTemplateMessage).toHaveBeenCalledWith({
       accessToken: "wa_token",
