@@ -87,9 +87,11 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 ### `auth.send_otp`
 - Enqueued by: Customer auth flow
 - Handler: Inline in queue consumer
-  - `method: "email"` -- Sends OTP code via email provider
-  - `method: "phone"` + `allowedMethod: "whatsapp_otp"` -- Sends OTP via WhatsApp Business API template
-  - `method: "phone"` + other -- Sends OTP via active SMS provider (`getActiveSmsProvider()`)
+  - Claims `auth_otp_delivery_receipts` by `deliveryKey` before provider work
+  - Skips already accepted/delivered/skipped receipts and marks expired OTP attempts as skipped instead of sending stale codes
+  - `method: "email"` -- Sends OTP code via email provider. Resend receives `deliveryKey` as `Idempotency-Key`; Cloudflare Email stores the returned `messageId`.
+  - `method: "phone"` + `allowedMethod: "whatsapp_otp"` -- Sends OTP via WhatsApp Business API template and stores Meta message IDs when returned
+  - `method: "phone"` + other -- Sends OTP via active SMS provider (`getActiveSmsProvider()`); GenNet receives a deterministic receipt-derived client reference as `csms_id`
 
 ## Files
 
@@ -97,10 +99,11 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 - `notifications.service.ts` -- both functions
 - `order-notification-outbox.ts` -- parent queue handoff/replay state
 - `order-notification-delivery-receipts.ts` -- per-channel receipt claims and accepted/failed/skipped marks
+- `../customers/otp-delivery-receipts.ts` -- customer OTP receipt claims and provider idempotency helper
 
 ## Dependencies
 
-- `@scalius/database` -- `adminFcmTokens` table (FCM tokens), `settings` table (Firebase credentials)
+- `@scalius/database` -- `adminFcmTokens` table (FCM tokens), `settings` table (Firebase credentials), `authOtpDeliveryReceipts` table (customer OTP delivery fencing)
 - `@scalius/core/integrations/firebase/admin` -- `getFirebaseAdminMessaging()` for FCM REST API
 - `@scalius/core/integrations/email` -- `sendEmail()` for transactional emails
 - `@scalius/core/integrations/sms` -- `getActiveSmsProvider()` for SMS channel dispatch (4 providers: smsnetbd, bdbulksms, mimsms, gennet)

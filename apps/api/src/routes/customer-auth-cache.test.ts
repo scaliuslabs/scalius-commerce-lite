@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
+  sendOtp: vi.fn(),
   getCustomerBySession: vi.fn(),
   getCustomerOrders: vi.fn(),
   getSessionCookie: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
-  sendOtp: vi.fn(),
+  sendOtp: mocks.sendOtp,
   verifyOtp: vi.fn(),
   getCustomerBySession: mocks.getCustomerBySession,
   deleteCustomerSession: vi.fn(),
@@ -46,6 +47,10 @@ describe("customer auth private cache policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSessionCookie.mockReturnValue("session_1");
+    mocks.sendOtp.mockResolvedValue({
+      success: true,
+      message: "Verification code sent to your email",
+    });
     mocks.getCustomerBySession.mockResolvedValue({
       email: "customer@example.com",
       name: "Customer",
@@ -102,5 +107,57 @@ describe("customer auth private cache policy", () => {
     );
     expect(response.headers.get("Pragma")).toBe("no-cache");
     expect(response.headers.get("Expires")).toBe("0");
+  });
+
+  it("clears OTP KV state when queue handoff fails", async () => {
+    const app = createTestApp();
+    const queueSend = vi.fn().mockRejectedValue(new Error("queue down"));
+    const kvDelete = vi.fn().mockResolvedValue(undefined);
+    mocks.sendOtp.mockResolvedValue({
+      success: true,
+      message: "Verification code sent to your email",
+      otpStorageKey: "cust_otp:buyer@example.com",
+      queuePayload: {
+        type: "auth.send_otp",
+        deliveryKey: "otp_delivery_1",
+        purpose: "customer_login",
+        otpExpiresAt: 4_102_444_800,
+        method: "email",
+        allowedMethod: "email",
+        identifier: "buyer@example.com",
+        code: "123456",
+        name: "Buyer",
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/customer-auth/send-otp",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "email",
+          identifier: "Buyer@Example.com",
+          name: "Buyer",
+        }),
+      },
+      {
+        CACHE: { delete: kvDelete },
+        AUTH_OTP_QUEUE: { send: queueSend },
+      } as never,
+    );
+
+    expect(response.status).toBe(503);
+    expect(queueSend).toHaveBeenCalledWith(expect.objectContaining({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_1",
+    }));
+    expect(kvDelete).toHaveBeenCalledWith("cust_otp:buyer@example.com");
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+      },
+    });
   });
 });

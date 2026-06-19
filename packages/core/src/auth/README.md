@@ -196,11 +196,13 @@ Completely separate from Better Auth. OTP-based, sessionless JWT-free design usi
 
 ### Flow
 
-1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings for allowed method (email/phone/both), rate limits by IP, generates 6-digit OTP, stores in KV, returns queue payload for async delivery
-2. `verifyOtp()` -- normalizes identifier to E.164, validates OTP, creates/finds customer in DB, creates KV session, returns `CustomerSession` with `cs_tok` cookie
-3. `getCustomerBySession()` -- retrieves session from KV by token
-4. `deleteCustomerSession()` -- logout
-5. `updateCustomerProfile()` -- updates the customer DB record and refreshes the KV session name; address/location fields are persisted in D1 but not mirrored into the session object
+1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings for allowed method (email/phone/both), validates delivery transport before mutating KV, rate limits by IP, generates 6-digit OTP, stores in KV, returns queue payload with `deliveryKey` and `otpExpiresAt` for async delivery
+2. `/send-otp` sends the payload to `AUTH_OTP_QUEUE`; if queue handoff fails, it deletes the exact OTP KV key and returns retryable `503`
+3. Queue delivery claims `auth_otp_delivery_receipts`, skips terminal/expired attempts, and records provider refs/status for email, SMS, or WhatsApp delivery
+4. `verifyOtp()` -- normalizes identifier to E.164, validates OTP, creates/finds customer in DB, creates KV session, returns `CustomerSession` with `cs_tok` cookie
+5. `getCustomerBySession()` -- retrieves session from KV by token
+6. `deleteCustomerSession()` -- logout
+7. `updateCustomerProfile()` -- updates the customer DB record and refreshes the KV session name; address/location fields are persisted in D1 but not mirrored into the session object
 
 Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer records auto-created on first successful OTP verification.
 

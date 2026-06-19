@@ -12,6 +12,9 @@ import type { SiteSettings } from "@scalius/database/schema";
 
 export interface OtpQueuePayload {
   type: "auth.send_otp";
+  deliveryKey: string;
+  purpose?: string;
+  otpExpiresAt?: number;
   method: "email" | "phone";
   allowedMethod: string;
   identifier: string;
@@ -39,6 +42,8 @@ export interface OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    deliveryKey: string,
+    otpExpiresAt: number,
   ): OtpQueuePayload;
 
   /**
@@ -61,9 +66,14 @@ export class EmailOtpTransport implements OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    deliveryKey: string,
+    otpExpiresAt: number,
   ): OtpQueuePayload {
     return {
       type: "auth.send_otp",
+      deliveryKey,
+      purpose: "customer_login",
+      otpExpiresAt,
       method: "email",
       allowedMethod: settings.authVerificationMethod,
       identifier,
@@ -87,9 +97,14 @@ export class SmsOtpTransport implements OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    deliveryKey: string,
+    otpExpiresAt: number,
   ): OtpQueuePayload {
     return {
       type: "auth.send_otp",
+      deliveryKey,
+      purpose: "customer_login",
+      otpExpiresAt,
       method: "phone",
       allowedMethod: settings.authVerificationMethod,
       identifier,
@@ -113,9 +128,14 @@ export class WhatsAppOtpTransport implements OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    deliveryKey: string,
+    otpExpiresAt: number,
   ): OtpQueuePayload {
     return {
       type: "auth.send_otp",
+      deliveryKey,
+      purpose: "customer_login",
+      otpExpiresAt,
       method: "phone",
       allowedMethod: "whatsapp_otp",
       identifier,

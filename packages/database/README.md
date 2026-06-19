@@ -114,6 +114,7 @@ the schema declarations are the source of truth.
 |-------|---------|
 | `customers` | Customer records. `phone` (unique), order totals, last order timestamp, address IDs/names |
 | `customerHistory` | Change audit log. `changeType` ("created"/"updated"/"deleted") |
+| `authOtpDeliveryReceipts` | Customer OTP delivery receipt fence. One row per OTP attempt/channel, with recipient hash/mask, provider refs, claim lease, retry status, and OTP expiry |
 
 ### `orders.ts` -- Order Domain
 
@@ -206,6 +207,7 @@ These `text()` columns store serialized JSON. Shapes documented from core servic
 | `metaConversionsLogs.requestPayload` | `string` (JSON, Meta CAPI request body) |
 | `metaConversionsLogs.responsePayload` | `string` (JSON, Meta CAPI response body, nullable) |
 | `adminFcmTokens.deviceInfo` | `string` (JSON, device metadata, nullable) |
+| `authOtpDeliveryReceipts.rawResponse` | `string` (bounded provider response summary, nullable; must not contain OTP code or provider secrets) |
 
 ## Entity ID Prefixes
 
@@ -222,6 +224,7 @@ All entity IDs are `text` primary keys generated as `"prefix_" + nanoid()`.
 | `attr_` | Attribute definition | `productAttributes` |
 | `cust_` | Customer | `customers` |
 | `hist_` | Customer history entry | `customerHistory` |
+| `aor_` | Auth OTP delivery receipt | `authOtpDeliveryReceipts` |
 | `disc_` | Discount | `discounts` |
 | `dp_` | Discount-product link | `discountProducts` |
 | `dc_` | Discount-collection link | `discountCollections` |

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(() => ({ id: "db" })),
@@ -18,6 +18,12 @@ const mocks = vi.hoisted(() => ({
   claimOrderNotificationOutboxForProcessing: vi.fn(),
   markOrderNotificationOutboxProcessingFailed: vi.fn(),
   markOrderNotificationOutboxSent: vi.fn(),
+  createAuthOtpDeliveryTarget: vi.fn(),
+  claimAuthOtpDeliveryReceipt: vi.fn(),
+  markAuthOtpDeliveryReceiptAccepted: vi.fn(),
+  markAuthOtpDeliveryReceiptFailed: vi.fn(),
+  markAuthOtpDeliveryReceiptSkipped: vi.fn(),
+  createAuthOtpProviderClientReference: vi.fn(() => "otpclientref1"),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -43,6 +49,15 @@ vi.mock("@scalius/core/modules/notifications", () => ({
   claimOrderNotificationOutboxForProcessing: mocks.claimOrderNotificationOutboxForProcessing,
   markOrderNotificationOutboxProcessingFailed: mocks.markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent: mocks.markOrderNotificationOutboxSent,
+}));
+
+vi.mock("@scalius/core/modules/customers/otp-delivery-receipts", () => ({
+  createAuthOtpDeliveryTarget: mocks.createAuthOtpDeliveryTarget,
+  claimAuthOtpDeliveryReceipt: mocks.claimAuthOtpDeliveryReceipt,
+  markAuthOtpDeliveryReceiptAccepted: mocks.markAuthOtpDeliveryReceiptAccepted,
+  markAuthOtpDeliveryReceiptFailed: mocks.markAuthOtpDeliveryReceiptFailed,
+  markAuthOtpDeliveryReceiptSkipped: mocks.markAuthOtpDeliveryReceiptSkipped,
+  createAuthOtpProviderClientReference: mocks.createAuthOtpProviderClientReference,
 }));
 
 vi.mock("@scalius/core/integrations/email", () => ({
@@ -155,7 +170,13 @@ describe("handleQueueBatch payment confirmation retries", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     mocks.sendOrderNotificationEmail.mockResolvedValue(undefined);
     mocks.sendOrderNotification.mockResolvedValue(undefined);
-    mocks.sendEmail.mockResolvedValue(undefined);
+    mocks.sendEmail.mockResolvedValue({
+      success: true,
+      provider: "cloudflare",
+      providerRef: "cf_msg_1",
+      rawStatus: "accepted",
+    });
+    mocks.getActiveSmsProvider.mockResolvedValue(null);
     mocks.getAdminNotificationChannels.mockResolvedValue({});
     mocks.claimOrderNotificationOutboxForProcessing.mockResolvedValue({
       claimed: true,
@@ -165,6 +186,30 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
     mocks.markOrderNotificationOutboxProcessingFailed.mockResolvedValue(undefined);
     mocks.markOrderNotificationOutboxSent.mockResolvedValue(undefined);
+    mocks.createAuthOtpDeliveryTarget.mockImplementation(async (input) => ({
+      ...input,
+      purpose: input.purpose ?? "customer_login",
+      identifierHash: "recipient_hash_1",
+      identifierMasked: "b***@example.com",
+      otpExpiresAt: input.otpExpiresAt ?? null,
+    }));
+    mocks.claimAuthOtpDeliveryReceipt.mockResolvedValue({
+      claimed: true,
+      receipt: {
+        id: "aor_1",
+        deliveryKey: "otp_delivery_1",
+        claimId: "aorc_1",
+        attempts: 1,
+      },
+    });
+    mocks.markAuthOtpDeliveryReceiptAccepted.mockResolvedValue(undefined);
+    mocks.markAuthOtpDeliveryReceiptFailed.mockResolvedValue(undefined);
+    mocks.markAuthOtpDeliveryReceiptSkipped.mockResolvedValue(undefined);
+    mocks.createAuthOtpProviderClientReference.mockReturnValue("otpclientref1");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("retries confirmed payment messages when processing returns an unsuccessful result", async () => {
@@ -456,6 +501,9 @@ describe("handleQueueBatch payment confirmation retries", () => {
   it("passes env and encryption context to OTP email dispatch", async () => {
     const message = createMessage({
       type: "auth.send_otp",
+      deliveryKey: "otp_delivery_1",
+      purpose: "customer_login",
+      otpExpiresAt: 4_102_444_800,
       method: "email",
       allowedMethod: "email",
       identifier: "buyer@example.com",
@@ -476,11 +524,176 @@ describe("handleQueueBatch payment confirmation retries", () => {
         to: "buyer@example.com",
         subject: "Your login code",
         text: "Your login code is: 123456\n\nExpires in 5 minutes.",
+        idempotencyKey: "otp_delivery_1",
       }),
       {
         db: { id: "db" },
         env,
         encryptionKey: "test-key",
+      },
+    );
+    expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
+      { id: "db" },
+      {
+        id: "aor_1",
+        deliveryKey: "otp_delivery_1",
+        claimId: "aorc_1",
+        attempts: 1,
+      },
+      {
+        provider: "cloudflare",
+        providerMessageId: "cf_msg_1",
+        providerStatus: "accepted",
+      },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries OTP email when providers fall back to local logging", async () => {
+    mocks.sendEmail.mockResolvedValue({
+      success: false,
+      provider: "log",
+      rawStatus: "No configured email provider available; logged locally only",
+    });
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_1",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.markAuthOtpDeliveryReceiptFailed).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+      expect.any(Error),
+      {
+        provider: "log",
+        providerMessageId: undefined,
+        providerStatus: "No configured email provider available; logged locally only",
+      },
+    );
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  });
+
+  it("passes deterministic OTP client references to the active SMS provider", async () => {
+    const smsProvider = {
+      name: "gennet",
+      validateConfig: vi.fn(() => null),
+      sendSms: vi.fn().mockResolvedValue({
+        success: true,
+        providerRef: "sms_ref_1",
+        rawStatus: "SUCCESS",
+      }),
+    };
+    mocks.getActiveSmsProvider.mockResolvedValue(smsProvider);
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_sms_1",
+      otpExpiresAt: 4_102_444_800,
+      method: "phone",
+      allowedMethod: "sms_otp",
+      identifier: "+8801712345678",
+      code: "654321",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(smsProvider.sendSms).toHaveBeenCalledWith({
+      to: "+8801712345678",
+      message: "Your login code: 654321\n\nValid for 5 minutes. Do not share.",
+      clientReference: "otpclientref1",
+    });
+    expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+      {
+        provider: "gennet",
+        providerMessageId: "sms_ref_1",
+        providerStatus: "SUCCESS",
+      },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("records WhatsApp OTP message IDs from Meta responses", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ messages: [{ id: "wamid.otp.1" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_wa_1",
+      otpExpiresAt: 4_102_444_800,
+      method: "phone",
+      allowedMethod: "whatsapp_otp",
+      identifier: "+8801712345678",
+      code: "654321",
+      name: "Buyer",
+      waToken: "wa_token",
+      waPhoneId: "phone_id_1",
+      waTemplate: "auth_otp",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/phone_id_1/messages"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer wa_token" }),
+      }),
+    );
+    expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toMatchObject({
+      messaging_product: "whatsapp",
+      to: "8801712345678",
+      type: "template",
+    });
+    expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+      {
+        provider: "whatsapp",
+        providerMessageId: "wamid.otp.1",
+        providerStatus: "accepted",
+        rawResponse: JSON.stringify({ messageId: "wamid.otp.1" }),
+      },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips expired OTP deliveries instead of sending stale codes", async () => {
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_expired_1",
+      otpExpiresAt: 1,
+      method: "email",
+      allowedMethod: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+      "otp_expired",
+      {
+        provider: "email",
+        providerStatus: "otp_expired",
       },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);

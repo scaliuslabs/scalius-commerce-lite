@@ -11,6 +11,7 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 | `customers.validation.ts` | Canonical Zod schemas: `createCustomerSchema` (uses `phoneNumberSchema` from `@scalius/shared/customer-utils`), `updateCustomerSchema` (partial). Imported by both service and API routes. |
 | `customer-auth.service.ts` | Storefront auth: `sendOtp()`, `verifyOtp()`, `getCustomerBySession()`, `deleteCustomerSession()`, `updateCustomerProfile()`. Cookie/session helpers. Imported directly by path (not through `index.ts`) |
 | `otp-transport.ts` | `OtpTransport` interface + three implementations: `EmailOtpTransport`, `SmsOtpTransport`, `WhatsAppOtpTransport`. Factory: `getOtpTransport()` |
+| `otp-delivery-receipts.ts` | D1 receipt helper for OTP delivery claims, accepted/failed/skipped marks, recipient hashing/masking, and provider client references |
 
 ## Features
 
@@ -49,9 +50,17 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 ### OTP Authentication (`customer-auth.service.ts`)
 
 **Flow:**
-1. `sendOtp()` -- validates identifier format, normalizes phone to E.164, checks site settings for allowed auth method, enforces IP rate limiting (5 requests/10 min via KV), enforces per-identifier cooldown (2 min), generates 6-digit cryptographic OTP, stores in KV with 5-min TTL and 0 attempts counter, resolves transport via factory, validates transport config, returns queue payload
-2. Queue consumer (in `apps/api/src/queue-consumer.ts`) delivers OTP via the selected transport (email, SMS, WhatsApp)
-3. `verifyOtp()` -- normalizes identifier to E.164 for phone method, validates code against KV, enforces max 5 attempts (increments counter in KV), on success: looks up or creates customer in DB, creates 30-day session in KV, returns session token
+1. `sendOtp()` -- validates identifier format, normalizes phone to E.164, checks site settings for allowed auth method, resolves/validates the transport before mutating KV, enforces IP rate limiting (5 requests/10 min via KV), enforces per-identifier cooldown (2 min), generates 6-digit cryptographic OTP, stores in KV with 5-min TTL and 0 attempts counter, and returns a queue payload with `deliveryKey` + `otpExpiresAt`
+2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after KV write, it deletes the exact `cust_otp:*` key and returns retryable `503`
+3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
+4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
+5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, validates code against KV, enforces max 5 attempts (increments counter in KV), on success: looks up or creates customer in DB, creates 30-day session in KV, returns session token
+
+**Delivery idempotency:**
+- Email sends pass `deliveryKey` as `idempotencyKey`; Resend forwards it as `Idempotency-Key`, while Cloudflare Email stores the returned `messageId`
+- SMS sends pass `createAuthOtpProviderClientReference()` as deterministic `clientReference`; GenNet maps this to `csms_id`
+- WhatsApp sends parse and store Meta message IDs from successful template-message responses
+- OTP codes stay only in KV/queue payloads. The D1 receipt stores recipient hash/mask, status, provider refs, bounded response summaries, and OTP expiry, never the code.
 
 **Session management:**
 - Cookie name: `cs_tok` (HttpOnly, Secure)
@@ -124,7 +133,7 @@ Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE custom
 
 ## Dependencies
 
-- `@scalius/database` -- `customers`, `customerHistory`, `deliveryLocations`, `siteSettings`, `orders` (the latter three accessed in route handlers, not the service)
+- `@scalius/database` -- `customers`, `customerHistory`, `authOtpDeliveryReceipts`, `deliveryLocations`, `siteSettings`, `orders` (the latter three accessed in route handlers, not the service)
 - `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `validateAndFormatPhone`, `isValidPhoneNumber`, `formatPhoneForDisplay`, `calculateCustomerStats`
 - `@scalius/core/errors` -- `ValidationError`, `ForbiddenError`, `RateLimitError`, `ServiceUnavailableError`
 - `@scalius/core/search` -- `ftsMatch` for FTS5 search
@@ -144,6 +153,14 @@ Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE custom
 - `changeType` enum: `"created"`, `"updated"`, `"deleted"`
 - `createdAt`
 
+**`authOtpDeliveryReceipts`** table:
+- `id` (PK, `aor_` prefix), `deliveryKey` (unique), `purpose` (`customer_login` today), `method`, `channel`, `provider`
+- `identifierHash` + `identifierMasked` for audit/debug without storing raw recipient in receipt search paths
+- `status`: `"pending"`, `"processing"`, `"accepted"`, `"delivered"`, `"failed"`, `"skipped"`
+- Claim fields: `attempts`, `nextAttemptAt`, `claimId`, `claimExpiresAt`, `lastAttemptAt`, `lastError`
+- Provider fields: `providerMessageId`, `providerStatus`, `rawResponse`
+- Lifecycle fields: `acceptedAt`, `deliveredAt`, `failedAt`, `skippedAt`, `otpExpiresAt`, `createdAt`, `updatedAt`
+
 **FTS5 index** (`customers_fts`):
 - Content table: `customers`
 - Indexed columns: `name`, `phone`, `email`
@@ -155,7 +172,7 @@ Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE custom
 
 2. **Index barrel omission**: `index.ts` only re-exports `customers.service`. `customer-auth.service.ts` and `otp-transport.ts` must be imported by direct path.
 
-3. **SMS transport**: `SmsOtpTransport.validateConfig()` returns `null` (always valid). SMS delivery is handled by the queue consumer via `getActiveSmsProvider()` with 4 supported providers (smsnetbd, bdbulksms, mimsms, gennet).
+3. **SMS transport**: `SmsOtpTransport.validateConfig()` returns `null` because SMS provider selection lives in settings. Queue delivery fails/retries with a receipt error if `getActiveSmsProvider()` cannot resolve a configured provider. Supported providers: smsnetbd, bdbulksms, mimsms, gennet.
 
 4. **Profile update limitations**: `updateCustomerProfile()` (storefront) only syncs `name` back to the KV session. Address/city/zone/cityName/zoneName are updated in DB but not reflected in the session object.
 

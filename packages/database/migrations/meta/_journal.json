@@ -316,6 +316,13 @@
       "when": 1781838323294,
       "tag": "0044_famous_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1781840048472,
+      "tag": "0045_rare_steel_serpent",
+      "breakpoints": true
     }
   ]
 }
