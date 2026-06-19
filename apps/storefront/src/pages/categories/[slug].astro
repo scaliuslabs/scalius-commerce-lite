@@ -28,6 +28,7 @@ import {
   hasDynamicProductListFilterParams,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   SlidersHorizontal,
   X,
@@ -205,7 +206,7 @@ const ogImageUrl = category?.imageUrl
 
 // CollectionPage JSON-LD with embedded BreadcrumbList (per SEO-03, SEO-04)
 const collectionJsonLd = category
-  ? JSON.stringify({
+  ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "CollectionPage",
       name: category.name,

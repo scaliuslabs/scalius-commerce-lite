@@ -16978,7 +16978,7 @@ export type GetApiV1AdminSettingsThemeResponses = {
         success: true;
         data: {
             colors: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
             [key: string]: unknown;
         };
@@ -16990,7 +16990,7 @@ export type GetApiV1AdminSettingsThemeResponse = GetApiV1AdminSettingsThemeRespo
 export type PostApiV1AdminSettingsThemeData = {
     body?: {
         colors: {
-            [key: string]: unknown;
+            [key: string]: string;
         };
     };
     path?: never;

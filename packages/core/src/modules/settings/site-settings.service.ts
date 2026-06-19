@@ -8,6 +8,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { upsertSetting } from "../payments/gateway-settings";
+import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
@@ -230,15 +231,26 @@ export async function getThemeSettings(db: Database) {
     )
     .get();
 
-  const colors = row?.value ? JSON.parse(row.value) : {};
-  return { colors };
+  let colors: unknown = {};
+  if (row?.value) {
+    try {
+      colors = JSON.parse(row.value);
+    } catch (e: unknown) {
+      console.warn(
+        "[Settings] Failed to parse storefront theme colors:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  return { colors: sanitizeStorefrontThemeColors(colors as Record<string, unknown>) };
 }
 
 export async function saveThemeSettings(
   db: Database,
   colors: Record<string, unknown>,
 ) {
-  await upsertSetting(db, "theme", "storefront_colors", JSON.stringify(colors));
+  const sanitized = sanitizeStorefrontThemeColors(colors);
+  await upsertSetting(db, "theme", "storefront_colors", JSON.stringify(sanitized));
 }
 
 // ─────────────────────────────────────────

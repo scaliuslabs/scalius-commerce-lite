@@ -13,6 +13,9 @@ import {
   getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
 
 interface Props {
   title: string;
@@ -94,7 +97,7 @@ const socialUrls = (footerData.social || [])
   .map((s: { url?: string }) => s.url)
   .filter(Boolean);
 const orgJsonLd = logoUrl
-  ? JSON.stringify({
+  ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "Organization",
       name: storeName,
@@ -106,7 +109,7 @@ const orgJsonLd = logoUrl
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
 const websiteJsonLd = storefrontUrl
-  ? JSON.stringify({
+  ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "WebSite",
       name: storeName,
@@ -122,7 +125,6 @@ const websiteJsonLd = storefrontUrl
     })
   : null;
 
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const currencyDecimalPlaces =
@@ -130,10 +132,10 @@ const currencyDecimalPlaces =
 
 // Build dynamic CSS overrides from admin-configured theme colors.
 // Only non-empty color values are included.
-const themeColors = layoutData?.theme?.colors ?? {};
-const themeColorEntries = Object.entries(themeColors).filter(
-  ([, v]) => v && v.trim(),
+const themeColors = sanitizeStorefrontThemeColors(
+  layoutData?.theme?.colors ?? {},
 );
+const themeColorEntries = Object.entries(themeColors);
 const themeStyleBlock =
   themeColorEntries.length > 0
     ? `:root, .site-root { ${themeColorEntries.map(([k, v]) => `--${k}: ${v}`).join("; ")}; }`
@@ -194,6 +196,17 @@ const imageCdnAliases = (mediaSettings?.canonicalHostAliases ?? [])
 
 const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
 const cdnDomain = cdnDomainUrl || null;
+const runtimeGlobalsScript = [
+  `window.__API_BASE_URL__=${serializeJsonForInlineScript(publicApiUrl)};`,
+  `window.__CDN_DOMAIN__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
+  `window.__IMAGE_OPTIMIZATION_ENABLED__=${serializeJsonForInlineScript(imageOptimizationEnabled)};`,
+  `window.__IMAGE_CDN_BASE_URL__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
+  `window.__IMAGE_CDN_HOSTS__=${serializeJsonForInlineScript(imageCdnHosts)};`,
+  `window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${serializeJsonForInlineScript(imageCdnAliases)};`,
+  `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
+  `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
+  `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
+].join("");
 ---
 
 <!doctype html>
@@ -212,10 +225,7 @@ const cdnDomain = cdnDomainUrl || null;
     }
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
-    <script
-      is:inline
-      set:html={`window.__API_BASE_URL__=${JSON.stringify(publicApiUrl)};window.__CDN_DOMAIN__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_OPTIMIZATION_ENABLED__=${JSON.stringify(imageOptimizationEnabled)};window.__IMAGE_CDN_BASE_URL__=${JSON.stringify(cdnDomainUrl || "")};window.__IMAGE_CDN_HOSTS__=${JSON.stringify(imageCdnHosts)};window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${JSON.stringify(imageCdnAliases)};window.__CURRENCY_SYMBOL__=${JSON.stringify(currencySymbol)};window.__CURRENCY_CODE__=${JSON.stringify(currencyCode)};window.__CURRENCY_DECIMAL_PLACES__=${currencyDecimalPlaces};`}
-    />
+    <script is:inline set:html={runtimeGlobalsScript} />
 
     <!-- Stale Asset Detector -->
     <script is:inline>

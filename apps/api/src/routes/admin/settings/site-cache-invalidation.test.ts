@@ -223,4 +223,20 @@ describe("site settings cache invalidation", () => {
 
     warn.mockRestore();
   });
+
+  it("rejects unsafe theme colors before saving or invalidating cache", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, "POST", "/theme", {
+      colors: {
+        primary: "#059669",
+        background: "#fff; color: red",
+        unsafe: "#000",
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
 });

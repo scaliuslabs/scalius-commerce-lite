@@ -7,6 +7,7 @@ import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy,
@@ -128,7 +129,7 @@ const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31)
   .split("T")[0];
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
-const productJsonLd = JSON.stringify({
+const productJsonLd = serializeJsonForInlineScript({
   "@context": "https://schema.org",
   "@type": "Product",
   name: product.name,
@@ -168,7 +169,7 @@ const breadcrumbItems = [
     item: canonicalUrl,
   },
 ];
-const breadcrumbJsonLd = JSON.stringify({
+const breadcrumbJsonLd = serializeJsonForInlineScript({
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   itemListElement: breadcrumbItems,

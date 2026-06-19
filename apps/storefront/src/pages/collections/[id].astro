@@ -11,6 +11,7 @@ import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { getProductImageUrl } from "@/lib/product-media";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { ArrowLeft, Tags } from "lucide-react";
 
@@ -57,7 +58,7 @@ const ogImageUrl = firstProductImage
     })
   : undefined;
 
-const collectionJsonLd = JSON.stringify({
+const collectionJsonLd = serializeJsonForInlineScript({
   "@context": "https://schema.org",
   "@type": "CollectionPage",
   name: title,

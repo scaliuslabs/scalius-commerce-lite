@@ -14,6 +14,7 @@ import {
   withOptimizedSocialIcons,
   type SerializedSocialLink,
 } from "@/lib/serialized-media";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 interface Props {
@@ -98,6 +99,20 @@ const menuCount = menus.length;
 let menuGridCols = "grid-cols-2"; // Default to 2 columns on mobile
 if (menuCount >= 3) menuGridCols = "grid-cols-2 lg:grid-cols-3";
 if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
+
+const siteSettingsJson = serializeJsonForInlineScript({
+  siteName: footerData?.copyrightText || "Your Store",
+  social,
+  favicon: optimizedFavicon || null,
+});
+const siteSettingsScript = `
+  var siteSettings = ${siteSettingsJson};
+  try {
+    localStorage.setItem("siteSettings", JSON.stringify(siteSettings));
+  } catch (e) {
+    console.error("Error storing site settings in localStorage:", e);
+  }
+`;
 ---
 
 <footer class="relative bg-primary text-primary-foreground overflow-hidden">
@@ -259,18 +274,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
   </div>
 </footer>
 
-<script is:inline set:html={`
-  var siteSettings = {
-    siteName: ${JSON.stringify(footerData?.copyrightText || "Your Store")},
-    social: ${JSON.stringify(social)},
-    favicon: ${JSON.stringify(optimizedFavicon || null)},
-  };
-  try {
-    localStorage.setItem("siteSettings", JSON.stringify(siteSettings));
-  } catch (e) {
-    console.error("Error storing site settings in localStorage:", e);
-  }
-`}></script>
+<script is:inline set:html={siteSettingsScript}></script>
 
 <style>
   html,
