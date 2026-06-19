@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { sendWhatsAppTemplateMessage } from "./whatsapp";
+import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "./whatsapp";
 
 describe("WhatsApp Cloud API integration", () => {
   it("sends template messages with normalized recipients and body parameters", async () => {
@@ -59,6 +59,43 @@ describe("WhatsApp Cloud API integration", () => {
         messageId: "wamid.order.1",
         messageStatus: "accepted",
       }),
+    });
+  });
+
+  it("includes URL button parameters when provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        messages: [{ id: "wamid.otp.1", message_status: "accepted" }],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await sendWhatsAppTemplateMessage({
+      accessToken: "wa_token",
+      phoneNumberId: "phone_id_1",
+      to: "+8801712345678",
+      templateName: "auth_otp",
+      bodyParameters: ["654321"],
+      buttonUrlParameter: "654321",
+    }, fetchMock);
+
+    expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toMatchObject({
+      template: {
+        components: [
+          {
+            type: "body",
+            parameters: [{ type: "text", text: "654321" }],
+          },
+          {
+            type: "button",
+            sub_type: "url",
+            index: "0",
+            parameters: [{ type: "text", text: "654321" }],
+          },
+        ],
+      },
     });
   });
 
@@ -124,4 +161,88 @@ describe("WhatsApp Cloud API integration", () => {
     expect(result.rawStatus).toBe("HTTP 400");
     expect(result.retryable).toBe(false);
   });
+
+  it("reports encrypted tokens as configured without decrypting when no key is available", async () => {
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: null,
+        whatsappPhoneNumberId: "phone_id_1",
+        whatsappTemplateName: "auth_otp",
+      },
+      tokenRow: { value: "enc:not-decrypted-without-key" },
+    });
+
+    const result = await getWhatsAppCloudApiSettings(db);
+
+    expect(result).toMatchObject({
+      accessToken: undefined,
+      accessTokenConfigured: true,
+      phoneNumberId: "phone_id_1",
+      accessTokenSource: "none",
+    });
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy plaintext fallback if an existing encrypted token cannot decrypt", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: "legacy_token",
+        whatsappPhoneNumberId: "phone_id_1",
+        whatsappTemplateName: "auth_otp",
+      },
+      tokenRow: { value: "enc:not-valid-aes-gcm" },
+    });
+
+    const result = await getWhatsAppCloudApiSettings(db, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", {
+      migrateLegacy: true,
+    });
+
+    expect(result).toMatchObject({
+      accessToken: "legacy_token",
+      accessTokenConfigured: true,
+      phoneNumberId: "phone_id_1",
+      accessTokenSource: "legacy",
+    });
+    expect(db.update).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });
+
+function createSettingsDb(input: {
+  site: {
+    id: string;
+    whatsappAccessToken: string | null;
+    whatsappPhoneNumberId: string | null;
+    whatsappTemplateName: string | null;
+  } | null;
+  tokenRow: { value: string } | null;
+}) {
+  const db = {
+    select: vi.fn((selection?: Record<string, unknown>) => {
+      const selectedToken = Boolean(selection && "value" in selection && Object.keys(selection).length === 1);
+      return {
+        from: vi.fn(() => selectedToken
+          ? {
+            where: vi.fn(() => ({
+              get: vi.fn(async () => input.tokenRow),
+            })),
+          }
+          : {
+            limit: vi.fn(() => ({
+              get: vi.fn(async () => input.site),
+            })),
+          }),
+      };
+    }),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(async () => undefined),
+      })),
+    })),
+  };
+
+  return db as typeof db & Parameters<typeof getWhatsAppCloudApiSettings>[0];
+}

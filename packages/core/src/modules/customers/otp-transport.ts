@@ -2,7 +2,8 @@
 // OTP transport abstraction — each transport knows how to build the queue
 // payload for its delivery channel (email, SMS, WhatsApp).
 // The queue consumer in apps/api/src/queue-consumer.ts dispatches based on
-// the `method` + `allowedMethod` fields in the payload.
+// the `method` + `allowedMethod` fields in the payload. Provider secrets are
+// resolved at send time and must not be serialized into queues.
 
 import type { SiteSettings } from "@scalius/database/schema";
 
@@ -20,9 +21,6 @@ export interface OtpQueuePayload {
   identifier: string;
   code: string;
   name: string;
-  waToken?: string;
-  waPhoneId?: string;
-  waTemplate?: string;
 }
 
 // ─────────────────────────────────────────
@@ -141,16 +139,11 @@ export class WhatsAppOtpTransport implements OtpTransport {
       identifier,
       code,
       name,
-      waToken: settings.whatsappAccessToken ?? undefined,
-      waPhoneId: settings.whatsappPhoneNumberId ?? undefined,
-      waTemplate: settings.whatsappTemplateName || "auth_otp",
     };
   }
 
-  validateConfig(settings: SiteSettings): string | null {
-    if (!settings.whatsappAccessToken || !settings.whatsappPhoneNumberId) {
-      return "WhatsApp verification is currently unavailable. Contact store support.";
-    }
+  validateConfig(_settings: SiteSettings): string | null {
+    // Customer auth validates encrypted WhatsApp credentials before queueing.
     return null;
   }
 }

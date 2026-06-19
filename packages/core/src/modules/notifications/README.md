@@ -68,7 +68,7 @@ Uses inline HTML templates with basic responsive styling. Customer names and tra
 
 **SMS channel dispatch**: When SMS is enabled for a status, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. Receipt-mode SMS stores provider refs; GenNet receives a deterministic receipt-derived `csms_id` so provider retries can dedupe.
 
-**WhatsApp channel dispatch**: When WhatsApp is enabled for a status, the function reads the order's normalized `customerPhone`, checks the shared Meta Cloud API credentials from `site_settings`, reads the order template settings from `settings.notifications`, and sends a template message through `sendWhatsAppTemplateMessage()`. The reusable order template receives 4 body variables: customer name, order ID, order status label, and tracking ID or `-`. Missing/invalid order phones, missing Meta credentials, paused templates, and non-retryable provider validation errors become skipped receipts; malformed 200 responses, 5xx, 408/409/429, and network failures remain retryable.
+**WhatsApp channel dispatch**: When WhatsApp is enabled for a status, the function reads the order's normalized `customerPhone`, resolves the shared encrypted Meta Cloud API credentials from `settings.whatsapp/access_token` with legacy plaintext fallback, reads the order template settings from `settings.notifications`, and sends a template message through `sendWhatsAppTemplateMessage()`. The reusable order template receives 4 body variables: customer name, order ID, order status label, and tracking ID or `-`. Missing/invalid order phones, missing Meta credentials, paused templates, and non-retryable provider validation errors become skipped receipts; malformed 200 responses, 5xx, 408/409/429, and network failures remain retryable.
 
 **Current provider gaps**: Email has a Cloudflare-native default and external fallback. Admin push is still Firebase-only, SMS is Bangladesh-provider-only, and Meta WhatsApp has no first-class upstream idempotency key; local D1 receipts fence retries but a Worker crash after provider acceptance and before receipt persistence can still duplicate on Meta.
 
@@ -108,6 +108,6 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 - `@scalius/core/integrations/firebase/admin` -- `getFirebaseAdminMessaging()` for FCM REST API
 - `@scalius/core/integrations/email` -- `sendEmail()` for transactional emails
 - `@scalius/core/integrations/sms` -- `getActiveSmsProvider()` for SMS channel dispatch (4 providers: smsnetbd, bdbulksms, mimsms, gennet)
-- `@scalius/core/integrations/whatsapp` -- Meta Cloud API template sender for order WhatsApp notifications
+- `@scalius/core/integrations/whatsapp` -- encrypted Meta Cloud API credential resolver and template sender for order/customer WhatsApp notifications
 - `@scalius/core/modules/settings/settings.service` -- `getNotificationChannels()`, `getOrderWhatsAppTemplateSettings()`, and `isWhatsAppCloudApiConfigured()`
 - `@scalius/shared/html-escape` -- `escapeHtml()` for XSS prevention in notification content

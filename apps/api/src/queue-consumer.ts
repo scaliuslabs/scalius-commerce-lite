@@ -32,7 +32,7 @@ import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
-import { META_GRAPH_API_VERSION } from "@scalius/core/integrations/meta/conversions-api";
+import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
 import {
   claimAuthOtpDeliveryReceipt,
   createAuthOtpDeliveryTarget,
@@ -160,9 +160,6 @@ export type AuthOtpQueueMessage =
     identifier: string;
     code: string;
     name: string;
-    waToken?: string;
-    waPhoneId?: string;
-    waTemplate?: string;
   };
 
 // ── Queue batch handler ────────────────────────────────────────────────────
@@ -530,7 +527,7 @@ async function sendAuthOtpByChannel(
   }
 
   if (payload.allowedMethod === "whatsapp_otp") {
-    return sendAuthOtpWhatsApp(payload);
+    return sendAuthOtpWhatsApp(payload, db, env);
   }
 
   return sendAuthOtpSms(payload, target, db, env);
@@ -585,53 +582,46 @@ async function sendAuthOtpEmail(
 
 async function sendAuthOtpWhatsApp(
   payload: AuthOtpQueueMessage,
+  db: ReturnType<typeof getDb>,
+  env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
-  if (!payload.waToken || !payload.waPhoneId) {
-    throw createAuthOtpDeliveryError("WhatsApp credentials missing in queue payload", {
+  const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+  const config = await getWhatsAppCloudApiSettings(db, encryptionKey, { migrateLegacy: true });
+  if (!config.accessToken || !config.phoneNumberId) {
+    throw createAuthOtpDeliveryError("WhatsApp credentials are not configured", {
       provider: "whatsapp",
       providerStatus: "missing_credentials",
     });
   }
 
-  const waRes = await fetch(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${payload.waPhoneId}/messages`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${payload.waToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: payload.identifier.replace("+", ""),
-      type: "template",
-      template: {
-        name: payload.waTemplate || "auth_otp",
-        language: { code: "en_US" },
-        components: [
-          { type: "body", parameters: [{ type: "text", text: payload.code }] },
-          { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: payload.code }] },
-        ],
-      },
-    }),
+  const result = await sendWhatsAppTemplateMessage({
+    accessToken: config.accessToken,
+    phoneNumberId: config.phoneNumberId,
+    to: payload.identifier,
+    templateName: config.authTemplateName,
+    languageCode: "en_US",
+    bodyParameters: [payload.code],
+    buttonUrlParameter: payload.code,
   });
 
-  if (!waRes.ok) {
-    const errorText = (await waRes.text()).slice(0, 500);
-    throw createAuthOtpDeliveryError(`WhatsApp API failed: ${errorText}`, {
+  const receiptResult: AuthOtpDeliveryReceiptResult = {
+    provider: "whatsapp",
+    providerMessageId: result.providerRef,
+    providerStatus: result.rawStatus,
+    rawResponse: result.rawResponse,
+  };
+
+  if (!result.success) {
+    throw createAuthOtpDeliveryError(`WhatsApp OTP delivery failed: ${result.rawStatus}`, {
       provider: "whatsapp",
-      providerStatus: `HTTP ${waRes.status}`,
-      rawResponse: errorText,
+      providerMessageId: result.providerRef,
+      providerStatus: result.rawStatus,
+      rawResponse: result.rawResponse,
     });
   }
 
-  const data = await waRes.json().catch(() => null) as { messages?: Array<{ id?: string }> } | null;
-  const messageId = data?.messages?.[0]?.id;
   console.log(`[Queue] Sent WhatsApp OTP to ${payload.identifier}`);
-  return {
-    provider: "whatsapp",
-    providerMessageId: messageId,
-    providerStatus: "accepted",
-    rawResponse: messageId ? JSON.stringify({ messageId }) : "accepted",
-  };
+  return receiptResult;
 }
 
 async function sendAuthOtpSms(

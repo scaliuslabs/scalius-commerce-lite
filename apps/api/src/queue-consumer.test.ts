@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   sendOrderNotificationEmail: vi.fn(),
   sendOrderNotification: vi.fn(),
   sendEmail: vi.fn(),
+  getWhatsAppCloudApiSettings: vi.fn(),
+  sendWhatsAppTemplateMessage: vi.fn(),
   handleOrderIngestBatch: vi.fn(),
   getDecimalPlaces: vi.fn(() => 2),
   getActiveSmsProvider: vi.fn(),
@@ -62,6 +64,11 @@ vi.mock("@scalius/core/modules/customers/otp-delivery-receipts", () => ({
 
 vi.mock("@scalius/core/integrations/email", () => ({
   sendEmail: mocks.sendEmail,
+}));
+
+vi.mock("@scalius/core/integrations/whatsapp", () => ({
+  getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
+  sendWhatsAppTemplateMessage: mocks.sendWhatsAppTemplateMessage,
 }));
 
 vi.mock("@scalius/core/modules/orders/orders.queue", () => ({
@@ -175,6 +182,19 @@ describe("handleQueueBatch payment confirmation retries", () => {
       provider: "cloudflare",
       providerRef: "cf_msg_1",
       rawStatus: "accepted",
+    });
+    mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
+      accessToken: "wa_token",
+      accessTokenConfigured: true,
+      phoneNumberId: "phone_id_1",
+      authTemplateName: "auth_otp",
+      accessTokenSource: "encrypted",
+    });
+    mocks.sendWhatsAppTemplateMessage.mockResolvedValue({
+      success: true,
+      providerRef: "wamid.otp.1",
+      rawStatus: "accepted",
+      rawResponse: JSON.stringify({ messageId: "wamid.otp.1", messageStatus: "accepted" }),
     });
     mocks.getActiveSmsProvider.mockResolvedValue(null);
     mocks.getAdminNotificationChannels.mockResolvedValue({});
@@ -623,14 +643,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
-  it("records WhatsApp OTP message IDs from Meta responses", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ messages: [{ id: "wamid.otp.1" }] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("records WhatsApp OTP message IDs after resolving encrypted Meta credentials", async () => {
     const message = createMessage({
       type: "auth.send_otp",
       deliveryKey: "otp_delivery_wa_1",
@@ -640,24 +653,23 @@ describe("handleQueueBatch payment confirmation retries", () => {
       identifier: "+8801712345678",
       code: "654321",
       name: "Buyer",
-      waToken: "wa_token",
-      waPhoneId: "phone_id_1",
-      waTemplate: "auth_otp",
     } as const);
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/phone_id_1/messages"),
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({ Authorization: "Bearer wa_token" }),
-      }),
+    expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
+      { id: "db" },
+      "test-key",
+      { migrateLegacy: true },
     );
-    expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toMatchObject({
-      messaging_product: "whatsapp",
-      to: "8801712345678",
-      type: "template",
+    expect(mocks.sendWhatsAppTemplateMessage).toHaveBeenCalledWith({
+      accessToken: "wa_token",
+      phoneNumberId: "phone_id_1",
+      to: "+8801712345678",
+      templateName: "auth_otp",
+      languageCode: "en_US",
+      bodyParameters: ["654321"],
+      buttonUrlParameter: "654321",
     });
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
       { id: "db" },
@@ -666,7 +678,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         provider: "whatsapp",
         providerMessageId: "wamid.otp.1",
         providerStatus: "accepted",
-        rawResponse: JSON.stringify({ messageId: "wamid.otp.1" }),
+        rawResponse: JSON.stringify({ messageId: "wamid.otp.1", messageStatus: "accepted" }),
       },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);

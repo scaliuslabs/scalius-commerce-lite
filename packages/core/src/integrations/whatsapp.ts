@@ -1,4 +1,8 @@
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import type { Database } from "@scalius/database/client";
+import { settings, siteSettings } from "@scalius/database/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { decryptCredentials, decryptCredentialsGraceful, encryptCredentials } from "../utils/credential-encryption";
 import { META_GRAPH_API_VERSION } from "./meta/conversions-api";
 
 export interface SendWhatsAppTemplateMessageInput {
@@ -8,6 +12,7 @@ export interface SendWhatsAppTemplateMessageInput {
   templateName: string;
   languageCode?: string;
   bodyParameters?: string[];
+  buttonUrlParameter?: string;
 }
 
 export interface SendWhatsAppTemplateMessageResult {
@@ -32,15 +37,123 @@ interface WhatsAppTemplatePayload {
   template: {
     name: string;
     language: { code: string };
-    components?: Array<{
-      type: "body";
-      parameters: Array<{ type: "text"; text: string }>;
-    }>;
+    components?: WhatsAppTemplateComponent[];
   };
 }
 
+type WhatsAppTemplateComponent =
+  | {
+    type: "body";
+    parameters: Array<{ type: "text"; text: string }>;
+  }
+  | {
+    type: "button";
+    sub_type: "url";
+    index: string;
+    parameters: Array<{ type: "text"; text: string }>;
+  };
+
+export interface WhatsAppCloudApiSettings {
+  accessToken?: string;
+  accessTokenConfigured: boolean;
+  phoneNumberId?: string;
+  authTemplateName: string;
+  accessTokenSource: "encrypted" | "legacy" | "none";
+}
+
+interface WhatsAppCloudApiSettingsOptions {
+  migrateLegacy?: boolean;
+}
+
+const WHATSAPP_SETTINGS_CATEGORY = "whatsapp";
+const WHATSAPP_ACCESS_TOKEN_KEY = "access_token";
+const ENCRYPTED_VALUE_PREFIX = "enc:";
+
 export function normalizeWhatsAppRecipient(input: string): string {
   return validateAndFormatPhone(input).replace(/^\+/, "");
+}
+
+export async function getWhatsAppCloudApiSettings(
+  db: Database,
+  encryptionKey?: string,
+  options: WhatsAppCloudApiSettingsOptions = {},
+): Promise<WhatsAppCloudApiSettings> {
+  const [site, tokenRow] = await Promise.all([
+    db.select({
+      id: siteSettings.id,
+      whatsappAccessToken: siteSettings.whatsappAccessToken,
+      whatsappPhoneNumberId: siteSettings.whatsappPhoneNumberId,
+      whatsappTemplateName: siteSettings.whatsappTemplateName,
+    }).from(siteSettings).limit(1).get(),
+    db.select({ value: settings.value })
+      .from(settings)
+      .where(and(
+        eq(settings.category, WHATSAPP_SETTINGS_CATEGORY),
+        eq(settings.key, WHATSAPP_ACCESS_TOKEN_KEY),
+      ))
+      .get(),
+  ]);
+
+  const encryptedAccessToken = tokenRow?.value
+    ? await readStoredWhatsAppAccessToken(tokenRow.value, encryptionKey)
+    : undefined;
+  const legacyAccessToken = site?.whatsappAccessToken?.trim() || undefined;
+  const accessToken = encryptedAccessToken ?? legacyAccessToken;
+  const accessTokenSource = encryptedAccessToken
+    ? "encrypted"
+    : legacyAccessToken
+      ? "legacy"
+      : "none";
+
+  if (site?.id && legacyAccessToken && encryptionKey && options.migrateLegacy && !tokenRow?.value) {
+    await migrateLegacyWhatsAppAccessToken(db, site.id, legacyAccessToken, encryptionKey);
+  } else if (site?.id && legacyAccessToken && encryptedAccessToken && options.migrateLegacy) {
+    await clearLegacyWhatsAppAccessToken(db, site.id);
+  }
+
+  return {
+    accessToken,
+    accessTokenConfigured: Boolean(tokenRow?.value || legacyAccessToken),
+    phoneNumberId: site?.whatsappPhoneNumberId ?? undefined,
+    authTemplateName: site?.whatsappTemplateName || "auth_otp",
+    accessTokenSource,
+  };
+}
+
+export async function saveWhatsAppAccessToken(
+  db: Database,
+  value: string,
+  encryptionKey?: string,
+  siteSettingsId?: string,
+): Promise<void> {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    await db.delete(settings).where(and(
+      eq(settings.category, WHATSAPP_SETTINGS_CATEGORY),
+      eq(settings.key, WHATSAPP_ACCESS_TOKEN_KEY),
+    ));
+    await clearLegacyWhatsAppAccessToken(db, siteSettingsId);
+    return;
+  }
+
+  if (!encryptionKey) {
+    throw new Error("CREDENTIAL_ENCRYPTION_KEY is required to store WhatsApp credentials.");
+  }
+
+  const encrypted = `${ENCRYPTED_VALUE_PREFIX}${await encryptCredentials(trimmed, encryptionKey)}`;
+  await db.insert(settings)
+    .values({
+      id: crypto.randomUUID(),
+      category: WHATSAPP_SETTINGS_CATEGORY,
+      key: WHATSAPP_ACCESS_TOKEN_KEY,
+      value: encrypted,
+      type: "string",
+    })
+    .onConflictDoUpdate({
+      target: [settings.key, settings.category],
+      set: { value: encrypted, updatedAt: sql`unixepoch()` },
+    });
+  await clearLegacyWhatsAppAccessToken(db, siteSettingsId);
 }
 
 export async function sendWhatsAppTemplateMessage(
@@ -68,6 +181,19 @@ export async function sendWhatsAppTemplateMessage(
       {
         type: "body",
         parameters: bodyParameters.map((text) => ({ type: "text", text })),
+      },
+    ];
+  }
+
+  const buttonUrlParameter = input.buttonUrlParameter?.trim();
+  if (buttonUrlParameter) {
+    payload.template.components = [
+      ...(payload.template.components ?? []),
+      {
+        type: "button",
+        sub_type: "url",
+        index: "0",
+        parameters: [{ type: "text", text: buttonUrlParameter }],
       },
     ];
   }
@@ -137,4 +263,64 @@ function truncateProviderResponse(value: string): string {
 
 function isRetryableWhatsAppStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+async function readStoredWhatsAppAccessToken(
+  storedValue: string,
+  encryptionKey?: string,
+): Promise<string | undefined> {
+  if (storedValue.startsWith(ENCRYPTED_VALUE_PREFIX)) {
+    if (!encryptionKey) return undefined;
+    try {
+      return await decryptCredentials(storedValue.slice(ENCRYPTED_VALUE_PREFIX.length), encryptionKey);
+    } catch (error: unknown) {
+      console.warn(
+        "[WhatsApp] Failed to decrypt encrypted access token:",
+        error instanceof Error ? error.message : error,
+      );
+      return undefined;
+    }
+  }
+  return decryptCredentialsGraceful(storedValue, encryptionKey);
+}
+
+async function migrateLegacyWhatsAppAccessToken(
+  db: Database,
+  siteSettingsId: string,
+  legacyAccessToken: string,
+  encryptionKey: string,
+): Promise<void> {
+  try {
+    await saveWhatsAppAccessToken(db, legacyAccessToken, encryptionKey, siteSettingsId);
+  } catch (error: unknown) {
+    console.warn(
+      "[WhatsApp] Failed to migrate legacy plaintext access token:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+async function clearLegacyWhatsAppAccessToken(
+  db: Database,
+  siteSettingsId?: string,
+): Promise<void> {
+  try {
+    const query = db
+      .update(siteSettings)
+      .set({
+        whatsappAccessToken: null,
+        updatedAt: sql`unixepoch()`,
+      });
+
+    if (siteSettingsId) {
+      await query.where(eq(siteSettings.id, siteSettingsId));
+    } else {
+      await query.where(eq(siteSettings.singletonKey, "default"));
+    }
+  } catch (error: unknown) {
+    console.warn(
+      "[WhatsApp] Failed to clear legacy plaintext access token:",
+      error instanceof Error ? error.message : error,
+    );
+  }
 }

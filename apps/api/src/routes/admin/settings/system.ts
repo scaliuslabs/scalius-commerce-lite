@@ -7,6 +7,7 @@ import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
+import { getWhatsAppCloudApiSettings, saveWhatsAppAccessToken } from "@scalius/core/integrations/whatsapp";
 import { upsertEncryptedSetting, upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
 import {
     getOptionalExecutionContext,
@@ -51,13 +52,18 @@ app.openapi(getAuthRoute, async (c) => {
     const db = c.get("db");
         const [row] = await db.select().from(siteSettings).limit(1);
         if (!row) throw new NotFoundError("Settings not found");
+        const whatsapp = await getWhatsAppCloudApiSettings(
+            db,
+            getEncryptionKey(c.env as Record<string, unknown>),
+            { migrateLegacy: true },
+        );
 
         return ok(c, {
             authVerificationMethod: row.authVerificationMethod,
             guestCheckoutEnabled: row.guestCheckoutEnabled,
-            whatsappAccessToken: row.whatsappAccessToken ? MASKED : "",
-            whatsappPhoneNumberId: row.whatsappPhoneNumberId || "",
-            whatsappTemplateName: row.whatsappTemplateName || "",
+            whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
+            whatsappPhoneNumberId: whatsapp.phoneNumberId || "",
+            whatsappTemplateName: whatsapp.authTemplateName || "",
             checkoutMode: row.checkoutMode,
             partialPaymentEnabled: row.partialPaymentEnabled,
             partialPaymentAmount: row.partialPaymentAmount
@@ -112,14 +118,21 @@ app.openapi(saveAuthRoute, async (c) => {
         if (typeof body.partialPaymentEnabled === "boolean") updates.partialPaymentEnabled = body.partialPaymentEnabled;
         if (typeof body.partialPaymentAmount === "number") updates.partialPaymentAmount = body.partialPaymentAmount;
 
-        if (typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED) {
-            updates.whatsappAccessToken = body.whatsappAccessToken;
+        if (Object.keys(updates).length > 0) {
+            await db
+                .update(siteSettings)
+                .set(updates)
+                .where(eq(siteSettings.id, existingSettings.id));
         }
 
-        await db
-            .update(siteSettings)
-            .set(updates)
-            .where(eq(siteSettings.id, existingSettings.id));
+        if (typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED) {
+            await saveWhatsAppAccessToken(
+                db,
+                body.whatsappAccessToken,
+                body.whatsappAccessToken.trim() ? requireEncryptionKey(c.env as Record<string, unknown>) : undefined,
+                existingSettings.id,
+            );
+        }
 
         await invalidateSiteSettingsCache(getKv());
         await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
