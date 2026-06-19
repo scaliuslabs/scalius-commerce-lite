@@ -82,6 +82,34 @@ describe("admin route graph boundaries", () => {
     expect(source).toMatch(/suppressHydrationWarning[^]*formatDate\(script\.createdAt\)/);
   });
 
+  it("keeps the hot login route off the generic Better Auth UI chunk", () => {
+    const loginRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "auth", "login.tsx"),
+      "utf8",
+    );
+    const resetPasswordRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "auth", "reset-password.tsx"),
+      "utf8",
+    );
+    const globalCssSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "styles", "global.css"),
+      "utf8",
+    );
+    const authClientSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "auth-client.ts"),
+      "utf8",
+    );
+
+    expect(loginRouteSource).toContain("LoginForm");
+    expect(loginRouteSource).not.toContain("AuthCard");
+    expect(loginRouteSource).not.toContain("@daveyplate/better-auth-ui");
+    expect(resetPasswordRouteSource).toContain("ResetPasswordForm");
+    expect(resetPasswordRouteSource).not.toContain("AuthCard");
+    expect(resetPasswordRouteSource).not.toContain("@daveyplate/better-auth-ui");
+    expect(globalCssSource).not.toContain("@daveyplate/better-auth-ui");
+    expect(authClientSource).not.toContain("adminClient");
+  });
+
   it("keeps admin navigation from doing focus refetch stampedes", () => {
     const routerSource = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
     const queryClientSource = readFileSync(
@@ -98,6 +126,18 @@ describe("admin route graph boundaries", () => {
     );
     const orderListSource = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "index.tsx"),
+      "utf8",
+    );
+    const adminHeaderSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
+      "utf8",
+    );
+    const appSidebarSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AppSidebar.tsx"),
+      "utf8",
+    );
+    const settingsQueryOptionsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "settings.ts"),
       "utf8",
     );
     const adminRouteSource = readFileSync(
@@ -128,6 +168,21 @@ describe("admin route graph boundaries", () => {
     expect(orderListSource).toContain("orderListRefreshInFlightRef");
     expect(orderListSource).toContain("ORDER_AUTO_REFRESH_DEBOUNCE_MS");
     expect(orderListSource).not.toContain("refreshIntervalRef");
+    expect(adminHeaderSource).toContain("requestIdleCallback");
+    expect(adminHeaderSource).toContain("lazy(()");
+    expect(adminHeaderSource).not.toMatch(
+      /import\s+\{\s*CacheNukeButton\s*\}\s+from/,
+    );
+    expect(adminHeaderSource).not.toMatch(
+      /import\s+\{\s*NotificationDropdown\s*\}\s+from/,
+    );
+    expect(appSidebarSource).toContain(
+      "~/lib/api-query-options/storefront-url",
+    );
+    expect(appSidebarSource).not.toContain(
+      "~/lib/api-query-options/settings",
+    );
+    expect(settingsQueryOptionsSource).not.toContain("getStorefrontUrl");
     expect(routerSource).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
     expect(routerSource).toContain("scrollRestorationBehavior: \"instant\"");
     expect(adminRouteSource).toContain("useAdminNestedScrollRestoration();");

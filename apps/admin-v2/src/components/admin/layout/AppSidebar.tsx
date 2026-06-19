@@ -2,7 +2,7 @@ import { useRef, useCallback } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Globe, ExternalLink } from "lucide-react";
-import { storefrontUrlQueryOptions } from "~/lib/api-query-options/settings";
+import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import {
   Sidebar,
   SidebarContent,

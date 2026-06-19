@@ -1,6 +1,6 @@
 // src/lib/auth-client.ts
 import { createAuthClient } from "better-auth/react";
-import { twoFactorClient, adminClient } from "better-auth/client/plugins";
+import { twoFactorClient } from "better-auth/client/plugins";
 import { storePendingTwoFactorMethods } from "./two-factor-pending";
 
 // Create the auth client for use in React components
@@ -13,7 +13,6 @@ export const authClient = createAuthClient({
         window.location.href = "/auth/two-factor";
       },
     }),
-    adminClient(),
   ],
 });
 
@@ -25,7 +24,6 @@ export const {
   useSession,
   getSession,
   twoFactor,
-  admin,
 } = authClient;
 
 // Type exports for use in components
