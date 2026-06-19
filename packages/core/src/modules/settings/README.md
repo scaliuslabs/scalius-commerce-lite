@@ -201,7 +201,7 @@ Full CRUD with soft-delete, restore, permanent delete, pagination, search, sort.
 List, create, update, soft-delete, bulk-delete, delete-all, Pathao location import (chunked).
 
 ### `delivery-providers.ts` -- Delivery provider management
-List, create, update, test connection, delete. Masks sensitive credential fields.
+List, create, update, test connection, delete. Persistent credential saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before DB writes/checkout cache invalidation if missing. List/get/update paths decrypt existing provider rows before masking or merging masked credential fields, including `webhookSecret`; provider runtime reads keep graceful legacy plaintext/JWT fallback only for migration.
 
 ## Checkout Config (Storefront)
 

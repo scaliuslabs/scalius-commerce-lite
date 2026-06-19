@@ -8,7 +8,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 |------|---------|
 | `index.ts` | Barrel exports (delivery.service, tracking, factory, locations, types, status-mapper, provider). Excludes pathao-location-import and providers/. |
 | `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement. Extends `ProviderLifecycle` from `@scalius/core/providers/types`. Methods: `getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`. |
-| `factory.ts` | `createProvider()` -- factory that parses credentials (with optional AES-GCM decryption via `decryptCredentialsGraceful()`) and config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. |
+| `factory.ts` | `createProvider()` -- factory that parses credentials (with optional AES-GCM decryption via `decryptCredentialsGraceful()`) and config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Read paths tolerate legacy plaintext/JWT-encrypted rows only for migration. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
 | `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`), `getTrackingUrl()` |
@@ -25,7 +25,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `getDeliveryProviders` | `(db)` | All providers, ordered by updatedAt desc |
 | `getActiveDeliveryProviders` | `(db)` | Active providers only |
 | `getDeliveryProvider` | `(db, id)` | Single provider by ID |
-| `saveDeliveryProvider` | `(db, provider, encryptionKey?)` | Create or update. Encrypts credentials if key provided. |
+| `saveDeliveryProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. |
 | `deleteDeliveryProvider` | `(db, id)` | Hard delete |
 | `testDeliveryProvider` | `(db, id, encryptionKey?)` | Tests connection via provider instance |
 | `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Insert-first pattern (see below). Enriches with order item names and quantities. |
@@ -107,6 +107,10 @@ Single format: 11 mappings including `_approval_pending` suffixes. Normalized to
 Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries can repair stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
 
 Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `ORDER_NOTIFICATIONS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added.
+
+## Credential Storage
+
+Delivery provider credentials are encrypted before storage with the dedicated `CREDENTIAL_ENCRYPTION_KEY`. `saveDeliveryProvider()` is write-strict and must not be called with `getEncryptionKey()` fallback output; route-facing saves use `requireEncryptionKey()` and fail before DB writes or checkout-cache invalidation when the key is missing. Admin list/get/update paths decrypt existing rows before masking or merging masked fields, including `webhookSecret`, so encrypted rows are never returned as ciphertext and masked placeholders are never persisted as real credentials. Provider runtime reads keep graceful plaintext/JWT fallback through `createProvider()` for legacy migration only.
 
 ### Tracking URLs
 - Pathao: `https://merchant.pathao.com/tracking?consignment_id={trackingId}`

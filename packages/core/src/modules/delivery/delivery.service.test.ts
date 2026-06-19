@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ShipmentStatus } from "@scalius/database/schema";
-import { deleteShipmentRecord } from "./delivery.service";
+import { deleteShipmentRecord, saveDeliveryProvider } from "./delivery.service";
 
 function createDeleteShipmentDb({
   shipment,
@@ -56,6 +56,32 @@ function shipment(status: string, overrides: Record<string, unknown> = {}) {
     status,
     ...overrides,
   };
+}
+
+function createSaveProviderDb(existingProvider: Record<string, unknown> | null = null) {
+  const writes: Array<Record<string, unknown>> = [];
+  const db = {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => Promise.resolve(existingProvider ? [existingProvider] : [])),
+      })),
+    })),
+    insert: vi.fn(() => ({
+      values: vi.fn(async (values: Record<string, unknown>) => {
+        writes.push(values);
+      }),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => {
+        writes.push(values);
+        return {
+          where: vi.fn(async () => undefined),
+        };
+      }),
+    })),
+  };
+
+  return { db, writes };
 }
 
 describe("deleteShipmentRecord claim safety", () => {
@@ -165,5 +191,43 @@ describe("deleteShipmentRecord claim safety", () => {
     await expect(deleteShipmentRecord(db as never, "shp_1")).resolves.toBe(true);
     expect(updates).toHaveLength(0);
     expect(deletes).toEqual(["delivery_shipments"]);
+  });
+});
+
+describe("saveDeliveryProvider credential storage", () => {
+  it("fails closed before writing credentials without an encryption key", async () => {
+    const { db, writes } = createSaveProviderDb();
+
+    await expect(saveDeliveryProvider(db as never, {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: true,
+      credentials: { clientSecret: "secret", password: "pass" },
+      config: { storeId: "store_1" },
+    }, "")).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY is required");
+
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(writes).toHaveLength(0);
+  });
+
+  it("encrypts delivery provider credentials before insert", async () => {
+    const { db, writes } = createSaveProviderDb();
+    const key = Buffer.alloc(32, 9).toString("base64");
+
+    await saveDeliveryProvider(db as never, {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: true,
+      credentials: { clientSecret: "secret", password: "pass" },
+      config: { storeId: "store_1" },
+    }, key);
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.credentials).toEqual(expect.any(String));
+    expect(writes[0]?.credentials).not.toBe(JSON.stringify({ clientSecret: "secret", password: "pass" }));
+    expect(writes[0]?.credentials).toContain(":");
   });
 });

@@ -118,8 +118,12 @@ export async function saveDeliveryProvider(
     credentials: Record<string, unknown> | string;
     config: Record<string, unknown> | string;
   },
-  encryptionKey?: string,
+  encryptionKey: string,
 ) {
+  if (!encryptionKey) {
+    throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+  }
+
   const providerId = provider.id || nanoid();
 
   // Convert objects to JSON strings
@@ -133,10 +137,7 @@ export async function saveDeliveryProvider(
       ? provider.config
       : JSON.stringify(provider.config);
 
-  // Encrypt credentials if an encryption key is available
-  if (encryptionKey) {
-    credentials = await encryptCredentials(credentials, encryptionKey);
-  }
+  credentials = await encryptCredentials(credentials, encryptionKey);
 
   // Check if provider exists
   const existingProvider = await getDeliveryProvider(db, providerId);
