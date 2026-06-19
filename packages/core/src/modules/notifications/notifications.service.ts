@@ -2,13 +2,14 @@
 // Centralized notification service for admin push + order notifications.
 
 import type { Database } from "@scalius/database/client";
-import { adminFcmTokens, orders, settings, siteSettings } from "@scalius/database/schema";
+import { adminFcmTokens, orders, settings } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
 import {
+    getWhatsAppCloudApiSettings,
     normalizeWhatsAppRecipient,
     sendWhatsAppTemplateMessage,
     type SendWhatsAppTemplateMessageResult,
@@ -538,7 +539,7 @@ export async function sendOrderNotificationEmail(
                 }
 
                 if (whatsappRecipient) {
-                    const sendConfig = db ? await resolveOrderWhatsAppSendConfig(db) : null;
+                    const sendConfig = db ? await resolveOrderWhatsAppSendConfig(db, options.encryptionKey) : null;
                     if (!sendConfig) {
                         if (receiptDb && outboxId) {
                             outcomes.push(await recordSkippedDelivery({
@@ -635,25 +636,17 @@ interface OrderWhatsAppSendConfig {
     languageCode: string;
 }
 
-async function resolveOrderWhatsAppSendConfig(db: Database): Promise<OrderWhatsAppSendConfig | null> {
-    const site = await db
-        .select({
-            whatsappAccessToken: siteSettings.whatsappAccessToken,
-            whatsappPhoneNumberId: siteSettings.whatsappPhoneNumberId,
-        })
-        .from(siteSettings)
-        .limit(1)
-        .get();
-
-    if (!site?.whatsappAccessToken || !site.whatsappPhoneNumberId) {
+async function resolveOrderWhatsAppSendConfig(db: Database, encryptionKey?: string): Promise<OrderWhatsAppSendConfig | null> {
+    const whatsapp = await getWhatsAppCloudApiSettings(db, encryptionKey, { migrateLegacy: true });
+    if (!whatsapp.accessToken || !whatsapp.phoneNumberId) {
         return null;
     }
 
     const { getOrderWhatsAppTemplateSettings } = await import("../settings/settings.service");
     const template = await getOrderWhatsAppTemplateSettings(db);
     return {
-        accessToken: site.whatsappAccessToken,
-        phoneNumberId: site.whatsappPhoneNumberId,
+        accessToken: whatsapp.accessToken,
+        phoneNumberId: whatsapp.phoneNumberId,
         templateName: template.templateName,
         languageCode: template.languageCode,
     };

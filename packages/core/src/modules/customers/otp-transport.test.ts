@@ -50,7 +50,7 @@ describe("OTP transports", () => {
     });
   });
 
-  it("includes WhatsApp credentials and durable delivery metadata in WhatsApp payloads", () => {
+  it("includes durable metadata without WhatsApp credentials in WhatsApp payloads", () => {
     const payload = new WhatsAppOtpTransport().buildQueuePayload(
       "123456",
       "+8801712345678",
@@ -67,9 +67,9 @@ describe("OTP transports", () => {
       otpExpiresAt: 4_102_444_800,
       method: "phone",
       allowedMethod: "whatsapp_otp",
-      waToken: "wa_token",
-      waPhoneId: "phone_id_1",
-      waTemplate: "auth_otp",
     });
+    expect(payload).not.toHaveProperty("waToken");
+    expect(payload).not.toHaveProperty("waPhoneId");
+    expect(payload).not.toHaveProperty("waTemplate");
   });
 });

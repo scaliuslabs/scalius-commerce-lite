@@ -24,6 +24,7 @@ Scalius Commerce is a pnpm/Turborepo monorepo with three Cloudflare Worker appli
 - API errors must use the standardized JSON error envelope via `ApiError`/global handlers.
 - 202 responses still need `{ success: true, data: ... }` at top level.
 - Runtime secrets must come from Cloudflare `env`, not `import.meta.env`.
+- Meta WhatsApp Cloud API access tokens live in encrypted `settings.whatsapp/access_token`; `site_settings.whatsapp_access_token` is legacy fallback only, and auth OTP queue messages must not carry provider secrets.
 - Storefront must not import `@scalius/core` or `@scalius/database` directly.
 - Schema changes require matching Drizzle migrations.
 - Typecheck matters: `pnpm build` alone can miss TypeScript regressions.

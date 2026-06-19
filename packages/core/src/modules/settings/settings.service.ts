@@ -9,6 +9,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
+import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 
 // ─────────────────────────────────────────
 // Types
@@ -299,16 +300,8 @@ export async function updateNotificationChannels(
 }
 
 export async function isWhatsAppCloudApiConfigured(db: Database): Promise<boolean> {
-    const row = await db
-        .select({
-            whatsappAccessToken: siteSettings.whatsappAccessToken,
-            whatsappPhoneNumberId: siteSettings.whatsappPhoneNumberId,
-        })
-        .from(siteSettings)
-        .limit(1)
-        .get();
-
-    return Boolean(row?.whatsappAccessToken && row.whatsappPhoneNumberId);
+    const config = await getWhatsAppCloudApiSettings(db);
+    return Boolean(config.accessTokenConfigured && config.phoneNumberId);
 }
 
 export async function getOrderWhatsAppTemplateSettings(

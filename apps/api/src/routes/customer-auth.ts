@@ -33,6 +33,7 @@ import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, Ser
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
 import { ok } from "../utils/api-response";
+import { getEncryptionKey } from "../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -89,7 +90,13 @@ app.openapi(sendOtpRoute, async (c) => {
   const kv = c.env.CACHE;
   const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
 
-  const result = await sendOtp(db, kv, { method, identifier: identifier!, name, ip });
+  const result = await sendOtp(db, kv, {
+    method,
+    identifier: identifier!,
+    name,
+    ip,
+    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+  });
 
   if (!result.success) {
     const status = result.httpStatus || 400;

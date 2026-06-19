@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     getActiveSmsProvider: vi.fn(),
     sendEmail: vi.fn(),
     sendSms: vi.fn(),
+    getWhatsAppCloudApiSettings: vi.fn(),
     sendWhatsAppTemplateMessage: vi.fn(),
     normalizeWhatsAppRecipient: vi.fn(),
     getFirebaseAdminMessaging: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("../../integrations/email", () => ({
 }));
 
 vi.mock("../../integrations/whatsapp", () => ({
+    getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
     sendWhatsAppTemplateMessage: mocks.sendWhatsAppTemplateMessage,
     normalizeWhatsAppRecipient: mocks.normalizeWhatsAppRecipient,
 }));
@@ -55,27 +57,17 @@ import { ORDER_NOTIFICATION_TYPES } from "./notification-types";
 
 function createDb(input: string | {
     customerPhone?: string;
-    siteSettings?: {
-        whatsappAccessToken?: string | null;
-        whatsappPhoneNumberId?: string | null;
-    } | null;
 } = "+8801700000000"): Database {
     const customerPhone = typeof input === "string" ? input : (input.customerPhone ?? "+8801700000000");
-    const siteSettings = typeof input === "string"
-        ? { whatsappAccessToken: "wa_token", whatsappPhoneNumberId: "phone_id_1" }
-        : (input.siteSettings ?? { whatsappAccessToken: "wa_token", whatsappPhoneNumberId: "phone_id_1" });
 
     return {
-        select: vi.fn((selection?: Record<string, unknown>) => ({
+        select: vi.fn((_selection?: Record<string, unknown>) => ({
             from: vi.fn(() => ({
                 where: vi.fn(() => ({
                     get: vi.fn(async () => ({ customerPhone })),
                 })),
                 limit: vi.fn(() => ({
                     get: vi.fn(async () => {
-                        if (selection && "whatsappAccessToken" in selection) {
-                            return siteSettings;
-                        }
                         return { customerPhone };
                     }),
                 })),
@@ -108,6 +100,13 @@ describe("order notification dispatch", () => {
             providerRef: "wamid.order.1",
             rawStatus: "accepted",
             rawResponse: JSON.stringify({ messageId: "wamid.order.1", messageStatus: "accepted" }),
+        });
+        mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
+            accessToken: "wa_token",
+            accessTokenConfigured: true,
+            phoneNumberId: "phone_id_1",
+            authTemplateName: "auth_otp",
+            accessTokenSource: "encrypted",
         });
         mocks.normalizeWhatsAppRecipient.mockImplementation((phone: string) => phone.replace(/^\+/, ""));
         mocks.getOrderWhatsAppTemplateSettings.mockResolvedValue({
@@ -343,6 +342,11 @@ describe("order notification dispatch", () => {
                 recipient: "whatsapp:8801700000000",
             }),
         );
+        expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
+            db,
+            "credential-key",
+            { migrateLegacy: true },
+        );
         expect(mocks.sendWhatsAppTemplateMessage).toHaveBeenCalledWith({
             accessToken: "wa_token",
             phoneNumberId: "phone_id_1",
@@ -369,11 +373,13 @@ describe("order notification dispatch", () => {
     });
 
     it("records skipped WhatsApp receipts without sending when Meta credentials are missing", async () => {
-        const db = createDb({
-            siteSettings: {
-                whatsappAccessToken: null,
-                whatsappPhoneNumberId: null,
-            },
+        const db = createDb();
+        mocks.getWhatsAppCloudApiSettings.mockResolvedValueOnce({
+            accessToken: undefined,
+            accessTokenConfigured: false,
+            phoneNumberId: undefined,
+            authTemplateName: "auth_otp",
+            accessTokenSource: "none",
         });
         mocks.getNotificationChannels.mockResolvedValue({
             order_created: ["whatsapp"],

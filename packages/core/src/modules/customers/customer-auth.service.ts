@@ -15,6 +15,7 @@ import {
 import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
 import { createAuthOtpDeliveryKey } from "./otp-delivery-receipts";
 import { validateAndFormatPhone, isValidPhoneNumber } from "@scalius/shared/customer-utils";
+import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 
 // ─────────────────────────────────────────
 // Constants
@@ -70,6 +71,7 @@ export interface SendOtpInput {
     identifier: string;
     name: string;
     ip: string;
+    encryptionKey?: string;
 }
 
 export interface SendOtpResult {
@@ -225,6 +227,12 @@ export async function sendOtp(
     const transport = getOtpTransport(method, allowedMethod);
     if (!settings) {
         throw new ServiceUnavailableError("Customer authentication settings are not initialized.");
+    }
+    if (method === "phone" && allowedMethod === "whatsapp_otp") {
+        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.encryptionKey, { migrateLegacy: true });
+        if (!whatsAppSettings.accessToken || !whatsAppSettings.phoneNumberId) {
+            throw new ServiceUnavailableError("WhatsApp verification is currently unavailable. Contact store support.");
+        }
     }
     const configError = transport.validateConfig(settings);
     if (configError) {

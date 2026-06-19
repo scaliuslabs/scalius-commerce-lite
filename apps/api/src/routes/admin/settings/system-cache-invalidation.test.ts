@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getEmailRuntimeSettings: vi.fn(),
   readEmailSetting: vi.fn(),
+  getWhatsAppCloudApiSettings: vi.fn(),
+  saveWhatsAppAccessToken: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
     try {
       return c.executionCtx;
@@ -41,6 +43,11 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
 vi.mock("@scalius/core/integrations/email", () => ({
   getEmailRuntimeSettings: mocks.getEmailRuntimeSettings,
   readEmailSetting: mocks.readEmailSetting,
+}));
+
+vi.mock("@scalius/core/integrations/whatsapp", () => ({
+  getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
+  saveWhatsAppAccessToken: mocks.saveWhatsAppAccessToken,
 }));
 
 import { systemSettingsRoutes } from "./system";
@@ -99,6 +106,14 @@ function createTestApp() {
     cloudflareBindingConfigured: true,
   });
   mocks.readEmailSetting.mockResolvedValue("orders@example.com");
+  mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
+    accessToken: undefined,
+    accessTokenConfigured: false,
+    phoneNumberId: "",
+    authTemplateName: "auth_otp",
+    accessTokenSource: "none",
+  });
+  mocks.saveWhatsAppAccessToken.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -156,6 +171,34 @@ describe("system settings cache invalidation", () => {
       ["checkout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("saves a new WhatsApp access token through encrypted credential storage", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      whatsappAccessToken: "EAAG_meta_token",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.saveWhatsAppAccessToken).toHaveBeenCalledWith(
+      expect.anything(),
+      "EAAG_meta_token",
+      "credential-key",
+      "site_settings_1",
+    );
+  });
+
+  it("does not resave a masked WhatsApp access token", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      whatsappAccessToken: "••••••••••••",
+      whatsappPhoneNumberId: "phone_id_1",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
   });
 
   it("invalidates layout caches after CSP security settings save", async () => {

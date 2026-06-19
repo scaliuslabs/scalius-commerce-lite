@@ -23,7 +23,7 @@ Central store configuration: site settings (singleton row), key-value settings, 
 | `updateNotificationChannels` | `(db, input) => Promise<Record<string, string[]>>` | Saves notification channel preferences. Accepts both UI format (boolean maps, possibly wrapped in `{ channels }`) and canonical format (string arrays). Validates channels against known set (`email`, `sms`, `whatsapp`, `push`) and rejects WhatsApp enables unless Meta Cloud API credentials are configured. Stores via `upsertSetting()` under category `notifications`, key `order_channels` |
 | `getOrderWhatsAppTemplateSettings` | `(db) => Promise<OrderWhatsAppTemplateSettings>` | Reads order WhatsApp template name/language from `settings.notifications`, defaulting to `order_status_update` / `en_US` |
 | `updateOrderWhatsAppTemplateSettings` | `(db, input) => Promise<OrderWhatsAppTemplateSettings>` | Validates and saves order WhatsApp template name/language under `whatsapp_order_template_name` and `whatsapp_order_template_language` |
-| `isWhatsAppCloudApiConfigured` | `(db) => Promise<boolean>` | Checks whether `site_settings.whatsapp_access_token` and `whatsapp_phone_number_id` are present before WhatsApp order channels can be enabled |
+| `isWhatsAppCloudApiConfigured` | `(db) => Promise<boolean>` | Checks whether encrypted `settings.whatsapp/access_token` (or legacy plaintext fallback) and `site_settings.whatsapp_phone_number_id` are present before WhatsApp order channels can be enabled |
 
 ### Default Notification Channels
 
@@ -122,10 +122,10 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 ## Data Model
 
 ### `siteSettings` (singleton row)
-Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, whatsapp OTP fields. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
+Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, authVerificationMethod, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, and non-secret WhatsApp OTP fields such as phone-number ID and auth template name. `whatsapp_access_token` is legacy fallback only; new token saves go to encrypted `settings.whatsapp/access_token`. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 ## API Endpoints (Admin)
 
@@ -165,8 +165,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 ### `system.ts` -- System integrations & auth
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/auth` | Get auth/checkout settings (verification method, guest checkout, checkout mode, partial payment, whatsapp config). Masks whatsappAccessToken |
-| POST | `/auth` | Save auth/checkout settings. Skips masked token values |
+| GET | `/auth` | Get auth/checkout settings (verification method, guest checkout, checkout mode, partial payment, WhatsApp config). Masks encrypted or legacy `whatsappAccessToken` |
+| POST | `/auth` | Save auth/checkout settings. Skips masked WhatsApp token values, encrypts new token values with `CREDENTIAL_ENCRYPTION_KEY`, and clears encrypted/legacy token storage when the token is set to an empty string |
 | GET | `/security` | Get CSP allowed domains |
 | POST | `/security` | Save CSP allowed domains. Also writes to KV at `security:csp_allowed_domains` |
 | GET | `/email` | Get transactional email provider settings: Cloudflare binding status, Resend key status, selected provider, and sender |
