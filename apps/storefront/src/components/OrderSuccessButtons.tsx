@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 
 export default function OrderSuccessButtons() {
   const [isAnimated, setIsAnimated] = useState(false);
+  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
 
   useEffect(() => {
     // Clear the cart when the component mounts
     console.log("Order success page loaded, clearing cart");
     clearCart();
+    setIsCustomerAuthenticated(document.cookie.includes("cs_auth=1"));
 
     // Trigger animation after a short delay
     setTimeout(() => {
@@ -50,7 +52,7 @@ export default function OrderSuccessButtons() {
           </svg>
           Continue Shopping
         </Button>
-        {typeof document !== "undefined" && document.cookie.includes("cs_tok=") && (
+        {isCustomerAuthenticated && (
           <Button
             variant="outline"
             className="border-2 border-green-600 text-green-700 font-medium py-3 px-6 rounded-xl hover:bg-green-50 transition-all duration-200 flex-1"

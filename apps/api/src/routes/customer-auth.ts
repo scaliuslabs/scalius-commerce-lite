@@ -423,7 +423,25 @@ const getCustomerOrdersRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            orders: z.array(z.object({ id: z.string(), status: z.string(), totalAmount: z.number(), createdAt: nullableTimestampSchema }).passthrough()),
+            orders: z.array(z.object({
+              id: z.string(),
+              status: z.string(),
+              totalAmount: z.number(),
+              createdAt: nullableTimestampSchema,
+              latestShipment: z.object({
+                id: z.string(),
+                providerType: z.string(),
+                providerName: z.string().nullable(),
+                status: z.string(),
+                rawStatus: z.string().nullable(),
+                trackingId: z.string().nullable(),
+                trackingUrl: z.string().nullable(),
+                courierName: z.string().nullable(),
+                lastChecked: nullableTimestampSchema,
+                updatedAt: nullableTimestampSchema,
+                createdAt: nullableTimestampSchema,
+              }).nullable().optional(),
+            }).passthrough()),
             customer: z.object({
               id: z.string().optional(),
               name: z.string(),
