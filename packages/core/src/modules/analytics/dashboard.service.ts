@@ -34,8 +34,7 @@ type DailyCustomerRow = {
     customerCount: number;
 };
 
-/** Aggregated dashboard metrics for the admin home page. */
-export async function getDashboardStats(db: Database) {
+function getDashboardMonthBounds() {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const firstDayOfLastMonth = new Date(
@@ -49,66 +48,71 @@ export async function getDashboardStats(db: Database) {
         firstDayOfLastMonth.getTime() / 1000,
     );
 
-    const [
-        totalProductsArr,
-        totalCustomersArr,
-        currentMonthArr,
-        lastMonthArr,
-        totalRevenueArr,
-    ] = await runDashboardQuery(() =>
-        safeBatch(db, [
-            db
-                .select({ count: sql<number>`count(*)` })
-                .from(products)
-                .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`),
-            db
-                .select({ count: sql<number>`count(*)` })
-                .from(customers)
-                .where(sql`${customers.deletedAt} is null`),
-            db
-                .select({
-                    count: sql<number>`count(*)`,
-                    revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
-                    delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
-                    processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
-                    shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
-                    cancelled: sql<number>`count(case when status in ('cancelled', 'returned') then 1 end)`,
-                })
-                .from(orders)
-                .where(
-                    sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs}`,
-                ),
-            db
-                .select({
-                    count: sql<number>`count(*)`,
-                    revenue: sql<number>`sum(total_amount)`,
-                })
-                .from(orders)
-                .where(
-                    sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-                ),
-            db
-                .select({
-                    total: sql<number>`sum(total_amount)`,
-                })
-                .from(orders)
-                .where(
-                    sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-                ),
-        ]) as Promise<[
-            CountRow[],
-            CountRow[],
-            CurrentMonthRow[],
-            MonthComparisonRow[],
-            TotalRevenueRow[],
-        ]>,
-    );
+    return { firstDayOfMonthTs, firstDayOfLastMonthTs };
+}
 
+function getDashboardSummaryQueries(
+    db: Database,
+    {
+        firstDayOfMonthTs,
+        firstDayOfLastMonthTs,
+    }: ReturnType<typeof getDashboardMonthBounds>,
+) {
+    return [
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(products)
+            .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`),
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(customers)
+            .where(sql`${customers.deletedAt} is null`),
+        db
+            .select({
+                count: sql<number>`count(*)`,
+                revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
+                delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
+                processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
+                shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
+                cancelled: sql<number>`count(case when status in ('cancelled', 'returned') then 1 end)`,
+            })
+            .from(orders)
+            .where(
+                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfMonthTs}`,
+            ),
+        db
+            .select({
+                count: sql<number>`count(*)`,
+                revenue: sql<number>`sum(total_amount)`,
+            })
+            .from(orders)
+            .where(
+                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+            ),
+    ] as const;
+}
+
+function getDashboardTotalRevenueQuery(db: Database) {
+    return db
+        .select({
+            total: sql<number>`sum(total_amount)`,
+        })
+        .from(orders)
+        .where(
+            sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+        );
+}
+
+function mapDashboardSummaryStats([
+    totalProductsArr,
+    totalCustomersArr,
+    currentMonthArr,
+    lastMonthArr,
+]: [CountRow[], CountRow[], CurrentMonthRow[], MonthComparisonRow[]]) {
     const totalProducts = totalProductsArr[0]?.count ?? 0;
     const totalCustomers = totalCustomersArr[0]?.count ?? 0;
     const currentMonthStats = currentMonthArr[0];
     const lastMonthStats = lastMonthArr[0];
-    const totalRevenue = totalRevenueArr[0]?.total ?? 0;
 
     const orderGrowth = lastMonthStats?.count
         ? Math.round(
@@ -129,7 +133,6 @@ export async function getDashboardStats(db: Database) {
     return {
         totalProducts,
         totalCustomers,
-        totalRevenue: totalRevenue || 0,
         currentMonth: {
             orders: currentMonthStats?.count ?? 0,
             revenue: currentMonthStats?.revenue ?? 0,
@@ -146,6 +149,59 @@ export async function getDashboardStats(db: Database) {
             orders: lastMonthStats?.count ?? 0,
             revenue: lastMonthStats?.revenue ?? 0,
         },
+    };
+}
+
+/** Aggregated dashboard metrics needed by the admin home SSR summary. */
+export async function getDashboardSummaryStats(db: Database) {
+    const monthBounds = getDashboardMonthBounds();
+
+    const rows = await runDashboardQuery(() =>
+        safeBatch(db, getDashboardSummaryQueries(db, monthBounds)) as Promise<[
+            CountRow[],
+            CountRow[],
+            CurrentMonthRow[],
+            MonthComparisonRow[],
+        ]>,
+    );
+
+    return mapDashboardSummaryStats(rows);
+}
+
+/** Full dashboard metrics for legacy callers that still need lifetime revenue. */
+export async function getDashboardStats(db: Database) {
+    const monthBounds = getDashboardMonthBounds();
+
+    const [
+        totalProductsArr,
+        totalCustomersArr,
+        currentMonthArr,
+        lastMonthArr,
+        totalRevenueArr,
+    ] = await runDashboardQuery(() =>
+        safeBatch(db, [
+            ...getDashboardSummaryQueries(db, monthBounds),
+            getDashboardTotalRevenueQuery(db),
+        ]) as Promise<[
+            CountRow[],
+            CountRow[],
+            CurrentMonthRow[],
+            MonthComparisonRow[],
+            TotalRevenueRow[],
+        ]>,
+    );
+
+    const summaryStats = mapDashboardSummaryStats([
+        totalProductsArr,
+        totalCustomersArr,
+        currentMonthArr,
+        lastMonthArr,
+    ]);
+    const totalRevenue = totalRevenueArr[0]?.total ?? 0;
+
+    return {
+        ...summaryStats,
+        totalRevenue: totalRevenue || 0,
     };
 }
 

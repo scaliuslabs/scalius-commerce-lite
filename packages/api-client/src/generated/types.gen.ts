@@ -14448,6 +14448,54 @@ export type PostApiV1AdminAnalyticsByIdToggleResponses = {
 
 export type PostApiV1AdminAnalyticsByIdToggleResponse = PostApiV1AdminAnalyticsByIdToggleResponses[keyof PostApiV1AdminAnalyticsByIdToggleResponses];
 
+export type GetApiV1AdminDashboardHomeSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/home-summary';
+};
+
+export type GetApiV1AdminDashboardHomeSummaryResponses = {
+    /**
+     * Dashboard home summary data
+     */
+    200: {
+        success: true;
+        data: {
+            stats: {
+                totalProducts: number;
+                totalCustomers: number;
+                currentMonth: {
+                    orders: number;
+                    revenue: number;
+                    orderGrowth: number;
+                    revenueGrowth: number;
+                    orderStatus: {
+                        delivered: number;
+                        processing: number;
+                        shipping: number;
+                        cancelled: number;
+                    };
+                };
+                lastMonth: {
+                    orders: number;
+                    revenue: number;
+                };
+            };
+            recentOrders: Array<{
+                id: string;
+                customerName: string;
+                totalAmount: number;
+                status: string;
+                createdAt: string | number;
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminDashboardHomeSummaryResponse = GetApiV1AdminDashboardHomeSummaryResponses[keyof GetApiV1AdminDashboardHomeSummaryResponses];
+
 export type GetApiV1AdminDashboardSummaryData = {
     body?: never;
     path?: never;

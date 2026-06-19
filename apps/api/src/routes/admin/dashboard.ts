@@ -2,7 +2,12 @@
 // Admin OpenAPI routes for dashboard summary and activity data.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getDashboardStats, getRecentOrders, getDailyActivityData } from "@scalius/core/modules/analytics";
+import {
+    getDashboardStats,
+    getDashboardSummaryStats,
+    getRecentOrders,
+    getDailyActivityData,
+} from "@scalius/core/modules/analytics";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
@@ -60,11 +65,40 @@ const dashboardSummaryResponseSchema = successEnvelope(z.object({
     recentOrders: z.array(recentOrderSchema),
 }));
 
+const dashboardHomeSummaryResponseSchema = successEnvelope(z.object({
+    stats: dashboardStatsSchema.omit({ totalRevenue: true }),
+    recentOrders: z.array(recentOrderSchema),
+}));
+
 const dashboardActivityResponseSchema = successEnvelope(z.object({
     dailyActivityData: z.array(dailyActivitySchema),
 }));
 
 // ── Dashboard Summary ──
+
+const dashboardHomeSummaryRoute = createRoute({
+    method: "get",
+    path: "/home-summary",
+    tags: ["Admin - Dashboard"],
+    summary: "Get lightweight dashboard home metrics and recent orders",
+    responses: {
+        200: {
+            description: "Dashboard home summary data",
+            content: { "application/json": { schema: dashboardHomeSummaryResponseSchema } },
+        },
+    },
+});
+
+app.openapi(dashboardHomeSummaryRoute, async (c) => {
+    const db = c.get("db");
+
+    const [stats, recentOrders] = await Promise.all([
+        getDashboardSummaryStats(db),
+        getRecentOrders(db, 11),
+    ]);
+
+    return ok(c, { stats, recentOrders });
+});
 
 const dashboardSummaryRoute = createRoute({
     method: "get",

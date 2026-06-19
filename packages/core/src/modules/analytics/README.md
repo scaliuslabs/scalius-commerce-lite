@@ -9,7 +9,7 @@ Third-party analytics script management, Meta Conversions API integration, and a
 | `index.ts` | Barrel exports (re-exports dashboard.service, analytics.validation, analytics.service, meta.service) |
 | `analytics.service.ts` | Standalone functions for CRUD on analytics scripts |
 | `analytics.validation.ts` | Zod validation schemas for create/update/toggle |
-| `dashboard.service.ts` | `getDashboardStats()`, `getRecentOrders()`, `getDailyActivityData()` |
+| `dashboard.service.ts` | `getDashboardSummaryStats()`, `getDashboardStats()`, `getRecentOrders()`, `getDailyActivityData()` |
 | `meta.service.ts` | Standalone functions for Meta Conversions API settings and log management |
 
 ## Analytics Scripts
@@ -40,13 +40,17 @@ browser performance timing directly.
 
 ## Dashboard Statistics
 
-### `getDashboardStats(db: Database)`
-Returns aggregated metrics in a single `Promise.all` (5 parallel queries):
+### `getDashboardSummaryStats(db: Database)`
+Returns lightweight admin-home metrics without the lifetime revenue scan:
 - `totalProducts` -- active, non-deleted products count
 - `totalCustomers` -- non-deleted customers count
-- `totalRevenue` -- lifetime revenue (excludes cancelled/returned)
 - `currentMonth` -- orders, revenue, orderGrowth (% vs last month), revenueGrowth, orderStatus breakdown (delivered, processing, shipping, cancelled)
 - `lastMonth` -- orders, revenue
+
+### `getDashboardStats(db: Database)`
+Returns the full dashboard metrics contract for legacy/full-summary callers:
+- all fields from `getDashboardSummaryStats()`
+- `totalRevenue` -- lifetime revenue (excludes cancelled/returned)
 
 ### `getRecentOrders(db: Database, limit = 5)`
 Returns N most recent orders with customerName, totalAmount, status, createdAt (converted from unix to Date).

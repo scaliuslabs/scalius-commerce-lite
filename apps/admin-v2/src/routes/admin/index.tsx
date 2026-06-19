@@ -8,7 +8,6 @@ import {
   dashboardActivityQueryOptions,
   dashboardSummaryQueryOptions,
 } from "~/lib/api-query-options/dashboard";
-import { warmRouteQuery } from "~/lib/route-query-warming";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { DashboardSummaryData } from "~/lib/api-functions/dashboard";
 import { isTransientD1Error } from "@scalius/core/utils/transient-d1";
@@ -18,7 +17,6 @@ const EMPTY_DASHBOARD_SUMMARY: DashboardSummaryData = {
   stats: {
     totalProducts: 0,
     totalCustomers: 0,
-    totalRevenue: 0,
     currentMonth: {
       orders: 0,
       revenue: 0,
@@ -41,17 +39,20 @@ const EMPTY_DASHBOARD_SUMMARY: DashboardSummaryData = {
 
 export const Route = createFileRoute("/admin/")({
   loader: async ({ context: { queryClient } }) => {
-    try {
-      await warmRouteQuery(queryClient, dashboardSummaryQueryOptions());
-      void queryClient.prefetchQuery(dashboardActivityQueryOptions()).catch((error) => {
-        if (!isTransientD1Error(error)) {
-          console.warn("Dashboard activity prefetch skipped", error);
-        }
-      });
-    } catch (error) {
-      if (!isTransientD1Error(error)) throw error;
-      console.warn("Dashboard summary prefetch skipped after transient D1 overload", error);
+    if (typeof window === "undefined") {
+      return;
     }
+
+    void queryClient.prefetchQuery(dashboardSummaryQueryOptions()).catch((error) => {
+      if (!isTransientD1Error(error)) {
+        console.warn("Dashboard summary prefetch skipped", error);
+      }
+    });
+    void queryClient.prefetchQuery(dashboardActivityQueryOptions()).catch((error) => {
+      if (!isTransientD1Error(error)) {
+        console.warn("Dashboard activity prefetch skipped", error);
+      }
+    });
   },
   head: () => ({ meta: [{ title: "Dashboard | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,

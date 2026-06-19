@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     getDashboardStats: vi.fn(),
+    getDashboardSummaryStats: vi.fn(),
     getRecentOrders: vi.fn(),
     getDailyActivityData: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/analytics", () => ({
     getDashboardStats: mocks.getDashboardStats,
+    getDashboardSummaryStats: mocks.getDashboardSummaryStats,
     getRecentOrders: mocks.getRecentOrders,
     getDailyActivityData: mocks.getDailyActivityData,
 }));
@@ -35,6 +37,13 @@ const stats = {
         orders: 8,
         revenue: 1000,
     },
+};
+
+const homeStats = {
+    totalProducts: stats.totalProducts,
+    totalCustomers: stats.totalCustomers,
+    currentMonth: stats.currentMonth,
+    lastMonth: stats.lastMonth,
 };
 
 const recentOrders = [
@@ -74,7 +83,26 @@ describe("admin dashboard routes", () => {
         vi.clearAllMocks();
     });
 
-    it("serves summary data without running the activity query", async () => {
+    it("serves lightweight home summary data without lifetime revenue or activity queries", async () => {
+        mocks.getDashboardSummaryStats.mockResolvedValue(homeStats);
+        mocks.getRecentOrders.mockResolvedValue(recentOrders);
+        const { app, db } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/dashboard/home-summary");
+        const body = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(body).toEqual({
+            success: true,
+            data: { stats: homeStats, recentOrders },
+        });
+        expect(mocks.getDashboardSummaryStats).toHaveBeenCalledWith(db);
+        expect(mocks.getRecentOrders).toHaveBeenCalledWith(db, 11);
+        expect(mocks.getDashboardStats).not.toHaveBeenCalled();
+        expect(mocks.getDailyActivityData).not.toHaveBeenCalled();
+    });
+
+    it("serves full summary data without running the activity query", async () => {
         mocks.getDashboardStats.mockResolvedValue(stats);
         mocks.getRecentOrders.mockResolvedValue(recentOrders);
         const { app, db } = createTestApp();
