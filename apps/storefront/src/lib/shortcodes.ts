@@ -1,59 +1,13 @@
 // src/lib/shortcodes.ts
 import { getProductBySlug, getWidgetById } from "@/lib/api";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import {
+  parseShortcodes,
+  type ShortcodeMatch,
+} from "@scalius/shared/shortcodes";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
 import { withOptimizedProductPageImages } from "./serialized-media";
 import { createScopedWidgetScript, prepareWidgetContent } from "./widget-content";
-
-export interface ShortcodeMatch {
-  fullMatch: string;
-  type: "widget" | "product";
-  id: string;
-  attributes: Record<string, string>;
-}
-
-function normalizeShortcodeAttributeQuotes(value: string): string {
-  return value
-    .replace(/&quot;/gi, '"')
-    .replace(/&#34;/g, '"')
-    .replace(/&#x22;/gi, '"')
-    .replace(/&apos;/gi, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/gi, "'");
-}
-
-export function parseShortcodes(content: string): ShortcodeMatch[] {
-  const shortcodeRegex = /\[(\w+)([^\]]*)\]/g;
-  const matches: ShortcodeMatch[] = [];
-  let match;
-
-  while ((match = shortcodeRegex.exec(content)) !== null) {
-    const [fullMatch, type, attributesString] = match;
-
-    if (type === "widget" || type === "product") {
-      const attributes: Record<string, string> = {};
-      const normalizedAttributesString =
-        normalizeShortcodeAttributeQuotes(attributesString);
-
-      const attrRegex = /(\w+)=["']([^"']*)["']/g;
-      let attrMatch;
-      while ((attrMatch = attrRegex.exec(normalizedAttributesString)) !== null) {
-        attributes[attrMatch[1]] = attrMatch[2];
-      }
-
-      if (attributes.id || attributes.slug) {
-        matches.push({
-          fullMatch,
-          type: type as "widget" | "product",
-          id: attributes.id || attributes.slug,
-          attributes,
-        });
-      }
-    }
-  }
-
-  return matches;
-}
 
 // Render widget shortcode
 export async function renderWidgetShortcode(widgetId: string): Promise<string> {

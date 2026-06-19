@@ -239,7 +239,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
         orderIds: data.orderIds,
     });
     await OrdersService.bulkDeleteOrders(db, data.orderIds, data.permanent);
-    await invalidateProductAvailabilityCacheSubjects(subjects, c);
+    await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
     return noContent(c);
 });
 
@@ -367,6 +367,7 @@ app.openapi(updateOrderRoute, async (c) => {
     await invalidateProductAvailabilityCacheSubjects(
         [...beforeSubjects, ...afterSubjects],
         c,
+        db,
     );
     return ok(c, result);
 });
@@ -393,7 +394,7 @@ app.openapi(deleteOrderRoute, async (c) => {
         orderIds: [orderId],
     });
     await OrdersService.deleteOrder(db, orderId);
-    await invalidateProductAvailabilityCacheSubjects(subjects, c);
+    await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
     return noContent(c);
 });
 
@@ -442,7 +443,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
         orderIds: [orderId],
     });
     await OrdersService.permanentlyDeleteOrder(db, orderId);
-    await invalidateProductAvailabilityCacheSubjects(subjects, c);
+    await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
     return noContent(c);
 });
 

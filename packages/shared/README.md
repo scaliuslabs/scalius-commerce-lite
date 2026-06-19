@@ -34,6 +34,7 @@ import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
 import { scopeCss } from "@scalius/shared/css-scope";
 import { normalizeWidgetPlacementSlotForScope } from "@scalius/shared/widget-placement";
+import { parseShortcodes } from "@scalius/shared/shortcodes";
 import { toISOString, fromUnixSeconds, nowUnixSeconds, unixToDate, formatDate } from "@scalius/shared/timestamps";
 import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 ```
@@ -60,6 +61,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `css-sanitize.ts` | Defense-in-depth sanitizer for admin-authored widget stylesheets | `sanitizeCssForStyleElement()` -- prevents style-tag breakout, removes external stylesheet/font at-rules, strips HTML tags, and neutralizes script-capable CSS values/URLs |
 | `css-scope.ts` | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
 | `widget-placement.ts` | Canonical widget placement scope/slot rules shared by admin and API validation | `isWidgetPlacementSlotAllowedForScope()`, `normalizeWidgetPlacementSlotForScope()`, `isWidgetCollectionSlot()` |
+| `shortcodes.ts` | CMS shortcode parsing shared by storefront rendering and API cache invalidation | `parseShortcodes()`, `normalizeShortcodeAttributeQuotes()`, `ShortcodeMatch` |
 | `timestamps.ts` | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
 | `barcode-utils.ts` | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
 | `barcode-svg.ts` | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |

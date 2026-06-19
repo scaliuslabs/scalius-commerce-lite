@@ -4,6 +4,7 @@ import {
   INVALIDATION_GROUPS,
   MAX_STOREFRONT_EXACT_HTML_PATHS,
   WIDGET_CACHE_GROUPS,
+  collectCmsShortcodePageInvalidation,
   collectProductAvailabilityCacheInvalidation,
   getGroupsForPath,
   getProductAvailabilityApiCacheKeys,
@@ -19,6 +20,7 @@ import {
   normalizeStorefrontPurgeUrl,
   purgeStorefrontForGroups,
   purgeStorefrontForPrefixes,
+  resolveCmsShortcodePageTargets,
   resolveProductAvailabilityCacheSubjects,
   triggerStorefrontPurgeForGroups,
   triggerStorefrontPurgeForPrefixes,
@@ -88,6 +90,86 @@ describe("catalog cache groups", () => {
         "global_seo_settings",
       ]),
     );
+  });
+});
+
+describe("CMS shortcode page invalidation", () => {
+  function cmsPageDb(rows: Array<{ id: string; slug: string; content: string }>) {
+    const query = {
+      from: vi.fn(() => query),
+      where: vi.fn(() => Promise.resolve(rows)),
+    };
+    return {
+      select: vi.fn(() => query),
+      query,
+    };
+  }
+
+  it("collects exact page render prefixes and HTML paths for shortcode pages", () => {
+    const targets = [
+      { id: "page_1", slug: "combo-offer" },
+      { id: "page_1_duplicate", slug: "combo-offer" },
+      { id: "page_2", slug: "gift-guide" },
+    ];
+
+    expect(collectCmsShortcodePageInvalidation(targets)).toEqual({
+      apiPatterns: [
+        "api:storefront:page:/api/v1/storefront/pages/slug/combo-offer*",
+        "api:storefront:page:/api/v1/storefront/pages/slug/gift-guide*",
+      ],
+      storefrontPrefixes: [
+        "page_render_combo-offer_",
+        "page_render_gift-guide_",
+      ],
+      storefrontHtmlPaths: ["/combo-offer", "/gift-guide"],
+      bumpVersion: false,
+    });
+  });
+
+  it("requests a global HTML bump when shortcode references exceed the exact warm cap", () => {
+    const targets = Array.from(
+      { length: MAX_STOREFRONT_EXACT_HTML_PATHS + 1 },
+      (_, index) => ({ id: `page_${index}`, slug: `promo-${index}` }),
+    );
+
+    expect(collectCmsShortcodePageInvalidation(targets).bumpVersion).toBe(true);
+  });
+
+  it("resolves published CMS pages that reference affected product slugs or widget ids", async () => {
+    const db = cmsPageDb([
+      {
+        id: "page_1",
+        slug: "combo-offer",
+        content: '<p>[product slug="phone"]</p>',
+      },
+      {
+        id: "page_2",
+        slug: "widget-offer",
+        content: "<p>[widget id=&quot;wid_1&quot;]</p>",
+      },
+      {
+        id: "page_3",
+        slug: "other-product",
+        content: '<p>[product slug="rice"] [widget id="wid_2"]</p>',
+      },
+      {
+        id: "page_4",
+        slug: "case-sensitive",
+        content: '<p>[Product slug="phone"]</p>',
+      },
+    ]);
+
+    await expect(
+      resolveCmsShortcodePageTargets(db as never, {
+        productSlugs: ["phone"],
+        widgetIds: ["wid_1"],
+      }),
+    ).resolves.toEqual([
+      { id: "page_1", slug: "combo-offer" },
+      { id: "page_2", slug: "widget-offer" },
+    ]);
+    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(db.query.where).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -735,6 +817,62 @@ describe("triggerStorefrontPurgeForGroups", () => {
       prefixes: [],
       exactKeys: ["product_slug_phone", "product_variants_prod_1"],
       htmlPaths: ["/products/phone"],
+      bumpVersion: false,
+    });
+  });
+
+  it("adds CMS shortcode page paths to product availability purges", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+    const pageQuery = {
+      from: vi.fn(() => pageQuery),
+      where: vi.fn(() =>
+        Promise.resolve([
+          {
+            id: "page_1",
+            slug: "stock-alert",
+            content: '<p>[product slug="phone"]</p>',
+          },
+        ]),
+      ),
+    };
+    const db = {
+      select: vi.fn(() => pageQuery),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await invalidateProductAvailabilityCacheSubjects(
+      [{ productId: "prod_1", slug: "phone" }],
+      {
+        env: {
+          CACHE: kv,
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+        } as unknown as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      },
+      db as never,
+    );
+
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:storefront:page:/api/v1/storefront/pages/slug/stock-alert",
+    });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      groups: ["products"],
+      prefixes: ["page_render_stock-alert_"],
+      exactKeys: ["product_slug_phone", "product_variants_prod_1"],
+      htmlPaths: ["/products/phone", "/stock-alert"],
       bumpVersion: false,
     });
   });
