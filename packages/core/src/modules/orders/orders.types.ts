@@ -164,5 +164,9 @@ export interface StatusUpdateResult {
         customerName: string;
         notificationType: OrderNotificationType;
         trackingId?: string;
+        dedupeKey?: string;
+        previousStatus?: string;
+        newStatus?: string;
+        version?: number;
     };
 }

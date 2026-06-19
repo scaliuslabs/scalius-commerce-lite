@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   getEncryptionKey: vi.fn(() => "test-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
   getAdminNotificationChannels: vi.fn(),
+  claimOrderNotificationOutboxForProcessing: vi.fn(),
+  markOrderNotificationOutboxProcessingFailed: vi.fn(),
+  markOrderNotificationOutboxSent: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -34,6 +37,12 @@ vi.mock("@scalius/core/modules/payments/polar", () => ({
 vi.mock("@scalius/core/modules/notifications/notifications.service", () => ({
   sendOrderNotificationEmail: mocks.sendOrderNotificationEmail,
   sendOrderNotification: mocks.sendOrderNotification,
+}));
+
+vi.mock("@scalius/core/modules/notifications", () => ({
+  claimOrderNotificationOutboxForProcessing: mocks.claimOrderNotificationOutboxForProcessing,
+  markOrderNotificationOutboxProcessingFailed: mocks.markOrderNotificationOutboxProcessingFailed,
+  markOrderNotificationOutboxSent: mocks.markOrderNotificationOutboxSent,
 }));
 
 vi.mock("@scalius/core/integrations/email", () => ({
@@ -144,7 +153,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.sendOrderNotificationEmail.mockResolvedValue(undefined);
+    mocks.sendOrderNotification.mockResolvedValue(undefined);
+    mocks.sendEmail.mockResolvedValue(undefined);
     mocks.getAdminNotificationChannels.mockResolvedValue({});
+    mocks.claimOrderNotificationOutboxForProcessing.mockResolvedValue({
+      claimed: true,
+      outboxId: "outbox_1",
+      claimId: "claim_1",
+      attempts: 2,
+    });
+    mocks.markOrderNotificationOutboxProcessingFailed.mockResolvedValue(undefined);
+    mocks.markOrderNotificationOutboxSent.mockResolvedValue(undefined);
   });
 
   it("retries confirmed payment messages when processing returns an unsuccessful result", async () => {
@@ -299,6 +319,73 @@ describe("handleQueueBatch payment confirmation retries", () => {
       },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("claims and marks durable order notifications sent", async () => {
+    const message = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_order_shipped",
+      orderId: "order-shipped",
+      customerName: "Outbox Customer",
+      notificationType: "order_shipped",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.claimOrderNotificationOutboxForProcessing).toHaveBeenCalledWith(
+      { id: "db" },
+      "outbox_order_shipped",
+    );
+    expect(mocks.sendOrderNotificationEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.markOrderNotificationOutboxSent).toHaveBeenCalledWith(
+      { id: "db" },
+      "outbox_1",
+      "claim_1",
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips already-sent durable order notification messages", async () => {
+    mocks.claimOrderNotificationOutboxForProcessing.mockResolvedValue({
+      claimed: false,
+      reason: "already_sent",
+    });
+    const message = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_sent",
+      orderId: "order-sent",
+      customerName: "Sent Customer",
+      notificationType: "order_delivered",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
+    expect(mocks.markOrderNotificationOutboxSent).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks durable order notifications failed before queue retry when dispatch throws", async () => {
+    mocks.sendOrderNotificationEmail.mockRejectedValue(new Error("email provider down"));
+    const message = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_fail",
+      orderId: "order-fail",
+      customerName: "Fail Customer",
+      notificationType: "order_cancelled",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.markOrderNotificationOutboxProcessingFailed).toHaveBeenCalledWith(
+      { id: "db" },
+      "outbox_1",
+      "claim_1",
+      2,
+      expect.any(Error),
+    );
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
   it("passes notification type to admin push dispatch when push is enabled", async () => {

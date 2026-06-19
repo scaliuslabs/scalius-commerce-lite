@@ -23,6 +23,11 @@ import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } 
 import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications";
+import {
+  claimOrderNotificationOutboxForProcessing,
+  markOrderNotificationOutboxProcessingFailed,
+  markOrderNotificationOutboxSent,
+} from "@scalius/core/modules/notifications";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -125,6 +130,7 @@ export type PaymentQueueMessage =
   }
   | {
     type: "order.notification";
+    outboxId?: string;
     orderId: string;
     customerEmail?: string;
     customerName: string;
@@ -431,37 +437,65 @@ async function processQueueMessage(
     // ── Order notifications ────────────────────────────────────────────────
 
     case "order.notification": {
-      // Customer notifications (email, SMS, etc.)
-      const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
-      await sendOrderNotificationEmail(
-        payload.customerEmail,
-        payload.customerName,
-        payload.orderId,
-        payload.notificationType,
-        payload.data,
-        db,
-        {
-          encryptionKey,
-          env: env as unknown as Record<string, unknown>,
-        },
-      );
+      const outboxClaim = payload.outboxId
+        ? await claimOrderNotificationOutboxForProcessing(db, payload.outboxId)
+        : undefined;
 
-      // Admin push notification — check admin channel settings before sending
+      if (outboxClaim && !outboxClaim.claimed) {
+        console.log(`[Queue] Skipped order notification outbox ${payload.outboxId}: ${outboxClaim.reason}`);
+        break;
+      }
+
       try {
-        const { getAdminNotificationChannels } = await import("@scalius/core/modules/settings/settings.service");
-        const adminChannels = await getAdminNotificationChannels(db);
-        const enabledAdminChannels = adminChannels[payload.notificationType] || [];
+        // Customer notifications (email, SMS, etc.)
+        const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+        await sendOrderNotificationEmail(
+          payload.customerEmail,
+          payload.customerName,
+          payload.orderId,
+          payload.notificationType,
+          payload.data,
+          db,
+          {
+            encryptionKey,
+            env: env as unknown as Record<string, unknown>,
+          },
+        );
 
-        if (enabledAdminChannels.includes("push")) {
-          const requestUrl = env.PUBLIC_API_BASE_URL || "https://api.scalius.com";
-          await sendOrderNotification(db, {
-            id: payload.orderId,
-            customerName: payload.customerName,
-            notificationType: payload.notificationType,
-          }, env, requestUrl);
+        // Admin push notification — check admin channel settings before sending
+        try {
+          const { getAdminNotificationChannels } = await import("@scalius/core/modules/settings/settings.service");
+          const adminChannels = await getAdminNotificationChannels(db);
+          const enabledAdminChannels = adminChannels[payload.notificationType] || [];
+
+          if (enabledAdminChannels.includes("push")) {
+            const requestUrl = env.PUBLIC_API_BASE_URL || "https://api.scalius.com";
+            await sendOrderNotification(db, {
+              id: payload.orderId,
+              customerName: payload.customerName,
+              notificationType: payload.notificationType,
+            }, env, requestUrl);
+          }
+        } catch (fcmError) {
+          console.error(`[Queue] Admin notification check/send failed for ${payload.orderId}:`, fcmError);
         }
-      } catch (fcmError) {
-        console.error(`[Queue] Admin notification check/send failed for ${payload.orderId}:`, fcmError);
+
+        if (outboxClaim?.claimed) {
+          await markOrderNotificationOutboxSent(db, outboxClaim.outboxId, outboxClaim.claimId);
+        }
+      } catch (error) {
+        if (outboxClaim?.claimed) {
+          await markOrderNotificationOutboxProcessingFailed(
+            db,
+            outboxClaim.outboxId,
+            outboxClaim.claimId,
+            outboxClaim.attempts,
+            error,
+          ).catch((markError: unknown) => {
+            console.error("[Queue] Failed to mark order notification outbox failure:", markError);
+          });
+        }
+        throw error;
       }
       break;
     }

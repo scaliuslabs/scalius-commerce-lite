@@ -1,31 +1,35 @@
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications";
+import {
+    buildOrderStatusNotificationDedupeKey,
+    recordAndEnqueueOrderNotification,
+    type OrderNotificationQueue,
+    type OrderNotificationQueueMessage,
+    type OrderNotificationType,
+} from "@scalius/core/modules/notifications";
 import { eq, inArray } from "drizzle-orm";
 
 export interface OrderStatusChange {
     orderId: string;
     previousStatus: string;
     newStatus: string;
-}
-
-interface OrderNotificationQueueMessage {
-    type: "order.notification";
-    orderId: string;
-    customerEmail?: string;
-    customerName: string;
-    notificationType: OrderNotificationType;
-    data?: Record<string, unknown>;
-}
-
-interface OrderNotificationQueue {
-    send(message: OrderNotificationQueueMessage): Promise<unknown>;
+    version?: number;
 }
 
 export interface EnqueueOrderNotificationResult {
     orderId: string;
+    outboxId?: string;
     enqueued: boolean;
-    skippedReason?: "no_queue" | "no_notification_type" | "order_missing" | "queue_failed";
+    skippedReason?:
+        | "no_queue"
+        | "no_notification_type"
+        | "order_missing"
+        | "record_failed"
+        | "queue_failed"
+        | "already_queued"
+        | "already_sent"
+        | "busy"
+        | "missing";
 }
 
 export function getOrderNotificationTypeForStatus(status: string): OrderNotificationType | null {
@@ -60,6 +64,10 @@ export async function enqueueOrderStatusChangeNotification(options: {
         trackingByOrderId: options.trackingId
             ? { [options.statusChange.orderId]: options.trackingId }
             : undefined,
+        previousStatusByOrderId: { [options.statusChange.orderId]: options.statusChange.previousStatus },
+        versionByOrderId: options.statusChange.version
+            ? { [options.statusChange.orderId]: options.statusChange.version }
+            : undefined,
         source: options.source,
     });
 
@@ -72,6 +80,9 @@ export async function enqueueOrderNotificationsForStatus(options: {
     orderIds: string[];
     newStatus: string;
     trackingByOrderId?: Record<string, string | null | undefined>;
+    dedupeKeyByOrderId?: Record<string, string | null | undefined>;
+    previousStatusByOrderId?: Record<string, string | null | undefined>;
+    versionByOrderId?: Record<string, number | null | undefined>;
     source: string;
 }): Promise<EnqueueOrderNotificationResult[]> {
     const orderIds = Array.from(new Set(options.orderIds.filter(Boolean)));
@@ -83,13 +94,6 @@ export async function enqueueOrderNotificationsForStatus(options: {
             orderId,
             enqueued: false,
             skippedReason: "no_notification_type",
-        }));
-    }
-    if (!options.queue) {
-        return orderIds.map((orderId) => ({
-            orderId,
-            enqueued: false,
-            skippedReason: "no_queue",
         }));
     }
 
@@ -126,16 +130,63 @@ export async function enqueueOrderNotificationsForStatus(options: {
             data: trackingId ? { trackingId } : undefined,
         };
 
-        try {
-            await options.queue.send(message);
-            results.push({ orderId, enqueued: true });
-        } catch (error: unknown) {
-            console.error(`[${options.source}] Failed to enqueue ${notificationType} notification for ${orderId}:`, error);
-            results.push({ orderId, enqueued: false, skippedReason: "queue_failed" });
-        }
+        results.push(await enqueueOrderNotificationMessage({
+            db: options.db,
+            queue: options.queue,
+            message,
+            dedupeKey: options.dedupeKeyByOrderId?.[orderId] || buildOrderStatusNotificationDedupeKey({
+                orderId,
+                notificationType,
+                previousStatus: options.previousStatusByOrderId?.[orderId],
+                newStatus: options.newStatus,
+                version: options.versionByOrderId?.[orderId],
+            }),
+            source: options.source,
+        }));
     }
 
     return results;
+}
+
+export async function enqueueOrderNotificationMessage(options: {
+    db: Database;
+    queue: OrderNotificationQueue | undefined;
+    message: OrderNotificationQueueMessage;
+    dedupeKey: string;
+    source: string;
+}): Promise<EnqueueOrderNotificationResult> {
+    try {
+        const result = await recordAndEnqueueOrderNotification({
+            db: options.db,
+            queue: options.queue,
+            notification: {
+                dedupeKey: options.dedupeKey,
+                orderId: options.message.orderId,
+                customerEmail: options.message.customerEmail,
+                customerName: options.message.customerName,
+                notificationType: options.message.notificationType,
+                data: options.message.data,
+                source: options.source,
+            },
+        });
+
+        return {
+            orderId: options.message.orderId,
+            outboxId: result.outboxId,
+            enqueued: result.enqueued,
+            skippedReason: result.skippedReason,
+        };
+    } catch (error: unknown) {
+        console.error(
+            `[${options.source}] Failed to record ${options.message.notificationType} notification for ${options.message.orderId}:`,
+            error,
+        );
+        return {
+            orderId: options.message.orderId,
+            enqueued: false,
+            skippedReason: "record_failed",
+        };
+    }
 }
 
 async function selectSingleOrder(db: Database, orderId: string) {

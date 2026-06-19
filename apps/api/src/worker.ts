@@ -4,6 +4,7 @@ import app from "./app";
 import { handleQueueBatch } from "./queue-consumer";
 import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 export { WidgetDesignAgent } from "./agents/widget-design-agent";
 
@@ -36,5 +37,17 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
         (result.errors.length > 0 ? `, errors=${result.errors.length}` : "")
     );
+
+    const notificationOutbox = await flushPendingOrderNotificationOutbox({
+      db,
+      queue: this.env.ORDER_NOTIFICATIONS_QUEUE,
+      limit: 10,
+    });
+    if (notificationOutbox.scanned > 0 || notificationOutbox.failed > 0) {
+      console.log(
+        `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
+          `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, skipped=${notificationOutbox.skipped}`,
+      );
+    }
   }
 }

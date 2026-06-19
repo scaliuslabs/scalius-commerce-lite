@@ -1,8 +1,8 @@
 // src/db/schema/orders.ts
 // Order domain tables: orders, orderItems, orderPayments, paymentPlans,
-// codTracking, webhookEvents, abandonedCheckouts.
+// codTracking, webhookEvents, orderNotificationOutbox, abandonedCheckouts.
 
-import { sqliteTable, text, integer, real, unique, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { customers } from "./customers";
 import { products, productVariants } from "./products";
@@ -194,6 +194,32 @@ export const webhookEvents = sqliteTable("webhook_events", {
     index("webhook_events_order_id_idx").on(table.orderId),
 ]);
 
+export const orderNotificationOutbox = sqliteTable("order_notification_outbox", {
+    id: text("id").primaryKey(),
+    dedupeKey: text("dedupe_key").notNull(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    notificationType: text("notification_type").notNull(),
+    source: text("source").notNull(),
+    payload: text("payload").notNull(),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    queuedAt: integer("queued_at"),
+    sentAt: integer("sent_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_notification_outbox_dedupe_key_unique").on(table.dedupeKey),
+    index("order_notification_outbox_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
+    index("order_notification_outbox_claim_idx").on(table.status, table.claimExpiresAt),
+    index("order_notification_outbox_order_id_idx").on(table.orderId),
+]);
+
 export const abandonedCheckouts = sqliteTable(
     "abandoned_checkouts",
     {
@@ -217,4 +243,5 @@ export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;
 export type WebhookEvent = InferSelectModel<typeof webhookEvents>;
+export type OrderNotificationOutbox = InferSelectModel<typeof orderNotificationOutbox>;
 export type AbandonedCheckout = InferSelectModel<typeof abandonedCheckouts>;

@@ -41,7 +41,7 @@ function isSuccessfulOrderResult(result: unknown): result is { success: true; or
 function isNewShipmentResult(result: unknown): result is {
     success: true;
     orderId: string;
-    shipment: { data?: { trackingId?: string | null } };
+    shipment: { shipmentId?: string | null; data?: { trackingId?: string | null } };
 } {
     return isSuccessfulOrderResult(result)
         && typeof (result as Record<string, unknown>).shipment === "object"
@@ -291,6 +291,14 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
             newlyShippedResults
                 .map((result) => [result.orderId, result.shipment.data?.trackingId] as const)
                 .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0),
+        ),
+        dedupeKeyByOrderId: Object.fromEntries(
+            newlyShippedResults.map((result) => [
+                result.orderId,
+                result.shipment.shipmentId
+                    ? `shipment:${result.shipment.shipmentId}:order_shipped`
+                    : `shipment:${result.orderId}:${result.shipment.data?.trackingId ?? "unknown"}:order_shipped`,
+            ] as const),
         ),
         source: "bulk-ship",
     });

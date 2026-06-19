@@ -154,6 +154,7 @@ export async function updateOrderStatusFromShipment(
         orderId: order.id,
         previousStatus: order.status,
         newStatus: newOrderStatus,
+        version: order.version + 1,
       };
     }
 
