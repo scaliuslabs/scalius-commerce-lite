@@ -8,8 +8,10 @@ import {
   orders,
   productVariants,
 } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
-import { recordMovement } from "./movements";
+import { safeBatch, type Database } from "@scalius/database/client";
+
+export const DEFAULT_EXPIRY_SWEEP_LIMIT = 50;
+export const MAX_EXPIRY_SWEEP_LIMIT = 200;
 
 /**
  * Result of an expiry sweep, for observability.
@@ -17,12 +19,31 @@ import { recordMovement } from "./movements";
 export interface ExpiryResult {
   /** Number of expired reservations found */
   found: number;
+  /** Maximum number of reservation groups considered in this sweep */
+  limit: number;
+  /** True when at least one additional expired reservation group remains */
+  hasMore: boolean;
   /** Number of reservations successfully released */
   released: number;
   /** Variant IDs that were released */
   releasedVariantIds: string[];
   /** Any errors encountered (non-fatal) */
   errors: string[];
+}
+
+export interface ExpirySweepOptions {
+  /** Maximum reservation groups to process in one invocation. Defaults to 50. */
+  limit?: number;
+}
+
+function normalizeExpirySweepLimit(limit: number | undefined): number {
+  if (limit === undefined) return DEFAULT_EXPIRY_SWEEP_LIMIT;
+  if (!Number.isFinite(limit)) return DEFAULT_EXPIRY_SWEEP_LIMIT;
+  return Math.max(1, Math.min(MAX_EXPIRY_SWEEP_LIMIT, Math.floor(limit)));
+}
+
+function createExpiredReleaseMovementId(orderId: string, variantId: string): string {
+  return `expiry_release:${orderId}:${variantId}`;
 }
 
 async function reservationOrderExists(
@@ -38,6 +59,37 @@ async function reservationOrderExists(
     .get();
 
   return Boolean(order);
+}
+
+async function reservationHasTerminalMovement(
+  db: Database,
+  orderId: string,
+  variantId: string,
+): Promise<boolean> {
+  const movement = await db
+    .select({
+      movementId: inventoryMovements.id,
+    })
+    .from(inventoryMovements)
+    .where(
+      and(
+        eq(inventoryMovements.orderId, orderId),
+        eq(inventoryMovements.variantId, variantId),
+        sql`${inventoryMovements.type} IN ('deducted', 'preorder_deducted', 'released')`,
+      ),
+    )
+    .get();
+
+  return Boolean(movement);
+}
+
+function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes("expiry_release:") ||
+    (message.includes("UNIQUE constraint failed") &&
+      message.includes("inventory_movements"))
+  );
 }
 
 /**
@@ -64,13 +116,18 @@ async function reservationOrderExists(
  *
  * @param db - Drizzle database instance
  * @param maxAgeMinutes - Maximum age in minutes before a reservation expires (default: 30)
+ * @param options.limit - Maximum reservation groups to process in one invocation (default: 50, max: 200)
  */
 export async function releaseExpiredReservations(
   db: Database,
-  maxAgeMinutes = 30
+  maxAgeMinutes = 30,
+  options: ExpirySweepOptions = {},
 ): Promise<ExpiryResult> {
+  const limit = normalizeExpirySweepLimit(options.limit);
   const result: ExpiryResult = {
     found: 0,
+    limit,
+    hasMore: false,
     released: 0,
     releasedVariantIds: [],
     errors: [],
@@ -86,8 +143,10 @@ export async function releaseExpiredReservations(
   //
   // We use a subquery approach since D1/SQLite supports it well.
   // Group by (variantId, orderId) to handle cases where multiple
-  // reservation movements exist for the same order+variant.
-  const expiredReservations = await db
+  // reservation movements exist for the same order+variant. Read one
+  // sentinel row beyond the processing limit so cron logs can tell whether
+  // another bounded pass is needed.
+  const expiredReservationCandidates = await db
     .select({
       variantId: inventoryMovements.variantId,
       orderId: inventoryMovements.orderId,
@@ -125,9 +184,13 @@ export async function releaseExpiredReservations(
       )
     )
     .groupBy(inventoryMovements.variantId, inventoryMovements.orderId)
+    .orderBy(sql`MIN(${inventoryMovements.createdAt})`)
+    .limit(limit + 1)
     .all();
 
+  const expiredReservations = expiredReservationCandidates.slice(0, limit);
   result.found = expiredReservations.length;
+  result.hasMore = expiredReservationCandidates.length > limit;
 
   if (expiredReservations.length === 0) {
     return result;
@@ -141,6 +204,7 @@ export async function releaseExpiredReservations(
 
     try {
       if (await reservationOrderExists(db, orderId)) continue;
+      if (await reservationHasTerminalMovement(db, orderId, variantId)) continue;
 
       // Read current variant state for the movement log
       const variant = await db
@@ -157,8 +221,24 @@ export async function releaseExpiredReservations(
         continue;
       }
 
-      // Decrement reservedStock (clamped to 0)
-      await db
+      const movementId = createExpiredReleaseMovementId(orderId, variantId);
+      const releaseMovement = db.insert(inventoryMovements).values({
+        id: movementId,
+        variantId,
+        orderId,
+        type: "released",
+        quantity: -totalQuantity,
+        previousStock: variant.stock,
+        newStock: variant.stock,
+        notes: `expired reservation (age > ${maxAgeMinutes}min, order ${orderId})`,
+        createdBy: null,
+        createdAt: new Date(),
+      });
+
+      // Decrement reservedStock (clamped to 0). The deterministic release
+      // movement and stock counter update run in one D1 batch so overlapping
+      // cron invocations cannot both claim and apply the same expiry release.
+      const releaseCounterUpdate = db
         .update(productVariants)
         .set({
           reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${totalQuantity})`,
@@ -167,19 +247,13 @@ export async function releaseExpiredReservations(
         })
         .where(eq(productVariants.id, variantId));
 
-      await recordMovement(db, {
-        variantId,
-        orderId: orderId ?? undefined,
-        type: "released",
-        quantity: -totalQuantity,
-        previousStock: variant.stock,
-        newStock: variant.stock, // physical stock doesn't change
-        notes: `expired reservation (age > ${maxAgeMinutes}min, order ${orderId ?? "unknown"})`,
-      });
+      await safeBatch(db, [releaseMovement, releaseCounterUpdate]);
 
       result.released++;
       result.releasedVariantIds.push(variantId);
     } catch (err: unknown) {
+      if (isDuplicateExpiryReleaseClaimError(err)) continue;
+
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push(`Failed to release variant ${variantId}: ${msg}`);
       console.error(`[inventory/expiry] Failed to release expired reservation for variant ${variantId}:`, err);
@@ -189,7 +263,8 @@ export async function releaseExpiredReservations(
   if (result.released > 0) {
     console.log(
       `[inventory/expiry] Released ${result.released}/${result.found} expired reservations ` +
-        `(maxAge=${maxAgeMinutes}min, variants: ${result.releasedVariantIds.join(", ")})`
+        `(maxAge=${maxAgeMinutes}min, limit=${result.limit}, hasMore=${result.hasMore}, ` +
+        `variants: ${result.releasedVariantIds.join(", ")})`
     );
   }
 
