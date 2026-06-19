@@ -124,6 +124,9 @@ describe("admin route graph boundaries", () => {
     expect(orderDetailSource).not.toContain("refetchOnReconnect: true");
     expect(orderListSource).toContain('document.addEventListener("visibilitychange"');
     expect(orderListSource).toContain("isDocumentHidden()");
+    expect(orderListSource).toContain("activeOrderListRefreshRef");
+    expect(orderListSource).toContain("orderListRefreshInFlightRef");
+    expect(orderListSource).toContain("ORDER_AUTO_REFRESH_DEBOUNCE_MS");
     expect(orderListSource).not.toContain("refreshIntervalRef");
     expect(routerSource).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
     expect(routerSource).toContain("scrollRestorationBehavior: \"instant\"");
