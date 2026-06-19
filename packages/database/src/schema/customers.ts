@@ -1,7 +1,7 @@
 // src/db/schema/customers.ts
-// Customer domain tables: customers, customerHistory.
+// Customer domain tables: customers, customerHistory, authOtpDeliveryReceipts.
 
-import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
@@ -56,5 +56,40 @@ export const customerHistory = sqliteTable("customer_history", {
     index("customer_history_customer_id_idx").on(table.customerId),
 ]);
 
+export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts", {
+    id: text("id").primaryKey(),
+    deliveryKey: text("delivery_key").notNull(),
+    purpose: text("purpose").notNull().default("customer_login"),
+    method: text("method").notNull(),
+    channel: text("channel").notNull(),
+    provider: text("provider").notNull(),
+    identifierHash: text("identifier_hash").notNull(),
+    identifierMasked: text("identifier_masked"),
+    status: text("status").notNull().default("pending"),
+    providerMessageId: text("provider_message_id"),
+    providerStatus: text("provider_status"),
+    rawResponse: text("raw_response"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    lastAttemptAt: integer("last_attempt_at"),
+    acceptedAt: integer("accepted_at"),
+    deliveredAt: integer("delivered_at"),
+    failedAt: integer("failed_at"),
+    skippedAt: integer("skipped_at"),
+    otpExpiresAt: integer("otp_expires_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("auth_otp_delivery_receipts_delivery_key_unique").on(table.deliveryKey),
+    index("auth_otp_delivery_receipts_identifier_created_idx").on(table.identifierHash, table.createdAt),
+    index("auth_otp_delivery_receipts_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
+    index("auth_otp_delivery_receipts_claim_idx").on(table.status, table.claimExpiresAt, table.createdAt),
+    index("auth_otp_delivery_receipts_provider_message_idx").on(table.provider, table.providerMessageId),
+]);
+
 export type Customer = InferSelectModel<typeof customers>;
 export type CustomerHistory = InferSelectModel<typeof customerHistory>;
+export type AuthOtpDeliveryReceipt = InferSelectModel<typeof authOtpDeliveryReceipts>;

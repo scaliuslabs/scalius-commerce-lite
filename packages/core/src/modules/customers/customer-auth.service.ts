@@ -13,6 +13,7 @@ import {
     ServiceUnavailableError,
 } from "@scalius/core/errors";
 import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
+import { createAuthOtpDeliveryKey } from "./otp-delivery-receipts";
 import { validateAndFormatPhone, isValidPhoneNumber } from "@scalius/shared/customer-utils";
 
 // ─────────────────────────────────────────
@@ -79,6 +80,10 @@ export interface SendOtpResult {
     httpStatus?: number;
     /** Queue payload for async OTP delivery */
     queuePayload?: OtpQueuePayload;
+    /** Exact KV key used for this OTP attempt, so route-level queue failures can clear cooldown state. */
+    otpStorageKey?: string;
+    /** Stable per-attempt delivery key used for provider idempotency and D1 receipt fencing. */
+    deliveryKey?: string;
 }
 
 export interface VerifyOtpInput {
@@ -216,6 +221,17 @@ export async function sendOtp(
 
     const otpKey = `${OTP_PREFIX}${normalizedIdentifier}`;
 
+    // Resolve and validate the delivery transport before mutating rate-limit or OTP KV state.
+    const transport = getOtpTransport(method, allowedMethod);
+    if (!settings) {
+        throw new ServiceUnavailableError("Customer authentication settings are not initialized.");
+    }
+    const configError = transport.validateConfig(settings);
+    if (configError) {
+        console.error(`[CustomerAuth] Transport ${transport.label} misconfigured: ${configError}`);
+        throw new ServiceUnavailableError(configError);
+    }
+
     // IP-based Rate Limiting (max 5 requests per 10 minutes per IP)
     if (ip !== "unknown") {
         const ipRateKey = `rate_limit_ip:${ip}`;
@@ -260,21 +276,24 @@ export async function sendOtp(
 
     // OTP code is intentionally NOT logged — it would leak secrets in production.
 
-    // Resolve transport and validate its configuration
-    const transport = getOtpTransport(method, allowedMethod);
-    const configError = settings ? transport.validateConfig(settings) : null;
-    if (configError) {
-        console.error(`[CustomerAuth] Transport ${transport.label} misconfigured: ${configError}`);
-        throw new ServiceUnavailableError(configError);
-    }
-
     // Build queue payload via transport — use original identifier for delivery (user-facing)
-    const queuePayload = transport.buildQueuePayload(code, normalizedIdentifier, name, settings!);
+    const deliveryKey = createAuthOtpDeliveryKey();
+    const otpExpiresAt = Math.floor(storedOtp.expiresAt / 1000);
+    const queuePayload = transport.buildQueuePayload(
+        code,
+        normalizedIdentifier,
+        name,
+        settings,
+        deliveryKey,
+        otpExpiresAt,
+    );
 
     return {
         success: true,
         message: `Verification code sent${method === "email" ? " to your email" : ` via ${transport.label}`}`,
         queuePayload,
+        otpStorageKey: otpKey,
+        deliveryKey,
     };
 }
 

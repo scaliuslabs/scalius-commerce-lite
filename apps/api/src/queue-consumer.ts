@@ -33,6 +33,17 @@ import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/c
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { META_GRAPH_API_VERSION } from "@scalius/core/integrations/meta/conversions-api";
+import {
+  claimAuthOtpDeliveryReceipt,
+  createAuthOtpDeliveryTarget,
+  createAuthOtpProviderClientReference,
+  markAuthOtpDeliveryReceiptAccepted,
+  markAuthOtpDeliveryReceiptFailed,
+  markAuthOtpDeliveryReceiptSkipped,
+  type AuthOtpDeliveryChannel,
+  type AuthOtpDeliveryReceiptResult,
+} from "@scalius/core/modules/customers/otp-delivery-receipts";
+import { escapeHtml } from "@scalius/shared/html-escape";
 import { getEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
@@ -141,6 +152,9 @@ export type PaymentQueueMessage =
 export type AuthOtpQueueMessage =
   | {
     type: "auth.send_otp";
+    deliveryKey?: string;
+    purpose?: string;
+    otpExpiresAt?: number;
     method: "email" | "phone";
     allowedMethod: string;
     identifier: string;
@@ -227,73 +241,7 @@ async function processQueueMessage(
     // TODO: When SMS providers (Twilio, etc.) are finalized, extract this block
     //       to src/modules/notifications/otp.handler.ts
     case "auth.send_otp": {
-      if (payload.method === "email") {
-        const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
-        await sendEmail({
-          to: payload.identifier,
-          subject: "Your login code",
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-              <h2 style="font-size: 20px; margin-bottom: 8px;">Your login code</h2>
-              <p style="color: #555; margin-bottom: 24px;">Hi ${payload.name}, enter this code to sign in:</p>
-              <div style="background: #f5f5f5; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 24px;">
-                <span style="font-size: 40px; font-weight: 700; letter-spacing: 10px; font-family: monospace; color: #111;">${payload.code}</span>
-              </div>
-              <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
-            </div>
-          `,
-          text: `Your login code is: ${payload.code}\n\nExpires in 5 minutes.`,
-        }, {
-          db,
-          env: env as unknown as Record<string, unknown>,
-          encryptionKey,
-        });
-        console.log(`[Queue] Sent OTP email to ${payload.identifier}`);
-      } else if (payload.method === "phone" && payload.allowedMethod === "whatsapp_otp") {
-        if (!payload.waToken || !payload.waPhoneId) {
-          throw new Error("WhatsApp credentials missing in queue payload");
-        }
-        const waRes = await fetch(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${payload.waPhoneId}/messages`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${payload.waToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: payload.identifier.replace("+", ""),
-            type: "template",
-            template: {
-              name: payload.waTemplate || "auth_otp",
-              language: { code: "en_US" },
-              components: [
-                { type: "body", parameters: [{ type: "text", text: payload.code }] },
-                { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: payload.code }] },
-              ],
-            },
-          }),
-        });
-        if (!waRes.ok) {
-          const err = await waRes.text();
-          throw new Error(`WhatsApp API failed: ${err}`);
-        }
-        console.log(`[Queue] Sent WhatsApp OTP to ${payload.identifier}`);
-      } else {
-        // SMS OTP via configured BD SMS gateway
-        const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
-        const smsProvider = await getActiveSmsProvider(db, encryptionKey);
-        if (!smsProvider) {
-          throw new Error("SMS OTP requested but no SMS provider is configured. Configure an SMS provider in Auth & Access settings.");
-        }
-        const result = await smsProvider.sendSms({
-          to: payload.identifier,  // Already E.164 from customers.phone
-          message: `Your login code: ${payload.code}\n\nValid for 5 minutes. Do not share.`,
-        });
-        if (!result.success) {
-          throw new Error(`SMS OTP delivery failed via ${smsProvider.name}: ${result.rawStatus}`);
-        }
-        console.log(`[Queue] SMS OTP sent via ${smsProvider.name} to ${payload.identifier}, ref=${result.providerRef}`);
-      }
+      await processAuthOtpQueueMessage(payload, msg.id, db, env);
       break;
     }
 
@@ -518,6 +466,235 @@ async function processQueueMessage(
       console.warn(`[Queue] Unknown message type:`, (payload as Record<string, unknown>).type);
     }
   }
+}
+
+async function processAuthOtpQueueMessage(
+  payload: AuthOtpQueueMessage,
+  messageId: string,
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<void> {
+  const channel = resolveAuthOtpDeliveryChannel(payload);
+  const target = await createAuthOtpDeliveryTarget({
+    deliveryKey: payload.deliveryKey ?? `legacy:${messageId}`,
+    purpose: payload.purpose ?? "customer_login",
+    method: payload.method,
+    channel,
+    provider: channel,
+    identifier: payload.identifier,
+    otpExpiresAt: payload.otpExpiresAt ?? null,
+  });
+  const claim = await claimAuthOtpDeliveryReceipt(db, target);
+
+  if (!claim.claimed) {
+    if (claim.reason === "accepted" || claim.reason === "delivered" || claim.reason === "skipped") {
+      console.log(`[Queue] Skipped OTP delivery ${target.deliveryKey}: already ${claim.reason}`);
+      return;
+    }
+    throw new Error(`OTP delivery receipt ${target.deliveryKey} is ${claim.reason}`);
+  }
+
+  try {
+    if (target.otpExpiresAt && target.otpExpiresAt <= Math.floor(Date.now() / 1000)) {
+      await markAuthOtpDeliveryReceiptSkipped(db, claim.receipt, "otp_expired", {
+        provider: target.provider,
+        providerStatus: "otp_expired",
+      });
+      console.log(`[Queue] Skipped expired OTP delivery ${target.deliveryKey}`);
+      return;
+    }
+
+    const result = await sendAuthOtpByChannel(payload, target, db, env);
+    await markAuthOtpDeliveryReceiptAccepted(db, claim.receipt, result);
+  } catch (error) {
+    await markAuthOtpDeliveryReceiptFailed(
+      db,
+      claim.receipt,
+      error,
+      getAuthOtpDeliveryFailureResult(error),
+    ).catch((markError: unknown) => {
+      console.error("[Queue] Failed to mark OTP delivery receipt failure:", markError);
+    });
+    throw error;
+  }
+}
+
+async function sendAuthOtpByChannel(
+  payload: AuthOtpQueueMessage,
+  target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<AuthOtpDeliveryReceiptResult> {
+  if (payload.method === "email") {
+    return sendAuthOtpEmail(payload, target.deliveryKey, db, env);
+  }
+
+  if (payload.allowedMethod === "whatsapp_otp") {
+    return sendAuthOtpWhatsApp(payload);
+  }
+
+  return sendAuthOtpSms(payload, target, db, env);
+}
+
+async function sendAuthOtpEmail(
+  payload: AuthOtpQueueMessage,
+  deliveryKey: string,
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<AuthOtpDeliveryReceiptResult> {
+  const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+  const safeName = escapeHtml(payload.name);
+  const safeCode = escapeHtml(payload.code);
+  const result = await sendEmail({
+    to: payload.identifier,
+    subject: "Your login code",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="font-size: 20px; margin-bottom: 8px;">Your login code</h2>
+        <p style="color: #555; margin-bottom: 24px;">Hi ${safeName}, enter this code to sign in:</p>
+        <div style="background: #f5f5f5; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 24px;">
+          <span style="font-size: 40px; font-weight: 700; letter-spacing: 10px; font-family: monospace; color: #111;">${safeCode}</span>
+        </div>
+        <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
+      </div>
+    `,
+    text: `Your login code is: ${payload.code}\n\nExpires in 5 minutes.`,
+    idempotencyKey: deliveryKey,
+  }, {
+    db,
+    env: env as unknown as Record<string, unknown>,
+    encryptionKey,
+  });
+
+  const receiptResult: AuthOtpDeliveryReceiptResult = {
+    provider: result.provider,
+    providerMessageId: result.providerRef,
+    providerStatus: result.rawStatus ?? (result.success ? "accepted" : "failed"),
+  };
+
+  if (!result.success) {
+    throw createAuthOtpDeliveryError(
+      `OTP email delivery unavailable: ${result.rawStatus ?? result.provider}`,
+      receiptResult,
+    );
+  }
+
+  console.log(`[Queue] Sent OTP email to ${payload.identifier}`);
+  return receiptResult;
+}
+
+async function sendAuthOtpWhatsApp(
+  payload: AuthOtpQueueMessage,
+): Promise<AuthOtpDeliveryReceiptResult> {
+  if (!payload.waToken || !payload.waPhoneId) {
+    throw createAuthOtpDeliveryError("WhatsApp credentials missing in queue payload", {
+      provider: "whatsapp",
+      providerStatus: "missing_credentials",
+    });
+  }
+
+  const waRes = await fetch(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${payload.waPhoneId}/messages`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${payload.waToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: payload.identifier.replace("+", ""),
+      type: "template",
+      template: {
+        name: payload.waTemplate || "auth_otp",
+        language: { code: "en_US" },
+        components: [
+          { type: "body", parameters: [{ type: "text", text: payload.code }] },
+          { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: payload.code }] },
+        ],
+      },
+    }),
+  });
+
+  if (!waRes.ok) {
+    const errorText = (await waRes.text()).slice(0, 500);
+    throw createAuthOtpDeliveryError(`WhatsApp API failed: ${errorText}`, {
+      provider: "whatsapp",
+      providerStatus: `HTTP ${waRes.status}`,
+      rawResponse: errorText,
+    });
+  }
+
+  const data = await waRes.json().catch(() => null) as { messages?: Array<{ id?: string }> } | null;
+  const messageId = data?.messages?.[0]?.id;
+  console.log(`[Queue] Sent WhatsApp OTP to ${payload.identifier}`);
+  return {
+    provider: "whatsapp",
+    providerMessageId: messageId,
+    providerStatus: "accepted",
+    rawResponse: messageId ? JSON.stringify({ messageId }) : "accepted",
+  };
+}
+
+async function sendAuthOtpSms(
+  payload: AuthOtpQueueMessage,
+  target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<AuthOtpDeliveryReceiptResult> {
+  const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+  const smsProvider = await getActiveSmsProvider(db, encryptionKey);
+  if (!smsProvider) {
+    throw createAuthOtpDeliveryError(
+      "SMS OTP requested but no SMS provider is configured. Configure an SMS provider in Auth & Access settings.",
+      { provider: "sms", providerStatus: "not_configured" },
+    );
+  }
+
+  const result = await smsProvider.sendSms({
+    to: payload.identifier,  // Already E.164 from customers.phone
+    message: `Your login code: ${payload.code}\n\nValid for 5 minutes. Do not share.`,
+    clientReference: createAuthOtpProviderClientReference(target),
+  });
+
+  const receiptResult: AuthOtpDeliveryReceiptResult = {
+    provider: smsProvider.name,
+    providerMessageId: result.providerRef,
+    providerStatus: result.rawStatus ?? (result.success ? "accepted" : "failed"),
+  };
+
+  if (!result.success) {
+    throw createAuthOtpDeliveryError(
+      `SMS OTP delivery failed via ${smsProvider.name}: ${result.rawStatus ?? "unknown provider status"}`,
+      receiptResult,
+    );
+  }
+
+  console.log(`[Queue] SMS OTP sent via ${smsProvider.name} to ${payload.identifier}, ref=${result.providerRef}`);
+  return receiptResult;
+}
+
+function resolveAuthOtpDeliveryChannel(payload: AuthOtpQueueMessage): AuthOtpDeliveryChannel {
+  if (payload.method === "email") return "email";
+  return payload.allowedMethod === "whatsapp_otp" ? "whatsapp" : "sms";
+}
+
+type AuthOtpDeliveryError = Error & {
+  deliveryResult?: AuthOtpDeliveryReceiptResult;
+};
+
+function createAuthOtpDeliveryError(
+  message: string,
+  deliveryResult?: AuthOtpDeliveryReceiptResult,
+): AuthOtpDeliveryError {
+  const error = new Error(message) as AuthOtpDeliveryError;
+  error.deliveryResult = deliveryResult;
+  return error;
+}
+
+function getAuthOtpDeliveryFailureResult(error: unknown): AuthOtpDeliveryReceiptResult {
+  if (error instanceof Error && "deliveryResult" in error) {
+    return (error as AuthOtpDeliveryError).deliveryResult ?? {};
+  }
+  return {};
 }
 
 function summarizeNotificationFailures(

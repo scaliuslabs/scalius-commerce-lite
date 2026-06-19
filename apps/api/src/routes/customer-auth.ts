@@ -29,7 +29,7 @@ import {
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import { getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
-import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError } from "../utils/api-error";
+import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, ServiceUnavailableError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
 import { ok } from "../utils/api-response";
@@ -104,7 +104,17 @@ app.openapi(sendOtpRoute, async (c) => {
 
   // Dispatch OTP delivery to queue
   if (result.queuePayload) {
-    await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
+    try {
+      await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
+    } catch (error) {
+      if (result.otpStorageKey) {
+        await kv.delete(result.otpStorageKey).catch((deleteError: unknown) => {
+          console.error("[CustomerAuth] Failed to clear OTP after queue handoff failure:", deleteError);
+        });
+      }
+      console.error("[CustomerAuth] Failed to enqueue OTP delivery:", error);
+      throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
+    }
   }
 
   return ok(c, { message: result.message });
