@@ -40,17 +40,15 @@ export async function getCheckoutConfig(
             checkoutMode: siteSettings.checkoutMode,
             partialPaymentEnabled: siteSettings.partialPaymentEnabled,
             partialPaymentAmount: siteSettings.partialPaymentAmount
-        }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null).catch(() => null),
+        }).from(siteSettings).limit(1).then((rows) => rows[0] ?? null),
         db.select({ key: settings.key, value: settings.value })
             .from(settings)
             .where(eq(settings.category, "currency"))
-            .all()
-            .catch(() => [] as { key: string; value: string }[]),
+            .all(),
         db.select({ value: settings.value })
             .from(settings)
             .where(and(eq(settings.category, "phone"), eq(settings.key, "allowed_countries")))
-            .get()
-            .catch(() => null),
+            .get(),
     ]);
 
     let allowedCountries: string[] = [];
@@ -76,29 +74,32 @@ export async function getCheckoutConfig(
 
     const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
 
-    const activePaymentMethods = await getActivePaymentMethods(db, kv, encryptionKey).catch(() => ({
-        enabledMethods: ["cod"] as Array<"stripe" | "sslcommerz" | "polar" | "cod">,
-        defaultMethod: "cod" as const,
-    }));
+    const activePaymentMethods = await getActivePaymentMethods(db, kv, encryptionKey, {
+        bypassMemoryCache: true,
+    });
     const allowedGatewayIds = new Set(activePaymentMethods.enabledMethods);
 
     // Dynamically resolve enabled gateways from the registry
     const registeredGateways = getRegisteredGateways();
-    const gatewaySettingsPromises = registeredGateways.map((gw) =>
-        gw.getSettings(db, kv, encryptionKey).catch(() => null)
+    const candidateGateways = registeredGateways.filter((gw) => {
+        if (!allowedGatewayIds.has(gw.id as "stripe" | "sslcommerz" | "polar" | "cod")) return false;
+        if (gw.id === "cod" && checkoutMode === "gateways_only") return false;
+        if (gw.id !== "cod" && checkoutMode === "guest_cod_only") return false;
+        return true;
+    });
+    const settingsResults = await Promise.all(
+        candidateGateways.map((gw) =>
+            gw.getSettings(db, kv, encryptionKey, { bypassMemoryCache: true })
+        ),
     );
-    const settingsResults = await Promise.all(gatewaySettingsPromises);
 
     const gateways: Array<Record<string, unknown>> = [];
 
-    for (let i = 0; i < registeredGateways.length; i++) {
-        const gw = registeredGateways[i];
+    for (let i = 0; i < candidateGateways.length; i++) {
+        const gw = candidateGateways[i];
         if (!gw) continue;
-        if (!allowedGatewayIds.has(gw.id as "stripe" | "sslcommerz" | "polar" | "cod")) continue;
         const gwSettings = settingsResults[i];
         if (!gwSettings?.enabled) continue;
-        if (gw.id === "cod" && checkoutMode === "gateways_only") continue;
-        if (gw.id !== "cod" && checkoutMode === "guest_cod_only") continue;
 
         gateways.push({
             id: gw.id,

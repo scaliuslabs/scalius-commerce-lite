@@ -91,12 +91,13 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     const db = c.get("db");
         const kv = getKv();
         const encKey = getEncryptionKey(c.env as Record<string, unknown>);
-        const config = await getActivePaymentMethods(db, kv, encKey);
+        const readOptions = { bypassMemoryCache: true };
+        const config = await getActivePaymentMethods(db, kv, encKey, readOptions);
 
         const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
-            getStripeSettings(db, undefined, encKey),
-            getSSLCommerzSettings(db, undefined, encKey),
-            getPolarSettings(db, undefined, encKey),
+            getStripeSettings(db, kv, encKey, readOptions),
+            getSSLCommerzSettings(db, kv, encKey, readOptions),
+            getPolarSettings(db, kv, encKey, readOptions),
         ]);
 
         return ok(c, {

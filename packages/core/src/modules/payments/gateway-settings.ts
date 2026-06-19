@@ -11,6 +11,7 @@
 import { eq, sql } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import type { GatewaySettingsReadOptions } from "./gateway-registry";
 import { registerGateway } from "./gateway-registry";
 import { encryptCredentials, decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 
@@ -122,11 +123,14 @@ const STRIPE_CACHE_KEY = "gw:stripe";
 export async function getStripeSettings(
   db: Database,
   kv?: KVNamespace,
-  encryptionKey?: string
+  encryptionKey?: string,
+  options: GatewaySettingsReadOptions = {},
 ): Promise<StripeSettings | null> {
   // Try in-memory cache first
-  const cached = getCachedCredential<StripeSettings>(STRIPE_CACHE_KEY);
-  if (cached) return cached;
+  if (!options.bypassMemoryCache) {
+    const cached = getCachedCredential<StripeSettings>(STRIPE_CACHE_KEY);
+    if (cached) return cached;
+  }
 
   // Migration path: if KV has a stale entry from before this fix, delete it.
   await cleanupLegacyCredentialKv(kv, STRIPE_CACHE_KEY);
@@ -142,7 +146,9 @@ export async function getStripeSettings(
   };
 
   // Cache in memory only — never persist decrypted credentials
-  setCachedCredential(STRIPE_CACHE_KEY, stripeSettings);
+  if (!options.bypassMemoryCache) {
+    setCachedCredential(STRIPE_CACHE_KEY, stripeSettings);
+  }
 
   return stripeSettings;
 }
@@ -164,11 +170,14 @@ const SSL_CACHE_KEY = "gw:sslcommerz";
 export async function getSSLCommerzSettings(
   db: Database,
   kv?: KVNamespace,
-  encryptionKey?: string
+  encryptionKey?: string,
+  options: GatewaySettingsReadOptions = {},
 ): Promise<SSLCommerzSettings | null> {
   // Try in-memory cache first
-  const cached = getCachedCredential<SSLCommerzSettings>(SSL_CACHE_KEY);
-  if (cached) return cached;
+  if (!options.bypassMemoryCache) {
+    const cached = getCachedCredential<SSLCommerzSettings>(SSL_CACHE_KEY);
+    if (cached) return cached;
+  }
 
   // Migration path: clean up stale KV entries.
   await cleanupLegacyCredentialKv(kv, SSL_CACHE_KEY);
@@ -184,7 +193,9 @@ export async function getSSLCommerzSettings(
   };
 
   // Cache in memory only — never persist decrypted credentials
-  setCachedCredential(SSL_CACHE_KEY, sslSettings);
+  if (!options.bypassMemoryCache) {
+    setCachedCredential(SSL_CACHE_KEY, sslSettings);
+  }
 
   return sslSettings;
 }
@@ -206,11 +217,14 @@ const POLAR_CACHE_KEY = "gw:polar";
 export async function getPolarSettings(
   db: Database,
   kv?: KVNamespace,
-  encryptionKey?: string
+  encryptionKey?: string,
+  options: GatewaySettingsReadOptions = {},
 ): Promise<PolarSettings | null> {
   // Try in-memory cache first
-  const cached = getCachedCredential<PolarSettings>(POLAR_CACHE_KEY);
-  if (cached) return cached;
+  if (!options.bypassMemoryCache) {
+    const cached = getCachedCredential<PolarSettings>(POLAR_CACHE_KEY);
+    if (cached) return cached;
+  }
 
   // Migration path: clean up stale KV entries.
   await cleanupLegacyCredentialKv(kv, POLAR_CACHE_KEY);
@@ -229,7 +243,9 @@ export async function getPolarSettings(
   };
 
   // Cache in memory only — never persist decrypted credentials
-  setCachedCredential(POLAR_CACHE_KEY, polarSettings);
+  if (!options.bypassMemoryCache) {
+    setCachedCredential(POLAR_CACHE_KEY, polarSettings);
+  }
 
   return polarSettings;
 }
@@ -304,11 +320,14 @@ export interface PaymentMethodsConfig {
 export async function getActivePaymentMethods(
   db: Database,
   kv?: KVNamespace,
-  encryptionKey?: string
+  encryptionKey?: string,
+  options: GatewaySettingsReadOptions = {},
 ): Promise<PaymentMethodsConfig> {
   // Try in-memory cache first
-  const cached = getCachedCredential<PaymentMethodsConfig>(PAYMENT_METHODS_CACHE_KEY);
-  if (cached) return cached;
+  if (!options.bypassMemoryCache) {
+    const cached = getCachedCredential<PaymentMethodsConfig>(PAYMENT_METHODS_CACHE_KEY);
+    if (cached) return cached;
+  }
 
   // Migration path: clean up stale KV entries
   if (kv) {
@@ -340,19 +359,19 @@ export async function getActivePaymentMethods(
       continue;
     }
     if (method === "stripe") {
-      const stripe = await getStripeSettings(db, undefined, encryptionKey);
+      const stripe = await getStripeSettings(db, kv, encryptionKey, options);
       if (stripe && stripe.enabled) {
         validMethods.push("stripe");
       }
     }
     if (method === "sslcommerz") {
-      const ssl = await getSSLCommerzSettings(db, undefined, encryptionKey);
+      const ssl = await getSSLCommerzSettings(db, kv, encryptionKey, options);
       if (ssl && ssl.enabled) {
         validMethods.push("sslcommerz");
       }
     }
     if (method === "polar") {
-      const polar = await getPolarSettings(db, undefined, encryptionKey);
+      const polar = await getPolarSettings(db, kv, encryptionKey, options);
       if (polar && polar.enabled) {
         validMethods.push("polar");
       }
@@ -370,7 +389,9 @@ export async function getActivePaymentMethods(
   };
 
   // Cache in memory only
-  setCachedCredential(PAYMENT_METHODS_CACHE_KEY, config);
+  if (!options.bypassMemoryCache) {
+    setCachedCredential(PAYMENT_METHODS_CACHE_KEY, config);
+  }
 
   return config;
 }
@@ -390,8 +411,8 @@ registerGateway({
   id: "stripe",
   name: "Card Payment",
   settingsCategory: STRIPE_CATEGORY,
-  getSettings: async (db, kv, encryptionKey) => {
-    const s = await getStripeSettings(db, kv, encryptionKey);
+  getSettings: async (db, kv, encryptionKey, options) => {
+    const s = await getStripeSettings(db, kv, encryptionKey, options);
     return s ? { ...s, enabled: s.enabled } : null;
   },
   getPublicConfig: (s) => ({
@@ -404,8 +425,8 @@ registerGateway({
   id: "sslcommerz",
   name: "Online Payment",
   settingsCategory: SSL_CATEGORY,
-  getSettings: async (db, kv, encryptionKey) => {
-    const s = await getSSLCommerzSettings(db, kv, encryptionKey);
+  getSettings: async (db, kv, encryptionKey, options) => {
+    const s = await getSSLCommerzSettings(db, kv, encryptionKey, options);
     return s ? { ...s, enabled: s.enabled } : null;
   },
   getPublicConfig: (s) => ({
@@ -418,8 +439,8 @@ registerGateway({
   id: "polar",
   name: "Polar",
   settingsCategory: POLAR_CATEGORY,
-  getSettings: async (db, kv, encryptionKey) => {
-    const s = await getPolarSettings(db, kv, encryptionKey);
+  getSettings: async (db, kv, encryptionKey, options) => {
+    const s = await getPolarSettings(db, kv, encryptionKey, options);
     return s ? { ...s, enabled: s.enabled } : null;
   },
   getPublicConfig: (s) => ({

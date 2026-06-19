@@ -34,7 +34,10 @@ const [
   getCheckoutConfig(),
 ]);
 const shippingMethods: ShippingMethod[] = shippingMethodsResponse || [];
-const codOnly = isCodOnly(checkoutConfig);
+const checkoutUnavailable = checkoutConfig.unavailable === true || checkoutConfig.gateways.length === 0;
+const checkoutUnavailableMessage =
+  checkoutConfig.unavailableMessage || "Checkout is temporarily unavailable. Please try again shortly.";
+const codOnly = !checkoutUnavailable && isCodOnly(checkoutConfig);
 const allowedCountriesMode = checkoutConfig?.allowedCountriesMode || "include";
 const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   id: "fallback",
@@ -138,6 +141,8 @@ if (Astro.request.method === "POST" && codOnly) {
 // Determine submit button label
 const submitLabel = codOnly
   ? lang.languageData.placeOrderText
+  : checkoutUnavailable
+    ? "Checkout temporarily unavailable"
   : "Proceed to Payment →";
 ---
 
@@ -146,6 +151,8 @@ const submitLabel = codOnly
   <div
     id="checkout-meta"
     data-cod-only={codOnly ? "true" : "false"}
+    data-checkout-unavailable={checkoutUnavailable ? "true" : "false"}
+    data-checkout-unavailable-message={checkoutUnavailableMessage}
     data-gateways={JSON.stringify(checkoutConfig.gateways)}
     data-guest-checkout-enabled={checkoutConfig.guestCheckoutEnabled !== false ? "true" : "false"}
     data-default-shipping-id={shippingMethods[0]?.id || ""}
@@ -156,6 +163,18 @@ const submitLabel = codOnly
   <main
     class="container max-w-6xl mx-auto px-2 pt-2 pb-3 sm:px-3 sm:pt-2 sm:pb-3"
   >
+    {
+      checkoutUnavailable && (
+        <div
+          class="bg-destructive/10 border border-destructive/20 text-destructive px-3 py-2 sm:px-4 sm:py-3 rounded mb-2 sm:mb-2.5 relative text-xs sm:text-sm"
+          role="alert"
+        >
+          <strong class="font-bold">Checkout unavailable: </strong>
+          <span class="block sm:inline">{checkoutUnavailableMessage}</span>
+        </div>
+      )
+    }
+
     {
       errorMessage && (
         <div
@@ -449,7 +468,7 @@ const submitLabel = codOnly
                 type="submit"
                 className="w-full bg-primary text-primary-foreground font-bold text-base py-3 sm:py-3.5 rounded-xl shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 overflow-hidden relative"
                 id="submitButton"
-                disabled={isProcessing}
+                disabled={isProcessing || checkoutUnavailable}
               >
                 <span class="relative z-10" id="submitButtonText">
                   {isProcessing ? lang.languageData.processingText : submitLabel}
@@ -596,6 +615,9 @@ const submitLabel = codOnly
   // ── Multi-gateway checkout redirect ──
   const meta = document.getElementById("checkout-meta");
   const codOnly = meta?.dataset.codOnly === "true";
+  const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
+  const checkoutUnavailableMessage =
+    meta?.dataset.checkoutUnavailableMessage || "Checkout is temporarily unavailable. Please try again shortly.";
   const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -616,8 +638,8 @@ const submitLabel = codOnly
     const updateCheckoutButtonState = () => {
       if (submitButton) {
         const empty = isCartEmpty();
-        submitButton.disabled = empty;
-        if (empty) submitButton.classList.add("opacity-50", "cursor-not-allowed");
+        submitButton.disabled = checkoutUnavailable || empty;
+        if (checkoutUnavailable || empty) submitButton.classList.add("opacity-50", "cursor-not-allowed");
         else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
       }
     };
@@ -628,6 +650,12 @@ const submitLabel = codOnly
     if (!form || !submitButton) return;
 
     form.addEventListener("submit", (e) => {
+      if (checkoutUnavailable) {
+        e.preventDefault();
+        alert(checkoutUnavailableMessage);
+        return;
+      }
+
       // Guest Checkout Interception
       if (!guestCheckoutEnabled && !isUserLoggedIn()) {
         e.preventDefault();

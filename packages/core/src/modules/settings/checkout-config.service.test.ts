@@ -81,6 +81,12 @@ describe("getCheckoutConfig", () => {
         const config = await getCheckoutConfig(createDb() as never);
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
+        expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
+            expect.anything(),
+            undefined,
+            undefined,
+            { bypassMemoryCache: true },
+        );
     });
 
     it("still requires the individual gateway settings to be enabled", async () => {
@@ -94,5 +100,32 @@ describe("getCheckoutConfig", () => {
         const config = await getCheckoutConfig(createDb() as never);
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
+        expect(gateways[0].getSettings).toHaveBeenCalledWith(
+            expect.anything(),
+            undefined,
+            undefined,
+            { bypassMemoryCache: true },
+        );
+    });
+
+    it("rejects when payment-method settings cannot be read", async () => {
+        mocks.getActivePaymentMethods.mockRejectedValue(new Error("settings unavailable"));
+
+        await expect(getCheckoutConfig(createDb() as never)).rejects.toThrow(
+            "settings unavailable",
+        );
+    });
+
+    it("rejects when a candidate gateway setting read fails", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "stripe",
+        });
+        const gateways = mocks.getRegisteredGateways();
+        gateways[0].getSettings.mockRejectedValue(new Error("stripe settings unavailable"));
+
+        await expect(getCheckoutConfig(createDb() as never)).rejects.toThrow(
+            "stripe settings unavailable",
+        );
     });
 });
