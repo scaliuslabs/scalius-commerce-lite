@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { UserMenu } from "@/components/auth/UserMenu";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -20,16 +19,24 @@ const NotificationDropdown = lazy(() =>
   })),
 );
 
+const UserMenu = lazy(() =>
+  import("@/components/auth/UserMenu").then((module) => ({
+    default: module.UserMenu,
+  })),
+);
+
+interface AdminHeaderUser {
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+  role: string | null;
+  twoFactorEnabled: boolean;
+  isSuperAdmin: boolean;
+}
+
 interface AdminHeaderProps {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    image: string | null;
-    role: string | null;
-    twoFactorEnabled: boolean;
-    isSuperAdmin: boolean;
-  };
+  user: AdminHeaderUser;
 }
 
 type IdleSchedulerWindow = Window & {
@@ -86,6 +93,31 @@ function HeaderActionsSkeleton() {
   );
 }
 
+function getUserInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function UserMenuFallback({ user }: { user: AdminHeaderUser }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative inline-flex items-center gap-3 rounded-lg px-2 py-1"
+    >
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary ring-2 ring-primary/10">
+        {getUserInitials(user.name)}
+      </div>
+      <span className="hidden text-sm font-medium text-foreground md:inline-block">
+        {user.name}
+      </span>
+    </div>
+  );
+}
+
 function DeferredAdminHeaderActions({ userId }: { userId: string }) {
   const ready = useDeferredHeaderActions();
 
@@ -97,6 +129,18 @@ function DeferredAdminHeaderActions({ userId }: { userId: string }) {
       <div className="h-5 w-px bg-border mx-2.5" />
       <NotificationDropdown userId={userId} />
       <div className="h-5 w-px bg-border mx-2.5" />
+    </Suspense>
+  );
+}
+
+function DeferredUserMenu({ user }: { user: AdminHeaderUser }) {
+  const ready = useDeferredHeaderActions();
+
+  if (!ready) return <UserMenuFallback user={user} />;
+
+  return (
+    <Suspense fallback={<UserMenuFallback user={user} />}>
+      <UserMenu user={user} />
     </Suspense>
   );
 }
@@ -120,7 +164,7 @@ export function AdminHeader({ user }: AdminHeaderProps) {
           </div>
           <DarkModeToggle />
           <div className="h-5 w-px bg-border mx-2.5" />
-          <UserMenu user={user} />
+          <DeferredUserMenu user={user} />
         </div>
       </TooltipProvider>
     </header>

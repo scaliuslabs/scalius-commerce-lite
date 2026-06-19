@@ -8,13 +8,6 @@ import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
@@ -26,9 +19,14 @@ import {
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "13rem";
-const SIDEBAR_WIDTH_MOBILE = "16rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+
+const SidebarMobileSheet = React.lazy(() =>
+  import("./sidebar-mobile-sheet").then((module) => ({
+    default: module.SidebarMobileSheet,
+  })),
+);
 
 type SidebarContext = {
   state: "expanded" | "collapsed";
@@ -179,6 +177,12 @@ const Sidebar = React.forwardRef<
     ref,
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+    const [hasLoadedMobileSheet, setHasLoadedMobileSheet] =
+      React.useState(false);
+
+    React.useEffect(() => {
+      if (openMobile) setHasLoadedMobileSheet(true);
+    }, [openMobile]);
 
     if (collapsible === "none") {
       return (
@@ -196,28 +200,18 @@ const Sidebar = React.forwardRef<
     }
 
     if (isMobile) {
+      if (!openMobile && !hasLoadedMobileSheet) return null;
+
       return (
-        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
-          <SheetContent
-            data-sidebar="sidebar"
-            data-mobile="true"
-            className="border-sidebar-border bg-sidebar p-0 text-sidebar-foreground shadow-xl [&>button]:hidden"
-            style={
-              {
-                "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-                width: "min(var(--sidebar-width), calc(100vw - 2rem))",
-                maxWidth: "calc(100vw - 2rem)",
-              } as React.CSSProperties
-            }
+        <React.Suspense fallback={null}>
+          <SidebarMobileSheet
+            open={openMobile}
+            onOpenChange={setOpenMobile}
             side={side}
           >
-            <SheetHeader className="sr-only">
-              <SheetTitle>Sidebar</SheetTitle>
-              <SheetDescription>Navigation sidebar</SheetDescription>
-            </SheetHeader>
-            <div className="flex h-full w-full flex-col">{children}</div>
-          </SheetContent>
-        </Sheet>
+            {children}
+          </SidebarMobileSheet>
+        </React.Suspense>
       );
     }
 
