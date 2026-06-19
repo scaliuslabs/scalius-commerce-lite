@@ -24,7 +24,7 @@ describe("email provider selection", () => {
   it("sends with the Cloudflare EMAIL binding when Cloudflare is configured", async () => {
     const send = vi.fn().mockResolvedValue({ messageId: "cf_msg_1" });
 
-    await sendEmail(
+    const result = await sendEmail(
       {
         to: "buyer@example.com",
         subject: "Order received",
@@ -39,6 +39,11 @@ describe("email provider selection", () => {
       },
     );
 
+    expect(result).toMatchObject({
+      success: true,
+      provider: "cloudflare",
+      providerRef: "cf_msg_1",
+    });
     expect(send).toHaveBeenCalledWith({
       to: "buyer@example.com",
       from: "orders@example.com",
@@ -55,7 +60,7 @@ describe("email provider selection", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await sendEmail(
+    const result = await sendEmail(
       {
         to: "buyer@example.com",
         subject: "Order received",
@@ -71,6 +76,11 @@ describe("email provider selection", () => {
       },
     );
 
+    expect(result).toMatchObject({
+      success: true,
+      provider: "resend",
+      providerRef: "resend_msg_1",
+    });
     expect(fetchMock).toHaveBeenCalledWith("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -87,6 +97,37 @@ describe("email provider selection", () => {
     });
   });
 
+  it("passes idempotency keys through to Resend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ id: "resend_msg_2" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendEmail(
+      {
+        to: "buyer@example.com",
+        subject: "Order received",
+        html: "<p>Thanks</p>",
+        idempotencyKey: "outbox_1:email:recipient_hash",
+      },
+      {
+        settings: {
+          ...baseSettings,
+          provider: "resend",
+          resendApiKey: "re_test_key",
+          hasResendApiKey: true,
+        },
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.resend.com/emails", expect.objectContaining({
+      headers: expect.objectContaining({
+        "Idempotency-Key": "outbox_1:email:recipient_hash",
+      }),
+    }));
+  });
+
   it("logs locally instead of throwing when no provider is configured", async () => {
     await expect(sendEmail(
       {
@@ -95,7 +136,10 @@ describe("email provider selection", () => {
         html: "<p>Thanks</p>",
       },
       { settings: baseSettings },
-    )).resolves.toBeUndefined();
+    )).resolves.toMatchObject({
+      success: false,
+      provider: "log",
+    });
 
     expect(console.log).toHaveBeenCalledWith(
       "EMAIL (no configured provider available - logging only)",

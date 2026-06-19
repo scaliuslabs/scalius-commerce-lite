@@ -10,6 +10,7 @@ export {
 
 export type {
   SendEmailOptions,
+  SendEmailResult,
   EmailProvider,
   EmailRuntimeContext,
   EmailRuntimeSettings,

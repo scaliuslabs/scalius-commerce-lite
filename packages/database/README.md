@@ -291,6 +291,7 @@ Notable migrations:
 - `0041` -- Dashboard customer activity index on `(deleted_at, created_at)`
 - `0042` -- Admin order search relevance: rebuilds `orders_fts` with `customer_email` and adds the default list index on `(deleted_at, updated_at)`
 - `0043` -- Durable `order_notification_outbox` table for idempotent order-notification queue handoff and replay
+- `0044` -- Durable `order_notification_delivery_receipts` table for per-channel order notification receipts and retry dedupe
 
 Validate migration metadata after schema or migration edits:
 

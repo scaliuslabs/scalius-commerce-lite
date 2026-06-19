@@ -7,6 +7,14 @@ export interface SendEmailOptions {
   html: string;
   from?: string;
   text?: string;
+  idempotencyKey?: string;
+}
+
+export interface SendEmailResult {
+  success: boolean;
+  provider: "cloudflare" | "resend" | "log";
+  providerRef?: string;
+  rawStatus?: string;
 }
 
 export interface CloudflareEmailBinding {
@@ -43,7 +51,7 @@ export interface EmailRuntimeContext {
  */
 export interface EmailProvider {
   readonly name: string;
-  sendEmail(options: SendEmailOptions, context?: EmailRuntimeContext): Promise<void>;
+  sendEmail(options: SendEmailOptions, context?: EmailRuntimeContext): Promise<SendEmailResult>;
 }
 
 // ── Provider Registry ───────────────────────────────────────────────

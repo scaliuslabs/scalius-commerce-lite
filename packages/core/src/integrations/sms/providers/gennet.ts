@@ -26,11 +26,9 @@ export class GennetProvider implements SmsProvider {
     // Strip + prefix: +8801XXXXXXXXX -> 8801XXXXXXXXX
     const msisdn = options.to.replace(/^\+/, "");
 
-    // csms_id must be unique per day — use timestamp + random suffix
-    const csmsId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(
-      0,
-      20,
-    );
+    // csms_id must be unique per day. Use a deterministic caller reference
+    // when available so provider retries dedupe the same logical message.
+    const csmsId = normalizeCsmsId(options.clientReference);
 
     const url = `${this.config.baseUrl.replace(/\/$/, "")}/api/v3/send-sms`;
 
@@ -72,7 +70,7 @@ export class GennetProvider implements SmsProvider {
       return {
         success: true,
         providerRef: csmsId,
-        rawStatus: "Duplicate csms_id — already sent",
+        rawStatus: "Duplicate csms_id - already sent",
       };
     }
     return {
@@ -80,4 +78,20 @@ export class GennetProvider implements SmsProvider {
       rawStatus: `${json.status_code}: ${json.error_message}`,
     };
   }
+}
+
+function normalizeCsmsId(clientReference?: string): string {
+  const cleaned = (clientReference ?? "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 20);
+
+  if (cleaned.length > 0) {
+    return cleaned;
+  }
+
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 20);
+  }
+
+  return Date.now().toString(36).slice(0, 20);
 }

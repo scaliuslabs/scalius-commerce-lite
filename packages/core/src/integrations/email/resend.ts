@@ -5,7 +5,7 @@
 // the provider registry. This file is retained for backward compatibility with
 // the email barrel (integrations/email/index.ts).
 
-import type { EmailProvider, EmailRuntimeContext, SendEmailOptions } from "./provider";
+import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { getEmailRuntimeSettings } from "./settings";
 
@@ -17,9 +17,9 @@ export class ResendEmailProvider implements EmailProvider {
   readonly name = "resend";
 
   async sendEmail(
-    { to, subject, html, from, text }: SendEmailOptions,
+    { to, subject, html, from, text, idempotencyKey }: SendEmailOptions,
     context?: EmailRuntimeContext,
-  ): Promise<void> {
+  ): Promise<SendEmailResult> {
     const settings = await getEmailRuntimeSettings(context);
     const apiKey = settings.resendApiKey;
     if (!apiKey) {
@@ -34,6 +34,7 @@ export class ResendEmailProvider implements EmailProvider {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
+          ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey.slice(0, 256) } : {}),
         },
         body: JSON.stringify({
           from: fromAddress,
@@ -49,7 +50,14 @@ export class ResendEmailProvider implements EmailProvider {
         throw new ServiceUnavailableError(error.message || `Resend API error: ${response.status}`);
       }
 
-      console.log(`[Email] Sent via Resend to ${to}`);
+      const data = await response.json().catch(() => ({})) as { id?: string };
+      console.log(`[Email] Sent via Resend to ${to}${data.id ? ` (${data.id})` : ""}`);
+      return {
+        success: true,
+        provider: "resend",
+        providerRef: data.id,
+        rawStatus: "accepted",
+      };
     } catch (error: unknown) {
       console.error("[Email] Failed to send via Resend:", error);
       throw new ServiceUnavailableError(

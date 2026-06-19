@@ -6,6 +6,15 @@ export {
   isOrderNotificationType,
 } from "./notification-types";
 export {
+  buildOrderNotificationDeliveryReceiptKey,
+  claimOrderNotificationDeliveryReceipt,
+  createOrderNotificationDeliveryTarget,
+  createProviderClientReference,
+  markOrderNotificationDeliveryReceiptAccepted,
+  markOrderNotificationDeliveryReceiptFailed,
+  markOrderNotificationDeliveryReceiptSkipped,
+} from "./order-notification-delivery-receipts";
+export {
   buildOrderCreatedNotificationDedupeKey,
   buildOrderStatusNotificationDedupeKey,
   claimOrderNotificationOutboxForProcessing,
@@ -17,6 +26,14 @@ export {
   recordAndEnqueueOrderNotification,
 } from "./order-notification-outbox";
 export type { OrderNotificationType } from "./notification-types";
+export type {
+  OrderNotificationDeliveryChannel,
+  OrderNotificationDeliveryReceiptClaim,
+  OrderNotificationDeliveryReceiptResult,
+  OrderNotificationDeliveryReceiptStatus,
+  OrderNotificationDeliveryTarget,
+  OrderNotificationDeliveryTargetInput,
+} from "./order-notification-delivery-receipts";
 export type {
   OrderNotificationInput,
   OrderNotificationOutboxStatus,

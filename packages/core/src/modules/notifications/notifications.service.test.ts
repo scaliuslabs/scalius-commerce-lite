@@ -8,6 +8,12 @@ const mocks = vi.hoisted(() => ({
     sendSms: vi.fn(),
     getFirebaseAdminMessaging: vi.fn(),
     sendEachForMulticast: vi.fn(),
+    createOrderNotificationDeliveryTarget: vi.fn(),
+    claimOrderNotificationDeliveryReceipt: vi.fn(),
+    markOrderNotificationDeliveryReceiptAccepted: vi.fn(),
+    markOrderNotificationDeliveryReceiptFailed: vi.fn(),
+    markOrderNotificationDeliveryReceiptSkipped: vi.fn(),
+    createProviderClientReference: vi.fn(),
 }));
 
 vi.mock("../settings/settings.service", () => ({
@@ -24,6 +30,15 @@ vi.mock("../../integrations/email", () => ({
 
 vi.mock("../../integrations/firebase/admin", () => ({
     getFirebaseAdminMessaging: mocks.getFirebaseAdminMessaging,
+}));
+
+vi.mock("./order-notification-delivery-receipts", () => ({
+    createOrderNotificationDeliveryTarget: mocks.createOrderNotificationDeliveryTarget,
+    claimOrderNotificationDeliveryReceipt: mocks.claimOrderNotificationDeliveryReceipt,
+    markOrderNotificationDeliveryReceiptAccepted: mocks.markOrderNotificationDeliveryReceiptAccepted,
+    markOrderNotificationDeliveryReceiptFailed: mocks.markOrderNotificationDeliveryReceiptFailed,
+    markOrderNotificationDeliveryReceiptSkipped: mocks.markOrderNotificationDeliveryReceiptSkipped,
+    createProviderClientReference: mocks.createProviderClientReference,
 }));
 
 import { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
@@ -54,6 +69,31 @@ describe("order notification dispatch", () => {
             failureCount: 0,
             responses: [],
         });
+        mocks.sendEmail.mockResolvedValue({
+            success: true,
+            provider: "cloudflare",
+            providerRef: "cf_msg_1",
+            rawStatus: "accepted",
+        });
+        mocks.createOrderNotificationDeliveryTarget.mockImplementation(async (input: Record<string, unknown>) => ({
+            ...input,
+            receiptKey: `${input.outboxId}:${input.channel}:recipient_hash`,
+            recipientHash: "recipient_hash",
+            recipientMasked: input.recipientMasked ?? "masked-recipient",
+        }));
+        mocks.claimOrderNotificationDeliveryReceipt.mockResolvedValue({
+            claimed: true,
+            receipt: {
+                id: "receipt_1",
+                receiptKey: "outbox_1:email:recipient_hash",
+                claimId: "claim_1",
+                attempts: 1,
+            },
+        });
+        mocks.markOrderNotificationDeliveryReceiptAccepted.mockResolvedValue(undefined);
+        mocks.markOrderNotificationDeliveryReceiptFailed.mockResolvedValue(undefined);
+        mocks.markOrderNotificationDeliveryReceiptSkipped.mockResolvedValue(undefined);
+        mocks.createProviderClientReference.mockReturnValue("client_ref_1");
     });
 
     it("keeps the shared notification type list complete", () => {
@@ -138,6 +178,101 @@ describe("order notification dispatch", () => {
                 encryptionKey: "credential-key",
             },
         );
+    });
+
+    it("records durable email receipts and passes the receipt key to email providers", async () => {
+        const db = createDb();
+        const emailEnv = {
+            EMAIL: {
+                send: vi.fn(),
+            },
+        };
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["email"],
+        });
+
+        const result = await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Email Customer",
+            "order_3",
+            "order_created",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                env: emailEnv,
+                outboxId: "outbox_1",
+            },
+        );
+
+        expect(mocks.createOrderNotificationDeliveryTarget).toHaveBeenCalledWith(
+            expect.objectContaining({
+                outboxId: "outbox_1",
+                orderId: "order_3",
+                notificationType: "order_created",
+                channel: "email",
+                provider: "email",
+                recipient: "buyer@example.com",
+            }),
+        );
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                to: "buyer@example.com",
+                idempotencyKey: "outbox_1:email:recipient_hash",
+            }),
+            {
+                db,
+                env: emailEnv,
+                encryptionKey: "credential-key",
+            },
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptAccepted).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            expect.objectContaining({
+                provider: "cloudflare",
+                providerMessageId: "cf_msg_1",
+            }),
+        );
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("passes a deterministic client reference to SMS providers when receipts are enabled", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_refunded: ["sms"],
+        });
+        mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_1", rawStatus: "accepted" });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "gennet",
+            sendSms: mocks.sendSms,
+        });
+
+        await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_4",
+            "order_refunded",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_1",
+            },
+        );
+
+        expect(mocks.createProviderClientReference).toHaveBeenCalledWith(
+            expect.objectContaining({
+                channel: "sms",
+                receiptKey: "outbox_sms_1:sms:recipient_hash",
+            }),
+        );
+        expect(mocks.sendSms).toHaveBeenCalledWith({
+            to: "+8801700000000",
+            message:
+                "Hi SMS Customer, your order #order_4 has been refunded. Contact us if you have questions.",
+            clientReference: "client_ref_1",
+        });
     });
 
     it("labels admin push payloads by notification type", async () => {
