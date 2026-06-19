@@ -1,8 +1,10 @@
 // src/server/utils/cache-invalidation.ts
 import type { Database } from "@scalius/database/client";
-import { orderItems, products, productVariants } from "@scalius/database/schema";
+import { orderItems, pages, products, productVariants } from "@scalius/database/schema";
+import { publicPageVisibilityCondition } from "@scalius/core/modules/pages";
+import { parseShortcodes } from "@scalius/shared/shortcodes";
 import { normalizeStorefrontHtmlCachePaths } from "@scalius/shared/storefront-cache-path";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { deleteCacheByPattern } from "./kv-cache";
 import {
   API_CACHE_FENCE_GLOBAL_SCOPE,
@@ -42,6 +44,23 @@ export interface ProductAvailabilityCacheInvalidation {
   apiPatterns: string[];
   storefrontPrefixes: string[];
   storefrontHtmlPaths: string[];
+}
+
+export interface CmsShortcodePageTarget {
+  id: string;
+  slug: string;
+}
+
+export interface CmsShortcodeReferenceInput {
+  productSlugs?: readonly string[];
+  widgetIds?: readonly string[];
+}
+
+export interface CmsShortcodePageInvalidation {
+  apiPatterns: string[];
+  storefrontPrefixes: string[];
+  storefrontHtmlPaths: string[];
+  bumpVersion: boolean;
 }
 
 export function normalizeStorefrontHtmlPaths(
@@ -621,6 +640,99 @@ function uniqueValues(values: readonly string[] | undefined): string[] {
   return [...new Set((values ?? []).filter(Boolean))];
 }
 
+function uniqueCmsShortcodePageTargets(
+  targets: readonly CmsShortcodePageTarget[],
+): CmsShortcodePageTarget[] {
+  const bySlug = new Map<string, CmsShortcodePageTarget>();
+  for (const target of targets) {
+    if (!target.slug) continue;
+    bySlug.set(target.slug, target);
+  }
+  return [...bySlug.values()];
+}
+
+function cmsShortcodeCandidateCondition(
+  productSlugs: readonly string[],
+  widgetIds: readonly string[],
+): SQL | undefined {
+  const conditions: SQL[] = [];
+  if (productSlugs.length > 0) {
+    conditions.push(sql`lower(${pages.content}) LIKE ${"%[product%"}`);
+  }
+  if (widgetIds.length > 0) {
+    conditions.push(sql`lower(${pages.content}) LIKE ${"%[widget%"}`);
+  }
+  if (conditions.length === 0) return undefined;
+  return conditions.length === 1 ? conditions[0] : or(...conditions);
+}
+
+export async function resolveCmsShortcodePageTargets(
+  db: Database,
+  input: CmsShortcodeReferenceInput,
+): Promise<CmsShortcodePageTarget[]> {
+  const productSlugs = uniqueValues(input.productSlugs);
+  const widgetIds = uniqueValues(input.widgetIds);
+  const productSlugSet = new Set(productSlugs);
+  const widgetIdSet = new Set(widgetIds);
+  const candidateCondition = cmsShortcodeCandidateCondition(productSlugs, widgetIds);
+  if (!candidateCondition) return [];
+
+  const rows = await db
+    .select({
+      id: pages.id,
+      slug: pages.slug,
+      content: pages.content,
+    })
+    .from(pages)
+    .where(and(publicPageVisibilityCondition(), candidateCondition));
+
+  const targets: CmsShortcodePageTarget[] = [];
+  for (const row of rows) {
+    const shortcodes = parseShortcodes(row.content ?? "");
+    const hasReference = shortcodes.some((shortcode) => {
+      if (shortcode.type === "product") {
+        return productSlugSet.has(shortcode.id);
+      }
+      return widgetIdSet.has(shortcode.id);
+    });
+    if (hasReference) {
+      targets.push({ id: row.id, slug: row.slug });
+    }
+  }
+
+  return uniqueCmsShortcodePageTargets(targets);
+}
+
+export function collectCmsShortcodePageInvalidation(
+  targets: readonly CmsShortcodePageTarget[],
+): CmsShortcodePageInvalidation {
+  const uniqueTargets = uniqueCmsShortcodePageTargets(targets);
+  return {
+    apiPatterns: uniqueTargets.map(
+      (target) =>
+        `api:storefront:page:/api/v1/storefront/pages/slug/${target.slug}*`,
+    ),
+    storefrontPrefixes: uniqueTargets.map((target) => `page_render_${target.slug}_`),
+    storefrontHtmlPaths: uniqueTargets.map((target) => `/${target.slug}`),
+    bumpVersion: uniqueTargets.length > MAX_STOREFRONT_EXACT_HTML_PATHS,
+  };
+}
+
+async function tryResolveCmsShortcodePageTargets(
+  db: Database,
+  input: CmsShortcodeReferenceInput,
+): Promise<{ targets: CmsShortcodePageTarget[]; failed: boolean }> {
+  try {
+    return {
+      targets: await resolveCmsShortcodePageTargets(db, input),
+      failed: false,
+    };
+  } catch (error) {
+    console.error("[Cache] Failed to resolve CMS shortcode page targets:", error);
+    return { targets: [], failed: true };
+  }
+}
+
 function uniqueAvailabilitySubjects(
   subjects: readonly ProductAvailabilityCacheSubject[],
 ): ProductAvailabilityCacheSubject[] {
@@ -761,11 +873,25 @@ export function collectProductAvailabilityCacheInvalidation(
 export async function invalidateProductAvailabilityCacheSubjects(
   subjects: readonly ProductAvailabilityCacheSubject[],
   c: { env?: Env; executionCtx?: ExecutionContext },
+  db?: Database,
 ): Promise<void> {
   const normalizedSubjects = uniqueAvailabilitySubjects(subjects);
   if (normalizedSubjects.length === 0) return;
 
   const invalidation = collectProductAvailabilityCacheInvalidation(normalizedSubjects);
+  const productSlugs = normalizedSubjects
+    .map((subject) => subject.slug)
+    .filter((slug): slug is string => typeof slug === "string" && slug.length > 0);
+  const shortcodeResult = db && productSlugs.length > 0
+    ? await tryResolveCmsShortcodePageTargets(db, { productSlugs })
+    : { targets: [], failed: false };
+  const shortcodeInvalidation = collectCmsShortcodePageInvalidation(
+    shortcodeResult.targets,
+  );
+  const apiPatterns = [
+    ...invalidation.apiPatterns,
+    ...shortcodeInvalidation.apiPatterns,
+  ];
 
   console.log(
     `[Cache] Invalidating product availability for ${normalizedSubjects.length} product(s)`,
@@ -774,7 +900,7 @@ export async function invalidateProductAvailabilityCacheSubjects(
   await bumpApiCacheFences(
     [
       ...invalidation.apiKeys,
-      ...invalidation.apiPatterns
+      ...apiPatterns
         .map(getApiCacheFenceScopeForPattern)
         .filter((scope): scope is string => Boolean(scope)),
     ],
@@ -785,19 +911,22 @@ export async function invalidateProductAvailabilityCacheSubjects(
     ...invalidation.apiKeys.map((key) =>
       deleteVersionedCacheKeyFamily(key, c.env?.CACHE),
     ),
-    ...invalidation.apiPatterns.map((pattern) =>
+    ...apiPatterns.map((pattern) =>
       deleteCacheByPattern(pattern, c.env?.CACHE),
     ),
   ]);
 
   triggerStorefrontPurgeForPrefixes(
-    [],
+    shortcodeInvalidation.storefrontPrefixes,
     c.env,
     {
       groups: ["products"],
-      bumpVersion: false,
+      bumpVersion: shortcodeInvalidation.bumpVersion || shortcodeResult.failed,
       exactKeys: invalidation.storefrontPrefixes,
-      htmlPaths: invalidation.storefrontHtmlPaths,
+      htmlPaths: [
+        ...invalidation.storefrontHtmlPaths,
+        ...shortcodeInvalidation.storefrontHtmlPaths,
+      ],
     },
     getOptionalExecutionContext(c),
   );
@@ -814,7 +943,7 @@ export async function invalidateProductAvailabilityCaches(
   c: { env?: Env; executionCtx?: ExecutionContext },
 ): Promise<void> {
   const subjects = await tryResolveProductAvailabilityCacheSubjects(db, input);
-  await invalidateProductAvailabilityCacheSubjects(subjects, c);
+  await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
 }
 
 /**

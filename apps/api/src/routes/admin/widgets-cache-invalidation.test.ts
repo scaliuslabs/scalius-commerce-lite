@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   deleteHistoryEntry: vi.fn(),
   getWidgetCacheSubjects: vi.fn(),
   invalidateApiCachePatterns: vi.fn(),
+  resolveCmsShortcodePageTargets: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
     try {
       return c.executionCtx;
@@ -54,11 +55,18 @@ vi.mock("@scalius/core/modules/widgets", async () => {
   };
 });
 
-vi.mock("../../utils/cache-invalidation", () => ({
-  invalidateApiCachePatterns: mocks.invalidateApiCachePatterns,
-  getOptionalExecutionContext: mocks.getOptionalExecutionContext,
-  triggerStorefrontPurgeForPrefixes: mocks.triggerStorefrontPurgeForPrefixes,
-}));
+vi.mock("../../utils/cache-invalidation", async () => {
+  const actual = await vi.importActual<typeof import("../../utils/cache-invalidation")>(
+    "../../utils/cache-invalidation",
+  );
+  return {
+    ...actual,
+    invalidateApiCachePatterns: mocks.invalidateApiCachePatterns,
+    resolveCmsShortcodePageTargets: mocks.resolveCmsShortcodePageTargets,
+    getOptionalExecutionContext: mocks.getOptionalExecutionContext,
+    triggerStorefrontPurgeForPrefixes: mocks.triggerStorefrontPurgeForPrefixes,
+  };
+});
 
 import { adminWidgetRoutes } from "./widgets";
 
@@ -99,6 +107,7 @@ function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.invalidateApiCachePatterns.mockResolvedValue(undefined);
+  mocks.resolveCmsShortcodePageTargets.mockResolvedValue([]);
   mocks.createWidget.mockResolvedValue({ id: "wid_new" });
   mocks.updateWidget.mockResolvedValue({ id: "wid_1" });
 
@@ -295,6 +304,55 @@ describe("admin widget cache invalidation", () => {
     });
   });
 
+  it("purges CMS pages that reference active widget shortcodes without placements", async () => {
+    const { app, db, env } = createTestApp();
+    mocks.createWidget.mockResolvedValue({ id: "wid_shortcode" });
+    mocks.getWidgetCacheSubjects.mockResolvedValueOnce([
+      subject("wid_shortcode", []),
+    ]);
+    mocks.resolveCmsShortcodePageTargets.mockResolvedValueOnce([
+      { id: "page_1", slug: "combo-offer" },
+    ]);
+
+    const response = await app.request(
+      "/api/v1/admin/widgets",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Shortcode Widget",
+          htmlContent: "<section>Shortcode copy</section>",
+          isActive: true,
+          placements: [],
+        }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.resolveCmsShortcodePageTargets).toHaveBeenCalledWith(db, {
+      widgetIds: ["wid_shortcode"],
+    });
+    expect(mocks.invalidateApiCachePatterns).toHaveBeenCalledWith(
+      [
+        "api:widgets:single:/api/v1/widgets/wid_shortcode*",
+        "api:storefront:page:/api/v1/storefront/pages/slug/combo-offer*",
+      ],
+      env.CACHE,
+    );
+
+    const [prefixes, , options] = mocks.triggerStorefrontPurgeForPrefixes.mock.calls[0]!;
+    expect(prefixes).toEqual([
+      "widget_wid_shortcode",
+      "page_render_combo-offer_",
+    ]);
+    expect(options).toEqual({
+      groups: ["widgets"],
+      bumpVersion: false,
+      htmlPaths: ["/combo-offer"],
+    });
+  });
+
   it("purges exact collection HTML caches for collection-scoped placements", async () => {
     const { app, env } = createTestApp();
     mocks.createWidget.mockResolvedValue({ id: "wid_collection" });
@@ -376,6 +434,7 @@ describe("admin widget cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
+    expect(mocks.resolveCmsShortcodePageTargets).not.toHaveBeenCalled();
     expect(mocks.invalidateApiCachePatterns).not.toHaveBeenCalled();
     expect(mocks.triggerStorefrontPurgeForPrefixes).not.toHaveBeenCalled();
   });
