@@ -2936,6 +2936,19 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 status: string;
                 totalAmount: number;
                 createdAt: string | number | null;
+                latestShipment?: {
+                    id: string;
+                    providerType: string;
+                    providerName: string | null;
+                    status: string;
+                    rawStatus: string | null;
+                    trackingId: string | null;
+                    trackingUrl: string | null;
+                    courierName: string | null;
+                    lastChecked: string | number | null;
+                    updatedAt: string | number | null;
+                    createdAt: string | number | null;
+                } | null;
                 [key: string]: unknown;
             }>;
             customer: {

@@ -11,7 +11,7 @@ const layoutData = await getLayoutData();
 
 <Layout title="My Account" layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <main class="container max-w-4xl mx-auto px-4 py-8">
+  <section class="container max-w-4xl mx-auto px-4 py-8" data-account-page>
     <!-- Loading state (shown while checking auth) -->
     <div id="loadingState" class="flex items-center justify-center min-h-[400px]">
       <div class="text-center">
@@ -146,6 +146,16 @@ const layoutData = await getLayoutData();
             <a href="/" class="inline-flex items-center px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors">Start Shopping</a>
           </div>
 
+          <!-- Error state -->
+          <div id="ordersError" class="hidden p-8 text-center bg-destructive/5 rounded-2xl border border-destructive/20" role="status" aria-live="polite">
+            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-card shadow-sm flex items-center justify-center">
+              <svg class="h-6 w-6 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-foreground mb-1">Order history is temporarily unavailable</h3>
+            <p id="ordersErrorMessage" class="text-sm text-muted-foreground mb-6">We could not load your orders. Your account is still safe.</p>
+            <button type="button" id="ordersRetryBtn" class="inline-flex items-center px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors">Try Again</button>
+          </div>
+
           <!-- Orders list -->
           <div id="ordersList" class="space-y-4"></div>
 
@@ -159,16 +169,24 @@ const layoutData = await getLayoutData();
         </div>
       </div>
     </div>
-  </main>
+  </section>
 </Layout>
 
 <script>
-  import { getCustomerSession, getCustomerOrders, logoutCustomer, updateCustomerProfile, type CustomerOrder } from "@/lib/api/customer-auth";
+  import { getCustomerSession, getCustomerOrders, logoutCustomer, updateCustomerProfile, type CustomerOrder, type CustomerOrderShipment } from "@/lib/api/customer-auth";
   import { getCities, getZones } from "@/lib/api/shipping";
   import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
   import { escapeHtml } from "@scalius/shared/html-escape";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
   import { getProductImageUrl } from "@/lib/product-media";
+
+  type AccountWindow = Window & {
+    __CURRENCY_SYMBOL__?: string;
+    __scaliusAccountPageBound?: boolean;
+    __scaliusAccountInitRun?: number;
+  };
+
+  const accountWindow = window as AccountWindow;
 
 
 
@@ -179,24 +197,96 @@ const layoutData = await getLayoutData();
   }
 
   function formatCurrency(amount: number): string {
-    const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
+    const sym = accountWindow.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
     return sym + amount.toFixed(0);
   }
 
-  function renderOrder(order: CustomerOrder): string {
-    let statusClass = "bg-muted text-muted-foreground"; // Default or fallback
+  function getStatusClass(status: string): string {
+    switch(status) {
+      case "pending":
+      case "incomplete":
+        return "bg-muted/50 text-muted-foreground";
+      case "confirmed":
+      case "processing":
+      case "shipped":
+        return "bg-primary/10 text-primary";
+      case "delivered":
+      case "completed":
+        return "bg-primary/20 text-primary";
+      case "cancelled":
+        return "bg-destructive/10 text-destructive";
+      case "returned":
+      case "refunded":
+      case "partially_refunded":
+        return "bg-muted text-muted-foreground";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
+  }
 
-    switch(order.status) {
-      case 'pending': statusClass = "bg-muted/50 text-muted-foreground"; break;
-      case 'confirmed': statusClass = "bg-primary/10 text-primary"; break;
-      case 'processing': statusClass = "bg-primary/10 text-primary"; break;
-      case 'shipped': statusClass = "bg-primary/10 text-primary"; break;
-      case 'delivered': statusClass = "bg-primary/20 text-primary"; break;
-      case 'completed': statusClass = "bg-primary/20 text-primary"; break;
-      case 'cancelled': statusClass = "bg-destructive/10 text-destructive"; break;
-      case 'refunded': statusClass = "bg-muted text-muted-foreground"; break;
+  function formatStatusLabel(status: string): string {
+    return status.replace(/_/g, " ");
+  }
+
+  function toSafeExternalUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+      return parsed.href;
+    } catch {
+      return null;
+    }
+  }
+
+  function getShipmentTrackingUrl(shipment: CustomerOrderShipment): string | null {
+    const explicitUrl = toSafeExternalUrl(shipment.trackingUrl);
+    if (explicitUrl) return explicitUrl;
+    if (!shipment.trackingId) return null;
+    if (shipment.providerType === "pathao") {
+      return `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`;
+    }
+    if (shipment.providerType === "steadfast") {
+      return `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId)}`;
+    }
+    return null;
+  }
+
+  function renderShipmentSummary(order: CustomerOrder): string {
+    const shipment = order.latestShipment;
+    if (!shipment) {
+      return `<div class="mt-4 rounded-xl border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+        Tracking updates will appear here after the merchant creates a shipment.
+      </div>`;
     }
 
+    const trackingUrl = getShipmentTrackingUrl(shipment);
+    const providerLabel = shipment.providerName || shipment.courierName || shipment.providerType;
+    const checkedLabel = shipment.lastChecked || shipment.updatedAt
+      ? `Updated ${formatDate(shipment.lastChecked || shipment.updatedAt)}`
+      : "";
+
+    return `<div class="mt-4 rounded-xl border border-border bg-muted/30 p-3">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Delivery status</p>
+          <p class="mt-1 text-sm font-bold capitalize text-foreground">${escapeHtml(formatStatusLabel(shipment.status))}</p>
+          <p class="mt-0.5 text-xs text-muted-foreground">${escapeHtml(providerLabel || "Delivery provider")}${checkedLabel ? ` • ${escapeHtml(checkedLabel)}` : ""}</p>
+        </div>
+        ${shipment.trackingId
+          ? `<div class="text-left sm:text-right">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tracking ID</p>
+              <p class="mt-1 font-mono text-xs text-foreground">${escapeHtml(shipment.trackingId)}</p>
+              ${trackingUrl ? `<a class="mt-1 inline-flex text-xs font-semibold text-primary hover:text-primary/80" href="${escapeHtml(trackingUrl)}" target="_blank" rel="noopener noreferrer">View courier tracking</a>` : ""}
+            </div>`
+          : ""}
+      </div>
+    </div>`;
+  }
+
+  function renderOrder(order: CustomerOrder): string {
+    const statusClass = getStatusClass(order.status);
+    const detailsId = `order-details-${order.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
     const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
 
     // Item details layout (shown when expanded)
@@ -233,16 +323,17 @@ const layoutData = await getLayoutData();
            <div>
              <div class="flex items-center gap-3">
                <span class="text-lg font-bold text-foreground">#${order.id}</span>
-               <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${statusClass}">${escapeHtml(order.status)}</span>
+               <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider capitalize ${statusClass}">${escapeHtml(formatStatusLabel(order.status))}</span>
              </div>
              <p class="text-sm text-muted-foreground mt-1">${formatDate(order.createdAt)} • ${itemCount} item${itemCount !== 1 ? "s" : ""}</p>
            </div>
            <div class="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start">
              <p class="text-xl font-bold text-foreground">${formatCurrency(order.totalAmount)}</p>
-             <button class="text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors mt-1" onclick="this.closest('.order-card').querySelector('.order-details').classList.toggle('hidden')">View Details</button>
+             <button type="button" class="text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors mt-1" data-order-toggle="${escapeHtml(detailsId)}" aria-expanded="false" aria-controls="${escapeHtml(detailsId)}">View Details</button>
            </div>
         </div>
-        <div class="order-details hidden border-t border-border pt-2 mt-4">
+        ${renderShipmentSummary(order)}
+        <div id="${escapeHtml(detailsId)}" class="order-details hidden border-t border-border pt-2 mt-4">
            <div class="divide-y divide-border">
              ${itemDetails}
            </div>
@@ -260,13 +351,46 @@ const layoutData = await getLayoutData();
     `;
   }
 
-  document.addEventListener("DOMContentLoaded", async () => {
+  function bindOrderDetailToggles(container: HTMLElement): void {
+    container.querySelectorAll<HTMLButtonElement>("[data-order-toggle]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const detailsId = button.dataset.orderToggle;
+        if (!detailsId) return;
+        const details = document.getElementById(detailsId);
+        if (!details) return;
+        const isExpanded = !details.classList.toggle("hidden");
+        button.setAttribute("aria-expanded", String(isExpanded));
+        button.textContent = isExpanded ? "Hide Details" : "View Details";
+      });
+    });
+  }
+
+  async function initializeAccountPage(): Promise<void> {
+    if (!document.querySelector("[data-account-page]")) return;
+
+    const runId = (accountWindow.__scaliusAccountInitRun ?? 0) + 1;
+    accountWindow.__scaliusAccountInitRun = runId;
+
     const loadingState = document.getElementById("loadingState")!;
     const unauthState = document.getElementById("unauthState")!;
     const authState = document.getElementById("authState")!;
+    const ordersList = document.getElementById("ordersList")!;
+    const emptyOrders = document.getElementById("emptyOrders")!;
+    const ordersError = document.getElementById("ordersError")!;
+    const ordersErrorMessage = document.getElementById("ordersErrorMessage")!;
+    const showMoreContainer = document.getElementById("showMoreContainer")!;
+
+    loadingState.classList.remove("hidden");
+    unauthState.classList.add("hidden");
+    authState.classList.add("hidden");
+    ordersList.innerHTML = "";
+    emptyOrders.classList.add("hidden");
+    ordersError.classList.add("hidden");
+    showMoreContainer.classList.add("hidden");
 
     // Check session
     const session = await getCustomerSession();
+    if (accountWindow.__scaliusAccountInitRun !== runId) return;
 
     if (!session.authenticated || !session.customer) {
       loadingState.classList.add("hidden");
@@ -283,64 +407,76 @@ const layoutData = await getLayoutData();
       document.getElementById("profilePhone")!.textContent = formatPhoneForDisplay(customer.phone);
     }
 
+    loadingState.classList.add("hidden");
+    authState.classList.remove("hidden");
+    document.getElementById("statTotalOrders")!.textContent = "—";
+    document.getElementById("statTotalSpent")!.textContent = "—";
+    document.getElementById("orderCount")!.textContent = "Loading";
+
     // Fetch orders
     const result = await getCustomerOrders();
+    if (accountWindow.__scaliusAccountInitRun !== runId) return;
 
     // Render stats
     const orders = result.orders || [];
-    const totalSpent = orders.reduce((s, o) => s + o.totalAmount, 0);
-    const completed = orders.filter((o) => o.status === "delivered" || o.status === "completed").length;
-    const pending = orders.filter((o) => o.status === "pending" || o.status === "confirmed" || o.status === "processing").length;
-
-    document.getElementById("statTotalOrders")!.textContent = String(orders.length);
-    document.getElementById("statTotalSpent")!.textContent = formatCurrency(totalSpent);
-    
-    const statCompleted = document.getElementById("statCompleted");
-    if (statCompleted) statCompleted.textContent = String(completed);
-    
-    const statPending = document.getElementById("statPending");
-    if (statPending) statPending.textContent = String(pending);
-    document.getElementById("orderCount")!.textContent = `${orders.length} order${orders.length !== 1 ? "s" : ""}`;
-
-    // Render orders
-    const ordersList = document.getElementById("ordersList")!;
-    const emptyOrders = document.getElementById("emptyOrders")!;
-
-    if (orders.length === 0) {
-      emptyOrders.classList.remove("hidden");
+    if (!result.success) {
+      const error = result.error || "Please try again in a moment.";
+      const lowerError = error.toLowerCase();
+      const sessionExpired = lowerError.includes("auth") || lowerError.includes("session") || lowerError.includes("login");
+      ordersErrorMessage.textContent = sessionExpired
+        ? "Your session expired. Please sign in again to view your orders."
+        : error;
+      ordersError.classList.remove("hidden");
+      document.getElementById("orderCount")!.textContent = "Unavailable";
     } else {
-      // Client-side pagination: show ORDERS_PER_PAGE at a time
-      const ORDERS_PER_PAGE = 5;
-      let visibleCount = Math.min(ORDERS_PER_PAGE, orders.length);
+      const totalSpent = orders.reduce((s, o) => s + o.totalAmount, 0);
+      const completed = orders.filter((o) => o.status === "delivered" || o.status === "completed").length;
+      const pending = orders.filter((o) => o.status === "pending" || o.status === "confirmed" || o.status === "processing").length;
 
-      function renderVisibleOrders() {
-        ordersList.innerHTML = orders.slice(0, visibleCount).map(renderOrder).join("");
-        
-        const showMoreContainer = document.getElementById("showMoreContainer")!;
-        const showMoreText = document.getElementById("showMoreText")!;
-        
-        if (visibleCount < orders.length) {
-          const remaining = orders.length - visibleCount;
-          showMoreText.textContent = `Show More (${remaining} remaining)`;
-          showMoreContainer.classList.remove("hidden");
-        } else {
-          showMoreContainer.classList.add("hidden");
+      document.getElementById("statTotalOrders")!.textContent = String(orders.length);
+      document.getElementById("statTotalSpent")!.textContent = formatCurrency(totalSpent);
+
+      const statCompleted = document.getElementById("statCompleted");
+      if (statCompleted) statCompleted.textContent = String(completed);
+
+      const statPending = document.getElementById("statPending");
+      if (statPending) statPending.textContent = String(pending);
+      document.getElementById("orderCount")!.textContent = `${orders.length} order${orders.length !== 1 ? "s" : ""}`;
+
+      if (orders.length === 0) {
+        emptyOrders.classList.remove("hidden");
+      } else {
+        // Client-side pagination: show ORDERS_PER_PAGE at a time
+        const ORDERS_PER_PAGE = 5;
+        let visibleCount = Math.min(ORDERS_PER_PAGE, orders.length);
+
+        function renderVisibleOrders() {
+          ordersList.innerHTML = orders.slice(0, visibleCount).map(renderOrder).join("");
+          bindOrderDetailToggles(ordersList);
+
+          const showMoreText = document.getElementById("showMoreText")!;
+
+          if (visibleCount < orders.length) {
+            const remaining = orders.length - visibleCount;
+            showMoreText.textContent = `Show More (${remaining} remaining)`;
+            showMoreContainer.classList.remove("hidden");
+          } else {
+            showMoreContainer.classList.add("hidden");
+          }
+        }
+
+        renderVisibleOrders();
+
+        const showMoreBtn = document.getElementById("showMoreBtn") as HTMLButtonElement | null;
+        if (showMoreBtn) {
+          showMoreBtn.onclick = () => {
+            visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, orders.length);
+            renderVisibleOrders();
+            ordersList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          };
         }
       }
-
-      renderVisibleOrders();
-
-      document.getElementById("showMoreBtn")?.addEventListener("click", () => {
-        visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, orders.length);
-        renderVisibleOrders();
-        // Scroll smoothly to show new orders
-        ordersList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      });
     }
-
-    // Show auth state
-    loadingState.classList.add("hidden");
-    authState.classList.remove("hidden");
 
     // Pre-fill profile fields: prefer customer DB profile, fallback to latest order
     const fName = document.getElementById("fieldName") as HTMLInputElement;
@@ -349,7 +485,7 @@ const layoutData = await getLayoutData();
     const fCity = document.getElementById("fieldCity") as unknown as HTMLSelectElement;
     const fZone = document.getElementById("fieldZone") as unknown as HTMLSelectElement;
 
-    const dbCustomer = result.customer && Object.keys(result.customer).length > 0 ? result.customer : null;
+    const dbCustomer = result.success && result.customer && Object.keys(result.customer).length > 0 ? result.customer : null;
     const latestOrder = orders.length > 0 ? orders[0] : null;
 
     if (fName) fName.value = dbCustomer?.name || customer.name || "";
@@ -386,7 +522,7 @@ const layoutData = await getLayoutData();
       }
 
       // Handle city change
-      fCity.addEventListener("change", async (e) => {
+      fCity.onchange = async (e) => {
         const target = e.target as HTMLSelectElement;
         const selectedOption = target.options[target.selectedIndex];
         const cityId = selectedOption?.dataset?.id;
@@ -404,7 +540,7 @@ const layoutData = await getLayoutData();
           });
           fZone.disabled = false;
         }
-      });
+      };
 
       // Populate zones initially if a city is already selected
       if (initialCityId) {
@@ -430,13 +566,14 @@ const layoutData = await getLayoutData();
     const profileToggle = document.getElementById("profileToggle");
     const profileForm = document.getElementById("profileForm");
     const profileChevron = document.getElementById("profileChevron");
-    profileToggle?.addEventListener("click", () => {
+    if (profileToggle) profileToggle.onclick = () => {
       profileForm?.classList.toggle("hidden");
       profileChevron?.classList.toggle("rotate-180");
-    });
+    };
 
     // Save profile handler
-    document.getElementById("saveProfileBtn")?.addEventListener("click", async () => {
+    const saveProfileBtn = document.getElementById("saveProfileBtn") as HTMLButtonElement | null;
+    if (saveProfileBtn) saveProfileBtn.onclick = async () => {
       const btn = document.getElementById("saveProfileBtn") as HTMLButtonElement;
       const status = document.getElementById("profileSaveStatus")!;
       const originalText = btn.textContent;
@@ -476,10 +613,11 @@ const layoutData = await getLayoutData();
         status.classList.add("text-red-600");
         status.classList.remove("hidden");
       }
-    });
+    };
 
     // Logout handler
-    document.getElementById("logoutBtn")!.addEventListener("click", async () => {
+    const logoutBtn = document.getElementById("logoutBtn");
+    if (logoutBtn) logoutBtn.onclick = async () => {
       // Clear cs_auth for BOTH host-only and the root domain
       // to cover however the cookie was originally set.
       const rootDomain = window.location.hostname.split(".").slice(-2).join(".");
@@ -488,19 +626,26 @@ const layoutData = await getLayoutData();
 
       await logoutCustomer();
       window.location.href = "/";
-    });
+    };
 
-    // Login handler (from modal)
+    const ordersRetryBtn = document.getElementById("ordersRetryBtn");
+    if (ordersRetryBtn) ordersRetryBtn.onclick = () => void initializeAccountPage();
+
+  }
+
+  if (!accountWindow.__scaliusAccountPageBound) {
+    accountWindow.__scaliusAccountPageBound = true;
+    document.addEventListener("astro:page-load", () => void initializeAccountPage());
     window.addEventListener("customer-login", () => {
       window.location.reload();
     });
-  });
+  }
 
-  // Init on page load
-  document.addEventListener("astro:page-load", () => {
-    // Re-run the DOMContentLoaded logic for Astro page loads
-    (document.querySelector("script") as HTMLScriptElement).dispatchEvent(new Event("DOMContentLoaded"));
-  });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => void initializeAccountPage(), { once: true });
+  } else {
+    void initializeAccountPage();
+  }
 </script>
 
 <style>

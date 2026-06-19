@@ -1,7 +1,7 @@
 // src/modules/customers/customers.service.ts
 // All DB queries and business logic for the customers domain.
 
-import { customers, customerHistory, deliveryLocations, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
+import { customers, customerHistory, deliveryLocations, deliveryProviders, deliveryShipments, orders, orderItems, products, productVariants, productImages } from "@scalius/database/schema";
 import { sql, isNull, inArray, asc, desc, eq, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
@@ -20,6 +20,25 @@ import type { CreateCustomerInput, UpdateCustomerInput } from "./customers.valid
 // ─────────────────────────────────────────
 // Queries
 // ─────────────────────────────────────────
+
+const timestampToIso = (timestamp: number | null): string | null => {
+    if (!timestamp) return null;
+    return new Date(timestamp * 1000).toISOString();
+};
+
+interface CustomerOrderShipmentSummary {
+    id: string;
+    providerType: string;
+    providerName: string | null;
+    status: string;
+    rawStatus: string | null;
+    trackingId: string | null;
+    trackingUrl: string | null;
+    courierName: string | null;
+    lastChecked: string | null;
+    updatedAt: string | null;
+    createdAt: string | null;
+}
 
 export async function listCustomers(
     db: Database,
@@ -382,36 +401,102 @@ export async function getCustomerOrders(
     // Fetch items for all orders in one batch
     const orderIds = customerOrders.map((o) => o.id);
     const itemsByOrder = new Map<string, Array<Record<string, unknown>>>();
+    const latestShipmentByOrder = new Map<string, CustomerOrderShipmentSummary>();
 
     if (orderIds.length > 0) {
-        const allItems = await db
-            .select({
-                orderId: orderItems.orderId,
-                productId: orderItems.productId,
-                variantId: orderItems.variantId,
-                quantity: orderItems.quantity,
-                price: orderItems.price,
-                productName: products.name,
-                productSlug: products.slug,
-                productImage: sql<string>`(
-                    SELECT ${productImages.url}
-                    FROM ${productImages}
-                    WHERE ${productImages.productId} = ${products.id}
-                    AND ${productImages.isPrimary} = 1
-                    LIMIT 1
-                )`.as("productImage"),
-                variantSize: productVariants.size,
-                variantColor: productVariants.color
-            })
-            .from(orderItems)
-            .leftJoin(products, eq(products.id, orderItems.productId))
-            .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-            .where(sql`${orderItems.orderId} IN ${orderIds}`);
+        const [allItems, allShipments] = await db.batch([
+            db
+                .select({
+                    orderId: orderItems.orderId,
+                    productId: orderItems.productId,
+                    variantId: orderItems.variantId,
+                    quantity: orderItems.quantity,
+                    price: orderItems.price,
+                    productName: products.name,
+                    productSlug: products.slug,
+                    productImage: sql<string>`(
+                        SELECT ${productImages.url}
+                        FROM ${productImages}
+                        WHERE ${productImages.productId} = ${products.id}
+                        AND ${productImages.isPrimary} = 1
+                        LIMIT 1
+                    )`.as("productImage"),
+                    variantSize: productVariants.size,
+                    variantColor: productVariants.color
+                })
+                .from(orderItems)
+                .leftJoin(products, eq(products.id, orderItems.productId))
+                .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+                .where(sql`${orderItems.orderId} IN ${orderIds}`),
+            db
+                .select({
+                    id: deliveryShipments.id,
+                    orderId: deliveryShipments.orderId,
+                    providerType: deliveryShipments.providerType,
+                    providerName: deliveryProviders.name,
+                    status: deliveryShipments.status,
+                    rawStatus: deliveryShipments.rawStatus,
+                    trackingId: deliveryShipments.trackingId,
+                    trackingUrl: deliveryShipments.trackingUrl,
+                    courierName: deliveryShipments.courierName,
+                    lastChecked: sql<number>`CAST(${deliveryShipments.lastChecked} AS INTEGER)`,
+                    updatedAt: sql<number>`CAST(${deliveryShipments.updatedAt} AS INTEGER)`,
+                    createdAt: sql<number>`CAST(${deliveryShipments.createdAt} AS INTEGER)`,
+                })
+                .from(deliveryShipments)
+                .leftJoin(deliveryProviders, eq(deliveryProviders.id, deliveryShipments.providerId))
+                .where(sql`${deliveryShipments.orderId} IN ${orderIds}`)
+                .orderBy(desc(deliveryShipments.createdAt)),
+        ] as Parameters<Database["batch"]>[0]) as [
+            Array<{
+                orderId: string;
+                productId: string;
+                variantId: string | null;
+                quantity: number;
+                price: number;
+                productName: string | null;
+                productSlug: string | null;
+                productImage: string | null;
+                variantSize: string | null;
+                variantColor: string | null;
+            }>,
+            Array<{
+                id: string;
+                orderId: string;
+                providerType: string;
+                providerName: string | null;
+                status: string;
+                rawStatus: string | null;
+                trackingId: string | null;
+                trackingUrl: string | null;
+                courierName: string | null;
+                lastChecked: number | null;
+                updatedAt: number | null;
+                createdAt: number | null;
+            }>,
+        ];
 
         for (const item of allItems) {
             const list = itemsByOrder.get(item.orderId) || [];
             list.push(item);
             itemsByOrder.set(item.orderId, list);
+        }
+
+        for (const shipment of allShipments) {
+            if (latestShipmentByOrder.has(shipment.orderId)) continue;
+            latestShipmentByOrder.set(shipment.orderId, {
+                id: shipment.id,
+                providerType: shipment.providerType,
+                providerName: shipment.providerName,
+                status: shipment.status,
+                rawStatus: shipment.rawStatus,
+                trackingId: shipment.trackingId,
+                trackingUrl: shipment.trackingUrl,
+                courierName: shipment.courierName,
+                lastChecked: timestampToIso(shipment.lastChecked),
+                updatedAt: timestampToIso(shipment.updatedAt),
+                createdAt: timestampToIso(shipment.createdAt),
+            });
         }
     }
 
@@ -421,6 +506,7 @@ export async function getCustomerOrders(
         createdAt: order.createdAt
             ? new Date(order.createdAt * 1000).toISOString()
             : null,
+        latestShipment: latestShipmentByOrder.get(order.id) ?? null,
         items: itemsByOrder.get(order.id) || []
     }));
 

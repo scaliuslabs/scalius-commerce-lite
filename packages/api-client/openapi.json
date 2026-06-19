@@ -9159,6 +9159,87 @@
                                   }
                                 ],
                                 "nullable": true
+                              },
+                              "latestShipment": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "providerType": {
+                                    "type": "string"
+                                  },
+                                  "providerName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "rawStatus": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "trackingId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "trackingUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "courierName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "lastChecked": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  },
+                                  "createdAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "providerType",
+                                  "providerName",
+                                  "status",
+                                  "rawStatus",
+                                  "trackingId",
+                                  "trackingUrl",
+                                  "courierName",
+                                  "lastChecked",
+                                  "updatedAt",
+                                  "createdAt"
+                                ]
                               }
                             },
                             "required": [

@@ -176,6 +176,20 @@ export interface CustomerOrderItem {
   variantColor: string | null;
 }
 
+export interface CustomerOrderShipment {
+  id: string;
+  providerType: string;
+  providerName: string | null;
+  status: string;
+  rawStatus: string | null;
+  trackingId: string | null;
+  trackingUrl: string | null;
+  courierName: string | null;
+  lastChecked: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+}
+
 export interface CustomerOrder {
   id: string;
   status: string;
@@ -192,6 +206,7 @@ export interface CustomerOrder {
   areaName: string | null;
   notes: string | null;
   createdAt: string | null;
+  latestShipment: CustomerOrderShipment | null;
   items: CustomerOrderItem[];
 }
 

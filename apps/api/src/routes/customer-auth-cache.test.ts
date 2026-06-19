@@ -64,6 +64,19 @@ describe("customer auth private cache policy", () => {
           status: "pending",
           totalAmount: 100,
           createdAt: "2026-06-18T00:00:00.000Z",
+          latestShipment: {
+            id: "shipment_1",
+            providerType: "steadfast",
+            providerName: "Steadfast",
+            status: "in_transit",
+            rawStatus: "In Transit",
+            trackingId: "SF123",
+            trackingUrl: "https://steadfast.com.bd/t/SF123",
+            courierName: null,
+            lastChecked: "2026-06-18T01:00:00.000Z",
+            updatedAt: "2026-06-18T01:00:00.000Z",
+            createdAt: "2026-06-18T00:30:00.000Z",
+          },
         },
       ],
       customerProfile: {
@@ -107,6 +120,36 @@ describe("customer auth private cache policy", () => {
     );
     expect(response.headers.get("Pragma")).toBe("no-cache");
     expect(response.headers.get("Expires")).toBe("0");
+  });
+
+  it("returns customer shipment tracking summary with order history", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders",
+      { headers: { Cookie: "cs_tok=session_1" } },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        orders: [
+          {
+            id: "order_1",
+            latestShipment: {
+              id: "shipment_1",
+              providerType: "steadfast",
+              providerName: "Steadfast",
+              status: "in_transit",
+              trackingId: "SF123",
+              trackingUrl: "https://steadfast.com.bd/t/SF123",
+            },
+          },
+        ],
+      },
+    });
   });
 
   it("clears OTP KV state when queue handoff fails", async () => {
