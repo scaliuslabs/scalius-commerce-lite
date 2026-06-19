@@ -9551,6 +9551,982 @@
         }
       }
     },
+    "/api/v1/customer-auth/orders/{id}": {
+      "get": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Get one authenticated customer order with timeline",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer order detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "invoiceNumber": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "totalAmount": {
+                              "type": "number"
+                            },
+                            "paidAmount": {
+                              "type": "number"
+                            },
+                            "balanceDue": {
+                              "type": "number"
+                            },
+                            "shippingCharge": {
+                              "type": "number"
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "paymentStatus": {
+                              "type": "string"
+                            },
+                            "paymentMethod": {
+                              "type": "string"
+                            },
+                            "fulfillmentStatus": {
+                              "type": "string"
+                            },
+                            "expectedDelivery": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingAddress": {
+                              "type": "string"
+                            },
+                            "city": {
+                              "type": "string"
+                            },
+                            "zone": {
+                              "type": "string"
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "cityName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zoneName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "notes": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "invoiceNumber",
+                            "status",
+                            "totalAmount",
+                            "paidAmount",
+                            "balanceDue",
+                            "shippingCharge",
+                            "discountAmount",
+                            "paymentStatus",
+                            "paymentMethod",
+                            "fulfillmentStatus",
+                            "expectedDelivery",
+                            "shippingAddress",
+                            "city",
+                            "zone",
+                            "area",
+                            "cityName",
+                            "zoneName",
+                            "areaName",
+                            "notes",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "quantity": {
+                                "type": "number"
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "productName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "productSlug": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "productImage": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "variantSize": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "variantColor": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "unitPrice": {
+                                "type": "number"
+                              },
+                              "lineTotal": {
+                                "type": "number"
+                              },
+                              "fulfillmentStatus": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "variantId",
+                              "quantity",
+                              "price",
+                              "productName",
+                              "productSlug",
+                              "productImage",
+                              "variantSize",
+                              "variantColor",
+                              "unitPrice",
+                              "lineTotal",
+                              "fulfillmentStatus",
+                              "createdAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "shipments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "providerType": {
+                                "type": "string"
+                              },
+                              "providerName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "rawStatus": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "trackingId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "trackingUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "courierName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "shipmentAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "isFinalShipment": {
+                                "type": "boolean"
+                              },
+                              "lastChecked": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "providerType",
+                              "providerName",
+                              "status",
+                              "rawStatus",
+                              "trackingId",
+                              "trackingUrl",
+                              "courierName",
+                              "note",
+                              "shipmentAmount",
+                              "isFinalShipment",
+                              "lastChecked",
+                              "updatedAt",
+                              "createdAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "payments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "paymentMethod": {
+                                "type": "string"
+                              },
+                              "paymentType": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "codReceiptUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "amount",
+                              "currency",
+                              "paymentMethod",
+                              "paymentType",
+                              "status",
+                              "codReceiptUrl",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "paymentPlan": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "totalAmount": {
+                              "type": "number"
+                            },
+                            "depositAmount": {
+                              "type": "number"
+                            },
+                            "balanceDue": {
+                              "type": "number"
+                            },
+                            "balanceDueDate": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "depositPaidAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "balancePaidAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "totalAmount",
+                            "depositAmount",
+                            "balanceDue",
+                            "balanceDueDate",
+                            "status",
+                            "depositPaidAt",
+                            "balancePaidAt",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "cod": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "codStatus": {
+                              "type": "string"
+                            },
+                            "deliveryAttempts": {
+                              "type": "number"
+                            },
+                            "failureReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "collectedAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "receiptUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "lastAttemptAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "collectedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "codStatus",
+                            "deliveryAttempts",
+                            "failureReason",
+                            "collectedAmount",
+                            "receiptUrl",
+                            "lastAttemptAt",
+                            "collectedAt",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
+                        "notifications": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "notificationType": {
+                                "type": "string"
+                              },
+                              "channel": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "providerStatus": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "acceptedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "deliveredAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "failedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "skippedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "notificationType",
+                              "channel",
+                              "status",
+                              "provider",
+                              "providerStatus",
+                              "acceptedAt",
+                              "deliveredAt",
+                              "failedAt",
+                              "skippedAt",
+                              "updatedAt",
+                              "createdAt"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "timeline": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "order",
+                                  "payment",
+                                  "shipment",
+                                  "notification"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "happenedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "details": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "status",
+                              "label",
+                              "happenedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "order",
+                        "items",
+                        "shipments",
+                        "payments",
+                        "paymentPlan",
+                        "cod",
+                        "notifications",
+                        "timeline"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/checkout-languages/active": {
       "get": {
         "tags": [

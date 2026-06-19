@@ -28,7 +28,7 @@ import {
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
-import { getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
+import { getCustomerOrderDetail, getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, ServiceUnavailableError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
@@ -41,6 +41,23 @@ function setPrivateNoStoreHeaders(c: Context) {
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
   c.header("Pragma", "no-cache");
   c.header("Expires", "0");
+}
+
+async function requireCustomerSession(c: Context<{ Bindings: Env }>) {
+  const cookieHeader = c.req.header("Cookie") || null;
+  const token = getSessionCookie(cookieHeader);
+
+  if (!token) {
+    throw new UnauthorizedError("Authentication required");
+  }
+
+  const session = await getCustomerBySession(c.env.CACHE, token);
+
+  if (!session) {
+    throw new UnauthorizedError("Session expired. Please log in again.");
+  }
+
+  return { session, token };
 }
 
 // ─── POST /send-otp ──────────────────────────────────────────────────────────
@@ -464,19 +481,7 @@ const getCustomerOrdersRoute = createRoute({
 app.openapi(getCustomerOrdersRoute, async (c) => {
   setPrivateNoStoreHeaders(c);
 
-  const cookieHeader = c.req.header("Cookie") || null;
-  const token = getSessionCookie(cookieHeader);
-
-  if (!token) {
-    throw new UnauthorizedError("Authentication required");
-  }
-
-  const kv = c.env.CACHE;
-  const session = await getCustomerBySession(kv, token);
-
-  if (!session) {
-    throw new UnauthorizedError("Session expired. Please log in again.");
-  }
+  const { session } = await requireCustomerSession(c);
 
   // Build a fallback customer profile from session data
   const sessionProfile = {
@@ -504,6 +509,156 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     : sessionProfile;
 
   return ok(c, { orders: result.orders, customer });
+});
+
+const customerOrderDetailSchema = z.object({
+  order: z.object({
+    id: z.string(),
+    invoiceNumber: z.number().nullable(),
+    status: z.string(),
+    totalAmount: z.number(),
+    paidAmount: z.number(),
+    balanceDue: z.number(),
+    shippingCharge: z.number(),
+    discountAmount: z.number().nullable(),
+    paymentStatus: z.string(),
+    paymentMethod: z.string(),
+    fulfillmentStatus: z.string(),
+    expectedDelivery: z.string().nullable(),
+    shippingAddress: z.string(),
+    city: z.string(),
+    zone: z.string(),
+    area: z.string().nullable(),
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
+    areaName: z.string().nullable(),
+    notes: z.string().nullable(),
+    createdAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+  }).passthrough(),
+  items: z.array(z.object({
+    id: z.string(),
+    productId: z.string(),
+    variantId: z.string().nullable(),
+    quantity: z.number(),
+    price: z.number(),
+    productName: z.string().nullable(),
+    productSlug: z.string().nullable(),
+    productImage: z.string().nullable(),
+    variantSize: z.string().nullable(),
+    variantColor: z.string().nullable(),
+    unitPrice: z.number(),
+    lineTotal: z.number(),
+    fulfillmentStatus: z.string(),
+    createdAt: nullableTimestampSchema,
+  }).passthrough()),
+  shipments: z.array(z.object({
+    id: z.string(),
+    providerType: z.string(),
+    providerName: z.string().nullable(),
+    status: z.string(),
+    rawStatus: z.string().nullable(),
+    trackingId: z.string().nullable(),
+    trackingUrl: z.string().nullable(),
+    courierName: z.string().nullable(),
+    note: z.string().nullable(),
+    shipmentAmount: z.number().nullable(),
+    isFinalShipment: z.boolean(),
+    lastChecked: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+    createdAt: nullableTimestampSchema,
+  }).passthrough()),
+  payments: z.array(z.object({
+    id: z.string(),
+    amount: z.number(),
+    currency: z.string(),
+    paymentMethod: z.string(),
+    paymentType: z.string(),
+    status: z.string(),
+    codReceiptUrl: z.string().nullable(),
+    createdAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+  }).passthrough()),
+  paymentPlan: z.object({
+    totalAmount: z.number(),
+    depositAmount: z.number(),
+    balanceDue: z.number(),
+    balanceDueDate: z.string().nullable(),
+    status: z.string(),
+    depositPaidAt: nullableTimestampSchema,
+    balancePaidAt: nullableTimestampSchema,
+    createdAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+  }).passthrough().nullable(),
+  cod: z.object({
+    codStatus: z.string(),
+    deliveryAttempts: z.number(),
+    failureReason: z.string().nullable(),
+    collectedAmount: z.number().nullable(),
+    receiptUrl: z.string().nullable(),
+    lastAttemptAt: nullableTimestampSchema,
+    collectedAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+  }).passthrough().nullable(),
+  notifications: z.array(z.object({
+    id: z.string(),
+    notificationType: z.string(),
+    channel: z.string(),
+    status: z.string(),
+    provider: z.string(),
+    providerStatus: z.string().nullable(),
+    acceptedAt: nullableTimestampSchema,
+    deliveredAt: nullableTimestampSchema,
+    failedAt: nullableTimestampSchema,
+    skippedAt: nullableTimestampSchema,
+    updatedAt: nullableTimestampSchema,
+    createdAt: nullableTimestampSchema,
+  }).passthrough()),
+  timeline: z.array(z.object({
+    id: z.string(),
+    type: z.enum(["order", "payment", "shipment", "notification"]),
+    status: z.string(),
+    label: z.string(),
+    happenedAt: nullableTimestampSchema,
+    details: z.string().nullable().optional(),
+  })),
+});
+
+const getCustomerOrderDetailRoute = createRoute({
+  method: "get",
+  path: "/orders/{id}",
+  tags: ["Customer Auth"],
+  summary: "Get one authenticated customer order with timeline",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Customer order detail",
+      content: {
+        "application/json": {
+          schema: successEnvelope(customerOrderDetailSchema),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getCustomerOrderDetailRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+
+  const { session } = await requireCustomerSession(c);
+  if (!session.customerId) {
+    throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
+  }
+
+  const db = c.get("db");
+  const detail = await getCustomerOrderDetail(db, session.customerId, c.req.valid("param").id);
+
+  return ok(c, detail);
 });
 
 export { app as customerAuthRoutes };

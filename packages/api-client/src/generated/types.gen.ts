@@ -2968,6 +2968,216 @@ export type GetApiV1CustomerAuthOrdersResponses = {
 
 export type GetApiV1CustomerAuthOrdersResponse = GetApiV1CustomerAuthOrdersResponses[keyof GetApiV1CustomerAuthOrdersResponses];
 
+export type GetApiV1CustomerAuthOrdersByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}';
+};
+
+export type GetApiV1CustomerAuthOrdersByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthOrdersByIdError = GetApiV1CustomerAuthOrdersByIdErrors[keyof GetApiV1CustomerAuthOrdersByIdErrors];
+
+export type GetApiV1CustomerAuthOrdersByIdResponses = {
+    /**
+     * Customer order detail
+     */
+    200: {
+        success: true;
+        data: {
+            order: {
+                id: string;
+                invoiceNumber: number | null;
+                status: string;
+                totalAmount: number;
+                paidAmount: number;
+                balanceDue: number;
+                shippingCharge: number;
+                discountAmount: number | null;
+                paymentStatus: string;
+                paymentMethod: string;
+                fulfillmentStatus: string;
+                expectedDelivery: string | null;
+                shippingAddress: string;
+                city: string;
+                zone: string;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                notes: string | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                [key: string]: unknown;
+            };
+            items: Array<{
+                id: string;
+                productId: string;
+                variantId: string | null;
+                quantity: number;
+                price: number;
+                productName: string | null;
+                productSlug: string | null;
+                productImage: string | null;
+                variantSize: string | null;
+                variantColor: string | null;
+                unitPrice: number;
+                lineTotal: number;
+                fulfillmentStatus: string;
+                createdAt: string | number | null;
+                [key: string]: unknown;
+            }>;
+            shipments: Array<{
+                id: string;
+                providerType: string;
+                providerName: string | null;
+                status: string;
+                rawStatus: string | null;
+                trackingId: string | null;
+                trackingUrl: string | null;
+                courierName: string | null;
+                note: string | null;
+                shipmentAmount: number | null;
+                isFinalShipment: boolean;
+                lastChecked: string | number | null;
+                updatedAt: string | number | null;
+                createdAt: string | number | null;
+                [key: string]: unknown;
+            }>;
+            payments: Array<{
+                id: string;
+                amount: number;
+                currency: string;
+                paymentMethod: string;
+                paymentType: string;
+                status: string;
+                codReceiptUrl: string | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                [key: string]: unknown;
+            }>;
+            paymentPlan: {
+                totalAmount: number;
+                depositAmount: number;
+                balanceDue: number;
+                balanceDueDate: string | null;
+                status: string;
+                depositPaidAt: string | number | null;
+                balancePaidAt: string | number | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                [key: string]: unknown;
+            } | null;
+            cod: {
+                codStatus: string;
+                deliveryAttempts: number;
+                failureReason: string | null;
+                collectedAmount: number | null;
+                receiptUrl: string | null;
+                lastAttemptAt: string | number | null;
+                collectedAt: string | number | null;
+                updatedAt: string | number | null;
+                [key: string]: unknown;
+            } | null;
+            notifications: Array<{
+                id: string;
+                notificationType: string;
+                channel: string;
+                status: string;
+                provider: string;
+                providerStatus: string | null;
+                acceptedAt: string | number | null;
+                deliveredAt: string | number | null;
+                failedAt: string | number | null;
+                skippedAt: string | number | null;
+                updatedAt: string | number | null;
+                createdAt: string | number | null;
+                [key: string]: unknown;
+            }>;
+            timeline: Array<{
+                id: string;
+                type: 'order' | 'payment' | 'shipment' | 'notification';
+                status: string;
+                label: string;
+                happenedAt: string | number | null;
+                details?: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthOrdersByIdResponse = GetApiV1CustomerAuthOrdersByIdResponses[keyof GetApiV1CustomerAuthOrdersByIdResponses];
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;

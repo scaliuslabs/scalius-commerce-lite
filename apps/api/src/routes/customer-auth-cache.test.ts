@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   sendOtp: vi.fn(),
   getCustomerBySession: vi.fn(),
   getCustomerOrders: vi.fn(),
+  getCustomerOrderDetail: vi.fn(),
   getSessionCookie: vi.fn(),
 }));
 
@@ -25,6 +26,7 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
 
 vi.mock("@scalius/core/modules/customers/customers.service", () => ({
   getCustomerOrders: mocks.getCustomerOrders,
+  getCustomerOrderDetail: mocks.getCustomerOrderDetail,
 }));
 
 import { customerAuthRoutes } from "./customer-auth";
@@ -85,6 +87,115 @@ describe("customer auth private cache policy", () => {
         email: "customer@example.com",
         phone: "+8801712345678",
       },
+    });
+    mocks.getCustomerOrderDetail.mockResolvedValue({
+      order: {
+        id: "order_1",
+        invoiceNumber: 12,
+        status: "shipped",
+        totalAmount: 100,
+        paidAmount: 100,
+        balanceDue: 0,
+        shippingCharge: 60,
+        discountAmount: 0,
+        paymentStatus: "paid",
+        paymentMethod: "sslcommerz",
+        fulfillmentStatus: "partial",
+        expectedDelivery: "2026-06-22",
+        shippingAddress: "Dhaka",
+        city: "dhaka",
+        zone: "mirpur",
+        area: null,
+        cityName: "Dhaka",
+        zoneName: "Mirpur",
+        areaName: null,
+        notes: null,
+        createdAt: "2026-06-18T00:00:00.000Z",
+        updatedAt: "2026-06-18T01:00:00.000Z",
+      },
+      items: [
+        {
+          id: "item_1",
+          productId: "product_1",
+          variantId: null,
+          quantity: 2,
+          price: 50,
+          unitPrice: 50,
+          lineTotal: 100,
+          productName: "Product",
+          productSlug: "product",
+          productImage: null,
+          variantSize: null,
+          variantColor: null,
+          fulfillmentStatus: "shipped",
+          createdAt: "2026-06-18T00:00:00.000Z",
+        },
+      ],
+      shipments: [
+        {
+          id: "shipment_1",
+          providerType: "steadfast",
+          providerName: "Steadfast",
+          status: "in_transit",
+          rawStatus: "In Transit",
+          trackingId: "SF123",
+          trackingUrl: "https://steadfast.com.bd/t/SF123",
+          courierName: null,
+          note: null,
+          shipmentAmount: null,
+          isFinalShipment: false,
+          lastChecked: "2026-06-18T01:00:00.000Z",
+          updatedAt: "2026-06-18T01:00:00.000Z",
+          createdAt: "2026-06-18T00:30:00.000Z",
+        },
+      ],
+      payments: [
+        {
+          id: "payment_1",
+          amount: 100,
+          currency: "BDT",
+          paymentMethod: "sslcommerz",
+          paymentType: "full",
+          status: "confirmed",
+          codReceiptUrl: null,
+          createdAt: "2026-06-18T00:10:00.000Z",
+          updatedAt: "2026-06-18T00:12:00.000Z",
+        },
+      ],
+      paymentPlan: null,
+      cod: null,
+      notifications: [
+        {
+          id: "receipt_1",
+          notificationType: "order_shipped",
+          channel: "sms",
+          status: "accepted",
+          provider: "gennet",
+          providerStatus: "accepted",
+          acceptedAt: "2026-06-18T01:05:00.000Z",
+          deliveredAt: null,
+          failedAt: null,
+          skippedAt: null,
+          updatedAt: "2026-06-18T01:05:00.000Z",
+          createdAt: "2026-06-18T01:04:00.000Z",
+        },
+      ],
+      timeline: [
+        {
+          id: "order-created:order_1",
+          type: "order",
+          status: "shipped",
+          label: "Order placed",
+          happenedAt: "2026-06-18T00:00:00.000Z",
+        },
+        {
+          id: "shipment:shipment_1",
+          type: "shipment",
+          status: "in_transit",
+          label: "Shipment In Transit",
+          happenedAt: "2026-06-18T01:00:00.000Z",
+        },
+      ],
     });
   });
 
@@ -150,6 +261,79 @@ describe("customer auth private cache policy", () => {
         ],
       },
     });
+  });
+
+  it("marks customer order detail reads as private no-store and scopes by customer id", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1",
+      { headers: { Cookie: "cs_tok=session_1" } },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-cache, no-store, must-revalidate",
+    );
+    expect(mocks.getCustomerOrderDetail).toHaveBeenCalledWith(
+      expect.anything(),
+      "customer_1",
+      "order_1",
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        order: {
+          id: "order_1",
+          invoiceNumber: 12,
+          paymentStatus: "paid",
+        },
+        shipments: [
+          {
+            id: "shipment_1",
+            trackingId: "SF123",
+          },
+        ],
+        payments: [
+          {
+            id: "payment_1",
+            status: "confirmed",
+          },
+        ],
+        notifications: [
+          {
+            channel: "sms",
+            status: "accepted",
+          },
+        ],
+        timeline: expect.arrayContaining([
+          expect.objectContaining({
+            type: "order",
+            label: "Order placed",
+          }),
+        ]),
+      },
+    });
+  });
+
+  it("rejects customer order detail reads when the session has no customer id", async () => {
+    const app = createTestApp();
+    mocks.getCustomerBySession.mockResolvedValueOnce({
+      email: "customer@example.com",
+      name: "Customer",
+      phone: "+8801712345678",
+      customerId: null,
+    });
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1",
+      { headers: { Cookie: "cs_tok=session_1" } },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.getCustomerOrderDetail).not.toHaveBeenCalled();
   });
 
   it("clears OTP KV state when queue handoff fails", async () => {

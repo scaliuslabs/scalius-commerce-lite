@@ -287,6 +287,7 @@ const layoutData = await getLayoutData();
   function renderOrder(order: CustomerOrder): string {
     const statusClass = getStatusClass(order.status);
     const detailsId = `order-details-${order.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+    const detailHref = `/account/orders/${encodeURIComponent(order.id)}`;
     const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
 
     // Item details layout (shown when expanded)
@@ -327,11 +328,14 @@ const layoutData = await getLayoutData();
              </div>
              <p class="text-sm text-muted-foreground mt-1">${formatDate(order.createdAt)} • ${itemCount} item${itemCount !== 1 ? "s" : ""}</p>
            </div>
-           <div class="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start">
+           <div class="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3">
              <p class="text-xl font-bold text-foreground">${formatCurrency(order.totalAmount)}</p>
-             <button type="button" class="text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors mt-1" data-order-toggle="${escapeHtml(detailsId)}" aria-expanded="false" aria-controls="${escapeHtml(detailsId)}">View Details</button>
+             <div class="flex flex-wrap items-center justify-end gap-3">
+               <button type="button" class="min-h-11 text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors" data-order-toggle="${escapeHtml(detailsId)}" aria-expanded="false" aria-controls="${escapeHtml(detailsId)}">Quick View</button>
+               <a class="inline-flex min-h-11 items-center text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors" href="${escapeHtml(detailHref)}">Full Timeline</a>
+             </div>
            </div>
-        </div>
+         </div>
         ${renderShipmentSummary(order)}
         <div id="${escapeHtml(detailsId)}" class="order-details hidden border-t border-border pt-2 mt-4">
            <div class="divide-y divide-border">
