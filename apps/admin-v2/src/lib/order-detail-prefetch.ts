@@ -1,7 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import {
-  currencySettingsQueryOptions,
-} from "./api-query-options/settings";
+import { currencySettingsQueryOptions } from "./api-query-options/currency";
 import { deliveryProvidersQueryOptions } from "./api-query-options/delivery";
 import {
   orderCodQueryOptions,

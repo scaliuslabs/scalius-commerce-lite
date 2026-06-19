@@ -1,10 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { apiGet } from "../api.server";
 
-export interface DashboardStatsPayload {
+export interface DashboardHomeStatsPayload {
   totalProducts: number;
   totalCustomers: number;
-  totalRevenue: number;
   currentMonth: {
     orders: number;
     revenue: number;
@@ -39,14 +38,23 @@ export interface DashboardDailyActivity {
   newCustomers: number;
 }
 
-export interface DashboardData {
-  stats: DashboardStatsPayload;
+export interface DashboardSummaryData {
+  stats: DashboardHomeStatsPayload;
   recentOrders: DashboardRecentOrder[];
+}
+
+export interface DashboardActivityData {
   dailyActivityData: DashboardDailyActivity[];
 }
 
-export const getDashboardData = createServerFn({ method: "GET" }).handler(
+export const getDashboardSummary = createServerFn({ method: "GET" }).handler(
   async () => {
-    return apiGet<DashboardData>("/dashboard");
+    return apiGet<DashboardSummaryData>("/dashboard/home-summary");
+  },
+);
+
+export const getDashboardActivity = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<DashboardActivityData>("/dashboard/activity");
   },
 );

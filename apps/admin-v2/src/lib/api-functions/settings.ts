@@ -74,12 +74,6 @@ export interface GeneralSettingsPayload {
   headerConfig: SettingsPayload;
   footerConfig: SettingsPayload;
 }
-export interface CurrencySettingsPayload {
-  currencyCode: string;
-  currencySymbol: string;
-  usdExchangeRate: string;
-}
-export type UpdateCurrencySettingsInput = SettingsPayload;
 export type SeoSettingsPayload = SettingsPayload;
 export type UpdateSeoSettingsInput = SettingsPayload;
 export type SecuritySettingsPayload = SettingsPayload;
@@ -205,18 +199,6 @@ export const saveFooterConfig = createServerFn({ method: "POST" })
   .validator((data: FooterConfigInput) => data)
   .handler(async ({ data }) => {
     return apiPost<EmptyPayload>("/settings/footer", data);
-  });
-
-export const getCurrencySettings = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<CurrencySettingsPayload>("/settings/currency");
-  },
-);
-
-export const updateCurrencySettings = createServerFn({ method: "POST" })
-  .validator((data: UpdateCurrencySettingsInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MessagePayload>("/settings/currency", data);
   });
 
 export const getSeoSettings = createServerFn({ method: "GET" }).handler(

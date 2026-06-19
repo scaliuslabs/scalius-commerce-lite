@@ -262,11 +262,38 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "routes", "admin", "index.tsx"),
       "utf8",
     );
+    const currencyHookSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "hooks", "use-currency.ts"),
+      "utf8",
+    );
+    const currencyQueryOptionsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "currency.ts"),
+      "utf8",
+    );
+    const dashboardHomeQueryOptionsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "dashboard-home.ts"),
+      "utf8",
+    );
     const loaderSource = source.slice(
       source.indexOf("loader: async"),
       source.indexOf("head: ()"),
     );
 
+    expect(source).toContain('from "~/lib/api-query-options/dashboard-home"');
+    expect(source).not.toContain('from "~/lib/api-query-options/dashboard"');
+    expect(source).not.toMatch(
+      /import\s+\{\s*DashboardStats\s*\}\s+from\s+["']~\/components\/admin\/DashboardStats["']/,
+    );
+    expect(source).not.toMatch(
+      /import\s+\{\s*RecentOrders\s*\}\s+from\s+["']~\/components\/admin\/RecentOrders["']/,
+    );
+    expect(source).not.toMatch(
+      /import\s+\{\s*WelcomeBanner\s*\}\s+from\s+["']~\/components\/admin\/WelcomeBanner["']/,
+    );
+    expect(source).toContain("const DashboardStats = lazy(()");
+    expect(source).toContain("const RecentOrders = lazy(()");
+    expect(source).toContain("const WelcomeBanner = lazy(()");
+    expect(source).toContain("fallback={<WelcomeBannerLoading />}");
     expect(loaderSource).toContain('typeof window === "undefined"');
     expect(loaderSource).toContain(
       "void queryClient.prefetchQuery(dashboardSummaryQueryOptions())",
@@ -277,6 +304,22 @@ describe("admin route graph boundaries", () => {
     expect(loaderSource).not.toContain("await warmRouteQuery");
     expect(source).toContain("isSummaryInitialLoading");
     expect(source).toContain("DashboardSummaryLoading");
+    expect(currencyHookSource).toContain(
+      "~/lib/api-query-options/currency",
+    );
+    expect(currencyHookSource).not.toContain(
+      "~/lib/api-query-options/settings",
+    );
+    expect(currencyQueryOptionsSource).toContain(
+      "../api-functions/currency",
+    );
+    expect(currencyQueryOptionsSource).not.toContain("getPaymentMethods");
+    expect(currencyQueryOptionsSource).not.toContain("getMetaConversionsLogs");
+    expect(currencyQueryOptionsSource).not.toContain("getAuthSettings");
+    expect(dashboardHomeQueryOptionsSource).toContain(
+      "../api-functions/dashboard-home",
+    );
+    expect(dashboardHomeQueryOptionsSource).not.toContain("getDashboardData");
   });
 
   it("keeps secondary admin tool routes from blocking first paint on data reads", () => {

@@ -39,7 +39,7 @@ vi.mock("../../../lib/api-query-options/delivery", () => ({
     queryOptionMocks.deliveryProvidersQueryOptions,
 }));
 
-vi.mock("../../../lib/api-query-options/settings", () => ({
+vi.mock("../../../lib/api-query-options/currency", () => ({
   currencySettingsQueryOptions: queryOptionMocks.currencySettingsQueryOptions,
 }));
 
