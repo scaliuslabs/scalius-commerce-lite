@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, Loader2, Lock, Mail } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { storePendingTwoFactorMethods } from "@/lib/two-factor-pending";
@@ -34,6 +34,7 @@ function getSignInError(error: unknown) {
 }
 
 export function LoginForm() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -62,11 +63,11 @@ export function LoginForm() {
 
       if (response.twoFactorRedirect) {
         storePendingTwoFactorMethods(response.twoFactorMethods);
-        window.location.href = "/auth/two-factor";
+        await navigate({ to: "/auth/two-factor" });
         return;
       }
 
-      window.location.href = "/admin";
+      await navigate({ to: "/admin" });
     } catch (signInError) {
       setPassword("");
       setError(getSignInError(signInError));

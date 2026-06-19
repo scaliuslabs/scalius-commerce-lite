@@ -10,7 +10,6 @@ export const authClient = createAuthClient({
     twoFactorClient({
       onTwoFactorRedirect: (context) => {
         storePendingTwoFactorMethods(context?.twoFactorMethods);
-        window.location.href = "/auth/two-factor";
       },
     }),
   ],

@@ -9,6 +9,10 @@ import { redirect } from "@tanstack/react-router";
 
 type AdminDb = Pick<D1Database, "prepare">;
 
+const ADMIN_EXISTS_CACHE_TTL_MS = 5 * 60_000;
+
+let adminExistsCache: { value: true; expiresAt: number } | null = null;
+
 async function queryAdminExists(db: AdminDb): Promise<boolean> {
   const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
   const result = await retryTransientD1(() =>
@@ -20,6 +24,28 @@ async function queryAdminExists(db: AdminDb): Promise<boolean> {
       .first<{ count: number }>(),
   );
   return (result?.count ?? 0) > 0;
+}
+
+export function clearAdminExistsCache() {
+  adminExistsCache = null;
+}
+
+async function getCachedAdminExists(db: AdminDb): Promise<boolean> {
+  const now = Date.now();
+  if (adminExistsCache && adminExistsCache.expiresAt > now) {
+    return adminExistsCache.value;
+  }
+
+  const adminExists = await queryAdminExists(db);
+  if (adminExists) {
+    adminExistsCache = {
+      value: true,
+      expiresAt: now + ADMIN_EXISTS_CACHE_TTL_MS,
+    };
+  } else {
+    clearAdminExistsCache();
+  }
+  return adminExists;
 }
 
 /**
@@ -63,7 +89,7 @@ export const checkAdminExists = createServerFn().handler(async () => {
   const { env } = await import("cloudflare:workers");
   initBindings();
   try {
-    return await queryAdminExists(env.DB);
+    return await getCachedAdminExists(env.DB);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("no such table")) return false;
@@ -87,7 +113,7 @@ export const loginPageGuard = createServerFn().handler(async () => {
   const { env } = await import("cloudflare:workers");
   let adminExists = true; // fail-closed: assume admin exists unless proven otherwise
   try {
-    adminExists = await queryAdminExists(env.DB);
+    adminExists = await getCachedAdminExists(env.DB);
   } catch (e: unknown) {
     // "no such table" = fresh DB after reset → no admin
     // Any other DB error = fail-closed, show login (safe for production)
@@ -132,7 +158,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   // Check if any admin exists in the shared Better Auth D1 database.
   let adminExists = true; // fail-closed
   try {
-    adminExists = await queryAdminExists(env.DB);
+    adminExists = await getCachedAdminExists(env.DB);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("no such table")) adminExists = false;
@@ -163,6 +189,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   const rbac = await loadUserPermissions(
     authResult.user.id,
     authResult.user.role,
+    authResult.user.isSuperAdmin,
   );
 
   return {
