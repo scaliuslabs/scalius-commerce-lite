@@ -4,7 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
+import { orders, PaymentMethod } from "@scalius/database/schema";
 import {
   buildSSLCommerzTranId,
   initSSLCommerzSession,
@@ -28,6 +28,7 @@ import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
+import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -42,7 +43,7 @@ type SSLCommerzSessionResponse = {
 const sessionSchema = z.object({
   orderId: z.string().min(1),
   receiptToken: z.string().min(1),
-  paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
+  paymentType: z.enum(["full", "deposit", "balance"]).optional(),
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
   retryKey: z.string().trim().min(1).max(128).optional()
@@ -126,6 +127,7 @@ app.openapi(createSessionRoute, async (c) => {
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
   }, checkoutFlowSettings);
+  await ensurePendingPaymentPlanForSession(db, order, policy);
 
   const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
   const currency = currencyConfig.code;
@@ -227,7 +229,8 @@ app.openapi(createSessionRoute, async (c) => {
     response: responsePayload,
   });
 
-  // Save session key to order
+  // Save session key to order as a recovery hint; attempt/provider ids carry
+  // the durable idempotency contract.
   try {
     if (result.sessionKey) {
       await db
@@ -235,22 +238,8 @@ app.openapi(createSessionRoute, async (c) => {
         .set({ paymentIntentId: result.sessionKey, updatedAt: sql`unixepoch()` })
         .where(eq(orders.id, body.orderId));
     }
-
-    // Create payment plan for deposit orders
-    if (policy.paymentType === "deposit") {
-      await db.insert(paymentPlans).values({
-        id: crypto.randomUUID(),
-        orderId: body.orderId,
-        totalAmount: order.totalAmount,
-        depositAmount: policy.depositAmount,
-        balanceDue: policy.balanceDue,
-        status: "pending",
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`
-      }).onConflictDoNothing();
-    }
   } catch (error: unknown) {
-    console.error("[payments] SSLCommerz session was created, but local order session side effects failed:", error);
+    console.error("[payments] SSLCommerz session was created, but local order recovery hint failed:", error);
   }
 
   return ok(c, responsePayload);

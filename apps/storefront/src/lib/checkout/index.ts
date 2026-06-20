@@ -22,6 +22,7 @@ let checkoutData: Record<string, unknown> | null = null;
 let checkoutConfig: CheckoutConfig | null = null;
 let gateways: Array<{ id: string; [key: string]: unknown }> = [];
 let isProcessing = false;
+let selectionVersion = 0;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,16 @@ function setPayButton(text: string, disabled = false): void {
   const span = document.getElementById("payButtonText");
   if (btn) btn.disabled = disabled || isProcessing;
   if (span) span.textContent = text;
+}
+
+function applySelectedMethodStyles(methodId: string | null): void {
+  document.querySelectorAll(".payment-method-card").forEach((card) => {
+    const el = card as HTMLElement;
+    const isSelected = el.dataset.method === methodId;
+    el.classList.toggle("border-primary", isSelected);
+    el.classList.toggle("border-input", !isSelected);
+    el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
+  });
 }
 
 function currencyFmt(amount: number | string): string {
@@ -100,6 +111,7 @@ function loadCheckoutData(): boolean {
       : checkoutConfig!.gateways;
     if (gwRaw && gateways.length === 0) {
       sessionStorage.removeItem("scalius_checkout_gateways");
+      gateways = checkoutConfig!.gateways;
     }
     return true;
   } catch {
@@ -223,6 +235,7 @@ function renderGateways(): void {
 
   const { total } = getCheckoutTotals(checkoutData);
   const depositRequired = isDepositPaymentRequired(checkoutConfig, total);
+  const renderedMethodIds = new Set<string>();
   let renderedCount = 0;
 
   for (const gw of gateways) {
@@ -257,29 +270,31 @@ function renderGateways(): void {
     `;
     card.addEventListener("click", () => selectMethod(gw.id, gw));
     container.appendChild(card);
+    renderedMethodIds.add(gw.id);
     renderedCount += 1;
   }
 
   if (renderedCount === 0) {
     showError("No available payment method can complete this checkout. Please go back to cart or contact the store.");
     setPayButton("Checkout unavailable", true);
+    return;
+  }
+
+  const defaultMethod = checkoutConfig.activeDefaultMethod;
+  const defaultGateway = gateways.find((gw) => gw.id === defaultMethod);
+  if (defaultMethod && defaultGateway && renderedMethodIds.has(defaultMethod)) {
+    void selectMethod(defaultMethod, defaultGateway);
   }
 }
 
 // ── Gateway selection ─────────────────────────────────────────────────────────
 
 async function selectMethod(methodId: string, gw: { id: string; [key: string]: unknown }): Promise<void> {
-  selectedMethod = methodId;
-
-  // Update card styles
-  document.querySelectorAll(".payment-method-card").forEach((card) => {
-    const el = card as HTMLElement;
-    const isSelected = el.dataset.method === methodId;
-    el.classList.toggle("border-primary", isSelected);
-    el.classList.toggle("border-input", !isSelected);
-    el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
-  });
-
+  const selectionId = ++selectionVersion;
+  selectedMethod = null;
+  applySelectedMethodStyles(null);
+  setPayButton("Preparing payment...", true);
+  hideError();
   const handler = getGateway(methodId);
   const stripeSection = document.getElementById("stripeSection");
 
@@ -298,11 +313,20 @@ async function selectMethod(methodId: string, gw: { id: string; [key: string]: u
         stripeContainer.dataset.publishableKey = gw.publishableKey as string;
       }
       await handler.onSelect(stripeContainer || document.body);
+      if (selectionId !== selectionVersion) return;
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : String(err));
+      selectedMethod = null;
+      applySelectedMethodStyles(null);
+      stripeSection?.classList.add("hidden");
+      setPayButton("Select a payment method", true);
       return;
     }
   }
+
+  if (selectionId !== selectionVersion) return;
+  selectedMethod = methodId;
+  applySelectedMethodStyles(methodId);
 
   // Set button text
   const isPartial = checkoutConfig?.partialPaymentEnabled ?? false;
@@ -361,8 +385,12 @@ async function processPayment(): Promise<void> {
 
   const handler = getGateway(selectedMethod);
   if (!handler) {
+    if (loadingOverlay) {
+      loadingOverlay.style.display = "none";
+    }
     showError("Unknown payment method selected.");
     isProcessing = false;
+    setPayButton("Continue to Payment", false);
     return;
   }
 
@@ -402,6 +430,7 @@ async function processPayment(): Promise<void> {
       loadingOverlay.style.display = "none";
     }
     showError(err instanceof Error ? err.message : "An error occurred. Please try again.");
+    isProcessing = false;
 
     // Restore button text based on selected method
     const restoreHandler = getGateway(selectedMethod);

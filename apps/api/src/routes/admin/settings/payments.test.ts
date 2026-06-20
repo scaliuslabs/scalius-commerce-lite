@@ -366,6 +366,51 @@ describe("payment settings cache invalidation", () => {
         });
     });
 
+    it("filters buyer-visible active methods through checkout flow rules", async () => {
+        const { app, env } = createTestApp({
+            partialPaymentEnabled: true,
+            partialPaymentAmount: 500,
+        });
+        mocks.getPaymentMethodPreferences.mockResolvedValueOnce({
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "cod",
+            hasExplicitEnabledMethods: true,
+        });
+        mocks.getActivePaymentMethods.mockResolvedValueOnce({
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "cod",
+        });
+        mocks.getStripeSettings.mockResolvedValueOnce({
+            enabled: true,
+            secretKey: "sk_live_existing",
+            publishableKey: "pk_live_existing",
+            webhookSecret: "whsec_existing",
+        });
+
+        const response = await getJson(app, env, "/payment-methods");
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        await expect(response.json()).resolves.toMatchObject({
+            success: true,
+            data: {
+                enabledMethods: ["stripe", "cod"],
+                defaultMethod: "cod",
+                activeMethods: ["stripe"],
+                activeDefaultMethod: "stripe",
+                gatewayStatus: {
+                    stripe: {
+                        checkoutSelected: true,
+                        checkoutVisible: true,
+                    },
+                    cod: {
+                        checkoutSelected: true,
+                        checkoutVisible: false,
+                    },
+                },
+            },
+        });
+    });
+
     it("rejects removing every configured online gateway while partial payments are enabled", async () => {
         const { app, env } = createTestApp({
             partialPaymentEnabled: true,
@@ -379,6 +424,36 @@ describe("payment settings cache invalidation", () => {
 
         expect(response.status, await response.clone().text()).toBe(400);
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidatePaymentMethodsCache).not.toHaveBeenCalled();
+    });
+
+    it("rejects saving a default method hidden by the current checkout flow", async () => {
+        const { app, env } = createTestApp({
+            partialPaymentEnabled: true,
+            partialPaymentAmount: 500,
+        });
+        mocks.getStripeSettings.mockResolvedValueOnce({
+            enabled: true,
+            secretKey: "sk_live_existing",
+            publishableKey: "pk_live_existing",
+            webhookSecret: "whsec_existing",
+        });
+
+        const response = await postJson(app, env, "/payment-methods", {
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "cod",
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Default method is hidden by the current checkout flow settings.",
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.safeBatch).not.toHaveBeenCalled();
         expect(mocks.invalidatePaymentMethodsCache).not.toHaveBeenCalled();
     });
 

@@ -23,6 +23,7 @@ import {
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
+    activeDefaultMethod?: string;
     guestCheckoutEnabled: boolean;
     authVerificationMethod: CustomerAuthMethod;
     customerAuthPolicy: CustomerAuthPolicyConfig;
@@ -167,9 +168,13 @@ export async function getCheckoutConfig(
     }
 
     const unavailable = gateways.length === 0;
+    const activeDefaultMethod = gateways.some((gateway) => gateway.id === activePaymentMethods.defaultMethod)
+        ? activePaymentMethods.defaultMethod
+        : undefined;
 
     return {
         gateways,
+        activeDefaultMethod,
         guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
         authVerificationMethod: customerAuthPolicyRow?.value
             ? getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy)

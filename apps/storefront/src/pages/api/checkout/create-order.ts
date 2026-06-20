@@ -19,14 +19,19 @@ export const POST: APIRoute = async ({ request }) => {
         success: false,
         error: getCheckoutErrorMessage(result.error),
       }), {
-        status: 400,
+        status: result.status && result.status >= 400 ? result.status : 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
     return new Response(JSON.stringify({
       success: true,
-      data: { id: result.orderId, receiptToken: result.receiptToken }
+      data: {
+        id: result.orderId,
+        receiptToken: result.receiptToken,
+        totalAmount: result.totalAmount,
+        paymentMethod: result.paymentMethod,
+      }
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

@@ -46,6 +46,8 @@ import {
 
 // --- Main Component ---
 
+const ALL_METHODS: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
+
 export default function PaymentGatewaysManager() {
     const queryClient = useQueryClient();
     const { data: checkoutFlowSettings } = useQuery(checkoutFlowSettingsQueryOptions());
@@ -182,6 +184,15 @@ export default function PaymentGatewaysManager() {
         return null;
     }, [checkoutFlowSettings]);
 
+    useEffect(() => {
+        const visibleEnabledMethods = ALL_METHODS.filter((method) =>
+            enabledMethods.has(method) && methodAllowedByFlow(method),
+        );
+        if (visibleEnabledMethods.length > 0 && !visibleEnabledMethods.includes(defaultMethod)) {
+            setDefaultMethod(visibleEnabledMethods[0]);
+        }
+    }, [defaultMethod, enabledMethods, methodAllowedByFlow]);
+
     const getStatusBadge = (m: MethodKey) => {
         const selected = enabledMethods.has(m);
         const flowAllowed = methodAllowedByFlow(m);
@@ -225,7 +236,8 @@ export default function PaymentGatewaysManager() {
 
     if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
 
-    const allMethods: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
+    const defaultOptions = ALL_METHODS.filter((method) => enabledMethods.has(method) && methodAllowedByFlow(method));
+    const canSaveMethods = defaultOptions.length > 0 && defaultOptions.includes(defaultMethod);
 
     return (
         <div className="space-y-6 max-w-4xl">
@@ -237,17 +249,21 @@ export default function PaymentGatewaysManager() {
                 </CardHeader>
                 <CardContent className="pt-4 flex items-center justify-between pb-4">
                     <span className="text-sm font-medium">Default selected checkout method</span>
-                    <Select value={defaultMethod} onValueChange={(v) => setDefaultMethod(v as MethodKey)}>
+                    <Select
+                        value={canSaveMethods ? defaultMethod : undefined}
+                        onValueChange={(v) => setDefaultMethod(v as MethodKey)}
+                        disabled={defaultOptions.length === 0}
+                    >
                         <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                            {allMethods.filter((m) => enabledMethods.has(m)).map((m) => (
+                            {defaultOptions.map((m) => (
                                 <SelectItem key={m} value={m} className="text-sm">{META[m].label}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                 </CardContent>
                 <CardFooter className="pt-0 justify-end">
-                    <Button variant="secondary" size="sm" onClick={() => saveMethods()} disabled={savingMethods}>
+                    <Button variant="secondary" size="sm" onClick={() => saveMethods()} disabled={savingMethods || !canSaveMethods}>
                         {savingMethods && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
                         Save checkout visibility
                     </Button>
@@ -257,10 +273,17 @@ export default function PaymentGatewaysManager() {
             {/* Gateway Cards - 2x2 Grid */}
             <Accordion type="multiple" value={expanded} onValueChange={handleAccordion}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {allMethods.map((method) => {
+                    {ALL_METHODS.map((method) => {
                         const meta = META[method];
                         const isOpen = expanded.includes(method);
                         const gatewayNotice = getGatewayNotice(method);
+                        const selected = enabledMethods.has(method);
+                        const status = methods?.gatewayStatus?.[method];
+                        const providerEnabled = status?.providerEnabled ?? status?.enabled === true;
+                        const usable = method === "cod"
+                            ? true
+                            : status?.usable ?? (providerEnabled && status?.configured === true);
+                        const toggleDisabled = method !== "cod" && !selected && !usable;
                         return (
                             <AccordionItem key={method} value={method} className={`border rounded-lg overflow-hidden ${meta.borderColor}`}>
                                 <div className={`p-4 ${meta.headerBg}`}>
@@ -280,6 +303,7 @@ export default function PaymentGatewaysManager() {
                                                 id={`toggle-${method}`}
                                                 checked={enabledMethods.has(method)}
                                                 aria-label={`Show ${meta.label} at checkout`}
+                                                disabled={toggleDisabled}
                                                 onCheckedChange={(v) => toggleMethod(method, v)}
                                             />
                                             <span className="text-[11px] leading-none text-muted-foreground">Show at checkout</span>

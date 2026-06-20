@@ -1,6 +1,7 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { createOrder } from "../create-order";
 import { resolveCheckoutPaymentRequest } from "../payment-mode";
+import { buildPaymentRecoveryUrl } from "../payment-recovery";
 
 export const sslcommerzHandler: GatewayHandler = {
   id: "sslcommerz",
@@ -17,19 +18,18 @@ export const sslcommerzHandler: GatewayHandler = {
   },
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
+    let createdOrder: Awaited<ReturnType<typeof createOrder>> | null = null;
+    let paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest> | null = null;
     try {
-      const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "sslcommerz");
-      const paymentRequest = resolveCheckoutPaymentRequest(ctx.config, ctx.totalAmount);
+      createdOrder = await createOrder(ctx.checkoutData, "sslcommerz");
+      const { orderId, receiptToken } = createdOrder;
+      paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
       const sessionPayload: Record<string, unknown> = {
         orderId,
         receiptToken,
         currency: (window as unknown as Record<string, unknown>).__CURRENCY_CODE__ || "BDT",
-        paymentType: paymentRequest.paymentType,
       };
-      if (paymentRequest.paymentType === "deposit") {
-        sessionPayload.depositAmount = paymentRequest.depositAmount;
-      }
 
       const sessionRes = await fetch("/api/checkout/sslcommerz-session", {
         method: "POST",
@@ -52,6 +52,19 @@ export const sslcommerzHandler: GatewayHandler = {
         clearCheckoutSessionOnRedirect: true,
       };
     } catch (err: unknown) {
+      if (createdOrder) {
+        return {
+          success: true,
+          redirectUrl: buildPaymentRecoveryUrl({
+            orderId: createdOrder.orderId,
+            receiptToken: createdOrder.receiptToken,
+            gateway: "sslcommerz",
+            paymentType: paymentRequest?.paymentType,
+            depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
+          }),
+          clearCheckoutSessionOnRedirect: true,
+        };
+      }
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   },

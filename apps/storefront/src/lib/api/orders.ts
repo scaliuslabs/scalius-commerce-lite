@@ -9,6 +9,9 @@ type CreateOrderResult = {
   success: boolean;
   orderId?: string;
   receiptToken?: string;
+  totalAmount?: number;
+  paymentMethod?: string;
+  status?: number;
   error?: string;
 };
 
@@ -65,14 +68,21 @@ export async function createOrder(
       error?: unknown;
       details?: unknown;
       message?: unknown;
-      data?: { id?: string; orderId?: string; checkoutToken?: string; receiptToken?: string };
+      data?: {
+        id?: string;
+        orderId?: string;
+        checkoutToken?: string;
+        receiptToken?: string;
+        totalAmount?: number;
+        paymentMethod?: string;
+      };
     };
 
     if (!response.ok || !data.success) {
       const errorMsg = getCheckoutErrorMessage(data);
 
       console.error("Failed to create order:", errorMsg);
-      return { success: false, error: errorMsg };
+      return { success: false, error: errorMsg, status: response.status };
     }
 
     // Capture the 202 Async Accepted queue payload and poll for completion!
@@ -120,11 +130,15 @@ export async function createOrder(
       success: true,
       orderId: data.data?.id || data.data?.orderId,
       receiptToken: data.data?.receiptToken || data.data?.checkoutToken,
+      totalAmount: typeof data.data?.totalAmount === "number" ? data.data.totalAmount : undefined,
+      paymentMethod: data.data?.paymentMethod,
+      status: response.status,
     };
   } catch (error: unknown) {
     console.error("Error creating order:", error);
     return {
       success: false,
+      status: 500,
       error: "Order creation failed",
     };
   }

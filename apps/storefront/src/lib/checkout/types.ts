@@ -38,6 +38,7 @@ export interface GatewayHandler {
 
 export interface CheckoutConfig {
   gateways: Array<{ id: string; [key: string]: unknown }>;
+  activeDefaultMethod?: string;
   guestCheckoutEnabled: boolean;
   authVerificationMethod: CustomerAuthMethod;
   customerAuthPolicy?: CustomerAuthPolicyConfig;

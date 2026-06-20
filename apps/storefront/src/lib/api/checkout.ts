@@ -20,6 +20,7 @@ export interface GatewayConfig {
 
 export interface CheckoutConfig {
   gateways: GatewayConfig[];
+  activeDefaultMethod?: GatewayConfig["id"];
   guestCheckoutEnabled?: boolean;
   authVerificationMethod?: CustomerAuthMethod;
   customerAuthPolicy?: CustomerAuthPolicyConfig;
