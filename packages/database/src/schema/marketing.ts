@@ -2,7 +2,7 @@
 // Marketing domain tables: discounts, discountProducts, discountCollections,
 // discountUsage, metaConversionsSettings, metaConversionsLogs.
 
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { products } from "./products";
@@ -108,6 +108,24 @@ export const discountUsage = sqliteTable("discount_usage", {
     index("discount_usage_order_id_idx").on(table.orderId),
 ]);
 
+export const discountCustomerRedemptions = sqliteTable("discount_customer_redemptions", {
+    discountId: text("discount_id")
+        .notNull()
+        .references(() => discounts.id, { onDelete: "cascade" }),
+    customerKey: text("customer_key").notNull(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.discountId, table.customerKey] }),
+    index("discount_customer_redemptions_order_id_idx").on(table.orderId),
+    index("discount_customer_redemptions_customer_id_idx").on(table.customerId),
+]);
+
 export const metaConversionsSettings = sqliteTable("meta_conversions_settings", {
     id: text("id").primaryKey(),
     singletonKey: text("singleton_key").notNull().default("default"),
@@ -144,5 +162,6 @@ export type Discount = InferSelectModel<typeof discounts>;
 export type DiscountProduct = InferSelectModel<typeof discountProducts>;
 export type DiscountCollection = InferSelectModel<typeof discountCollections>;
 export type DiscountUsage = InferSelectModel<typeof discountUsage>;
+export type DiscountCustomerRedemption = InferSelectModel<typeof discountCustomerRedemptions>;
 export type MetaConversionsSettings = InferSelectModel<typeof metaConversionsSettings>;
 export type MetaConversionsLog = InferSelectModel<typeof metaConversionsLogs>;

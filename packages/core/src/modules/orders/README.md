@@ -77,7 +77,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 1. **Storefront POST /orders** -- The storefront sends a stable `checkoutRequestId` for the checkout session. The API route builds a canonical request hash from the order input, does a read-only `checkout_attempts` lookup so committed/active same-key retries return before mutable checkout policy or rate-limit checks, then applies policy/rate gates before claiming new or reclaimable attempts.
 2. **Claim behavior** -- A new claim reserves the canonical `orderId` and checkout/receipt token for this submit. A committed same-key/same-payload retry replays the stored response. An active same-key/same-payload retry returns `202` with the reserved `orderId` and checkout token for polling. A same-key/different-payload retry is rejected as `409`. The route keeps the post-policy `claimCheckoutAttempt()` replay/processing branches for races where another request wins after the read-only lookup.
 3. **Order build** -- `createStorefrontOrder()` validates prices server-side, verifies discounts, checks partial-payment rules, rejects inactive/deleted products and product/variant mismatches, resolves active city/zone/area names from D1, validates inventory, and builds the order payload using the reserved `orderId` and checkout token from the attempt.
-4. **Commit** -- The API writes legacy checkout-status/receipt KV hints, then commits the D1 order synchronously through `commitStorefrontOrderPayload()`. The buyer receives `201` only after the order row exists.
+4. **Commit** -- The API writes legacy checkout-status/receipt KV hints, then commits the D1 order synchronously through `commitStorefrontOrderPayload()`. Discount usage limits are enforced inside the same D1 batch by `discount_usage` triggers; trigger aborts are translated back into checkout `ValidationError`s and any reserved stock is released before the buyer sees the failure. The buyer receives `201` only after the order row exists.
 5. **Attempt finalization** -- After the order commit, the API stores the committed response on `checkout_attempts` and clears the processing claim. If the Worker crashes after the order commit but before finalization, the same request can reclaim the stale attempt with the same reserved IDs and converge on the existing order instead of creating a duplicate.
 6. **Post-commit work** -- COD tracking, durable order-notification enqueue, and product availability cache invalidation run after commit through `executionCtx.waitUntil()` when available. These failures are logged and retried by their own durable paths instead of turning a committed checkout into a false `500`.
 7. **Recovery** -- `GET /orders/status/:token` and receipt validation use KV as the fast path, then fall back to D1 `checkout_attempts` plus the committed `orders` row. KV may be repaired best-effort from D1.
@@ -183,7 +183,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 - **Optimistic locking on inventory**: `stockVersion` column on `productVariants`, separate from general `version`
 - **Reservation rollback**: `reserveMultiple()` rolls back all successful reservations if any fail; queue ingest uses checked `releaseMultiple()` results before retrying messages after an isolated DB-write failure
 - **Batch atomicity**: Queue handler uses `db.batch()` for atomic multi-row writes; on DB failure it treats the outcome as ambiguous, checks whether each order committed, and never reserves the same queue message twice
-- **Discount race narrowing**: Queue handler re-checks discount usage before DB write to narrow the window between HTTP validation and queue processing
+- **Discount redemption authority**: Discount validation endpoints and pre-commit reads are advisory. The authoritative `maxUses` and one-per-customer guards are D1 triggers on `discount_usage`; one-per-customer redemptions also claim immutable `discount_customer_redemptions` rows keyed by the checkout phone proof so later admin edits to `orders.customerPhone` cannot reopen a coupon.
 
 ## API Endpoints
 
@@ -241,7 +241,7 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 
 ## Dependencies
 
-- `@scalius/database` -- `orders`, `orderItems`, `customers`, `customerHistory`, `products`, `productVariants`, `productImages`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `discountUsage`, `codTracking`
+- `@scalius/database` -- `orders`, `orderItems`, `customers`, `customerHistory`, `products`, `productVariants`, `productImages`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `discountUsage`, `discountCustomerRedemptions`, `codTracking`
 - `inventory` module -- reservation, deduction, release, transitions
 - `payments` module -- COD collection/return, refund service
 - `delivery` module -- `DeliveryService`, `ShipmentTracker`

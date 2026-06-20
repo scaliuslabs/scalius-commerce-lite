@@ -56,11 +56,20 @@ Checks performed in order:
 1. Code exists, is active, not soft-deleted, within date window
 2. Minimum purchase amount met
 3. Minimum quantity met (sum of cart item quantities)
-4. Total usage limit not exceeded (`maxUses` vs `discountUsage` count)
-5. Per-customer limit (`limitOnePerCustomer` via `discountUsage` joined with `orders.customerPhone`)
+4. Total usage limit not exceeded (`maxUses` vs `discountUsage` count; advisory before checkout commit)
+5. Per-customer limit (`limitOnePerCustomer` via `discountUsage` joined with `orders.customerPhone`; advisory before checkout commit)
 6. Product applicability: for `amount_off_products`, cart must contain at least one product from linked products or collections
 
 Returns `applicableProductIds` set for downstream use by `calculateDiscountAmount`.
+
+## Commit-Time Enforcement
+
+Cart and API validation are buyer-friendly prechecks, not the concurrency authority. Final redemption is enforced when checkout inserts `discount_usage` in the synchronous order commit batch:
+
+- `discount_usage_max_uses_guard` aborts the insert with `DISCOUNT_MAX_USES_EXCEEDED` when `maxUses` has already been reached.
+- `discount_usage_one_per_customer_guard` aborts with `DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED` when the checkout phone proof already has an immutable redemption claim for that discount.
+- `discount_customer_redemptions` stores the immutable per-customer claim as `phone:{checkoutPhone}` at redemption time, so later admin corrections to `orders.customerPhone` do not reopen a one-per-customer coupon.
+- `commitStorefrontOrderPayload()` maps those trigger aborts back to normal checkout `ValidationError`s and releases reserved stock before returning the failure.
 
 ### Discount Calculation (`calculateDiscountAmount`)
 
@@ -93,7 +102,7 @@ These flags are stored and returned in validation responses but NOT enforced at 
 
 ## Dependencies
 
-- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage`, `orders`, `collections`, `products` tables, `DiscountType`, `DiscountValueType` enums
+- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage`, `discountCustomerRedemptions`, `orders`, `collections`, `products` tables, `DiscountType`, `DiscountValueType` enums
 - `@scalius/core/search` -- `ftsMatch()` for FTS5 search
 - `@scalius/core/errors` -- `NotFoundError`, `ConflictError`
 - `@scalius/shared/price-utils` -- `roundPrice()`

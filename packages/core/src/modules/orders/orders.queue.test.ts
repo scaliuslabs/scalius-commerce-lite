@@ -126,6 +126,7 @@ function createEnvMock() {
 function createDbMock(options: {
   batchRejects?: boolean;
   batchOutcomes?: Array<"resolve" | "reject">;
+  batchErrors?: Error[];
   discount?: { maxUses: number | null; limitOnePerCustomer: boolean | null };
   totalDiscountUsage?: number;
   orderLookupResults?: Array<{ id: string; inventoryAction: string | null } | null>;
@@ -191,6 +192,8 @@ function createDbMock(options: {
       };
     },
     batch: vi.fn(async () => {
+      const batchError = options.batchErrors?.shift();
+      if (batchError) throw batchError;
       const outcome = options.batchOutcomes?.shift();
       if (outcome === "reject") throw new Error("D1 batch failed");
       if (outcome === "resolve") return [];
@@ -542,6 +545,35 @@ describe("handleOrderIngestBatch isolation", () => {
     expect(JSON.parse(writes.at(-1)!.value)).toMatchObject({
       status: "failed",
       error: "Order ingestion needs manual inventory reconciliation before retry.",
+    });
+  });
+
+  it("fails terminal discount trigger conflicts without retrying the legacy queue message", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+
+    const msg = createMessage(createPayload("order_discount_conflict", {
+      discountUsage: { discountId: "discount_1", amountDiscounted: 25 },
+    }));
+    const { env, writes } = createEnvMock();
+
+    await handleOrderIngestBatch(
+      createBatch([msg]) as never,
+      createDbMock({
+        batchErrors: [
+          new Error("D1 batch failed"),
+          new Error("SQLITE_CONSTRAINT_TRIGGER: DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED"),
+        ],
+      }) as never,
+      env as never,
+    );
+
+    expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseMultiple).toHaveBeenCalledTimes(1);
+    expect(msg.retry).not.toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(writes.at(-1)!.value)).toMatchObject({
+      status: "failed",
+      error: "Discount already used by this customer",
     });
   });
 });
