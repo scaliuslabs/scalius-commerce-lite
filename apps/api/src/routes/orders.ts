@@ -222,6 +222,10 @@ const orderReceiptSchema = z.object({
   zoneName: z.string().nullable(),
   areaName: z.string().nullable(),
   status: z.string(),
+  paymentMethod: z.string().nullable(),
+  paymentStatus: z.string(),
+  paidAmount: z.number(),
+  balanceDue: z.number(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   items: z.array(z.object({
@@ -289,6 +293,10 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       zoneName: orders.zoneName,
       areaName: orders.areaName,
       status: orders.status,
+      paymentMethod: orders.paymentMethod,
+      paymentStatus: orders.paymentStatus,
+      paidAmount: orders.paidAmount,
+      balanceDue: orders.balanceDue,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
     })

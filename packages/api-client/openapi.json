@@ -15364,6 +15364,19 @@
                             "status": {
                               "type": "string"
                             },
+                            "paymentMethod": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "paymentStatus": {
+                              "type": "string"
+                            },
+                            "paidAmount": {
+                              "type": "number"
+                            },
+                            "balanceDue": {
+                              "type": "number"
+                            },
                             "createdAt": {
                               "type": "string",
                               "nullable": true
@@ -15438,6 +15451,10 @@
                             "zoneName",
                             "areaName",
                             "status",
+                            "paymentMethod",
+                            "paymentStatus",
+                            "paidAmount",
+                            "balanceDue",
                             "createdAt",
                             "updatedAt",
                             "items"

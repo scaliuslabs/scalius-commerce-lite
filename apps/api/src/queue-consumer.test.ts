@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   getEncryptionKey: vi.fn(() => "test-key"),
   getCredentialEncryptionKey: vi.fn(() => "credential-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
+  enqueueOrderCreatedNotificationForOrder: vi.fn(),
   getAdminNotificationChannels: vi.fn(),
   claimOrderNotificationOutboxForProcessing: vi.fn(),
   markOrderNotificationOutboxProcessingFailed: vi.fn(),
@@ -91,6 +92,10 @@ vi.mock("./utils/encryption-key", () => ({
 
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+}));
+
+vi.mock("./utils/order-notification-queue", () => ({
+  enqueueOrderCreatedNotificationForOrder: mocks.enqueueOrderCreatedNotificationForOrder,
 }));
 
 vi.mock("@scalius/core/modules/settings/settings.service", () => ({
@@ -200,6 +205,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
     mocks.getActiveSmsProvider.mockResolvedValue(null);
     mocks.getAdminNotificationChannels.mockResolvedValue({});
+    mocks.enqueueOrderCreatedNotificationForOrder.mockResolvedValue({
+      orderId: "order_1",
+      outboxId: "outbox_order_1",
+      enqueued: true,
+    });
     mocks.claimOrderNotificationOutboxForProcessing.mockResolvedValue({
       claimed: true,
       outboxId: "outbox_1",
@@ -274,6 +284,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
   it("acks confirmed payment messages when processing succeeds", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    const notificationQueue = { send: vi.fn(async () => undefined) };
 
     const message = createMessage({
       type: "payment.stripe.confirmed",
@@ -283,14 +294,25 @@ describe("handleQueueBatch payment confirmation retries", () => {
       currency: "usd",
     });
 
-    await handleQueueBatch(createBatch([message]), {} as Env);
+    await handleQueueBatch(createBatch([message]), {
+      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+    } as unknown as Env);
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
       { id: "db" },
       { orderIds: ["order-stripe"] },
-      { env: {}, executionCtx: undefined },
+      { env: { ORDER_NOTIFICATIONS_QUEUE: notificationQueue }, executionCtx: undefined },
+    );
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: { id: "db" },
+        queue: notificationQueue,
+        orderId: "order-stripe",
+        source: "payment-stripe-confirmed",
+        retryOnQueueFailure: true,
+      }),
     );
   });
 
@@ -313,9 +335,43 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining("requires manual reconciliation"),
     );
+  });
+
+  it("retries confirmed payment messages when order-created notification enqueue fails", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    mocks.enqueueOrderCreatedNotificationForOrder.mockRejectedValue(new Error("queue unavailable"));
+
+    const message = createMessage({
+      type: "payment.sslcommerz.confirmed",
+      orderId: "order-ssl",
+      tranId: "tran_123",
+      valId: "val_123",
+      bankTranId: "bank_123",
+      amount: 1200,
+      currency: "BDT",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      { id: "db" },
+      { orderIds: ["order-ssl"] },
+      { env: {}, executionCtx: undefined },
+    );
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "order-ssl",
+        source: "payment-sslcommerz-confirmed",
+        retryOnQueueFailure: true,
+      }),
+    );
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
   it("routes the configured order-ingest queue to the order ingest handler", async () => {

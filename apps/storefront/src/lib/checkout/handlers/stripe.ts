@@ -137,7 +137,6 @@ export const stripeHandler: GatewayHandler = {
         return {
           success: true,
           redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}&token=${encodeURIComponent(receiptToken)}&payment=stripe`,
-          clearCartOnRedirect: true,
         };
       }
 

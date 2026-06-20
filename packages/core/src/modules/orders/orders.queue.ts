@@ -20,6 +20,7 @@ import {
     createOrderNotificationOutboxInsertValues,
     recordAndEnqueueOrderNotification,
 } from "../notifications/order-notification-outbox";
+import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 
 // ── Message type ────────────────────────────────────────────────────────────
 
@@ -395,6 +396,10 @@ async function completeQueuedOrder(
     msg.ack();
     console.log(logMessage);
 
+    if (!shouldCreateOrderCreatedNotification(payload.orderData)) {
+        return;
+    }
+
     try {
         const notificationResult = await recordAndEnqueueOrderNotification({
             db,
@@ -619,16 +624,18 @@ export async function handleOrderIngestBatch(
                 );
             }
 
-            writeBatch.push(
-                db.insert(orderNotificationOutbox).values(createOrderNotificationOutboxInsertValues({
-                    dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
-                    orderId: od.id,
-                    customerEmail: od.customerEmail ?? undefined,
-                    customerName: od.customerName,
-                    notificationType: "order_created",
-                    source: "order-ingest",
-                })),
-            );
+            if (shouldCreateOrderCreatedNotification(od)) {
+                writeBatch.push(
+                    db.insert(orderNotificationOutbox).values(createOrderNotificationOutboxInsertValues({
+                        dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
+                        orderId: od.id,
+                        customerEmail: od.customerEmail ?? undefined,
+                        customerName: od.customerName,
+                        notificationType: "order_created",
+                        source: "order-ingest",
+                    })),
+                );
+            }
 
             // Discount usage record
             if (payload.discountUsage) {

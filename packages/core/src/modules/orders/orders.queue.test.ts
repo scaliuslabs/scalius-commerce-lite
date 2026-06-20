@@ -243,6 +243,67 @@ describe("handleOrderIngestBatch isolation", () => {
     expect(bad.retry).toHaveBeenCalledWith({ delaySeconds: 15 });
   });
 
+  it("records and enqueues order-created notifications for accepted orders", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+
+    const message = createMessage(createPayload("order_accepted", {
+      orderData: {
+        ...createPayload("order_accepted").orderData,
+        status: "pending",
+        paymentMethod: "cod",
+      },
+    }));
+    const { env } = createEnvMock();
+
+    await handleOrderIngestBatch(
+      createBatch([message]) as never,
+      createDbMock() as never,
+      env as never,
+    );
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.createOrderNotificationOutboxInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dedupeKey: "order_created:order_accepted",
+        orderId: "order_accepted",
+        notificationType: "order_created",
+      }),
+    );
+    expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: expect.objectContaining({
+          dedupeKey: "order_created:order_accepted",
+          orderId: "order_accepted",
+          notificationType: "order_created",
+        }),
+      }),
+    );
+  });
+
+  it("defers order-created notifications for incomplete online orders", async () => {
+    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+    const basePayload = createPayload("order_online");
+    const message = createMessage({
+      ...basePayload,
+      orderData: {
+        ...basePayload.orderData,
+        status: "incomplete",
+        paymentMethod: "sslcommerz",
+      },
+    });
+    const { env } = createEnvMock();
+
+    await handleOrderIngestBatch(
+      createBatch([message]) as never,
+      createDbMock() as never,
+      env as never,
+    );
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.createOrderNotificationOutboxInsertValues).not.toHaveBeenCalled();
+    expect(mocks.recordAndEnqueueOrderNotification).not.toHaveBeenCalled();
+  });
+
   it("does not retry an already rejected discount message when the remaining DB batch fails", async () => {
     mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
 

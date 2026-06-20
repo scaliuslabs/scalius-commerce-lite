@@ -1,6 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import {
+    buildOrderCreatedNotificationDedupeKey,
     buildOrderStatusNotificationDedupeKey,
     recordAndEnqueueOrderNotification,
     type OrderNotificationQueue,
@@ -45,6 +46,49 @@ export function getOrderNotificationTypeForStatus(status: string): OrderNotifica
         default:
             return null;
     }
+}
+
+export async function enqueueOrderCreatedNotificationForOrder(options: {
+    db: Database;
+    queue: OrderNotificationQueue | undefined;
+    orderId: string;
+    source: string;
+    retryOnQueueFailure?: boolean;
+}): Promise<EnqueueOrderNotificationResult> {
+    const orderRows = await selectSingleOrder(options.db, options.orderId);
+    const order = orderRows[0];
+    if (!order) {
+        console.warn(`[${options.source}] Skipped order_created notification for missing order ${options.orderId}`);
+        return {
+            orderId: options.orderId,
+            enqueued: false,
+            skippedReason: "order_missing",
+        };
+    }
+
+    const result = await recordAndEnqueueOrderNotification({
+        db: options.db,
+        queue: options.queue,
+        notification: {
+            dedupeKey: buildOrderCreatedNotificationDedupeKey(options.orderId),
+            orderId: options.orderId,
+            customerEmail: order.customerEmail ?? undefined,
+            customerName: order.customerName || "Customer",
+            notificationType: "order_created",
+            source: options.source,
+        },
+    });
+
+    if (options.retryOnQueueFailure && result.skippedReason === "queue_failed") {
+        throw new Error(`order_created notification queue send failed for ${options.orderId}`);
+    }
+
+    return {
+        orderId: options.orderId,
+        outboxId: result.outboxId,
+        enqueued: result.enqueued,
+        skippedReason: result.skippedReason,
+    };
 }
 
 export async function enqueueOrderStatusChangeNotification(options: {

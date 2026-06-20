@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     recordAndEnqueueOrderNotification: vi.fn(),
+    buildOrderCreatedNotificationDedupeKey: vi.fn((orderId: string) => `order_created:${orderId}`),
     buildOrderStatusNotificationDedupeKey: vi.fn((options: {
         orderId: string;
         previousStatus?: string | null;
@@ -11,11 +12,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/notifications", () => ({
+    buildOrderCreatedNotificationDedupeKey: mocks.buildOrderCreatedNotificationDedupeKey,
     buildOrderStatusNotificationDedupeKey: mocks.buildOrderStatusNotificationDedupeKey,
     recordAndEnqueueOrderNotification: mocks.recordAndEnqueueOrderNotification,
 }));
 
 import {
+    enqueueOrderCreatedNotificationForOrder,
     enqueueOrderNotificationsForStatus,
     enqueueOrderStatusChangeNotification,
     getOrderNotificationTypeForStatus,
@@ -146,6 +149,56 @@ describe("order notification queue helpers", () => {
             notification: expect.objectContaining({
                 orderId: "order_1",
                 notificationType: "order_delivered",
+            }),
+        }));
+    });
+
+    it("enqueues order-created notifications from confirmed payment with the stable dedupe key", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+        ]);
+        const queue = { send: vi.fn(async () => undefined) };
+
+        const result = await enqueueOrderCreatedNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            source: "payment-stripe-confirmed",
+            retryOnQueueFailure: true,
+        });
+
+        expect(result).toEqual({ orderId: "order_1", outboxId: "outbox_order_1", enqueued: true });
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(expect.objectContaining({
+            queue,
+            notification: expect.objectContaining({
+                dedupeKey: "order_created:order_1",
+                orderId: "order_1",
+                customerEmail: "buyer@example.com",
+                customerName: "Buyer",
+                notificationType: "order_created",
+                source: "payment-stripe-confirmed",
+            }),
+        }));
+    });
+
+    it("throws on payment-confirmed notification queue failure when retry is requested", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: null, customerName: null },
+        ]);
+        const queue = { send: vi.fn(async () => { throw new Error("queue unavailable"); }) };
+
+        await expect(enqueueOrderCreatedNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            source: "payment-sslcommerz-confirmed",
+            retryOnQueueFailure: true,
+        })).rejects.toThrow("order_created notification queue send failed");
+
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(expect.objectContaining({
+            notification: expect.objectContaining({
+                customerName: "Customer",
+                notificationType: "order_created",
             }),
         }));
     });
