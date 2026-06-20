@@ -60,11 +60,13 @@ function ReadinessRow({
     label,
     ready,
     loading,
+    unknown,
     icon: Icon,
 }: {
     label: string;
-    ready: boolean;
+    ready: boolean | undefined;
     loading: boolean;
+    unknown?: boolean;
     icon: React.ComponentType<{ className?: string }>;
 }) {
     return (
@@ -77,6 +79,8 @@ function ReadinessRow({
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
             ) : ready ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            ) : unknown ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
             ) : (
                 <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
             )}
@@ -96,6 +100,9 @@ export default function CheckoutFlowSettings() {
     const {
         data: checkoutReadiness,
         isLoading: checkoutReadinessLoading,
+        isFetching: checkoutReadinessFetching,
+        isError: checkoutReadinessError,
+        refetch: refetchCheckoutReadiness,
     } = useQuery(checkoutReadinessQueryOptions());
     const [saving, setSaving] = useState(false);
 
@@ -159,6 +166,13 @@ export default function CheckoutFlowSettings() {
     const readinessIssues = readiness?.issues ?? [];
     const previewIssues = [...flowIssues, ...readinessIssues];
     const previewLoading = paymentMethodsLoading || checkoutReadinessLoading;
+    const readinessUnknown = !readiness && !checkoutReadinessLoading;
+    const readinessCheckUnavailable = checkoutReadinessError || readinessUnknown;
+    const previewCardClass = previewIssues.length > 0
+        ? "border-destructive/40 bg-destructive/5"
+        : readinessCheckUnavailable
+            ? "border-amber-500/30 bg-amber-500/5"
+            : "border-emerald-500/30 bg-emerald-500/5";
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
@@ -245,11 +259,13 @@ export default function CheckoutFlowSettings() {
                 </CardContent>
             </Card>
 
-            <Card className={previewIssues.length > 0 ? "border-destructive/40 bg-destructive/5" : "border-emerald-500/30 bg-emerald-500/5"}>
+            <Card className={previewCardClass}>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
                         {previewIssues.length > 0 ? (
                             <AlertTriangle className="h-4 w-4 text-destructive" />
+                        ) : readinessCheckUnavailable ? (
+                            <AlertTriangle className="h-4 w-4 text-amber-500" />
                         ) : (
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                         )}
@@ -267,17 +283,38 @@ export default function CheckoutFlowSettings() {
                         />
                         <ReadinessRow
                             label="Active shipping method"
-                            ready={readiness?.hasActiveShippingMethod === true}
-                            loading={checkoutReadinessLoading}
+                            ready={readiness?.hasActiveShippingMethod}
+                            loading={checkoutReadinessLoading || checkoutReadinessFetching}
+                            unknown={readinessUnknown}
                             icon={Truck}
                         />
                         <ReadinessRow
                             label="Active city and zone"
-                            ready={readiness?.hasActiveDeliveryHierarchy === true}
-                            loading={checkoutReadinessLoading}
+                            ready={readiness?.hasActiveDeliveryHierarchy}
+                            loading={checkoutReadinessLoading || checkoutReadinessFetching}
+                            unknown={readinessUnknown}
                             icon={MapPinned}
                         />
                     </div>
+                    {readinessCheckUnavailable && (
+                        <Alert className="border-amber-500/30 bg-amber-500/5">
+                            <AlertTriangle className="h-4 w-4 text-amber-500" />
+                            <AlertDescription className="flex flex-col gap-3 text-sm text-amber-700 dark:text-amber-400 sm:flex-row sm:items-center sm:justify-between">
+                                <span>Delivery readiness could not be checked. Public checkout still fails closed if shipping setup is incomplete.</span>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => void refetchCheckoutReadiness()}
+                                    disabled={checkoutReadinessFetching}
+                                    className="shrink-0"
+                                >
+                                    {checkoutReadinessFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Retry check
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     {(previewIssues.length > 0 || previewLoading) && (
                         <>
                             {previewLoading && (
