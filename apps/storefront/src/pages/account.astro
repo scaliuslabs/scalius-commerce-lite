@@ -39,6 +39,22 @@ const layoutData = await getLayoutData();
       </div>
     </div>
 
+    <!-- Temporary account read failure state -->
+    <div id="accountError" class="hidden">
+      <div class="max-w-md mx-auto text-center py-16">
+        <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-destructive/10 flex items-center justify-center">
+          <svg class="h-10 w-10 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold mb-2">Account is temporarily unavailable</h1>
+        <p id="accountErrorMessage" class="text-muted-foreground mb-6">We could not verify your account right now. Your session may still be active.</p>
+        <button type="button" id="accountRetryBtn" class="inline-flex items-center px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors shadow-sm">
+          Try Again
+        </button>
+      </div>
+    </div>
+
     <!-- Authenticated state -->
     <div id="authState" class="hidden max-w-5xl mx-auto">
       
@@ -377,15 +393,22 @@ const layoutData = await getLayoutData();
 
     const loadingState = document.getElementById("loadingState")!;
     const unauthState = document.getElementById("unauthState")!;
+    const accountError = document.getElementById("accountError")!;
+    const accountErrorMessage = document.getElementById("accountErrorMessage")!;
     const authState = document.getElementById("authState")!;
     const ordersList = document.getElementById("ordersList")!;
     const emptyOrders = document.getElementById("emptyOrders")!;
     const ordersError = document.getElementById("ordersError")!;
     const ordersErrorMessage = document.getElementById("ordersErrorMessage")!;
     const showMoreContainer = document.getElementById("showMoreContainer")!;
+    const accountRetryBtn = document.getElementById("accountRetryBtn");
+    const ordersRetryBtn = document.getElementById("ordersRetryBtn");
+    if (accountRetryBtn) accountRetryBtn.onclick = () => void initializeAccountPage();
+    if (ordersRetryBtn) ordersRetryBtn.onclick = () => void initializeAccountPage();
 
     loadingState.classList.remove("hidden");
     unauthState.classList.add("hidden");
+    accountError.classList.add("hidden");
     authState.classList.add("hidden");
     ordersList.innerHTML = "";
     emptyOrders.classList.add("hidden");
@@ -395,6 +418,13 @@ const layoutData = await getLayoutData();
     // Check session
     const session = await getCustomerSession();
     if (accountWindow.__scaliusAccountInitRun !== runId) return;
+
+    if (session.unavailable) {
+      loadingState.classList.add("hidden");
+      accountErrorMessage.textContent = session.error || "We could not verify your account right now. Your session may still be active.";
+      accountError.classList.remove("hidden");
+      return;
+    }
 
     if (!session.authenticated || !session.customer) {
       loadingState.classList.add("hidden");
@@ -429,7 +459,9 @@ const layoutData = await getLayoutData();
       const sessionExpired = lowerError.includes("auth") || lowerError.includes("session") || lowerError.includes("login");
       ordersErrorMessage.textContent = sessionExpired
         ? "Your session expired. Please sign in again to view your orders."
-        : error;
+        : result.unavailable
+          ? error || "Order history is temporarily unavailable. Please try again."
+          : error;
       ordersError.classList.remove("hidden");
       document.getElementById("orderCount")!.textContent = "Unavailable";
     } else {
@@ -631,9 +663,6 @@ const layoutData = await getLayoutData();
       await logoutCustomer();
       window.location.href = "/";
     };
-
-    const ordersRetryBtn = document.getElementById("ordersRetryBtn");
-    if (ordersRetryBtn) ordersRetryBtn.onclick = () => void initializeAccountPage();
 
   }
 

@@ -86,10 +86,64 @@ function authUrl(subpath: string): string {
   return `/api/customer-auth/${subpath}`;
 }
 
+const CUSTOMER_AUTH_READ_TIMEOUT_MS = 8_000;
+const CUSTOMER_AUTH_WRITE_TIMEOUT_MS = 12_000;
+
+async function customerAuthFetch(
+  input: string,
+  init: RequestInit = {},
+  timeoutMs = CUSTOMER_AUTH_READ_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
+
+async function readEnvelope<T>(res: Response): Promise<AuthApiEnvelope<T>> {
+  try {
+    return (await res.json()) as AuthApiEnvelope<T>;
+  } catch {
+    return {
+      success: false,
+      error: {
+        message: res.ok
+          ? "Invalid account response. Please try again."
+          : `Request failed with status ${res.status}`,
+      },
+    };
+  }
+}
+
 /** Extract a human-readable error message from the API envelope */
 function extractError(raw: AuthApiEnvelope): string | undefined {
   if (!raw.error) return undefined;
   return typeof raw.error === "object" ? raw.error.message : raw.error;
+}
+
+function isTemporaryReadFailure(status: number): boolean {
+  return status === 0 || status === 408 || status === 429 || status >= 500;
+}
+
+function isFailedEnvelope(raw: AuthApiEnvelope): boolean {
+  return raw.success === false;
+}
+
+function networkErrorMessage(error: unknown): string {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "Account request timed out. Please try again.";
+  }
+  if (error instanceof Error && error.name === "AbortError") {
+    return "Account request timed out. Please try again.";
+  }
+  return "Network error. Please try again.";
 }
 
 export interface CustomerInfo {
@@ -107,6 +161,9 @@ export interface CustomerInfo {
 export interface AuthState {
   authenticated: boolean;
   customer?: CustomerInfo;
+  unavailable?: boolean;
+  error?: string;
+  status?: number;
 }
 
 /**
@@ -116,20 +173,20 @@ export async function sendCustomerOtp(
   input: SendCustomerOtpInput,
 ): Promise<{ success: boolean; error?: string; retryAfter?: number }> {
   try {
-    const res = await fetch(authUrl("send-otp"), {
+    const res = await customerAuthFetch(authUrl("send-otp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(input),
-    });
-    const raw = (await res.json()) as AuthApiEnvelope<SendOtpData>;
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
+    const raw = await readEnvelope<SendOtpData>(res);
     const data = raw.data ?? (raw as unknown as SendOtpData); // Unwrap { success, data: T } envelope
-    if (!res.ok) {
+    if (!res.ok || isFailedEnvelope(raw)) {
       return { success: false, error: extractError(raw), retryAfter: data.retryAfter };
     }
     return { success: true };
-  } catch {
-    return { success: false, error: "Network error. Please try again." };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error) };
   }
 }
 
@@ -140,20 +197,20 @@ export async function verifyCustomerOtp(
   input: VerifyCustomerOtpInput,
 ): Promise<{ success: boolean; customer?: CustomerInfo; error?: string; attemptsLeft?: number; isNewUser?: boolean; }> {
   try {
-    const res = await fetch(authUrl("verify-otp"), {
+    const res = await customerAuthFetch(authUrl("verify-otp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(input),
-    });
-    const raw = (await res.json()) as AuthApiEnvelope<VerifyOtpData>;
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
+    const raw = await readEnvelope<VerifyOtpData>(res);
     const data = raw.data ?? (raw as unknown as VerifyOtpData); // Unwrap { success, data: T } envelope
-    if (!res.ok) {
+    if (!res.ok || isFailedEnvelope(raw)) {
       return { success: false, error: extractError(raw), attemptsLeft: data.attemptsLeft };
     }
     return { success: true, customer: data.customer, isNewUser: data.isNewUser };
-  } catch {
-    return { success: false, error: "Network error. Please try again." };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error) };
   }
 }
 
@@ -162,15 +219,28 @@ export async function verifyCustomerOtp(
  */
 export async function getCustomerSession(): Promise<AuthState> {
   try {
-    const res = await fetch(authUrl("me"), {
+    const res = await customerAuthFetch(authUrl("me"), {
       credentials: "include",
       cache: "no-store",
     });
-    if (!res.ok) return { authenticated: false };
-    const raw = (await res.json()) as AuthApiEnvelope<SessionData>;
-    return (raw.data ?? raw) as AuthState;
-  } catch {
-    return { authenticated: false };
+    const raw = await readEnvelope<SessionData>(res);
+    const data = raw.data ?? (raw as unknown as SessionData);
+    if (!res.ok || isFailedEnvelope(raw) || typeof data.authenticated !== "boolean") {
+      return {
+        authenticated: false,
+        unavailable: isTemporaryReadFailure(res.status) || res.ok,
+        status: res.status,
+        error: extractError(raw) || "Account status could not be read. Please try again.",
+      };
+    }
+    return data as AuthState;
+  } catch (error: unknown) {
+    return {
+      authenticated: false,
+      unavailable: true,
+      status: 0,
+      error: networkErrorMessage(error),
+    };
   }
 }
 
@@ -375,22 +445,29 @@ export async function updateCustomerProfile(data: ProfileUpdateData): Promise<{
   success: boolean;
   customer?: CustomerInfo;
   error?: string;
+  status?: number;
+  unavailable?: boolean;
 }> {
   try {
-    const res = await fetch(authUrl("profile"), {
+    const res = await customerAuthFetch(authUrl("profile"), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(data),
-    });
-    const raw = (await res.json()) as AuthApiEnvelope<ProfileData>;
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
+    const raw = await readEnvelope<ProfileData>(res);
     const result = raw.data ?? (raw as unknown as ProfileData); // Unwrap envelope
-    if (!res.ok) {
-      return { success: false, error: extractError(raw) };
+    if (!res.ok || isFailedEnvelope(raw)) {
+      return {
+        success: false,
+        error: extractError(raw) || "Profile could not be updated. Please try again.",
+        status: res.status,
+        unavailable: isTemporaryReadFailure(res.status) || res.ok,
+      };
     }
     return { success: true, customer: result.customer };
-  } catch {
-    return { success: false, error: "Network error" };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error), status: 0, unavailable: true };
   }
 }
 
@@ -402,21 +479,34 @@ export async function getCustomerOrders(): Promise<{
   orders: CustomerOrder[];
   customer?: CustomerInfo;
   error?: string;
+  status?: number;
+  unavailable?: boolean;
 }> {
   try {
-    const res = await fetch(authUrl("orders"), {
+    const res = await customerAuthFetch(authUrl("orders"), {
       credentials: "include",
       cache: "no-store",
     });
-    if (!res.ok) {
-      const raw = (await res.json()) as AuthApiEnvelope;
-      return { success: false, orders: [], error: extractError(raw) };
-    }
-    const raw = (await res.json()) as AuthApiEnvelope<OrdersData>;
+    const raw = await readEnvelope<OrdersData>(res);
     const data = raw.data ?? (raw as unknown as OrdersData); // Unwrap envelope
+    if (!res.ok || isFailedEnvelope(raw) || !Array.isArray(data.orders)) {
+      return {
+        success: false,
+        orders: [],
+        error: extractError(raw) || "Order history could not be read. Please try again.",
+        status: res.status,
+        unavailable: isTemporaryReadFailure(res.status) || res.ok,
+      };
+    }
     return { success: true, orders: data.orders || [], customer: data.customer };
-  } catch {
-    return { success: false, orders: [], error: "Network error" };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      orders: [],
+      error: networkErrorMessage(error),
+      status: 0,
+      unavailable: true,
+    };
   }
 }
 
@@ -428,29 +518,30 @@ export async function getCustomerOrderDetail(orderId: string): Promise<{
   detail?: CustomerOrderDetail;
   error?: string;
   status?: number;
+  unavailable?: boolean;
 }> {
   if (!orderId) {
     return { success: false, error: "Order ID is required", status: 400 };
   }
 
   try {
-    const res = await fetch(authUrl(`orders/${encodeURIComponent(orderId)}`), {
+    const res = await customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}`), {
       credentials: "include",
       cache: "no-store",
     });
-    if (!res.ok) {
-      const raw = (await res.json()) as AuthApiEnvelope;
+    const raw = await readEnvelope<CustomerOrderDetail>(res);
+    const detail = raw.data ?? (raw as unknown as CustomerOrderDetail);
+    if (!res.ok || isFailedEnvelope(raw) || !detail.order) {
       return {
         success: false,
-        error: extractError(raw),
+        error: extractError(raw) || "Order details could not be read. Please try again.",
         status: res.status,
+        unavailable: isTemporaryReadFailure(res.status) || res.ok,
       };
     }
-    const raw = (await res.json()) as AuthApiEnvelope<CustomerOrderDetail>;
-    const detail = raw.data ?? (raw as unknown as CustomerOrderDetail);
     return { success: true, detail };
-  } catch {
-    return { success: false, error: "Network error" };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error), status: 0, unavailable: true };
   }
 }
 
@@ -469,24 +560,24 @@ export async function createCustomerOrderPaymentSession(orderId: string): Promis
   }
 
   try {
-    const res = await fetch(authUrl(`orders/${encodeURIComponent(orderId)}/payment-session`), {
+    const res = await customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}/payment-session`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       cache: "no-store",
       body: JSON.stringify({}),
-    });
-    const raw = (await res.json()) as AuthApiEnvelope<CustomerOrderPaymentSessionData>;
-    if (!res.ok) {
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
+    const raw = await readEnvelope<CustomerOrderPaymentSessionData>(res);
+    if (!res.ok || isFailedEnvelope(raw)) {
       return {
         success: false,
-        error: extractError(raw),
+        error: extractError(raw) || "Payment could not be prepared. Please try again.",
         status: res.status,
       };
     }
     const session = raw.data ?? (raw as unknown as CustomerOrderPaymentSessionData);
     return { success: true, session };
-  } catch {
-    return { success: false, error: "Network error", status: 0 };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error), status: 0 };
   }
 }

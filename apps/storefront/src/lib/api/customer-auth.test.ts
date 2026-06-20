@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createCustomerOrderPaymentSession } from "./customer-auth";
+import {
+  createCustomerOrderPaymentSession,
+  getCustomerOrderDetail,
+  getCustomerOrders,
+  getCustomerSession,
+} from "./customer-auth";
 
 describe("customer auth API helpers", () => {
   afterEach(() => {
@@ -69,5 +74,76 @@ describe("customer auth API helpers", () => {
       status: 400,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps unauthenticated session reads distinct from temporary account-read failures", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: { message: "Sign in required" },
+    }), { status: 401, headers: { "Content-Type": "application/json" } })));
+
+    await expect(getCustomerSession()).resolves.toEqual({
+      authenticated: false,
+      unavailable: false,
+      status: 401,
+      error: "Sign in required",
+    });
+  });
+
+  it("marks retryable session read failures as unavailable instead of logged out", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: { message: "Database temporarily overloaded" },
+    }), { status: 503, headers: { "Content-Type": "application/json" } })));
+
+    await expect(getCustomerSession()).resolves.toMatchObject({
+      authenticated: false,
+      unavailable: true,
+      status: 503,
+      error: "Database temporarily overloaded",
+    });
+  });
+
+  it("fails closed when a successful session response is malformed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("not json", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    await expect(getCustomerSession()).resolves.toMatchObject({
+      authenticated: false,
+      unavailable: true,
+      status: 200,
+      error: "Invalid account response. Please try again.",
+    });
+  });
+
+  it("returns retryable order-history failures without pretending the list is empty", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: { message: "Order service unavailable" },
+    }), { status: 503, headers: { "Content-Type": "application/json" } })));
+
+    await expect(getCustomerOrders()).resolves.toEqual({
+      success: false,
+      orders: [],
+      error: "Order service unavailable",
+      status: 503,
+      unavailable: true,
+    });
+  });
+
+  it("marks order-detail network failures as retryable", async () => {
+    const abortError = Object.assign(new Error("aborted"), { name: "AbortError" });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw abortError;
+    }));
+
+    await expect(getCustomerOrderDetail("order_1")).resolves.toMatchObject({
+      success: false,
+      error: "Account request timed out. Please try again.",
+      status: 0,
+      unavailable: true,
+    });
   });
 });

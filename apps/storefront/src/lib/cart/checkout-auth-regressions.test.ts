@@ -24,8 +24,11 @@ describe("cart checkout auth regressions", () => {
   it("does not rely on the readable auth mirror cookie for guest-disabled submits", async () => {
     const source = await readFile(join(storefrontRoot, "src/pages/cart.astro"), "utf8");
 
-    expect(source).toContain("const hasAuthenticatedCustomerSession = async () => {");
-    expect(source).toContain("await hasAuthenticatedCustomerSession()");
+    expect(source).toContain("const readCustomerSessionForCheckout = async () => getCustomerSession();");
+    expect(source).toContain("const session = await readCustomerSessionForCheckout();");
+    expect(source).toContain("if (session.unavailable) {");
+    expect(source).toContain("window.dispatchEvent(new CustomEvent(\"open-auth-modal\"));");
+    expect(source).not.toContain("const hasAuthenticatedCustomerSession = async () => {");
     expect(source).not.toContain("!guestCheckoutEnabled && !isUserLoggedIn()");
   });
 });
