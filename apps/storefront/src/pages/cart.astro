@@ -606,6 +606,10 @@ const submitLabel = codOnly
     const isUserLoggedIn = document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
     if (isUserLoggedIn || !guestCheckoutEnabled) {
       const session = await getCustomerSession();
+      if (session.unavailable) {
+        console.warn("Customer session autofill skipped:", session.error || "Account status could not be read.");
+        return;
+      }
       if (session?.authenticated && session.customer) {
         fillBasicCustomerFields(session.customer);
         fillLocationDropdowns(session.customer);
@@ -640,10 +644,7 @@ const submitLabel = codOnly
       return !input?.value || input.value === "{}" || input.value === "[]";
     };
 
-    const hasAuthenticatedCustomerSession = async () => {
-      const session = await getCustomerSession();
-      return session?.authenticated === true;
-    };
+    const readCustomerSessionForCheckout = async () => getCustomerSession();
     const initialSubmitText = submitButton?.textContent || "Place Order";
     let submitAfterCustomerSessionCheck = false;
 
@@ -679,7 +680,14 @@ const submitLabel = codOnly
         submitButton.disabled = true;
         submitButton.textContent = "Checking account...";
 
-        if (!(await hasAuthenticatedCustomerSession())) {
+        const session = await readCustomerSessionForCheckout();
+        if (session.unavailable) {
+          restoreSubmitButton();
+          alert(session.error || "We could not verify your account right now. Please try again.");
+          return;
+        }
+
+        if (!session.authenticated) {
           restoreSubmitButton();
           window.dispatchEvent(new CustomEvent("open-auth-modal"));
           return;

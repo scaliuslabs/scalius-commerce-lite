@@ -621,6 +621,18 @@ const orderId = Astro.params.id ?? "";
 
     const session = await getCustomerSession();
     if (detailWindow.__scaliusOrderDetailRun !== run) return;
+    if (session.unavailable) {
+      currentDetail = null;
+      recoveryAction = null;
+      resetAccountStripeState();
+      const title = document.getElementById("orderErrorTitle");
+      const message = document.getElementById("orderErrorMessage");
+      if (title) title.textContent = "Account temporarily unavailable";
+      if (message) message.textContent = session.error || "We could not verify your account right now. Please try again.";
+      showOnly("error");
+      return;
+    }
+
     if (!session.authenticated) {
       currentDetail = null;
       recoveryAction = null;
@@ -635,12 +647,20 @@ const orderId = Astro.params.id ?? "";
       currentDetail = null;
       recoveryAction = null;
       resetAccountStripeState();
+      if (result.status === 401) {
+        showOnly("unauth");
+        return;
+      }
       const title = document.getElementById("orderErrorTitle");
       const message = document.getElementById("orderErrorMessage");
-      if (title) title.textContent = result.status === 404 ? "Order not found" : "Order details unavailable";
+      if (title) title.textContent = result.status === 404
+        ? "Order not found"
+        : result.unavailable
+          ? "Order details temporarily unavailable"
+          : "Order details unavailable";
       if (message) message.textContent = result.status === 404
         ? "We could not find this order in your account."
-        : result.error || "We could not load this order right now.";
+        : result.error || "We could not load this order right now. Please try again.";
       showOnly("error");
       return;
     }
