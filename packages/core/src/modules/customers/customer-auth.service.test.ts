@@ -98,16 +98,14 @@ describe("customer auth service intent handling", () => {
     });
   });
 
-  it("rejects duplicate phone during email OTP account creation before mutating OTP challenge state", async () => {
+  it("does not reveal duplicate phone during email OTP account creation before OTP proof", async () => {
     const db = createDb([
       { limit: [baseSiteSettings] },
       { get: null },
-      { get: null },
-      { get: { id: "cust_existing", phone: "+8801712345678" } },
     ]);
     const kv = createKv();
 
-    await expect(sendOtp(db as never, kv as never, {
+    const result = await sendOtp(db as never, kv as never, {
       intent: "sign_up",
       method: "email",
       channel: "email",
@@ -115,9 +113,23 @@ describe("customer auth service intent handling", () => {
       phone: "+8801712345678",
       name: "New Customer",
       ip: "unknown",
-    })).rejects.toThrow("An account already exists for this phone number. Sign in instead.");
+    });
 
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      message: "Verification code sent. Please check your selected contact.",
+    });
+    expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        otpKey: "cust_otp:email:new@example.com",
+        method: "email",
+        channel: "email",
+        identifier: "new@example.com",
+        phone: "+8801712345678",
+        intent: "sign_up",
+      }),
+    );
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
@@ -178,13 +190,6 @@ describe("customer auth service intent handling", () => {
           }),
         },
       },
-      {
-        get: {
-          id: "cust_existing",
-          email: null,
-          phone: "+8801712345678",
-        },
-      },
       { all: readySmsSettings },
     ]);
     const kv = createKv();
@@ -225,8 +230,6 @@ describe("customer auth service intent handling", () => {
     const db = createDb([
       { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
-      { get: null },
-      { get: null },
       { all: readySmsSettings },
     ]);
     const kv = createKv();
@@ -259,13 +262,6 @@ describe("customer auth service intent handling", () => {
     const db = createDb([
       { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
-      {
-        get: {
-          id: "cust_existing",
-          email: null,
-          phone: "+8801712345678",
-        },
-      },
       { all: [] },
     ]);
     const kv = createKv();

@@ -20,7 +20,12 @@ import {
   type CustomerAuthOtpChannel,
   type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
-import { getCustomerAuthInputError, resolveCustomerAuthUi } from "@/lib/customer-auth-ui";
+import {
+  getCustomerAuthAlternateIntent,
+  getCustomerAuthAlternateIntentLabel,
+  getCustomerAuthInputError,
+  resolveCustomerAuthUi,
+} from "@/lib/customer-auth-ui";
 
 /**
  * Lightweight client-side fetch for checkout config.
@@ -339,6 +344,8 @@ export default function AuthModal() {
     window.dispatchEvent(new CustomEvent("customer-logout"));
   };
 
+  const alternateAuthIntent = getCustomerAuthAlternateIntent(error);
+
   if (!isOpen) return null;
 
   return (
@@ -524,7 +531,25 @@ export default function AuthModal() {
               />
             </div>
 
-            {error && <p className="text-xs text-center text-destructive font-medium">{error}</p>}
+            {error && (
+              <div className="space-y-2 text-center">
+                <p className="text-xs text-destructive font-medium">{error}</p>
+                {alternateAuthIntent && alternateAuthIntent !== authIntent && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthIntent(alternateAuthIntent);
+                      setStep("input");
+                      setOtp("");
+                      setError("");
+                    }}
+                    className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                  >
+                    {getCustomerAuthAlternateIntentLabel(alternateAuthIntent)}
+                  </button>
+                )}
+              </div>
+            )}
 
             <button
               onClick={handleVerifyOtp}
