@@ -16,6 +16,7 @@ describe("OTP transports", () => {
       "buyer@example.com",
       "Buyer",
       baseSettings,
+      "email",
       "otp_delivery_1",
       4_102_444_800,
     );
@@ -36,6 +37,7 @@ describe("OTP transports", () => {
       "+8801712345678",
       "Buyer",
       { ...baseSettings, authVerificationMethod: "sms_otp" } as SiteSettings,
+      "sms",
       "otp_delivery_sms_1",
       4_102_444_800,
     );
@@ -56,6 +58,7 @@ describe("OTP transports", () => {
       "+8801712345678",
       "Buyer",
       { ...baseSettings, authVerificationMethod: "whatsapp_otp" } as SiteSettings,
+      "whatsapp",
       "otp_delivery_wa_1",
       4_102_444_800,
     );

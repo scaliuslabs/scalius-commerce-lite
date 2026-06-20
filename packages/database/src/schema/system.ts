@@ -39,7 +39,7 @@ export const siteSettings = sqliteTable("site_settings", {
     homepageMetaDescription: text("homepage_meta_description"),
     robotsTxt: text("robots_txt"),
     storefrontUrl: text("storefront_url").default("/"),
-    authVerificationMethod: text("auth_verification_method", { enum: ["email", "phone", "both", "whatsapp_otp", "sms_otp"] }).notNull().default("email"),
+    authVerificationMethod: text("auth_verification_method", { enum: ["email", "both", "whatsapp_otp", "sms_otp"] }).notNull().default("email"),
     guestCheckoutEnabled: integer("guest_checkout_enabled", { mode: "boolean" }).notNull().default(true),
     checkoutMode: text("checkout_mode", { enum: ["guest_cod_only", "gateways_only", "all"] }).notNull().default("all"),
     partialPaymentEnabled: integer("partial_payment_enabled", { mode: "boolean" }).notNull().default(false),

@@ -5,13 +5,21 @@ import type { Database } from "@scalius/database/client";
 import { siteSettings, settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+    getLegacyCustomerAuthMethodForPolicy,
+    normalizeCustomerAuthMethod,
+    normalizeCustomerAuthPolicy,
+    type CustomerAuthMethod,
+    type CustomerAuthPolicyConfig,
+} from "@scalius/shared/customer-auth-policy";
 import { getRegisteredGateways } from "../payments/gateway-registry";
 import { getActivePaymentMethods } from "../payments/gateway-settings";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
     guestCheckoutEnabled: boolean;
-    authVerificationMethod: string;
+    authVerificationMethod: CustomerAuthMethod;
+    customerAuthPolicy: CustomerAuthPolicyConfig;
     checkoutMode: string;
     partialPaymentEnabled: boolean;
     partialPaymentAmount: number;
@@ -33,7 +41,7 @@ export async function getCheckoutConfig(
     kv?: KVNamespace,
     encryptionKey?: string,
 ): Promise<CheckoutConfig> {
-    const [siteSettingsRow, currencyRows, allowedCountriesRow] = await Promise.all([
+    const [siteSettingsRow, currencyRows, allowedCountriesRow, customerAuthPolicyRow] = await Promise.all([
         db.select({
             guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
             authVerificationMethod: siteSettings.authVerificationMethod,
@@ -49,6 +57,11 @@ export async function getCheckoutConfig(
             .from(settings)
             .where(and(eq(settings.category, "phone"), eq(settings.key, "allowed_countries")))
             .get(),
+        db.select({ value: settings.value })
+            .from(settings)
+            .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
+            .get()
+            .catch(() => null),
     ]);
 
     let allowedCountries: string[] = [];
@@ -73,6 +86,10 @@ export async function getCheckoutConfig(
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
 
     const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
+    const customerAuthPolicy = normalizeCustomerAuthPolicy(
+        parseCustomerAuthPolicy(customerAuthPolicyRow?.value),
+        siteSettingsRow?.authVerificationMethod,
+    );
 
     const activePaymentMethods = await getActivePaymentMethods(db, kv, encryptionKey, {
         bypassMemoryCache: true,
@@ -112,7 +129,10 @@ export async function getCheckoutConfig(
     return {
         gateways,
         guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
-        authVerificationMethod: siteSettingsRow?.authVerificationMethod ?? "email",
+        authVerificationMethod: customerAuthPolicyRow?.value
+            ? getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy)
+            : normalizeCustomerAuthMethod(siteSettingsRow?.authVerificationMethod),
+        customerAuthPolicy,
         checkoutMode,
         partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
         partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
@@ -124,4 +144,13 @@ export async function getCheckoutConfig(
             decimalPlaces: currencyDecimalPlaces,
         },
     };
+}
+
+function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
+    if (!value) return undefined;
+    try {
+        return JSON.parse(value) as unknown;
+    } catch {
+        return undefined;
+    }
 }

@@ -14,6 +14,15 @@ import {
 import { getWhatsAppCloudApiSettings, saveWhatsAppAccessToken } from "@scalius/core/integrations/whatsapp";
 import { upsertEncryptedSetting, upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
 import {
+    CUSTOMER_AUTH_CONTACT_FIELDS,
+    CUSTOMER_AUTH_METHODS,
+    CUSTOMER_AUTH_OTP_CHANNELS,
+    getCustomerAuthPolicyForMethod,
+    getLegacyCustomerAuthMethodForPolicy,
+    normalizeCustomerAuthMethod,
+    normalizeCustomerAuthPolicy,
+} from "@scalius/shared/customer-auth-policy";
+import {
     getOptionalExecutionContext,
     invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
@@ -26,12 +35,29 @@ const MASKED = "••••••••••••";
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 
+const customerAuthPolicySchema = z.object({
+    otpChannels: z.array(z.enum(CUSTOMER_AUTH_OTP_CHANNELS)).min(1).max(3),
+    requiredContactFields: z.array(z.enum(CUSTOMER_AUTH_CONTACT_FIELDS)).max(2).optional(),
+    optionalContactFields: z.array(z.enum(CUSTOMER_AUTH_CONTACT_FIELDS)).max(2).optional(),
+    defaultOtpChannel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS).optional(),
+});
+
+function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
+    if (!value) return undefined;
+    try {
+        return JSON.parse(value) as unknown;
+    } catch {
+        return undefined;
+    }
+}
+
 // ─────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────
 
 const authSettingsResponseSchema = z.object({
-    authVerificationMethod: z.string(),
+    authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS),
+    customerAuthPolicy: customerAuthPolicySchema,
     guestCheckoutEnabled: z.boolean(),
     whatsappAccessToken: z.string(),
     whatsappPhoneNumberId: z.string(),
@@ -56,6 +82,16 @@ app.openapi(getAuthRoute, async (c) => {
     const db = c.get("db");
         const [row] = await db.select().from(siteSettings).limit(1);
         if (!row) throw new NotFoundError("Settings not found");
+        const policyRow = await db
+            .select({ value: settings.value })
+            .from(settings)
+            .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
+            .get()
+            .catch(() => null);
+        const customerAuthPolicy = normalizeCustomerAuthPolicy(
+            parseCustomerAuthPolicy(policyRow?.value),
+            row.authVerificationMethod,
+        );
         const whatsapp = await getWhatsAppCloudApiSettings(
             db,
             getEncryptionKey(c.env as Record<string, unknown>),
@@ -65,9 +101,12 @@ app.openapi(getAuthRoute, async (c) => {
             },
         );
 
-        return ok(c, {
-            authVerificationMethod: row.authVerificationMethod,
-            guestCheckoutEnabled: row.guestCheckoutEnabled,
+	        return ok(c, {
+	            authVerificationMethod: policyRow?.value
+                    ? getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy)
+                    : normalizeCustomerAuthMethod(row.authVerificationMethod),
+                customerAuthPolicy,
+	            guestCheckoutEnabled: row.guestCheckoutEnabled,
             whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
             whatsappPhoneNumberId: whatsapp.phoneNumberId || "",
             whatsappTemplateName: whatsapp.authTemplateName || "",
@@ -78,7 +117,8 @@ app.openapi(getAuthRoute, async (c) => {
 });
 
 const saveAuthSchema = z.object({
-    authVerificationMethod: z.enum(["email", "phone", "both", "whatsapp_otp", "sms_otp"]).optional(),
+    authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS).optional(),
+    customerAuthPolicy: customerAuthPolicySchema.optional(),
     guestCheckoutEnabled: z.boolean().optional(),
     whatsappAccessToken: z.string().optional(),
     whatsappPhoneNumberId: z.string().nullable().optional(),
@@ -109,8 +149,22 @@ app.openapi(saveAuthRoute, async (c) => {
 
         const updates: Partial<typeof siteSettings.$inferInsert> = {};
 
-        if (body.authVerificationMethod) {
-            updates.authVerificationMethod = body.authVerificationMethod;
+        if (body.customerAuthPolicy) {
+            const customerAuthPolicy = normalizeCustomerAuthPolicy(
+                body.customerAuthPolicy,
+                body.authVerificationMethod ?? existingSettings.authVerificationMethod,
+            );
+            updates.authVerificationMethod = getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy);
+            await upsertSetting(db, "customer_auth", "policy", JSON.stringify(customerAuthPolicy));
+        } else if (body.authVerificationMethod) {
+            const authVerificationMethod = normalizeCustomerAuthMethod(body.authVerificationMethod);
+            updates.authVerificationMethod = authVerificationMethod;
+            await upsertSetting(
+                db,
+                "customer_auth",
+                "policy",
+                JSON.stringify(getCustomerAuthPolicyForMethod(authVerificationMethod)),
+            );
         }
         if (typeof body.guestCheckoutEnabled === "boolean") updates.guestCheckoutEnabled = body.guestCheckoutEnabled;
         if (typeof body.whatsappPhoneNumberId === "string" || body.whatsappPhoneNumberId === null) {

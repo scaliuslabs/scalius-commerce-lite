@@ -216,6 +216,45 @@ describe("customer auth private cache policy", () => {
     expect(response.headers.get("Expires")).toBe("0");
   });
 
+  it("passes customer auth intent, channel, and secondary contact fields to OTP service", async () => {
+    const app = createTestApp();
+    const env = {
+      CACHE: {},
+      AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+    } as never;
+
+    const response = await app.request(
+      "/api/v1/customer-auth/send-otp",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "sign_up",
+          method: "email",
+          channel: "email",
+          identifier: "buyer@example.com",
+          phone: "+8801712345678",
+          email: "backup@example.com",
+        }),
+      },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.sendOtp).toHaveBeenCalledWith(
+      expect.anything(),
+      {},
+      expect.objectContaining({
+        intent: "sign_up",
+        method: "email",
+        channel: "email",
+        identifier: "buyer@example.com",
+        phone: "+8801712345678",
+        email: "backup@example.com",
+      }),
+    );
+  });
+
   it("marks customer order-history reads as private no-store", async () => {
     const app = createTestApp();
 

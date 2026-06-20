@@ -9,9 +9,16 @@ import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/client";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { isValidPhoneNumber, formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { FLAG_URL } from "@scalius/shared/phone-flags";
 import type { Country } from "react-phone-number-input";
+import {
+  getDefaultCustomerAuthOtpChannel,
+  normalizeCustomerAuthPolicy,
+  type CustomerAuthOtpChannel,
+  type CustomerAuthPolicyConfig,
+} from "@scalius/shared/customer-auth-policy";
+import { getCustomerAuthInputError, resolveCustomerAuthUi } from "@/lib/customer-auth-ui";
 
 /**
  * Lightweight client-side fetch for checkout config.
@@ -30,20 +37,21 @@ async function fetchCheckoutConfigClient(): Promise<CheckoutConfig | null> {
   }
 }
 
-type VerificationMethod = "email" | "phone";
 type Step = "method_select" | "input" | "otp" | "profile_setup" | "authenticated";
+type AuthIntent = "sign_in" | "sign_up";
 
 export default function AuthModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<Step>("input");
-  const [method, setMethod] = useState<VerificationMethod>("email");
+  const [authIntent, setAuthIntent] = useState<AuthIntent>("sign_in");
+  const [otpChannel, setOtpChannel] = useState<CustomerAuthOtpChannel>("email");
   const [identifier, setIdentifier] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [otp, setOtp] = useState("");
 
   // Settings injected globally
-  const [allowedMethods, setAllowedMethods] = useState<"email" | "phone" | "both" | "email_phone_mandatory" | "whatsapp_otp" | "sms_otp">("both");
+  const [authPolicy, setAuthPolicy] = useState<CustomerAuthPolicyConfig>(() => normalizeCustomerAuthPolicy("both"));
   const [allowedCountries, setAllowedCountries] = useState<string[]>([]);
   const [allowedCountriesMode, setAllowedCountriesMode] = useState<"include" | "exclude">("include");
 
@@ -61,6 +69,10 @@ export default function AuthModal() {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
+  const authUi = useMemo(
+    () => resolveCustomerAuthUi(authPolicy, otpChannel, authIntent),
+    [authPolicy, otpChannel, authIntent],
+  );
 
   // Compute effective countries list based on mode
   const effectiveCountries = useMemo((): Country[] | undefined => {
@@ -88,14 +100,12 @@ export default function AuthModal() {
       if (!isMounted) return;
       fetchCheckoutConfigClient().then((config) => {
         if (!isMounted || !config) return;
-        if (config.authVerificationMethod) {
-          setAllowedMethods(config.authVerificationMethod);
-          if (config.authVerificationMethod === "whatsapp_otp" || config.authVerificationMethod === "sms_otp" || config.authVerificationMethod === "phone") {
-            setMethod("phone");
-          } else if (config.authVerificationMethod === "email") {
-            setMethod("email");
-          }
-        }
+        const nextPolicy = normalizeCustomerAuthPolicy(
+          config.customerAuthPolicy,
+          config.authVerificationMethod,
+        );
+        setAuthPolicy(nextPolicy);
+        setOtpChannel(getDefaultCustomerAuthOtpChannel(nextPolicy));
         if (Array.isArray(config.allowedCountries) && config.allowedCountries.length > 0) {
           setAllowedCountries(config.allowedCountries);
         }
@@ -132,8 +142,14 @@ export default function AuthModal() {
       isMounted = false;
       window.removeEventListener("open-auth-modal", handleOpen);
       window.removeEventListener('load', fetchInitData);
-    }
+    };
   }, []);
+
+  useEffect(() => {
+    if (authUi.otpChannel !== otpChannel) {
+      setOtpChannel(authUi.otpChannel);
+    }
+  }, [authUi.otpChannel, otpChannel]);
 
   // Fetch cities when profile setup begins
   useEffect(() => {
@@ -186,33 +202,29 @@ export default function AuthModal() {
     }, 1000);
   };
 
-  const validateIdentifier = () => {
-    if (method === "email") {
-      const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim());
-      const phoneValid = !!phoneInput && isValidPhoneNumber(phoneInput);
-      return emailValid && phoneValid;
-    } else {
-      const phoneValid = !!identifier && isValidPhoneNumber(identifier);
-      if (allowedMethods === "email_phone_mandatory") {
-        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.trim());
-        return phoneValid && emailValid;
-      }
-      return phoneValid;
-    }
-  };
-
   const handleSendOtp = async () => {
-    if (!validateIdentifier()) {
-      if (method === "email") {
-        setError("Please enter a valid email address and phone number");
-      } else {
-        setError("Please enter a valid phone number");
-      }
+    const validationError = getCustomerAuthInputError({
+      authPolicy,
+      otpChannel: authUi.otpChannel,
+      intent: authIntent,
+      identifier,
+      phoneInput,
+      emailInput,
+    });
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setLoading(true);
     setError("");
-    const res = await sendCustomerOtp(method, identifier.trim());
+    const res = await sendCustomerOtp({
+      intent: authIntent,
+      method: authUi.requestMethod,
+      channel: authUi.otpChannel,
+      identifier: identifier.trim(),
+      phone: authUi.fields.phone.primary ? undefined : phoneInput.trim(),
+      email: authUi.fields.email.primary ? undefined : emailInput.trim(),
+    });
     setLoading(false);
 
     if (res.success) {
@@ -232,7 +244,18 @@ export default function AuthModal() {
     }
     setLoading(true);
     setError("");
-    const res = await verifyCustomerOtp(method, identifier.trim(), otp.trim(), "", method === "email" ? phoneInput.trim() : "", method === "phone" ? emailInput.trim() : "");
+    const res = await verifyCustomerOtp(
+      {
+        intent: authIntent,
+        method: authUi.requestMethod,
+        channel: authUi.otpChannel,
+        identifier: identifier.trim(),
+        code: otp.trim(),
+        name: "",
+        phone: authUi.fields.phone.primary ? undefined : phoneInput.trim(),
+        email: authUi.fields.email.primary ? undefined : emailInput.trim(),
+      },
+    );
     setLoading(false);
 
     if (res.success && res.customer) {
@@ -322,7 +345,7 @@ export default function AuthModal() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold tracking-tight text-foreground">
-            {step === "authenticated" ? "Welcome back" : "Sign In"}
+            {step === "authenticated" ? "Welcome back" : authIntent === "sign_up" ? "Create Account" : "Sign In"}
           </h2>
           <button
             onClick={() => setIsOpen(false)}
@@ -366,28 +389,38 @@ export default function AuthModal() {
               Access your orders, track shipments, and checkout faster.
             </p>
 
-            {(allowedMethods === "both" || allowedMethods === "email_phone_mandatory") && (
+            <div className="flex rounded-lg border border-border p-1 bg-muted/50">
+              {(["sign_in", "sign_up"] as const).map((intent) => (
+                <button
+                  key={intent}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${authIntent === intent ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => { setAuthIntent(intent); setError(""); setOtp(""); }}
+                >
+                  {intent === "sign_in" ? "Sign in" : "Create account"}
+                </button>
+              ))}
+            </div>
+
+            {authUi.showMethodSwitcher && (
               <div className="flex rounded-lg border border-border p-1 mb-4 bg-muted/50">
-                <button
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${method === "email" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => { setMethod("email"); setError(""); setIdentifier(""); setPhoneInput(""); setEmailInput(""); }}
-                >
-                  <Mail className="h-4 w-4" /> Email
-                </button>
-                <button
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${method === "phone" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => { setMethod("phone"); setError(""); setIdentifier(""); setPhoneInput(""); setEmailInput(""); }}
-                >
-                  <Smartphone className="h-4 w-4" /> WhatsApp
-                </button>
+                {authUi.requestOptions.map((option) => (
+                  <button
+                    key={option.channel}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${otpChannel === option.channel ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    onClick={() => { setOtpChannel(option.channel); setError(""); setIdentifier(""); setPhoneInput(""); setEmailInput(""); }}
+                  >
+                    {option.method === "email" ? <Mail className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+                    {option.label}
+                  </button>
+                ))}
               </div>
             )}
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">
-                {method === "email" ? "Email address" : (allowedMethods === "sms_otp" ? "Phone Number" : "WhatsApp Number")}
+                {authUi.currentOption.destinationLabel}
               </label>
-              {method === "email" ? (
+              {authUi.fields.email.primary ? (
                 <input
                   type="email"
                   value={identifier}
@@ -412,9 +445,9 @@ export default function AuthModal() {
               )}
             </div>
 
-            {method === "email" && (
+            {authUi.fields.phone.visible && !authUi.fields.phone.primary && (
               <div className="space-y-1.5 mt-2">
-                <label className="text-sm font-medium text-foreground">Phone Number (Required)</label>
+                <label className="text-sm font-medium text-foreground">{authUi.fields.phone.label}</label>
                 <PhoneInput
                   international
                   flagUrl={FLAG_URL}
@@ -429,10 +462,10 @@ export default function AuthModal() {
               </div>
             )}
 
-            {method === "phone" && (
+            {authUi.fields.email.visible && !authUi.fields.email.primary && (
               <div className="space-y-1.5 mt-2">
                 <label className="text-sm font-medium text-foreground">
-                  {allowedMethods === "email_phone_mandatory" ? "Email Address (Required)" : "Email Address (Optional)"}
+                  {authUi.fields.email.label}
                 </label>
                 <input
                   type="email"
@@ -462,7 +495,7 @@ export default function AuthModal() {
           <div className="space-y-5">
             <div className="text-center space-y-2">
               <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                {method === "email" ? <Mail className="h-6 w-6 text-primary" /> : <Smartphone className="h-6 w-6 text-primary" />}
+                {authUi.requestMethod === "email" ? <Mail className="h-6 w-6 text-primary" /> : <Smartphone className="h-6 w-6 text-primary" />}
               </div>
               <p className="text-sm text-muted-foreground">
                 We've sent a 6-digit code to
@@ -500,7 +533,7 @@ export default function AuthModal() {
                 onClick={() => { setStep("input"); setOtp(""); setError(""); }}
                 className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
-                Change {method}
+                Change {authUi.currentOption.destinationLabel.toLowerCase()}
               </button>
 
               {countdown > 0 ? (

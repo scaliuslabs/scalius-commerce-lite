@@ -154,10 +154,11 @@ export type AuthOtpQueueMessage =
     type: "auth.send_otp";
     deliveryKey?: string;
     purpose?: string;
-    otpExpiresAt?: number;
-    method: "email" | "phone";
-    allowedMethod: string;
-    identifier: string;
+	    otpExpiresAt?: number;
+	    method: "email" | "phone";
+	    allowedMethod: string;
+	    channel?: "email" | "sms" | "whatsapp";
+	    identifier: string;
     code: string;
     name: string;
   };
@@ -527,7 +528,7 @@ async function sendAuthOtpByChannel(
     return sendAuthOtpEmail(payload, target.deliveryKey, db, env);
   }
 
-  if (payload.allowedMethod === "whatsapp_otp") {
+  if (payload.channel === "whatsapp" || payload.allowedMethod === "whatsapp_otp") {
     return sendAuthOtpWhatsApp(payload, db, env);
   }
 
@@ -668,7 +669,8 @@ async function sendAuthOtpSms(
 
 function resolveAuthOtpDeliveryChannel(payload: AuthOtpQueueMessage): AuthOtpDeliveryChannel {
   if (payload.method === "email") return "email";
-  return payload.allowedMethod === "whatsapp_otp" ? "whatsapp" : "sms";
+  if (payload.channel === "whatsapp" || payload.allowedMethod === "whatsapp_otp") return "whatsapp";
+  return "sms";
 }
 
 type AuthOtpDeliveryError = Error & {

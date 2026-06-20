@@ -43,11 +43,10 @@ export default function CheckoutFlowSettings() {
 
     useEffect(() => {
         if (!authSettings) return;
-        const data = authSettings as Record<string, unknown>;
-        setGuestCheckoutEnabled(data.guestCheckoutEnabled !== false);
-        setCheckoutMode((data.checkoutMode as string) || "all");
-        setPartialPaymentEnabled(!!data.partialPaymentEnabled);
-        setPartialPaymentAmount((data.partialPaymentAmount as number) || 0);
+        setGuestCheckoutEnabled(authSettings.guestCheckoutEnabled !== false);
+        setCheckoutMode(authSettings.checkoutMode || "all");
+        setPartialPaymentEnabled(!!authSettings.partialPaymentEnabled);
+        setPartialPaymentAmount(authSettings.partialPaymentAmount || 0);
     }, [authSettings]);
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {

@@ -63,7 +63,7 @@ Some tables use inline enum arrays instead of the centralized enums:
 - `heroSliders.type`: `["desktop", "mobile"]`
 - `deliveryLocations.type`: `["city", "zone", "area"]`
 - `customerHistory.changeType`: `["created", "updated", "deleted"]`
-- `siteSettings.authVerificationMethod`: `["email", "phone", "both", "whatsapp_otp", "sms_otp"]`
+- `siteSettings.authVerificationMethod`: `["email", "both", "whatsapp_otp", "sms_otp"]` legacy summary only; advanced customer auth policy is stored in `settings.customer_auth/policy`, and phone collection remains mandatory.
 - `siteSettings.checkoutMode`: `["guest_cod_only", "gateways_only", "all"]`
 - `widgets.displayTarget`: `["homepage"]`
 - `metaConversionsLogs.status`: `["success", "failed"]`

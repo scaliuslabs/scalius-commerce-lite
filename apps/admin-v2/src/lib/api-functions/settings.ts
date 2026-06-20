@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 export {
   getStorefrontUrl,
@@ -78,10 +79,11 @@ export type SeoSettingsPayload = SettingsPayload;
 export type UpdateSeoSettingsInput = SettingsPayload;
 export type SecuritySettingsPayload = SettingsPayload;
 export type UpdateSecuritySettingsInput = SettingsPayload;
-export type AuthVerificationMethod = "email" | "phone" | "both" | "whatsapp_otp" | "sms_otp";
+export type AuthVerificationMethod = CustomerAuthMethod;
 export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
-export interface AuthSettingsPayload extends SettingsPayload {
+export interface AuthSettingsPayload {
   authVerificationMethod: AuthVerificationMethod | string;
+  customerAuthPolicy?: SettingsPayload;
   guestCheckoutEnabled: boolean;
   whatsappAccessToken: string;
   whatsappPhoneNumberId: string;

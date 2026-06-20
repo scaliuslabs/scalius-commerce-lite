@@ -2,10 +2,15 @@
 // OTP transport abstraction — each transport knows how to build the queue
 // payload for its delivery channel (email, SMS, WhatsApp).
 // The queue consumer in apps/api/src/queue-consumer.ts dispatches based on
-// the `method` + `allowedMethod` fields in the payload. Provider secrets are
+// the `method` + `channel` fields in the payload. Provider secrets are
 // resolved at send time and must not be serialized into queues.
 
 import type { SiteSettings } from "@scalius/database/schema";
+import {
+  type CustomerAuthOtpChannel,
+  getCustomerAuthDeliveryChannel,
+  normalizeCustomerAuthMethod,
+} from "@scalius/shared/customer-auth-policy";
 
 // ─────────────────────────────────────────
 // Queue payload shape (matches AuthOtpQueueMessage in queue-consumer.ts)
@@ -18,6 +23,7 @@ export interface OtpQueuePayload {
   otpExpiresAt?: number;
   method: "email" | "phone";
   allowedMethod: string;
+  channel?: CustomerAuthOtpChannel;
   identifier: string;
   code: string;
   name: string;
@@ -40,6 +46,7 @@ export interface OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
   ): OtpQueuePayload;
@@ -64,6 +71,7 @@ export class EmailOtpTransport implements OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
   ): OtpQueuePayload {
@@ -73,7 +81,8 @@ export class EmailOtpTransport implements OtpTransport {
       purpose: "customer_login",
       otpExpiresAt,
       method: "email",
-      allowedMethod: settings.authVerificationMethod,
+      allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
+      channel,
       identifier,
       code,
       name,
@@ -95,6 +104,7 @@ export class SmsOtpTransport implements OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
   ): OtpQueuePayload {
@@ -104,7 +114,8 @@ export class SmsOtpTransport implements OtpTransport {
       purpose: "customer_login",
       otpExpiresAt,
       method: "phone",
-      allowedMethod: settings.authVerificationMethod,
+      allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
+      channel,
       identifier,
       code,
       name,
@@ -126,6 +137,7 @@ export class WhatsAppOtpTransport implements OtpTransport {
     identifier: string,
     name: string,
     settings: SiteSettings,
+    channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
   ): OtpQueuePayload {
@@ -136,6 +148,7 @@ export class WhatsAppOtpTransport implements OtpTransport {
       otpExpiresAt,
       method: "phone",
       allowedMethod: "whatsapp_otp",
+      channel,
       identifier,
       code,
       name,
@@ -165,12 +178,14 @@ const whatsAppTransport = new WhatsAppOtpTransport();
  */
 export function getOtpTransport(
   method: "email" | "phone",
-  allowedMethod: string,
+  allowedMethod: unknown,
+  requestedChannel?: CustomerAuthOtpChannel,
 ): OtpTransport {
-  if (method === "email") {
+  const channel = getCustomerAuthDeliveryChannel(allowedMethod, method, requestedChannel);
+  if (channel === "email") {
     return emailTransport;
   }
-  if (allowedMethod === "whatsapp_otp") {
+  if (channel === "whatsapp") {
     return whatsAppTransport;
   }
   return smsTransport;
