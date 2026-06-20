@@ -41,19 +41,30 @@ export function getCheckoutFlowValidationIssues(options: {
     partialPaymentAmount: unknown;
     availablePaymentMethods?: readonly string[];
 }): string[] {
-    if (!options.partialPaymentEnabled) return [];
-
     const issues: string[] = [];
+    const checkoutMode = options.checkoutMode ?? "all";
+    const availablePaymentMethods = options.availablePaymentMethods;
+    const hasCod = availablePaymentMethods?.includes("cod") === true;
+    const hasOnlineGateway = availablePaymentMethods?.some(isOnlinePaymentMethod) === true;
+
+    if (availablePaymentMethods) {
+        if (checkoutMode === "guest_cod_only" && !hasCod) {
+            issues.push("Fast COD Only needs Cash on Delivery to be enabled.");
+        }
+        if (checkoutMode === "gateways_only" && !hasOnlineGateway) {
+            issues.push("Online Gateways Only needs at least one enabled and configured online gateway.");
+        }
+    }
+
+    if (!options.partialPaymentEnabled) return issues;
+
     if (!isPositiveDepositAmount(options.partialPaymentAmount)) {
         issues.push("Advance payment amount must be greater than zero.");
     }
-    if ((options.checkoutMode ?? "all") === "guest_cod_only") {
+    if (checkoutMode === "guest_cod_only") {
         issues.push("Partial payment needs an online payment gateway, so Fast COD Only cannot be used.");
     }
-    if (
-        options.availablePaymentMethods &&
-        !options.availablePaymentMethods.some(isOnlinePaymentMethod)
-    ) {
+    if (availablePaymentMethods && !hasOnlineGateway) {
         issues.push("Partial payment needs at least one enabled and configured online payment gateway.");
     }
 

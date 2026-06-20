@@ -79,10 +79,22 @@ export default function CheckoutFlowSettings() {
             return status?.enabled === true && status?.configured === true;
         });
     }, [paymentMethods]);
+    const codEnabled = useMemo(() => {
+        const methodsPayload = paymentMethods as PaymentMethodsPayload | undefined;
+        return methodsPayload?.enabledMethods?.includes("cod") === true &&
+            methodsPayload.gatewayStatus?.cod?.enabled === true &&
+            methodsPayload.gatewayStatus?.cod?.configured === true;
+    }, [paymentMethods]);
 
     const flowIssues = useMemo(() => {
-        if (!partialPaymentEnabled) return [];
         const issues: string[] = [];
+        if (paymentMethods && checkoutMode === "guest_cod_only" && !codEnabled) {
+            issues.push("Enable Cash on Delivery in Payment Gateways before using Fast COD Only.");
+        }
+        if (paymentMethods && checkoutMode === "gateways_only" && activeOnlineMethods.length === 0) {
+            issues.push("Enable and configure at least one online gateway in Payment Gateways.");
+        }
+        if (!partialPaymentEnabled) return issues;
         if (!Number.isFinite(partialPaymentAmount) || partialPaymentAmount <= 0) {
             issues.push("Set an advance amount greater than 0.");
         }
@@ -90,10 +102,10 @@ export default function CheckoutFlowSettings() {
             issues.push("Fast COD Only cannot be used with advance payments.");
         }
         if (paymentMethods && activeOnlineMethods.length === 0) {
-            issues.push("Enable and configure at least one online gateway in Payment Gateways.");
+            issues.push("Advance payments need at least one enabled and configured online gateway.");
         }
         return issues;
-    }, [activeOnlineMethods.length, checkoutMode, partialPaymentAmount, partialPaymentEnabled, paymentMethods]);
+    }, [activeOnlineMethods.length, checkoutMode, codEnabled, partialPaymentAmount, partialPaymentEnabled, paymentMethods]);
 
     const flowSummary = buildCheckoutFlowSummary({
         guestCheckoutEnabled,
@@ -198,10 +210,10 @@ export default function CheckoutFlowSettings() {
                     </CardTitle>
                     <CardDescription>{flowSummary}</CardDescription>
                 </CardHeader>
-                {(flowIssues.length > 0 || (partialPaymentEnabled && paymentMethodsLoading)) && (
+                {(flowIssues.length > 0 || paymentMethodsLoading) && (
                     <CardContent className="pt-0">
-                        {partialPaymentEnabled && paymentMethodsLoading && (
-                            <p className="text-xs text-muted-foreground">Checking configured online gateways...</p>
+                        {paymentMethodsLoading && (
+                            <p className="text-xs text-muted-foreground">Checking configured payment methods...</p>
                         )}
                         {flowIssues.length > 0 && (
                             <ul className="space-y-1 text-sm text-destructive">

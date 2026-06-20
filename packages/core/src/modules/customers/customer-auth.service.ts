@@ -24,6 +24,7 @@ import {
     type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
+import { getSmsProviderReadiness } from "../../integrations/sms";
 
 // ─────────────────────────────────────────
 // Constants
@@ -409,6 +410,13 @@ export async function sendOtp(
         });
         if (!whatsAppSettings.accessToken || !whatsAppSettings.phoneNumberId) {
             throw new ServiceUnavailableError("WhatsApp verification is currently unavailable. Contact store support.");
+        }
+    }
+    if (channel === "sms") {
+        const smsReadiness = await getSmsProviderReadiness(db, input.encryptionKey);
+        if (!smsReadiness.configured) {
+            console.error(`[CustomerAuth] SMS transport unavailable: ${smsReadiness.error ?? "not configured"}`);
+            throw new ServiceUnavailableError("SMS verification is currently unavailable. Contact store support.");
         }
     }
     const configError = transport.validateConfig(settings);

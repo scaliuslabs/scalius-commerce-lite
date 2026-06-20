@@ -7,6 +7,7 @@ import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey, getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
+import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import {
     normalizeFirebaseServiceAccountJson,
     saveFirebaseServiceAccountJson,
@@ -21,6 +22,8 @@ import {
     CUSTOMER_AUTH_CONTACT_FIELDS,
     CUSTOMER_AUTH_METHODS,
     CUSTOMER_AUTH_OTP_CHANNELS,
+    customerAuthPolicyUsesSmsProvider,
+    customerAuthPolicyUsesWhatsAppProvider,
     getCustomerAuthPolicyForMethod,
     getLegacyCustomerAuthMethodForPolicy,
     normalizeCustomerAuthMethod,
@@ -154,18 +157,31 @@ app.openapi(saveAuthRoute, async (c) => {
 
         const updates: Partial<typeof siteSettings.$inferInsert> = {};
         let customerAuthPolicyValue: string | undefined;
+        let requestedCustomerAuthPolicy:
+            | ReturnType<typeof normalizeCustomerAuthPolicy>
+            | undefined;
+        const credentialEncryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+        const credentialWriteKey =
+            typeof body.whatsappAccessToken === "string" &&
+            body.whatsappAccessToken !== MASKED &&
+            body.whatsappAccessToken.trim()
+                ? requireEncryptionKey(c.env as Record<string, unknown>)
+                : undefined;
 
         if (body.customerAuthPolicy) {
             const customerAuthPolicy = normalizeCustomerAuthPolicy(
                 body.customerAuthPolicy,
                 body.authVerificationMethod ?? existingSettings.authVerificationMethod,
             );
+            requestedCustomerAuthPolicy = customerAuthPolicy;
             updates.authVerificationMethod = getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy);
             customerAuthPolicyValue = JSON.stringify(customerAuthPolicy);
         } else if (body.authVerificationMethod) {
             const authVerificationMethod = normalizeCustomerAuthMethod(body.authVerificationMethod);
+            const customerAuthPolicy = getCustomerAuthPolicyForMethod(authVerificationMethod);
+            requestedCustomerAuthPolicy = customerAuthPolicy;
             updates.authVerificationMethod = authVerificationMethod;
-            customerAuthPolicyValue = JSON.stringify(getCustomerAuthPolicyForMethod(authVerificationMethod));
+            customerAuthPolicyValue = JSON.stringify(customerAuthPolicy);
         }
         if (typeof body.guestCheckoutEnabled === "boolean") updates.guestCheckoutEnabled = body.guestCheckoutEnabled;
         if (typeof body.whatsappPhoneNumberId === "string" || body.whatsappPhoneNumberId === null) {
@@ -180,6 +196,39 @@ app.openapi(saveAuthRoute, async (c) => {
         if (typeof body.partialPaymentEnabled === "boolean") updates.partialPaymentEnabled = body.partialPaymentEnabled;
         if (typeof body.partialPaymentAmount === "number") updates.partialPaymentAmount = body.partialPaymentAmount;
 
+        if (requestedCustomerAuthPolicy && customerAuthPolicyUsesSmsProvider(requestedCustomerAuthPolicy)) {
+            const smsReadiness = await getSmsProviderReadiness(db, credentialEncryptionKey);
+            if (!smsReadiness.configured) {
+                throw new ValidationError(
+                    `SMS OTP cannot be enabled until an active SMS provider is configured. ${smsReadiness.error ?? ""}`.trim(),
+                );
+            }
+        }
+
+        if (requestedCustomerAuthPolicy && customerAuthPolicyUsesWhatsAppProvider(requestedCustomerAuthPolicy)) {
+            const whatsapp = await getWhatsAppCloudApiSettings(db, credentialEncryptionKey);
+            const nextAccessToken =
+                typeof body.whatsappAccessToken === "string"
+                    ? body.whatsappAccessToken === MASKED
+                        ? whatsapp.accessToken
+                        : body.whatsappAccessToken.trim() || undefined
+                    : whatsapp.accessToken;
+            const nextPhoneNumberId =
+                updates.whatsappPhoneNumberId !== undefined
+                    ? updates.whatsappPhoneNumberId?.trim() || undefined
+                    : whatsapp.phoneNumberId?.trim() || undefined;
+            const nextTemplateName =
+                updates.whatsappTemplateName !== undefined
+                    ? updates.whatsappTemplateName?.trim() || undefined
+                    : whatsapp.authTemplateName?.trim() || undefined;
+
+            if (!nextAccessToken || !nextPhoneNumberId || !nextTemplateName) {
+                throw new ValidationError(
+                    "WhatsApp OTP cannot be enabled until a WhatsApp access token, phone number ID, and OTP template name are configured.",
+                );
+            }
+        }
+
         const shouldValidateCheckoutFlow =
             body.checkoutMode !== undefined ||
             typeof body.partialPaymentEnabled === "boolean" ||
@@ -188,14 +237,12 @@ app.openapi(saveAuthRoute, async (c) => {
             const nextCheckoutMode = updates.checkoutMode ?? existingSettings.checkoutMode;
             const nextPartialPaymentEnabled = updates.partialPaymentEnabled ?? existingSettings.partialPaymentEnabled;
             const nextPartialPaymentAmount = updates.partialPaymentAmount ?? existingSettings.partialPaymentAmount;
-            const activePaymentMethods = nextPartialPaymentEnabled
-                ? await getActivePaymentMethods(
-                    db,
-                    getKv(),
-                    getEncryptionKey(c.env as Record<string, unknown>),
-                    { bypassMemoryCache: true },
-                )
-                : undefined;
+            const activePaymentMethods = await getActivePaymentMethods(
+                db,
+                getKv(),
+                credentialEncryptionKey,
+                { bypassMemoryCache: true },
+            );
             const checkoutFlowIssues = getCheckoutFlowValidationIssues({
                 checkoutMode: nextCheckoutMode,
                 partialPaymentEnabled: nextPartialPaymentEnabled,
@@ -222,7 +269,7 @@ app.openapi(saveAuthRoute, async (c) => {
             await saveWhatsAppAccessToken(
                 db,
                 body.whatsappAccessToken,
-                body.whatsappAccessToken.trim() ? requireEncryptionKey(c.env as Record<string, unknown>) : undefined,
+                credentialWriteKey,
                 existingSettings.id,
             );
         }

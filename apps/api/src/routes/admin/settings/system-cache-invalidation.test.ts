@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   readEmailSetting: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
   saveWhatsAppAccessToken: vi.fn(),
+  getSmsProviderReadiness: vi.fn(),
   normalizeFirebaseServiceAccountJson: vi.fn(),
   saveFirebaseServiceAccountJson: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
@@ -53,6 +54,10 @@ vi.mock("@scalius/core/integrations/email", () => ({
 vi.mock("@scalius/core/integrations/whatsapp", () => ({
   getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
   saveWhatsAppAccessToken: mocks.saveWhatsAppAccessToken,
+}));
+
+vi.mock("@scalius/core/integrations/sms", () => ({
+  getSmsProviderReadiness: mocks.getSmsProviderReadiness,
 }));
 
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
@@ -124,6 +129,11 @@ function createTestApp() {
     accessTokenSource: "none",
   });
   mocks.saveWhatsAppAccessToken.mockResolvedValue(undefined);
+  mocks.getSmsProviderReadiness.mockResolvedValue({
+    activeProvider: "bdbulksms",
+    configured: true,
+    error: null,
+  });
   mocks.normalizeFirebaseServiceAccountJson.mockImplementation((value: string) => value.trim());
   mocks.saveFirebaseServiceAccountJson.mockResolvedValue(undefined);
   mocks.getActivePaymentMethods.mockResolvedValue({
@@ -189,6 +199,70 @@ describe("system settings cache invalidation", () => {
     );
   });
 
+  it("rejects SMS customer auth policy before writes when no SMS provider is ready", async () => {
+    mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+      activeProvider: null,
+      configured: false,
+      error: "No active SMS provider selected",
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      customerAuthPolicy: {
+        otpChannels: ["sms"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "sms",
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("rejects WhatsApp customer auth policy before writes when WhatsApp is not ready", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      customerAuthPolicy: {
+        otpChannels: ["whatsapp"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "whatsapp",
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
+  it("requires the dedicated credential key before saving a real WhatsApp token", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
+    (env as Record<string, unknown>).JWT_SECRET = "jwt-fallback-key";
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      customerAuthPolicy: {
+        otpChannels: ["whatsapp"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "whatsapp",
+      },
+      whatsappAccessToken: "EAAG_meta_token",
+      whatsappPhoneNumberId: "phone_id_1",
+      whatsappTemplateName: "auth_otp",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
   it("rejects partial payment settings when no online gateway is available", async () => {
     mocks.getActivePaymentMethods.mockResolvedValueOnce({
       enabledMethods: ["cod"],
@@ -200,6 +274,38 @@ describe("system settings cache invalidation", () => {
       checkoutMode: "all",
       partialPaymentEnabled: true,
       partialPaymentAmount: 500,
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
+  it("rejects gateway-only checkout mode when no online gateway is available", async () => {
+    mocks.getActivePaymentMethods.mockResolvedValueOnce({
+      enabledMethods: ["cod"],
+      defaultMethod: "cod",
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      checkoutMode: "gateways_only",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
+  it("rejects Fast COD Only when COD is unavailable", async () => {
+    mocks.getActivePaymentMethods.mockResolvedValueOnce({
+      enabledMethods: ["sslcommerz"],
+      defaultMethod: "sslcommerz",
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      checkoutMode: "guest_cod_only",
     });
 
     expect(response.status, await response.clone().text()).toBe(400);

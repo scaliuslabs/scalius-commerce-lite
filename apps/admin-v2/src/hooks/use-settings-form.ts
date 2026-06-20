@@ -50,8 +50,8 @@ export function useSettingsForm<T extends object>({
       queryClient.invalidateQueries({ queryKey: queryKey as unknown[] });
       toast.success(successMessage);
     },
-    onError: () => {
-      toast.error(errorMessage);
+    onError: (error) => {
+      toast.error(error instanceof Error && error.message ? error.message : errorMessage);
     },
   });
 
