@@ -90,6 +90,13 @@ const sendOtpRoute = createRoute({
                 path: ["identifier"]
 	              });
 	            }
+            if (data.method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.identifier.trim())) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid email address",
+                path: ["identifier"]
+              });
+            }
 	            if (data.phone && !isValidPhoneNumber(data.phone)) {
 	              ctx.addIssue({
 	                code: z.ZodIssueCode.custom,
@@ -197,6 +204,13 @@ const verifyOtpRoute = createRoute({
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: "Invalid phone number",
+                path: ["identifier"]
+              });
+            }
+            if (data.method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.identifier.trim())) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid email address",
                 path: ["identifier"]
               });
             }

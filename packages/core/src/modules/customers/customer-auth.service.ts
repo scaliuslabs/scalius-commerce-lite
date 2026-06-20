@@ -79,6 +79,8 @@ export interface CustomerSession {
 export interface StoredOtp {
     code: string;
     email: string;
+    method: "email" | "phone";
+    identifier: string;
     contactEmail?: string;
     phone?: string;
     expiresAt: number;
@@ -238,6 +240,24 @@ function normalizeEmail(value: string | undefined): string | undefined {
     return trimmed || undefined;
 }
 
+function isValidEmailAddress(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function normalizePrimaryIdentifier(method: "email" | "phone", identifier: string): string {
+    if (method === "email") {
+        if (!isValidEmailAddress(identifier)) {
+            throw new ValidationError("Valid email address required");
+        }
+        return identifier.trim().toLowerCase();
+    }
+
+    if (!isValidPhoneNumber(identifier)) {
+        throw new ValidationError("Valid phone number required");
+    }
+    return validateAndFormatPhone(identifier);
+}
+
 function getPrimaryEmail(method: "email" | "phone", identifier: string, email?: string): string | undefined {
     return method === "email" ? identifier.trim().toLowerCase() : normalizeEmail(email);
 }
@@ -358,20 +378,13 @@ export async function sendOtp(
         throw new ValidationError("Contact identifier required (email or phone)");
     }
 
-    if (method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
-        throw new ValidationError("Valid email address required");
-    }
-
-    if (method === "phone" && !isValidPhoneNumber(identifier)) {
-        throw new ValidationError("Valid phone number required");
-    }
     assertSecondaryContactFormats({
         email: input.email,
         phone: input.phone,
     });
 
     // Normalize phone identifier to E.164 for consistent storage/lookup
-    const normalizedIdentifier = method === "phone" ? validateAndFormatPhone(identifier) : identifier.trim().toLowerCase();
+    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier);
 
     const { settings, policy } = await getCustomerAuthRuntimePolicy(db);
     const channel = resolveCustomerAuthChannelForRequest(policy, method, input.channel);
@@ -461,6 +474,8 @@ export async function sendOtp(
     const storedOtp: StoredOtp = {
         code,
         email: contactEmail ?? normalizedIdentifier,
+        method,
+        identifier: normalizedIdentifier,
         contactEmail,
         phone: contactPhone,
         expiresAt: now + OTP_TTL_SECONDS * 1000,
@@ -514,10 +529,9 @@ export async function verifyOtp(
     }
     assertSecondaryContactFormats({ email, phone });
 
-    // Normalize phone identifiers to E.164 for consistent KV/DB lookup
-    const normalizedIdentifier = method === "phone" ? validateAndFormatPhone(identifier) : identifier.trim().toLowerCase();
-    const normalizedPhone = phone ? validateAndFormatPhone(phone) : undefined;
-    const normalizedEmail = normalizeEmail(email);
+    // Normalize the primary destination exactly as sendOtp() did. Verification
+    // payloads prove an OTP; they may not reinterpret which contact was verified.
+    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier);
 
     const channel = input.channel ?? getFallbackOtpChannel(method);
     const otpKey = getOtpStorageKey(channel, normalizedIdentifier);
@@ -526,18 +540,25 @@ export async function verifyOtp(
     if (!storedRaw) {
         throw new ValidationError("No verification code found. Please request a new one.");
     }
-    await kv.delete(otpKey);
 
     const stored = JSON.parse(storedRaw) as StoredOtp;
     const intent = normalizeCustomerAuthIntent(stored.intent ?? input.intent);
     if (stored.channel && stored.channel !== channel) {
         throw new ValidationError("Verification code does not match the selected delivery method. Please request a new code.");
     }
-    const verifiedEmail = stored.contactEmail ?? (method === "email" ? normalizedIdentifier : normalizedEmail);
-    const verifiedPhone = stored.phone ?? (method === "phone" ? normalizedIdentifier : normalizedPhone);
+    if (!stored.method || !stored.identifier) {
+        await kv.delete(otpKey);
+        throw new ValidationError("Verification code could not be verified. Please request a new code.");
+    }
+    if (stored.method !== method || stored.identifier !== normalizedIdentifier) {
+        throw new ValidationError("Verification code does not match the requested contact. Please request a new code.");
+    }
+    const verifiedEmail = stored.method === "email" ? stored.identifier : stored.contactEmail;
+    const verifiedPhone = stored.method === "phone" ? stored.identifier : stored.phone;
 
     // Check expiry
     if (Date.now() > stored.expiresAt) {
+        await kv.delete(otpKey);
         throw new ValidationError("Verification code has expired. Please request a new one.");
     }
 
@@ -546,6 +567,7 @@ export async function verifyOtp(
 
     // Max 5 attempts
     if (stored.attempts > 5) {
+        await kv.delete(otpKey);
         throw new RateLimitError("Too many failed attempts. Please request a new code.");
     }
 

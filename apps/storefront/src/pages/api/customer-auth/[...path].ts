@@ -13,6 +13,7 @@
 
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
+import { appendRewrittenCustomerAuthSetCookies } from "@/lib/customer-auth-proxy-cookies";
 
 export const prerender = false;
 
@@ -73,26 +74,19 @@ export const ALL: APIRoute = async ({ request, params }) => {
     // Build the response, passing through status, body, and headers
     const responseHeaders = new Headers();
 
-    // Copy all headers from API response
+    // Copy all non-cookie headers from API response.
+    // Set-Cookie needs dedicated handling because Headers.entries() may collapse
+    // multiple cookies into one comma-joined value on some runtimes.
     for (const [key, value] of apiResponse.headers.entries()) {
       const lk = key.toLowerCase();
       // Skip hop-by-hop headers
       if (lk === "transfer-encoding") continue;
 
-      if (lk === "set-cookie") {
-        // The API worker may set cookies with a Domain attr from its STOREFRONT_URL.
-        // Since this proxy serves from the storefront's own origin, we must:
-        // 1. Strip Domain= so the cookie becomes host-only (works on any storefront domain)
-        // 2. Change SameSite=None to SameSite=Lax (same-origin doesn't need cross-site)
-        const rewritten = value
-          .replace(/;\s*Domain=[^;]*/gi, "")
-          .replace(/;\s*SameSite=None/gi, "; SameSite=Lax");
-        responseHeaders.append(key, rewritten);
-        continue;
-      }
+      if (lk === "set-cookie") continue;
 
       responseHeaders.append(key, value);
     }
+    appendRewrittenCustomerAuthSetCookies(responseHeaders, apiResponse.headers);
 
     return new Response(apiResponse.body, {
       status: apiResponse.status,

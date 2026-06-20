@@ -1,10 +1,12 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { splitSetCookieHeader } from "better-auth/cookies";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   sendOtp: vi.fn(),
+  verifyOtp: vi.fn(),
   getCustomerBySession: vi.fn(),
   getCustomerOrders: vi.fn(),
   getCustomerOrderDetail: vi.fn(),
@@ -13,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   sendOtp: mocks.sendOtp,
-  verifyOtp: vi.fn(),
+  verifyOtp: mocks.verifyOtp,
   getCustomerBySession: mocks.getCustomerBySession,
   deleteCustomerSession: vi.fn(),
   updateCustomerProfile: vi.fn(),
@@ -52,6 +54,17 @@ describe("customer auth private cache policy", () => {
     mocks.sendOtp.mockResolvedValue({
       success: true,
       message: "Verification code sent to your email",
+    });
+    mocks.verifyOtp.mockResolvedValue({
+      success: true,
+      customer: {
+        email: "customer@example.com",
+        name: "Customer",
+        phone: "+8801712345678",
+        customerId: "customer_1",
+      },
+      isNewUser: false,
+      session: { token: "session_1" },
     });
     mocks.getCustomerBySession.mockResolvedValue({
       email: "customer@example.com",
@@ -253,6 +266,34 @@ describe("customer auth private cache policy", () => {
         email: "backup@example.com",
       }),
     );
+  });
+
+  it("sets both session and readable auth mirror cookies after OTP verification", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/verify-otp",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "sign_in",
+          method: "email",
+          channel: "email",
+          identifier: "customer@example.com",
+          code: "123456",
+        }),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const cookies = splitSetCookieHeader(response.headers.get("set-cookie") ?? "");
+    expect(cookies).toHaveLength(2);
+    expect(cookies).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^cs_tok=session_1; Path=\/; HttpOnly/),
+      "cs_auth=1; Max-Age=2592000; Path=/; SameSite=Lax; Secure",
+    ]));
   });
 
   it("marks customer order-history reads as private no-store", async () => {
