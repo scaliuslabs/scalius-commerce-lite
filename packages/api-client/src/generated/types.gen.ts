@@ -32079,6 +32079,7 @@ export type PostApiV1PaymentSslcommerzSessionData = {
         paymentType?: 'full' | 'deposit' | 'balance';
         depositAmount?: number;
         currency?: string;
+        retryKey?: string;
     };
     path?: never;
     query?: never;
@@ -32193,6 +32194,7 @@ export type PostApiV1PaymentPolarSessionData = {
         customerEmail?: string;
         customerPhone?: string;
         receiptToken: string;
+        retryKey?: string;
     };
     path?: never;
     query?: never;

@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ request }) => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             },
-            2,     // retries
+            0,     // retries; hosted session creation is explicit-user-action only
             15000, // 15s timeout
             true,  // requiresAuth
         );

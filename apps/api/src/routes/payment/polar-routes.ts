@@ -45,7 +45,8 @@ const polarSessionSchema = z.object({
     customerName: z.string().optional(),
     customerEmail: z.string().optional(),
     customerPhone: z.string().optional(),
-    receiptToken: z.string().min(1)
+    receiptToken: z.string().min(1),
+    retryKey: z.string().trim().min(1).max(128).optional()
 });
 
 const createPolarSessionRoute = createRoute({
@@ -168,11 +169,14 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const amountInCents = Math.round(paymentAmount * Math.pow(10, decimals));
 
     const baseUrl = getTrustedApiOrigin(c.env, c.req.url);
-    const receiptQuery = body.receiptToken
-        ? `&receipt_token=${encodeURIComponent(body.receiptToken)}`
-        : "";
-    const successUrl = `${baseUrl}/api/v1/payment/polar/success?order_id=${encodeURIComponent(orderId)}${receiptQuery}`;
-    const cancelUrl = `${baseUrl}/api/v1/payment/polar/cancel?order_id=${encodeURIComponent(orderId)}`;
+    const callbackParams = {
+        order_id: orderId,
+        receipt_token: body.receiptToken,
+        payment_type: policy.paymentType,
+        deposit_amount: policy.paymentType === "deposit" ? String(policy.depositAmount) : undefined,
+    };
+    const successUrl = buildPolarCallbackUrl(baseUrl, "/api/v1/payment/polar/success", callbackParams);
+    const cancelUrl = buildPolarCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", callbackParams);
 
     const attemptIdentity = await buildPaymentSessionAttemptIdentity({
         orderId,
@@ -190,6 +194,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
             cancelUrl,
             customerName: body.customerName ?? null,
             customerEmail: body.customerEmail ?? null,
+            retryKey: body.retryKey ?? null,
         },
     });
     const attemptClaim = await claimPaymentSessionAttempt<PolarSessionResponse>(db, attemptIdentity);
@@ -290,20 +295,84 @@ function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: 
     return base.replace(/\/+$/, "");
 }
 
+function buildPolarCallbackUrl(baseUrl: string, path: string, params: Record<string, string | undefined>): string {
+    const url = new URL(`${baseUrl}${path}`);
+    for (const [key, value] of Object.entries(params)) {
+        if (value) url.searchParams.set(key, value);
+    }
+    return url.toString();
+}
+
+function getConfiguredStorefrontUrl(env: { STOREFRONT_URL?: string; PUBLIC_STOREFRONT_URL?: string }): string {
+    return String(env.STOREFRONT_URL || env.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
+}
+
+function normalizeCallbackPaymentType(value: string | undefined): "full" | "deposit" | "balance" | "" {
+    if (value === "full" || value === "deposit" || value === "balance") return value;
+    return "";
+}
+
+function getCallbackPaymentType(c: { req: { query: (key: string) => string | undefined } }): "full" | "deposit" | "balance" | "" {
+    return normalizeCallbackPaymentType(c.req.query("payment_type") ?? c.req.query("paymentType"));
+}
+
+function getCallbackDepositAmount(c: { req: { query: (key: string) => string | undefined } }): string {
+    const value = c.req.query("deposit_amount") ?? c.req.query("depositAmount") ?? "";
+    if (!value) return "";
+    const amount = Number(value);
+    return Number.isFinite(amount) && amount > 0 ? value : "";
+}
+
+function buildStorefrontOrderSuccessUrl(
+    storefront: string,
+    params: {
+        orderId: string;
+        receiptToken: string;
+        payment: "polar";
+        result?: "cancelled";
+        paymentType?: "full" | "deposit" | "balance" | "";
+        depositAmount?: string;
+    },
+): string {
+    const url = new URL(`${storefront}/order-success`);
+    url.searchParams.set("orderId", params.orderId);
+    url.searchParams.set("token", params.receiptToken);
+    url.searchParams.set("payment", params.payment);
+    if (params.result) url.searchParams.set("result", params.result);
+    if (params.paymentType) url.searchParams.set("paymentType", params.paymentType);
+    if (params.depositAmount) url.searchParams.set("depositAmount", params.depositAmount);
+    return url.toString();
+}
+
+async function validateCallbackOrder(db: Pick<Database, "select">, orderId: string, storefrontUrl: string): Promise<string | null> {
+    if (!orderId) return null;
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
+    return order ? null : `${storefrontUrl}/checkout?error=invalid_order`;
+}
+
 polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
     const receiptToken = c.req.query("receipt_token") ?? "";
+    const paymentType = getCallbackPaymentType(c);
+    const depositAmount = getCallbackDepositAmount(c);
 
     const envObj = c.env;
-    const storefrontUrl = String(envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
+    const storefrontUrl = getConfiguredStorefrontUrl(envObj);
 
     if (storefrontUrl) {
         if (orderId) {
             const db: Database = c.get("db");
-            const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
-            if (!order) return c.redirect(`${storefrontUrl}/checkout?error=invalid_order`);
+            const invalidRedirect = await validateCallbackOrder(db, orderId, storefrontUrl);
+            if (invalidRedirect) return c.redirect(invalidRedirect);
         }
-        return c.redirect(`${storefrontUrl}/order-success?orderId=${encodeURIComponent(orderId ?? "")}&token=${encodeURIComponent(receiptToken)}&payment=polar`);
+        if (!receiptToken) return c.redirect(`${storefrontUrl}/checkout?error=payment_return_missing_receipt&payment=polar`);
+        return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
+            orderId: orderId ?? "",
+            receiptToken,
+            payment: "polar",
+            paymentType,
+            depositAmount,
+        }));
     }
 
     return c.redirect("/");
@@ -313,10 +382,27 @@ polarPaymentRoutes.get("/success", async (c) => {
 
 polarPaymentRoutes.get("/cancel", async (c) => {
     const envObj = c.env;
-    const storefrontUrl = String(envObj.STOREFRONT_URL || envObj.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
+    const storefrontUrl = getConfiguredStorefrontUrl(envObj);
+    const orderId = c.req.query("order_id") ?? "";
+    const receiptToken = c.req.query("receipt_token") ?? "";
 
     if (storefrontUrl) {
-        return c.redirect(`${storefrontUrl}/checkout?error=payment_cancelled&payment=polar`);
+        if (orderId) {
+            const db: Database = c.get("db");
+            const invalidRedirect = await validateCallbackOrder(db, orderId, storefrontUrl);
+            if (invalidRedirect) return c.redirect(invalidRedirect);
+        }
+        if (!receiptToken) {
+            return c.redirect(`${storefrontUrl}/checkout?error=payment_cancelled&payment=polar`);
+        }
+        return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
+            orderId,
+            receiptToken,
+            payment: "polar",
+            result: "cancelled",
+            paymentType: getCallbackPaymentType(c),
+            depositAmount: getCallbackDepositAmount(c),
+        }));
     }
 
     return c.redirect("/");
