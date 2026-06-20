@@ -45,6 +45,12 @@ interface AdminPushOptions {
     outboxId?: string;
 }
 
+interface FcmSendError {
+    code?: string;
+    message?: string;
+    status?: string;
+}
+
 export interface OrderNotificationChannelOutcome {
     channel: OrderNotificationDeliveryChannel;
     provider: string;
@@ -79,6 +85,56 @@ function credentialEncryptionKeyFromEnv(env: Env): string | undefined {
     const source = env as unknown as Record<string, unknown>;
     return (source.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
         ?? (source.JWT_SECRET as string | undefined);
+}
+
+function normalizeFcmErrorPart(value: unknown): string {
+    if (value === undefined || value === null) return "";
+    return String(value)
+        .toLowerCase()
+        .replace(/[_/-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function getPermanentInvalidFcmTokenReason(error: FcmSendError | undefined): string | undefined {
+    if (!error) return undefined;
+
+    const code = normalizeFcmErrorPart(error.code);
+    const status = normalizeFcmErrorPart(error.status);
+    const message = normalizeFcmErrorPart(error.message);
+    const combined = [code, status, message].filter(Boolean).join(" ");
+    const compact = combined.replace(/[^a-z0-9]+/g, "");
+
+    if (code === "messaging invalid registration token") {
+        return "messaging/invalid-registration-token";
+    }
+
+    if (code === "messaging invalid argument" && !combined.includes("registration token")) {
+        return undefined;
+    }
+
+    if (
+        code === "messaging registration token not registered" ||
+        code === "messaging unregistered" ||
+        status === "unregistered" ||
+        compact.includes("notregistered") ||
+        combined.includes("device unregistered") ||
+        combined.includes("requested entity was not found") ||
+        combined.includes("token not registered") ||
+        (combined.includes("registration token") && combined.includes("not registered"))
+    ) {
+        return "messaging/registration-token-not-registered";
+    }
+
+    if (combined.includes("registration token") && combined.includes("invalid")) {
+        return "messaging/invalid-registration-token";
+    }
+
+    return undefined;
+}
+
+function isPermanentInvalidFcmTokenError(error: FcmSendError | undefined): boolean {
+    return getPermanentInvalidFcmTokenReason(error) !== undefined;
 }
 
 /**
@@ -206,24 +262,25 @@ export async function sendOrderNotification(
 
             const errorCode = resp.error?.code ?? "messaging/unknown-error";
             const errorMessage = resp.error?.message ?? "Unknown FCM error";
-            const isExpiredToken =
-                errorCode === "messaging/registration-token-not-registered" ||
-                errorCode === "messaging/invalid-registration-token";
 
-            if (isExpiredToken) {
+            const invalidTokenReason = getPermanentInvalidFcmTokenReason(resp.error);
+            if (invalidTokenReason) {
                 console.warn(`[Notifications] FCM token #${index} expired/invalid (${errorCode}) - will deactivate`);
-                invalidTokens.push(entry.token);
-                outcomes.push(await markSkippedOutcome(
+                const outcome = await markSkippedOutcome(
                     db,
                     entry.target,
                     entry.receipt,
-                    errorCode,
+                    invalidTokenReason,
                     {
                         provider: "fcm",
                         providerStatus: errorCode,
                         rawResponse: errorMessage,
                     },
-                ));
+                );
+                outcomes.push(outcome);
+                if (!outcome.retryable) {
+                    invalidTokens.push(entry.token);
+                }
             } else {
                 console.error(`[Notifications] FCM send failed for token #${index}:`, errorCode, errorMessage);
                 outcomes.push(await markFailedOutcome(
@@ -906,10 +963,7 @@ async function deactivateInvalidFcmTokens(
     const invalidTokens: string[] = [];
     responses.forEach((resp, index) => {
         if (!resp.error) return;
-        const isExpiredToken =
-            resp.error.code === "messaging/registration-token-not-registered" ||
-            resp.error.code === "messaging/invalid-registration-token";
-        if (isExpiredToken) {
+        if (isPermanentInvalidFcmTokenError(resp.error)) {
             console.warn(`[Notifications] FCM token #${index} expired/invalid (${resp.error.code}) - will deactivate`);
             const failedToken = tokens[index];
             if (failedToken) invalidTokens.push(failedToken);
