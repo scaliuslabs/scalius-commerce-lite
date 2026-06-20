@@ -287,7 +287,7 @@ Admin widget writes first invalidate API widget/pattern keys, then schedule stor
 
 ### Storefront Order Submit
 
-Normal buyer checkout is synchronous and D1-fenced. `POST /orders` requires a stable `checkoutRequestId`, claims `checkout_attempts.requestKey`, reserves the canonical `orderId` and checkout/receipt token, commits the order before returning `201`, and stores the replay response on the attempt row. Same-request retries replay committed responses or return a pollable `202` while the first request is active; changed payloads for the same key return `409`. Checkout-status and receipt KV rows are fast hints, while `/orders/status/:token` and receipt-token validation can fall back to D1 `checkout_attempts` plus the committed `orders` row.
+Normal buyer checkout is synchronous and D1-fenced. `POST /orders` requires a stable `checkoutRequestId`, builds the canonical attempt identity, does a read-only `checkout_attempts` precheck so committed/active same-key retries return before mutable checkout policy or rate-limit gates, then claims new or reclaimable attempts before order writes. The claim reserves the canonical `orderId` and checkout/receipt token, the API commits the order before returning `201`, and the committed response is stored on the attempt row. Same-request retries replay committed responses or return a pollable `202` while the first request is active; changed payloads for the same key return `409`. Checkout-status and receipt KV rows are fast hints, while `/orders/status/:token` and receipt-token validation can fall back to D1 `checkout_attempts` plus the committed `orders` row.
 
 ### Legacy Order Ingest Queue
 
