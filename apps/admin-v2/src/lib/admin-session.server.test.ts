@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getAdminSessionFromCookieHeader,
   getAdminSessionTokenFromCookieHeader,
+  verifyBetterAuthSignedCookieValue,
 } from "./admin-session.server";
 
 const mocks = vi.hoisted(() => ({
@@ -25,31 +26,99 @@ function createSessionDb(row: Record<string, unknown> | null) {
   };
 }
 
+const TEST_SECRET = "test-better-auth-secret";
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+async function signCookieValue(token: string, secret = TEST_SECRET): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(token),
+  );
+  return `${token}.${encodeBase64(new Uint8Array(signature))}`;
+}
+
 describe("admin session direct D1 lookup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.retryTransientD1.mockImplementation((operation: () => unknown) => operation());
   });
 
-  it("extracts the unsigned Better Auth token from normal and secure cookies", () => {
-    expect(
-      getAdminSessionTokenFromCookieHeader(
-        "theme=dark; better-auth.session_token=session_token.signature; other=1",
-      ),
-    ).toBe("session_token");
+  it("extracts signed Better Auth tokens from normal and secure cookies", async () => {
+    const normalCookie = await signCookieValue("session_token");
+    const secureCookie = await signCookieValue("secure_token");
 
-    expect(
+    await expect(
       getAdminSessionTokenFromCookieHeader(
-        "__Secure-better-auth.session_token=secure_token%2Esignature",
+        `theme=dark; better-auth.session_token=${normalCookie}; other=1`,
+        TEST_SECRET,
       ),
-    ).toBe("secure_token");
+    ).resolves.toBe("session_token");
+
+    await expect(
+      getAdminSessionTokenFromCookieHeader(
+        `__Secure-better-auth.session_token=${encodeURIComponent(secureCookie)}`,
+        TEST_SECRET,
+      ),
+    ).resolves.toBe("secure_token");
+  });
+
+  it("rejects unsigned, tampered, and wrong-secret Better Auth cookies", async () => {
+    const signedCookie = await signCookieValue("session_token");
+
+    await expect(verifyBetterAuthSignedCookieValue("session_token", TEST_SECRET)).resolves.toBeNull();
+    await expect(verifyBetterAuthSignedCookieValue(`${signedCookie}tampered`, TEST_SECRET)).resolves.toBeNull();
+    await expect(verifyBetterAuthSignedCookieValue(signedCookie, "wrong-secret")).resolves.toBeNull();
+    await expect(verifyBetterAuthSignedCookieValue(signedCookie, "")).resolves.toBeNull();
   });
 
   it("returns null without touching D1 when no session cookie is present", async () => {
     const db = createSessionDb(null);
 
     await expect(
-      getAdminSessionFromCookieHeader(db.db as unknown as Pick<D1Database, "prepare">, "theme=dark"),
+      getAdminSessionFromCookieHeader(
+        db.db as unknown as Pick<D1Database, "prepare">,
+        "theme=dark",
+        TEST_SECRET,
+      ),
+    ).resolves.toBeNull();
+
+    expect(db.prepare).not.toHaveBeenCalled();
+    expect(mocks.retryTransientD1).not.toHaveBeenCalled();
+  });
+
+  it("returns null without touching D1 when the cookie is unsigned or tampered", async () => {
+    const db = createSessionDb(null);
+    const signedCookie = await signCookieValue("session_token");
+
+    await expect(
+      getAdminSessionFromCookieHeader(
+        db.db as unknown as Pick<D1Database, "prepare">,
+        "better-auth.session_token=session_token",
+        TEST_SECRET,
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      getAdminSessionFromCookieHeader(
+        db.db as unknown as Pick<D1Database, "prepare">,
+        `better-auth.session_token=${signedCookie}tampered`,
+        TEST_SECRET,
+      ),
     ).resolves.toBeNull();
 
     expect(db.prepare).not.toHaveBeenCalled();
@@ -68,11 +137,13 @@ describe("admin session direct D1 lookup", () => {
       twoFactorVerified: 1,
       isSuperAdmin: 1,
     });
+    const signedCookie = await signCookieValue("session_token");
 
     await expect(
       getAdminSessionFromCookieHeader(
         db.db as unknown as Pick<D1Database, "prepare">,
-        "better-auth.session_token=session_token.signature",
+        `better-auth.session_token=${signedCookie}`,
+        TEST_SECRET,
       ),
     ).resolves.toEqual({
       user: {

@@ -129,7 +129,7 @@ The TanStack admin app now uses route/server-function guards rather than the old
 
 ### 1. Auth Helpers
 
-- `apps/admin-v2/src/lib/admin-session.server.ts` is the hot route-guard path. It extracts the signed Better Auth session cookie, strips the signature suffix, and verifies the active session/user directly through D1 with expiry and ban predicates.
+- `apps/admin-v2/src/lib/admin-session.server.ts` is the hot route-guard path. It verifies the Better Auth session cookie HMAC with `BETTER_AUTH_SECRET`, then verifies the active session/user directly through D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach the D1 lookup.
 - `apps/admin-v2/src/lib/auth.server.ts` remains the Better Auth integration boundary for `/api/auth/*`, 2FA verification paths, and auth operations that need Better Auth itself. Do not pull it back into normal `/admin` guard reads.
 
 ### 2. Admin Detection Guards (`apps/admin-v2/src/lib/auth.fns.ts`)
