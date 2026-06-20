@@ -2,3 +2,4 @@
 export * from "./settings.service";
 export * from "./site-settings.service";
 export * from "./checkout-config.service";
+export * from "./checkout-readiness";

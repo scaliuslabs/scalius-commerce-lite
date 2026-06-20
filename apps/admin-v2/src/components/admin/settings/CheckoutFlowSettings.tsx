@@ -19,11 +19,19 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Save, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Loader2, MapPinned, Save, Truck, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getServerFnError } from "@/lib/api-helpers";
-import { updateAuthSettings, type PaymentMethodsPayload } from "@/lib/api-functions/settings";
-import { checkoutFlowSettingsQueryOptions, paymentMethodsQueryOptions } from "@/lib/api-query-options/settings";
+import {
+    updateAuthSettings,
+    type CheckoutReadinessPayload,
+    type PaymentMethodsPayload,
+} from "@/lib/api-functions/settings";
+import {
+    checkoutFlowSettingsQueryOptions,
+    checkoutReadinessQueryOptions,
+    paymentMethodsQueryOptions,
+} from "@/lib/api-query-options/settings";
 import { queryKeys } from "@/lib/query-keys";
 
 function buildCheckoutFlowSummary(options: {
@@ -46,6 +54,34 @@ function buildCheckoutFlowSummary(options: {
         : "Customers must sign in before checkout and then choose from available COD/online methods.";
 }
 
+function ReadinessRow({
+    label,
+    ready,
+    loading,
+    icon: Icon,
+}: {
+    label: string;
+    ready: boolean;
+    loading: boolean;
+    icon: React.ComponentType<{ className?: string }>;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{label}</span>
+            </div>
+            {loading ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+            ) : ready ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            ) : (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+            )}
+        </div>
+    );
+}
+
 export default function CheckoutFlowSettings() {
     const queryClient = useQueryClient();
     const {
@@ -55,6 +91,10 @@ export default function CheckoutFlowSettings() {
         refetch,
     } = useQuery(checkoutFlowSettingsQueryOptions());
     const { data: paymentMethods, isLoading: paymentMethodsLoading } = useQuery(paymentMethodsQueryOptions());
+    const {
+        data: checkoutReadiness,
+        isLoading: checkoutReadinessLoading,
+    } = useQuery(checkoutReadinessQueryOptions());
     const [saving, setSaving] = useState(false);
 
     const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
@@ -113,6 +153,10 @@ export default function CheckoutFlowSettings() {
         partialPaymentEnabled,
         partialPaymentAmount,
     });
+    const readiness = checkoutReadiness as CheckoutReadinessPayload | undefined;
+    const readinessIssues = readiness?.issues ?? [];
+    const previewIssues = [...flowIssues, ...readinessIssues];
+    const previewLoading = paymentMethodsLoading || checkoutReadinessLoading;
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
@@ -138,6 +182,7 @@ export default function CheckoutFlowSettings() {
                 }),
             );
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() });
             toast.success("Checkout flow settings saved successfully!");
         } catch (err) {
             toast.error(getServerFnError(err, "Failed to save checkout flow settings"));
@@ -198,10 +243,10 @@ export default function CheckoutFlowSettings() {
                 </CardContent>
             </Card>
 
-            <Card className={flowIssues.length > 0 ? "border-destructive/40 bg-destructive/5" : "border-emerald-500/30 bg-emerald-500/5"}>
+            <Card className={previewIssues.length > 0 ? "border-destructive/40 bg-destructive/5" : "border-emerald-500/30 bg-emerald-500/5"}>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
-                        {flowIssues.length > 0 ? (
+                        {previewIssues.length > 0 ? (
                             <AlertTriangle className="h-4 w-4 text-destructive" />
                         ) : (
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -210,20 +255,42 @@ export default function CheckoutFlowSettings() {
                     </CardTitle>
                     <CardDescription>{flowSummary}</CardDescription>
                 </CardHeader>
-                {(flowIssues.length > 0 || paymentMethodsLoading) && (
-                    <CardContent className="pt-0">
-                        {paymentMethodsLoading && (
-                            <p className="text-xs text-muted-foreground">Checking configured payment methods...</p>
-                        )}
-                        {flowIssues.length > 0 && (
+                <CardContent className="space-y-3 pt-0">
+                    <div className="grid gap-2">
+                        <ReadinessRow
+                            label="Payment flow"
+                            ready={flowIssues.length === 0}
+                            loading={paymentMethodsLoading}
+                            icon={CheckCircle2}
+                        />
+                        <ReadinessRow
+                            label="Active shipping method"
+                            ready={readiness?.hasActiveShippingMethod === true}
+                            loading={checkoutReadinessLoading}
+                            icon={Truck}
+                        />
+                        <ReadinessRow
+                            label="Active city and zone"
+                            ready={readiness?.hasActiveDeliveryHierarchy === true}
+                            loading={checkoutReadinessLoading}
+                            icon={MapPinned}
+                        />
+                    </div>
+                    {(previewIssues.length > 0 || previewLoading) && (
+                        <>
+                            {previewLoading && (
+                                <p className="text-xs text-muted-foreground">Checking checkout readiness...</p>
+                            )}
+                            {previewIssues.length > 0 && (
                             <ul className="space-y-1 text-sm text-destructive">
-                                {flowIssues.map((issue) => (
+                                {previewIssues.map((issue) => (
                                     <li key={issue}>{issue}</li>
                                 ))}
                             </ul>
-                        )}
-                    </CardContent>
-                )}
+                            )}
+                        </>
+                    )}
+                </CardContent>
             </Card>
 
             <Card>

@@ -19116,6 +19116,101 @@ export type PostApiV1AdminSettingsPolarResponses = {
 
 export type PostApiV1AdminSettingsPolarResponse = PostApiV1AdminSettingsPolarResponses[keyof PostApiV1AdminSettingsPolarResponses];
 
+export type GetApiV1AdminSettingsCheckoutReadinessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/checkout-readiness';
+};
+
+export type GetApiV1AdminSettingsCheckoutReadinessErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCheckoutReadinessError = GetApiV1AdminSettingsCheckoutReadinessErrors[keyof GetApiV1AdminSettingsCheckoutReadinessErrors];
+
+export type GetApiV1AdminSettingsCheckoutReadinessResponses = {
+    /**
+     * Checkout readiness
+     */
+    200: {
+        success: true;
+        data: {
+            ready: boolean;
+            hasActiveShippingMethod: boolean;
+            hasActiveDeliveryHierarchy: boolean;
+            issues: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCheckoutReadinessResponse = GetApiV1AdminSettingsCheckoutReadinessResponses[keyof GetApiV1AdminSettingsCheckoutReadinessResponses];
+
 export type GetApiV1AdminSettingsAuthData = {
     body?: never;
     path?: never;

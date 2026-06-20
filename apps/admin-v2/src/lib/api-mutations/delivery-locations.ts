@@ -19,6 +19,9 @@ function invalidateDeliveryLocationQueries(
   queryClient.invalidateQueries({
     queryKey: queryKeys.settings.deliveryLocationsAll(),
   });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.settings.checkoutReadiness(),
+  });
 }
 
 export function useCreateDeliveryLocation() {

@@ -30,6 +30,7 @@ import {
     normalizeCustomerAuthPolicy,
 } from "@scalius/shared/customer-auth-policy";
 import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
+import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-readiness";
 import {
     getOptionalExecutionContext,
     invalidateApiAndScheduleStorefrontGroups,
@@ -50,6 +51,13 @@ const customerAuthPolicySchema = z.object({
     defaultOtpChannel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS).optional(),
 });
 
+const checkoutReadinessResponseSchema = z.object({
+    ready: z.boolean(),
+    hasActiveShippingMethod: z.boolean(),
+    hasActiveDeliveryHierarchy: z.boolean(),
+    issues: z.array(z.string()),
+});
+
 function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
     if (!value) return undefined;
     try {
@@ -62,6 +70,25 @@ function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
 // ─────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────
+
+const getCheckoutReadinessRoute = createRoute({
+    method: "get",
+    path: "/checkout-readiness",
+    tags: ["Admin - Settings"],
+    summary: "Get checkout readiness",
+    responses: {
+        200: {
+            description: "Checkout readiness",
+            content: { "application/json": { schema: successEnvelope(checkoutReadinessResponseSchema) } },
+        },
+        ...errorResponses,
+    }
+});
+
+app.openapi(getCheckoutReadinessRoute, async (c) => {
+    const db = c.get("db");
+    return ok(c, await getCheckoutReadiness(db));
+});
 
 const authSettingsResponseSchema = z.object({
     authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS),

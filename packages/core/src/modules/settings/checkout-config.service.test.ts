@@ -15,7 +15,14 @@ vi.mock("../payments/gateway-settings", () => ({
 
 import { getCheckoutConfig } from "./checkout-config.service";
 
-function createDb(siteOverrides: Record<string, unknown> = {}, customerAuthPolicy?: Record<string, unknown>) {
+function createDb(
+    siteOverrides: Record<string, unknown> = {},
+    customerAuthPolicy?: Record<string, unknown>,
+    readiness: {
+        activeShippingRows?: Array<{ id: string }>;
+        activeHierarchyRows?: Array<{ id: string }>;
+    } = {},
+) {
     const select = vi.fn()
         .mockReturnValueOnce({
             from: () => ({
@@ -50,6 +57,20 @@ function createDb(siteOverrides: Record<string, unknown> = {}, customerAuthPolic
             from: () => ({
                 where: () => ({
                     get: () => Promise.resolve(customerAuthPolicy ? { value: JSON.stringify(customerAuthPolicy) } : null),
+                }),
+            }),
+        })
+        .mockReturnValueOnce({
+            from: () => ({
+                where: () => ({
+                    limit: () => Promise.resolve(readiness.activeShippingRows ?? [{ id: "sm_1" }]),
+                }),
+            }),
+        })
+        .mockReturnValueOnce({
+            from: () => ({
+                where: () => ({
+                    limit: () => Promise.resolve(readiness.activeHierarchyRows ?? [{ id: "zone_1" }]),
                 }),
             }),
         });
@@ -95,6 +116,8 @@ describe("getCheckoutConfig", () => {
             undefined,
             { bypassMemoryCache: true },
         );
+        expect(config.unavailable).toBe(false);
+        expect(config.checkoutReadiness.ready).toBe(true);
     });
 
     it("normalizes legacy public auth method values", async () => {
@@ -165,6 +188,53 @@ describe("getCheckoutConfig", () => {
 
         expect(config.gateways).toEqual([]);
         expect(config.partialPaymentEnabled).toBe(true);
+        expect(config.unavailable).toBe(true);
+    });
+
+    it("publishes unavailable config when there is no active shipping method", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        const config = await getCheckoutConfig(createDb({}, undefined, {
+            activeShippingRows: [],
+        }) as never);
+
+        expect(config.unavailable).toBe(true);
+        expect(config.gateways).toEqual([]);
+        expect(config.checkoutReadiness).toMatchObject({
+            ready: false,
+            hasActiveShippingMethod: false,
+            hasActiveDeliveryHierarchy: true,
+        });
+        expect(config.checkoutReadiness.issues).toContain(
+            "Add at least one active shipping method before checkout can accept orders.",
+        );
+        expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    });
+
+    it("publishes unavailable config when there is no active city-zone hierarchy", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        const config = await getCheckoutConfig(createDb({}, undefined, {
+            activeHierarchyRows: [],
+        }) as never);
+
+        expect(config.unavailable).toBe(true);
+        expect(config.gateways).toEqual([]);
+        expect(config.checkoutReadiness).toMatchObject({
+            ready: false,
+            hasActiveShippingMethod: true,
+            hasActiveDeliveryHierarchy: false,
+        });
+        expect(config.checkoutReadiness.issues).toContain(
+            "Add at least one active city with an active zone before checkout can accept orders.",
+        );
+        expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     });
 
     it("rejects when payment-method settings cannot be read", async () => {

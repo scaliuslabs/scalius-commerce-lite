@@ -28,6 +28,12 @@ export interface CheckoutConfig {
   partialPaymentAmount?: number;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
+  checkoutReadiness?: {
+    ready: boolean;
+    hasActiveShippingMethod: boolean;
+    hasActiveDeliveryHierarchy: boolean;
+    issues: string[];
+  };
   unavailable?: boolean;
   unavailableMessage?: string;
 }

@@ -15,6 +15,11 @@ import {
 import { getRegisteredGateways } from "../payments/gateway-registry";
 import { getActivePaymentMethods } from "../payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow } from "./checkout-flow";
+import {
+    CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
+    getCheckoutReadiness,
+    type CheckoutReadiness,
+} from "./checkout-readiness";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
@@ -31,6 +36,9 @@ export interface CheckoutConfig {
         symbol: string;
         decimalPlaces: number;
     };
+    checkoutReadiness: CheckoutReadiness;
+    unavailable: boolean;
+    unavailableMessage?: string;
 }
 
 /**
@@ -94,6 +102,31 @@ export async function getCheckoutConfig(
 
     const partialPaymentEnabled = siteSettingsRow?.partialPaymentEnabled ?? false;
     const partialPaymentAmount = siteSettingsRow?.partialPaymentAmount ?? 0;
+    const checkoutReadiness = await getCheckoutReadiness(db);
+
+    if (!checkoutReadiness.ready) {
+        return {
+            gateways: [],
+            guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
+            authVerificationMethod: customerAuthPolicyRow?.value
+                ? getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy)
+                : normalizeCustomerAuthMethod(siteSettingsRow?.authVerificationMethod),
+            customerAuthPolicy,
+            checkoutMode,
+            partialPaymentEnabled,
+            partialPaymentAmount,
+            allowedCountries,
+            allowedCountriesMode,
+            currency: {
+                code: localCurrencyCode,
+                symbol: currencyMap.currency_symbol ?? "\u09F3",
+                decimalPlaces: currencyDecimalPlaces,
+            },
+            checkoutReadiness,
+            unavailable: true,
+            unavailableMessage: CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
+        };
+    }
 
     const activePaymentMethods = await getActivePaymentMethods(db, kv, encryptionKey, {
         bypassMemoryCache: true,
@@ -133,6 +166,8 @@ export async function getCheckoutConfig(
         });
     }
 
+    const unavailable = gateways.length === 0;
+
     return {
         gateways,
         guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,
@@ -150,6 +185,11 @@ export async function getCheckoutConfig(
             symbol: currencyMap.currency_symbol ?? "\u09F3",
             decimalPlaces: currencyDecimalPlaces,
         },
+        checkoutReadiness,
+        unavailable,
+        unavailableMessage: unavailable
+            ? "Checkout is temporarily unavailable while the merchant finishes payment setup."
+            : undefined,
     };
 }
 

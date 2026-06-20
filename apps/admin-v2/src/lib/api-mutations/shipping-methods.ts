@@ -10,15 +10,24 @@ import {
 } from "../api-functions/shipping-methods";
 import { getServerFnError, queryKeys } from "./shared";
 
+function invalidateShippingMethodQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.settings.shippingMethods(),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.settings.checkoutReadiness(),
+  });
+}
+
 export function useCreateShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: ShippingMethodWriteInput) =>
       createShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.shippingMethods(),
-      });
+      invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method created");
     },
     onError: (err) =>
@@ -32,9 +41,7 @@ export function useUpdateShippingMethod() {
     mutationFn: (data: { id: string; update: ShippingMethodWriteInput }) =>
       updateShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.shippingMethods(),
-      });
+      invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method updated");
     },
     onError: (err) =>
@@ -47,9 +54,7 @@ export function useDeleteShippingMethod() {
   return useMutation({
     mutationFn: (data: { id: string }) => deleteShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.shippingMethods(),
-      });
+      invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method moved to trash");
     },
     onError: (err) =>
@@ -63,9 +68,7 @@ export function usePermanentDeleteShippingMethod() {
     mutationFn: (data: { id: string }) =>
       permanentDeleteShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.shippingMethods(),
-      });
+      invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method permanently deleted");
     },
     onError: (err) =>
@@ -78,9 +81,7 @@ export function useRestoreShippingMethod() {
   return useMutation({
     mutationFn: (data: { id: string }) => restoreShippingMethod({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.shippingMethods(),
-      });
+      invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method restored");
     },
     onError: (err) =>

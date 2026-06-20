@@ -93,6 +93,12 @@ export interface AuthSettingsPayload {
   partialPaymentAmount: number | null;
 }
 export type UpdateAuthSettingsInput = SettingsPayload;
+export interface CheckoutReadinessPayload {
+  ready: boolean;
+  hasActiveShippingMethod: boolean;
+  hasActiveDeliveryHierarchy: boolean;
+  issues: string[];
+}
 export type EmailProvider = "cloudflare" | "resend";
 export interface EmailSettingsPayload extends SettingsPayload {
   provider: EmailProvider;
@@ -240,6 +246,12 @@ export const updateAuthSettings = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/auth", data);
   });
+
+export const getCheckoutReadiness = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<CheckoutReadinessPayload>("/settings/checkout-readiness");
+  },
+);
 
 export const getEmailSettings = createServerFn({ method: "GET" }).handler(
   async () => {
