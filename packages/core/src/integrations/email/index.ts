@@ -35,29 +35,34 @@ import { getEmailProvider } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
+function maskEmailForLog(value: string | undefined): string {
+  if (!value) return "unset";
+  const [localPart, domain] = value.split("@");
+  if (!localPart || !domain) return "redacted";
+  const visible = localPart.length <= 2
+    ? localPart[0] ?? "*"
+    : `${localPart[0]}${localPart[localPart.length - 1]}`;
+  return `${visible}***@${domain}`;
+}
+
 function logEmailFallback(
   { to, subject, html, from, text }: SendEmailOptions,
   settings: EmailRuntimeSettings,
 ): SendEmailResult {
   const fromAddress = from || settings.sender;
-  console.log("=".repeat(60));
-  console.log("EMAIL (no configured provider available - logging only)");
-  console.log("=".repeat(60));
-  console.log(`Provider preference: ${settings.provider}`);
-  console.log(`From: ${fromAddress}`);
-  console.log(`To: ${to}`);
-  console.log(`Subject: ${subject}`);
-  console.log("-".repeat(60));
-  console.log(html);
-  if (text) {
-    console.log("-".repeat(60));
-    console.log(text);
-  }
-  console.log("=".repeat(60));
+  console.warn("[Email] No configured provider available; email was not delivered", {
+    providerPreference: settings.provider,
+    from: maskEmailForLog(fromAddress),
+    to: maskEmailForLog(to),
+    subjectLength: subject.length,
+    htmlLength: html.length,
+    textLength: text?.length ?? 0,
+    contentLogged: false,
+  });
   return {
     success: false,
     provider: "log",
-    rawStatus: "No configured email provider available; logged locally only",
+    rawStatus: "No configured email provider available; email not delivered",
   };
 }
 

@@ -66,16 +66,14 @@ class ResendEmailProvider implements EmailProvider {
     const fromAddress = options.from || this.settings.defaultFrom;
 
     if (!this.settings.apiKey) {
-      // Dev fallback: log instead of sending
-      console.log("=".repeat(60));
-      console.log("EMAIL (Resend API key not configured - logging only)");
-      console.log("=".repeat(60));
-      console.log(`From: ${fromAddress}`);
-      console.log(`To: ${options.to}`);
-      console.log(`Subject: ${options.subject}`);
-      console.log("-".repeat(60));
-      console.log(options.html);
-      console.log("=".repeat(60));
+      console.warn("[Email] Resend API key not configured; email was not delivered", {
+        from: maskEmailForLog(fromAddress),
+        to: maskEmailForLog(options.to),
+        subjectLength: options.subject.length,
+        htmlLength: options.html.length,
+        textLength: options.text?.length ?? 0,
+        contentLogged: false,
+      });
       return {};
     }
 
@@ -127,3 +125,13 @@ registerProvider(
   },
   (settings) => new ResendEmailProvider(settings),
 );
+
+function maskEmailForLog(value: string | undefined): string {
+  if (!value) return "unset";
+  const [localPart, domain] = value.split("@");
+  if (!localPart || !domain) return "redacted";
+  const visible = localPart.length <= 2
+    ? localPart[0] ?? "*"
+    : `${localPart[0]}${localPart[localPart.length - 1]}`;
+  return `${visible}***@${domain}`;
+}

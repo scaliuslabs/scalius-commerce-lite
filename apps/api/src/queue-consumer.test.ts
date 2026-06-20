@@ -680,7 +680,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.sendEmail.mockResolvedValue({
       success: false,
       provider: "log",
-      rawStatus: "No configured email provider available; logged locally only",
+      rawStatus: "No configured email provider available; email not delivered",
     });
     const message = createMessage({
       type: "auth.send_otp",
@@ -702,7 +702,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       {
         provider: "log",
         providerMessageId: undefined,
-        providerStatus: "No configured email provider available; logged locally only",
+        providerStatus: "No configured email provider available; email not delivered",
       },
     );
     expect(message.ack).not.toHaveBeenCalled();
