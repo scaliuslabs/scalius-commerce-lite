@@ -2,45 +2,12 @@
 // Hono routes for Stripe payment operations.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq, sql } from "drizzle-orm";
-import { orders, PaymentMethod } from "@scalius/database/schema";
-import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
-import {
-  buildPaymentSessionAttemptIdentity,
-  claimPaymentSessionAttempt,
-  markPaymentSessionAttemptCreated,
-  markPaymentSessionAttemptFailed,
-} from "@scalius/core/modules/payments/payment-session-attempts";
-import {
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-  getStripeSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
-import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
-import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { getDecimalPlaces } from "@scalius/shared/currency";
-import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
-import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
-import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
-import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
-import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
-import {
-  createPaymentProviderTimeoutError,
-  isPaymentProviderTimedOut,
-  withPaymentProviderDeadline,
-} from "./payment-provider-deadline";
-
 import { ok } from "../../utils/api-response";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+import { createStripePaymentSession } from "./payment-session-create";
 
-type StripeIntentResponse = {
-  clientSecret?: string;
-  paymentIntentId?: string;
-  publishableKey: string;
-  amount: number;
-  currency: string;
-};
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── POST /intent ────────────────────────────────────────────────────────────
 
@@ -90,131 +57,15 @@ app.openapi(createIntentRoute, async (c) => {
   const body = c.req.valid("json");
   await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken, db);
 
-  // Fetch the order
-  const order = await db
-    .select({
-      id: orders.id,
-      totalAmount: orders.totalAmount,
-      status: orders.status,
-      paymentMethod: orders.paymentMethod,
-      paymentStatus: orders.paymentStatus,
-      paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
-      deletedAt: orders.deletedAt,
-      shipmentClaimId: orders.shipmentClaimId,
-      shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt
-    })
-    .from(orders)
-    .where(eq(orders.id, body.orderId))
-    .get();
-
-  if (!order) throw new NotFoundError("Order not found");
-  assertNoActiveShipmentClaim(order);
-  assertPaymentSessionOrderPayable(order);
-  if (order.paymentMethod !== PaymentMethod.STRIPE) {
-    throw new ValidationError("Order is not configured for Stripe payment");
-  }
-
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "stripe");
-  const policy = await resolvePaymentSessionPolicy(db, order, {
+  const result = await createStripePaymentSession(c, {
+    orderId: body.orderId,
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
-  }, checkoutFlowSettings);
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code.toLowerCase();
-  const stripe = await getStripeSettings(
-    db,
-    c.env.CACHE,
-    encryptionKey,
-    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-  );
-
-  if (!stripe) {
-    throw new ServiceUnavailableError("Stripe is not configured. Please set credentials in the admin dashboard.");
-  }
-  if (!stripe.enabled) {
-    throw new ServiceUnavailableError("Stripe gateway is disabled.");
-  }
-
-  // Convert major-unit amount to smallest currency unit using ISO 4217 decimals.
-  // e.g. USD/BDT: ×100, JPY: ×1, BHD: ×1000
-  const decimals = getDecimalPlaces(currency);
-  const amountInSmallestUnit = Math.round(policy.chargeAmount * Math.pow(10, decimals));
-
-  const attemptIdentity = await buildPaymentSessionAttemptIdentity({
-    orderId: body.orderId,
-    gateway: "stripe",
-    paymentType: policy.paymentType,
-    amount: policy.chargeAmount,
-    currency,
-    receiptToken: body.receiptToken,
-    requestContext: {
-      amountInSmallestUnit,
-      manualCapture: false,
-    },
-  });
-  const attemptClaim = await claimPaymentSessionAttempt<StripeIntentResponse>(db, attemptIdentity);
-  if (attemptClaim.status === "replay") {
-    return ok(c, attemptClaim.response);
-  }
-
-  let result: Awaited<ReturnType<typeof createPaymentIntent>>;
-  try {
-    result = await withPaymentProviderDeadline("Stripe", (_signal, requestTimeoutMs) =>
-      createPaymentIntent(stripe.secretKey, {
-        orderId: body.orderId,
-        amount: amountInSmallestUnit,
-        currency,
-        paymentType: policy.paymentType,
-        manualCapture: false,
-        idempotencyKey: attemptIdentity.attemptKey,
-        requestTimeoutMs,
-        maxNetworkRetries: 0,
-      })
-    );
-  } catch (error: unknown) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
-      .catch((markError: unknown) => console.error("[payments] Failed to mark Stripe session attempt failed:", markError));
-    throw error;
-  }
-
-  if (!result.success) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create payment intent")
-      .catch((error: unknown) => console.error("[payments] Failed to mark Stripe session attempt failed:", error));
-    if (isPaymentProviderTimedOut(result)) {
-      throw createPaymentProviderTimeoutError("Stripe");
-    }
-    throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create payment intent");
-  }
-
-  const responsePayload: StripeIntentResponse = {
-    clientSecret: result.clientSecret,
-    paymentIntentId: result.paymentIntentId,
-    publishableKey: stripe.publishableKey,
-    amount: policy.chargeAmount,
-    currency
-  };
-
-  await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
-    providerSessionId: result.paymentIntentId,
-    response: responsePayload,
+    proof: { kind: "receipt", receiptToken: body.receiptToken },
+    returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
   });
 
-  // Save PaymentIntent ID to order. This is a recovery hint; the payment session
-  // attempt row and gateway idempotency key are the durable source of truth.
-  try {
-    await db
-      .update(orders)
-      .set({ paymentIntentId: result.paymentIntentId, updatedAt: sql`unixepoch()` })
-      .where(eq(orders.id, body.orderId));
-  } catch (error: unknown) {
-    console.error("[payments] Stripe session was created, but local order recovery hint failed:", error);
-  }
-
-  return ok(c, responsePayload);
+  return ok(c, result.stripe);
 });
 
 export const stripePaymentRoutes = app;

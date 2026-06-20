@@ -7,7 +7,7 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 | File | Purpose |
 |------|---------|
 | `index.ts` | Barrel export -- re-exports `customers.service` only (not customer-auth) |
-| `customers.service.ts` | Admin CRUD: `listCustomers`, `createCustomer`, `updateCustomer`, `deleteCustomer`, `permanentlyDeleteCustomer`, `restoreCustomer`, `bulkDeleteCustomers`, `getCustomerById`; storefront account order history via `getCustomerOrders()` with item and latest-shipment summaries. Re-exports schemas from `customers.validation.ts`. |
+| `customers.service.ts` | Admin CRUD: `listCustomers`, `createCustomer`, `updateCustomer`, `deleteCustomer`, `permanentlyDeleteCustomer`, `restoreCustomer`, `bulkDeleteCustomers`, `getCustomerById`; storefront account order history/detail via `getCustomerOrders()` and `getCustomerOrderDetail()` with customer-scoped order facts. Re-exports schemas from `customers.validation.ts`. |
 | `customers.validation.ts` | Canonical Zod schemas: `createCustomerSchema` (uses `phoneNumberSchema` from `@scalius/shared/customer-utils`), `updateCustomerSchema` (partial). Imported by both service and API routes. |
 | `customer-auth.service.ts` | Storefront auth: `sendOtp()`, `verifyOtp()`, `getCustomerBySession()`, `deleteCustomerSession()`, `updateCustomerProfile()`. Cookie/session helpers. Imported directly by path (not through `index.ts`) |
 | `otp-transport.ts` | `OtpTransport` interface + three implementations: `EmailOtpTransport`, `SmsOtpTransport`, `WhatsAppOtpTransport`. Factory: `getOtpTransport()` |
@@ -108,6 +108,8 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 | POST | `/logout` | `deleteCustomerSession` | Delete KV session, clear cookies |
 | PUT | `/profile` | `updateCustomerProfile` | Update name/address/city/zone |
 | GET | `/orders` | `getCustomerOrders` | Customer's latest 50 orders matched by `customerId` only, with items, product names/images, and one latest shipment summary for tracking display |
+| GET | `/orders/{id}` | `getCustomerOrderDetail` + API payment recovery preview | Customer-scoped order detail, items, shipments, payments, payment plan, COD, notification receipts, timeline, and policy-backed `paymentRecovery` preview |
+| POST | `/orders/{id}/payment-session` | API payment session creation | Create an owned-order Stripe/SSLCommerz/Polar payment session from the customer session and order state; strict empty body; no receipt-token input/output |
 
 ## Data Flow
 
@@ -128,7 +130,11 @@ The storefront proxy rewrites cookies (strips `Domain=`, changes `SameSite=None`
 ```
 Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE customers SET totalOrders, totalSpent, lastOrderAt
 Customer account order history -> getCustomerOrders() -> orders + orderItems/product images + latest deliveryShipments/deliveryProviders summary
+Customer account order detail -> getCustomerOrderDetail() -> order + items + shipments + payments + paymentPlan/COD + notification receipts + timeline
+Customer account payment recovery -> API customer-auth route -> shared payment-session policy/gateway readiness/attempt helpers -> gateway
 ```
+
+`paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy.
 
 ## Dependencies
 
@@ -177,4 +183,4 @@ Customer account order history -> getCustomerOrders() -> orders + orderItems/pro
 
 5. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
-6. **Customer order history is not a full order-detail timeline**: `/customer-auth/orders` now includes a latest shipment summary for account-page tracking, but it remains a capped list endpoint. It does not yet expose payment/refund history, notification receipts, return/cancel eligibility, or cursor pagination for more than 50 orders.
+6. **Customer order list is intentionally capped**: `/customer-auth/orders` remains a latest-50 list endpoint with only summary shipment data. Full payment/shipment/notification timeline data belongs on `/customer-auth/orders/{id}`. Cursor pagination for older account orders and customer-facing return/cancel eligibility are still not implemented.

@@ -23,7 +23,11 @@ export interface BuildPaymentSessionAttemptIdentityInput {
   paymentType: PaymentType;
   amount: number;
   currency: string;
-  receiptToken: string;
+  receiptToken?: string;
+  proof?: {
+    kind: "receipt" | "customer_account";
+    value: string;
+  };
   requestContext?: Record<string, unknown>;
 }
 
@@ -50,18 +54,30 @@ type AttemptRow = typeof paymentSessionAttempts.$inferSelect;
 export async function buildPaymentSessionAttemptIdentity(
   input: BuildPaymentSessionAttemptIdentityInput,
 ): Promise<PaymentSessionAttemptIdentity> {
-  const receiptTokenHash = await sha256Hex(input.receiptToken);
+  const proof = resolveAttemptProof(input);
+  const proofHash = await sha256Hex(proof.value);
   const currency = input.currency.trim().toLowerCase();
   const amount = normalizeAmount(input.amount);
-  const canonical = {
-    orderId: input.orderId,
-    gateway: input.gateway,
-    paymentType: input.paymentType,
-    amount,
-    currency,
-    receiptTokenHash,
-    requestContext: input.requestContext ?? null,
-  };
+  const canonical = proof.kind === "receipt"
+    ? {
+        orderId: input.orderId,
+        gateway: input.gateway,
+        paymentType: input.paymentType,
+        amount,
+        currency,
+        receiptTokenHash: proofHash,
+        requestContext: input.requestContext ?? null,
+      }
+    : {
+        orderId: input.orderId,
+        gateway: input.gateway,
+        paymentType: input.paymentType,
+        amount,
+        currency,
+        proofKind: proof.kind,
+        proofHash,
+        requestContext: input.requestContext ?? null,
+      };
   const requestHash = await sha256Hex(stableStringify(canonical));
 
   return {
@@ -73,6 +89,17 @@ export async function buildPaymentSessionAttemptIdentity(
     paymentType: input.paymentType,
     amount,
     currency,
+  };
+}
+
+function resolveAttemptProof(input: BuildPaymentSessionAttemptIdentityInput): { kind: "receipt" | "customer_account"; value: string } {
+  const proof = input.proof ?? (input.receiptToken ? { kind: "receipt" as const, value: input.receiptToken } : null);
+  if (!proof?.value?.trim()) {
+    throw new ServiceUnavailableError("Payment session proof is unavailable. Please try again.");
+  }
+  return {
+    kind: proof.kind,
+    value: proof.value.trim(),
   };
 }
 

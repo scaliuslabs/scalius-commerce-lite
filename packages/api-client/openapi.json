@@ -10300,6 +10300,68 @@
                               "happenedAt"
                             ]
                           }
+                        },
+                        "paymentRecovery": {
+                          "type": "object",
+                          "properties": {
+                            "eligible": {
+                              "type": "boolean"
+                            },
+                            "gateway": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "stripe",
+                                "sslcommerz",
+                                "polar",
+                                null
+                              ]
+                            },
+                            "paymentType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "full",
+                                "deposit",
+                                "balance",
+                                null
+                              ]
+                            },
+                            "amountDue": {
+                              "type": "number"
+                            },
+                            "label": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "reason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "blockType": {
+                              "type": "string",
+                              "enum": [
+                                "validation",
+                                "unavailable"
+                              ]
+                            },
+                            "requiresCardForm": {
+                              "type": "boolean"
+                            },
+                            "hostedRedirect": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "eligible",
+                            "gateway",
+                            "paymentType",
+                            "amountDue",
+                            "label",
+                            "reason",
+                            "requiresCardForm",
+                            "hostedRedirect"
+                          ]
                         }
                       },
                       "required": [
@@ -10310,7 +10372,8 @@
                         "paymentPlan",
                         "cod",
                         "notifications",
-                        "timeline"
+                        "timeline",
+                        "paymentRecovery"
                       ]
                     }
                   },
@@ -10524,6 +10587,526 @@
           },
           "500": {
             "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customer-auth/orders/{id}/payment-session": {
+      "post": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Create an authenticated customer payment session for an owned order",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customer payment session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "paymentType": {
+                              "type": "string",
+                              "enum": [
+                                "full",
+                                "deposit",
+                                "balance"
+                              ]
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "gateway": {
+                              "type": "string",
+                              "enum": [
+                                "stripe"
+                              ]
+                            },
+                            "stripe": {
+                              "type": "object",
+                              "properties": {
+                                "clientSecret": {
+                                  "type": "string"
+                                },
+                                "paymentIntentId": {
+                                  "type": "string"
+                                },
+                                "publishableKey": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "publishableKey",
+                                "amount",
+                                "currency"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "paymentType",
+                            "amount",
+                            "currency",
+                            "gateway",
+                            "stripe"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "paymentType": {
+                              "type": "string",
+                              "enum": [
+                                "full",
+                                "deposit",
+                                "balance"
+                              ]
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "gateway": {
+                              "type": "string",
+                              "enum": [
+                                "sslcommerz"
+                              ]
+                            },
+                            "hosted": {
+                              "type": "object",
+                              "properties": {
+                                "gatewayUrl": {
+                                  "type": "string"
+                                },
+                                "sessionKey": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "paymentType",
+                            "amount",
+                            "currency",
+                            "gateway",
+                            "hosted"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "paymentType": {
+                              "type": "string",
+                              "enum": [
+                                "full",
+                                "deposit",
+                                "balance"
+                              ]
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "gateway": {
+                              "type": "string",
+                              "enum": [
+                                "polar"
+                              ]
+                            },
+                            "hosted": {
+                              "type": "object",
+                              "properties": {
+                                "gatewayUrl": {
+                                  "type": "string"
+                                },
+                                "checkoutId": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "paymentType",
+                            "amount",
+                            "currency",
+                            "gateway",
+                            "hosted"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -104449,8 +105032,7 @@
                       "full",
                       "deposit",
                       "balance"
-                    ],
-                    "default": "full"
+                    ]
                   },
                   "depositAmount": {
                     "type": "number",
@@ -104832,8 +105414,7 @@
                       "full",
                       "deposit",
                       "balance"
-                    ],
-                    "default": "full"
+                    ]
                   },
                   "depositAmount": {
                     "type": "number",

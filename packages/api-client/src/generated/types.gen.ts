@@ -3178,11 +3178,168 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 happenedAt: string | number | null;
                 details?: string | null;
             }>;
+            paymentRecovery: {
+                eligible: boolean;
+                gateway: 'stripe' | 'sslcommerz' | 'polar' | null;
+                paymentType: 'full' | 'deposit' | 'balance' | null;
+                amountDue: number;
+                label: string | null;
+                reason: string | null;
+                blockType?: 'validation' | 'unavailable';
+                requiresCardForm: boolean;
+                hostedRedirect: boolean;
+            };
         };
     };
 };
 
 export type GetApiV1CustomerAuthOrdersByIdResponse = GetApiV1CustomerAuthOrdersByIdResponses[keyof GetApiV1CustomerAuthOrdersByIdResponses];
+
+export type PostApiV1CustomerAuthOrdersByIdPaymentSessionData = {
+    body?: {
+        [key: string]: never;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/payment-session';
+};
+
+export type PostApiV1CustomerAuthOrdersByIdPaymentSessionErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdPaymentSessionError = PostApiV1CustomerAuthOrdersByIdPaymentSessionErrors[keyof PostApiV1CustomerAuthOrdersByIdPaymentSessionErrors];
+
+export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses = {
+    /**
+     * Customer payment session created
+     */
+    200: {
+        success: true;
+        data: {
+            paymentType: 'full' | 'deposit' | 'balance';
+            amount: number;
+            currency: string;
+            gateway: 'stripe';
+            stripe: {
+                clientSecret?: string;
+                paymentIntentId?: string;
+                publishableKey: string;
+                amount: number;
+                currency: string;
+            };
+        } | {
+            paymentType: 'full' | 'deposit' | 'balance';
+            amount: number;
+            currency: string;
+            gateway: 'sslcommerz';
+            hosted: {
+                gatewayUrl?: string;
+                sessionKey?: string;
+            };
+        } | {
+            paymentType: 'full' | 'deposit' | 'balance';
+            amount: number;
+            currency: string;
+            gateway: 'polar';
+            hosted: {
+                gatewayUrl?: string;
+                checkoutId?: string;
+            };
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponse = PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses[keyof PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses];
 
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;

@@ -715,6 +715,42 @@ describe("payment session receipt-token proof", () => {
     );
   });
 
+  it("redirects SSLCommerz account callbacks without exposing receipt tokens", async () => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const success = await app.request(
+      "/api/v1/payment/sslcommerz/success?order_id=order_1&return_to=account&payment_type=balance",
+      { method: "GET" },
+      envFor(kv),
+    );
+    const failed = await app.request(
+      "/api/v1/payment/sslcommerz/fail?order_id=order_1&return_to=account&payment_type=balance",
+      { method: "GET" },
+      envFor(kv),
+    );
+    const cancelled = await app.request(
+      "/api/v1/payment/sslcommerz/cancel?order_id=order_1&return_to=account&payment_type=balance",
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(success.headers.get("location")).toBe(
+      "https://shop.example.test/account/orders/order_1?payment=sslcommerz&paymentType=balance",
+    );
+    expect(failed.headers.get("location")).toBe(
+      "https://shop.example.test/account/orders/order_1?payment=sslcommerz&result=failed&paymentType=balance",
+    );
+    expect(cancelled.headers.get("location")).toBe(
+      "https://shop.example.test/account/orders/order_1?payment=sslcommerz&result=cancelled&paymentType=balance",
+    );
+    for (const response of [success, failed, cancelled]) {
+      const location = response.headers.get("location") ?? "";
+      expect(response.status).toBe(302);
+      expect(location).not.toContain("token=");
+      expect(location).not.toContain("receipt_token");
+    }
+  });
+
   it("creates SSLCommerz balance sessions from stored balance without inserting a new payment plan", async () => {
     const { app, db, kv } = createTestApp("valid", {
       paymentMethod: "sslcommerz",
@@ -900,6 +936,34 @@ describe("payment session receipt-token proof", () => {
     expect(response.headers.get("location")).toBe(
       "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=polar&result=cancelled&paymentType=full",
     );
+  });
+
+  it("redirects Polar account callbacks without exposing receipt tokens", async () => {
+    const { app, kv } = createTestApp("valid", "polar");
+
+    const success = await app.request(
+      "/api/v1/payment/polar/success?order_id=order_1&return_to=account&payment_type=balance",
+      { method: "GET" },
+      envFor(kv),
+    );
+    const cancelled = await app.request(
+      "/api/v1/payment/polar/cancel?order_id=order_1&return_to=account&payment_type=balance",
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(success.headers.get("location")).toBe(
+      "https://shop.example.test/account/orders/order_1?payment=polar&paymentType=balance",
+    );
+    expect(cancelled.headers.get("location")).toBe(
+      "https://shop.example.test/account/orders/order_1?payment=polar&result=cancelled&paymentType=balance",
+    );
+    for (const response of [success, cancelled]) {
+      const location = response.headers.get("location") ?? "";
+      expect(response.status).toBe(302);
+      expect(location).not.toContain("token=");
+      expect(location).not.toContain("receipt_token");
+    }
   });
 
   it.each([
