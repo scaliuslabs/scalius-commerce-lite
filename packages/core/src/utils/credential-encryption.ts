@@ -1,5 +1,7 @@
 // Application-level AES-GCM encryption for sensitive credentials stored in D1.
 
+export const ENCRYPTED_CREDENTIAL_PREFIX = "enc:";
+
 /**
  * Encrypt a plaintext string using AES-256-GCM.
  * Returns base64-encoded "iv:ciphertext" string.
@@ -65,4 +67,71 @@ export async function decryptCredentialsGraceful(
   } catch {
     return value; // Not encrypted yet
   }
+}
+
+export interface StrictCredentialReadResult {
+  value: string;
+  encrypted: boolean;
+  error: string | null;
+}
+
+export function encodeEncryptedCredential(encrypted: string): string {
+  return encrypted.startsWith(ENCRYPTED_CREDENTIAL_PREFIX)
+    ? encrypted
+    : `${ENCRYPTED_CREDENTIAL_PREFIX}${encrypted}`;
+}
+
+export function isLikelyEncryptedCredential(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith(ENCRYPTED_CREDENTIAL_PREFIX)) return true;
+
+  const [iv, ciphertext, extra] = trimmed.split(":");
+  if (!iv || !ciphertext || extra !== undefined) return false;
+  return iv.length === 16 && ciphertext.length >= 24 && isBase64ish(iv) && isBase64ish(ciphertext);
+}
+
+export async function readStoredCredentialStrict(
+  storedValue: string | null | undefined,
+  keyBase64: string | undefined,
+  label = "Credential",
+): Promise<StrictCredentialReadResult> {
+  const trimmed = storedValue?.trim() ?? "";
+  if (!trimmed) {
+    return { value: "", encrypted: false, error: null };
+  }
+
+  if (!isLikelyEncryptedCredential(trimmed)) {
+    return { value: trimmed, encrypted: false, error: null };
+  }
+
+  if (!keyBase64) {
+    return {
+      value: "",
+      encrypted: true,
+      error: `${label} is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.`,
+    };
+  }
+
+  const encrypted = trimmed.startsWith(ENCRYPTED_CREDENTIAL_PREFIX)
+    ? trimmed.slice(ENCRYPTED_CREDENTIAL_PREFIX.length)
+    : trimmed;
+
+  try {
+    return {
+      value: await decryptCredentials(encrypted, keyBase64),
+      encrypted: true,
+      error: null,
+    };
+  } catch {
+    return {
+      value: "",
+      encrypted: true,
+      error: `${label} could not be decrypted with the configured credential key.`,
+    };
+  }
+}
+
+function isBase64ish(value: string): boolean {
+  return /^[A-Za-z0-9+/]+={0,2}$/.test(value);
 }

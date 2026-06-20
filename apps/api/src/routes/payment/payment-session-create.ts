@@ -16,8 +16,11 @@ import {
 } from "@scalius/core/modules/payments/payment-session-attempts";
 import {
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+  getPolarCheckoutReadiness,
   getPolarSettings,
+  getSSLCommerzCheckoutReadiness,
   getSSLCommerzSettings,
+  getStripeCheckoutReadiness,
   getStripeSettings,
 } from "@scalius/core/modules/payments/gateway-settings";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
@@ -32,7 +35,7 @@ import {
   isPaymentProviderTimedOut,
   withPaymentProviderDeadline,
 } from "./payment-provider-deadline";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
   ApiError,
   NotFoundError,
@@ -149,7 +152,7 @@ export async function createStripePaymentSession(
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
   assertOrderCanUseGateway(order, PaymentMethod.STRIPE, "Stripe");
 
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "stripe");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
@@ -166,10 +169,11 @@ export async function createStripePaymentSession(
     FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   );
 
-  if (!stripe) {
-    throw new ServiceUnavailableError("Stripe is not configured. Please set credentials in the admin dashboard.");
+  const stripeReadiness = getStripeCheckoutReadiness(stripe);
+  if (!stripe || !stripeReadiness.configured) {
+    throw new ServiceUnavailableError(stripeReadiness.blockedReason ?? "Stripe is not configured. Please set credentials in the admin dashboard.");
   }
-  if (!stripe.enabled) {
+  if (!stripeReadiness.enabled) {
     throw new ServiceUnavailableError("Stripe gateway is disabled.");
   }
 
@@ -274,7 +278,7 @@ export async function resolveCustomerPaymentSessionRecovery(
 
   try {
     assertOrderCanUseGateway(order, gateway, gatewayLabel(gateway));
-    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const checkoutFlowSettings = await assertGatewayEnabledForCheckout(
       db,
       c.env.CACHE,
@@ -308,7 +312,7 @@ export async function createSSLCommerzPaymentSession(
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
   assertOrderCanUseGateway(order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
 
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "sslcommerz");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
@@ -325,10 +329,11 @@ export async function createSSLCommerzPaymentSession(
     FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   );
 
-  if (!ssl) {
-    throw new ServiceUnavailableError("SSLCommerz is not configured. Please set credentials in the admin dashboard.");
+  const sslReadiness = getSSLCommerzCheckoutReadiness(ssl);
+  if (!ssl || !sslReadiness.configured) {
+    throw new ServiceUnavailableError(sslReadiness.blockedReason ?? "SSLCommerz is not configured. Please set credentials in the admin dashboard.");
   }
-  if (!ssl.enabled) {
+  if (!sslReadiness.enabled) {
     throw new ServiceUnavailableError("SSLCommerz gateway is disabled.");
   }
 
@@ -455,7 +460,7 @@ export async function createPolarPaymentSession(
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
   assertOrderCanUseGateway(order, PaymentMethod.POLAR, "Polar");
 
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, kv, encryptionKey, "polar");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
@@ -490,8 +495,12 @@ export async function createPolarPaymentSession(
     encryptionKey,
     FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   );
-  if (!polarSettings || !polarSettings.enabled) {
-    throw new ServiceUnavailableError("Polar is not configured or disabled");
+  const polarReadiness = getPolarCheckoutReadiness(polarSettings);
+  if (!polarSettings || !polarReadiness.configured) {
+    throw new ServiceUnavailableError(polarReadiness.blockedReason ?? "Polar is not configured. Please set credentials in the admin dashboard.");
+  }
+  if (!polarReadiness.enabled) {
+    throw new ServiceUnavailableError("Polar gateway is disabled.");
   }
 
   const decimals = getDecimalPlaces(currency);

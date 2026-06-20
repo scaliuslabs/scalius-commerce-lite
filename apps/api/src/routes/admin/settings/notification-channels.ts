@@ -13,6 +13,7 @@ import {
 } from "@scalius/core/modules/settings/settings.service";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
+import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -55,9 +56,10 @@ const getChannelsRoute = createRoute({
 
 app.openapi(getChannelsRoute, async (c) => {
     const db = c.get("db");
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const channels = await getNotificationChannels(db);
     const whatsappTemplate = await getOrderWhatsAppTemplateSettings(db);
-    const whatsappConfigured = await isWhatsAppCloudApiConfigured(db);
+    const whatsappConfigured = await isWhatsAppCloudApiConfigured(db, encryptionKey);
     return ok(c, { channels, whatsappTemplate, whatsappConfigured });
 });
 
@@ -81,12 +83,13 @@ const updateChannelsRoute = createRoute({
 
 app.openapi(updateChannelsRoute, async (c) => {
     const db = c.get("db");
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const { channels, whatsappTemplate: whatsappTemplateInput } = c.req.valid("json");
-    const updated = await updateNotificationChannels(db, channels);
+    const updated = await updateNotificationChannels(db, channels, encryptionKey);
     const whatsappTemplate = whatsappTemplateInput
         ? await updateOrderWhatsAppTemplateSettings(db, whatsappTemplateInput)
         : await getOrderWhatsAppTemplateSettings(db);
-    const whatsappConfigured = await isWhatsAppCloudApiConfigured(db);
+    const whatsappConfigured = await isWhatsAppCloudApiConfigured(db, encryptionKey);
     return ok(c, { channels: updated, whatsappTemplate, whatsappConfigured });
 });
 

@@ -278,6 +278,7 @@ function normalizeParsedChannels(parsed: unknown): Record<string, string[]> {
 export async function updateNotificationChannels(
     db: Database,
     input: Record<string, unknown>,
+    encryptionKey?: string,
 ): Promise<Record<string, string[]>> {
     // Normalize from whatever format the UI sends
     const channels = normalizeParsedChannels(input);
@@ -289,7 +290,7 @@ export async function updateNotificationChannels(
         );
     }
 
-    if (channelsRequireWhatsApp(channels) && !(await isWhatsAppCloudApiConfigured(db))) {
+    if (channelsRequireWhatsApp(channels) && !(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
         throw new ValidationError("Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.");
     }
 
@@ -299,8 +300,11 @@ export async function updateNotificationChannels(
     return channels;
 }
 
-export async function isWhatsAppCloudApiConfigured(db: Database): Promise<boolean> {
-    const config = await getWhatsAppCloudApiSettings(db);
+export async function isWhatsAppCloudApiConfigured(
+    db: Database,
+    encryptionKey?: string,
+): Promise<boolean> {
+    const config = await getWhatsAppCloudApiSettings(db, encryptionKey);
     return Boolean(config.accessTokenConfigured && config.phoneNumberId);
 }
 

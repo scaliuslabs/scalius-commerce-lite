@@ -6,7 +6,7 @@ import { ServiceUnavailableError } from "../../../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
     getKv: vi.fn(),
-    getEncryptionKey: vi.fn(),
+    getCredentialEncryptionKey: vi.fn(),
     requireEncryptionKey: vi.fn(),
     invalidateApiAndScheduleStorefrontGroups: vi.fn(),
     safeBatch: vi.fn(),
@@ -137,7 +137,7 @@ vi.mock("../../../utils/kv-cache", () => ({
 }));
 
 vi.mock("../../../utils/encryption-key", () => ({
-    getEncryptionKey: mocks.getEncryptionKey,
+    getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
     requireEncryptionKey: mocks.requireEncryptionKey,
 }));
 
@@ -207,7 +207,7 @@ function createTestApp(
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
     mocks.getKv.mockReturnValue(kv);
-    mocks.getEncryptionKey.mockReturnValue("enc-key");
+    mocks.getCredentialEncryptionKey.mockReturnValue("enc-key");
     mocks.requireEncryptionKey.mockReturnValue("credential-key");
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
     mocks.safeBatch.mockResolvedValue([]);

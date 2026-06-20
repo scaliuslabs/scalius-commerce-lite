@@ -45,7 +45,7 @@ import {
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { getCredentialEncryptionKey, getEncryptionKey } from "./utils/encryption-key";
+import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
@@ -419,7 +419,7 @@ async function processQueueMessage(
 
       try {
         // Customer notifications (email, SMS, etc.)
-        const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+        const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
         const customerNotificationResult = await sendOrderNotificationEmail(
           payload.customerEmail,
           payload.customerName,
@@ -566,7 +566,7 @@ async function sendAuthOtpEmail(
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
-  const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   const safeName = escapeHtml(payload.name);
   const safeCode = escapeHtml(payload.code);
   const result = await sendEmail({
@@ -612,7 +612,7 @@ async function sendAuthOtpWhatsApp(
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
-  const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   const config = await getWhatsAppCloudApiSettings(db, encryptionKey, {
     migrateLegacy: true,
     migrationEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
@@ -660,7 +660,7 @@ async function sendAuthOtpSms(
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
-  const encryptionKey = getEncryptionKey(env as unknown as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   const smsProvider = await getActiveSmsProvider(db, encryptionKey);
   if (!smsProvider) {
     throw createAuthOtpDeliveryError(

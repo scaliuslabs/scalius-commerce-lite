@@ -227,6 +227,14 @@ const runtimeGlobalsScript = [
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
 
+    <script is:inline>
+      (function () {
+        window.addEventListener("open-auth-modal", function () {
+          window.__scaliusAuthModalOpenPending = true;
+        });
+      })();
+    </script>
+
     <!-- Stale Asset Detector -->
     <script is:inline>
       (function () {

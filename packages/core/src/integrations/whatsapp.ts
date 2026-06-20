@@ -2,7 +2,10 @@ import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import type { Database } from "@scalius/database/client";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { decryptCredentials, decryptCredentialsGraceful, encryptCredentials } from "../utils/credential-encryption";
+import {
+  encryptCredentials,
+  readStoredCredentialStrict,
+} from "../utils/credential-encryption";
 import { META_GRAPH_API_VERSION } from "./meta/conversions-api";
 
 export interface SendWhatsAppTemplateMessageInput {
@@ -115,7 +118,7 @@ export async function getWhatsAppCloudApiSettings(
 
   return {
     accessToken,
-    accessTokenConfigured: Boolean(tokenRow?.value || legacyAccessToken),
+    accessTokenConfigured: Boolean(accessToken),
     phoneNumberId: site?.whatsappPhoneNumberId ?? undefined,
     authTemplateName: site?.whatsappTemplateName || "auth_otp",
     accessTokenSource,
@@ -271,19 +274,16 @@ async function readStoredWhatsAppAccessToken(
   storedValue: string,
   encryptionKey?: string,
 ): Promise<string | undefined> {
-  if (storedValue.startsWith(ENCRYPTED_VALUE_PREFIX)) {
-    if (!encryptionKey) return undefined;
-    try {
-      return await decryptCredentials(storedValue.slice(ENCRYPTED_VALUE_PREFIX.length), encryptionKey);
-    } catch (error: unknown) {
-      console.warn(
-        "[WhatsApp] Failed to decrypt encrypted access token:",
-        error instanceof Error ? error.message : error,
-      );
-      return undefined;
-    }
+  const result = await readStoredCredentialStrict(
+    storedValue,
+    encryptionKey,
+    "WhatsApp access token",
+  );
+  if (result.error) {
+    console.warn("[WhatsApp] Access token is not ready:", result.error);
+    return undefined;
   }
-  return decryptCredentialsGraceful(storedValue, encryptionKey);
+  return result.value || undefined;
 }
 
 async function migrateLegacyWhatsAppAccessToken(

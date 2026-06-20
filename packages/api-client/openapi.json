@@ -60588,6 +60588,12 @@
                                     "type": "string"
                                   }
                                 },
+                                "credentialErrors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "blockedReason": {
                                   "type": "string"
                                 },
@@ -60619,6 +60625,12 @@
                                   "type": "boolean"
                                 },
                                 "missingFields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "credentialErrors": {
                                   "type": "array",
                                   "items": {
                                     "type": "string"
@@ -60660,6 +60672,12 @@
                                     "type": "string"
                                   }
                                 },
+                                "credentialErrors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "blockedReason": {
                                   "type": "string"
                                 },
@@ -60691,6 +60709,12 @@
                                   "type": "boolean"
                                 },
                                 "missingFields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "credentialErrors": {
                                   "type": "array",
                                   "items": {
                                     "type": "string"

@@ -13,7 +13,7 @@ import {
   upsertSetting,
   upsertEncryptedSetting,
 } from "@scalius/core/modules/payments/gateway-settings";
-import { decryptCredentials } from "@scalius/core/utils/credential-encryption";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import type { SmsProvider, SmsProviderId } from "./provider";
 
 // ---------------------------------------------------------------------------
@@ -198,42 +198,11 @@ async function resolveSmsSecret(
   encryptionKey: string | undefined,
   label: string,
 ): Promise<ResolvedSmsSecret> {
-  if (!storedValue) {
-    return { value: "", error: null };
-  }
-
-  if (!isLikelyEncryptedCredential(storedValue)) {
-    return { value: storedValue, error: null };
-  }
-
-  if (!encryptionKey) {
-    return {
-      value: "",
-      error: `${label} is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.`,
-    };
-  }
-
-  try {
-    return {
-      value: await decryptCredentials(storedValue, encryptionKey),
-      error: null,
-    };
-  } catch {
-    return {
-      value: "",
-      error: `${label} could not be decrypted with the configured credential key.`,
-    };
-  }
-}
-
-function isLikelyEncryptedCredential(value: string): boolean {
-  const [iv, ciphertext, extra] = value.split(":");
-  if (!iv || !ciphertext || extra !== undefined) return false;
-  return iv.length === 16 && ciphertext.length >= 24 && isBase64ish(iv) && isBase64ish(ciphertext);
-}
-
-function isBase64ish(value: string): boolean {
-  return /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+  const result = await readStoredCredentialStrict(storedValue, encryptionKey, label);
+  return {
+    value: result.value,
+    error: result.error,
+  };
 }
 
 export async function getSmsProviderReadiness(

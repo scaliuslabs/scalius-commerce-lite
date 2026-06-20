@@ -31,7 +31,8 @@ vi.mock("@scalius/core/modules/payments/polar", () => ({
   createPolarCheckout: mocks.createPolarCheckout,
 }));
 
-vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
+vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getActivePaymentMethods: mocks.getActivePaymentMethods,
   getStripeSettings: mocks.getStripeSettings,
@@ -195,6 +196,7 @@ beforeEach(() => {
     enabled: true,
     secretKey: "sk_test",
     publishableKey: "pk_test",
+    webhookSecret: "whsec_test",
   });
   mocks.createPaymentIntent.mockResolvedValue({
     success: true,
@@ -216,6 +218,7 @@ beforeEach(() => {
     enabled: true,
     accessToken: "polar_token",
     productId: "polar_product",
+    webhookSecret: "polar_webhook",
     sandbox: true,
   });
   mocks.createPolarCheckout.mockResolvedValue({

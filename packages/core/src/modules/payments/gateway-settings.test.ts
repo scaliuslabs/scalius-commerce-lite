@@ -2,15 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getActivePaymentMethods,
+  getPolarSettings,
   getPolarCheckoutReadiness,
+  getSSLCommerzSettings,
   getSSLCommerzCheckoutReadiness,
   getStripeSettings,
+  getStripeCheckoutReadiness,
   invalidatePaymentMethodsCache,
   invalidatePolarCache,
   invalidateSSLCommerzCache,
   invalidateStripeCache,
   upsertEncryptedSetting,
 } from "./gateway-settings";
+import { decryptCredentials, encryptCredentials } from "../../utils/credential-encryption";
 
 function createRejectingDeleteKv(): KVNamespace {
   return {
@@ -259,6 +263,95 @@ describe("payment gateway settings cache cleanup", () => {
     });
   });
 
+  it("does not make Stripe active when encrypted credentials cannot be decrypted", async () => {
+    const key = Buffer.alloc(32, 8).toString("base64");
+    const wrongKey = Buffer.alloc(32, 9).toString("base64");
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["stripe"]) },
+        { key: "default_method", value: "stripe" },
+      ],
+      [
+        { key: "secret_key", value: `enc:${await encryptCredentials("sk_live_secret", key)}` },
+        { key: "publishable_key", value: "pk_live_public" },
+        { key: "webhook_secret", value: `enc:${await encryptCredentials("whsec_live", key)}` },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, wrongKey, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: [],
+      defaultMethod: "cod",
+    });
+  });
+
+  it("reports gateway credential errors instead of treating ciphertext as configured", async () => {
+    const key = Buffer.alloc(32, 10).toString("base64");
+    const wrongKey = Buffer.alloc(32, 11).toString("base64");
+    const stripeDb = createDbReturningCategoryReads([
+      [
+        { key: "secret_key", value: `enc:${await encryptCredentials("sk_live_secret", key)}` },
+        { key: "publishable_key", value: "pk_live_public" },
+        { key: "webhook_secret", value: `enc:${await encryptCredentials("whsec_live", key)}` },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+    const sslDb = createDbReturningCategoryReads([
+      [
+        { key: "store_id", value: "store_test" },
+        { key: "store_password", value: `enc:${await encryptCredentials("password_test", key)}` },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+    const polarDb = createDbReturningCategoryReads([
+      [
+        { key: "access_token", value: `enc:${await encryptCredentials("polar_token", key)}` },
+        { key: "product_id", value: "polar_product" },
+        { key: "webhook_secret", value: `enc:${await encryptCredentials("polar_webhook", key)}` },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    const stripe = await getStripeSettings(stripeDb as never, undefined, wrongKey, {
+      bypassMemoryCache: true,
+    });
+    const ssl = await getSSLCommerzSettings(sslDb as never, undefined, wrongKey, {
+      bypassMemoryCache: true,
+    });
+    const polar = await getPolarSettings(polarDb as never, undefined, wrongKey, {
+      bypassMemoryCache: true,
+    });
+
+    expect(getStripeCheckoutReadiness(stripe)).toMatchObject({
+      configured: false,
+      usable: false,
+      credentialErrors: [
+        "Stripe secret key could not be decrypted with the configured credential key.",
+        "Stripe webhook secret could not be decrypted with the configured credential key.",
+      ],
+      blockedReason: "Stripe secret key could not be decrypted with the configured credential key.",
+    });
+    expect(getSSLCommerzCheckoutReadiness(ssl)).toMatchObject({
+      configured: false,
+      usable: false,
+      credentialErrors: [
+        "SSLCommerz store password could not be decrypted with the configured credential key.",
+      ],
+    });
+    expect(getPolarCheckoutReadiness(polar)).toMatchObject({
+      configured: false,
+      usable: false,
+      credentialErrors: [
+        "Polar access token could not be decrypted with the configured credential key.",
+        "Polar webhook secret could not be decrypted with the configured credential key.",
+      ],
+    });
+  });
+
   it("reports exact SSLCommerz and Polar checkout readiness gaps", () => {
     expect(getSSLCommerzCheckoutReadiness({
       storeId: "store_1",
@@ -330,6 +423,10 @@ describe("payment gateway settings cache cleanup", () => {
       type: "string",
     });
     expect(captured.values?.value).toEqual(expect.any(String));
+    expect(captured.values?.value).toMatch(/^enc:/);
     expect(captured.values?.value).not.toBe("sk_live_secret");
+    await expect(
+      decryptCredentials(String(captured.values?.value).slice("enc:".length), key),
+    ).resolves.toBe("sk_live_secret");
   });
 });

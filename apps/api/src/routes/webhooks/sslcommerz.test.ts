@@ -22,6 +22,7 @@ vi.mock("@scalius/core/modules/payments/sslcommerz", async (importOriginal) => (
 
 vi.mock("../../utils/encryption-key", () => ({
   getEncryptionKey: vi.fn(() => "test-key"),
+  getCredentialEncryptionKey: vi.fn(() => "test-key"),
 }));
 
 vi.mock("../../utils/webhook-idempotency", async (importOriginal) => {

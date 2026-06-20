@@ -143,8 +143,14 @@ export default function AuthModal() {
       window.addEventListener('load', fetchInitData, { once: true });
     }
 
-    const handleOpen = () => setIsOpen(true);
+    const handleOpen = () => {
+      delete window.__scaliusAuthModalOpenPending;
+      setIsOpen(true);
+    };
     window.addEventListener("open-auth-modal", handleOpen);
+    if (window.__scaliusAuthModalOpenPending) {
+      handleOpen();
+    }
     return () => {
       isMounted = false;
       window.removeEventListener("open-auth-modal", handleOpen);

@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 
 import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
-import { getCredentialEncryptionKey, getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import {
@@ -129,7 +129,7 @@ app.openapi(getAuthRoute, async (c) => {
         );
         const whatsapp = await getWhatsAppCloudApiSettings(
             db,
-            getEncryptionKey(c.env as Record<string, unknown>),
+            getCredentialEncryptionKey(c.env as Record<string, unknown>),
             {
                 migrateLegacy: true,
                 migrationEncryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
@@ -187,7 +187,7 @@ app.openapi(saveAuthRoute, async (c) => {
         let requestedCustomerAuthPolicy:
             | ReturnType<typeof normalizeCustomerAuthPolicy>
             | undefined;
-        const credentialEncryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+        const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const credentialWriteKey =
             typeof body.whatsappAccessToken === "string" &&
             body.whatsappAccessToken !== MASKED &&
@@ -414,7 +414,7 @@ app.openapi(getEmailRoute, async (c) => {
         const emailSettings = await getEmailRuntimeSettings({
             db,
             env: c.env as Record<string, unknown>,
-            encryptionKey: getEncryptionKey(c.env as Record<string, unknown>),
+            encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
         });
         const sender = await readEmailSetting(db, "email_sender");
 
