@@ -38,6 +38,21 @@ function createTransactionSuffix(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, SSL_COMMERZ_TRAN_SUFFIX_LENGTH).toUpperCase();
 }
 
+function isProviderTimeoutError(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { name?: unknown; message?: unknown };
+  const name = typeof maybeError.name === "string" ? maybeError.name.toLowerCase() : "";
+  const message = typeof maybeError.message === "string" ? maybeError.message.toLowerCase() : "";
+  return (
+    name.includes("timeout") ||
+    name.includes("abort") ||
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("aborted")
+  );
+}
+
 export function buildSSLCommerzTranId(
   orderId: string,
   paymentType: InitSSLCommerzSessionParams["paymentType"],
@@ -109,6 +124,7 @@ export async function initSSLCommerzSession(
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
+      signal: params.signal,
     });
 
     if (!response.ok) {
@@ -133,6 +149,13 @@ export async function initSSLCommerzSession(
       error: data.failedreason ?? data.status ?? "Failed to initiate SSLCommerz session",
     };
   } catch (err: unknown) {
+    if (isProviderTimeoutError(err, params.signal)) {
+      return {
+        success: false,
+        error: "SSLCommerz did not respond before the payment timeout. Please try again.",
+        timedOut: true,
+      };
+    }
     const message = err instanceof Error ? err.message : "Network error contacting SSLCommerz";
     return { success: false, error: message };
   }

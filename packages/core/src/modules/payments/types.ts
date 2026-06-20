@@ -36,6 +36,10 @@ export interface CreateStripePaymentIntentParams {
   manualCapture?: boolean;
   /** Provider-side idempotency key for checkout/session retries */
   idempotencyKey?: string;
+  /** Per-provider HTTP deadline in milliseconds for checkout/session creation. */
+  requestTimeoutMs?: number;
+  /** Disable SDK network retries for buyer-facing session creation hot paths. */
+  maxNetworkRetries?: number;
   metadata?: Record<string, string>;
 }
 
@@ -44,6 +48,7 @@ export interface StripePaymentIntentResult {
   clientSecret?: string;
   paymentIntentId?: string;
   error?: string;
+  timedOut?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +73,8 @@ export interface InitSSLCommerzSessionParams {
   paymentType: PaymentType;
   productName?: string;
   numItems?: number;
+  /** Abort signal from the API route deadline guard. */
+  signal?: AbortSignal;
 }
 
 export interface SSLCommerzSessionResult {
@@ -75,6 +82,7 @@ export interface SSLCommerzSessionResult {
   gatewayUrl?: string; // Redirect customer to this URL
   sessionKey?: string; // SSLCommerz session key (stored as paymentIntentId)
   error?: string;
+  timedOut?: boolean;
 }
 
 export interface SSLCommerzIPNPayload {
@@ -130,6 +138,10 @@ export interface CreatePolarCheckoutParams {
   customerName?: string;
   customerEmail?: string;
   metadata?: Record<string, string>;
+  /** Per-provider HTTP deadline in milliseconds for checkout/session creation. */
+  requestTimeoutMs?: number;
+  /** Abort signal from the API route deadline guard. */
+  signal?: AbortSignal;
 }
 
 export interface PolarCheckoutResult {
@@ -137,6 +149,7 @@ export interface PolarCheckoutResult {
   checkoutUrl?: string; // Redirect customer to this URL
   checkoutId?: string; // Polar checkout session ID
   error?: string;
+  timedOut?: boolean;
 }
 
 export interface PolarRefundParams {

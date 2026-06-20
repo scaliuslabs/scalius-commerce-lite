@@ -37,7 +37,7 @@ describe("order success side effects", () => {
     );
 
     expect(pageSource).toContain("id=\"retryPaymentButton\"");
-    expect(pageSource).toContain("retryKey");
+    expect(pageSource).not.toContain("retryKey");
     const retryScriptIndex = pageSource.indexOf('document.getElementById("retryPaymentButton")');
     expect(retryScriptIndex).toBeGreaterThan(pageSource.indexOf("clearCart();"));
     const retryScript = pageSource.slice(retryScriptIndex);

@@ -25,6 +25,11 @@ import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
+import {
+  createPaymentProviderTimeoutError,
+  isPaymentProviderTimedOut,
+  withPaymentProviderDeadline,
+} from "./payment-provider-deadline";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -158,14 +163,18 @@ app.openapi(createIntentRoute, async (c) => {
 
   let result: Awaited<ReturnType<typeof createPaymentIntent>>;
   try {
-    result = await createPaymentIntent(stripe.secretKey, {
-      orderId: body.orderId,
-      amount: amountInSmallestUnit,
-      currency,
-      paymentType: policy.paymentType,
-      manualCapture: false,
-      idempotencyKey: attemptIdentity.attemptKey,
-    });
+    result = await withPaymentProviderDeadline("Stripe", (_signal, requestTimeoutMs) =>
+      createPaymentIntent(stripe.secretKey, {
+        orderId: body.orderId,
+        amount: amountInSmallestUnit,
+        currency,
+        paymentType: policy.paymentType,
+        manualCapture: false,
+        idempotencyKey: attemptIdentity.attemptKey,
+        requestTimeoutMs,
+        maxNetworkRetries: 0,
+      })
+    );
   } catch (error: unknown) {
     await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
       .catch((markError: unknown) => console.error("[payments] Failed to mark Stripe session attempt failed:", markError));
@@ -175,6 +184,9 @@ app.openapi(createIntentRoute, async (c) => {
   if (!result.success) {
     await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create payment intent")
       .catch((error: unknown) => console.error("[payments] Failed to mark Stripe session attempt failed:", error));
+    if (isPaymentProviderTimedOut(result)) {
+      throw createPaymentProviderTimeoutError("Stripe");
+    }
     throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create payment intent");
   }
 

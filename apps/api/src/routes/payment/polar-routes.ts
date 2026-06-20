@@ -26,6 +26,11 @@ import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
+import {
+    createPaymentProviderTimeoutError,
+    isPaymentProviderTimedOut,
+    withPaymentProviderDeadline,
+} from "./payment-provider-deadline";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -206,26 +211,31 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 
     let result: Awaited<ReturnType<typeof createPolarCheckout>>;
     try {
-        result = await createPolarCheckout(polarSettings, {
-            orderId,
-            amount: amountInCents,
-            currency,
-            productId: polarSettings.productId,
-            paymentType: policy.paymentType,
-            successUrl,
-            cancelUrl,
-            customerName: body.customerName,
-            customerEmail: body.customerEmail,
-            metadata: {
+        result = await withPaymentProviderDeadline(
+            "Polar",
+            (signal, requestTimeoutMs) => createPolarCheckout(polarSettings, {
                 orderId,
+                amount: amountInCents,
+                currency,
+                productId: polarSettings.productId,
                 paymentType: policy.paymentType,
-                // Roundtrip original amounts through Polar webhook so the queue consumer
-                // can record paidAmount in store currency, not gateway currency.
-                originalAmount: String(originalLocalAmount),
-                originalCurrency,
-                exchangeRate: String(exchangeRate),
-            }
-        });
+                successUrl,
+                cancelUrl,
+                customerName: body.customerName,
+                customerEmail: body.customerEmail,
+                metadata: {
+                    orderId,
+                    paymentType: policy.paymentType,
+                    // Roundtrip original amounts through Polar webhook so the queue consumer
+                    // can record paidAmount in store currency, not gateway currency.
+                    originalAmount: String(originalLocalAmount),
+                    originalCurrency,
+                    exchangeRate: String(exchangeRate),
+                },
+                requestTimeoutMs,
+                signal,
+            })
+        );
     } catch (error: unknown) {
         await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
             .catch((markError: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", markError));
@@ -235,6 +245,9 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     if (!result.success || !result.checkoutUrl) {
         await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create Polar checkout")
             .catch((error: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", error));
+        if (isPaymentProviderTimedOut(result)) {
+            throw createPaymentProviderTimeoutError("Polar");
+        }
         throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create Polar checkout");
     }
 

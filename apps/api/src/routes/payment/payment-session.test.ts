@@ -53,6 +53,7 @@ vi.mock("@scalius/core/modules/payments/payment-session-attempts", () => ({
 import { polarPaymentRoutes } from "./polar-routes";
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
+import { PAYMENT_SESSION_PROVIDER_REQUEST_TIMEOUT_MS } from "./payment-provider-deadline";
 import {
   OrderStatus,
   PaymentPlanStatus,
@@ -503,6 +504,8 @@ describe("payment session receipt-token proof", () => {
       currency: "bdt",
       paymentType: "deposit",
       manualCapture: false,
+      requestTimeoutMs: PAYMENT_SESSION_PROVIDER_REQUEST_TIMEOUT_MS,
+      maxNetworkRetries: 0,
     }));
     expect(db.__insertedValues).toContainEqual(expect.objectContaining({
       orderId: "order_1",
@@ -659,6 +662,7 @@ describe("payment session receipt-token proof", () => {
         totalAmount: 60,
         currency: "BDT",
         paymentType: "deposit",
+        signal: expect.any(AbortSignal),
         successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
         failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
         cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
@@ -877,6 +881,8 @@ describe("payment session receipt-token proof", () => {
           originalCurrency: "bdt",
           exchangeRate: "110",
         }),
+        requestTimeoutMs: PAYMENT_SESSION_PROVIDER_REQUEST_TIMEOUT_MS,
+        signal: expect.any(AbortSignal),
       }),
     );
   });
@@ -1029,6 +1035,71 @@ describe("payment session receipt-token proof", () => {
       db,
       expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
       "Stripe unavailable",
+    );
+    expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      gateway: mocks.createPaymentIntent,
+      timeoutResult: {
+        success: false,
+        error: "Stripe did not respond before the payment timeout. Please try again.",
+        timedOut: true,
+      },
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      gateway: mocks.initSSLCommerzSession,
+      timeoutResult: {
+        success: false,
+        error: "SSLCommerz did not respond before the payment timeout. Please try again.",
+        timedOut: true,
+      },
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      gateway: mocks.createPolarCheckout,
+      timeoutResult: {
+        success: false,
+        error: "Polar did not respond before the payment timeout. Please try again.",
+        timedOut: true,
+      },
+    },
+  ])("maps $label provider deadline results to retryable 503 responses", async ({
+    paymentMethod,
+    path,
+    gateway,
+    timeoutResult,
+  }) => {
+    gateway.mockResolvedValueOnce(timeoutResult);
+    const { app, db, kv } = createTestApp("valid", paymentMethod);
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+    const json = await response.json() as { error: { code: string; message: string } };
+
+    expect(response.status).toBe(503);
+    expect(json.error.code).toBe("SERVICE_UNAVAILABLE");
+    expect(json.error.message).toContain("did not respond in time");
+    expect(mocks.markPaymentSessionAttemptFailed).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
+      timeoutResult.error,
     );
     expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
   });

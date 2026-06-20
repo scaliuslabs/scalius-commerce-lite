@@ -3,21 +3,32 @@
 
 import type { APIRoute } from "astro";
 import { fetchWithRetry, createApiUrl } from "@/lib/api/client";
+import {
+  getPaymentSessionApiErrorMessage,
+  PAYMENT_SESSION_PROXY_TIMEOUT_MS,
+  paymentSessionProxyErrorResponse,
+} from "@/lib/checkout/payment-session-proxy";
 
 export const POST: APIRoute = async ({ request }) => {
   try {
     const payload = await request.json();
 
-    const res = await fetchWithRetry(createApiUrl("/payment/stripe/intent"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const res = await fetchWithRetry(
+      createApiUrl("/payment/stripe/intent"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      0,
+      PAYMENT_SESSION_PROXY_TIMEOUT_MS,
+      true,
+    );
 
     const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };
 
     if (!res.ok) {
-      const errMsg = typeof json.error === "string" ? json.error : (json.error as Record<string, unknown>)?.message || "Payment initialization failed";
+      const errMsg = getPaymentSessionApiErrorMessage(json, "Payment initialization failed");
       return new Response(JSON.stringify({ error: errMsg }), {
         status: res.status,
         headers: { "Content-Type": "application/json" },
@@ -31,9 +42,6 @@ export const POST: APIRoute = async ({ request }) => {
     });
   } catch (err: unknown) {
     console.error("[checkout/stripe-intent] Error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return paymentSessionProxyErrorResponse(err);
   }
 };

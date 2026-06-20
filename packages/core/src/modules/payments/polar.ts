@@ -48,6 +48,24 @@ function getPolarClient(settings: PolarSettings): Polar {
     return _cachedClient;
 }
 
+function isProviderTimeoutError(error: unknown, signal?: AbortSignal): boolean {
+    if (signal?.aborted) return true;
+    if (!error || typeof error !== "object") return false;
+    const maybeError = error as { name?: unknown; message?: unknown; code?: unknown };
+    const name = typeof maybeError.name === "string" ? maybeError.name.toLowerCase() : "";
+    const code = typeof maybeError.code === "string" ? maybeError.code.toLowerCase() : "";
+    const message = typeof maybeError.message === "string" ? maybeError.message.toLowerCase() : "";
+    return (
+        name.includes("timeout") ||
+        name.includes("abort") ||
+        code.includes("timeout") ||
+        code.includes("abort") ||
+        message.includes("timed out") ||
+        message.includes("timeout") ||
+        message.includes("aborted")
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Create Checkout Session
 // ---------------------------------------------------------------------------
@@ -66,28 +84,35 @@ export async function createPolarCheckout(
     try {
         const client = getPolarClient(settings);
 
-        const checkout = await client.checkouts.create({
-            products: [settings.productId],
-            prices: {
-                [settings.productId]: [
-                    {
-                        amountType: "fixed",
-                        priceAmount: params.amount, // Already in cents
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Polar SDK expects PresentmentCurrency enum
-                        priceCurrency: params.currency as any, // Cast: Polar SDK expects PresentmentCurrency enum
-                    },
-                ],
+        const checkout = await client.checkouts.create(
+            {
+                products: [settings.productId],
+                prices: {
+                    [settings.productId]: [
+                        {
+                            amountType: "fixed",
+                            priceAmount: params.amount, // Already in cents
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Polar SDK expects PresentmentCurrency enum
+                            priceCurrency: params.currency as any, // Cast: Polar SDK expects PresentmentCurrency enum
+                        },
+                    ],
+                },
+                successUrl: params.successUrl,
+                ...(params.cancelUrl ? { cancelUrl: params.cancelUrl } : {}),
+                metadata: {
+                    orderId: params.orderId,
+                    paymentType: params.paymentType,
+                    ...(params.metadata ?? {}),
+                },
+                ...(params.customerEmail ? { customerEmail: params.customerEmail } : {}),
+                ...(params.customerName ? { customerName: params.customerName } : {}),
             },
-            successUrl: params.successUrl,
-            ...(params.cancelUrl ? { cancelUrl: params.cancelUrl } : {}),
-            metadata: {
-                orderId: params.orderId,
-                paymentType: params.paymentType,
-                ...(params.metadata ?? {}),
+            {
+                retries: { strategy: "none" },
+                ...(params.requestTimeoutMs ? { timeoutMs: params.requestTimeoutMs } : {}),
+                ...(params.signal ? { signal: params.signal } : {}),
             },
-            ...(params.customerEmail ? { customerEmail: params.customerEmail } : {}),
-            ...(params.customerName ? { customerName: params.customerName } : {}),
-        });
+        );
 
         if (!checkout.url) {
             return {
@@ -102,6 +127,13 @@ export async function createPolarCheckout(
             checkoutId: checkout.id,
         };
     } catch (error: unknown) {
+        if (isProviderTimeoutError(error, params.signal)) {
+            return {
+                success: false,
+                error: "Polar did not respond before the payment timeout. Please try again.",
+                timedOut: true,
+            };
+        }
         console.error("[Polar] Error creating checkout session:", error);
         return {
             success: false,

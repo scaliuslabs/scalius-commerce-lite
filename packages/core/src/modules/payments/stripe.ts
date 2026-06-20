@@ -23,6 +23,25 @@ import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 let _stripe: Stripe | null = null;
 let _stripeKey: string | null = null;
 
+function isProviderTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { name?: unknown; message?: unknown; code?: unknown; type?: unknown };
+  const name = typeof maybeError.name === "string" ? maybeError.name.toLowerCase() : "";
+  const code = typeof maybeError.code === "string" ? maybeError.code.toLowerCase() : "";
+  const type = typeof maybeError.type === "string" ? maybeError.type.toLowerCase() : "";
+  const message = typeof maybeError.message === "string" ? maybeError.message.toLowerCase() : "";
+  return (
+    name.includes("timeout") ||
+    name.includes("abort") ||
+    code.includes("timeout") ||
+    code.includes("abort") ||
+    type.includes("connection") && message.includes("timeout") ||
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("aborted")
+  );
+}
+
 export function getStripe(secretKey: string): Stripe {
   if (!_stripe || _stripeKey !== secretKey) {
     _stripe = new Stripe(secretKey);
@@ -58,9 +77,16 @@ export async function createPaymentIntent(
       },
     };
 
-    const intent = params.idempotencyKey
-      ? await stripe.paymentIntents.create(intentParams, { idempotencyKey: params.idempotencyKey })
-      : await stripe.paymentIntents.create(intentParams);
+    const requestOptions: Stripe.RequestOptions = {};
+    if (params.idempotencyKey) requestOptions.idempotencyKey = params.idempotencyKey;
+    if (typeof params.requestTimeoutMs === "number" && params.requestTimeoutMs > 0) {
+      requestOptions.timeout = params.requestTimeoutMs;
+    }
+    if (typeof params.maxNetworkRetries === "number" && params.maxNetworkRetries >= 0) {
+      requestOptions.maxNetworkRetries = params.maxNetworkRetries;
+    }
+
+    const intent = await stripe.paymentIntents.create(intentParams, requestOptions);
 
     return {
       success: true,
@@ -68,6 +94,13 @@ export async function createPaymentIntent(
       paymentIntentId: intent.id,
     };
   } catch (err: unknown) {
+    if (isProviderTimeoutError(err)) {
+      return {
+        success: false,
+        error: "Stripe did not respond before the payment timeout. Please try again.",
+        timedOut: true,
+      };
+    }
     const message = err instanceof Stripe.errors.StripeError
       ? err.message
       : "Failed to create payment intent";
