@@ -7,6 +7,7 @@ import type { CreateStorefrontOrderInput } from "./orders.types";
 
 interface ProductRow {
   id: string;
+  name: string;
   isActive: boolean;
   price: number;
   discountPercentage: number | null;
@@ -18,7 +19,14 @@ interface ProductRow {
 interface VariantRow {
   id: string;
   productId: string;
+  size: string | null;
+  color: string | null;
   stock: number;
+  reservedStock: number;
+  preorderStock: number;
+  allowPreorder: boolean;
+  allowBackorder: boolean;
+  backorderLimit: number;
   price: number;
   discountPercentage: number | null;
   discountType: string | null;
@@ -44,6 +52,7 @@ interface LocationRow {
 function createProduct(overrides: Partial<ProductRow> = {}): ProductRow {
   return {
     id: "prod_standard",
+    name: "Standard Product",
     isActive: true,
     price: 100,
     discountPercentage: null,
@@ -58,7 +67,14 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
   return {
     id: "var_standard",
     productId: "prod_standard",
+    size: null,
+    color: null,
     stock: 10,
+    reservedStock: 0,
+    preorderStock: 0,
+    allowPreorder: false,
+    allowBackorder: false,
+    backorderLimit: 0,
     price: 125,
     discountPercentage: null,
     discountType: null,
@@ -103,9 +119,9 @@ function createOrderInput(overrides: Partial<CreateStorefrontOrderInput> = {}): 
     items: [
       {
         productId: "prod_standard",
-        variantId: null,
+        variantId: "var_standard",
         quantity: 1,
-        price: 1,
+        price: 125,
         productName: "Standard Product",
         variantLabel: null,
       },
@@ -120,9 +136,10 @@ function createOrderInput(overrides: Partial<CreateStorefrontOrderInput> = {}): 
   };
 }
 
-function createDbMock(readResults: unknown[]): Database {
+function createDbMock(readResults: unknown[], validationProducts: ProductRow[], validationVariants: VariantRow[]): Database {
+  const selectResults: unknown[] = [validationProducts, validationVariants];
   const statement = {
-    where: vi.fn(() => ({ statement: "where" })),
+    where: vi.fn(() => Promise.resolve(selectResults.shift() ?? [])),
     limit: vi.fn(() => ({ statement: "limit" })),
   };
 
@@ -137,7 +154,7 @@ function createDbMock(readResults: unknown[]): Database {
 async function placeOrder({
   inputOverrides,
   products = [createProduct()],
-  variants = [],
+  variants = [createVariant()],
   locations = [
     createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
     createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
@@ -150,15 +167,14 @@ async function placeOrder({
   locations?: LocationRow[];
   shippingMethods?: ShippingMethodRow[];
 } = {}) {
+  const validationProducts = products.filter((product) => product.isActive === true);
   const db = createDbMock([
-    variants,
     locations,
     [],
     [],
-    products,
     [],
     shippingMethods,
-  ]);
+  ], validationProducts, variants);
 
   return createStorefrontOrder(
     db,
@@ -175,7 +191,17 @@ describe("createStorefrontOrder product availability verification", () => {
       placeOrder({
         products: [createProduct({ isActive: false })],
       }),
-    ).rejects.toThrow("Product prod_standard not found or is inactive.");
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            code: "PRODUCT_UNAVAILABLE",
+            message: "Standard Product is no longer available.",
+          }),
+        ],
+      },
+    });
   });
 
   it("rejects missing products before building an order payload", async () => {
@@ -183,7 +209,17 @@ describe("createStorefrontOrder product availability verification", () => {
       placeOrder({
         products: [],
       }),
-    ).rejects.toThrow("Product prod_standard not found or is inactive.");
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            code: "PRODUCT_UNAVAILABLE",
+            message: "Standard Product is no longer available.",
+          }),
+        ],
+      },
+    });
   });
 
   it("rejects a variant that does not belong to the submitted product", async () => {
@@ -195,7 +231,7 @@ describe("createStorefrontOrder product availability verification", () => {
               productId: "prod_standard",
               variantId: "var_foreign",
               quantity: 1,
-              price: 1,
+              price: 125,
               productName: "Standard Product",
               variantLabel: "Foreign Variant",
             },
@@ -203,7 +239,111 @@ describe("createStorefrontOrder product availability verification", () => {
         },
         variants: [createVariant({ id: "var_foreign", productId: "prod_other" })],
       }),
-    ).rejects.toThrow("Selected product variant is no longer available for checkout.");
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            code: "VARIANT_MISMATCH",
+            message: "Standard Product has changed. Please remove it and add the option again.",
+          }),
+        ],
+      },
+    });
+  });
+
+  it("rejects variantless checkout lines for stock-managed products", async () => {
+    await expect(
+      placeOrder({
+        inputOverrides: {
+          items: [
+            {
+              productId: "prod_standard",
+              variantId: null,
+              quantity: 1,
+              price: 100,
+              productName: "Standard Product",
+              variantLabel: null,
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            code: "VARIANT_REQUIRED",
+            message: "Standard Product needs an option selection before checkout.",
+          }),
+        ],
+      },
+    });
+  });
+
+  it("returns all stale-cart item issues with customer-safe messages", async () => {
+    try {
+      await placeOrder({
+        inputOverrides: {
+          items: [
+            {
+              productId: "prod_removed",
+              variantId: "var_removed",
+              quantity: 1,
+              price: 100,
+              productName: "Removed Product",
+              variantLabel: null,
+            },
+            {
+              productId: "prod_standard",
+              variantId: "var_standard",
+              quantity: 20,
+              price: 125,
+              productName: "Standard Product",
+              variantLabel: null,
+            },
+            {
+              productId: "prod_price_changed",
+              variantId: "var_price_changed",
+              quantity: 1,
+              price: 50,
+              productName: "Price Changed Product",
+              variantLabel: null,
+            },
+          ],
+        },
+        products: [
+          createProduct(),
+          createProduct({ id: "prod_price_changed", name: "Price Changed Product", price: 50 }),
+        ],
+        variants: [
+          createVariant(),
+          createVariant({ id: "var_price_changed", productId: "prod_price_changed", price: 80 }),
+        ],
+      });
+      throw new Error("Expected stale cart validation to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError);
+      const details = (error as ValidationError).details as { itemIssues: Array<{ code: string; message: string; availableQuantity?: number; currentPrice?: number }> };
+      expect(details.itemIssues).toEqual([
+        expect.objectContaining({
+          code: "PRODUCT_UNAVAILABLE",
+          message: "Removed Product is no longer available.",
+        }),
+        expect.objectContaining({
+          code: "QUANTITY_UNAVAILABLE",
+          message: "Only 10 left for Standard Product.",
+          availableQuantity: 10,
+        }),
+        expect.objectContaining({
+          code: "PRICE_CHANGED",
+          message: "The price for Price Changed Product changed. Please review the updated cart total.",
+          currentPrice: 80,
+        }),
+      ]);
+      expect(details.itemIssues.map((issue) => issue.message).join(" ")).not.toContain("prod_");
+      expect(details.itemIssues.map((issue) => issue.message).join(" ")).not.toContain("var_");
+    }
   });
 });
 
@@ -215,7 +355,7 @@ describe("createStorefrontOrder shipping verification", () => {
     });
 
     expect(result.queuePayload.orderData.shippingCharge).toBe(75);
-    expect(result.totalAmount).toBe(175);
+    expect(result.totalAmount).toBe(200);
   });
 
   it("rejects missing or unknown shipping methods when shipping applies", async () => {
@@ -265,7 +405,7 @@ describe("createStorefrontOrder shipping verification", () => {
     });
 
     expect(result.queuePayload.orderData.shippingCharge).toBe(0);
-    expect(result.totalAmount).toBe(100);
+    expect(result.totalAmount).toBe(125);
   });
 });
 

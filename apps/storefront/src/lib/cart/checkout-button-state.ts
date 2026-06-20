@@ -4,9 +4,12 @@ export function applyCheckoutButtonState(
     checkoutUnavailable: boolean;
     unavailableMessage: string;
     isEmpty: boolean;
+    cartBlocked?: boolean;
+    cartBlockedMessage?: string;
   },
 ) {
-  const disabled = options.checkoutUnavailable || options.isEmpty;
+  const disabled =
+    options.checkoutUnavailable || options.isEmpty || options.cartBlocked === true;
   submitButton.disabled = disabled;
   submitButton.classList.toggle("opacity-50", disabled);
   submitButton.classList.toggle("cursor-not-allowed", disabled);
@@ -14,5 +17,7 @@ export function applyCheckoutButtonState(
     ? options.unavailableMessage
     : options.isEmpty
       ? "Your cart is empty"
+      : options.cartBlocked
+        ? options.cartBlockedMessage || "Some cart items need attention"
       : "";
 }

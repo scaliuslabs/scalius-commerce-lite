@@ -18,6 +18,7 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({
         success: false,
         error: getCheckoutErrorMessage(result.error),
+        details: result.details,
       }), {
         status: result.status && result.status >= 400 ? result.status : 400,
         headers: { "Content-Type": "application/json" },

@@ -83,12 +83,18 @@ function createStatementDb(batch: () => Promise<unknown> = vi.fn().mockResolvedV
       set: vi.fn(() => ({ where: vi.fn(() => ({ statement: "update" })) })),
     })),
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          all: vi.fn().mockResolvedValue([]),
-          get: vi.fn().mockResolvedValue(undefined),
-        })),
-      })),
+      from: vi.fn(() => {
+        const query = {
+          where: vi.fn(() => ({
+            all: vi.fn().mockResolvedValue([]),
+            get: vi.fn().mockResolvedValue(undefined),
+          })),
+        };
+        return {
+          ...query,
+          innerJoin: vi.fn(() => query),
+        };
+      }),
     })),
     batch,
   };

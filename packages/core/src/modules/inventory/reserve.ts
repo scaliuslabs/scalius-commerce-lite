@@ -3,8 +3,8 @@
 // Reserves stock by incrementing reservedStock WITHOUT decrementing stock.
 // Stock is permanently deducted only on payment confirmation.
 
-import { eq, and, sql, inArray } from "drizzle-orm";
-import { inventoryMovements, productVariants } from "@scalius/database/schema";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
@@ -41,7 +41,15 @@ export async function reserveStock(
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
-      .where(eq(productVariants.id, variantId))
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(
+        and(
+          eq(productVariants.id, variantId),
+          isNull(productVariants.deletedAt),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+        ),
+      )
       .get();
 
     if (!variant) {
@@ -129,11 +137,12 @@ export async function reserveStock(
       .update(productVariants)
       .set(updateSet)
       .where(
-        and(
-          eq(productVariants.id, variantId),
-          eq(productVariants.stockVersion, variant.stockVersion)
+          and(
+            eq(productVariants.id, variantId),
+            isNull(productVariants.deletedAt),
+            eq(productVariants.stockVersion, variant.stockVersion)
+          )
         )
-      )
       .returning({ id: productVariants.id });
 
     if (result.length > 0) {
@@ -328,6 +337,7 @@ export async function reserveStockBatch(
         .where(
           and(
             eq(productVariants.id, entry.variantId),
+            isNull(productVariants.deletedAt),
             eq(productVariants.stockVersion, variant.stockVersion)
           )
         )
@@ -756,7 +766,15 @@ async function loadReservationVariantStates(
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
-      .where(eq(productVariants.id, entry.variantId))
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(
+        and(
+          eq(productVariants.id, entry.variantId),
+          isNull(productVariants.deletedAt),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+        ),
+      )
       .get();
 
     if (!variant) {

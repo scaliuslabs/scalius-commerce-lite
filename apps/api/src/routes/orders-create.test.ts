@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   markCheckoutAttemptFailed: vi.fn(),
   commitStorefrontOrderPayload: vi.fn(),
   runStorefrontOrderPostCommitSideEffects: vi.fn(),
+  validateStorefrontCartItems: vi.fn(),
   invalidateProductAvailabilityCaches: vi.fn(),
   rateLimit: vi.fn(async () => ({ allowed: true })),
   getClientIp: vi.fn(() => "127.0.0.1"),
@@ -30,6 +31,7 @@ vi.mock("@scalius/core/modules/orders", () => ({
   markCheckoutAttemptFailed: mocks.markCheckoutAttemptFailed,
   commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
   runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
+  validateStorefrontCartItems: mocks.validateStorefrontCartItems,
 }));
 
 vi.mock("../utils/cache-invalidation", () => ({
@@ -87,6 +89,13 @@ beforeEach(() => {
   mocks.commitStorefrontOrderPayload.mockResolvedValue(undefined);
   mocks.runStorefrontOrderPostCommitSideEffects.mockResolvedValue(undefined);
   mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
+  mocks.validateStorefrontCartItems.mockResolvedValue({
+    valid: true,
+    issues: [],
+    items: [],
+    subtotal: 0,
+    hasFreeDeliveryProduct: false,
+  });
 });
 
 const validOrderBody = {
@@ -159,6 +168,73 @@ function createTestApp(options: {
   return { app, db, kv, queue, calls };
 }
 
+describe("cart validation preflight", () => {
+  it("returns every cart item issue without creating checkout side effects", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: false,
+      issues: [
+        {
+          index: 0,
+          cartKey: "line_1",
+          productId: "product_1",
+          variantId: "variant_1",
+          code: "QUANTITY_UNAVAILABLE",
+          action: "reduce_quantity",
+          message: "Only 2 left for Queue Product.",
+          productName: "Queue Product",
+          variantLabel: null,
+          requestedQuantity: 5,
+          availableQuantity: 2,
+        },
+      ],
+      items: [],
+      subtotal: 0,
+      hasFreeDeliveryProduct: false,
+    });
+    const { app, kv, queue } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders/cart-validation",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              cartKey: "line_1",
+              productId: "product_1",
+              variantId: "variant_1",
+              quantity: 5,
+              price: 100,
+              productName: "Queue Product",
+            },
+          ],
+        }),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        valid: false,
+        issues: [
+          {
+            cartKey: "line_1",
+            code: "QUANTITY_UNAVAILABLE",
+            message: "Only 2 left for Queue Product.",
+            availableQuantity: 2,
+          },
+        ],
+      },
+    });
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+});
+
 describe("create order commit/KV ordering", () => {
   it("writes checkout and receipt KV before synchronously committing the order", async () => {
     mocks.createStorefrontOrder.mockResolvedValue({
@@ -208,6 +284,7 @@ describe("create order commit/KV ordering", () => {
         orderId: "order_1",
         checkoutToken: "chk_order_1",
       },
+      expect.objectContaining({ valid: true }),
     );
     expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
       expect.anything(),
@@ -424,6 +501,71 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale cart items before policy, rate limiting, or checkout attempt claim", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: false,
+      issues: [
+        {
+          index: 0,
+          productId: "product_1",
+          variantId: "variant_1",
+          code: "PRICE_CHANGED",
+          action: "refresh_item",
+          message: "The price for Queue Product changed. Please review the updated cart total.",
+          productName: "Queue Product",
+          variantLabel: null,
+          requestedQuantity: 1,
+          submittedPrice: 100,
+          currentPrice: 120,
+        },
+      ],
+      items: [],
+      subtotal: 0,
+      hasFreeDeliveryProduct: false,
+    });
+    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Some items in your cart need attention.",
+        details: {
+          itemIssues: [
+            {
+              code: "PRICE_CHANGED",
+              message: "The price for Queue Product changed. Please review the updated cart total.",
+              currentPrice: 120,
+            },
+          ],
+        },
+      },
+    });
+    expect(mocks.buildCheckoutAttemptIdentity).toHaveBeenCalledOnce();
+    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
+    expect(mocks.validateStorefrontCartItems).toHaveBeenCalledOnce();
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 

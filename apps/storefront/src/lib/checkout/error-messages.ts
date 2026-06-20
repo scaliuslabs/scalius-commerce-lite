@@ -34,7 +34,7 @@ function collectMessages(value: unknown): string[] {
 
   const messages: string[] = [];
 
-  for (const key of ["details", "issues", "errors"]) {
+  for (const key of ["details", "issues", "errors", "itemIssues", "lineIssues"]) {
     if (key in value) {
       messages.push(...collectMessages(value[key]));
     }

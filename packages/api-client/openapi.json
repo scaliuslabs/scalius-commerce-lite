@@ -16103,6 +16103,338 @@
         }
       }
     },
+    "/api/v1/orders/cart-validation": {
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Validate a storefront cart before checkout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "cartKey": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "productId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "variantId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 99
+                        },
+                        "price": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "productName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "variantLabel": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "variantId",
+                        "quantity",
+                        "price"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 99
+                  },
+                  "inventoryPool": {
+                    "type": "string",
+                    "enum": [
+                      "regular",
+                      "preorder",
+                      "backorder"
+                    ],
+                    "default": "regular"
+                  }
+                },
+                "required": [
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cart validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "valid": {
+                          "type": "boolean"
+                        },
+                        "issues": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "number"
+                              },
+                              "cartKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "PRODUCT_UNAVAILABLE",
+                                  "VARIANT_REQUIRED",
+                                  "VARIANT_UNAVAILABLE",
+                                  "VARIANT_MISMATCH",
+                                  "QUANTITY_UNAVAILABLE",
+                                  "PRICE_CHANGED"
+                                ]
+                              },
+                              "action": {
+                                "type": "string",
+                                "enum": [
+                                  "remove",
+                                  "select_variant",
+                                  "reduce_quantity",
+                                  "refresh_item"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "productName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "variantLabel": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "requestedQuantity": {
+                                "type": "number"
+                              },
+                              "availableQuantity": {
+                                "type": "number"
+                              },
+                              "submittedPrice": {
+                                "type": "number"
+                              },
+                              "currentPrice": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "productId",
+                              "variantId",
+                              "code",
+                              "action",
+                              "message",
+                              "productName",
+                              "variantLabel",
+                              "requestedQuantity"
+                            ]
+                          }
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "number"
+                              },
+                              "cartKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "quantity": {
+                                "type": "number"
+                              },
+                              "unitPrice": {
+                                "type": "number"
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "variantLabel": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "freeDelivery": {
+                                "type": "boolean"
+                              },
+                              "availableQuantity": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "productId",
+                              "variantId",
+                              "quantity",
+                              "unitPrice",
+                              "productName",
+                              "variantLabel",
+                              "freeDelivery",
+                              "availableQuantity"
+                            ]
+                          }
+                        },
+                        "subtotal": {
+                          "type": "number"
+                        },
+                        "hasFreeDeliveryProduct": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "valid",
+                        "issues",
+                        "items",
+                        "subtotal",
+                        "hasFreeDeliveryProduct"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/orders": {
       "post": {
         "tags": [
@@ -97857,7 +98189,7 @@
         "tags": [
           "Admin - System Utils"
         ],
-        "summary": "List abandoned checkouts with cleanup",
+        "summary": "List abandoned checkouts",
         "parameters": [
           {
             "schema": {
