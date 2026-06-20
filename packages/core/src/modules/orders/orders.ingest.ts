@@ -27,6 +27,7 @@ import {
 import { getDiscountUsageConstraintError } from "./discount-usage-constraints";
 import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 import type { OrderIngestQueuePayload } from "./orders.types";
+import type { StorefrontCartItemIssue } from "./cart-validation";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 type CheckoutStatus = "processing" | "completed" | "failed";
@@ -220,6 +221,31 @@ function getReservationEntries(payload: OrderIngestQueuePayload): ReservationEnt
         }));
 }
 
+function buildReservationItemIssues(
+    payload: OrderIngestQueuePayload,
+    results: Array<{ success: boolean; variantId: string; error?: string }>,
+): StorefrontCartItemIssue[] {
+    return results
+        .filter((result) => !result.success)
+        .map((result) => {
+            const index = payload.items.findIndex((item) => item.variantId === result.variantId);
+            const item = index >= 0 ? payload.items[index] : undefined;
+            const productName = item?.productName ?? "This item";
+            const variantLabel = item?.variantLabel ?? null;
+            return {
+                index: index >= 0 ? index : 0,
+                productId: item?.productId ?? "",
+                variantId: result.variantId,
+                code: "QUANTITY_UNAVAILABLE",
+                action: "remove",
+                message: `${productName}${variantLabel ? ` (${variantLabel})` : ""} is no longer available in the requested quantity.`,
+                productName,
+                variantLabel,
+                requestedQuantity: item?.quantity ?? 0,
+            };
+        });
+}
+
 async function reserveOrderInventory(
     db: Database,
     payload: OrderIngestQueuePayload,
@@ -239,7 +265,23 @@ async function reserveOrderInventory(
     );
 
     if (!result.success) {
-        throw new ValidationError(result.error ?? "Insufficient stock preventing order creation.");
+        const itemIssues = buildReservationItemIssues(payload, result.results);
+        throw new ValidationError("Some items in your cart need attention.", {
+            itemIssues: itemIssues.length > 0
+                ? itemIssues
+                : [{
+                    index: 0,
+                    productId: "",
+                    variantId: null,
+                    code: "QUANTITY_UNAVAILABLE",
+                    action: "remove",
+                    message: "One or more items are no longer available in the requested quantity.",
+                    productName: null,
+                    variantLabel: null,
+                    requestedQuantity: 0,
+                }],
+            inventoryError: result.error,
+        });
     }
 
     return entries;

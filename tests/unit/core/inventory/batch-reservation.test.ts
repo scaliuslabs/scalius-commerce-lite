@@ -300,31 +300,37 @@ function createReserveStockBatchDb(options: {
 
   const db = {
     select(projection: Record<string, unknown>) {
+      const query = {
+        where() {
+          return {
+            get: async () => {
+              if ("stock" in projection) {
+                return variant
+                  ? {
+                      id: variant.id,
+                      stock: variant.stock,
+                      reservedStock: variant.reservedStock,
+                      preorderStock: variant.preorderStock,
+                      allowPreorder: variant.allowPreorder,
+                      allowBackorder: variant.allowBackorder,
+                      backorderLimit: variant.backorderLimit,
+                      stockVersion: variant.version,
+                    }
+                  : null;
+              }
+              if ("count" in projection) return { count: options.releaseCount ?? 0 };
+              return null;
+            },
+            all: async () => options.existingMovements ?? [],
+          };
+        },
+      };
       return {
         from() {
           return {
-            where() {
-              return {
-                get: async () => {
-                  if ("stock" in projection) {
-                    return variant
-                      ? {
-                          id: variant.id,
-                          stock: variant.stock,
-                          reservedStock: variant.reservedStock,
-                          preorderStock: variant.preorderStock,
-                          allowPreorder: variant.allowPreorder,
-                          allowBackorder: variant.allowBackorder,
-                          backorderLimit: variant.backorderLimit,
-                          stockVersion: variant.version,
-                        }
-                      : null;
-                  }
-                  if ("count" in projection) return { count: options.releaseCount ?? 0 };
-                  return null;
-                },
-                all: async () => options.existingMovements ?? [],
-              };
+            ...query,
+            innerJoin() {
+              return query;
             },
           };
         },

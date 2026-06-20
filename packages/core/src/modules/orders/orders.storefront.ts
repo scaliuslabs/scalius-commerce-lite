@@ -5,8 +5,6 @@ import type { Database } from "@scalius/database/client";
 import { subtractPrice, addPrices, roundPrice } from "@scalius/shared/price-utils";
 import {
     customers,
-    products,
-    productVariants,
     deliveryLocations,
     discounts,
     siteSettings,
@@ -18,10 +16,11 @@ import {
 } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 
-import { sql, eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
 import type { CreateStorefrontOrderIdentity, CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
+import { validateStorefrontCartItems, type StorefrontCartValidationResult } from "./cart-validation";
 
 /**
  * Validates and prepares a storefront order for queue dispatch.
@@ -41,14 +40,30 @@ export async function createStorefrontOrder(
     isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
     calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number | Promise<number>,
     identity?: CreateStorefrontOrderIdentity,
+    prevalidatedCart?: StorefrontCartValidationResult,
 ): Promise<CreateStorefrontOrderResult> {
+    const cartValidation = prevalidatedCart ?? await validateStorefrontCartItems(
+        storefrontDb,
+        data.items.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.price,
+            productName: item.productName,
+            variantLabel: item.variantLabel,
+        })),
+        { inventoryPool: data.inventoryPool },
+    );
+
+    if (!cartValidation.valid) {
+        throw new ValidationError("Some items in your cart need attention.", {
+            itemIssues: cartValidation.issues,
+        });
+    }
+
     // ------------------------------------------------------------------
     // 1. Batched Reads
     // ------------------------------------------------------------------
-    const variantIds = data.items
-        .map((item) => item.variantId)
-        .filter((id): id is string => id !== null);
-
     const locationIds = [data.city, data.zone, data.area].filter(
         (id): id is string => typeof id === "string" && id.trim().length > 0,
     );
@@ -57,32 +72,7 @@ export async function createStorefrontOrder(
     // Drizzle D1 batch() requires specific tuple types
     const readBatch: unknown[] = [];
 
-    // 1. Variants
-    if (variantIds.length > 0) {
-        readBatch.push(
-            storefrontDb
-                .select({
-                    id: productVariants.id,
-                    productId: productVariants.productId,
-                    stock: productVariants.stock,
-                    price: productVariants.price,
-                    discountPercentage: productVariants.discountPercentage,
-                    discountType: productVariants.discountType,
-                    discountAmount: productVariants.discountAmount,
-                })
-                .from(productVariants)
-                .where(
-                    and(
-                        sql`${productVariants.id} IN ${variantIds}`,
-                        isNull(productVariants.deletedAt),
-                    ),
-                ),
-        );
-    } else {
-        readBatch.push(storefrontDb.select().from(productVariants).limit(0));
-    }
-
-    // 2. Locations
+    // 1. Locations
     if (locationIds.length > 0) {
         readBatch.push(
             storefrontDb
@@ -107,7 +97,7 @@ export async function createStorefrontOrder(
         readBatch.push(storefrontDb.select().from(deliveryLocations).limit(0));
     }
 
-    // 3. Customer
+    // 2. Customer
     readBatch.push(
         storefrontDb
             .select({
@@ -119,7 +109,7 @@ export async function createStorefrontOrder(
             .where(eq(customers.phone, data.customerPhone)),
     );
 
-    // 4. Discount
+    // 3. Discount
     if (normalizedDiscountCode) {
         readBatch.push(
             storefrontDb
@@ -131,37 +121,10 @@ export async function createStorefrontOrder(
         readBatch.push(storefrontDb.select().from(discounts).limit(0));
     }
 
-    // 5. Products (for server-side price verification)
-    const productIds = [...new Set(data.items.map((item) => item.productId))];
-    if (productIds.length > 0) {
-        readBatch.push(
-            storefrontDb
-                .select({
-                    id: products.id,
-                    isActive: products.isActive,
-                    price: products.price,
-                    discountPercentage: products.discountPercentage,
-                    discountType: products.discountType,
-                    discountAmount: products.discountAmount,
-                    freeDelivery: products.freeDelivery,
-                })
-                .from(products)
-                .where(
-                    and(
-                        sql`${products.id} IN ${productIds}`,
-                        eq(products.isActive, true),
-                        isNull(products.deletedAt),
-                    ),
-                ),
-        );
-    } else {
-        readBatch.push(storefrontDb.select().from(products).limit(0));
-    }
-
-    // 6. Settings (for partial payment checks)
+    // 4. Settings (for partial payment checks)
     readBatch.push(storefrontDb.select().from(siteSettings).limit(1));
 
-    // 7. Shipping Method
+    // 5. Shipping Method
     if (data.shippingMethodId) {
         readBatch.push(
             storefrontDb
@@ -184,7 +147,6 @@ export async function createStorefrontOrder(
     const readResults = await storefrontDb.batch(readBatch as any);
 
     // Unpack Results
-    interface VariantRow { id: string; productId: string; stock: number; price: number; discountPercentage: number | null; discountType: string | null; discountAmount: number | null; }
     interface LocationRow {
         id: string;
         name: string;
@@ -193,104 +155,23 @@ export async function createStorefrontOrder(
         isActive: boolean;
         deletedAt: Date | number | null;
     }
-    const variants = variantIds.length > 0 ? (readResults[0] as VariantRow[]) : [] as VariantRow[];
-    const locationResults = locationIds.length > 0 ? (readResults[1] as LocationRow[]) : [] as LocationRow[];
+    const locationResults = locationIds.length > 0 ? (readResults[0] as LocationRow[]) : [] as LocationRow[];
 
-    const customerList = readResults[2] as { id: string; totalOrders: number; totalSpent: number }[];
+    const customerList = readResults[1] as { id: string; totalOrders: number; totalSpent: number }[];
     const existingCustomer = customerList.length > 0 ? customerList[0] : undefined;
 
-    const discountList = data.discountCode ? (readResults[3] as { id: string }[]) : [];
+    const discountList = data.discountCode ? (readResults[2] as { id: string }[]) : [];
     const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
 
-    const productList = productIds.length > 0
-        ? (readResults[4] as {
-            id: string;
-            isActive: boolean;
-            price: number;
-            discountPercentage: number | null;
-            discountType: string | null;
-            discountAmount: number | null;
-            freeDelivery: boolean;
-        }[])
-        : [];
-    const productMap = new Map(productList.map((p) => [p.id, p]));
-
-    const settingsList = readResults[5] as Record<string, unknown>[];
+    const settingsList = readResults[3] as Record<string, unknown>[];
     const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
 
-    const shippingMethodList = readResults[6] as Record<string, unknown>[];
+    const shippingMethodList = readResults[4] as Record<string, unknown>[];
     const shippingMethod = shippingMethodList.length > 0 ? shippingMethodList[0] as Record<string, unknown> : null;
 
-    // Validation (Pre-Check)
-    const variantMap = new Map(variants.map((v) => [v.id, v]));
-    for (const item of data.items) {
-        if (item.variantId) {
-            const variant = variantMap.get(item.variantId);
-            if (!variant) {
-                throw new NotFoundError(`Variant ${item.variantId} not found.`);
-            }
-            if (variant.productId !== item.productId) {
-                throw new ValidationError("Selected product variant is no longer available for checkout.");
-            }
-        }
-        const product = productMap.get(item.productId);
-        if (!product || product.isActive !== true) {
-            throw new NotFoundError(`Product ${item.productId} not found or is inactive.`);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // SERVER-SIDE PRICE VERIFICATION
-    // ------------------------------------------------------------------
-    let serverItemTotal = 0;
-    // Build server-verified unit prices per item index for use in queue payload
-    const serverUnitPrices: number[] = [];
-    for (const item of data.items) {
-        let unitPrice: number;
-
-        if (item.variantId) {
-            const variant = variantMap.get(item.variantId)!;
-            const product = productMap.get(item.productId)!;
-            unitPrice = variant.price;
-
-            // Variant discount overrides product discount; if variant has none, fall back to product discount
-            const variantHasDiscount =
-                (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) ||
-                (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0);
-
-            if (variantHasDiscount) {
-                if (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) {
-                    unitPrice = unitPrice * (1 - (variant.discountPercentage ?? 0) / 100);
-                } else if (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0) {
-                    unitPrice = Math.max(0, unitPrice - (variant.discountAmount ?? 0));
-                }
-            } else if (product.discountType === "percentage" && (product.discountPercentage ?? 0) > 0) {
-                unitPrice = unitPrice * (1 - (product.discountPercentage ?? 0) / 100);
-            } else if (product.discountType === "flat" && (product.discountAmount ?? 0) > 0) {
-                unitPrice = Math.max(0, unitPrice - (product.discountAmount ?? 0));
-            }
-        } else {
-            const product = productMap.get(item.productId)!;
-            unitPrice = product.price;
-
-            if (product.discountType === "percentage" && (product.discountPercentage ?? 0) > 0) {
-                unitPrice = unitPrice * (1 - (product.discountPercentage ?? 0) / 100);
-            } else if (product.discountType === "flat" && (product.discountAmount ?? 0) > 0) {
-                unitPrice = Math.max(0, unitPrice - (product.discountAmount ?? 0));
-            }
-        }
-
-        unitPrice = roundPrice(unitPrice);
-        serverUnitPrices.push(unitPrice);
-        serverItemTotal += unitPrice * item.quantity;
-    }
-
-    serverItemTotal = roundPrice(serverItemTotal);
-
-    const hasFreeDeliveryProduct = data.items.some((item) => {
-        const product = productMap.get(item.productId);
-        return product?.freeDelivery === true;
-    });
+    const serverItemTotal = cartValidation.subtotal;
+    const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
+    const hasFreeDeliveryProduct = cartValidation.hasFreeDeliveryProduct;
 
     // Existing storefront behavior: any free-delivery item waives shipping method and charge.
     let verifiedShippingCharge: number;
@@ -414,9 +295,9 @@ export async function createStorefrontOrder(
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
-            price: serverUnitPrices[idx] ?? item.price,
-            productName: item.productName ?? null,
-            variantLabel: item.variantLabel ?? null,
+            price: validatedItemByIndex.get(idx)?.unitPrice ?? item.price,
+            productName: validatedItemByIndex.get(idx)?.productName ?? item.productName ?? null,
+            variantLabel: validatedItemByIndex.get(idx)?.variantLabel ?? item.variantLabel ?? null,
         })),
         discountUsage: appliedDiscountId && verifiedDiscountAmount > 0 ? {
             discountId: appliedDiscountId,

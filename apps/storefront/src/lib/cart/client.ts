@@ -5,9 +5,13 @@ import {
   addToCart,
   updateQuantity,
   removeFromCart,
+  removeCartItemByKey,
+  updateCartItemByKey,
   applyDiscount,
   removeDiscount,
+  type CartItem,
 } from "@/store/cart";
+import type { CartValidationIssue } from "@/lib/api/orders";
 import {
   validateDiscount,
   getActiveCheckoutLanguage,
@@ -34,8 +38,15 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+function inlineJsString(value: string): string {
+  return escapeHtml(JSON.stringify(value));
+}
+
 let globalLangData: CheckoutLanguageData | null = null;
 let hasTrackedInitiateCheckout = false;
+let cartValidationIssues: Record<string, CartValidationIssue[]> = {};
+let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
+let cartValidationSequence = 0;
 
 // --- Abandoned Checkout ---
 let abandonedCheckoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -262,6 +273,165 @@ function updateDiscountUI() {
   }
 }
 
+function cartItemVariantLabel(item: CartItem): string | null {
+  const parts = [item.size, item.color].filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+function cartValidationPayload(items: Record<string, CartItem>) {
+  return Object.entries(items).map(([cartKey, item]) => ({
+    cartKey,
+    productId: item.id,
+    variantId: item.variantId && item.variantId !== "default" ? item.variantId : null,
+    quantity: item.quantity,
+    price: item.price,
+    productName: item.name,
+    variantLabel: cartItemVariantLabel(item),
+  }));
+}
+
+function issueKeyForCart(
+  issue: CartValidationIssue,
+  items: Record<string, CartItem>,
+): string | null {
+  if (issue.cartKey && items[issue.cartKey]) return issue.cartKey;
+
+  const match = Object.entries(items).find(([, item], index) => {
+    const itemVariant = item.variantId && item.variantId !== "default" ? item.variantId : null;
+    return (
+      index === issue.index ||
+      (item.id === issue.productId && itemVariant === issue.variantId)
+    );
+  });
+
+  return match?.[0] ?? null;
+}
+
+function setCartValidationIssues(
+  issues: CartValidationIssue[],
+  items: Record<string, CartItem>,
+) {
+  const grouped: Record<string, CartValidationIssue[]> = {};
+  for (const issue of issues) {
+    const key = issueKeyForCart(issue, items);
+    if (!key) continue;
+    grouped[key] = [...(grouped[key] ?? []), issue];
+  }
+  cartValidationIssues = grouped;
+  updateCartValidationMessage();
+}
+
+function cartIssueCount(): number {
+  return Object.values(cartValidationIssues).reduce(
+    (count, issues) => count + issues.length,
+    0,
+  );
+}
+
+function hasBlockingCartIssues(): boolean {
+  return cartIssueCount() > 0;
+}
+
+function cartBlockedMessage(): string {
+  const count = Object.keys(cartValidationIssues).length;
+  if (count <= 0) return "";
+  return count === 1
+    ? "One cart item needs attention before checkout."
+    : `${count} cart items need attention before checkout.`;
+}
+
+function updateCartValidationMessage() {
+  const message = document.getElementById("cartValidationMessage");
+  if (!message) return;
+
+  if (hasBlockingCartIssues()) {
+    message.textContent = cartBlockedMessage();
+    message.classList.remove("hidden");
+  } else {
+    message.textContent = "";
+    message.classList.add("hidden");
+  }
+}
+
+export async function validateCartSnapshot(): Promise<boolean> {
+  const { items } = cartStore.get();
+  const payloadItems = cartValidationPayload(items);
+  const sequence = ++cartValidationSequence;
+
+  if (payloadItems.length === 0) {
+    cartValidationIssues = {};
+    updateCartValidationMessage();
+    updateCheckoutButtonState();
+    return true;
+  }
+
+  try {
+    const response = await fetch("/api/checkout/validate-cart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: payloadItems }),
+    });
+    const json = await response.json().catch(() => null) as {
+      success?: boolean;
+      data?: { valid: boolean; issues: CartValidationIssue[] };
+      details?: { itemIssues?: CartValidationIssue[] };
+    } | null;
+
+    if (sequence !== cartValidationSequence) {
+      return !hasBlockingCartIssues();
+    }
+
+    const issues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
+    setCartValidationIssues(Array.isArray(issues) ? issues : [], cartStore.get().items);
+    await renderCartItems();
+    updateCheckoutButtonState();
+
+    if (!response.ok || !json?.success) {
+      return false;
+    }
+
+    return json.data?.valid !== false && !hasBlockingCartIssues();
+  } catch (error) {
+    console.warn("Could not refresh cart availability before checkout.", error);
+    cartValidationIssues = {};
+    updateCartValidationMessage();
+    updateCheckoutButtonState();
+    return true;
+  }
+}
+
+function scheduleCartValidation() {
+  if (cartValidationTimer) clearTimeout(cartValidationTimer);
+  cartValidationTimer = setTimeout(() => {
+    void validateCartSnapshot();
+  }, 350);
+}
+
+function renderIssueAction(cartKey: string, issue: CartValidationIssue): string {
+  const jsKey = inlineJsString(cartKey);
+  if (issue.action === "reduce_quantity" && typeof issue.availableQuantity === "number" && issue.availableQuantity > 0) {
+    return `<button type="button" class="text-xs font-semibold text-primary hover:underline" onclick="window.reduceCartIssueItem(${jsKey})">Update quantity</button>`;
+  }
+  if (issue.action === "refresh_item" && typeof issue.currentPrice === "number") {
+    return `<button type="button" class="text-xs font-semibold text-primary hover:underline" onclick="window.refreshCartIssueItem(${jsKey})">Refresh price</button>`;
+  }
+  return `<button type="button" class="text-xs font-semibold text-destructive hover:underline" onclick="window.removeCartIssueItem(${jsKey})">Remove item</button>`;
+}
+
+function renderCartItemIssues(cartKey: string): string {
+  const issues = cartValidationIssues[cartKey] ?? [];
+  if (issues.length === 0) return "";
+
+  return `<div class="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs text-destructive space-y-1">${issues
+    .map((issue) => (
+      `<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <span>${escapeHtml(issue.message)}</span>
+        ${renderIssueAction(cartKey, issue)}
+      </div>`
+    ))
+    .join("")}</div>`;
+}
+
 export async function updateTotals() {
   const { items, totalAmount, discount } = cartStore.get();
 
@@ -330,8 +500,8 @@ export async function renderCartItems() {
   }
 
   const csym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
-  cartItemsContainer.innerHTML = Object.values(items)
-    .map((item) => {
+  cartItemsContainer.innerHTML = Object.entries(items)
+    .map(([cartKey, item]) => {
       // Escape all user-supplied strings to prevent XSS via innerHTML
       const safeName = escapeHtml(item.name || "");
       const safeImage = escapeHtml(
@@ -343,10 +513,11 @@ export async function renderCartItems() {
           fit: "cover",
         }),
       );
-      const safeId = escapeHtml(item.id || "");
-      const safeVariantId = escapeHtml(item.variantId || "");
+      const jsId = inlineJsString(item.id || "");
+      const jsVariantId = inlineJsString(item.variantId || "");
       const safeSize = item.size ? escapeHtml(item.size) : "";
       const safeColor = item.color ? escapeHtml(item.color) : "";
+      const issueBlock = renderCartItemIssues(cartKey);
 
       const variantInfo =
         safeSize || safeColor
@@ -359,16 +530,17 @@ export async function renderCartItems() {
           <div class="flex-1 min-w-0">
             <div class="flex justify-between">
               <div class="min-w-0"><h3 class="font-medium truncate text-sm sm:text-base text-foreground">${safeName}</h3><div class="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">${variantInfo}</div></div>
-              <button class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart('${safeId}', '${safeVariantId}')"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart(${jsId}, ${jsVariantId})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="flex items-center justify-between mt-1.5 sm:mt-2">
               <div class="flex items-center gap-1.5 sm:gap-2">
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity('${safeId}', '${safeVariantId}', ${Math.max(0, item.quantity - 1)})">-</button>
+                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsId}, ${jsVariantId}, ${Math.max(0, item.quantity - 1)})">-</button>
                 <span class="w-5 sm:w-6 text-center text-xs sm:text-sm text-foreground">${item.quantity}</span>
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity('${safeId}', '${safeVariantId}', ${item.quantity + 1})">+</button>
+                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsId}, ${jsVariantId}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${csym}${(item.price * item.quantity).toLocaleString()}</div><div class="text-xs text-muted-foreground">${csym}${item.price.toLocaleString()} each</div></div>
             </div>
+            ${issueBlock}
           </div>
         </div></div>`;
     })
@@ -392,6 +564,8 @@ export function updateCheckoutButtonState() {
     checkoutUnavailable,
     unavailableMessage,
     isEmpty,
+    cartBlocked: hasBlockingCartIssues(),
+    cartBlockedMessage: cartBlockedMessage(),
   });
 }
 
@@ -545,17 +719,45 @@ export async function initCartFunctionality() {
   }
 
   window.handleAbandonedCheckout = handleAbandonedCheckout;
+  window.validateCartSnapshot = validateCartSnapshot;
+  window.hasCartValidationIssues = () => hasBlockingCartIssues();
+  window.getCartBlockedMessage = () => cartBlockedMessage();
 
   window.updateCartQuantity = (id, variantId, qty) =>
     updateQuantity(id, variantId || undefined, qty);
   window.removeFromCart = (id, variantId) =>
     removeFromCart(id, variantId || undefined);
+  window.removeCartIssueItem = (cartKey) => {
+    delete cartValidationIssues[cartKey];
+    removeCartItemByKey(cartKey);
+  };
+  window.reduceCartIssueItem = (cartKey) => {
+    const issue = (cartValidationIssues[cartKey] ?? []).find(
+      (item) => item.action === "reduce_quantity",
+    );
+    if (typeof issue?.availableQuantity !== "number" || issue.availableQuantity < 1) {
+      removeCartItemByKey(cartKey);
+      return;
+    }
+    updateCartItemByKey(cartKey, { quantity: issue.availableQuantity });
+  };
+  window.refreshCartIssueItem = (cartKey) => {
+    const issue = (cartValidationIssues[cartKey] ?? []).find(
+      (item) => item.action === "refresh_item",
+    );
+    if (typeof issue?.currentPrice !== "number") return;
+    updateCartItemByKey(cartKey, {
+      price: issue.currentPrice,
+      name: issue.productName || undefined,
+    });
+  };
 
   cartStore.subscribe(() => {
     renderCartItems();
     updateTotals();
     updateCheckoutButtonState();
     handleAbandonedCheckout();
+    scheduleCartValidation();
   });
 
   window.addEventListener("shippingLocationChange", (e) => {
@@ -592,6 +794,7 @@ export async function initCartFunctionality() {
 
   await getLanguageData();
   await renderCartItems();
+  await validateCartSnapshot();
   updateTotals();
   updateCheckoutButtonState();
 }

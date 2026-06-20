@@ -175,12 +175,18 @@ interface Window {
   // Cart interaction handlers (set by lib/cart/client.ts initCartFunctionality)
   lastShippingEventDetail?: { id: string; fee: number; name?: string };
   handleAbandonedCheckout?: () => void;
+  validateCartSnapshot?: () => Promise<boolean>;
+  hasCartValidationIssues?: () => boolean;
+  getCartBlockedMessage?: () => string;
   updateCartQuantity?: (
     id: string,
     variantId: string,
     quantity: number,
   ) => void;
   removeFromCart?: (id: string, variantId: string) => void;
+  removeCartIssueItem?: (cartKey: string) => void;
+  reduceCartIssueItem?: (cartKey: string) => void;
+  refreshCartIssueItem?: (cartKey: string) => void;
   removeDiscountCode?: () => void;
 
   // Note: Stripe type is declared in checkout/handlers/stripe.ts with its full interface

@@ -162,4 +162,40 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     expect(mocks.releaseMultiple).toHaveBeenCalledOnce();
   });
+
+  it("maps reservation failures to structured cart item issues", async () => {
+    const db = createDbMock();
+    mocks.reserveStockBatch.mockResolvedValue({
+      success: false,
+      error: "Insufficient stock for variant variant_1. Available: 0, Requested: 2",
+      results: [
+        {
+          success: false,
+          variantId: "variant_1",
+          previousStock: 0,
+          newStock: 0,
+          error: "Insufficient stock for variant variant_1. Available: 0, Requested: 2",
+        },
+      ],
+    });
+
+    const result = commitStorefrontOrderPayload(db, undefined, createPayload());
+    await expect(result).rejects.toMatchObject({
+      name: "ValidationError",
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          {
+            code: "QUANTITY_UNAVAILABLE",
+            productName: "Discounted Product",
+            message: "Discounted Product is no longer available in the requested quantity.",
+            requestedQuantity: 2,
+          },
+        ],
+      },
+    });
+    await expect(commitStorefrontOrderPayload(db, undefined, createPayload()))
+      .rejects.not.toThrow("variant_1");
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
+  });
 });

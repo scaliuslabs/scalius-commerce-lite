@@ -27,6 +27,7 @@ import {
   markCheckoutAttemptFailed,
   resolveExistingCheckoutAttempt,
   runStorefrontOrderPostCommitSideEffects,
+  validateStorefrontCartItems,
   type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
 import { invalidateProductAvailabilityCaches } from "../utils/cache-invalidation";
@@ -428,6 +429,98 @@ app.openapi(getOrderReceiptRoute, async (c) => {
 
 // ─── POST / ──────────────────────────────────────────────────────────────────
 
+const cartIssueSchema = z.object({
+  index: z.number(),
+  cartKey: z.string().nullable().optional(),
+  productId: z.string(),
+  variantId: z.string().nullable(),
+  code: z.enum([
+    "PRODUCT_UNAVAILABLE",
+    "VARIANT_REQUIRED",
+    "VARIANT_UNAVAILABLE",
+    "VARIANT_MISMATCH",
+    "QUANTITY_UNAVAILABLE",
+    "PRICE_CHANGED",
+  ]),
+  action: z.enum(["remove", "select_variant", "reduce_quantity", "refresh_item"]),
+  message: z.string(),
+  productName: z.string().nullable(),
+  variantLabel: z.string().nullable(),
+  requestedQuantity: z.number(),
+  availableQuantity: z.number().optional(),
+  submittedPrice: z.number().optional(),
+  currentPrice: z.number().optional(),
+});
+
+const cartValidationItemSchema = z.object({
+  cartKey: z.string().min(1).max(256).optional().nullable(),
+  productId: z.string().min(1, "Product is required"),
+  variantId: z.string().nullable(),
+  quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(99, "Quantity must be at most 99"),
+  price: z.number().min(0, "Price must be greater than or equal to 0"),
+  productName: z.string().optional().nullable(),
+  variantLabel: z.string().optional().nullable(),
+});
+
+const cartValidationRoute = createRoute({
+  method: "post",
+  path: "/cart-validation",
+  tags: ["Orders"],
+  summary: "Validate a storefront cart before checkout",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            items: z.array(cartValidationItemSchema).min(1).max(99),
+            inventoryPool: z
+              .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
+              .default(InventoryPool.REGULAR),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Cart validation result",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            valid: z.boolean(),
+            issues: z.array(cartIssueSchema),
+            items: z.array(z.object({
+              index: z.number(),
+              cartKey: z.string().nullable().optional(),
+              productId: z.string(),
+              variantId: z.string().nullable(),
+              quantity: z.number(),
+              unitPrice: z.number(),
+              productName: z.string(),
+              variantLabel: z.string().nullable(),
+              freeDelivery: z.boolean(),
+              availableQuantity: z.number().nullable(),
+            })),
+            subtotal: z.number(),
+            hasFreeDeliveryProduct: z.boolean(),
+          })),
+        },
+      },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(cartValidationRoute, async (c) => {
+  const db = c.get("db");
+  const data = c.req.valid("json");
+  const result = await validateStorefrontCartItems(db, data.items, {
+    inventoryPool: data.inventoryPool,
+  });
+  return ok(c, result);
+});
+
 const createOrderSchema = z.object({
   checkoutRequestId: z
     .string()
@@ -566,6 +659,24 @@ app.openapi(createOrderRoute, async (c) => {
       }, 202);
     }
 
+    const cartValidation = await validateStorefrontCartItems(
+      db,
+      data.items.map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        price: item.price,
+        productName: item.productName,
+        variantLabel: item.variantLabel,
+      })),
+      { inventoryPool: data.inventoryPool },
+    );
+    if (!cartValidation.valid) {
+      throw new ValidationError("Some items in your cart need attention.", {
+        itemIssues: cartValidation.issues,
+      });
+    }
+
     await assertCheckoutOrderPolicy(c, data.customerPhone, data.paymentMethod as CheckoutPaymentMethodId);
 
     // Rate limit new or reclaimable order attempts without punishing legitimate shared-IP buyers.
@@ -625,6 +736,7 @@ app.openapi(createOrderRoute, async (c) => {
         orderId: checkoutAttempt.orderId,
         checkoutToken: checkoutAttempt.checkoutToken,
       },
+      cartValidation,
     );
 
     const kvKey = `checkout_status:${result.checkoutToken}`;

@@ -4989,6 +4989,94 @@ export type GetApiV1OrdersReceiptByIdResponses = {
 
 export type GetApiV1OrdersReceiptByIdResponse = GetApiV1OrdersReceiptByIdResponses[keyof GetApiV1OrdersReceiptByIdResponses];
 
+export type PostApiV1OrdersCartValidationData = {
+    body?: {
+        items: Array<{
+            cartKey?: string | null;
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            price: number;
+            productName?: string | null;
+            variantLabel?: string | null;
+        }>;
+        inventoryPool?: 'regular' | 'preorder' | 'backorder';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/cart-validation';
+};
+
+export type PostApiV1OrdersCartValidationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersCartValidationError = PostApiV1OrdersCartValidationErrors[keyof PostApiV1OrdersCartValidationErrors];
+
+export type PostApiV1OrdersCartValidationResponses = {
+    /**
+     * Cart validation result
+     */
+    200: {
+        success: true;
+        data: {
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: 'PRODUCT_UNAVAILABLE' | 'VARIANT_REQUIRED' | 'VARIANT_UNAVAILABLE' | 'VARIANT_MISMATCH' | 'QUANTITY_UNAVAILABLE' | 'PRICE_CHANGED';
+                action: 'remove' | 'select_variant' | 'reduce_quantity' | 'refresh_item';
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                availableQuantity: number | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+        };
+    };
+};
+
+export type PostApiV1OrdersCartValidationResponse = PostApiV1OrdersCartValidationResponses[keyof PostApiV1OrdersCartValidationResponses];
+
 export type PostApiV1OrdersData = {
     body?: {
         checkoutRequestId: string;

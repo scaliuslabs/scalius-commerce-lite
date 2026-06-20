@@ -276,6 +276,23 @@ export function removeFromCart(itemId: string, variantId?: string) {
   emitCartUpdated();
 }
 
+export function removeCartItemByKey(itemKey: string) {
+  ensureCartHydrated();
+  if (cartStore.get().discount) {
+    cartStore.setKey("discount", null);
+  }
+
+  const currentItems = cartStore.get().items;
+  if (!currentItems[itemKey]) return;
+
+  const newItems = { ...currentItems };
+  delete newItems[itemKey];
+
+  cartStore.setKey("items", newItems);
+  updateCartTotals();
+  emitCartUpdated();
+}
+
 // Update item quantity
 export function updateQuantity(
   itemId: string,
@@ -320,6 +337,37 @@ export function updateQuantity(
     ...currentItems,
     [itemKey]: {
       ...existingItem,
+      quantity,
+    },
+  });
+
+  updateCartTotals();
+  emitCartUpdated();
+}
+
+export function updateCartItemByKey(
+  itemKey: string,
+  updates: Partial<Pick<CartItem, "name" | "price" | "quantity" | "freeDelivery">>,
+) {
+  ensureCartHydrated();
+  const currentItems = cartStore.get().items;
+  const existingItem = currentItems[itemKey];
+  if (!existingItem) return;
+
+  if (cartStore.get().discount) {
+    cartStore.setKey("discount", null);
+  }
+
+  const quantity =
+    updates.quantity !== undefined
+      ? Math.max(1, Math.floor(updates.quantity))
+      : existingItem.quantity;
+
+  cartStore.setKey("items", {
+    ...currentItems,
+    [itemKey]: {
+      ...existingItem,
+      ...updates,
       quantity,
     },
   });

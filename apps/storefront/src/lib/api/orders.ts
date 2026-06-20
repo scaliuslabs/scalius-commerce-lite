@@ -13,6 +13,58 @@ type CreateOrderResult = {
   paymentMethod?: string;
   status?: number;
   error?: string;
+  details?: unknown;
+};
+
+export type CartValidationIssue = {
+  index: number;
+  cartKey?: string | null;
+  productId: string;
+  variantId: string | null;
+  code:
+    | "PRODUCT_UNAVAILABLE"
+    | "VARIANT_REQUIRED"
+    | "VARIANT_UNAVAILABLE"
+    | "VARIANT_MISMATCH"
+    | "QUANTITY_UNAVAILABLE"
+    | "PRICE_CHANGED";
+  action: "remove" | "select_variant" | "reduce_quantity" | "refresh_item";
+  message: string;
+  productName: string | null;
+  variantLabel: string | null;
+  requestedQuantity: number;
+  availableQuantity?: number;
+  submittedPrice?: number;
+  currentPrice?: number;
+};
+
+export type CartValidationRequestItem = {
+  cartKey?: string | null;
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  price: number;
+  productName?: string | null;
+  variantLabel?: string | null;
+};
+
+export type CartValidationResult = {
+  valid: boolean;
+  issues: CartValidationIssue[];
+  items: Array<{
+    index: number;
+    cartKey?: string | null;
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+    unitPrice: number;
+    productName: string;
+    variantLabel: string | null;
+    freeDelivery: boolean;
+    availableQuantity: number | null;
+  }>;
+  subtotal: number;
+  hasFreeDeliveryProduct: boolean;
 };
 
 type OrderStatusData = {
@@ -29,6 +81,16 @@ type OrderStatusPayload = OrderStatusData & {
 type CreateOrderOptions = {
   customerSessionToken?: string | null;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getApiErrorDetails(data: unknown): unknown {
+  if (!isRecord(data)) return undefined;
+  if (isRecord(data.error) && "details" in data.error) return data.error.details;
+  return data.details;
+}
 
 /**
  * Submits a new order to the backend.
@@ -80,9 +142,10 @@ export async function createOrder(
 
     if (!response.ok || !data.success) {
       const errorMsg = getCheckoutErrorMessage(data);
+      const details = getApiErrorDetails(data);
 
       console.error("Failed to create order:", errorMsg);
-      return { success: false, error: errorMsg, status: response.status };
+      return { success: false, error: errorMsg, status: response.status, details };
     }
 
     // Capture the 202 Async Accepted queue payload and poll for completion!
@@ -140,6 +203,49 @@ export async function createOrder(
       success: false,
       status: 500,
       error: "Order creation failed",
+    };
+  }
+}
+
+export async function validateCartItems(
+  items: CartValidationRequestItem[],
+): Promise<{ success: true; data: CartValidationResult } | { success: false; error: string; status?: number; details?: unknown }> {
+  try {
+    const response = await fetchWithRetry(
+      createApiUrl("/orders/cart-validation"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      },
+      1,
+      8000,
+      true,
+    );
+
+    const json = await response.json() as {
+      success?: boolean;
+      data?: CartValidationResult;
+      error?: unknown;
+      details?: unknown;
+    };
+
+    if (!response.ok || !json.success || !json.data) {
+      return {
+        success: false,
+        status: response.status,
+        error: getCheckoutErrorMessage(json, "Cart validation failed"),
+        details: getApiErrorDetails(json),
+      };
+    }
+
+    return { success: true, data: json.data };
+  } catch (error: unknown) {
+    console.error("Error validating cart:", error);
+    return {
+      success: false,
+      status: 500,
+      error: "Cart validation failed",
     };
   }
 }
