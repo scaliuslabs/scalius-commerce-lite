@@ -111,8 +111,33 @@ export const twoFactor = sqliteTable("two_factor", {
     index("two_factor_user_id_idx").on(table.userId),
 ]);
 
+export const adminSetupClaims = sqliteTable("admin_setup_claims", {
+    singletonKey: text("singleton_key").primaryKey(),
+    status: text("status", { enum: ["processing", "completed", "failed"] }).notNull().default("processing"),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    completedUserId: text("completed_user_id").references(() => user.id, { onDelete: "set null" }),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("admin_setup_claims_status_claim_idx").on(table.status, table.claimExpiresAt),
+]);
+
+export const adminSetupRateLimits = sqliteTable("admin_setup_rate_limits", {
+    key: text("key").primaryKey(),
+    attempts: integer("attempts").notNull().default(0),
+    windowExpiresAt: integer("window_expires_at").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("admin_setup_rate_limits_window_idx").on(table.windowExpiresAt),
+]);
+
 export type User = InferSelectModel<typeof user>;
 export type Session = InferSelectModel<typeof session>;
 export type Account = InferSelectModel<typeof account>;
 export type Verification = InferSelectModel<typeof verification>;
 export type TwoFactor = InferSelectModel<typeof twoFactor>;
+export type AdminSetupClaim = InferSelectModel<typeof adminSetupClaims>;
+export type AdminSetupRateLimit = InferSelectModel<typeof adminSetupRateLimits>;

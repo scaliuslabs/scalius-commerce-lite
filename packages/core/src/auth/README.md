@@ -32,7 +32,8 @@ Customer Auth Flow (storefront):
 | File | Purpose |
 |------|---------|
 | `auth.ts` | `createAuth()` / `getAuth()` -- Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), admin plugin. Cached per runtime auth signature: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_API_BASE_URL`, and `STOREFRONT_URL`. |
-| `index.ts` | Barrel re-export of `createAuth`, `getAuth`, and `Auth` type. |
+| `admin-setup.ts` | D1-backed first-admin setup coordination. Owns the singleton setup claim, setup attempt rate limit, and guarded admin promotion/claim completion helper used by `/api/v1/setup`. |
+| `index.ts` | Barrel re-export of `createAuth`, `getAuth`, `Auth` type, and setup coordination helpers. |
 
 ### RBAC
 
@@ -172,7 +173,7 @@ Simpler JWT-only middleware for non-admin routes (`/auth/token`, `/auth/me`, etc
 | Page | Purpose |
 |------|---------|
 | `/auth/login` | Sign-in form. Redirects to setup if no admins exist, to admin if already logged in. |
-| `/auth/setup` | First admin user creation. Blocked if any admin already exists. Rate-limited (5/hour/IP via KV). Seeds RBAC. |
+| `/auth/setup` | First admin user creation. Blocked if any admin already exists or setup has already completed. D1-backed rate limit and setup claim prevent concurrent bootstrap races. Seeds RBAC. |
 | `/auth/two-factor` | 2FA verification form. Shows if session exists but `twoFactorVerified` is false. |
 | `/auth/setup-2fa` | Optional 2FA setup page. Redirects if 2FA already enabled. |
 | `/auth/forgot-password` | Password reset request form. |
@@ -228,6 +229,8 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 |--------|------|---------|
 | GET | `/` | Check if any admin user exists |
 | POST | `/` | Create first admin (sets as super admin, seeds RBAC) |
+
+`POST /api/v1/setup` uses `admin_setup_rate_limits` for the 5/hour/IP setup throttle and `admin_setup_claims` as the singleton D1 setup authority. Do not move first-admin locking back to Cloudflare KV; KV may cache RBAC seed status, but setup concurrency must be decided by D1 insert/update predicates.
 
 ### RBAC (`/api/v1/admin/rbac/`)
 

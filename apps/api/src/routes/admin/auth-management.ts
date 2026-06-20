@@ -6,12 +6,20 @@ import { and, eq, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import type { Database } from "@scalius/database/client";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
-import { createAuth } from "@scalius/core/auth";
+import {
+    claimAdminSetup,
+    completeAdminSetupClaimWithUserPromotion,
+    createAuth,
+    enforceAdminSetupRateLimit,
+    markAdminSetupClaimCompleted,
+    markAdminSetupClaimFailed,
+    type ClaimedAdminSetup,
+} from "@scalius/core/auth";
 import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
-import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, RateLimitError, ServiceUnavailableError } from "../../utils/api-error";
+import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { getEncryptionKey } from "../../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -799,96 +807,104 @@ setupApp.openapi(setupRoute, async (c) => {
         throw new ForbiddenError("An admin user already exists. Please use the login page.");
     }
 
-    // KV-based rate limiting + creation lock: prevents both brute force and
-    // concurrent first-admin creation race conditions.
+    // D1 is the setup authority: KV is eventually consistent and cannot be a
+    // compare-and-set lock for first-admin bootstrap.
     const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-    const rateLimitKey = `setup_rate:${ip}`;
-    const setupLockKey = "setup:admin_creation_lock";
     const kv = env.CACHE as KVNamespace | undefined;
-    let setupLockAcquired = false;
-    if (kv) {
-        const raw = await kv.get(rateLimitKey);
-        const attempts = raw ? parseInt(raw, 10) : 0;
-        if (attempts >= 5) {
-            throw new RateLimitError("Too many setup attempts. Try again later.", 3600);
-        }
-        await kv.put(rateLimitKey, String(attempts + 1), { expirationTtl: 3600 });
-
-        // Acquire a short-lived lock to prevent concurrent admin creation.
-        // If another request is already creating the first admin, this will fail.
-        const existingLock = await kv.get(setupLockKey);
-        if (existingLock) {
-            throw new ConflictError("Admin setup is already in progress. Please wait.");
-        }
-        await kv.put(setupLockKey, "1", { expirationTtl: 60 });
-        setupLockAcquired = true;
-    }
+    await enforceAdminSetupRateLimit(db, ip);
 
     const auth = createAuth(env);
 
     const { name, email, password } = c.req.valid("json");
+    let setupClaim: ClaimedAdminSetup | null = null;
+    let promotedUserId: string | null = null;
 
     try {
-        const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
-        if (!signUpResult || !signUpResult.user) {
-            throw new ServiceUnavailableError("Could not create user account");
-        }
-
-        await db.update(user).set({ role: "admin", isSuperAdmin: true, emailVerified: true }).where(eq(user.id, signUpResult.user.id));
-
-        const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-        await autoSeedRbacIfNeeded(db, kv);
-
-        return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
-    } catch (error: unknown) {
-        if (!isBetterAuthUserAlreadyExistsError(error)) {
-            throw error;
-        }
-
-        const existingUser = await db
-            .select({ id: user.id })
-            .from(user)
-            .where(eq(user.email, email))
-            .get();
-
-        if (!existingUser) {
-            throw error;
-        }
+        setupClaim = await claimAdminSetup(db);
 
         const currentAdminExists = await firstAdminExists(db);
         if (currentAdminExists) {
+            await markAdminSetupClaimCompleted(db, setupClaim, null);
+            setupClaim = null;
             throw new ForbiddenError("An admin user already exists. Please use the login page.");
         }
 
-        const passwordMatchesExistingAccount = await verifyExistingSetupAccountPassword(
-            auth,
-            db,
-            email,
-            password,
-        );
-        if (!passwordMatchesExistingAccount) {
-            throw new ConflictError(
-                "An account with this email already exists. Use that account's existing password or reset it before completing first-admin setup.",
+        try {
+            const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
+            if (!signUpResult || !signUpResult.user) {
+                throw new ServiceUnavailableError("Could not create user account");
+            }
+
+            await completeAdminSetupClaimWithUserPromotion(db, setupClaim, {
+                userId: signUpResult.user.id,
+            });
+            promotedUserId = signUpResult.user.id;
+            setupClaim = null;
+
+            const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
+            await autoSeedRbacIfNeeded(db, kv);
+
+            return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
+        } catch (error: unknown) {
+            if (!isBetterAuthUserAlreadyExistsError(error)) {
+                throw error;
+            }
+
+            const existingUser = await db
+                .select({ id: user.id })
+                .from(user)
+                .where(eq(user.email, email))
+                .get();
+
+            if (!existingUser) {
+                throw error;
+            }
+
+            const currentAdminExists = await firstAdminExists(db);
+            if (currentAdminExists) {
+                throw new ForbiddenError("An admin user already exists. Please use the login page.");
+            }
+
+            const passwordMatchesExistingAccount = await verifyExistingSetupAccountPassword(
+                auth,
+                db,
+                email,
+                password,
             );
+            if (!passwordMatchesExistingAccount) {
+                throw new ConflictError(
+                    "An account with this email already exists. Use that account's existing password or reset it before completing first-admin setup.",
+                );
+            }
+
+            if (!setupClaim) {
+                throw new ServiceUnavailableError("Admin setup claim is unavailable. Please retry setup.");
+            }
+            await completeAdminSetupClaimWithUserPromotion(db, setupClaim, {
+                userId: existingUser.id,
+                name,
+            });
+            promotedUserId = existingUser.id;
+            setupClaim = null;
+
+            const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
+            await autoSeedRbacIfNeeded(db, kv);
+
+            return created(c, { message: "Admin account recovered successfully", userId: existingUser.id });
         }
-
-        await db
-            .update(user)
-            .set({ name, role: "admin", isSuperAdmin: true, emailVerified: true })
-            .where(eq(user.id, existingUser.id));
-
-        const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-        await autoSeedRbacIfNeeded(db, kv);
-
-        return created(c, { message: "Admin account recovered successfully", userId: existingUser.id });
-    } finally {
-        if (kv && setupLockAcquired) {
+    } catch (error) {
+        if (setupClaim) {
             try {
-                await kv.delete(setupLockKey);
+                if (promotedUserId) {
+                    await markAdminSetupClaimCompleted(db, setupClaim, promotedUserId);
+                } else {
+                    await markAdminSetupClaimFailed(db, setupClaim, error);
+                }
             } catch (cleanupError) {
-                console.warn("Failed to release setup lock:", cleanupError);
+                console.warn("Failed to finalize setup claim:", cleanupError);
             }
         }
+        throw error;
     }
 });
 

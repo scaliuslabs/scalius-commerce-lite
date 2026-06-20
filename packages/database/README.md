@@ -82,6 +82,8 @@ the schema declarations are the source of truth.
 | `account` | OAuth/credential accounts. `providerId`, `accessToken`, `refreshToken`, `password` |
 | `verification` | Email/phone verification tokens. `identifier`, `value`, `expiresAt` |
 | `twoFactor` | TOTP secrets, backup codes, and verification state. `secret`, `backupCodes` (JSON string), `verified` |
+| `adminSetupClaims` | Singleton D1 first-admin setup authority. Holds active/completed setup claim state so only one bootstrap can win |
+| `adminSetupRateLimits` | D1 setup throttle rows keyed by hashed client identifier. Enforces setup attempts without KV read-modify-write races |
 
 ### `rbac.ts` -- Role-Based Access Control
 
