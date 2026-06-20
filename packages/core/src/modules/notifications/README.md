@@ -21,7 +21,7 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 - Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) through the Firebase settings helper. New rows are encrypted `enc:` AES-GCM values, legacy plaintext rows remain read-compatible, and unreadable ciphertext falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` instead of being passed to FCM.
 - `getFirebaseAdminMessaging(env, serviceAccountJson?)` creates a new `FCMMessagingService` instance when DB credentials are provided, or returns a singleton for env-var credentials
 - Uses `escapeHtml()` from `@scalius/shared/html-escape` to sanitize customer names in notification payloads
-- Stores FCM REST message `name` values on accepted delivery receipts; invalid tokens become skipped receipts before deactivation
+- Stores FCM REST message `name` values on accepted delivery receipts; invalid/stale tokens become skipped receipts before deactivation, including Firebase variants surfaced as `Device unregistered` or `NotRegistered`
 
 ### Order Emails: Connected
 
@@ -43,7 +43,7 @@ Sends FCM push notifications to all active admin devices about a new order.
 - Queries all active tokens from `adminFcmTokens` table
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
 - Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.
-- Auto-deactivates invalid tokens (unregistered or invalid registration) in the database
+- Auto-deactivates invalid tokens (unregistered, invalid registration, or Firebase stale-device variants such as `Device unregistered`/`NotRegistered`) in the database. In receipt mode, deactivation happens only after the skipped receipt is successfully terminal.
 - Returns per-target outcomes; receipt-mode retryable failures keep the parent outbox retryable instead of marking it sent
 - All catch blocks use typed `error: unknown` with `instanceof Error` checks
 

@@ -77,6 +77,46 @@ function createDb(input: string | {
     } as unknown as Database;
 }
 
+function createPushDb(tokenRows: Array<{ token: string }>): {
+    db: Database;
+    update: ReturnType<typeof vi.fn>;
+    updateSet: ReturnType<typeof vi.fn>;
+    updateWhere: ReturnType<typeof vi.fn>;
+} {
+    const updateWhere = vi.fn(async () => undefined);
+    const updateSet = vi.fn(() => ({ where: updateWhere }));
+    const update = vi.fn(() => ({ set: updateSet }));
+    let selectCount = 0;
+    const select = vi.fn(() => {
+        selectCount += 1;
+        if (selectCount === 1) {
+            return {
+                from: vi.fn(() => ({
+                    where: vi.fn(() => ({
+                        get: vi.fn(async () => null),
+                    })),
+                })),
+            };
+        }
+
+        return {
+            from: vi.fn(() => ({
+                where: vi.fn(() => ({
+                    then: (resolve: (value: typeof tokenRows) => void) =>
+                        Promise.resolve(tokenRows).then(resolve),
+                })),
+            })),
+        };
+    });
+
+    return {
+        db: { select, update } as unknown as Database,
+        update,
+        updateSet,
+        updateWhere,
+    };
+}
+
 describe("order notification dispatch", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -570,5 +610,150 @@ describe("order notification dispatch", () => {
             env,
             serviceAccountJson,
         );
+    });
+
+    it("treats provider stale-device FCM errors as skipped receipts and deactivates tokens", async () => {
+        const pushDb = createPushDb([
+            { token: "dead_fcm_token" },
+            { token: "active_fcm_token" },
+        ]);
+        mocks.sendEachForMulticast.mockResolvedValueOnce({
+            successCount: 1,
+            failureCount: 1,
+            responses: [
+                {
+                    success: false,
+                    error: {
+                        code: "messaging/unknown-error",
+                        message: "Device unregistered.",
+                    },
+                },
+                {
+                    success: true,
+                    messageId: "projects/scalius/messages/active_fcm_token",
+                },
+            ],
+        });
+
+        const result = await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_push_1",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+            { outboxId: "outbox_push_1" },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            pushDb.db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "messaging/registration-token-not-registered",
+            expect.objectContaining({
+                provider: "fcm",
+                providerStatus: "messaging/unknown-error",
+                rawResponse: "Device unregistered.",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptAccepted).toHaveBeenCalledWith(
+            pushDb.db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            expect.objectContaining({
+                provider: "fcm",
+                providerMessageId: "projects/scalius/messages/active_fcm_token",
+                providerStatus: "accepted",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(pushDb.update).toHaveBeenCalled();
+        expect(pushDb.updateSet).toHaveBeenCalledWith(expect.objectContaining({
+            isActive: false,
+        }));
+        expect(pushDb.updateWhere).toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+        expect(result.outcomes.map((outcome) => outcome.status)).toEqual([
+            "skipped",
+            "accepted",
+        ]);
+    });
+
+    it("deactivates NotRegistered FCM tokens outside receipt mode", async () => {
+        const pushDb = createPushDb([{ token: "dead_fcm_token" }]);
+        mocks.sendEachForMulticast.mockResolvedValueOnce({
+            successCount: 0,
+            failureCount: 1,
+            responses: [
+                {
+                    success: false,
+                    error: {
+                        code: "messaging/unknown-error",
+                        message: "NotRegistered",
+                    },
+                },
+            ],
+        });
+
+        await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_push_2",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+        );
+
+        expect(pushDb.update).toHaveBeenCalled();
+        expect(pushDb.updateSet).toHaveBeenCalledWith(expect.objectContaining({
+            isActive: false,
+        }));
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).not.toHaveBeenCalled();
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+    });
+
+    it("keeps transient FCM failures retryable in receipt mode", async () => {
+        const pushDb = createPushDb([{ token: "retryable_fcm_token" }]);
+        mocks.sendEachForMulticast.mockResolvedValueOnce({
+            successCount: 0,
+            failureCount: 1,
+            responses: [
+                {
+                    success: false,
+                    error: {
+                        code: "messaging/unknown-error",
+                        message: "Internal server error",
+                    },
+                },
+            ],
+        });
+
+        const result = await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_push_3",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+            { outboxId: "outbox_push_3" },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).toHaveBeenCalledWith(
+            pushDb.db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            expect.any(Error),
+            expect.objectContaining({
+                provider: "fcm",
+                providerStatus: "messaging/unknown-error",
+                rawResponse: "Internal server error",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).not.toHaveBeenCalled();
+        expect(pushDb.update).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(true);
     });
 });

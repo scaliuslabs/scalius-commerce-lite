@@ -521,6 +521,54 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
+  it("marks durable order notifications sent when admin push only has skipped receipts", async () => {
+    mocks.getAdminNotificationChannels.mockResolvedValue({
+      order_created: ["push"],
+    });
+    mocks.sendOrderNotification.mockResolvedValueOnce({
+      outcomes: [{
+        channel: "push",
+        provider: "fcm",
+        recipientMasked: "token:dead...oken",
+        status: "skipped",
+        providerStatus: "messaging/registration-token-not-registered",
+        retryable: false,
+      }],
+      hasRetryableFailure: false,
+    });
+    const message = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_admin_push_skipped",
+      orderId: "order-admin-push-skipped",
+      customerName: "Push Customer",
+      notificationType: "order_created",
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      PUBLIC_API_BASE_URL: "https://api.example.test",
+    } as Env);
+
+    expect(mocks.sendOrderNotification).toHaveBeenCalledWith(
+      { id: "db" },
+      {
+        id: "order-admin-push-skipped",
+        customerName: "Push Customer",
+        notificationType: "order_created",
+      },
+      { PUBLIC_API_BASE_URL: "https://api.example.test" },
+      "https://api.example.test",
+      { outboxId: "outbox_admin_push_skipped" },
+    );
+    expect(mocks.markOrderNotificationOutboxSent).toHaveBeenCalledWith(
+      { id: "db" },
+      "outbox_1",
+      "claim_1",
+    );
+    expect(mocks.markOrderNotificationOutboxProcessingFailed).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
   it("passes env and encryption context to OTP email dispatch", async () => {
     const message = createMessage({
       type: "auth.send_otp",
