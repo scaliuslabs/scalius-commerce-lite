@@ -8,6 +8,14 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+
+function crossOriginCookieRequestResponse(): Response {
+  return Response.json(
+    { success: false, error: "Cross-origin cookie request denied" },
+    { status: 403 },
+  );
+}
 
 export const Route = createFileRoute("/api/auth/$")({
   server: {
@@ -18,6 +26,9 @@ export const Route = createFileRoute("/api/auth/$")({
         return handler(request);
       },
       POST: async ({ request }) => {
+        if (shouldRejectCrossOriginCookieRequest(request)) {
+          return crossOriginCookieRequestResponse();
+        }
         const { createAuthHandler } = await import("~/lib/auth.server");
         const handler = createAuthHandler();
         return handler(request);

@@ -13,6 +13,7 @@
 
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { appendRewrittenCustomerAuthSetCookies } from "@/lib/customer-auth-proxy-cookies";
 
 export const prerender = false;
@@ -20,6 +21,13 @@ export const prerender = false;
 const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 export const ALL: APIRoute = async ({ request, params }) => {
+  if (shouldRejectCrossOriginCookieRequest(request)) {
+    return new Response(JSON.stringify({ success: false, error: "Cross-origin cookie request denied" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const subpath = params.path || "";
 
   // Security: reject path traversal and restrict to safe characters

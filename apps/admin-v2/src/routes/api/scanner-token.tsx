@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   SCANNER_COOKIE_NAME,
   SCANNER_SESSION_TTL_SECONDS,
@@ -108,6 +109,10 @@ export async function handleCreateScannerToken(
   request: Request,
   deps: CreateScannerTokenDeps = {},
 ): Promise<Response> {
+  if (shouldRejectCrossOriginCookieRequest(request)) {
+    return jsonResponse({ success: false, error: "Cross-origin cookie request denied" }, 403);
+  }
+
   const getAuthSession = deps.getAuthSession ?? defaultGetAuthSession;
   const loadUserPermissions = deps.loadUserPermissions ?? defaultLoadUserPermissions;
   const authResult = await getAuthSession(request.headers);

@@ -13,32 +13,53 @@ describe("getCorsOriginContext", () => {
     expect(getOrigin("https://api.scalius.com")).toBe("https://api.scalius.com");
   });
 
-  it("allows real subdomains without matching lookalike domains", async () => {
+  it("rejects non-http and credentialed configured origins", async () => {
     const getOrigin = await getCorsOriginContext({
       env: {
+        CREDENTIAL_CORS_ALLOWED_ORIGINS: "ftp://trusted.example.com, https://user:pass@trusted.example.com",
+      },
+    });
+
+    expect(getOrigin("ftp://trusted.example.com")).toBeNull();
+    expect(getOrigin("https://trusted.example.com")).toBeNull();
+  });
+
+  it("does not treat merchant CSP domains as credentialed API origins", async () => {
+    const get = vi.fn(async () => "kv.example.com");
+    const getOrigin = await getCorsOriginContext({
+      env: {
+        CACHE: { get },
         CSP_ALLOWED: "example.com",
       },
     });
 
-    expect(getOrigin("https://example.com")).toBe("https://example.com");
-    expect(getOrigin("https://shop.example.com")).toBe("https://shop.example.com");
-    expect(getOrigin("https://a.b.example.com")).toBe("https://a.b.example.com");
-    expect(getOrigin("https://badexample.com")).toBeNull();
-    expect(getOrigin("https://example.com.evil.test")).toBeNull();
-    expect(getOrigin("https://shop-example.com")).toBeNull();
+    expect(get).not.toHaveBeenCalled();
+    expect(getOrigin("https://example.com")).toBeNull();
+    expect(getOrigin("https://shop.example.com")).toBeNull();
+    expect(getOrigin("https://kv.example.com")).toBeNull();
   });
 
-  it("keeps CDN wildcard matching below the configured CDN host boundary", async () => {
+  it("allows explicit credentialed-CORS URL origins without expanding wildcard hosts", async () => {
     const getOrigin = await getCorsOriginContext({
       env: {
-        CDN_DOMAIN_URL: "cloud.scalius.com",
+        CREDENTIAL_CORS_ALLOWED_ORIGINS: "https://trusted.example.com/path, https://*.wild.example.com, example.test",
       },
     });
 
-    expect(getOrigin("https://cloud.scalius.com")).toBe("https://cloud.scalius.com");
-    expect(getOrigin("https://media.cloud.scalius.com")).toBe("https://media.cloud.scalius.com");
-    expect(getOrigin("https://badcloud.scalius.com")).toBeNull();
-    expect(getOrigin("https://cloud.scalius.com.evil.test")).toBeNull();
+    expect(getOrigin("https://trusted.example.com")).toBe("https://trusted.example.com");
+    expect(getOrigin("https://shop.wild.example.com")).toBeNull();
+    expect(getOrigin("https://example.test")).toBeNull();
+  });
+
+  it("also supports the legacy explicit CORS_ALLOWED_ORIGINS env key for exact URL origins", async () => {
+    const getOrigin = await getCorsOriginContext({
+      env: {
+        CORS_ALLOWED_ORIGINS: "https://mobile-admin.example.com",
+      },
+    });
+
+    expect(getOrigin("https://mobile-admin.example.com")).toBe("https://mobile-admin.example.com");
+    expect(getOrigin("https://other.example.com")).toBeNull();
   });
 
   it("allows localhost and loopback development ports without allowing lookalike hosts", async () => {
@@ -46,21 +67,8 @@ describe("getCorsOriginContext", () => {
 
     expect(getOrigin("http://localhost:4323")).toBe("http://localhost:4323");
     expect(getOrigin("http://127.0.0.1:8787")).toBe("http://127.0.0.1:8787");
+    expect(getOrigin("http://[::1]:8787")).toBe("http://[::1]:8787");
     expect(getOrigin("http://localhost.evil.test:4323")).toBeNull();
     expect(getOrigin("http://127.0.0.10:8787")).toBeNull();
-  });
-
-  it("uses the KV security setting when present", async () => {
-    const get = vi.fn(async () => "kv.example.com");
-    const getOrigin = await getCorsOriginContext({
-      env: {
-        CACHE: { get },
-        CSP_ALLOWED: "env.example.com",
-      },
-    });
-
-    expect(get).toHaveBeenCalledWith("security:csp_allowed_domains");
-    expect(getOrigin("https://shop.kv.example.com")).toBe("https://shop.kv.example.com");
-    expect(getOrigin("https://shop.env.example.com")).toBeNull();
   });
 });

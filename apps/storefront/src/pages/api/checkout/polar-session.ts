@@ -2,6 +2,7 @@
 // Server-side proxy: initializes a Polar checkout session via the backend.
 
 import type { APIRoute } from "astro";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { fetchWithRetry, createApiUrl } from "@/lib/api/client";
 import {
     getPaymentSessionApiErrorMessage,
@@ -10,6 +11,13 @@ import {
 } from "@/lib/checkout/payment-session-proxy";
 
 export const POST: APIRoute = async ({ request }) => {
+    if (shouldRejectCrossOriginCookieRequest(request)) {
+        return new Response(JSON.stringify({ error: "Cross-origin cookie request denied" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+        });
+    }
+
     try {
         const payload = await request.json() as Record<string, unknown>;
         console.log("[checkout/polar-session] Requesting session for order:", payload.orderId);
