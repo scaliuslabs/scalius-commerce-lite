@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { getScannerTokenKey } from "@scalius/shared/scanner-auth";
+import { UnauthorizedError } from "@scalius/core/errors";
+import {
+  SCANNER_SESSION_TTL_SECONDS,
+  getScannerSessionKey,
+} from "@scalius/shared/scanner-auth";
 
-import { handleCreateScannerToken } from "./scanner-token";
+import { handleCreateScannerToken, handleExchangeScannerToken } from "./scanner-token";
 
 function createRequest() {
   return new Request("http://localhost:4323/api/scanner-token", {
@@ -26,6 +30,10 @@ function createKv() {
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn(),
   };
+}
+
+function createDb() {
+  return { id: "db" };
 }
 
 async function readJson(response: Response) {
@@ -119,6 +127,8 @@ describe("handleCreateScannerToken", () => {
 
   it("requires product view and edit permissions because scanner sessions can read and mutate stock", async () => {
     const kv = createKv();
+    const db = createDb();
+    const createTokenClaim = vi.fn().mockResolvedValue(undefined);
 
     const response = await handleCreateScannerToken(createRequest(), {
       getAuthSession: vi.fn().mockResolvedValue({
@@ -137,7 +147,9 @@ describe("handleCreateScannerToken", () => {
         ]),
         isSuperAdmin: false,
       }),
-      getEnv: () => ({ CACHE: kv }),
+      getEnv: () => ({ CACHE: kv, DB: {} as D1Database }),
+      getDb: () => db as never,
+      createTokenClaim,
       createToken: () => "scanner-token",
       now: () => 123,
     });
@@ -147,19 +159,21 @@ describe("handleCreateScannerToken", () => {
       success: true,
       token: "scanner-token",
     });
-    expect(kv.put).toHaveBeenCalledWith(
-      await getScannerTokenKey("scanner-token"),
-      JSON.stringify({
+    expect(createTokenClaim).toHaveBeenCalledWith(
+      db,
+      {
+        token: "scanner-token",
         adminId: "user_1",
         adminName: "Inventory Admin",
-        createdAt: 123,
-      }),
-      expect.objectContaining({ expirationTtl: expect.any(Number) }),
+        nowMs: 123,
+      },
     );
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("allows super admins to create scanner tokens", async () => {
     const kv = createKv();
+    const createTokenClaim = vi.fn().mockResolvedValue(undefined);
 
     const response = await handleCreateScannerToken(createRequest(), {
       getAuthSession: vi.fn().mockResolvedValue({
@@ -170,11 +184,128 @@ describe("handleCreateScannerToken", () => {
         permissions: new Set(),
         isSuperAdmin: true,
       }),
-      getEnv: () => ({ CACHE: kv }),
+      getEnv: () => ({ CACHE: kv, DB: {} as D1Database }),
+      getDb: () => createDb() as never,
+      createTokenClaim,
       createToken: () => "owner-token",
     });
 
     expect(response.status).toBe(200);
+    expect(createTokenClaim).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleExchangeScannerToken", () => {
+  it("claims a QR token through D1 before writing a scanner session", async () => {
+    const kv = createKv();
+    const db = createDb();
+    const consumeTokenClaim = vi.fn().mockResolvedValue({
+      tokenHash: "token_hash_1",
+      adminId: "admin_1",
+      adminName: "Inventory Admin",
+    });
+
+    const response = await handleExchangeScannerToken(
+      new Request("https://dashboard.example.test/api/scanner-token?token=scanner-token"),
+      {
+        getEnv: () => ({ CACHE: kv, DB: {} as D1Database }),
+        getDb: () => db as never,
+        createSessionId: () => "scanner-session-1",
+        consumeTokenClaim,
+        now: () => 1_234,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toContain("scanner_sid=scanner-session-1");
+    expect(consumeTokenClaim).toHaveBeenCalledWith(db, {
+      token: "scanner-token",
+      sessionId: "scanner-session-1",
+      nowMs: 1_234,
+    });
+    expect(kv.put).toHaveBeenCalledWith(
+      await getScannerSessionKey("scanner-session-1"),
+      JSON.stringify({
+        adminId: "admin_1",
+        adminName: "Inventory Admin",
+        createdAt: 1_234,
+        lastSeenAt: 1_234,
+        claimTokenHash: "token_hash_1",
+      }),
+      { expirationTtl: SCANNER_SESSION_TTL_SECONDS },
+    );
+  });
+
+  it("lets only one racing QR-token exchange mint a scanner session", async () => {
+    const kv = createKv();
+    const db = createDb();
+    let claimed = false;
+    const consumeTokenClaim = vi.fn(async () => {
+      if (claimed) {
+        throw new UnauthorizedError("Token invalid or expired");
+      }
+      claimed = true;
+      return {
+        tokenHash: "token_hash_1",
+        adminId: "admin_1",
+        adminName: "Inventory Admin",
+      };
+    });
+    let sessionCounter = 0;
+
+    const responses = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        handleExchangeScannerToken(
+          new Request("https://dashboard.example.test/api/scanner-token?token=scanner-token"),
+          {
+            getEnv: () => ({ CACHE: kv, DB: {} as D1Database }),
+            getDb: () => db as never,
+            createSessionId: () => `scanner-session-${++sessionCounter}`,
+            consumeTokenClaim,
+            now: () => 2_000,
+          },
+        ),
+      ),
+    );
+
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 401)).toHaveLength(3);
+    expect(responses.filter((response) => response.headers.has("Set-Cookie"))).toHaveLength(1);
     expect(kv.put).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes an existing scanner session when no token is supplied", async () => {
+    const kv = createKv();
+    kv.get.mockResolvedValue(JSON.stringify({
+      adminId: "admin_1",
+      adminName: "Inventory Admin",
+      createdAt: 1_000,
+      lastSeenAt: 1_000,
+      claimTokenHash: "token_hash_1",
+    }));
+
+    const response = await handleExchangeScannerToken(
+      new Request("https://dashboard.example.test/api/scanner-token", {
+        headers: { Cookie: "scanner_sid=scanner-session-1" },
+      }),
+      {
+        getEnv: () => ({ CACHE: kv }),
+        now: () => 3_000,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(kv.put).toHaveBeenCalledWith(
+      await getScannerSessionKey("scanner-session-1"),
+      JSON.stringify({
+        adminId: "admin_1",
+        adminName: "Inventory Admin",
+        createdAt: 1_000,
+        lastSeenAt: 3_000,
+        claimTokenHash: "token_hash_1",
+      }),
+      { expirationTtl: SCANNER_SESSION_TTL_SECONDS },
+    );
   });
 });

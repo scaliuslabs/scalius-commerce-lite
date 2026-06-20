@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     archiveStaleIncompleteOrders: vi.fn(),
     flushPendingOrderNotificationOutbox: vi.fn(),
     cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
+    cleanupExpiredScannerTokenClaims: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
   };
 });
@@ -38,6 +39,10 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   cleanupExpiredCustomerAuthOtpChallenges: mocks.cleanupExpiredCustomerAuthOtpChallenges,
 }));
 
+vi.mock("@scalius/core/auth", () => ({
+  cleanupExpiredScannerTokenClaims: mocks.cleanupExpiredScannerTokenClaims,
+}));
+
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
 }));
@@ -49,6 +54,7 @@ import {
   INVENTORY_EXPIRY_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
+  SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
   runScheduledMaintenance,
@@ -111,6 +117,12 @@ describe("runScheduledMaintenance", () => {
       limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.cleanupExpiredScannerTokenClaims.mockResolvedValue({
+      scanned: 0,
+      deleted: 0,
+      limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
+      hasMore: false,
+    });
   });
 
   afterEach(() => {
@@ -161,6 +173,12 @@ describe("runScheduledMaintenance", () => {
       limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.cleanupExpiredScannerTokenClaims.mockResolvedValue({
+      scanned: 2,
+      deleted: 2,
+      limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
+      hasMore: false,
+    });
 
     await runScheduledMaintenance(env, executionCtx);
 
@@ -204,6 +222,13 @@ describe("runScheduledMaintenance", () => {
       Math.floor(now.getTime() / 1000),
       { limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT },
     );
+    expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalledWith(
+      mocks.db,
+      {
+        nowSeconds: Math.floor(now.getTime() / 1000),
+        limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
+      },
+    );
   });
 
   it("does not invalidate availability caches when a sweep has no affected subjects", async () => {
@@ -215,5 +240,6 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalled();
+    expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalled();
   });
 });

@@ -33,6 +33,7 @@ Customer Auth Flow (storefront):
 |------|---------|
 | `auth.ts` | `createAuth()` / `getAuth()` -- Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), admin plugin. Cached per runtime auth signature: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_API_BASE_URL`, and `STOREFRONT_URL`. |
 | `admin-setup.ts` | D1-backed first-admin setup coordination. Owns the singleton setup claim, setup attempt rate limit, and guarded admin promotion/claim completion helper used by `/api/v1/setup`. |
+| `scanner-token-claims.ts` | D1-backed scanner QR-token claim helpers. Minting stores only a token hash, exchange atomically consumes an unexpired/unconsumed claim before a scanner KV session is written, and scheduled maintenance prunes expired/old claims. |
 | `index.ts` | Barrel re-export of `createAuth`, `getAuth`, `Auth` type, and setup coordination helpers. |
 
 ### RBAC
@@ -152,13 +153,14 @@ The TanStack admin app now uses route/server-function guards rather than the old
 Authentication strategy:
 1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding)
 2. **JWT Bearer token** -- fallback (for external/mobile apps)
-3. **Scanner session cookie** -- created after the admin worker exchanges a QR token; limited to exact scanner workflow endpoints
+3. **Scanner session cookie** -- created only after the admin worker atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
 
 Then validates:
 - 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`, `POST /2fa/method`).
 - User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.
 - Fine-grained route permission check via `getRoutePermission()`. Unmapped admin routes fail closed, including for super admins.
 - Scanner sessions use only the scanner allowlist and never inherit the minting admin's role or permissions.
+- Scanner QR token single-use state lives in `scanner_token_claims`, not KV. KV stores only the post-claim `scanner:session:*` payload with `claimTokenHash`.
 
 ### JWT Auth Middleware (`apps/api/src/middleware/auth.ts`)
 

@@ -3,19 +3,15 @@ import {
   SCANNER_COOKIE_NAME,
   buildScannerSessionCookie,
   getScannerSessionKey,
-  getScannerTokenKey,
   isAllowedScannerApiRequest,
   parseCookie,
 } from "./scanner-auth";
 
 describe("scanner auth helpers", () => {
-  it("hashes token and session identifiers before deriving KV keys", async () => {
-    const tokenKey = await getScannerTokenKey("qr-secret");
+  it("hashes session identifiers before deriving KV keys", async () => {
     const sessionKey = await getScannerSessionKey("session-secret");
 
-    expect(tokenKey).toMatch(/^scanner:token:[a-f0-9]{64}$/);
     expect(sessionKey).toMatch(/^scanner:session:[a-f0-9]{64}$/);
-    expect(tokenKey).not.toContain("qr-secret");
     expect(sessionKey).not.toContain("session-secret");
   });
 
