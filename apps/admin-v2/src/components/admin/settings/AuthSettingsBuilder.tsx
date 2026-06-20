@@ -192,6 +192,17 @@ function getWhatsAppProviderIssue(values: AuthAndSmsSettings): string | null {
     return null;
 }
 
+function formatProviderReadinessIssue(issue: string | null | undefined): string {
+    if (!issue) return "";
+    if (
+        issue.includes("could not be decrypted with the configured credential key") ||
+        issue.includes("is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured")
+    ) {
+        return `${issue} Re-enter this provider API key and save it again, or restore the CREDENTIAL_ENCRYPTION_KEY that was used when the credential was saved.`;
+    }
+    return issue;
+}
+
 async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
     const authVerificationMethod = normalizeCustomerAuthMethod(v.authVerificationMethod);
     const customerAuthPolicy = normalizeCustomerAuthPolicy(v.customerAuthPolicy, authVerificationMethod);
@@ -408,7 +419,7 @@ export default function AuthSettingsBuilder() {
                             <Alert variant="destructive">
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertTitle>Verification channel is not ready</AlertTitle>
-                                <AlertDescription>{providerReadinessIssue}</AlertDescription>
+                                <AlertDescription>{formatProviderReadinessIssue(providerReadinessIssue)}</AlertDescription>
                             </Alert>
                         )}
 
@@ -574,7 +585,7 @@ export default function AuthSettingsBuilder() {
                             <Alert variant="destructive">
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertTitle>SMS OTP is not ready</AlertTitle>
-                                <AlertDescription>{smsProviderIssue ?? smsProviderServerIssue}</AlertDescription>
+                                <AlertDescription>{formatProviderReadinessIssue(smsProviderIssue ?? smsProviderServerIssue)}</AlertDescription>
                             </Alert>
                         )}
 
