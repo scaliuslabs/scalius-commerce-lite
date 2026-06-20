@@ -1,6 +1,5 @@
 // src/server/middleware/admin-auth.ts
 import type { MiddlewareHandler } from "hono";
-import { extractTokenFromHeader, verifyToken, refreshTokenIfNeeded } from "../utils/jwt";
 import { getAuth } from "@scalius/core/auth";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
@@ -50,8 +49,9 @@ function isTwoFactorCompletionRequest(pathname: string, method: string): boolean
  * Admin Authentication & RBAC middleware for Hono
  *
  * This perfectly decouples the API from Astro's SSR middleware.
- * It accepts EITHER a Better Auth session cookie (from the Dashboard frontend)
- * OR a JWT Bearer token via Authorization header (for decoupled mobile/external apps).
+ * It accepts an active Better Auth session cookie from the dashboard frontend.
+ * Scanner sessions are the only non-dashboard exception and are restricted to
+ * the exact scanner workflow endpoints.
  */
 export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     let user: User | null = null;
@@ -72,27 +72,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         console.warn("[AdminAuth] Session verification failed:", error instanceof Error ? error.message : "Unknown error");
     }
 
-    // 2. Try JWT Bearer Token
-    if (!user) {
-        try {
-            const authHeader = c.req.header("Authorization") || null;
-            const token = extractTokenFromHeader(authHeader);
-
-            if (token) {
-                user = (await verifyToken(token, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE })) as User;
-
-                // Refresh token if needed
-                const refreshedToken = await refreshTokenIfNeeded(token, 5, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE });
-                if (refreshedToken !== token) {
-                    c.header("X-New-Token", refreshedToken);
-                }
-            }
-        } catch (error: unknown) {
-            console.warn("[AdminAuth] JWT verification failed:", error instanceof Error ? error.message : "Unknown error");
-        }
-    }
-
-    // 3. Try Scanner Session Cookie (for warehouse scanner app)
+    // 2. Try Scanner Session Cookie (for warehouse scanner app)
     if (!user) {
         try {
             const sessionId = parseCookie(c.req.header("Cookie"), SCANNER_COOKIE_NAME);
@@ -120,7 +100,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // If all methods fail, log and return 401
     if (!user) {
         console.warn("[AdminAuth] All auth methods failed for:", c.req.path);
-        throw new UnauthorizedError("Admin access required. Please provide a valid authentication token or session cookie.");
+        throw new UnauthorizedError("Admin access requires a valid dashboard session cookie.");
     }
 
     // Inject user into Hono context

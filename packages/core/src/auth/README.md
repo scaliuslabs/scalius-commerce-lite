@@ -15,7 +15,7 @@ Admin Auth Flow:
                                        Page/API Route Guard
 
 API Worker Auth Flow (service bindings / external apps):
-  Request --> Hono admin-auth middleware --> Better Auth Cookie OR JWT Bearer OR Scanner Cookie
+  Request --> Hono admin-auth middleware --> Better Auth Cookie OR Scanner Cookie
                                              |
                                              v
                                        2FA gate + RBAC Permission Check via route-permissions.ts
@@ -152,8 +152,7 @@ The TanStack admin app now uses route/server-function guards rather than the old
 
 Authentication strategy:
 1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding)
-2. **JWT Bearer token** -- fallback (for external/mobile apps)
-3. **Scanner session cookie** -- created only after the admin worker atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
+2. **Scanner session cookie** -- created only after the admin worker atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
 
 Then validates:
 - 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`, `POST /2fa/method`).
@@ -164,7 +163,7 @@ Then validates:
 
 ### JWT Auth Middleware (`apps/api/src/middleware/auth.ts`)
 
-Simpler JWT-only middleware for non-admin routes (`/auth/token`, `/auth/me`, etc.). Skips health, docs, and token endpoints.
+Simpler JWT-only middleware for non-admin service-token routes (`/auth/token`, `/auth/me`, etc.). Admin APIs intentionally do not accept JWT Bearer fallback; they require live Better Auth session truth for revocation, ban/deleted status, and 2FA.
 
 ### Service-to-Service Token (`apps/api/src/routes/auth.ts`)
 
