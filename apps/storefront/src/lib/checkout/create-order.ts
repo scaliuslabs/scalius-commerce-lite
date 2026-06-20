@@ -72,8 +72,16 @@ export async function createOrder(
     price: item.price,
   }));
   const discount = parseDiscountInput(checkoutData);
+  const checkoutRequestId = readString(
+    checkoutData.checkoutRequestId ?? checkoutData.checkoutId,
+  ).trim();
+
+  if (!checkoutRequestId) {
+    throw new Error("Checkout session expired. Please refresh checkout and try again.");
+  }
 
   const payload: CreateOrderPayload = {
+    checkoutRequestId,
     customerName: readString(checkoutData.customerName),
     customerPhone: readString(checkoutData.customerPhone),
     customerEmail: readOptionalString(checkoutData.customerEmail),

@@ -21,7 +21,7 @@ import { nanoid } from "nanoid";
 import { sql, eq, and, isNull, inArray } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import type { CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
+import type { CreateStorefrontOrderIdentity, CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
 
 /**
  * Validates and prepares a storefront order for queue dispatch.
@@ -40,6 +40,7 @@ export async function createStorefrontOrder(
     requestUrl: string,
     isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
     calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number | Promise<number>,
+    identity?: CreateStorefrontOrderIdentity,
 ): Promise<CreateStorefrontOrderResult> {
     // ------------------------------------------------------------------
     // 1. Batched Reads
@@ -371,8 +372,8 @@ export async function createStorefrontOrder(
     // ------------------------------------------------------------------
     // Build Queue Payload
     // ------------------------------------------------------------------
-    const orderId = generateOrderId();
-    const checkoutToken = `chk_${nanoid()}`;
+    const orderId = identity?.orderId ?? generateOrderId();
+    const checkoutToken = identity?.checkoutToken ?? `chk_${nanoid()}`;
 
     const queuePayload = {
         type: "order.ingest" as const,

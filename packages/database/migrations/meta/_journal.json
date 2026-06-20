@@ -344,6 +344,13 @@
       "when": 1781935411323,
       "tag": "0048_payment_session_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1781936839728,
+      "tag": "0049_checkout_attempts",
+      "breakpoints": true
     }
   ]
 }

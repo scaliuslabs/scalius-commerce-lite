@@ -15217,6 +15217,9 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "orderId": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -15529,6 +15532,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "checkoutRequestId": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9:_-]+$"
+                  },
                   "customerName": {
                     "type": "string",
                     "minLength": 3,
@@ -15656,6 +15665,7 @@
                   }
                 },
                 "required": [
+                  "checkoutRequestId",
                   "customerName",
                   "customerPhone",
                   "customerEmail",
@@ -15726,6 +15736,54 @@
               }
             }
           },
+          "202": {
+            "description": "Order submit is already processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "checkoutToken": {
+                          "type": "string"
+                        },
+                        "orderId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "processing"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "checkoutToken",
+                        "orderId",
+                        "status",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
           "400": {
             "description": "Validation error",
             "content": {
@@ -15768,6 +15826,46 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {

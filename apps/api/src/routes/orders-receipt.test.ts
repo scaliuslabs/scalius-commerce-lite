@@ -40,12 +40,34 @@ const itemRows = [
   },
 ];
 
-function createDbMock() {
+function createDbMock(options: {
+  attemptRow?: { orderId: string; status: string } | null;
+} = {}) {
   let selectCount = 0;
   return {
     select: vi.fn(() => {
       selectCount += 1;
+      if (options.attemptRow && selectCount === 1) {
+        return {
+          from: () => ({
+            where: () => ({
+              get: async () => options.attemptRow,
+            }),
+          }),
+        };
+      }
+
       if (selectCount === 1) {
+        return {
+          from: () => ({
+            where: () => ({
+              get: async () => orderRow,
+            }),
+          }),
+        };
+      }
+
+      if (options.attemptRow && selectCount === 2) {
         return {
           from: () => ({
             where: () => ({
@@ -65,14 +87,18 @@ function createDbMock() {
   };
 }
 
-function createTestApp(options: { tokenOrderId?: string | null }) {
-  const db = createDbMock();
+function createTestApp(options: {
+  tokenOrderId?: string | null;
+  attemptRow?: { orderId: string; status: string } | null;
+}) {
+  const db = createDbMock({ attemptRow: options.attemptRow });
   const kv = {
     get: vi.fn().mockResolvedValue(
       options.tokenOrderId
         ? JSON.stringify({ orderId: options.tokenOrderId })
         : null,
     ),
+    put: vi.fn(async () => undefined),
   };
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
@@ -167,5 +193,30 @@ describe("order receipt route", () => {
     expect(body.data?.order).not.toHaveProperty("paymentIntentId");
     expect(body.data?.order).not.toHaveProperty("shipments");
     expect(body.data?.order).not.toHaveProperty("deliveryProviders");
+  });
+
+  it("falls back to D1 checkout attempts and repairs KV when receipt KV is missing", async () => {
+    const { app, kv } = createTestApp({
+      tokenOrderId: null,
+      attemptRow: { orderId: "order_1", status: "committed" },
+    });
+
+    const response = await app.request(
+      "/api/v1/orders/receipt/order_1?token=chk_valid",
+      {},
+      { CACHE: kv } as never,
+    );
+    const body = await response.json() as {
+      data?: { order?: Record<string, unknown> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.order?.id).toBe("order_1");
+    expect(kv.get).toHaveBeenCalledWith("order_receipt:chk_valid");
+    expect(kv.put).toHaveBeenCalledWith(
+      "order_receipt:chk_valid",
+      JSON.stringify({ orderId: "order_1" }),
+      { expirationTtl: 60 * 60 * 24 * 7 },
+    );
   });
 });

@@ -9,6 +9,7 @@ describe("clearCheckoutSession", () => {
     const keys = [
       "scalius_checkout_data",
       "scalius_checkout_gateways",
+      "checkoutId",
       "scalius_user_phone",
       "scalius_user_email",
       "scalius_user_name",

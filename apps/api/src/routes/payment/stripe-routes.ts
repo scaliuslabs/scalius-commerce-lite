@@ -82,7 +82,7 @@ const createIntentRoute = createRoute({
 app.openapi(createIntentRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken);
+  await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken, db);
 
   // Fetch the order
   const order = await db

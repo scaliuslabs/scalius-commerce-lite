@@ -9,7 +9,8 @@ Full order lifecycle: storefront checkout, admin CRUD, state machine validation,
 | `index.ts` | barrel re-exports | Public API surface |
 | `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `OrderIngestQueuePayload`, `StatusUpdateResult` | Shared TypeScript interfaces for admin, storefront, and queue |
 | `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `updateOrder()`, `deleteOrder()`, `restoreOrder()`, `permanentlyDeleteOrder()`, `bulkDeleteOrders()` | Admin dashboard queries and write operations |
-| `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and queue payload builder |
+| `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and synchronous order payload builder |
+| `checkout-attempts.ts` | `buildCheckoutAttemptIdentity()`, `claimCheckoutAttempt()`, `markCheckoutAttemptCommitted()`, `markCheckoutAttemptFailed()` | D1-backed storefront submit idempotency ledger |
 | `orders.fulfillment.ts` | `bulkShipOrders()`, `processCodAction()`, `getOrderShipments()`, `createFulfillmentShipment()`, `updateOrderStatus()` | Shipment creation, COD actions, status transitions with notification dispatch |
 | `orders.validation.ts` | `createOrderSchema`, `updateOrderSchema`, `bulkDeleteOrderSchema`, `bulkShipOrderSchema`, `CreateOrderInput`, `UpdateOrderInput`, `BulkDeleteOrderInput`, `BulkShipOrderInput` | Zod validation schemas for API routes |
 | `order-state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()`, `StatusDimension` | Enforces valid order/payment/fulfillment status transitions |
@@ -71,17 +72,15 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 
 ## Data Flow
 
-### Storefront Order Creation (async, queue-based)
+### Storefront Order Creation (synchronous, idempotent)
 
-1. **Storefront POST /orders** -- `createStorefrontOrder()` validates prices server-side, verifies discounts, checks partial payment rules, resolves locations, builds queue payload with pre-generated `orderId` and `checkoutToken`
-2. **Enqueue** -- API route sends payload to `ORDER_INGEST_QUEUE`, writes `{ status: "processing", orderId }` to KV
-3. **Queue consumer** -- `handleOrderIngestBatch()` processes the batch:
-   - Phase 1: Accumulate DB write statements (customer, order, items, discount usage, durable `order_created` notification outbox row) and reservation entries
-   - Phase 1b: Re-check discount usage limits to narrow race window
-   - Phase 2: classify active reservation movements for the order, reuse exact active reservations from prior delivery/crash, then call `reserveStockBatch(..., { reservationKey: "checkout-ingest:v1" })` only for missing entries. If one order cannot reserve, retry only that message; quantity/stray reservation mismatches fail closed for manual inventory reconciliation.
-   - Phase 3: `db.batch()` atomic write -- if succeeds, init COD tracking for COD orders, write "completed" to KV, ack messages
-   - Phase 4: On shared DB failure, re-check each order for ambiguous commit, then replay isolated writes with the reservation already held or reused. If isolated writes fail, release only that order's known reservations and retry only after `releaseMultiple()` confirms success; uncertain release fails the checkout closed for manual reconciliation.
-4. **Storefront polls** -- `GET /orders/status/:token` reads KV until "completed" or "failed"
+1. **Storefront POST /orders** -- The storefront sends a stable `checkoutRequestId` for the checkout session. The API route builds a canonical request hash from the order input and claims `checkout_attempts.requestKey` before creating an order.
+2. **Claim behavior** -- A new claim reserves the canonical `orderId` and checkout/receipt token for this submit. A committed same-key/same-payload retry replays the stored response. An active same-key/same-payload retry returns `202` with the reserved `orderId` and checkout token for polling. A same-key/different-payload retry is rejected as `409`.
+3. **Order build** -- `createStorefrontOrder()` validates prices server-side, verifies discounts, checks partial-payment rules, resolves active city/zone/area names from D1, validates inventory, and builds the order payload using the reserved `orderId` and checkout token from the attempt.
+4. **Commit** -- The API writes legacy checkout-status/receipt KV hints, then commits the D1 order synchronously through `commitStorefrontOrderPayload()`. The buyer receives `201` only after the order row exists.
+5. **Attempt finalization** -- After the order commit, the API stores the committed response on `checkout_attempts` and clears the processing claim. If the Worker crashes after the order commit but before finalization, the same request can reclaim the stale attempt with the same reserved IDs and converge on the existing order instead of creating a duplicate.
+6. **Post-commit work** -- COD tracking, durable order-notification enqueue, and product availability cache invalidation run after commit through `executionCtx.waitUntil()` when available. These failures are logged and retried by their own durable paths instead of turning a committed checkout into a false `500`.
+7. **Recovery** -- `GET /orders/status/:token` and receipt validation use KV as the fast path, then fall back to D1 `checkout_attempts` plus the committed `orders` row. KV may be repaired best-effort from D1.
 
 ### Admin Order Creation (synchronous, reserve then deduct)
 

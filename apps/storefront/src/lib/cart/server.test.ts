@@ -34,6 +34,7 @@ function buildCodFormData(): FormData {
   formData.set("zone", "zone_1");
   formData.set("area", "");
   formData.set("shippingLocation", "ship_1");
+  formData.set("checkoutId", "chk_session_test_123456");
   formData.set("notes", "");
   formData.set("cartItems", JSON.stringify({
     line_1: {
@@ -93,6 +94,7 @@ describe("cart server order processing", () => {
     expect(result).toMatchObject({ success: true, orderId: "order_1" });
     expect(mocks.createOrder).toHaveBeenCalledWith(
       expect.objectContaining({
+        checkoutRequestId: "chk_session_test_123456",
         paymentMethod: "cod",
         customerPhone: "+8801712345678",
         shippingMethodId: "ship_1",

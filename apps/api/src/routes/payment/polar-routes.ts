@@ -84,7 +84,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const db: Database = c.get("db");
     const kv = c.env.CACHE;
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-    await validateReceiptToken(c.env.CACHE, orderId, body.receiptToken);
+    await validateReceiptToken(c.env.CACHE, orderId, body.receiptToken, db);
 
     // Validate the order exists
     const order = await db

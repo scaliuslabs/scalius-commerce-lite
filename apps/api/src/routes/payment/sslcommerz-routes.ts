@@ -86,7 +86,7 @@ const createSessionRoute = createRoute({
 app.openapi(createSessionRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken);
+  await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken, db);
 
   // Fetch order + customer info
   const order = await db

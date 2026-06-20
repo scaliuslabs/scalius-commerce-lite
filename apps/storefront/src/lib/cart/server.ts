@@ -137,6 +137,11 @@ export async function processOrder(
     const shippingLocationId = formData.get("shippingLocation") as string;
     const discountJson = formData.get("discountCodeHidden") as string;
     const checkoutId = formData.get("checkoutId") as string | null;
+    const checkoutRequestId = checkoutId?.trim();
+
+    if (!checkoutRequestId) {
+      throw new Error("Checkout session expired. Please refresh checkout and try again.");
+    }
 
     const cartItems = JSON.parse(cartItemsJson);
     // Validate cart item shape and value ranges (defense against crafted form data)
@@ -328,6 +333,7 @@ export async function processOrder(
     }
 
     const payload: CreateOrderPayload = {
+      checkoutRequestId,
       customerName,
       customerPhone,
       customerEmail,

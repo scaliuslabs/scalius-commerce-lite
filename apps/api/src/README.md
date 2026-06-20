@@ -9,7 +9,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | Handler | Purpose |
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
-| `queue(batch)` | Queues -- payment events, order ingest, OTP, notifications |
+| `queue(batch)` | Queues -- payment events, legacy order ingest, OTP, notifications |
 | `scheduled(controller)` | Cron -- releases at most 50 orphaned reservation movement groups per run, invalidates affected availability caches, and flushes the order notification outbox; existing orders are not expired here |
 
 ## Route Organization
@@ -45,7 +45,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/seo` | `routes/seo.ts` | SEO settings for meta tags |
 | `/products` | `routes/products.ts` | Product catalog |
 | `/categories` | `routes/categories.ts` | Category listings |
-| `/orders` | `routes/orders.ts` | Order creation (auth-protected via `authMiddleware`) |
+| `/orders` | `routes/orders.ts` | Idempotent storefront order creation, receipt/status recovery, auth-protected via `authMiddleware` |
 | `/cache` | `routes/cache.ts` | Cache control (admin-protected via `adminAuthMiddleware`) |
 | `/__ptproxy` | `routes/partytown-proxy.ts` | Partytown analytics proxy |
 
@@ -285,11 +285,15 @@ Admin widget writes first invalidate API widget/pattern keys, then schedule stor
 
 `src/queue-consumer.ts` dispatches messages by type. Two queue strategies:
 
-### Order Ingest Queue
+### Storefront Order Submit
+
+Normal buyer checkout is synchronous and D1-fenced. `POST /orders` requires a stable `checkoutRequestId`, claims `checkout_attempts.requestKey`, reserves the canonical `orderId` and checkout/receipt token, commits the order before returning `201`, and stores the replay response on the attempt row. Same-request retries replay committed responses or return a pollable `202` while the first request is active; changed payloads for the same key return `409`. Checkout-status and receipt KV rows are fast hints, while `/orders/status/:token` and receipt-token validation can fall back to D1 `checkout_attempts` plus the committed `orders` row.
+
+### Legacy Order Ingest Queue
 
 Queue name: `order-ingest`. Uses batch processing for throughput, but reservation, ambiguous-commit checks, fallback writes, checkout status, ack/retry, and rollback decisions remain isolated per order. A rejected or acked message must not be retried because another message in the same queue batch failed. Handles `order.ingest` messages. Delegated to `handleOrderIngestBatch()` in `@scalius/core/modules/orders/orders.queue`.
 
-After the ingest handler returns, the API queue consumer invalidates targeted product availability caches from the attempted order IDs and variant IDs. This is intentionally post-processing: the ingest handler still owns ack/retry and inventory safety decisions.
+This queue is retained for legacy/backward-compatible messages and is not on the normal buyer checkout path. After the ingest handler returns, the API queue consumer invalidates targeted product availability caches from the attempted order IDs and variant IDs. This is intentionally post-processing: the ingest handler still owns ack/retry and inventory safety decisions.
 
 ### Payment/Notification/OTP Queue
 

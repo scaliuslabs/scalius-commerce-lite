@@ -50,6 +50,11 @@ export const serviceUnavailableResponse = {
   content: { "application/json": { schema: errorResponseSchema } },
 } as const;
 
+export const conflictResponse = {
+  description: "Conflict",
+  content: { "application/json": { schema: errorResponseSchema } },
+} as const;
+
 /** Reusable error response definitions for createRoute() responses block. */
 export const errorResponses = {
   400: {
