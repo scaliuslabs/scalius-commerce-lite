@@ -24,7 +24,7 @@ Category `email` keys:
 
 - `email_provider` -- `cloudflare` or `resend`.
 - `email_sender` -- default From address, falling back to `noreply@example.com` at runtime.
-- `resend_api_key` -- encrypted Resend key. Reads use `decryptCredentialsGraceful()`. Writes of real keys must require `CREDENTIAL_ENCRYPTION_KEY`.
+- `resend_api_key` -- encrypted Resend key. Runtime reads use strict credential resolution with the dedicated `CREDENTIAL_ENCRYPTION_KEY`; unreadable ciphertext returns `hasResendApiKey=false` instead of falling through to Resend with ciphertext. Writes of real keys must require `CREDENTIAL_ENCRYPTION_KEY`.
 
 Admin API:
 
@@ -43,7 +43,7 @@ await sendEmail(message, {
 });
 ```
 
-The context lets the selector detect `env.EMAIL`, read DB settings without relying on global singleton initialization, and decrypt fallback provider credentials. Queue consumers, Better Auth callbacks, order notifications, and admin invitations all pass this context.
+The context lets the selector detect `env.EMAIL`, read DB settings without relying on global singleton initialization, and decrypt provider credentials with the dedicated credential key. Queue consumers, Better Auth callbacks, order notifications, and admin invitations all pass this context.
 
 ## Cloudflare Binding
 

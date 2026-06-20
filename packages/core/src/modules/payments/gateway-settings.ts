@@ -13,7 +13,11 @@ import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { GatewaySettingsReadOptions } from "./gateway-registry";
 import { registerGateway } from "./gateway-registry";
-import { encryptCredentials, decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import {
+  encodeEncryptedCredential,
+  encryptCredentials,
+  readStoredCredentialStrict,
+} from "@scalius/core/utils/credential-encryption";
 
 // ---------------------------------------------------------------------------
 // In-memory credential cache (per-isolate, lost on cold start)
@@ -83,6 +87,7 @@ export interface StripeSettings {
   publishableKey: string;
   webhookSecret: string;
   enabled: boolean;
+  credentialErrors?: string[];
 }
 
 export type StripeCheckoutRequiredField = "secretKey" | "publishableKey" | "webhookSecret";
@@ -98,6 +103,7 @@ export interface StripeCheckoutReadiness {
   enabled: boolean;
   usable: boolean;
   missingFields: StripeCheckoutRequiredField[];
+  credentialErrors?: string[];
   blockedReason?: string;
 }
 
@@ -106,6 +112,7 @@ export interface SSLCommerzSettings {
   storePassword: string;
   sandbox: boolean;
   enabled: boolean;
+  credentialErrors?: string[];
 }
 
 export type SSLCommerzCheckoutRequiredField = "storeId" | "storePassword";
@@ -120,6 +127,7 @@ export interface SSLCommerzCheckoutReadiness {
   enabled: boolean;
   usable: boolean;
   missingFields: SSLCommerzCheckoutRequiredField[];
+  credentialErrors?: string[];
   blockedReason?: string;
 }
 
@@ -129,6 +137,7 @@ export interface PolarSettings {
   productId: string;
   sandbox: boolean;
   enabled: boolean;
+  credentialErrors?: string[];
 }
 
 export type PolarCheckoutRequiredField = "accessToken" | "productId" | "webhookSecret";
@@ -144,6 +153,7 @@ export interface PolarCheckoutReadiness {
   enabled: boolean;
   usable: boolean;
   missingFields: PolarCheckoutRequiredField[];
+  credentialErrors?: string[];
   blockedReason?: string;
 }
 
@@ -175,6 +185,10 @@ function hasText(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function compactErrors(errors: Array<string | null | undefined>): string[] {
+  return errors.filter((error): error is string => Boolean(error));
+}
+
 export function getStripeCheckoutMissingFields(
   settings: Partial<Pick<StripeSettings, StripeCheckoutRequiredField>> | null | undefined,
 ): StripeCheckoutRequiredField[] {
@@ -195,13 +209,16 @@ export function getStripeCheckoutReadiness(
   settings: Partial<StripeSettings> | null | undefined,
 ): StripeCheckoutReadiness {
   const missingFields = getStripeCheckoutMissingFields(settings);
+  const credentialErrors = compactErrors(settings?.credentialErrors ?? []);
   const enabled = settings?.enabled === true;
+  const configured = missingFields.length === 0 && credentialErrors.length === 0;
   return {
-    configured: missingFields.length === 0,
+    configured,
     enabled,
-    usable: enabled && missingFields.length === 0,
+    usable: enabled && configured,
     missingFields,
-    blockedReason: stripeBlockedReason(missingFields),
+    credentialErrors,
+    blockedReason: credentialErrors[0] ?? stripeBlockedReason(missingFields),
   };
 }
 
@@ -227,13 +244,19 @@ export async function getStripeSettings(
   await cleanupLegacyCredentialKv(kv, STRIPE_CACHE_KEY);
 
   const values = await readCategory(db, STRIPE_CATEGORY);
-  if (!values.secret_key || !values.webhook_secret) return null;
+  if (!values.secret_key && !values.publishable_key && !values.webhook_secret && values.enabled === undefined) return null;
+
+  const [secretKey, webhookSecret] = await Promise.all([
+    readStoredCredentialStrict(values.secret_key, encryptionKey, "Stripe secret key"),
+    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Stripe webhook secret"),
+  ]);
 
   const stripeSettings: StripeSettings = {
-    secretKey: await decryptCredentialsGraceful(values.secret_key, encryptionKey),
+    secretKey: secretKey.value,
     publishableKey: values.publishable_key ?? "",
-    webhookSecret: await decryptCredentialsGraceful(values.webhook_secret, encryptionKey),
+    webhookSecret: webhookSecret.value,
     enabled: values.enabled !== "false",
+    credentialErrors: compactErrors([secretKey.error, webhookSecret.error]),
   };
 
   // Cache in memory only — never persist decrypted credentials
@@ -277,13 +300,16 @@ export function getSSLCommerzCheckoutReadiness(
   settings: Partial<SSLCommerzSettings> | null | undefined,
 ): SSLCommerzCheckoutReadiness {
   const missingFields = getSSLCommerzCheckoutMissingFields(settings);
+  const credentialErrors = compactErrors(settings?.credentialErrors ?? []);
   const enabled = settings?.enabled === true;
+  const configured = missingFields.length === 0 && credentialErrors.length === 0;
   return {
-    configured: missingFields.length === 0,
+    configured,
     enabled,
-    usable: enabled && missingFields.length === 0,
+    usable: enabled && configured,
     missingFields,
-    blockedReason: sslCommerzBlockedReason(missingFields),
+    credentialErrors,
+    blockedReason: credentialErrors[0] ?? sslCommerzBlockedReason(missingFields),
   };
 }
 
@@ -309,13 +335,20 @@ export async function getSSLCommerzSettings(
   await cleanupLegacyCredentialKv(kv, SSL_CACHE_KEY);
 
   const values = await readCategory(db, SSL_CATEGORY);
-  if (!values.store_id || !values.store_password) return null;
+  if (!values.store_id && !values.store_password && values.sandbox === undefined && values.enabled === undefined) return null;
+
+  const storePassword = await readStoredCredentialStrict(
+    values.store_password,
+    encryptionKey,
+    "SSLCommerz store password",
+  );
 
   const sslSettings: SSLCommerzSettings = {
-    storeId: values.store_id,
-    storePassword: await decryptCredentialsGraceful(values.store_password, encryptionKey),
+    storeId: values.store_id ?? "",
+    storePassword: storePassword.value,
     sandbox: values.sandbox !== "false",
     enabled: values.enabled !== "false",
+    credentialErrors: compactErrors([storePassword.error]),
   };
 
   // Cache in memory only — never persist decrypted credentials
@@ -360,13 +393,16 @@ export function getPolarCheckoutReadiness(
   settings: Partial<PolarSettings> | null | undefined,
 ): PolarCheckoutReadiness {
   const missingFields = getPolarCheckoutMissingFields(settings);
+  const credentialErrors = compactErrors(settings?.credentialErrors ?? []);
   const enabled = settings?.enabled === true;
+  const configured = missingFields.length === 0 && credentialErrors.length === 0;
   return {
-    configured: missingFields.length === 0,
+    configured,
     enabled,
-    usable: enabled && missingFields.length === 0,
+    usable: enabled && configured,
     missingFields,
-    blockedReason: polarBlockedReason(missingFields),
+    credentialErrors,
+    blockedReason: credentialErrors[0] ?? polarBlockedReason(missingFields),
   };
 }
 
@@ -392,16 +428,20 @@ export async function getPolarSettings(
   await cleanupLegacyCredentialKv(kv, POLAR_CACHE_KEY);
 
   const values = await readCategory(db, POLAR_CATEGORY);
-  if (!values.access_token || !values.product_id) return null;
+  if (!values.access_token && !values.product_id && !values.webhook_secret && values.sandbox === undefined && values.enabled === undefined) return null;
+
+  const [accessToken, webhookSecret] = await Promise.all([
+    readStoredCredentialStrict(values.access_token, encryptionKey, "Polar access token"),
+    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Polar webhook secret"),
+  ]);
 
   const polarSettings: PolarSettings = {
-    accessToken: await decryptCredentialsGraceful(values.access_token, encryptionKey),
-    webhookSecret: values.webhook_secret
-      ? await decryptCredentialsGraceful(values.webhook_secret, encryptionKey)
-      : "",
-    productId: values.product_id,
+    accessToken: accessToken.value,
+    webhookSecret: webhookSecret.value,
+    productId: values.product_id ?? "",
     sandbox: values.sandbox !== "false",
     enabled: values.enabled !== "false",
+    credentialErrors: compactErrors([accessToken.error, webhookSecret.error]),
   };
 
   // Cache in memory only — never persist decrypted credentials
@@ -456,7 +496,7 @@ export async function upsertEncryptedSetting(
     throw new Error("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
   }
 
-  const stored = await encryptCredentials(value, encryptionKey);
+  const stored = encodeEncryptedCredential(await encryptCredentials(value, encryptionKey));
   await upsertSetting(db, category, key, stored);
 }
 

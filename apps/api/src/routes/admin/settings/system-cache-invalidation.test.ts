@@ -390,7 +390,7 @@ describe("system settings cache invalidation", () => {
     );
   });
 
-  it("does not pass JWT fallback as the WhatsApp migration write key", async () => {
+  it("does not pass JWT fallback as the WhatsApp read or migration write key", async () => {
     const { app, env, executionCtx } = createTestApp();
     delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
     (env as Record<string, unknown>).JWT_SECRET = "jwt-fallback-key";
@@ -405,7 +405,7 @@ describe("system settings cache invalidation", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
       expect.anything(),
-      "jwt-fallback-key",
+      undefined,
       {
         migrateLegacy: true,
         migrationEncryptionKey: undefined,

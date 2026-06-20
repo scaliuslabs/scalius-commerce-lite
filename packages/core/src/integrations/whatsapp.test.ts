@@ -163,7 +163,7 @@ describe("WhatsApp Cloud API integration", () => {
     expect(result.retryable).toBe(false);
   });
 
-  it("reports encrypted tokens as configured without decrypting when no key is available", async () => {
+  it("does not report encrypted tokens as configured when no key is available", async () => {
     const db = createSettingsDb({
       site: {
         id: "site_settings_1",
@@ -178,11 +178,34 @@ describe("WhatsApp Cloud API integration", () => {
 
     expect(result).toMatchObject({
       accessToken: undefined,
-      accessTokenConfigured: true,
+      accessTokenConfigured: false,
       phoneNumberId: "phone_id_1",
       accessTokenSource: "none",
     });
     expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("does not use bare encrypted legacy tokens as plaintext when the key is wrong", async () => {
+    const key = Buffer.alloc(32, 31).toString("base64");
+    const wrongKey = Buffer.alloc(32, 32).toString("base64");
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: null,
+        whatsappPhoneNumberId: "phone_id_1",
+        whatsappTemplateName: "auth_otp",
+      },
+      tokenRow: { value: await encryptCredentials("encrypted_token", key) },
+    });
+
+    const result = await getWhatsAppCloudApiSettings(db, wrongKey);
+
+    expect(result).toMatchObject({
+      accessToken: undefined,
+      accessTokenConfigured: false,
+      phoneNumberId: "phone_id_1",
+      accessTokenSource: "none",
+    });
   });
 
   it("keeps legacy plaintext fallback if an existing encrypted token cannot decrypt", async () => {

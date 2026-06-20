@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendEmail, type EmailRuntimeSettings } from "./index";
+import { getEmailRuntimeSettings } from "./settings";
+import { encryptCredentials } from "../../utils/credential-encryption";
 
 const baseSettings: EmailRuntimeSettings = {
   provider: "cloudflare",
@@ -9,6 +11,18 @@ const baseSettings: EmailRuntimeSettings = {
   hasResendApiKey: false,
   cloudflareBindingConfigured: false,
 };
+
+function createEmailSettingsDb(rows: Array<{ key: string; value: string }>) {
+  return {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          all: async () => rows,
+        }),
+      }),
+    }),
+  };
+}
 
 describe("email provider selection", () => {
   beforeEach(() => {
@@ -158,5 +172,25 @@ describe("email provider selection", () => {
     ].map((call) => call.map((value) => JSON.stringify(value)).join(" ")).join("\n");
     expect(logOutput).not.toContain("123456");
     expect(logOutput).not.toContain("<p>Your code");
+  });
+
+  it("does not treat an unreadable encrypted Resend API key as configured", async () => {
+    const key = Buffer.alloc(32, 12).toString("base64");
+    const wrongKey = Buffer.alloc(32, 13).toString("base64");
+    const settings = await getEmailRuntimeSettings({
+      db: createEmailSettingsDb([
+        { key: "email_provider", value: "resend" },
+        { key: "email_sender", value: "orders@example.com" },
+        { key: "resend_api_key", value: `enc:${await encryptCredentials("re_live_secret", key)}` },
+      ]),
+      encryptionKey: wrongKey,
+    });
+
+    expect(settings).toMatchObject({
+      provider: "resend",
+      sender: "orders@example.com",
+      resendApiKey: null,
+      hasResendApiKey: false,
+    });
   });
 });

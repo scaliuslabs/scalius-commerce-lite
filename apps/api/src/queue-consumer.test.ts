@@ -426,7 +426,8 @@ describe("handleQueueBatch payment confirmation retries", () => {
       CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as Env);
 
-    expect(mocks.getEncryptionKey).toHaveBeenCalledTimes(1);
+    expect(mocks.getEncryptionKey).not.toHaveBeenCalled();
+    expect(mocks.getCredentialEncryptionKey).toHaveBeenCalledTimes(2);
     expect(mocks.sendOrderNotificationEmail).toHaveBeenCalledWith(
       undefined,
       "SMS Customer",
@@ -435,7 +436,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { reason: "refund" },
       { id: "db" },
       {
-        encryptionKey: "test-key",
+        encryptionKey: "credential-key",
         migrationEncryptionKey: "credential-key",
         env: {
           CREDENTIAL_ENCRYPTION_KEY: "credential-key",
@@ -656,7 +657,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       {
         db: { id: "db" },
         env,
-        encryptionKey: "test-key",
+        encryptionKey: "credential-key",
       },
     );
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
@@ -766,7 +767,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
       { id: "db" },
-      "test-key",
+      "credential-key",
       {
         migrateLegacy: true,
         migrationEncryptionKey: "credential-key",

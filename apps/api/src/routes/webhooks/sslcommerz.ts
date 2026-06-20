@@ -13,7 +13,7 @@ import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import type { PaymentQueueMessage } from "../../queue-consumer";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
   buildWebhookEventId,
   claimWebhookEvent,
@@ -131,7 +131,7 @@ function resolvePaymentType(
 
 app.post("/", async (c) => {
   const db = c.get("db") as Database;
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   let ssl: Awaited<ReturnType<typeof getSSLCommerzSettings>>;
   try {
     ssl = await getSSLCommerzSettings(
@@ -150,6 +150,14 @@ app.post("/", async (c) => {
 
   if (!ssl) {
     console.warn("[ssl-webhook] SSLCommerz not configured — ignoring IPN");
+    return c.text("OK");
+  }
+  if (ssl.credentialErrors?.length) {
+    console.error("[ssl-webhook] SSLCommerz credentials are not readable:", ssl.credentialErrors[0]);
+    return c.text("RETRY", 503);
+  }
+  if (!ssl.storeId || !ssl.storePassword) {
+    console.warn("[ssl-webhook] SSLCommerz webhook credentials are incomplete — ignoring IPN");
     return c.text("OK");
   }
 

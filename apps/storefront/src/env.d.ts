@@ -159,6 +159,7 @@ interface Window {
   __CURRENCY_DECIMAL_PLACES__?: number;
   __BUILD_ID__?: string;
   __CHECKOUT_CONFIG__?: unknown;
+  __scaliusAuthModalOpenPending?: boolean;
   dataLayer?: Record<string, unknown>[];
   fbq?: ((...args: unknown[]) => void) & { q?: unknown[] };
   zaraz?: {

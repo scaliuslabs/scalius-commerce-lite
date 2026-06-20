@@ -9,7 +9,7 @@ import {
   getStripeSettings,
 } from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentQueueMessage } from "../../queue-consumer";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
   buildWebhookEventId,
   claimWebhookEvent,
@@ -22,7 +22,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.post("/", async (c) => {
   const db = c.get("db");
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   let stripeSettings: Awaited<ReturnType<typeof getStripeSettings>>;
   try {
     stripeSettings = await getStripeSettings(
@@ -41,6 +41,14 @@ app.post("/", async (c) => {
 
   if (!stripeSettings) {
     console.warn("[stripe-webhook] Stripe not configured — ignoring event");
+    return c.json({ received: true, skipped: true });
+  }
+  if (stripeSettings.credentialErrors?.length) {
+    console.error("[stripe-webhook] Stripe credentials are not readable:", stripeSettings.credentialErrors[0]);
+    return c.json({ error: "Webhook settings unavailable" }, 503);
+  }
+  if (!stripeSettings.secretKey || !stripeSettings.webhookSecret) {
+    console.warn("[stripe-webhook] Stripe webhook credentials are incomplete — ignoring event");
     return c.json({ received: true, skipped: true });
   }
 

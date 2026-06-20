@@ -63,7 +63,7 @@ describe("SMS settings readiness", () => {
 
   it("does not treat encrypted secrets as ready when the credential key is unavailable", async () => {
     const key = Buffer.alloc(32, 7).toString("base64");
-    const encryptedToken = await encryptCredentials("token_123", key);
+    const encryptedToken = `enc:${await encryptCredentials("token_123", key)}`;
     const db = createSmsSettingsDb([
       { key: "active_provider", value: "bdbulksms" },
       { key: "bdbulksms_token", value: encryptedToken },
@@ -78,6 +78,22 @@ describe("SMS settings readiness", () => {
       activeProvider: "bdbulksms",
       configured: true,
       error: null,
+    });
+  });
+
+  it("does not treat encrypted secrets as ready when the credential key is wrong", async () => {
+    const key = Buffer.alloc(32, 8).toString("base64");
+    const wrongKey = Buffer.alloc(32, 9).toString("base64");
+    const db = createSmsSettingsDb([
+      { key: "active_provider", value: "smsnetbd" },
+      { key: "smsnetbd_api_key", value: `enc:${await encryptCredentials("api_key_123", key)}` },
+      { key: "smsnetbd_sender_id", value: "SCALIUS" },
+    ]);
+
+    await expect(getSmsProviderReadiness(db as never, wrongKey)).resolves.toEqual({
+      activeProvider: "smsnetbd",
+      configured: false,
+      error: "SMS.net.bd API key could not be decrypted with the configured credential key.",
     });
   });
 });

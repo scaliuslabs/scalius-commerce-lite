@@ -3,7 +3,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { settings as settingsTable } from "@scalius/database/schema";
-import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { and, eq } from "drizzle-orm";
 import type { EmailRuntimeContext, EmailRuntimeSettings } from "./provider";
 
@@ -11,8 +11,7 @@ const DEFAULT_FROM = "noreply@example.com";
 
 function encryptionKeyFromContext(context?: EmailRuntimeContext): string | undefined {
   return context?.encryptionKey
-    ?? context?.env?.CREDENTIAL_ENCRYPTION_KEY
-    ?? context?.env?.JWT_SECRET;
+    ?? context?.env?.CREDENTIAL_ENCRYPTION_KEY;
 }
 
 async function resolveDb(context?: EmailRuntimeContext): Promise<Database> {
@@ -36,9 +35,17 @@ export async function getEmailRuntimeSettings(
 
     const values = new Map(rows.map((row) => [row.key, row.value]));
     const storedResendApiKey = values.get("resend_api_key") || "";
-    const resendApiKey = storedResendApiKey
-      ? await decryptCredentialsGraceful(storedResendApiKey, encryptionKeyFromContext(context))
-      : null;
+    const resolvedResendApiKey = await readStoredCredentialStrict(
+      storedResendApiKey,
+      encryptionKeyFromContext(context),
+      "Resend API key",
+    );
+    if (resolvedResendApiKey.error) {
+      console.warn("[Email] Resend API key is not ready:", resolvedResendApiKey.error);
+    }
+    const resendApiKey = resolvedResendApiKey.error || !resolvedResendApiKey.value
+      ? null
+      : resolvedResendApiKey.value;
     const savedProvider = values.get("email_provider");
     const provider = savedProvider === "cloudflare" || savedProvider === "resend"
       ? savedProvider

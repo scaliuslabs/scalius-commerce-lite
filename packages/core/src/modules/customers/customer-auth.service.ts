@@ -80,6 +80,7 @@ export interface SendOtpInput {
     phone?: string;
     email?: string;
     encryptionKey?: string;
+    credentialEncryptionKey?: string;
     migrationEncryptionKey?: string;
 }
 
@@ -379,7 +380,7 @@ export async function sendOtp(
     // Resolve and validate the delivery transport before mutating rate-limit or OTP challenge state.
     const transport = getOtpTransport(method, policy, channel);
     if (channel === "whatsapp") {
-        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.encryptionKey, {
+        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey, {
             migrateLegacy: true,
             migrationEncryptionKey: input.migrationEncryptionKey,
         });
@@ -388,7 +389,7 @@ export async function sendOtp(
         }
     }
     if (channel === "sms") {
-        const smsReadiness = await getSmsProviderReadiness(db, input.encryptionKey);
+        const smsReadiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
         if (!smsReadiness.configured) {
             console.error(`[CustomerAuth] SMS transport unavailable: ${smsReadiness.error ?? "not configured"}`);
             throw new ServiceUnavailableError("SMS verification is currently unavailable. Contact store support.");

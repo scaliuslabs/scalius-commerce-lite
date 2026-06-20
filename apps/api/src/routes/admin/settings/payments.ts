@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
-import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import {
     invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
@@ -67,7 +67,7 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
     const activePaymentMethods = await getActivePaymentMethods(
         db,
         getKv(),
-        getEncryptionKey(env as Record<string, unknown>),
+        getCredentialEncryptionKey(env as Record<string, unknown>),
         { bypassMemoryCache: true },
     );
     const nextPaymentMethods = activePaymentMethods.enabledMethods.filter((method) => method !== gatewayId);
@@ -226,6 +226,7 @@ const gatewayStatusSchema = z.object({
     enabled: z.boolean(),
     usable: z.boolean().optional(),
     missingFields: z.array(z.string()).optional(),
+    credentialErrors: z.array(z.string()).optional(),
     blockedReason: z.string().optional(),
     providerEnabled: z.boolean().optional(),
     checkoutSelected: z.boolean().optional(),
@@ -259,7 +260,7 @@ const getPaymentMethodsRoute = createRoute({
 app.openapi(getPaymentMethodsRoute, async (c) => {
     const db = c.get("db");
         const kv = getKv();
-        const encKey = getEncryptionKey(c.env as Record<string, unknown>);
+        const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const readOptions = { bypassMemoryCache: true };
         const [rawConfig, activeConfig] = await Promise.all([
             getPaymentMethodPreferences(db),
@@ -383,7 +384,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     }
 
     const kv = getKv();
-    const encKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const readOptions = { bypassMemoryCache: true };
     const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
         getStripeSettings(db, kv, encKey, readOptions),

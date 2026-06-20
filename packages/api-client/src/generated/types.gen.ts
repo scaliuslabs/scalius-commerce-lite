@@ -18701,6 +18701,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     enabled: boolean;
                     usable?: boolean;
                     missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
                     blockedReason?: string;
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;
@@ -18711,6 +18712,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     enabled: boolean;
                     usable?: boolean;
                     missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
                     blockedReason?: string;
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;
@@ -18721,6 +18723,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     enabled: boolean;
                     usable?: boolean;
                     missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
                     blockedReason?: string;
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;
@@ -18731,6 +18734,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     enabled: boolean;
                     usable?: boolean;
                     missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
                     blockedReason?: string;
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;

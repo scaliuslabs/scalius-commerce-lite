@@ -8,7 +8,7 @@ import {
     getPolarSettings,
 } from "@scalius/core/modules/payments/gateway-settings";
 import { type Database } from "@scalius/database/client";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import {
     buildWebhookEventId,
@@ -65,7 +65,7 @@ polarWebhookRoutes.post("/", async (c) => {
 
         const db: Database = c.get("db");
         const kv = c.env.CACHE;
-        const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+        const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
 
         let polarSettings: Awaited<ReturnType<typeof getPolarSettings>>;
         try {
@@ -80,6 +80,13 @@ polarWebhookRoutes.post("/", async (c) => {
                 "[Polar Webhook] Polar settings read failed:",
                 error instanceof Error ? error.message : error,
             );
+            return c.json({ error: "Webhook settings unavailable" }, 503);
+        }
+        const webhookSecretUnreadable = polarSettings?.credentialErrors?.some((error) =>
+            error.toLowerCase().includes("webhook secret"),
+        );
+        if (webhookSecretUnreadable) {
+            console.error("[Polar Webhook] Polar webhook secret is not readable:", polarSettings?.credentialErrors?.[0]);
             return c.json({ error: "Webhook settings unavailable" }, 503);
         }
         if (!polarSettings || !polarSettings.webhookSecret) {

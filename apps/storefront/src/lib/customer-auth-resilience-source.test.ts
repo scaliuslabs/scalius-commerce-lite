@@ -42,4 +42,26 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain("if (!session.authenticated) {");
     expect(source).toContain("window.dispatchEvent(new CustomEvent(\"open-auth-modal\"));");
   });
+
+  it("buffers auth modal opens before the idle React island hydrates", () => {
+    const source = readStorefrontSource("src/layouts/Layout.astro");
+
+    const bufferIndex = source.indexOf("window.__scaliusAuthModalOpenPending = true;");
+    const modalIndex = source.indexOf("<AuthModal client:idle />");
+
+    expect(bufferIndex).toBeGreaterThanOrEqual(0);
+    expect(modalIndex).toBeGreaterThan(bufferIndex);
+  });
+
+  it("consumes pending auth modal opens after registering the hydrated listener", () => {
+    const source = readStorefrontSource("src/components/AuthModal.tsx");
+
+    const listenerIndex = source.indexOf("window.addEventListener(\"open-auth-modal\", handleOpen);");
+    const pendingIndex = source.indexOf("if (window.__scaliusAuthModalOpenPending) {");
+
+    expect(source).toContain("delete window.__scaliusAuthModalOpenPending;");
+    expect(listenerIndex).toBeGreaterThanOrEqual(0);
+    expect(pendingIndex).toBeGreaterThan(listenerIndex);
+    expect(source).toContain("handleOpen();");
+  });
 });
