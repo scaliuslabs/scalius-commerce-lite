@@ -14,6 +14,12 @@ import {
 } from "@scalius/core/errors";
 import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
 import { createAuthOtpDeliveryKey } from "./otp-delivery-receipts";
+import {
+    claimCustomerAuthOtpChallenge,
+    persistCustomerAuthOtpChallenge,
+    deleteCustomerAuthOtpChallenge,
+    cleanupExpiredCustomerAuthOtpChallenges,
+} from "./customer-auth-otp-challenges";
 import { validateAndFormatPhone, isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
@@ -35,6 +41,10 @@ export const SESSION_PREFIX = "cust_session:";
 export const OTP_PREFIX = "cust_otp:";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
+const OTP_RESEND_COOLDOWN_SECONDS = 120;
+const OTP_MAX_ATTEMPTS = 5;
+
+export { deleteCustomerAuthOtpChallenge, cleanupExpiredCustomerAuthOtpChallenges };
 
 function getOtpStorageKey(channel: CustomerAuthOtpChannel, normalizedIdentifier: string): string {
     return `${OTP_PREFIX}${channel}:${normalizedIdentifier}`;
@@ -42,24 +52,6 @@ function getOtpStorageKey(channel: CustomerAuthOtpChannel, normalizedIdentifier:
 
 function getFallbackOtpChannel(method: "email" | "phone"): CustomerAuthOtpChannel {
     return method === "email" ? "email" : "sms";
-}
-
-// ─────────────────────────────────────────
-// Security Helpers
-// ─────────────────────────────────────────
-
-/**
- * Constant-time string comparison to prevent timing attacks on OTP codes.
- * Standard `===` returns early on first mismatch, leaking information about
- * which characters are correct via response time differences.
- */
-function timingSafeEqualString(a: string, b: string): boolean {
-    if (a.length !== b.length) return false;
-    let result = 0;
-    for (let i = 0; i < a.length; i++) {
-        result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-    }
-    return result === 0;
 }
 
 // ─────────────────────────────────────────
@@ -74,19 +66,6 @@ export interface CustomerSession {
     customerId?: string;
     createdAt: number;
     expiresAt: number;
-}
-
-export interface StoredOtp {
-    code: string;
-    email: string;
-    method: "email" | "phone";
-    identifier: string;
-    contactEmail?: string;
-    phone?: string;
-    expiresAt: number;
-    attempts: number;
-    intent?: CustomerAuthIntent;
-    channel?: CustomerAuthOtpChannel;
 }
 
 export type CustomerAuthIntent = "sign_in" | "sign_up";
@@ -112,7 +91,7 @@ export interface SendOtpResult {
     httpStatus?: number;
     /** Queue payload for async OTP delivery */
     queuePayload?: OtpQueuePayload;
-    /** Exact KV key used for this OTP attempt, so route-level queue failures can clear cooldown state. */
+    /** Exact D1 challenge key used for this OTP attempt, so route-level queue failures can clear cooldown state. */
     otpStorageKey?: string;
     /** Stable per-attempt delivery key used for provider idempotency and D1 receipt fencing. */
     deliveryKey?: string;
@@ -127,6 +106,7 @@ export interface VerifyOtpInput {
     intent?: CustomerAuthIntent;
     phone?: string;
     email?: string;
+    encryptionKey?: string;
 }
 
 export interface VerifyOtpResult {
@@ -414,7 +394,7 @@ export async function sendOtp(
     const contactEmail = getPrimaryEmail(method, normalizedIdentifier, input.email);
     const contactPhone = getPrimaryPhone(method, normalizedIdentifier, input.phone);
 
-    // Resolve and validate the delivery transport before mutating rate-limit or OTP KV state.
+    // Resolve and validate the delivery transport before mutating rate-limit or OTP challenge state.
     const transport = getOtpTransport(method, policy, channel);
     if (channel === "whatsapp") {
         const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.encryptionKey, {
@@ -455,42 +435,29 @@ export async function sendOtp(
         await kv.put(ipRateKey, (ipCount + 1).toString(), { expirationTtl: rlWindow });
     }
 
-    // Check if a recent OTP exists (prevent spam — must wait 2 min between sends)
-    const existingOtpRaw = await kv.get(otpKey, "text");
-    if (existingOtpRaw) {
-        const existing = JSON.parse(existingOtpRaw) as StoredOtp;
-        const now = Date.now();
-        if (existing.expiresAt - now > (OTP_TTL_SECONDS - 120) * 1000) {
-            throw new RateLimitError(
-                "A verification code was recently sent. Please wait a moment before requesting a new one.",
-                120,
-            );
-        }
-    }
-
-    // Generate and store OTP
+    // Generate and persist an atomic D1 challenge. KV is intentionally not the
+    // OTP authority; it cannot safely count attempts or consume one-time codes.
     const code = generateOtpCode();
-    const now = Date.now();
-    const storedOtp: StoredOtp = {
-        code,
-        email: contactEmail ?? normalizedIdentifier,
+    const deliveryKey = createAuthOtpDeliveryKey();
+    const challenge = await persistCustomerAuthOtpChallenge(db, {
+        otpKey,
+        deliveryKey,
         method,
+        channel,
+        intent,
         identifier: normalizedIdentifier,
         contactEmail,
         phone: contactPhone,
-        expiresAt: now + OTP_TTL_SECONDS * 1000,
-        attempts: 0,
-        intent,
-        channel,
-    };
-
-    await kv.put(otpKey, JSON.stringify(storedOtp), { expirationTtl: OTP_TTL_SECONDS });
+        code,
+        encryptionKey: input.encryptionKey,
+        ttlSeconds: OTP_TTL_SECONDS,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+        maxAttempts: OTP_MAX_ATTEMPTS,
+    });
 
     // OTP code is intentionally NOT logged — it would leak secrets in production.
 
     // Build queue payload via transport — use original identifier for delivery (user-facing)
-    const deliveryKey = createAuthOtpDeliveryKey();
-    const otpExpiresAt = Math.floor(storedOtp.expiresAt / 1000);
     const queuePayload = transport.buildQueuePayload(
         code,
         normalizedIdentifier,
@@ -498,7 +465,7 @@ export async function sendOtp(
         { ...settings, authVerificationMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod) },
         channel,
         deliveryKey,
-        otpExpiresAt,
+        challenge.expiresAt,
     );
 
     return {
@@ -536,56 +503,17 @@ export async function verifyOtp(
     const channel = input.channel ?? getFallbackOtpChannel(method);
     const otpKey = getOtpStorageKey(channel, normalizedIdentifier);
 
-    const storedRaw = await kv.get(otpKey, "text");
-    if (!storedRaw) {
-        throw new ValidationError("No verification code found. Please request a new one.");
-    }
-
-    const stored = JSON.parse(storedRaw) as StoredOtp;
-    const intent = normalizeCustomerAuthIntent(stored.intent ?? input.intent);
-    if (stored.channel && stored.channel !== channel) {
-        throw new ValidationError("Verification code does not match the selected delivery method. Please request a new code.");
-    }
-    if (!stored.method || !stored.identifier) {
-        await kv.delete(otpKey);
-        throw new ValidationError("Verification code could not be verified. Please request a new code.");
-    }
-    if (stored.method !== method || stored.identifier !== normalizedIdentifier) {
-        throw new ValidationError("Verification code does not match the requested contact. Please request a new code.");
-    }
-    const verifiedEmail = stored.method === "email" ? stored.identifier : stored.contactEmail;
-    const verifiedPhone = stored.method === "phone" ? stored.identifier : stored.phone;
-
-    // Check expiry
-    if (Date.now() > stored.expiresAt) {
-        await kv.delete(otpKey);
-        throw new ValidationError("Verification code has expired. Please request a new one.");
-    }
-
-    // Increment attempts
-    stored.attempts++;
-
-    // Max 5 attempts
-    if (stored.attempts > 5) {
-        await kv.delete(otpKey);
-        throw new RateLimitError("Too many failed attempts. Please request a new code.");
-    }
-
-    // Verify code using constant-time comparison to prevent timing attacks.
-    // A direct `!==` leaks correct digits via response timing differences.
-    if (!timingSafeEqualString(stored.code, code)) {
-        // Verification failed — re-store with incremented attempts so the user can retry
-        const remaining = OTP_TTL_SECONDS - Math.floor((Date.now() - (stored.expiresAt - OTP_TTL_SECONDS * 1000)) / 1000);
-        await kv.put(otpKey, JSON.stringify(stored), { expirationTtl: Math.max(remaining, 60) });
-        throw new ValidationError("Incorrect code. Please try again.", {
-            attemptsLeft: 5 - stored.attempts,
-        });
-    }
-
-    // OTP verified; remove it before session creation, and restore it only for
-    // recoverable account-policy validation errors so the customer can correct
-    // secondary contact fields without requesting a new code.
-    await kv.delete(otpKey);
+    const challenge = await claimCustomerAuthOtpChallenge(db, {
+        otpKey,
+        method,
+        channel,
+        identifier: normalizedIdentifier,
+        code,
+        encryptionKey: input.encryptionKey,
+    });
+    const intent = normalizeCustomerAuthIntent(challenge.intent ?? input.intent);
+    const verifiedEmail = challenge.method === "email" ? challenge.identifier : challenge.contactEmail;
+    const verifiedPhone = challenge.method === "phone" ? challenge.identifier : challenge.phone;
 
     // Look up customer in DB (if exists)
     let customerId: string | undefined;
@@ -675,8 +603,6 @@ export async function verifyOtp(
     } catch (dbError: unknown) {
         // Re-throw typed errors (ValidationError etc.) as-is
         if (dbError instanceof ValidationError) {
-            const remaining = OTP_TTL_SECONDS - Math.floor((Date.now() - (stored.expiresAt - OTP_TTL_SECONDS * 1000)) / 1000);
-            await kv.put(otpKey, JSON.stringify(stored), { expirationTtl: Math.max(remaining, 60) });
             throw dbError;
         }
         console.warn("[CustomerAuth] DB lookup/insert failed:", dbError);

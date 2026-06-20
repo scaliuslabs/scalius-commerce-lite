@@ -1,6 +1,6 @@
 # Auth & RBAC System
 
-Complete authentication and role-based access control for the Scalius Commerce admin dashboard. Two independent auth systems: Better Auth for admin users, OTP-based KV sessions for storefront customers.
+Complete authentication and role-based access control for the Scalius Commerce admin dashboard. Two independent auth systems: Better Auth for admin users, D1-backed OTP challenges plus KV sessions for storefront customers.
 
 ## Architecture Overview
 
@@ -21,7 +21,7 @@ API Worker Auth Flow (service bindings / external apps):
                                        2FA gate + RBAC Permission Check via route-permissions.ts
 
 Customer Auth Flow (storefront):
-  Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/send-otp --> KV-stored OTP
+  Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/send-otp --> D1 OTP challenge
   Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/verify   --> KV-stored session (cs_tok cookie)
 ```
 
@@ -182,7 +182,7 @@ Simpler JWT-only middleware for non-admin routes (`/auth/token`, `/auth/me`, etc
 
 ## Customer Auth (Storefront)
 
-Completely separate from Better Auth. OTP-based, sessionless JWT-free design using KV.
+Completely separate from Better Auth. OTP verification uses short-lived D1 challenges; customer sessions remain JWT-free KV records.
 
 | Constant | Value |
 |----------|-------|
@@ -195,10 +195,10 @@ Completely separate from Better Auth. OTP-based, sessionless JWT-free design usi
 
 ### Flow
 
-1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings for allowed method (email/phone/both), validates delivery transport before mutating KV, rate limits by IP, generates 6-digit OTP, stores in KV, returns queue payload with `deliveryKey` and `otpExpiresAt` for async delivery
-2. `/send-otp` sends the payload to `AUTH_OTP_QUEUE`; if queue handoff fails, it deletes the exact OTP KV key and returns retryable `503`
+1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings/customer-auth policy, validates delivery transport before mutating challenge state, rate limits by IP, generates a 6-digit OTP, stores only an HMAC hash plus pinned contact metadata in `customer_auth_otp_challenges`, and returns queue payload with `deliveryKey` and `otpExpiresAt` for async delivery
+2. `/send-otp` sends the payload to `AUTH_OTP_QUEUE`; if queue handoff fails, it deletes the exact D1 OTP challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue delivery claims `auth_otp_delivery_receipts`, skips terminal/expired attempts, and records provider refs/status for email, SMS, or WhatsApp delivery
-4. `verifyOtp()` -- normalizes identifier to E.164, validates OTP, creates/finds customer in DB, creates KV session, returns `CustomerSession` with `cs_tok` cookie
+4. `verifyOtp()` -- normalizes identifier to E.164, atomically consumes correct D1 OTP challenges or increments wrong-code attempts, creates/finds customer in DB, creates KV session, returns `CustomerSession` with `cs_tok` cookie
 5. `getCustomerBySession()` -- retrieves session from KV by token
 6. `deleteCustomerSession()` -- logout
 7. `updateCustomerProfile()` -- updates the customer DB record and refreshes the KV session name; address/location fields are persisted in D1 but not mirrored into the session object

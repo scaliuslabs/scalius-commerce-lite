@@ -7,6 +7,7 @@ import { errorResponseFromError } from "../utils/api-response";
 const mocks = vi.hoisted(() => ({
   sendOtp: vi.fn(),
   verifyOtp: vi.fn(),
+  deleteCustomerAuthOtpChallenge: vi.fn(),
   getCustomerBySession: vi.fn(),
   getCustomerOrders: vi.fn(),
   getCustomerOrderDetail: vi.fn(),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   sendOtp: mocks.sendOtp,
   verifyOtp: mocks.verifyOtp,
+  deleteCustomerAuthOtpChallenge: mocks.deleteCustomerAuthOtpChallenge,
   getCustomerBySession: mocks.getCustomerBySession,
   deleteCustomerSession: vi.fn(),
   updateCustomerProfile: vi.fn(),
@@ -623,14 +625,15 @@ describe("customer auth private cache policy", () => {
     expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
   });
 
-  it("clears OTP KV state when queue handoff fails", async () => {
+  it("clears OTP challenge state when queue handoff fails", async () => {
     const app = createTestApp();
     const queueSend = vi.fn().mockRejectedValue(new Error("queue down"));
-    const kvDelete = vi.fn().mockResolvedValue(undefined);
+    mocks.deleteCustomerAuthOtpChallenge.mockResolvedValue(undefined);
     mocks.sendOtp.mockResolvedValue({
       success: true,
       message: "Verification code sent to your email",
-      otpStorageKey: "cust_otp:buyer@example.com",
+      otpStorageKey: "cust_otp:email:buyer@example.com",
+      deliveryKey: "otp_delivery_1",
       queuePayload: {
         type: "auth.send_otp",
         deliveryKey: "otp_delivery_1",
@@ -656,7 +659,7 @@ describe("customer auth private cache policy", () => {
         }),
       },
       {
-        CACHE: { delete: kvDelete },
+        CACHE: {},
         AUTH_OTP_QUEUE: { send: queueSend },
       } as never,
     );
@@ -666,7 +669,13 @@ describe("customer auth private cache policy", () => {
       type: "auth.send_otp",
       deliveryKey: "otp_delivery_1",
     }));
-    expect(kvDelete).toHaveBeenCalledWith("cust_otp:buyer@example.com");
+    expect(mocks.deleteCustomerAuthOtpChallenge).toHaveBeenCalledWith(
+      {},
+      {
+        otpKey: "cust_otp:email:buyer@example.com",
+        deliveryKey: "otp_delivery_1",
+      },
+    );
     await expect(response.json()).resolves.toMatchObject({
       success: false,
       error: {

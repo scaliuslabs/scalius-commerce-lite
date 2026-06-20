@@ -295,6 +295,11 @@ Notable migrations:
 - `0042` -- Admin order search relevance: rebuilds `orders_fts` with `customer_email` and adds the default list index on `(deleted_at, updated_at)`
 - `0043` -- Durable `order_notification_outbox` table for idempotent order-notification queue handoff and replay
 - `0044` -- Durable `order_notification_delivery_receipts` table for per-channel order notification receipts and retry dedupe
+- `0045` -- Durable `auth_otp_delivery_receipts` table for customer OTP provider delivery receipts and retry dedupe
+- `0048` -- Durable `payment_session_attempts` table for hosted-payment session idempotency
+- `0049` -- Durable `checkout_attempts` table for synchronous storefront checkout idempotency
+- `0050` -- Immutable `discount_customer_redemptions` claims for one-per-customer discount enforcement
+- `0051` -- D1-backed `customer_auth_otp_challenges` for atomic customer OTP attempt accounting and one-time consumption
 
 Validate migration metadata after schema or migration edits:
 
