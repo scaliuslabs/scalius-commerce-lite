@@ -18,7 +18,7 @@ import {
 } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 
-import { sql, eq, and, isNull } from "drizzle-orm";
+import { sql, eq, and, isNull, inArray } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import type { CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
@@ -48,7 +48,9 @@ export async function createStorefrontOrder(
         .map((item) => item.variantId)
         .filter((id): id is string => id !== null);
 
-    const locationIds = [data.city, data.zone, data.area].filter(Boolean);
+    const locationIds = [data.city, data.zone, data.area].filter(
+        (id): id is string => typeof id === "string" && id.trim().length > 0,
+    );
     const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
 
     // Drizzle D1 batch() requires specific tuple types
@@ -83,11 +85,19 @@ export async function createStorefrontOrder(
     if (locationIds.length > 0) {
         readBatch.push(
             storefrontDb
-                .select()
+                .select({
+                    id: deliveryLocations.id,
+                    name: deliveryLocations.name,
+                    type: deliveryLocations.type,
+                    parentId: deliveryLocations.parentId,
+                    isActive: deliveryLocations.isActive,
+                    deletedAt: deliveryLocations.deletedAt,
+                })
                 .from(deliveryLocations)
                 .where(
                     and(
-                        sql`${deliveryLocations.id} IN ${locationIds}`,
+                        inArray(deliveryLocations.id, locationIds),
+                        eq(deliveryLocations.isActive, true),
                         isNull(deliveryLocations.deletedAt),
                     ),
                 ),
@@ -172,7 +182,14 @@ export async function createStorefrontOrder(
 
     // Unpack Results
     interface VariantRow { id: string; productId: string; stock: number; price: number; discountPercentage: number | null; discountType: string | null; discountAmount: number | null; }
-    interface LocationRow { id: string; name: string; }
+    interface LocationRow {
+        id: string;
+        name: string;
+        type: "city" | "zone" | "area";
+        parentId: string | null;
+        isActive: boolean;
+        deletedAt: Date | number | null;
+    }
     const variants = variantIds.length > 0 ? (readResults[0] as VariantRow[]) : [] as VariantRow[];
     const locationResults = locationIds.length > 0 ? (readResults[1] as LocationRow[]) : [] as LocationRow[];
 
@@ -331,10 +348,25 @@ export async function createStorefrontOrder(
     }
 
     // Process Location Data
-    const locationMap = new Map(locationResults.map((l: LocationRow) => [l.id, l.name]));
-    const cityName = locationMap.get(data.city) || data.cityName || null;
-    const zoneName = locationMap.get(data.zone) || data.zoneName || null;
-    const areaName = locationMap.get(data.area || "") || data.areaName || null;
+    const locationMap = new Map(locationResults.map((location: LocationRow) => [location.id, location]));
+    const city = locationMap.get(data.city);
+    if (!city || city.type !== "city" || city.parentId !== null || city.isActive !== true || city.deletedAt != null) {
+        throw new ValidationError("Selected city is no longer available for checkout.");
+    }
+
+    const zone = locationMap.get(data.zone);
+    if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
+        throw new ValidationError("Selected zone is no longer available for the chosen city.");
+    }
+
+    const area = data.area ? locationMap.get(data.area) : null;
+    if (data.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
+        throw new ValidationError("Selected area is no longer available for the chosen zone.");
+    }
+
+    const cityName = city.name;
+    const zoneName = zone.name;
+    const areaName = area?.name ?? null;
 
     // ------------------------------------------------------------------
     // Build Queue Payload

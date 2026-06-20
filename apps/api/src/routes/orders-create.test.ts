@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ValidationError } from "../utils/api-error";
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
@@ -446,5 +447,34 @@ describe("create order commit/KV ordering", () => {
     expect(excessiveQuantity.status).toBe(400);
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+  });
+
+  it("does not write checkout status or receipt proof when location validation fails", async () => {
+    mocks.createStorefrontOrder.mockRejectedValue(
+      new ValidationError("Selected zone is no longer available for the chosen city."),
+    );
+    const { app, kv, queue } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    const responseText = await response.clone().text();
+    expect(response.status, responseText).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Selected zone is no longer available for the chosen city.",
+      },
+    });
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,15 @@ interface ShippingMethodRow {
   deletedAt: Date | null;
 }
 
+interface LocationRow {
+  id: string;
+  name: string;
+  type: "city" | "zone" | "area";
+  parentId: string | null;
+  isActive: boolean;
+  deletedAt: Date | null;
+}
+
 function createProduct(overrides: Partial<ProductRow> = {}): ProductRow {
   return {
     id: "prod_standard",
@@ -37,6 +46,18 @@ function createShippingMethod(overrides: Partial<ShippingMethodRow> = {}): Shipp
   return {
     id: "ship_standard",
     fee: 60,
+    isActive: true,
+    deletedAt: null,
+    ...overrides,
+  };
+}
+
+function createLocation(overrides: Partial<LocationRow> = {}): LocationRow {
+  return {
+    id: "city_1",
+    name: "Dhaka",
+    type: "city",
+    parentId: null,
     isActive: true,
     deletedAt: null,
     ...overrides,
@@ -90,18 +111,20 @@ function createDbMock(readResults: unknown[]): Database {
 async function placeOrder({
   inputOverrides,
   products = [createProduct()],
+  locations = [
+    createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+    createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+  ],
   shippingMethods = [createShippingMethod()],
 }: {
   inputOverrides?: Partial<CreateStorefrontOrderInput>;
   products?: ProductRow[];
+  locations?: LocationRow[];
   shippingMethods?: ShippingMethodRow[];
 } = {}) {
   const db = createDbMock([
     [],
-    [
-      { id: "city_1", name: "Dhaka" },
-      { id: "zone_1", name: "Mirpur" },
-    ],
+    locations,
     [],
     [],
     products,
@@ -177,5 +200,137 @@ describe("createStorefrontOrder shipping verification", () => {
 
     expect(result.queuePayload.orderData.shippingCharge).toBe(0);
     expect(result.totalAmount).toBe(100);
+  });
+});
+
+describe("createStorefrontOrder delivery-location verification", () => {
+  it("uses active D1 delivery-location names instead of caller-supplied names", async () => {
+    const result = await placeOrder({
+      inputOverrides: {
+        cityName: "Forged City",
+        zoneName: "Forged Zone",
+        areaName: "Forged Area",
+        area: "area_1",
+      },
+      locations: [
+        createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+        createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+        createLocation({ id: "area_1", name: "Section 10", type: "area", parentId: "zone_1" }),
+      ],
+    });
+
+    expect(result.queuePayload.orderData.cityName).toBe("Dhaka");
+    expect(result.queuePayload.orderData.zoneName).toBe("Mirpur");
+    expect(result.queuePayload.orderData.areaName).toBe("Section 10");
+  });
+
+  it("rejects unknown, inactive, or soft-deleted city selections", async () => {
+    await expect(
+      placeOrder({
+        locations: [
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected city is no longer available for checkout.");
+
+    await expect(
+      placeOrder({
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null, isActive: false }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected city is no longer available for checkout.");
+
+    await expect(
+      placeOrder({
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null, deletedAt: new Date("2026-01-01T00:00:00.000Z") }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected city is no longer available for checkout.");
+  });
+
+  it("rejects zones that are missing, wrong-type, inactive, or not children of the city", async () => {
+    await expect(
+      placeOrder({
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+        ],
+      }),
+    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+
+    await expect(
+      placeOrder({
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", name: "Wrong Type", type: "area", parentId: "city_1" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+
+    await expect(
+      placeOrder({
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_2" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+
+    await expect(
+      placeOrder({
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1", isActive: false }),
+        ],
+      }),
+    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+  });
+
+  it("rejects areas that are missing, wrong-type, inactive, or not children of the zone", async () => {
+    await expect(
+      placeOrder({
+        inputOverrides: { area: "area_1" },
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+
+    await expect(
+      placeOrder({
+        inputOverrides: { area: "area_1" },
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+          createLocation({ id: "area_1", name: "Wrong Type", type: "zone", parentId: "zone_1" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+
+    await expect(
+      placeOrder({
+        inputOverrides: { area: "area_1" },
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+          createLocation({ id: "area_1", name: "Section 10", type: "area", parentId: "zone_2" }),
+        ],
+      }),
+    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+
+    await expect(
+      placeOrder({
+        inputOverrides: { area: "area_1" },
+        locations: [
+          createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+          createLocation({ id: "area_1", name: "Section 10", type: "area", parentId: "zone_1", isActive: false }),
+        ],
+      }),
+    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
   });
 });
