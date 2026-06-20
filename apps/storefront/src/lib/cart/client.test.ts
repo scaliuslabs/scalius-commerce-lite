@@ -2,9 +2,12 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { cartStore } from "../../store/cart";
 import type { CheckoutLanguageData } from "../api/types";
+import type { CartValidationIssue } from "../api/orders";
 import { applyCheckoutButtonState } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
+import { renderCartIssueAction } from "./issue-action";
 
 const maliciousEmptyCartText =
   '</h3><img src=x onerror="window.__emptyCartPwned=true"><h3>';
@@ -99,6 +102,47 @@ describe("renderEmptyCartState", () => {
     expect(
       (window as typeof window & { __continuePwned?: boolean }).__continuePwned,
     ).toBeUndefined();
+  });
+});
+
+describe("renderIssueAction", () => {
+  beforeEach(() => {
+    cartStore.set({
+      items: {
+        line_1: {
+          id: "prod_1",
+          slug: "cotton-panjabi",
+          name: "Cotton Panjabi",
+          price: 150,
+          quantity: 1,
+          variantId: "default",
+        },
+      },
+      totalItems: 1,
+      totalAmount: 150,
+      discount: null,
+    });
+  });
+
+  it("links variant-required cart issues back to the product options", () => {
+    const issue: CartValidationIssue = {
+      index: 0,
+      cartKey: "line_1",
+      productId: "prod_1",
+      variantId: null,
+      code: "VARIANT_REQUIRED",
+      action: "select_variant",
+      message: "Cotton Panjabi needs an option selection before checkout.",
+      productName: "Cotton Panjabi",
+      variantLabel: null,
+      requestedQuantity: 1,
+    };
+
+    const html = renderCartIssueAction("line_1", issue, cartStore.get().items.line_1?.slug);
+
+    expect(html).toContain("Choose option");
+    expect(html).toContain('href="/products/cotton-panjabi"');
+    expect(html).not.toContain("Remove item");
   });
 });
 

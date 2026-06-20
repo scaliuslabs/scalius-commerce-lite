@@ -25,6 +25,12 @@ export const GET: APIRoute = async ({ params, url }) => {
     }
 
     const { product, images, variants, category } = productData;
+    if (!product.hasVariants) {
+      return new Response(null, {
+        status: 307,
+        headers: { Location: `/products/${slug}?error=product_unavailable` },
+      });
+    }
     const layoutData = await getLayoutData();
     setRuntimeImageCdnPolicy(layoutData?.media);
     const currencyCode = layoutData?.currency?.code ?? "BDT";

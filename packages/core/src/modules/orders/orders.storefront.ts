@@ -45,6 +45,7 @@ export async function createStorefrontOrder(
     const cartValidation = prevalidatedCart ?? await validateStorefrontCartItems(
         storefrontDb,
         data.items.map((item) => ({
+            cartKey: item.cartKey,
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,

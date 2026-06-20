@@ -72,6 +72,7 @@ export interface OrderDetails extends OrderListItem {
 // ─────────────────────────────────────────
 
 export interface StorefrontOrderItem {
+    cartKey?: string | null;
     productId: string;
     variantId: string | null;
     quantity: number;

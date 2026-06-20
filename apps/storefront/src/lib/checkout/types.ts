@@ -2,6 +2,7 @@ import type {
   CustomerAuthMethod,
   CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
+import type { CartValidationIssue } from "../api/orders";
 
 export interface GatewayMeta {
   label: string;
@@ -22,6 +23,7 @@ export interface PaymentResult {
   success: boolean;
   redirectUrl?: string;
   error?: string;
+  cartIssues?: CartValidationIssue[];
   clearCartOnRedirect?: boolean;
   clearCheckoutSessionOnRedirect?: boolean;
 }

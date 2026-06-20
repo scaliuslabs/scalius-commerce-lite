@@ -216,6 +216,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `facebook-feed.xml.ts` | Facebook product feed |
 
 Checkout proxy endpoints unwrap `.data` before returning to the browser -- the checkout page reads top-level fields.
+`checkout/create-order.ts` must preserve structured `details.itemIssues` from the API; checkout gateway handlers use those issues to return buyers to the cart repair UI instead of collapsing catalog freshness failures into a string-only payment error.
 
 ## Cart (`src/store/cart.ts`)
 
@@ -225,6 +226,7 @@ Client-side cart state using Nano Stores (`nanostores/map`):
 - Cart item keys use `{productId}-{variantId}` for variant products, `{productId}-{size}-{color}` for size/color combos, or just `{productId}` for simple products
 - Discount support with auto-clear when cart contents change
 - Cross-component communication via `CustomEvent` dispatches (`cart-updated`, `discount-applied`, `discount-removed`)
+- Checkout repair handoff uses a one-shot `sessionStorage` key (`scalius_cart_repair_state`) written by `/checkout`; `src/lib/cart/client.ts` consumes it, renders line-level issues immediately, then runs the normal backend cart validation as authority.
 
 ## Checkout (`src/lib/checkout/`)
 
@@ -235,7 +237,7 @@ Gateway-based payment architecture:
 - `handlers/stripe.ts` -- Stripe Elements
 - `handlers/sslcommerz.ts` -- SSLCommerz redirect
 - `handlers/polar.ts` -- Polar redirect
-- `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, renders order summary, renders gateway cards, handles payment processing
+- `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, and redirects stale cart snapshots back to `/cart?checkoutIssues=1`
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
 
 ## Account Order Payments (`src/pages/account/orders/[id].astro`)

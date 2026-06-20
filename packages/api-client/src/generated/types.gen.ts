@@ -5092,6 +5092,7 @@ export type PostApiV1OrdersData = {
         areaName?: string | null;
         notes: string | null;
         items: Array<{
+            cartKey?: string | null;
             productId: string;
             variantId: string | null;
             quantity: number;

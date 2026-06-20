@@ -1,5 +1,5 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
-import { createOrder } from "../create-order";
+import { CheckoutOrderError, createOrder } from "../create-order";
 import { resolveCheckoutPaymentRequest } from "../payment-mode";
 import { buildPaymentRecoveryUrl } from "../payment-recovery";
 
@@ -64,6 +64,9 @@ export const sslcommerzHandler: GatewayHandler = {
           }),
           clearCheckoutSessionOnRedirect: true,
         };
+      }
+      if (err instanceof CheckoutOrderError) {
+        return { success: false, error: err.message, cartIssues: err.cartIssues };
       }
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
