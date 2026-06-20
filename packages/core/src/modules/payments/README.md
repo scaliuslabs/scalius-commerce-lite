@@ -136,7 +136,7 @@ Dispatches `PaymentQueueMessage` types:
 
 - **SDK**: `stripe` v17+ (Web Fetch API native, works on CF Workers)
 - **Client singleton**: Module-level `_stripe` with key rotation detection (`_stripeKey` comparison)
-- **Session creation**: `createPaymentIntent()` creates a Stripe PaymentIntent; returns `clientSecret` for client-side confirmation via Stripe.js
+- **Session creation**: `createPaymentIntent()` creates a Stripe PaymentIntent; returns `clientSecret` for client-side confirmation via Stripe.js. Public checkout routes pass the durable payment-session attempt key as Stripe's provider idempotency key.
 - **Capture modes**: Provider code supports automatic (default) or manual (`manualCapture: true` -- authorize now, capture later via `capturePaymentIntent()`). Public checkout session routes currently force `manualCapture: false`.
 - **Cancel**: `cancelPaymentIntent()` cancels uncaptured intents
 - **Webhook verification**: `verifyStripeWebhook()` uses `constructEventAsync` (Web Crypto compatible)
@@ -152,7 +152,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Base URLs**: `sandbox.sslcommerz.com` (sandbox) / `securepay.sslcommerz.com` (production)
 - **Session creation**: `initSSLCommerzSession()` POSTs to `/gwprocess/v4/api.php`; returns `GatewayPageURL` (redirect) + `sessionkey`
 - **Amount formatting**: Uses `totalAmount.toFixed(getDecimalPlaces(currency))` for ISO 4217-aware decimal formatting. e.g. BDT: `toFixed(2)`, JPY: `toFixed(0)`, BHD: `toFixed(3)`. No smallest-unit multiplication -- SSLCommerz always receives the display amount.
-- **Session params**: Uses a unique merchant `tran_id` per payment attempt (`{orderId}_{paymentType}_{suffix}`), includes `value_a` for payment type, and includes `value_b` for the canonical order id.
+- **Session params**: Uses a unique merchant `tran_id` per payment attempt (`{orderId}_{paymentType}_{suffix}`), includes `value_a` for payment type, and includes `value_b` for the canonical order id. Public checkout routes derive the suffix from the durable payment-session attempt hash, so retries for the same canonical attempt reuse the same merchant transaction id.
 - **Redirect handlers**: API has POST + GET handlers for `/success`, `/fail`, `/cancel`; each validates order exists before redirecting to storefront. Trusted callback URLs include `order_id`; legacy callbacks can still derive the order id by parsing scoped `tran_id`. `STOREFRONT_URL` from env determines redirect target.
 - **IPN validation**: SSLCommerz does NOT sign webhooks. `validateSSLCommerzIPN()` makes a server-to-server API call to `/validator/api/validationserverAPI.php` using `val_id`. Only `VALID`/`VALIDATED` statuses are accepted.
 - **Transaction validation**: `validateSSLCommerzPayment()` validates by `tran_id` via `/validator/api/merchantTransIDvalidationAPI.php`
@@ -164,7 +164,7 @@ Dispatches `PaymentQueueMessage` types:
 
 - **SDK**: `@polar-sh/sdk` (`Polar` class) + `standardwebhooks` (`Webhook` class for signature verification)
 - **Client singleton**: Module-level `_cachedClient` keyed by access token and sandbox/production server so credential or environment rotation takes effect in warm isolates
-- **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`.
+- **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`, and forwards trusted success/cancel URLs from the API route.
 - **Webhook verification**: `verifyPolarWebhook()` base64-encodes the webhook secret before passing to `standardwebhooks`. Synchronous verification (not async).
 - **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (enqueue refund -> update payment and allowed order status + pre-fulfillment inventory)
 - **Replay protection**: Durable `webhook_events` claim before queueing
@@ -199,11 +199,12 @@ Uses `roundPrice()` and `pricesEqual()` from `@scalius/shared/price-utils` for f
 
 ### Idempotency
 
-Three layers of duplicate prevention:
+Four layers of duplicate prevention:
 
-1. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue failures mark the event `failed` so provider retries can reclaim it. Fresh `processing` claims dedupe in-flight work, while stale `processing` claims are lease-reclaimable so isolate failures before queue send do not black-hole provider retries.
-2. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry)
-3. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (Stripe payment intent, SSLCommerz validation id with transaction-id fallback for legacy failed attempts, Polar checkout id) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
+1. **Session creation level**: Public Stripe, SSLCommerz, and Polar routes claim `payment_session_attempts` before provider calls using a canonical key derived from order id, receipt token hash, gateway, payment type, server-derived amount/currency, and route-owned callback/customer context. Created attempts store the replay payload (`clientSecret`/redirect URL/session id) so identical retries return the original session without touching the provider again. In-flight attempts return a conflict instead of creating a duplicate. Failed attempts are reclaimable. Stripe also receives the same durable attempt key as its provider idempotency key.
+2. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue failures mark the event `failed` so provider retries can reclaim it. Fresh `processing` claims dedupe in-flight work, while stale `processing` claims are lease-reclaimable so isolate failures before queue send do not black-hole provider retries.
+3. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry)
+4. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (Stripe payment intent, SSLCommerz validation id with transaction-id fallback for legacy failed attempts, Polar checkout id) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
 
 COD collection (`recordCODCollection()`) has its own idempotency: queries for existing succeeded payment with `paymentMethod: "cod"`.
 
@@ -216,7 +217,7 @@ Before any writes, `processPaymentConfirmed()` calls `validateTransition()` for 
 
 ### Public Session Policy
 
-Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and fresh checkout settings, and keeps public Stripe sessions on automatic capture. Session creation fresh-reads `payment_methods.enabled_methods`, `siteSettings.checkoutMode`/partial-payment fields, and gateway credentials with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`; this blocks stale checkout tabs from creating new external sessions after a merchant disables/rotates a gateway or switches to Fast COD Only.
+Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and fresh checkout settings, and keeps public Stripe sessions on automatic capture. Session creation fresh-reads `payment_methods.enabled_methods`, `siteSettings.checkoutMode`/partial-payment fields, and gateway credentials with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`; this blocks stale checkout tabs from creating new external sessions after a merchant disables/rotates a gateway or switches to Fast COD Only. After those checks and before the provider call, routes claim `payment_session_attempts`; created attempts replay the original public response, and concurrent processing attempts fail fast instead of double-creating gateway sessions.
 
 ### Partial Payments (Deposit/Balance)
 

@@ -10,6 +10,12 @@ import {
   parseSSLCommerzTranId,
 } from "@scalius/core/modules/payments/sslcommerz";
 import {
+  buildPaymentSessionAttemptIdentity,
+  claimPaymentSessionAttempt,
+  markPaymentSessionAttemptCreated,
+  markPaymentSessionAttemptFailed,
+} from "@scalius/core/modules/payments/payment-session-attempts";
+import {
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   getSSLCommerzSettings,
 } from "@scalius/core/modules/payments/gateway-settings";
@@ -24,6 +30,11 @@ import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type SSLCommerzSessionResponse = {
+  gatewayUrl?: string;
+  sessionKey?: string;
+};
 
 // ─── POST /session ───────────────────────────────────────────────────────────
 
@@ -116,7 +127,6 @@ app.openapi(createSessionRoute, async (c) => {
 
   const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
   const currency = currencyConfig.code;
-  const transactionId = buildSSLCommerzTranId(body.orderId, policy.paymentType);
 
   const ssl = await getSSLCommerzSettings(
     db,
@@ -138,59 +148,107 @@ app.openapi(createSessionRoute, async (c) => {
     order_id: body.orderId,
     receipt_token: body.receiptToken,
   };
+  const successUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/success", callbackParams);
+  const failUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/fail", { order_id: body.orderId });
+  const cancelUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/cancel", { order_id: body.orderId });
+  const ipnUrl = `${apiBase}/webhooks/sslcommerz`;
 
-  const result = await initSSLCommerzSession(
-    ssl.storeId,
-    ssl.storePassword,
-    ssl.sandbox,
-    {
-      orderId: body.orderId,
-      transactionId,
-      totalAmount: policy.chargeAmount,
-      currency,
-      successUrl: buildSslCallbackUrl(apiBase, "/payment/sslcommerz/success", callbackParams),
-      failUrl: buildSslCallbackUrl(apiBase, "/payment/sslcommerz/fail", { order_id: body.orderId }),
-      cancelUrl: buildSslCallbackUrl(apiBase, "/payment/sslcommerz/cancel", { order_id: body.orderId }),
-      ipnUrl: `${apiBase}/webhooks/sslcommerz`,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      customerEmail: order.customerEmail ?? undefined,
-      customerAddress: order.shippingAddress,
-      customerCity: order.cityName ?? undefined,
-      paymentType: policy.paymentType
-    }
-  );
+  const attemptIdentity = await buildPaymentSessionAttemptIdentity({
+    orderId: body.orderId,
+    gateway: "sslcommerz",
+    paymentType: policy.paymentType,
+    amount: policy.chargeAmount,
+    currency,
+    receiptToken: body.receiptToken,
+    requestContext: {
+      successUrl,
+      failUrl,
+      cancelUrl,
+      ipnUrl,
+    },
+  });
+  const transactionId = buildSSLCommerzTranId(body.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
+  const attemptClaim = await claimPaymentSessionAttempt<SSLCommerzSessionResponse>(db, {
+    ...attemptIdentity,
+    providerCorrelationId: transactionId,
+  });
+  if (attemptClaim.status === "replay") {
+    return ok(c, attemptClaim.response);
+  }
+
+  let result: Awaited<ReturnType<typeof initSSLCommerzSession>>;
+  try {
+    result = await initSSLCommerzSession(
+      ssl.storeId,
+      ssl.storePassword,
+      ssl.sandbox,
+      {
+        orderId: body.orderId,
+        transactionId,
+        totalAmount: policy.chargeAmount,
+        currency,
+        successUrl,
+        failUrl,
+        cancelUrl,
+        ipnUrl,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        customerEmail: order.customerEmail ?? undefined,
+        customerAddress: order.shippingAddress,
+        customerCity: order.cityName ?? undefined,
+        paymentType: policy.paymentType
+      }
+    );
+  } catch (error: unknown) {
+    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
+      .catch((markError: unknown) => console.error("[payments] Failed to mark SSLCommerz session attempt failed:", markError));
+    throw error;
+  }
 
   if (!result.success) {
+    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create SSLCommerz session")
+      .catch((error: unknown) => console.error("[payments] Failed to mark SSLCommerz session attempt failed:", error));
     throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create SSLCommerz session");
   }
 
-  // Save session key to order
-  if (result.sessionKey) {
-    await db
-      .update(orders)
-      .set({ paymentIntentId: result.sessionKey, updatedAt: sql`unixepoch()` })
-      .where(eq(orders.id, body.orderId));
-  }
-
-  // Create payment plan for deposit orders
-  if (policy.paymentType === "deposit") {
-    await db.insert(paymentPlans).values({
-      id: crypto.randomUUID(),
-      orderId: body.orderId,
-      totalAmount: order.totalAmount,
-      depositAmount: policy.depositAmount,
-      balanceDue: policy.balanceDue,
-      status: "pending",
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`
-    }).onConflictDoNothing();
-  }
-
-  return ok(c, {
+  const responsePayload: SSLCommerzSessionResponse = {
     gatewayUrl: result.gatewayUrl,
     sessionKey: result.sessionKey
+  };
+
+  await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
+    providerSessionId: result.sessionKey,
+    providerCorrelationId: transactionId,
+    response: responsePayload,
   });
+
+  // Save session key to order
+  try {
+    if (result.sessionKey) {
+      await db
+        .update(orders)
+        .set({ paymentIntentId: result.sessionKey, updatedAt: sql`unixepoch()` })
+        .where(eq(orders.id, body.orderId));
+    }
+
+    // Create payment plan for deposit orders
+    if (policy.paymentType === "deposit") {
+      await db.insert(paymentPlans).values({
+        id: crypto.randomUUID(),
+        orderId: body.orderId,
+        totalAmount: order.totalAmount,
+        depositAmount: policy.depositAmount,
+        balanceDue: policy.balanceDue,
+        status: "pending",
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`
+      }).onConflictDoNothing();
+    }
+  } catch (error: unknown) {
+    console.error("[payments] SSLCommerz session was created, but local order session side effects failed:", error);
+  }
+
+  return ok(c, responsePayload);
 });
 
 // ─── Redirect handlers ──────────────────────────────────────────────────────

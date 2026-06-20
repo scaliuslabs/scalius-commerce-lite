@@ -135,6 +135,34 @@ export const orderPayments = sqliteTable("order_payments", {
     // idx_order_payments_sslcommerz_val_unique ON (order_id, sslcommerz_val_id) WHERE sslcommerz_val_id IS NOT NULL
 ]);
 
+export const paymentSessionAttempts = sqliteTable("payment_session_attempts", {
+    id: text("id").primaryKey(),
+    attemptKey: text("attempt_key").notNull(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    gateway: text("gateway").notNull(),
+    paymentType: text("payment_type").notNull(),
+    amount: real("amount").notNull(),
+    currency: text("currency").notNull(),
+    requestHash: text("request_hash").notNull(),
+    status: text("status").notNull().default("processing"),
+    providerSessionId: text("provider_session_id"),
+    providerCorrelationId: text("provider_correlation_id"),
+    responsePayload: text("response_payload"),
+    attempts: integer("attempts").notNull().default(0),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("payment_session_attempts_attempt_key_unique").on(table.attemptKey),
+    index("payment_session_attempts_order_id_idx").on(table.orderId),
+    index("payment_session_attempts_status_claim_idx").on(table.status, table.claimExpiresAt),
+    index("payment_session_attempts_provider_session_idx").on(table.gateway, table.providerSessionId),
+]);
+
 export const paymentPlans = sqliteTable("payment_plans", {
     id: text("id").primaryKey(),
     orderId: text("order_id")
@@ -281,6 +309,7 @@ export const abandonedCheckouts = sqliteTable(
 export type Order = InferSelectModel<typeof orders>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
+export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;
 export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;
 export type WebhookEvent = InferSelectModel<typeof webhookEvents>;

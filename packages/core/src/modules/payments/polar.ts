@@ -79,6 +79,7 @@ export async function createPolarCheckout(
                 ],
             },
             successUrl: params.successUrl,
+            ...(params.cancelUrl ? { cancelUrl: params.cancelUrl } : {}),
             metadata: {
                 orderId: params.orderId,
                 paymentType: params.paymentType,
