@@ -42,6 +42,9 @@ export const checkoutReadinessQueryOptions = () =>
     queryKey: queryKeys.settings.checkoutReadiness(),
     queryFn: () => getCheckoutReadiness(),
     staleTime: MODERATE_STALE_TIME_MS,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    retry: 2,
   });
 
 export const firebaseSettingsQueryOptions = () =>
