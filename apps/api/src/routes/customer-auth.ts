@@ -2,15 +2,15 @@
 // Customer-facing authentication via email OTP.
 //
 // Endpoints (mounted at /api/v1/customer-auth):
-//   POST /send-otp   — generate & email a 6-digit OTP (5-min TTL in KV)
-//   POST /verify-otp — verify OTP, create 30-day session in KV, set cookie
+//   POST /send-otp   — generate & deliver a 6-digit OTP (5-min D1 challenge)
+//   POST /verify-otp — atomically verify OTP, create 30-day session in KV, set cookie
 //   GET  /me         — return session customer info (reads cookie)
 //   POST /logout     — delete session from KV, clear cookie
 //   PUT  /profile    — update customer profile
 //   GET  /orders     — return orders for authenticated customer
 //
 // Session storage: Cloudflare KV (binding: CACHE), prefix "cust_session:"
-// OTP storage:     Cloudflare KV (binding: CACHE), prefix "cust_otp:"
+// OTP challenges:  D1 table "customer_auth_otp_challenges", key prefix "cust_otp:"
 // Cookie name:     "cs_tok" (httpOnly, SameSite=Strict, Secure)
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
@@ -24,6 +24,7 @@ import {
   getSessionCookie,
   getCookieConfig,
   buildSetCookieHeader,
+  deleteCustomerAuthOtpChallenge,
   COOKIE_NAME,
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
@@ -179,9 +180,14 @@ app.openapi(sendOtpRoute, async (c) => {
       await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
     } catch (error) {
       if (result.otpStorageKey) {
-        await kv.delete(result.otpStorageKey).catch((deleteError: unknown) => {
-          console.error("[CustomerAuth] Failed to clear OTP after queue handoff failure:", deleteError);
-        });
+        if (result.deliveryKey) {
+          await deleteCustomerAuthOtpChallenge(db, {
+            otpKey: result.otpStorageKey,
+            deliveryKey: result.deliveryKey,
+          }).catch((deleteError: unknown) => {
+            console.error("[CustomerAuth] Failed to clear OTP challenge after queue handoff failure:", deleteError);
+          });
+        }
       }
       console.error("[CustomerAuth] Failed to enqueue OTP delivery:", error);
       throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
@@ -281,7 +287,8 @@ app.openapi(verifyOtpRoute, async (c) => {
     code: code!,
     name,
     phone,
-    email
+    email,
+    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
 
   if (!result.success) {

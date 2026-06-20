@@ -3,6 +3,7 @@ import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
 import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
+import { cleanupExpiredCustomerAuthOtpChallenges } from "@scalius/core/modules/customers/customer-auth.service";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
@@ -12,6 +13,7 @@ export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
 export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 10;
+export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 
 export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionContext): Promise<void> {
   const db = getDb(env);
@@ -85,6 +87,17 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     console.log(
       `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
         `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, skipped=${notificationOutbox.skipped}`,
+    );
+  }
+
+  const customerAuthOtpCleanup = await cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000), {
+    limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
+  });
+  if (customerAuthOtpCleanup.scanned > 0 || customerAuthOtpCleanup.hasMore) {
+    console.log(
+      `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
+        `deleted=${customerAuthOtpCleanup.deleted}, limit=${customerAuthOtpCleanup.limit}, ` +
+        `hasMore=${customerAuthOtpCleanup.hasMore}`,
     );
   }
 }

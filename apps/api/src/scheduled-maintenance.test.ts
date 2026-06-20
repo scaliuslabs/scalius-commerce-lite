@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     cleanupStaleAbandonedCheckouts: vi.fn(),
     archiveStaleIncompleteOrders: vi.fn(),
     flushPendingOrderNotificationOutbox: vi.fn(),
+    cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
   };
 });
@@ -33,6 +34,10 @@ vi.mock("@scalius/core/modules/notifications", () => ({
   flushPendingOrderNotificationOutbox: mocks.flushPendingOrderNotificationOutbox,
 }));
 
+vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
+  cleanupExpiredCustomerAuthOtpChallenges: mocks.cleanupExpiredCustomerAuthOtpChallenges,
+}));
+
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
 }));
@@ -42,6 +47,7 @@ import {
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
   INVENTORY_EXPIRY_SWEEP_LIMIT,
+  CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
@@ -99,6 +105,12 @@ describe("runScheduledMaintenance", () => {
       failed: 0,
       skipped: 0,
     });
+    mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
+      scanned: 0,
+      deleted: 0,
+      limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
+      hasMore: false,
+    });
   });
 
   afterEach(() => {
@@ -143,6 +155,12 @@ describe("runScheduledMaintenance", () => {
       failed: 0,
       skipped: 0,
     });
+    mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
+      scanned: 2,
+      deleted: 2,
+      limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
+      hasMore: false,
+    });
 
     await runScheduledMaintenance(env, executionCtx);
 
@@ -181,6 +199,11 @@ describe("runScheduledMaintenance", () => {
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
     });
+    expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalledWith(
+      mocks.db,
+      Math.floor(now.getTime() / 1000),
+      { limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT },
+    );
   });
 
   it("does not invalidate availability caches when a sweep has no affected subjects", async () => {
@@ -191,5 +214,6 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalled();
   });
 });
