@@ -2,7 +2,7 @@
 // Same-origin logout proxy.
 //
 // Clears cs_tok/cs_auth cookies from the browser (same-origin Set-Cookie)
-// and forwards the logout to the API worker to delete the KV session.
+// and forwards the logout to the API worker to revoke the D1 session.
 //
 // Uses BACKEND_API service binding in production, HTTP in dev.
 
@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ request }) => {
     "cs_auth=; Max-Age=0; Path=/; SameSite=Lax; Secure",
   ];
 
-  // Forward the logout to the backend so the KV session is deleted.
+  // Forward the logout to the backend so the D1 session is revoked.
   // Best-effort: even if this fails, the cookies are cleared above.
   const env = (() => {
     try {

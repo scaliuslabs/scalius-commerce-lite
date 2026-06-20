@@ -379,6 +379,13 @@
       "when": 1782000000000,
       "tag": "0053_scanner_token_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1782057600000,
+      "tag": "0054_customer_sessions",
+      "breakpoints": true
     }
   ]
 }

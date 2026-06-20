@@ -3,14 +3,15 @@
 // Used by the customer-auth route handler (apps/api/src/routes/customer-auth.ts).
 
 import { nanoid } from "nanoid";
-import { customers, siteSettings, settings as genericSettings } from "@scalius/database/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { customers, customerSessions, siteSettings, settings as genericSettings } from "@scalius/database/schema";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
     ValidationError,
     RateLimitError,
     ForbiddenError,
     ServiceUnavailableError,
+    UnauthorizedError,
 } from "@scalius/core/errors";
 import { getOtpTransport, type OtpQueuePayload } from "./otp-transport";
 import { createAuthOtpDeliveryKey } from "./otp-delivery-receipts";
@@ -37,7 +38,6 @@ import { getSmsProviderReadiness } from "../../integrations/sms";
 // ─────────────────────────────────────────
 
 export const COOKIE_NAME = "cs_tok";
-export const SESSION_PREFIX = "cust_session:";
 export const OTP_PREFIX = "cust_otp:";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
@@ -107,6 +107,7 @@ export interface VerifyOtpInput {
     phone?: string;
     email?: string;
     encryptionKey?: string;
+    sessionHashKey?: string;
 }
 
 export interface VerifyOtpResult {
@@ -123,6 +124,13 @@ export interface VerifyOtpResult {
         phone?: string;
         customerId?: string;
     };
+}
+
+export interface CleanupExpiredCustomerSessionsResult {
+    scanned: number;
+    deleted: number;
+    limit: number;
+    hasMore: boolean;
 }
 
 // ─────────────────────────────────────────
@@ -245,6 +253,33 @@ function getPrimaryEmail(method: "email" | "phone", identifier: string, email?: 
 function getPrimaryPhone(method: "email" | "phone", identifier: string, phone?: string): string | undefined {
     if (method === "phone") return validateAndFormatPhone(identifier);
     return phone ? validateAndFormatPhone(phone) : undefined;
+}
+
+async function hashCustomerSessionToken(sessionToken: string, sessionHashKey: string | undefined): Promise<string> {
+    const secret = requireCustomerSessionHashKey(sessionHashKey);
+    const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+    );
+    const signature = await crypto.subtle.sign(
+        "HMAC",
+        key,
+        new TextEncoder().encode(`customer-session:${sessionToken}`),
+    );
+    return Array.from(new Uint8Array(signature))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+}
+
+function requireCustomerSessionHashKey(sessionHashKey: string | undefined): string {
+    const key = sessionHashKey?.trim();
+    if (!key) {
+        throw new ServiceUnavailableError("Customer session signing key is not configured.");
+    }
+    return key;
 }
 
 function assertSecondaryContactFormats(input: {
@@ -433,7 +468,7 @@ export async function sendOtp(
  */
 export async function verifyOtp(
     db: Database,
-    kv: KVNamespace,
+    _kv: KVNamespace,
     input: VerifyOtpInput,
 ): Promise<VerifyOtpResult> {
     const { method, identifier, code, name, phone, email } = input;
@@ -556,20 +591,35 @@ export async function verifyOtp(
         throw new ServiceUnavailableError("Customer account service is temporarily unavailable. Please try again.");
     }
 
-    // Create session
+    if (!customerId) {
+        throw new ServiceUnavailableError("Customer session could not be created. Please try again.");
+    }
+
+    // Create session. The raw bearer token is only returned for the httpOnly
+    // cookie; D1 stores an HMAC hash so a database leak cannot replay sessions.
+    const nowMs = Date.now();
+    const nowSeconds = Math.floor(nowMs / 1000);
     const sessionToken = nanoid(48);
+    const sessionExpiresAtSeconds = nowSeconds + SESSION_TTL_SECONDS;
+    const tokenHash = await hashCustomerSessionToken(sessionToken, input.sessionHashKey);
     const session: CustomerSession = {
         token: sessionToken,
         email: resolvedEmail || "",
         name: customerName,
         phone: resolvedPhone,
         customerId,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000,
+        createdAt: nowMs,
+        expiresAt: sessionExpiresAtSeconds * 1000,
     };
 
-    const sessionKey = `${SESSION_PREFIX}${sessionToken}`;
-    await kv.put(sessionKey, JSON.stringify(session), { expirationTtl: SESSION_TTL_SECONDS });
+    await db.insert(customerSessions).values({
+        tokenHash,
+        customerId,
+        expiresAt: sessionExpiresAtSeconds,
+        revokedAt: null,
+        createdAt: nowSeconds,
+        updatedAt: nowSeconds,
+    });
 
     return {
         success: true,
@@ -586,82 +636,158 @@ export async function verifyOtp(
 }
 
 /**
- * Retrieves the customer session from a session token.
- * Returns null if the session is expired or not found.
+ * Retrieves a D1-backed customer session from a raw cookie token.
+ * Returns null if the session is expired, revoked, missing, or points at a
+ * soft-deleted/missing customer.
  */
 export async function getCustomerBySession(
-    kv: KVNamespace,
+    db: Database,
     sessionToken: string,
+    sessionHashKey: string | undefined,
 ): Promise<CustomerSession | null> {
-    const sessionKey = `${SESSION_PREFIX}${sessionToken}`;
-    const sessionRaw = await kv.get(sessionKey, "text");
+    if (!sessionToken.trim()) return null;
 
-    if (!sessionRaw) return null;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const tokenHash = await hashCustomerSessionToken(sessionToken, sessionHashKey);
+    const row = await db
+        .select({
+            tokenHash: customerSessions.tokenHash,
+            customerId: customerSessions.customerId,
+            expiresAt: customerSessions.expiresAt,
+            createdAt: customerSessions.createdAt,
+            customerName: customers.name,
+            customerEmail: customers.email,
+            customerPhone: customers.phone,
+        })
+        .from(customerSessions)
+        .innerJoin(customers, eq(customerSessions.customerId, customers.id))
+        .where(and(
+            eq(customerSessions.tokenHash, tokenHash),
+            isNull(customerSessions.revokedAt),
+            gt(customerSessions.expiresAt, nowSeconds),
+            isNull(customers.deletedAt),
+        ))
+        .get();
 
-    const session = JSON.parse(sessionRaw) as CustomerSession;
-
-    if (Date.now() > session.expiresAt) {
-        await kv.delete(sessionKey);
+    if (!row) {
         return null;
     }
 
-    return session;
+    return {
+        token: sessionToken,
+        email: row.customerEmail ?? "",
+        name: row.customerName,
+        phone: row.customerPhone,
+        customerId: row.customerId,
+        createdAt: row.createdAt * 1000,
+        expiresAt: row.expiresAt * 1000,
+    };
 }
 
 /**
- * Deletes a customer session from KV.
+ * Revokes a customer session in D1.
  */
 export async function deleteCustomerSession(
-    kv: KVNamespace,
+    db: Database,
     sessionToken: string,
+    sessionHashKey: string | undefined,
 ): Promise<void> {
-    const sessionKey = `${SESSION_PREFIX}${sessionToken}`;
-    await kv.delete(sessionKey);
+    if (!sessionToken.trim()) return;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const tokenHash = await hashCustomerSessionToken(sessionToken, sessionHashKey);
+    await db
+        .update(customerSessions)
+        .set({ revokedAt: nowSeconds, updatedAt: nowSeconds })
+        .where(and(
+            eq(customerSessions.tokenHash, tokenHash),
+            isNull(customerSessions.revokedAt),
+        ));
 }
 
 /**
- * Updates a customer profile and refreshes the session in KV.
+ * Updates a customer profile and returns a fresh session projection from D1.
  */
 export async function updateCustomerProfile(
     db: Database,
-    kv: KVNamespace,
     session: CustomerSession,
-    sessionToken: string,
     updates: Record<string, string | undefined>,
 ): Promise<{ session: CustomerSession; updates: Record<string, string | undefined> }> {
-    // Update customer record in DB if customerId exists
-    if (session.customerId) {
-        const dbUpdates: Record<string, unknown> = {
-            updatedAt: sql`unixepoch()`,
-        };
-        if (updates.name) dbUpdates.name = updates.name;
-        if (updates.address) dbUpdates.address = updates.address;
-        if (updates.city) dbUpdates.city = updates.city;
-        if (updates.zone) dbUpdates.zone = updates.zone;
-        if (updates.cityName) dbUpdates.cityName = updates.cityName;
-        if (updates.zoneName) dbUpdates.zoneName = updates.zoneName;
-
-        await db
-            .update(customers)
-            .set(dbUpdates)
-            .where(eq(customers.id, session.customerId));
+    if (!session.customerId) {
+        throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
     }
 
-    // Update session in KV
+    const dbUpdates: Record<string, unknown> = {
+        updatedAt: sql`unixepoch()`,
+    };
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.address) dbUpdates.address = updates.address;
+    if (updates.city) dbUpdates.city = updates.city;
+    if (updates.zone) dbUpdates.zone = updates.zone;
+    if (updates.cityName) dbUpdates.cityName = updates.cityName;
+    if (updates.zoneName) dbUpdates.zoneName = updates.zoneName;
+
+    await db
+        .update(customers)
+        .set(dbUpdates)
+        .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)));
+
+    const customer = await db
+        .select({
+            id: customers.id,
+            name: customers.name,
+            email: customers.email,
+            phone: customers.phone,
+        })
+        .from(customers)
+        .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)))
+        .get();
+
+    if (!customer) {
+        throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
+    }
+
     const updatedSession: CustomerSession = {
         ...session,
-        name: updates.name || session.name,
+        email: customer.email ?? "",
+        name: customer.name,
+        phone: customer.phone,
+        customerId: customer.id,
     };
 
-    const remainingTtl = Math.max(
-        60,
-        Math.floor((session.expiresAt - Date.now()) / 1000),
-    );
-
-    const sessionKey = `${SESSION_PREFIX}${sessionToken}`;
-    await kv.put(sessionKey, JSON.stringify(updatedSession), {
-        expirationTtl: remainingTtl,
-    });
-
     return { session: updatedSession, updates };
+}
+
+export async function cleanupExpiredCustomerSessions(
+    db: Database,
+    nowSeconds = Math.floor(Date.now() / 1000),
+    options: { limit?: number; revokedRetentionSeconds?: number } = {},
+): Promise<CleanupExpiredCustomerSessionsResult> {
+    const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
+    const revokedRetentionSeconds = options.revokedRetentionSeconds ?? 7 * 24 * 60 * 60;
+    const revokedCutoff = nowSeconds - revokedRetentionSeconds;
+    const rows = await db
+        .select({ tokenHash: customerSessions.tokenHash })
+        .from(customerSessions)
+        .where(or(
+            lte(customerSessions.expiresAt, nowSeconds),
+            and(
+                isNotNull(customerSessions.revokedAt),
+                lte(customerSessions.revokedAt, revokedCutoff),
+            ),
+        ))
+        .limit(limit + 1);
+
+    const deleteIds = rows.slice(0, limit).map((row) => row.tokenHash);
+    if (deleteIds.length > 0) {
+        await db
+            .delete(customerSessions)
+            .where(inArray(customerSessions.tokenHash, deleteIds));
+    }
+
+    return {
+        scanned: Math.min(rows.length, limit),
+        deleted: deleteIds.length,
+        limit,
+        hasMore: rows.length > limit,
+    };
 }

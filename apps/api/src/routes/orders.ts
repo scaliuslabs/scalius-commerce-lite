@@ -32,7 +32,7 @@ import {
 } from "@scalius/core/modules/orders";
 import { invalidateProductAvailabilityCaches } from "../utils/cache-invalidation";
 import { NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
-import { getEncryptionKey } from "../utils/encryption-key";
+import { getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
   RECEIPT_TOKEN_PREFIX,
@@ -136,16 +136,16 @@ async function assertCheckoutOrderPolicy(
     return;
   }
 
-  if (!c.env.CACHE) {
-    throw new ServiceUnavailableError("Checkout sign-in is temporarily unavailable. Please try again shortly.");
-  }
-
   const sessionToken = getCustomerSessionTokenFromRequest(c);
   if (!sessionToken) {
     throw new UnauthorizedError("Please sign in before checkout.");
   }
 
-  const session = await getCustomerBySession(c.env.CACHE, sessionToken);
+  const session = await getCustomerBySession(
+    db,
+    sessionToken,
+    getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+  );
   if (!session?.customerId) {
     throw new UnauthorizedError("Please sign in before checkout.");
   }
