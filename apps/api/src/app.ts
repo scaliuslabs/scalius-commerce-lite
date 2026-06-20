@@ -50,6 +50,7 @@ import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 
 // Admin routes
 import { adminAuthMiddleware } from "./middleware/admin-auth";
+import { cookieOriginGuardMiddleware } from "./middleware/cookie-origin-guard";
 import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminCollectionRoutes } from "./routes/admin/collections";
@@ -210,6 +211,7 @@ app.route("/analytics", analyticsRoutes);
 app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
 app.route("/checkout", checkoutRoutes);
+app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);
 app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
@@ -264,7 +266,9 @@ app.route("/webhooks/pathao", pathaoWebhookRoutes);
 app.route("/webhooks/steadfast", steadfastWebhookRoutes);
 
 // Apply auth middleware ONLY to paths needing protection
+app.use("/cache/*", cookieOriginGuardMiddleware);
 app.use("/cache/*", adminAuthMiddleware);
+app.use("/orders/*", cookieOriginGuardMiddleware);
 app.use("/orders/*", authMiddleware);
 
 // Register routes (mix of public and protected)
@@ -278,6 +282,7 @@ app.route("/orders", orderRoutes);
 // ==========================================
 // The /admin/* routes are strictly protected by adminAuthMiddleware.
 // It verifies either a Better Auth session (Astro SSR) or a JWT Bearer token (Decoupled Hono).
+app.use("/admin/*", cookieOriginGuardMiddleware);
 app.use("/admin/*", adminAuthMiddleware);
 
 // Register Admin routes

@@ -147,7 +147,7 @@ Registered in order in `app.ts`. Every request goes through these global middlew
 
 1. **Per-request init** (`app.use("*")`) -- Calls `getDb(env)`, `initKv(env.CACHE)`, `initStorage(env.BUCKET)`.
 2. **CORS logging** (`app.use("*")`) -- Logs preflight requests for debugging.
-3. **CORS** (`app.use("*")`) -- Dynamic origin validation via `getCorsOriginContext()` from `@scalius/shared`.
+3. **CORS** (`app.use("*")`) -- Dynamic credentialed origin validation via `getCorsOriginContext()` from `@scalius/shared`; allowed origins come from exact first-party runtime URLs plus optional explicit credentialed-CORS env origins, never merchant CSP settings.
 4. **Security headers** (`app.use("*")`) -- Adds `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS outside localhost.
 5. **Proxy base URL** (`app.use("*")`) -- Sets `X-Proxy-Base-URL` header from `PUBLIC_API_BASE_URL`.
 
@@ -157,6 +157,7 @@ Then, route-specific middleware:
 
 | Middleware | Applied To | Purpose |
 |---|---|---|
+| `cookieOriginGuardMiddleware` | `/admin/*`, `/cache/*`, `/customer-auth/*` | Rejects unsafe cookie-bearing browser requests when `Origin` is outside the credentialed API CORS allowlist; service-binding/server-to-server calls without a browser `Origin` continue to rely on route auth. |
 | `adminAuthMiddleware` | `/admin/*`, `/cache/*` | Better Auth session cookie OR JWT Bearer token OR scanner session cookie. Then RBAC/2FA permission checks. |
 | `authMiddleware` | `/orders/*` | JWT Bearer token verification with auto-refresh. |
 | `cacheMiddleware` | Individual routes | KV-backed response caching with configurable TTL; cache-miss writes use `executionCtx.waitUntil()` when Workers provides it. |

@@ -3,11 +3,19 @@
 // The API_TOKEN is only available server-side, never exposed to the browser.
 
 import type { APIRoute } from "astro";
-import { createOrder } from "@/lib/api/orders";
-import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
-import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { createOrder } from "../../../lib/api/orders";
+import { getCheckoutErrorMessage } from "../../../lib/checkout/error-messages";
+import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 
 export const POST: APIRoute = async ({ request }) => {
+  if (shouldRejectCrossOriginCookieRequest(request)) {
+    return new Response(JSON.stringify({ success: false, error: "Cross-origin cookie request denied" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const payload = (await request.json()) as import("@/lib/api/types").CreateOrderPayload;
     const customerSessionToken = getCustomerSessionTokenFromCookie(request.headers.get("cookie"));

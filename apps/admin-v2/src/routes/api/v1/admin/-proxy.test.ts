@@ -83,4 +83,25 @@ describe("admin API proxy", () => {
     expect(response.status).toBe(200);
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeUndefined();
   });
+
+  it("rejects cross-origin cookie write requests before forwarding", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { proxyToApi } = await import("./$");
+    const response = await proxyToApi(
+      new Request("https://dashboard.test/api/v1/admin/products", {
+        method: "POST",
+        headers: {
+          Cookie: "better-auth.session_token=session.signature",
+          Origin: "https://evil.test",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "Fish" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

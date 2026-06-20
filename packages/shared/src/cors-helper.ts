@@ -2,8 +2,19 @@ interface CorsContext {
   env: Record<string, unknown>;
 }
 
+const FIRST_PARTY_ORIGIN_ENV_KEYS = [
+  "PUBLIC_API_BASE_URL",
+  "BETTER_AUTH_URL",
+  "STOREFRONT_URL",
+] as const;
+
+const EXTRA_CREDENTIAL_ORIGIN_ENV_KEYS = [
+  "CREDENTIAL_CORS_ALLOWED_ORIGINS",
+  "CORS_ALLOWED_ORIGINS",
+] as const;
+
 export const getCorsOriginContext = async (c: CorsContext) => {
-  const allowedOrigins = await getAllowedCorsOrigins(c);
+  const allowedOrigins = getAllowedCorsOrigins(c);
   return (origin: string): string | null => {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return "*";
@@ -21,7 +32,10 @@ export const getCorsOriginContext = async (c: CorsContext) => {
 
 function normalizeOrigin(origin: string): string | null {
   try {
-    return new URL(origin.trim()).origin;
+    const url = new URL(origin.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (url.username || url.password) return null;
+    return url.origin;
   } catch {
     return null;
   }
@@ -34,7 +48,6 @@ function escapeRegExp(value: string): string {
 function isAllowedOriginMatch(allowedOrigin: string, origin: string): boolean {
   const allowed = allowedOrigin.trim();
   if (!allowed) return false;
-  if (allowed === "*") return true;
 
   if (!allowed.includes("*")) {
     return normalizeOrigin(allowed) === origin;
@@ -66,60 +79,33 @@ function isAllowedOriginMatch(allowedOrigin: string, origin: string): boolean {
   return false;
 }
 
-async function getAllowedCorsOrigins(c: CorsContext): Promise<string[]> {
-  // Try to get from KV, fallback to env
-  let cspAllowed = (c.env?.CSP_ALLOWED as string) || "";
-  try {
-    if (c.env?.CACHE) {
-      const cache = c.env.CACHE as { get(key: string): Promise<string | null> };
-      const cached = await cache.get("security:csp_allowed_domains");
-      if (cached !== null) {
-        cspAllowed = cached;
-      }
-    }
-  } catch (e: unknown) {
-    console.error("Failed to read CSP_ALLOWED from KV Cache", e);
-  }
-
-  const cdnDomain = c.env?.CDN_DOMAIN_URL as string | undefined;
-
-  // Auto-allow all platform URLs from env
+function getAllowedCorsOrigins(c: CorsContext): string[] {
   const origins = [
     // Allow all localhost ports in development
     "http://localhost:*",
     "http://127.0.0.1:*",
+    "http://[::1]:*",
   ];
 
-  // Add platform URLs from env (API, admin, storefront, CDN)
-  const envKeys = ["PUBLIC_API_BASE_URL", "BETTER_AUTH_URL", "STOREFRONT_URL"];
-  for (const key of envKeys) {
+  // Add exact first-party platform origins from env.
+  for (const key of FIRST_PARTY_ORIGIN_ENV_KEYS) {
     const val = ((c.env?.[key] as string) || "").trim();
     if (val) origins.push(val);
   }
 
-  if (cdnDomain) {
-    origins.push(`https://${cdnDomain}`, `https://*.${cdnDomain}`);
-  }
-
-  if (cspAllowed.trim()) {
-    const customOrigins = cspAllowed
+  // Separate explicit credentialed-CORS origins from merchant CSP domains.
+  // Values must be URL origins; CSP hostnames/wildcards are intentionally ignored.
+  for (const key of EXTRA_CREDENTIAL_ORIGIN_ENV_KEYS) {
+    const raw = ((c.env?.[key] as string) || "").trim();
+    if (!raw) continue;
+    const extraOrigins = raw
       .split(",")
-      .map((domain: string) => domain.trim())
-      .filter((domain: string) => domain.length > 0)
-      .flatMap((domain: string) => {
-        // Remove https:// if present to normalize
-        const cleanDomain = domain.replace(/^https?:\/\//, "");
+      .filter((value: string) => !value.includes("*"))
+      .map((value: string) => normalizeOrigin(value))
+      .filter((value: string | null): value is string => Boolean(value));
 
-        // If it's already a wildcard, just add https
-        if (cleanDomain.startsWith("*.")) {
-          return [`https://${cleanDomain}`];
-        }
-
-        // For regular domains, add both exact and wildcard
-        return [`https://${cleanDomain}`, `https://*.${cleanDomain}`];
-      });
-
-    origins.push(...customOrigins);
+    origins.push(...extraOrigins);
   }
+
   return origins;
 }

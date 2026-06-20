@@ -8,12 +8,20 @@
 
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 
 export const prerender = false;
 
 const BACKEND_LOGOUT_PATH = "/api/v1/customer-auth/logout";
 
 export const POST: APIRoute = async ({ request }) => {
+  if (shouldRejectCrossOriginCookieRequest(request)) {
+    return new Response(JSON.stringify({ success: false, error: "Cross-origin cookie request denied" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   // Clear cookies as host-only (no Domain attr) + SameSite=Lax (same-origin proxy)
   const cookieHeaders: string[] = [
     "cs_tok=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure",

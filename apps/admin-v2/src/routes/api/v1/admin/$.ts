@@ -11,6 +11,7 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   ADMIN_API_READ_TIMEOUT_CODE,
   AdminApiReadTimeoutError,
@@ -42,6 +43,13 @@ function readTimeoutResponse(error: AdminApiReadTimeoutError): Response {
 }
 
 export async function proxyToApi(request: Request): Promise<Response> {
+  if (shouldRejectCrossOriginCookieRequest(request)) {
+    return Response.json(
+      { success: false, error: { code: "CROSS_ORIGIN_COOKIE_REQUEST", message: "Cross-origin cookie request denied" } },
+      { status: 403 },
+    );
+  }
+
   const { env } = await import("cloudflare:workers");
   const url = new URL(request.url);
   const timeout = createAdminApiReadTimeout(request.method, request.signal);

@@ -10,6 +10,16 @@ function createRequest() {
   });
 }
 
+function createCrossOriginCookieRequest() {
+  return new Request("https://dashboard.example.test/api/scanner-token", {
+    method: "POST",
+    headers: {
+      Cookie: "better-auth.session_token=session.signature",
+      Origin: "https://evil.example.test",
+    },
+  });
+}
+
 function createKv() {
   return {
     get: vi.fn(),
@@ -23,6 +33,24 @@ async function readJson(response: Response) {
 }
 
 describe("handleCreateScannerToken", () => {
+  it("rejects cross-origin cookie requests before auth or KV work", async () => {
+    const kv = createKv();
+    const getAuthSession = vi.fn();
+
+    const response = await handleCreateScannerToken(createCrossOriginCookieRequest(), {
+      getAuthSession,
+      getEnv: () => ({ CACHE: kv }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await readJson(response)).toMatchObject({
+      success: false,
+      error: "Cross-origin cookie request denied",
+    });
+    expect(getAuthSession).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
   it("rejects unauthenticated token creation", async () => {
     const kv = createKv();
 

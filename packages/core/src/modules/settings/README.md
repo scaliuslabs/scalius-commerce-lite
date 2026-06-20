@@ -175,7 +175,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/auth` | Get auth/checkout settings (verification method, guest checkout, checkout mode, partial payment, WhatsApp config). Masks encrypted or legacy `whatsappAccessToken`; uses tolerant reads but only migrates/clears legacy WhatsApp tokens when `CREDENTIAL_ENCRYPTION_KEY` is present |
 | POST | `/auth` | Save auth/checkout settings. Skips masked WhatsApp token values, encrypts new token values with `CREDENTIAL_ENCRYPTION_KEY`, and clears encrypted/legacy token storage when the token is set to an empty string |
 | GET | `/security` | Get CSP allowed domains |
-| POST | `/security` | Save CSP allowed domains. Also writes to KV at `security:csp_allowed_domains` |
+| POST | `/security` | Save storefront CSP allowed domains. Also writes to KV at `security:csp_allowed_domains`; this setting is layout/CSP-only and must not expand credentialed API CORS origins |
 | GET | `/email` | Get transactional email provider settings: Cloudflare binding status, Resend key status, selected provider, and sender |
 | POST | `/email` | Save selected email provider + sender. Skips masked Resend key values and encrypts new Resend keys |
 | GET | `/firebase` | Get Firebase settings (masks service account) |

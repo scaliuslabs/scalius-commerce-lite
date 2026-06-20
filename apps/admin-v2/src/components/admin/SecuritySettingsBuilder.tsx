@@ -46,7 +46,7 @@ export function SecuritySettingsBuilder() {
     <div className="space-y-4 max-w-xl">
       <div className="space-y-2">
         <Label htmlFor="csp-allowed-domains">
-          CORS & CSP Allowed Domains
+          CSP Allowed Domains
         </Label>
         <Input
           id="csp-allowed-domains"
@@ -64,7 +64,7 @@ export function SecuritySettingsBuilder() {
           <code className="text-[0.8em] bg-muted px-1 py-0.5 rounded">
             *.facebook.com
           </code>
-          ). Synced to Edge Cache immediately on save.
+          ). These domains are used for storefront content security policy only.
         </p>
       </div>
 
