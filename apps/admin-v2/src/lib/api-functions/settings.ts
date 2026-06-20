@@ -120,6 +120,8 @@ export type UpdateWidgetAiSettingsInput = SettingsPayload;
 export type SmsProvider = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet";
 export interface SmsSettingsPayload {
   activeProvider?: SmsProvider | string;
+  activeProviderConfigured?: boolean;
+  activeProviderError?: string | null;
   smsnetbdApiKey?: string;
   smsnetbdSenderId?: string;
   bdbulksmsToken?: string;

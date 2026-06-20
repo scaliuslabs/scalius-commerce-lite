@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getSmsSettings, saveSmsSettings, invalidateSmsCache, SMS_PROVIDER_IDS } from "@scalius/core/integrations/sms";
-import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 
@@ -12,6 +12,8 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const smsSettingsSchema = z.object({
     activeProvider: z.string().nullable(),
+    activeProviderConfigured: z.boolean(),
+    activeProviderError: z.string().nullable(),
     bdbulksmsToken: z.string(),
     mimsmsUsername: z.string(),
     mimsmsApiKey: z.string(),
@@ -36,7 +38,7 @@ const getSmsRoute = createRoute({
 
 app.openapi(getSmsRoute, async (c) => {
     const db = c.get("db");
-    const data = await getSmsSettings(db);
+    const data = await getSmsSettings(db, getEncryptionKey(c.env as Record<string, unknown>));
     return ok(c, data);
 });
 

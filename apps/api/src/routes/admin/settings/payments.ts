@@ -52,7 +52,7 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
         .from(siteSettings)
         .limit(1);
 
-    if (!checkoutSettings?.partialPaymentEnabled) return;
+    if (!checkoutSettings) return;
 
     const activePaymentMethods = await getActivePaymentMethods(
         db,
@@ -70,7 +70,7 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 
     if (checkoutFlowIssues.length > 0) {
         throw new ValidationError(
-            `Cannot disable ${GATEWAY_LABELS[gatewayId]} while partial payment is active. ${checkoutFlowIssues.join(" ")}`,
+            `Cannot disable ${GATEWAY_LABELS[gatewayId]} because it would leave checkout without a compatible payment method. ${checkoutFlowIssues.join(" ")}`,
         );
     }
 }

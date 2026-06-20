@@ -73702,6 +73702,13 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "activeProviderConfigured": {
+                          "type": "boolean"
+                        },
+                        "activeProviderError": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "bdbulksmsToken": {
                           "type": "string"
                         },
@@ -73732,6 +73739,8 @@
                       },
                       "required": [
                         "activeProvider",
+                        "activeProviderConfigured",
+                        "activeProviderError",
                         "bdbulksmsToken",
                         "mimsmsUsername",
                         "mimsmsApiKey",

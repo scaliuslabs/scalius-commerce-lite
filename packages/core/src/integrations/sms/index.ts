@@ -15,11 +15,12 @@ export {
 
 export {
   getActiveSmsProvider,
+  getSmsProviderReadiness,
   getSmsSettings,
   saveSmsSettings,
   invalidateSmsCache,
 } from "./sms-settings";
-export type { SmsSettingsData } from "./sms-settings";
+export type { SmsProviderReadiness, SmsSettingsData } from "./sms-settings";
 
 // ── Register built-in providers ─────────────────────────────────────
 // These are placeholder registrations for type checking / registry enumeration.

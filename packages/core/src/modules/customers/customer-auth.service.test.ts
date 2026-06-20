@@ -14,7 +14,7 @@ const baseSiteSettings = {
   whatsappTemplateName: "auth_otp",
 };
 
-function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown }>) {
+function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?: unknown[] }>) {
   const queue = [...selectResults];
   const insertValues = vi.fn(async () => undefined);
   return {
@@ -29,6 +29,10 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown }>) {
             const result = queue.shift();
             return result?.get ?? null;
           }),
+          all: vi.fn(async () => {
+            const result = queue.shift();
+            return result?.all ?? [];
+          }),
         })),
       })),
     })),
@@ -38,6 +42,11 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown }>) {
     insertValues,
   };
 }
+
+const readySmsSettings = [
+  { key: "active_provider", value: "bdbulksms" },
+  { key: "bdbulksms_token", value: "test-token" },
+];
 
 function createKv(initialValues: Record<string, string> = {}) {
   const store = new Map(Object.entries(initialValues));
@@ -135,6 +144,7 @@ describe("customer auth service intent handling", () => {
           phone: "+8801712345678",
         },
       },
+      { all: readySmsSettings },
     ]);
     const kv = createKv();
 
@@ -167,6 +177,7 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { get: null },
       { get: null },
+      { all: readySmsSettings },
     ]);
     const kv = createKv();
 
@@ -188,6 +199,34 @@ describe("customer auth service intent handling", () => {
       intent: "sign_up",
       channel: "sms",
     });
+  });
+
+  it("rejects SMS OTP when no SMS provider is configured before mutating OTP KV", async () => {
+    const db = createDb([
+      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { get: null },
+      {
+        get: {
+          id: "cust_existing",
+          email: null,
+          phone: "+8801712345678",
+        },
+      },
+      { all: [] },
+    ]);
+    const kv = createKv();
+
+    await expect(sendOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "phone",
+      channel: "sms",
+      identifier: "+8801712345678",
+      name: "Buyer",
+      ip: "unknown",
+    })).rejects.toThrow("SMS verification is currently unavailable. Contact store support.");
+
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("uses pinned OTP contact fields instead of tampered verify payload fields", async () => {

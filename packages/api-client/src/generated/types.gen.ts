@@ -22792,6 +22792,8 @@ export type GetApiV1AdminSettingsSmsResponses = {
         success: true;
         data: {
             activeProvider: string | null;
+            activeProviderConfigured: boolean;
+            activeProviderError: string | null;
             bdbulksmsToken: string;
             mimsmsUsername: string;
             mimsmsApiKey: string;

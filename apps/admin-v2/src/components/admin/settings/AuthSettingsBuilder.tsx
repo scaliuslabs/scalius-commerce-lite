@@ -18,8 +18,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, Save, CheckCircle2, ExternalLink } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Save, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
@@ -71,6 +71,8 @@ interface AuthAndSmsSettings {
     whatsappTemplateName: string;
     // SMS settings
     smsProvider: string;
+    smsProviderConfigured: boolean;
+    smsProviderError: string;
     smsnetbdApiKey: string;
     smsnetbdSenderId: string;
     bdbulksmsToken: string;
@@ -89,6 +91,8 @@ const defaultValues: AuthAndSmsSettings = {
     whatsappPhoneNumberId: "",
     whatsappTemplateName: "auth_otp",
     smsProvider: "",
+    smsProviderConfigured: false,
+    smsProviderError: "",
     smsnetbdApiKey: "",
     smsnetbdSenderId: "",
     bdbulksmsToken: "",
@@ -117,6 +121,8 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
     try {
         const smsData = await getSmsSettings() as Record<string, unknown>;
         result.smsProvider = (smsData.activeProvider as string) || "";
+        result.smsProviderConfigured = smsData.activeProviderConfigured === true;
+        result.smsProviderError = (smsData.activeProviderError as string) || "";
         result.smsnetbdApiKey = (smsData.smsnetbdApiKey as string) || "";
         result.smsnetbdSenderId = (smsData.smsnetbdSenderId as string) || "";
         result.bdbulksmsToken = (smsData.bdbulksmsToken as string) || "";
@@ -133,22 +139,66 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
     return result;
 }
 
+function hasConfiguredSecret(value: string): boolean {
+    return value.trim().length > 0;
+}
+
+function hasFreshSecret(value: string): boolean {
+    const trimmed = value.trim();
+    return trimmed.length > 0 && trimmed !== MASKED_VALUE;
+}
+
+function hasFreshSmsSecretForProvider(values: AuthAndSmsSettings): boolean {
+    if (values.smsProvider === "smsnetbd") return hasFreshSecret(values.smsnetbdApiKey);
+    if (values.smsProvider === "bdbulksms") return hasFreshSecret(values.bdbulksmsToken);
+    if (values.smsProvider === "mimsms") return hasFreshSecret(values.mimsmsApiKey);
+    if (values.smsProvider === "gennet") return hasFreshSecret(values.gennetApiToken);
+    return false;
+}
+
+function getSmsProviderIssue(values: AuthAndSmsSettings): string | null {
+    if (!values.smsProvider) return "Select an SMS provider before enabling SMS OTP.";
+
+    if (values.smsProvider === "smsnetbd" && !hasConfiguredSecret(values.smsnetbdApiKey)) {
+        return "SMS.net.bd API key is required before enabling SMS OTP.";
+    }
+    if (values.smsProvider === "bdbulksms" && !hasConfiguredSecret(values.bdbulksmsToken)) {
+        return "BDBulkSMS token is required before enabling SMS OTP.";
+    }
+    if (values.smsProvider === "mimsms") {
+        if (!values.mimsmsUsername.trim()) return "MIM SMS username is required before enabling SMS OTP.";
+        if (!hasConfiguredSecret(values.mimsmsApiKey)) return "MIM SMS API key is required before enabling SMS OTP.";
+        if (!values.mimsmsSenderName.trim()) return "MIM SMS sender name is required before enabling SMS OTP.";
+    }
+    if (values.smsProvider === "gennet") {
+        if (!hasConfiguredSecret(values.gennetApiToken)) return "GenNet API token is required before enabling SMS OTP.";
+        if (!values.gennetBaseUrl.trim()) return "GenNet base URL is required before enabling SMS OTP.";
+        if (!values.gennetSid.trim()) return "GenNet sender ID is required before enabling SMS OTP.";
+    }
+
+    return null;
+}
+
+function getWhatsAppProviderIssue(values: AuthAndSmsSettings): string | null {
+    if (!hasConfiguredSecret(values.whatsappAccessToken)) {
+        return "WhatsApp access token is required before enabling WhatsApp OTP.";
+    }
+    if (!values.whatsappPhoneNumberId.trim()) {
+        return "WhatsApp phone number ID is required before enabling WhatsApp OTP.";
+    }
+    if (!values.whatsappTemplateName.trim()) {
+        return "WhatsApp OTP template name is required before enabling WhatsApp OTP.";
+    }
+    return null;
+}
+
 async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
     const authVerificationMethod = normalizeCustomerAuthMethod(v.authVerificationMethod);
     const customerAuthPolicy = normalizeCustomerAuthPolicy(v.customerAuthPolicy, authVerificationMethod);
 
-    await updateAuthSettings({
-        data: {
-            authVerificationMethod: getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy),
-            customerAuthPolicy: serializeCustomerAuthPolicy(customerAuthPolicy),
-            whatsappAccessToken: v.whatsappAccessToken,
-            whatsappPhoneNumberId: v.whatsappPhoneNumberId,
-            whatsappTemplateName: v.whatsappTemplateName,
-        },
-    });
-
-    // Save SMS settings separately (different endpoint, different storage)
-    if (customerAuthPolicyUsesSmsProvider(customerAuthPolicy) && v.smsProvider) {
+    if (customerAuthPolicyUsesSmsProvider(customerAuthPolicy)) {
+        const smsIssue = getSmsProviderIssue(v);
+        if (smsIssue) throw new Error(smsIssue);
         await updateSmsSettings({
             data: {
                 activeProvider: v.smsProvider,
@@ -164,6 +214,21 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
             },
         });
     }
+
+    if (customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy)) {
+        const whatsappIssue = getWhatsAppProviderIssue(v);
+        if (whatsappIssue) throw new Error(whatsappIssue);
+    }
+
+    await updateAuthSettings({
+        data: {
+            authVerificationMethod: getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy),
+            customerAuthPolicy: serializeCustomerAuthPolicy(customerAuthPolicy),
+            whatsappAccessToken: v.whatsappAccessToken,
+            whatsappPhoneNumberId: v.whatsappPhoneNumberId,
+            whatsappTemplateName: v.whatsappTemplateName,
+        },
+    });
 }
 
 export default function AuthSettingsBuilder() {
@@ -177,12 +242,38 @@ export default function AuthSettingsBuilder() {
     });
 
     // Derive configured status from current values
-    const accessTokenConfigured = !!values.whatsappAccessToken;
-    const smsConfigured = !!values.smsProvider;
+    const accessTokenConfigured = hasConfiguredSecret(values.whatsappAccessToken);
     const customerAuthPolicy = normalizeCustomerAuthPolicy(
         values.customerAuthPolicy,
         values.authVerificationMethod,
     );
+    const smsProviderIssue = customerAuthPolicyUsesSmsProvider(customerAuthPolicy)
+        ? getSmsProviderIssue(values)
+        : null;
+    const smsProviderServerIssue = customerAuthPolicyUsesSmsProvider(customerAuthPolicy) &&
+        !smsProviderIssue &&
+        !values.smsProviderConfigured &&
+        values.smsProviderError &&
+        !hasFreshSmsSecretForProvider(values)
+        ? values.smsProviderError
+        : null;
+    const whatsAppProviderIssue = customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy)
+        ? getWhatsAppProviderIssue(values)
+        : null;
+    const providerReadinessIssue = smsProviderIssue ?? smsProviderServerIssue ?? whatsAppProviderIssue;
+    const smsConfigured = customerAuthPolicyUsesSmsProvider(customerAuthPolicy)
+        ? !smsProviderIssue && !smsProviderServerIssue
+        : false;
+    const whatsAppConfigured = customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy)
+        ? !whatsAppProviderIssue
+        : false;
+
+    const getChannelReadinessIssue = (channel: CustomerAuthOtpChannel): string | null => {
+        if (!customerAuthPolicy.otpChannels.includes(channel)) return null;
+        if (channel === "sms") return smsProviderIssue ?? smsProviderServerIssue;
+        if (channel === "whatsapp") return whatsAppProviderIssue;
+        return null;
+    };
 
     const setPreset = (value: unknown) => {
         const method = normalizeCustomerAuthMethod(value);
@@ -289,19 +380,37 @@ export default function AuthSettingsBuilder() {
                             </p>
                         </div>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            {CUSTOMER_AUTH_OTP_CHANNELS.map((channel) => (
-                                <label
-                                    key={channel}
-                                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
-                                >
-                                    <Checkbox
-                                        checked={customerAuthPolicy.otpChannels.includes(channel)}
-                                        onCheckedChange={(checked) => toggleOtpChannel(channel, checked === true)}
-                                    />
-                                    <span>{CUSTOMER_AUTH_CHANNEL_OPTIONS[channel].label}</span>
-                                </label>
-                            ))}
+                            {CUSTOMER_AUTH_OTP_CHANNELS.map((channel) => {
+                                const channelSelected = customerAuthPolicy.otpChannels.includes(channel);
+                                const channelIssue = getChannelReadinessIssue(channel);
+                                return (
+                                    <label
+                                        key={channel}
+                                        className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                                    >
+                                        <Checkbox
+                                            checked={channelSelected}
+                                            onCheckedChange={(checked) => toggleOtpChannel(channel, checked === true)}
+                                        />
+                                        <span>{CUSTOMER_AUTH_CHANNEL_OPTIONS[channel].label}</span>
+                                        {channelSelected && channelIssue && (
+                                            <AlertTriangle className="ml-auto h-4 w-4 text-destructive" />
+                                        )}
+                                        {channelSelected && !channelIssue && channel !== "email" && (
+                                            <CheckCircle2 className="ml-auto h-4 w-4 text-green-500" />
+                                        )}
+                                    </label>
+                                );
+                            })}
                         </div>
+
+                        {providerReadinessIssue && (
+                            <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertTitle>Verification channel is not ready</AlertTitle>
+                                <AlertDescription>{providerReadinessIssue}</AlertDescription>
+                            </Alert>
+                        )}
 
                         <div className="space-y-3">
                             <Label>Email Collection</Label>
@@ -366,7 +475,7 @@ export default function AuthSettingsBuilder() {
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">
                                 Meta WhatsApp Cloud API
-                                {accessTokenConfigured && (
+                                {whatsAppConfigured && (
                                     <CheckCircle2 className="h-4 w-4 text-green-500" />
                                 )}
                             </CardTitle>
@@ -375,6 +484,14 @@ export default function AuthSettingsBuilder() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            {whatsAppProviderIssue && (
+                                <Alert variant="destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertTitle>WhatsApp OTP is not ready</AlertTitle>
+                                    <AlertDescription>{whatsAppProviderIssue}</AlertDescription>
+                                </Alert>
+                            )}
+
                             <Alert>
                                 <AlertDescription className="text-sm">
                                     Create an approved message template with one variable{" "}
@@ -453,6 +570,14 @@ export default function AuthSettingsBuilder() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        {(smsProviderIssue || smsProviderServerIssue) && (
+                            <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertTitle>SMS OTP is not ready</AlertTitle>
+                                <AlertDescription>{smsProviderIssue ?? smsProviderServerIssue}</AlertDescription>
+                            </Alert>
+                        )}
+
                         <div className="space-y-1.5">
                             <Label>SMS Provider</Label>
                             <Select value={values.smsProvider} onValueChange={(val) => setValue("smsProvider", val)}>
@@ -600,7 +725,7 @@ export default function AuthSettingsBuilder() {
             <div className="flex justify-end pt-4 border-t border-border">
                 <Button
                     onClick={() => handleSubmit()}
-                    disabled={isSaving}
+                    disabled={isSaving || Boolean(providerReadinessIssue)}
                     className="min-w-[140px]"
                 >
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -13,7 +13,7 @@ import {
   upsertSetting,
   upsertEncryptedSetting,
 } from "@scalius/core/modules/payments/gateway-settings";
-import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import { decryptCredentials } from "@scalius/core/utils/credential-encryption";
 import type { SmsProvider, SmsProviderId } from "./provider";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,8 @@ const MASKED = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u20
 
 export interface SmsSettingsData {
   activeProvider: SmsProviderId | null;
+  activeProviderConfigured: boolean;
+  activeProviderError: string | null;
   // Per-provider fields (all returned, UI shows conditionally)
   bdbulksmsToken: string; // masked on GET
   mimsmsUsername: string;
@@ -60,6 +62,194 @@ export interface SmsSettingsData {
   gennetSid: string;
 }
 
+export interface SmsProviderReadiness {
+  activeProvider: SmsProviderId | null;
+  configured: boolean;
+  error: string | null;
+}
+
+type SmsSettingValues = Record<string, string>;
+
+interface ResolvedSmsSecret {
+  value: string;
+  error: string | null;
+}
+
+async function readSmsSettingValues(db: Database): Promise<SmsSettingValues> {
+  const rows = await db
+    .select({ key: settings.key, value: settings.value })
+    .from(settings)
+    .where(eq(settings.category, SMS_CATEGORY))
+    .all();
+
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+async function instantiateSmsProvider(
+  vals: SmsSettingValues,
+  encryptionKey?: string,
+): Promise<{
+  activeProvider: SmsProviderId | null;
+  provider: SmsProvider | null;
+  error: string | null;
+}> {
+  const providerName = vals.active_provider as SmsProviderId | undefined;
+  if (!providerName) {
+    return {
+      activeProvider: null,
+      provider: null,
+      error: "No active SMS provider selected",
+    };
+  }
+
+  let provider: SmsProvider;
+
+  switch (providerName) {
+    case "smsnetbd": {
+      const { SmsNetBdProvider } = await import("./providers/smsnetbd");
+      const apiKey = await resolveSmsSecret(
+        vals.smsnetbd_api_key ?? "",
+        encryptionKey,
+        "SMS.net.bd API key",
+      );
+      if (apiKey.error) return smsProviderReadinessError(providerName, apiKey.error);
+      provider = new SmsNetBdProvider({
+        apiKey: apiKey.value,
+        senderId: vals.smsnetbd_sender_id || undefined,
+      });
+      break;
+    }
+    case "bdbulksms": {
+      const { BdBulkSmsProvider } = await import("./providers/bdbulksms");
+      const token = await resolveSmsSecret(
+        vals.bdbulksms_token ?? "",
+        encryptionKey,
+        "BDBulkSMS token",
+      );
+      if (token.error) return smsProviderReadinessError(providerName, token.error);
+      provider = new BdBulkSmsProvider({
+        token: token.value,
+      });
+      break;
+    }
+    case "mimsms": {
+      const { MimSmsProvider } = await import("./providers/mimsms");
+      const apiKey = await resolveSmsSecret(
+        vals.mimsms_api_key ?? "",
+        encryptionKey,
+        "MIM SMS API key",
+      );
+      if (apiKey.error) return smsProviderReadinessError(providerName, apiKey.error);
+      provider = new MimSmsProvider({
+        userName: vals.mimsms_username ?? "",
+        apiKey: apiKey.value,
+        senderName: vals.mimsms_sender_name ?? "",
+      });
+      break;
+    }
+    case "gennet": {
+      const { GennetProvider } = await import("./providers/gennet");
+      const apiToken = await resolveSmsSecret(
+        vals.gennet_api_token ?? "",
+        encryptionKey,
+        "GenNet API token",
+      );
+      if (apiToken.error) return smsProviderReadinessError(providerName, apiToken.error);
+      provider = new GennetProvider({
+        apiToken: apiToken.value,
+        baseUrl: vals.gennet_base_url ?? "",
+        sid: vals.gennet_sid ?? "",
+      });
+      break;
+    }
+    default:
+      return {
+        activeProvider: null,
+        provider: null,
+        error: `Unsupported SMS provider "${providerName}"`,
+      };
+  }
+
+  const validationError = provider.validateConfig();
+  return {
+    activeProvider: providerName,
+    provider: validationError ? null : provider,
+    error: validationError,
+  };
+}
+
+function smsProviderReadinessError(
+  activeProvider: SmsProviderId,
+  error: string,
+): {
+  activeProvider: SmsProviderId;
+  provider: null;
+  error: string;
+} {
+  return {
+    activeProvider,
+    provider: null,
+    error,
+  };
+}
+
+async function resolveSmsSecret(
+  storedValue: string,
+  encryptionKey: string | undefined,
+  label: string,
+): Promise<ResolvedSmsSecret> {
+  if (!storedValue) {
+    return { value: "", error: null };
+  }
+
+  if (!isLikelyEncryptedCredential(storedValue)) {
+    return { value: storedValue, error: null };
+  }
+
+  if (!encryptionKey) {
+    return {
+      value: "",
+      error: `${label} is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.`,
+    };
+  }
+
+  try {
+    return {
+      value: await decryptCredentials(storedValue, encryptionKey),
+      error: null,
+    };
+  } catch {
+    return {
+      value: "",
+      error: `${label} could not be decrypted with the configured credential key.`,
+    };
+  }
+}
+
+function isLikelyEncryptedCredential(value: string): boolean {
+  const [iv, ciphertext, extra] = value.split(":");
+  if (!iv || !ciphertext || extra !== undefined) return false;
+  return iv.length === 16 && ciphertext.length >= 24 && isBase64ish(iv) && isBase64ish(ciphertext);
+}
+
+function isBase64ish(value: string): boolean {
+  return /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+}
+
+export async function getSmsProviderReadiness(
+  db: Database,
+  encryptionKey?: string,
+): Promise<SmsProviderReadiness> {
+  const vals = await readSmsSettingValues(db);
+  const resolved = await instantiateSmsProvider(vals, encryptionKey);
+
+  return {
+    activeProvider: resolved.activeProvider,
+    configured: Boolean(resolved.provider),
+    error: resolved.error,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Read settings (masked secrets)
 // ---------------------------------------------------------------------------
@@ -70,17 +260,15 @@ export interface SmsSettingsData {
  */
 export async function getSmsSettings(
   db: Database,
+  encryptionKey?: string,
 ): Promise<SmsSettingsData> {
-  const rows = await db
-    .select({ key: settings.key, value: settings.value })
-    .from(settings)
-    .where(eq(settings.category, SMS_CATEGORY))
-    .all();
-
-  const vals = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const vals = await readSmsSettingValues(db);
+  const readiness = await instantiateSmsProvider(vals, encryptionKey);
 
   return {
     activeProvider: (vals.active_provider as SmsProviderId) ?? null,
+    activeProviderConfigured: Boolean(readiness.provider),
+    activeProviderError: readiness.error,
     bdbulksmsToken: vals.bdbulksms_token ? MASKED : "",
     mimsmsUsername: vals.mimsms_username ?? "",
     mimsmsApiKey: vals.mimsms_api_key ? MASKED : "",
@@ -217,79 +405,23 @@ export async function getActiveSmsProvider(
   const cached = getCachedCredential<SmsProvider>(SMS_CACHE_KEY);
   if (cached) return cached;
 
-  const rows = await db
-    .select({ key: settings.key, value: settings.value })
-    .from(settings)
-    .where(eq(settings.category, SMS_CATEGORY))
-    .all();
+  const resolved = await instantiateSmsProvider(
+    await readSmsSettingValues(db),
+    encryptionKey,
+  );
 
-  const vals = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  const providerName = vals.active_provider;
-  if (!providerName) return null;
-
-  // Import provider classes and instantiate with decrypted credentials
-  let provider: SmsProvider | null = null;
-
-  switch (providerName) {
-    case "smsnetbd": {
-      const { SmsNetBdProvider } = await import("./providers/smsnetbd");
-      provider = new SmsNetBdProvider({
-        apiKey: await decryptCredentialsGraceful(
-          vals.smsnetbd_api_key ?? "",
-          encryptionKey,
-        ),
-        senderId: vals.smsnetbd_sender_id || undefined,
-      });
-      break;
-    }
-    case "bdbulksms": {
-      const { BdBulkSmsProvider } = await import("./providers/bdbulksms");
-      provider = new BdBulkSmsProvider({
-        token: await decryptCredentialsGraceful(
-          vals.bdbulksms_token ?? "",
-          encryptionKey,
-        ),
-      });
-      break;
-    }
-    case "mimsms": {
-      const { MimSmsProvider } = await import("./providers/mimsms");
-      provider = new MimSmsProvider({
-        userName: vals.mimsms_username ?? "",
-        apiKey: await decryptCredentialsGraceful(
-          vals.mimsms_api_key ?? "",
-          encryptionKey,
-        ),
-        senderName: vals.mimsms_sender_name ?? "",
-      });
-      break;
-    }
-    case "gennet": {
-      const { GennetProvider } = await import("./providers/gennet");
-      provider = new GennetProvider({
-        apiToken: await decryptCredentialsGraceful(
-          vals.gennet_api_token ?? "",
-          encryptionKey,
-        ),
-        baseUrl: vals.gennet_base_url ?? "",
-        sid: vals.gennet_sid ?? "",
-      });
-      break;
-    }
+  if (resolved.error) {
+    console.error(
+      `[SMS] Provider "${resolved.activeProvider ?? "none"}" is not ready: ${resolved.error}`,
+    );
+    return null;
   }
 
-  if (provider) {
-    const validationError = provider.validateConfig();
-    if (validationError) {
-      console.error(
-        `[SMS] Provider "${providerName}" configured but invalid: ${validationError}`,
-      );
-      return null;
-    }
-    setCachedCredential(SMS_CACHE_KEY, provider);
+  if (resolved.provider) {
+    setCachedCredential(SMS_CACHE_KEY, resolved.provider);
   }
 
-  return provider;
+  return resolved.provider;
 }
 
 // ---------------------------------------------------------------------------
