@@ -18,6 +18,7 @@ import {
   getCheckoutConfig,
   isCodOnly,
 } from "@/lib/api";
+import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 
 // Parallel fetch: layout + cities + shipping methods + checkout language + checkout config
 const [
@@ -109,7 +110,11 @@ if (Astro.request.method === "POST" && codOnly) {
       );
     }
 
-    const result = await processOrder(formData);
+    const result = await processOrder(formData, {
+      customerSessionToken: getCustomerSessionTokenFromCookie(
+        Astro.request.headers.get("cookie"),
+      ),
+    });
 
     if (
       result.success &&
@@ -595,7 +600,7 @@ const submitLabel = codOnly
   // 1. Initial page load hydration (standalone fetch)
   document.addEventListener("DOMContentLoaded", async () => {
     const isUserLoggedIn = document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
-    if (isUserLoggedIn) {
+    if (isUserLoggedIn || !guestCheckoutEnabled) {
       const session = await getCustomerSession();
       if (session?.authenticated && session.customer) {
         fillBasicCustomerFields(session.customer);
@@ -631,8 +636,16 @@ const submitLabel = codOnly
       return !input?.value || input.value === "{}" || input.value === "[]";
     };
 
-    const isUserLoggedIn = () => {
-      return document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
+    const hasAuthenticatedCustomerSession = async () => {
+      const session = await getCustomerSession();
+      return session?.authenticated === true;
+    };
+    const initialSubmitText = submitButton?.textContent || "Place Order";
+    let submitAfterCustomerSessionCheck = false;
+
+    const restoreSubmitButton = () => {
+      submitButton.disabled = false;
+      submitButton.textContent = initialSubmitText;
     };
 
     const updateCheckoutButtonState = () => {
@@ -649,7 +662,7 @@ const submitLabel = codOnly
 
     if (!form || !submitButton) return;
 
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       if (checkoutUnavailable) {
         e.preventDefault();
         alert(checkoutUnavailableMessage);
@@ -657,15 +670,32 @@ const submitLabel = codOnly
       }
 
       // Guest Checkout Interception
-      if (!guestCheckoutEnabled && !isUserLoggedIn()) {
+      if (!guestCheckoutEnabled && !submitAfterCustomerSessionCheck) {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("open-auth-modal"));
-        return;
+        submitButton.disabled = true;
+        submitButton.textContent = "Checking account...";
+
+        if (!(await hasAuthenticatedCustomerSession())) {
+          restoreSubmitButton();
+          window.dispatchEvent(new CustomEvent("open-auth-modal"));
+          return;
+        }
+
+        if (codOnly) {
+          submitAfterCustomerSessionCheck = true;
+          form.requestSubmit();
+          return;
+        }
+      }
+
+      if (submitAfterCustomerSessionCheck) {
+        submitAfterCustomerSessionCheck = false;
       }
 
       // Cart empty check
       if (isCartEmpty()) {
         e.preventDefault();
+        restoreSubmitButton();
         alert("Your cart is empty. Please add items before placing an order.");
         return;
       }
@@ -679,6 +709,7 @@ const submitLabel = codOnly
       }
       if (missing.length > 0) {
         e.preventDefault();
+        restoreSubmitButton();
         alert(`Please fill in all required fields: ${missing.join(", ")}`);
         return;
       }
