@@ -62,13 +62,45 @@ describe("handleCreateScannerToken", () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
+  it("rejects pending 2FA sessions before loading permissions or minting tokens", async () => {
+    const kv = createKv();
+    const loadUserPermissions = vi.fn();
+
+    const response = await handleCreateScannerToken(createRequest(), {
+      getAuthSession: vi.fn().mockResolvedValue({
+        session: { id: "session_1", twoFactorVerified: false },
+        user: {
+          id: "user_1",
+          email: "admin@example.com",
+          role: "admin",
+          twoFactorEnabled: true,
+        },
+      }),
+      loadUserPermissions,
+      getEnv: () => ({ CACHE: kv }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await readJson(response)).toMatchObject({
+      success: false,
+      error: "Two-factor verification required",
+    });
+    expect(loadUserPermissions).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
   it("requires product view and edit permissions because scanner sessions can read and mutate stock", async () => {
     const kv = createKv();
 
     const response = await handleCreateScannerToken(createRequest(), {
       getAuthSession: vi.fn().mockResolvedValue({
-        session: { id: "session_1" },
-        user: { id: "user_1", name: "Inventory Admin", role: "admin" },
+        session: { id: "session_1", twoFactorVerified: true },
+        user: {
+          id: "user_1",
+          name: "Inventory Admin",
+          role: "admin",
+          twoFactorEnabled: true,
+        },
       }),
       loadUserPermissions: vi.fn().mockResolvedValue({
         permissions: new Set([
