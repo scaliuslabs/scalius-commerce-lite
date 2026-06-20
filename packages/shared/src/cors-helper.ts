@@ -13,6 +13,12 @@ const EXTRA_CREDENTIAL_ORIGIN_ENV_KEYS = [
   "CORS_ALLOWED_ORIGINS",
 ] as const;
 
+const LOOPBACK_DEVELOPMENT_ORIGINS = [
+  "http://localhost:*",
+  "http://127.0.0.1:*",
+  "http://[::1]:*",
+] as const;
+
 export const getCorsOriginContext = async (c: CorsContext) => {
   const allowedOrigins = getAllowedCorsOrigins(c);
   return (origin: string): string | null => {
@@ -79,18 +85,36 @@ function isAllowedOriginMatch(allowedOrigin: string, origin: string): boolean {
   return false;
 }
 
+function isLoopbackOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  try {
+    const { hostname } = new URL(origin);
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "[::1]" ||
+      hostname === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getAllowedCorsOrigins(c: CorsContext): string[] {
-  const origins = [
-    // Allow all localhost ports in development
-    "http://localhost:*",
-    "http://127.0.0.1:*",
-    "http://[::1]:*",
-  ];
+  const origins: string[] = [];
+  let isLoopbackRuntime = false;
 
   // Add exact first-party platform origins from env.
   for (const key of FIRST_PARTY_ORIGIN_ENV_KEYS) {
     const val = ((c.env?.[key] as string) || "").trim();
-    if (val) origins.push(val);
+    const origin = normalizeOrigin(val);
+    if (!origin) continue;
+    origins.push(origin);
+    isLoopbackRuntime ||= isLoopbackOrigin(origin);
+  }
+
+  if (isLoopbackRuntime) {
+    origins.push(...LOOPBACK_DEVELOPMENT_ORIGINS);
   }
 
   // Separate explicit credentialed-CORS origins from merchant CSP domains.
