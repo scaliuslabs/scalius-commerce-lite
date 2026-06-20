@@ -5,6 +5,10 @@ import { getConfiguredSdkClient } from "./client";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { unwrapData } from "./unwrap";
 import { getApiV1CheckoutConfig } from "@scalius/api-client/sdk";
+import type {
+  CustomerAuthMethod,
+  CustomerAuthPolicyConfig,
+} from "@scalius/shared/customer-auth-policy";
 
 export interface GatewayConfig {
   id: "stripe" | "sslcommerz" | "polar" | "cod";
@@ -17,7 +21,8 @@ export interface GatewayConfig {
 export interface CheckoutConfig {
   gateways: GatewayConfig[];
   guestCheckoutEnabled?: boolean;
-  authVerificationMethod?: "email" | "phone" | "both" | "email_phone_mandatory" | "whatsapp_otp" | "sms_otp";
+  authVerificationMethod?: CustomerAuthMethod;
+  customerAuthPolicy?: CustomerAuthPolicyConfig;
   checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;

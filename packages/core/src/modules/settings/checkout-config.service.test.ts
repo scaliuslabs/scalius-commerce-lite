@@ -15,7 +15,7 @@ vi.mock("../payments/gateway-settings", () => ({
 
 import { getCheckoutConfig } from "./checkout-config.service";
 
-function createDb() {
+function createDb(siteOverrides: Record<string, unknown> = {}, customerAuthPolicy?: Record<string, unknown>) {
     const select = vi.fn()
         .mockReturnValueOnce({
             from: () => ({
@@ -25,6 +25,7 @@ function createDb() {
                     checkoutMode: "all",
                     partialPaymentEnabled: false,
                     partialPaymentAmount: 0,
+                    ...siteOverrides,
                 }]),
             }),
         })
@@ -42,6 +43,13 @@ function createDb() {
             from: () => ({
                 where: () => ({
                     get: () => Promise.resolve(null),
+                }),
+            }),
+        })
+        .mockReturnValueOnce({
+            from: () => ({
+                where: () => ({
+                    get: () => Promise.resolve(customerAuthPolicy ? { value: JSON.stringify(customerAuthPolicy) } : null),
                 }),
             }),
         });
@@ -87,6 +95,42 @@ describe("getCheckoutConfig", () => {
             undefined,
             { bypassMemoryCache: true },
         );
+    });
+
+    it("normalizes legacy public auth method values", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        const legacyPhone = await getCheckoutConfig(createDb({ authVerificationMethod: "phone" }) as never);
+        const unsupportedMandatory = await getCheckoutConfig(createDb({ authVerificationMethod: "email_phone_mandatory" }) as never);
+
+	    expect(legacyPhone.authVerificationMethod).toBe("sms_otp");
+	    expect(unsupportedMandatory.authVerificationMethod).toBe("email");
+        expect(legacyPhone.customerAuthPolicy.otpChannels).toEqual(["sms"]);
+	});
+
+    it("publishes advanced customer auth policy for the storefront", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        const config = await getCheckoutConfig(createDb({}, {
+            otpChannels: ["email", "whatsapp"],
+            requiredContactFields: ["email", "phone"],
+            optionalContactFields: [],
+            defaultOtpChannel: "whatsapp",
+        }) as never);
+
+        expect(config.customerAuthPolicy).toEqual({
+            otpChannels: ["email", "whatsapp"],
+            requiredContactFields: ["email", "phone"],
+            optionalContactFields: [],
+            defaultOtpChannel: "whatsapp",
+        });
+        expect(config.authVerificationMethod).toBe("whatsapp_otp");
     });
 
     it("still requires the individual gateway settings to be enabled", async () => {

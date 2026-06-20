@@ -12,7 +12,7 @@ import type { CheckoutConfig } from "./types";
 const baseConfig: CheckoutConfig = {
   gateways: [],
   guestCheckoutEnabled: true,
-  authVerificationMethod: "none",
+  authVerificationMethod: "email",
   checkoutMode: "single",
   partialPaymentEnabled: false,
   partialPaymentAmount: 0,

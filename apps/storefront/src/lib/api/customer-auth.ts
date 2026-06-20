@@ -41,6 +41,23 @@ interface SessionData {
   customer?: CustomerInfo;
 }
 
+export type CustomerAuthIntent = "sign_in" | "sign_up";
+export type CustomerOtpChannel = "email" | "sms" | "whatsapp";
+
+export interface SendCustomerOtpInput {
+  intent: CustomerAuthIntent;
+  method: "email" | "phone";
+  channel: CustomerOtpChannel;
+  identifier: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface VerifyCustomerOtpInput extends SendCustomerOtpInput {
+  code: string;
+}
+
 /**
  * Build a same-origin customer auth URL.
  * On the client, uses a relative path (same-origin proxy).
@@ -77,16 +94,14 @@ export interface AuthState {
  * Send OTP to customer via email or phone.
  */
 export async function sendCustomerOtp(
-  method: "email" | "phone",
-  identifier: string,
-  name?: string
+  input: SendCustomerOtpInput,
 ): Promise<{ success: boolean; error?: string; retryAfter?: number }> {
   try {
     const res = await fetch(authUrl("send-otp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ method, identifier, name }),
+      body: JSON.stringify(input),
     });
     const raw = (await res.json()) as AuthApiEnvelope<SendOtpData>;
     const data = raw.data ?? (raw as unknown as SendOtpData); // Unwrap { success, data: T } envelope
@@ -103,19 +118,14 @@ export async function sendCustomerOtp(
  * Verify OTP and create session.
  */
 export async function verifyCustomerOtp(
-  method: "email" | "phone",
-  identifier: string,
-  code: string,
-  name?: string,
-  phone?: string,
-  email?: string,
+  input: VerifyCustomerOtpInput,
 ): Promise<{ success: boolean; customer?: CustomerInfo; error?: string; attemptsLeft?: number; isNewUser?: boolean; }> {
   try {
     const res = await fetch(authUrl("verify-otp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ method, identifier, code, name, phone, email }),
+      body: JSON.stringify(input),
     });
     const raw = (await res.json()) as AuthApiEnvelope<VerifyOtpData>;
     const data = raw.data ?? (raw as unknown as VerifyOtpData); // Unwrap { success, data: T } envelope

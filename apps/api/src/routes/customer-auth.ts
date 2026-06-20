@@ -29,6 +29,7 @@ import {
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import { getCustomerOrderDetail, getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
+import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, ServiceUnavailableError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
@@ -36,6 +37,8 @@ import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey, getEncryptionKey } from "../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const customerAuthIntentSchema = z.enum(["sign_in", "sign_up"]);
+const customerAuthChannelSchema = z.enum(CUSTOMER_AUTH_OTP_CHANNELS);
 
 function setPrivateNoStoreHeaders(c: Context) {
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
@@ -71,19 +74,37 @@ const sendOtpRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({
-            method: z.enum(["email", "phone"]).optional().default("email"),
-            identifier: z.string().openapi({ description: "Email or phone number" }),
-            name: z.string().optional()
-          }).superRefine((data, ctx) => {
-            if (data.method === "phone" && !isValidPhoneNumber(data.identifier)) {
+	          schema: z.object({
+	            method: z.enum(["email", "phone"]).optional().default("email"),
+	            channel: customerAuthChannelSchema.optional(),
+	            intent: customerAuthIntentSchema.optional().default("sign_in"),
+	            identifier: z.string().openapi({ description: "Email or phone number" }),
+	            name: z.string().optional(),
+	            phone: z.string().optional(),
+	            email: z.string().optional(),
+	          }).superRefine((data, ctx) => {
+	            if (data.method === "phone" && !isValidPhoneNumber(data.identifier)) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: "Invalid phone number",
                 path: ["identifier"]
-              });
-            }
-          })
+	              });
+	            }
+	            if (data.phone && !isValidPhoneNumber(data.phone)) {
+	              ctx.addIssue({
+	                code: z.ZodIssueCode.custom,
+	                message: "Invalid phone number",
+	                path: ["phone"]
+	              });
+	            }
+	            if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+	              ctx.addIssue({
+	                code: z.ZodIssueCode.custom,
+	                message: "Invalid email address",
+	                path: ["email"]
+	              });
+	            }
+	          })
         }
       }
     }
@@ -99,19 +120,25 @@ const sendOtpRoute = createRoute({
 
 app.openapi(sendOtpRoute, async (c) => {
   const body = c.req.valid("json");
-  const method = body.method || "email";
-  const identifier = body.identifier?.trim().toLowerCase();
-  const name = body.name?.trim() || "Customer";
+	  const method = body.method || "email";
+	  const identifier = body.identifier?.trim().toLowerCase();
+	  const name = body.name?.trim() || "Customer";
+	  const phone = body.phone?.trim();
+	  const email = body.email?.trim().toLowerCase();
 
   const db = c.get("db");
   const kv = c.env.CACHE;
   const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
 
   const result = await sendOtp(db, kv, {
-    method,
-    identifier: identifier!,
-    name,
-    ip,
+	    method,
+	    channel: body.channel,
+	    intent: body.intent,
+	    identifier: identifier!,
+	    name,
+	    ip,
+	    phone,
+	    email,
     encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
     migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
@@ -156,9 +183,11 @@ const verifyOtpRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({
-            method: z.enum(["email", "phone"]).optional().default("email"),
-            identifier: z.string().openapi({ description: "Email or phone number" }),
+	          schema: z.object({
+	            method: z.enum(["email", "phone"]).optional().default("email"),
+	            channel: customerAuthChannelSchema.optional(),
+	            intent: customerAuthIntentSchema.optional().default("sign_in"),
+	            identifier: z.string().openapi({ description: "Email or phone number" }),
             code: z.string().openapi({ description: "6-digit OTP code" }),
             name: z.string().optional(),
             phone: z.string().optional(),
@@ -176,6 +205,13 @@ const verifyOtpRoute = createRoute({
                 code: z.ZodIssueCode.custom,
                 message: "Invalid phone number",
                 path: ["phone"]
+              });
+            }
+            if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid email address",
+                path: ["email"]
               });
             }
           })
@@ -204,7 +240,7 @@ app.openapi(verifyOtpRoute, async (c) => {
   const method = body.method || "email";
   const identifier = body.identifier?.trim().toLowerCase();
   const code = body.code?.trim();
-  const name = body.name?.trim() || "Customer";
+	  const name = body.name?.trim() || "Customer";
   const phone = body.phone?.trim();
   const email = body.email?.trim().toLowerCase();
 
@@ -212,8 +248,10 @@ app.openapi(verifyOtpRoute, async (c) => {
   const kv = c.env.CACHE;
 
   const result = await verifyOtp(db, kv, {
-    method,
-    identifier: identifier!,
+	    method,
+	    channel: body.channel,
+	    intent: body.intent,
+	    identifier: identifier!,
     code: code!,
     name,
     phone,

@@ -7569,11 +7569,33 @@
                     ],
                     "default": "email"
                   },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "sms",
+                      "whatsapp"
+                    ]
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "sign_in",
+                      "sign_up"
+                    ],
+                    "default": "sign_in"
+                  },
                   "identifier": {
                     "type": "string",
                     "description": "Email or phone number"
                   },
                   "name": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "email": {
                     "type": "string"
                   }
                 },
@@ -7877,6 +7899,22 @@
                       "phone"
                     ],
                     "default": "email"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "sms",
+                      "whatsapp"
+                    ]
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "sign_in",
+                      "sign_up"
+                    ],
+                    "default": "sign_in"
                   },
                   "identifier": {
                     "type": "string",
@@ -61801,7 +61839,64 @@
                       "type": "object",
                       "properties": {
                         "authVerificationMethod": {
-                          "type": "string"
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms_otp",
+                            "whatsapp_otp",
+                            "both"
+                          ]
+                        },
+                        "customerAuthPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "otpChannels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "email",
+                                  "sms",
+                                  "whatsapp"
+                                ]
+                              },
+                              "minItems": 1,
+                              "maxItems": 3
+                            },
+                            "requiredContactFields": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "email",
+                                  "phone"
+                                ]
+                              },
+                              "maxItems": 2
+                            },
+                            "optionalContactFields": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "email",
+                                  "phone"
+                                ]
+                              },
+                              "maxItems": 2
+                            },
+                            "defaultOtpChannel": {
+                              "type": "string",
+                              "enum": [
+                                "email",
+                                "sms",
+                                "whatsapp"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "otpChannels"
+                          ]
                         },
                         "guestCheckoutEnabled": {
                           "type": "boolean"
@@ -61828,6 +61923,7 @@
                       },
                       "required": [
                         "authVerificationMethod",
+                        "customerAuthPolicy",
                         "guestCheckoutEnabled",
                         "whatsappAccessToken",
                         "whatsappPhoneNumberId",
@@ -62103,10 +62199,60 @@
                     "type": "string",
                     "enum": [
                       "email",
-                      "phone",
-                      "both",
+                      "sms_otp",
                       "whatsapp_otp",
-                      "sms_otp"
+                      "both"
+                    ]
+                  },
+                  "customerAuthPolicy": {
+                    "type": "object",
+                    "properties": {
+                      "otpChannels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 3
+                      },
+                      "requiredContactFields": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "phone"
+                          ]
+                        },
+                        "maxItems": 2
+                      },
+                      "optionalContactFields": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "phone"
+                          ]
+                        },
+                        "maxItems": 2
+                      },
+                      "defaultOtpChannel": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "otpChannels"
                     ]
                   },
                   "guestCheckoutEnabled": {

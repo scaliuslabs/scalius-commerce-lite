@@ -1,3 +1,8 @@
+import type {
+  CustomerAuthMethod,
+  CustomerAuthPolicyConfig,
+} from "@scalius/shared/customer-auth-policy";
+
 export interface GatewayMeta {
   label: string;
   icon: string; // SVG HTML string
@@ -34,7 +39,8 @@ export interface GatewayHandler {
 export interface CheckoutConfig {
   gateways: Array<{ id: string; [key: string]: unknown }>;
   guestCheckoutEnabled: boolean;
-  authVerificationMethod: string;
+  authVerificationMethod: CustomerAuthMethod;
+  customerAuthPolicy?: CustomerAuthPolicyConfig;
   checkoutMode: string;
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;

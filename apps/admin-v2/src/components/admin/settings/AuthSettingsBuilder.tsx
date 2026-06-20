@@ -7,6 +7,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Save, CheckCircle2, ExternalLink } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSettingsForm } from "@/hooks/use-settings-form";
@@ -26,26 +28,44 @@ import {
     getSmsSettings,
     updateSmsSettings,
 } from "@/lib/api-functions/settings";
+import {
+    CUSTOMER_AUTH_CHANNEL_OPTIONS,
+    CUSTOMER_AUTH_METHODS,
+    CUSTOMER_AUTH_OTP_CHANNELS,
+    customerAuthPolicyUsesSmsProvider,
+    customerAuthPolicyUsesWhatsAppProvider,
+    getCustomerAuthPolicyForMethod,
+    getCustomerAuthMethodLabel,
+    getLegacyCustomerAuthMethodForPolicy,
+    normalizeCustomerAuthPolicy,
+    normalizeCustomerAuthMethod,
+    type CustomerAuthMethod,
+    type CustomerAuthOtpChannel,
+    type CustomerAuthPolicyConfig,
+} from "@scalius/shared/customer-auth-policy";
 
 const MASKED_VALUE = "••••••••••••";
-const AUTH_METHODS_WITH_SMS = new Set(["phone", "both", "sms_otp"]);
+type EmailCollectionMode = "none" | "optional" | "required";
 
-function normalizeAuthVerificationMethod(method: unknown): string {
-    // `phone` is a legacy persisted value. The backend routes it through SMS.
-    return method === "phone" ? "sms_otp" : (typeof method === "string" && method ? method : "email");
+function serializeCustomerAuthPolicy(policy: CustomerAuthPolicyConfig) {
+    return {
+        otpChannels: [...policy.otpChannels],
+        requiredContactFields: [...policy.requiredContactFields],
+        optionalContactFields: [...policy.optionalContactFields],
+        defaultOtpChannel: policy.defaultOtpChannel,
+    };
 }
 
-function usesSmsProvider(method: string): boolean {
-    return AUTH_METHODS_WITH_SMS.has(method);
-}
-
-function usesWhatsAppProvider(method: string): boolean {
-    return method === "whatsapp_otp";
+function getEmailCollectionMode(policy: CustomerAuthPolicyConfig): EmailCollectionMode {
+    if (policy.requiredContactFields.includes("email")) return "required";
+    if (policy.optionalContactFields.includes("email")) return "optional";
+    return "none";
 }
 
 interface AuthAndSmsSettings {
     // Auth settings
-    authVerificationMethod: string;
+    authVerificationMethod: CustomerAuthMethod;
+    customerAuthPolicy: CustomerAuthPolicyConfig;
     whatsappAccessToken: string;
     whatsappPhoneNumberId: string;
     whatsappTemplateName: string;
@@ -64,6 +84,7 @@ interface AuthAndSmsSettings {
 
 const defaultValues: AuthAndSmsSettings = {
     authVerificationMethod: "email",
+    customerAuthPolicy: getCustomerAuthPolicyForMethod("email"),
     whatsappAccessToken: "",
     whatsappPhoneNumberId: "",
     whatsappTemplateName: "auth_otp",
@@ -82,11 +103,15 @@ const defaultValues: AuthAndSmsSettings = {
 async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
     const result: Partial<AuthAndSmsSettings> = {};
 
-    const authData = await getAuthSettings() as Record<string, unknown>;
-    result.authVerificationMethod = normalizeAuthVerificationMethod(authData.authVerificationMethod);
-    result.whatsappAccessToken = (authData.whatsappAccessToken as string) || "";
-    result.whatsappPhoneNumberId = (authData.whatsappPhoneNumberId as string) || "";
-    result.whatsappTemplateName = (authData.whatsappTemplateName as string) || "auth_otp";
+    const authData = await getAuthSettings();
+    result.customerAuthPolicy = normalizeCustomerAuthPolicy(
+        authData.customerAuthPolicy,
+        authData.authVerificationMethod,
+    );
+    result.authVerificationMethod = getLegacyCustomerAuthMethodForPolicy(result.customerAuthPolicy);
+    result.whatsappAccessToken = authData.whatsappAccessToken || "";
+    result.whatsappPhoneNumberId = authData.whatsappPhoneNumberId || "";
+    result.whatsappTemplateName = authData.whatsappTemplateName || "auth_otp";
 
     // SMS fetch is non-fatal
     try {
@@ -109,11 +134,13 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
 }
 
 async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
-    const authVerificationMethod = normalizeAuthVerificationMethod(v.authVerificationMethod);
+    const authVerificationMethod = normalizeCustomerAuthMethod(v.authVerificationMethod);
+    const customerAuthPolicy = normalizeCustomerAuthPolicy(v.customerAuthPolicy, authVerificationMethod);
 
     await updateAuthSettings({
         data: {
-            authVerificationMethod,
+            authVerificationMethod: getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy),
+            customerAuthPolicy: serializeCustomerAuthPolicy(customerAuthPolicy),
             whatsappAccessToken: v.whatsappAccessToken,
             whatsappPhoneNumberId: v.whatsappPhoneNumberId,
             whatsappTemplateName: v.whatsappTemplateName,
@@ -121,7 +148,7 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
     });
 
     // Save SMS settings separately (different endpoint, different storage)
-    if (usesSmsProvider(authVerificationMethod) && v.smsProvider) {
+    if (customerAuthPolicyUsesSmsProvider(customerAuthPolicy) && v.smsProvider) {
         await updateSmsSettings({
             data: {
                 activeProvider: v.smsProvider,
@@ -152,6 +179,67 @@ export default function AuthSettingsBuilder() {
     // Derive configured status from current values
     const accessTokenConfigured = !!values.whatsappAccessToken;
     const smsConfigured = !!values.smsProvider;
+    const customerAuthPolicy = normalizeCustomerAuthPolicy(
+        values.customerAuthPolicy,
+        values.authVerificationMethod,
+    );
+
+    const setPreset = (value: unknown) => {
+        const method = normalizeCustomerAuthMethod(value);
+        const policy = getCustomerAuthPolicyForMethod(method);
+        setValue("authVerificationMethod", method);
+        setValue("customerAuthPolicy", policy);
+    };
+
+    const updateCustomerAuthPolicy = (
+        updater: (policy: CustomerAuthPolicyConfig) => CustomerAuthPolicyConfig,
+    ) => {
+        const nextPolicy = normalizeCustomerAuthPolicy(
+            updater(customerAuthPolicy),
+            values.authVerificationMethod,
+        );
+        setValue("customerAuthPolicy", nextPolicy);
+        setValue("authVerificationMethod", getLegacyCustomerAuthMethodForPolicy(nextPolicy));
+    };
+
+    const toggleOtpChannel = (channel: CustomerAuthOtpChannel, checked: boolean) => {
+        updateCustomerAuthPolicy((policy) => {
+            const current = new Set(policy.otpChannels);
+            if (checked) current.add(channel);
+            if (!checked && current.size > 1) current.delete(channel);
+            const otpChannels = CUSTOMER_AUTH_OTP_CHANNELS.filter((item) => current.has(item));
+            return {
+                ...policy,
+                otpChannels,
+                defaultOtpChannel: otpChannels.includes(policy.defaultOtpChannel)
+                    ? policy.defaultOtpChannel
+                    : otpChannels[0] ?? "email",
+            };
+        });
+    };
+
+    const setEmailCollectionMode = (mode: EmailCollectionMode) => {
+        updateCustomerAuthPolicy((policy) => {
+            const required = new Set(policy.requiredContactFields);
+            const optional = new Set(policy.optionalContactFields);
+            required.add("phone");
+            required.delete("email");
+            optional.delete("email");
+
+            if (mode === "required") {
+                required.add("email");
+            }
+            if (mode === "optional") {
+                optional.add("email");
+            }
+
+            return {
+                ...policy,
+                requiredContactFields: ["phone", ...(required.has("email") ? ["email" as const] : [])],
+                optionalContactFields: optional.has("email") ? ["email"] : [],
+            };
+        });
+    };
 
     if (isLoading) {
         return (
@@ -165,36 +253,115 @@ export default function AuthSettingsBuilder() {
         <div className="space-y-5 max-w-2xl">
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Account Verification</CardTitle>
+                    <CardTitle className="text-base">Customer Login & Account Creation</CardTitle>
                     <CardDescription>
-                        Configure how customers verify their identity when creating an account or logging in.
+                        Configure verification channels and the contact details collected from customers.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                     <div className="space-y-1.5">
-                        <Label>Account Verification Method</Label>
+                        <Label>Quick Preset</Label>
                         <p className="text-xs text-muted-foreground mb-1.5">
-                            How customers verify their identity when creating an account or logging in.
+                            Start from a common setup, then fine-tune channels and email collection below.
                         </p>
                         <Select
                             value={values.authVerificationMethod}
-                            onValueChange={(val) => setValue("authVerificationMethod", val)}
+                            onValueChange={setPreset}
                         >
                             <SelectTrigger className="w-full max-w-xs">
                                 <SelectValue placeholder="Select verification method" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="email">Email OTP</SelectItem>
-                                <SelectItem value="sms_otp">SMS OTP</SelectItem>
-                                <SelectItem value="whatsapp_otp">WhatsApp OTP</SelectItem>
-                                <SelectItem value="both">Email or SMS OTP</SelectItem>
+                                {CUSTOMER_AUTH_METHODS.map((method) => (
+                                    <SelectItem key={method} value={method}>
+                                        {getCustomerAuthMethodLabel(method)}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
+                    </div>
+
+                    <div className="space-y-4 rounded-lg border border-border p-4">
+                        <div>
+                            <Label>Verification Channels</Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Customers can choose from the enabled channels during sign in or account creation.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            {CUSTOMER_AUTH_OTP_CHANNELS.map((channel) => (
+                                <label
+                                    key={channel}
+                                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                                >
+                                    <Checkbox
+                                        checked={customerAuthPolicy.otpChannels.includes(channel)}
+                                        onCheckedChange={(checked) => toggleOtpChannel(channel, checked === true)}
+                                    />
+                                    <span>{CUSTOMER_AUTH_CHANNEL_OPTIONS[channel].label}</span>
+                                </label>
+                            ))}
+                        </div>
+
+                        <div className="space-y-3">
+                            <Label>Email Collection</Label>
+                            <RadioGroup
+                                value={getEmailCollectionMode(customerAuthPolicy)}
+                                onValueChange={(value) => setEmailCollectionMode(value as EmailCollectionMode)}
+                                className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                            >
+                                {([
+                                    ["none", "Do not collect"],
+                                    ["optional", "Optional"],
+                                    ["required", "Required"],
+                                ] as const).map(([value, label]) => (
+                                    <label
+                                        key={value}
+                                        className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                                    >
+                                        <RadioGroupItem value={value} />
+                                        <span>{label}</span>
+                                    </label>
+                                ))}
+                            </RadioGroup>
+
+                            <div className="rounded-md border border-border px-3 py-2 text-sm">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                    <span>Phone number required</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>Default Channel</Label>
+                            <Select
+                                value={customerAuthPolicy.defaultOtpChannel}
+                                onValueChange={(value) => {
+                                    if (!CUSTOMER_AUTH_OTP_CHANNELS.includes(value as CustomerAuthOtpChannel)) return;
+                                    updateCustomerAuthPolicy((policy) => ({
+                                        ...policy,
+                                        defaultOtpChannel: value as CustomerAuthOtpChannel,
+                                    }));
+                                }}
+                            >
+                                <SelectTrigger className="w-full max-w-xs">
+                                    <SelectValue placeholder="Select default channel" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {customerAuthPolicy.otpChannels.map((channel) => (
+                                        <SelectItem key={channel} value={channel}>
+                                            {CUSTOMER_AUTH_CHANNEL_OPTIONS[channel].label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {usesWhatsAppProvider(values.authVerificationMethod) && (
+            {customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy) && (
                 <Card className="border-green-500/20 dark:bg-green-950/10">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">
@@ -271,7 +438,7 @@ export default function AuthSettingsBuilder() {
                 </Card>
             )}
 
-            {usesSmsProvider(values.authVerificationMethod) && (
+            {customerAuthPolicyUsesSmsProvider(customerAuthPolicy) && (
                 <Card className="border-blue-500/20 dark:bg-blue-950/10">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">

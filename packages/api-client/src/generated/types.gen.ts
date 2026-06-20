@@ -2346,11 +2346,15 @@ export type GetApiV1CheckoutConfigResponse = GetApiV1CheckoutConfigResponses[key
 export type PostApiV1CustomerAuthSendOtpData = {
     body?: {
         method?: 'email' | 'phone';
+        channel?: 'email' | 'sms' | 'whatsapp';
+        intent?: 'sign_in' | 'sign_up';
         /**
          * Email or phone number
          */
         identifier: string;
         name?: string;
+        phone?: string;
+        email?: string;
     };
     path?: never;
     query?: never;
@@ -2445,6 +2449,8 @@ export type PostApiV1CustomerAuthSendOtpResponse = PostApiV1CustomerAuthSendOtpR
 export type PostApiV1CustomerAuthVerifyOtpData = {
     body?: {
         method?: 'email' | 'phone';
+        channel?: 'email' | 'sms' | 'whatsapp';
+        intent?: 'sign_in' | 'sign_up';
         /**
          * Email or phone number
          */
@@ -19151,7 +19157,13 @@ export type GetApiV1AdminSettingsAuthResponses = {
     200: {
         success: true;
         data: {
-            authVerificationMethod: string;
+            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
+            customerAuthPolicy: {
+                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
+                requiredContactFields?: Array<'email' | 'phone'>;
+                optionalContactFields?: Array<'email' | 'phone'>;
+                defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+            };
             guestCheckoutEnabled: boolean;
             whatsappAccessToken: string;
             whatsappPhoneNumberId: string;
@@ -19167,7 +19179,13 @@ export type GetApiV1AdminSettingsAuthResponse = GetApiV1AdminSettingsAuthRespons
 
 export type PostApiV1AdminSettingsAuthData = {
     body?: {
-        authVerificationMethod?: 'email' | 'phone' | 'both' | 'whatsapp_otp' | 'sms_otp';
+        authVerificationMethod?: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
+        customerAuthPolicy?: {
+            otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
+            requiredContactFields?: Array<'email' | 'phone'>;
+            optionalContactFields?: Array<'email' | 'phone'>;
+            defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+        };
         guestCheckoutEnabled?: boolean;
         whatsappAccessToken?: string;
         whatsappPhoneNumberId?: string | null;

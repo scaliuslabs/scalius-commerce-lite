@@ -75,7 +75,7 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Queues | Cloudflare Queues (payments, notifications, OTP, order ingestion) |
 | Payments | Stripe, SSLCommerz, Polar, COD |
 | Delivery | Pathao, Steadfast (webhook-driven tracking) |
-| Notifications | Email (Resend), SMS (4 providers), Firebase Cloud Messaging |
+| Notifications | Email (Cloudflare Email default, Resend fallback), SMS (4 providers), Firebase Cloud Messaging |
 | AI | AI SDK providers for widget/content generation (OpenRouter, OpenAI, Gemini, Cloudflare Workers AI) |
 | CI/CD | GitHub Actions (lint → typecheck → build → test) |
 | Deploy | Cloudflare Workers via Wrangler |
@@ -102,7 +102,7 @@ flowchart TB
 
     subgraph API ["API Worker (Hono)"]
         direction TB
-        HonoApp["257 OpenAPI paths / 355 operations<br/>(@hono/zod-openapi)"]
+        HonoApp["258 OpenAPI paths / 356 operations<br/>(@hono/zod-openapi)"]
         QueueConsumer["Queue Consumer<br/>(payments, notifications, OTP)"]
         CoreModules["@scalius/core<br/>(domain services)"]
     end
@@ -122,7 +122,7 @@ flowchart TB
         Steadfast["Steadfast"]
         Firebase["Firebase FCM"]
         SMS["SMS Providers (4)"]
-        Resend["Resend Email"]
+        EmailProvider["Cloudflare Email / Resend"]
         AIProviders["AI providers<br/>(OpenRouter, OpenAI, Gemini, Cloudflare)"]
     end
 
@@ -135,7 +135,7 @@ flowchart TB
     Queues -->|Consume| QueueConsumer
     QueueConsumer --> Firebase
     QueueConsumer --> SMS
-    QueueConsumer --> Resend
+    QueueConsumer --> EmailProvider
     HonoApp --> CoreModules
     Storefront --> EdgeCache
 
@@ -194,7 +194,7 @@ In production, service bindings are zero-latency RPC calls (no HTTP overhead). I
 
 ### Notifications
 - 9 notification types (order placed → refunded)
-- 3 channels: Email (Resend), SMS (4 providers), FCM push
+- 3 channels: Email (Cloudflare Email default, Resend fallback), SMS (4 providers), FCM push
 - Per-status channel independence (configurable per event type)
 - Queue-driven async delivery
 
@@ -501,7 +501,7 @@ pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
 
 | Integration | Settings Location |
 |-------------|-------------------|
-| Email (Resend) | Settings → Email |
+| Email (Cloudflare Email / Resend) | Settings → Email |
 | Firebase (FCM) | Settings → Notifications |
 | Stripe / SSLCommerz / Polar | Settings → Checkout → Payment Gateways |
 | Pathao / Steadfast | Settings → Delivery Providers |

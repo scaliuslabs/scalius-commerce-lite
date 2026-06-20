@@ -50,11 +50,11 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 ### OTP Authentication (`customer-auth.service.ts`)
 
 **Flow:**
-1. `sendOtp()` -- validates identifier format, normalizes phone to E.164, checks site settings for allowed auth method, resolves/validates the transport before mutating KV, verifies encrypted WhatsApp credentials when `authVerificationMethod = "whatsapp_otp"`, passes a tolerant read key plus a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min via KV), enforces per-identifier cooldown (2 min), generates 6-digit cryptographic OTP, stores in KV with 5-min TTL and 0 attempts counter, and returns a queue payload with `deliveryKey` + `otpExpiresAt`
+1. `sendOtp()` -- validates sign-in vs sign-up intent, validates identifier and secondary contact formats, normalizes phone to E.164, resolves the advanced customer-auth policy from `settings.customer_auth/policy` with `siteSettings.authVerificationMethod` fallback, requires phone collection for customer identity, blocks sign-in for unknown accounts, blocks sign-up for duplicate phone/email accounts before mutating KV, resolves/validates the selected transport, verifies encrypted WhatsApp credentials for WhatsApp OTP, passes a tolerant read key plus a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min via KV), enforces per-channel identifier cooldown (2 min), generates 6-digit cryptographic OTP, stores it in KV with 5-min TTL plus intent/channel/pinned-contact metadata, and returns a queue payload with `deliveryKey` + `otpExpiresAt`
 2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after KV write, it deletes the exact `cust_otp:*` key and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
-5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, validates code against KV, enforces max 5 attempts (increments counter in KV), on success: looks up or creates customer in DB, creates 30-day session in KV, returns session token
+5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, validates code against the channel-scoped KV key, enforces max 5 attempts (increments counter in KV), rechecks sign-up collection policy, uses the phone/email fields pinned when the OTP was issued, and on success signs in an existing customer or creates a new customer only for explicit `sign_up` intent before creating a 30-day session in KV
 
 **Delivery idempotency:**
 - Email sends pass `deliveryKey` as `idempotencyKey`; Resend forwards it as `Idempotency-Key`, while Cloudflare Email stores the returned `messageId`
@@ -70,18 +70,16 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 - `getCustomerBySession()` checks expiry, deletes expired sessions
 - `updateCustomerProfile()` updates the DB record and mirrors the customer name into the KV session. Address/city/zone fields are persisted in D1 but are not mirrored into the session object.
 
-**Transport selection:**
-- Site settings `authVerificationMethod` controls allowed methods
-- `"email"` -> only email allowed
-- `"phone"` or `"sms_otp"` -> only phone (SMS) allowed
-- `"whatsapp_otp"` -> only phone (WhatsApp) allowed
-- `"both"` -> email and phone allowed
+**Transport selection and collection policy:**
+- Phone number collection is a platform invariant for customer identity, checkout, delivery, fraud checks, SMS OTP, and WhatsApp OTP. Do not add a merchant setting that makes phone optional or uncollected.
+- The advanced policy lives at `settings.customer_auth/policy` with `{ otpChannels, requiredContactFields, optionalContactFields, defaultOtpChannel }`; `siteSettings.authVerificationMethod` remains a legacy summary/fallback.
+- OTP channels are independent: `"email"`, `"sms"`, and `"whatsapp"` may be enabled in any non-empty combination. The legacy summaries map to `"email"`, `"sms_otp"`, `"whatsapp_otp"`, and `"both"` for older callers.
+- Email collection is independent of OTP channel: merchants may not collect email, collect it optionally, or require it while still verifying through SMS/WhatsApp.
 - WhatsApp OTP validates encrypted Meta credentials before KV mutation, but the queue payload carries no provider secrets; the API queue consumer resolves/decrypts the token and phone-number ID at send time. Legacy WhatsApp token migration/cleanup requires the dedicated `migrationEncryptionKey`; `getEncryptionKey()` fallback output is read-only.
 
 **Auto-registration:**
-- If `verifyOtp()` finds no existing customer, it creates one automatically
-- Email-method registration requires a phone number (prevents phone-less records)
-- Phone-method registration creates customer with phone only (no email)
+- Only explicit `sign_up` OTPs can create customers; explicit `sign_in` OTPs require an existing account and return a customer-facing "Create an account instead" error when none exists.
+- New customer creation always requires a phone number and rejects duplicate phone/email before account creation.
 - New customers get a bare-bones record (no address/location)
 
 ## API Endpoints
