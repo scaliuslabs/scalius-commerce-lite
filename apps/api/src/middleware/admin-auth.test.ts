@@ -89,6 +89,18 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("allows checkout readiness reads for settings viewers", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.SETTINGS_GENERAL_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/settings/checkout-readiness") as never,
+      next,
+    );
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("passes the runtime KV binding into permission resolution", async () => {
     mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
     const next = vi.fn().mockResolvedValue(undefined);
