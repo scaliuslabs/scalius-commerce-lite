@@ -10,7 +10,11 @@ const mocks = vi.hoisted(() => ({
   getCustomerBySession: vi.fn(),
   getCustomerOrders: vi.fn(),
   getCustomerOrderDetail: vi.fn(),
+  resolveCustomerPaymentSessionRecovery: vi.fn(),
   getSessionCookie: vi.fn(),
+  createStripePaymentSession: vi.fn(),
+  createSSLCommerzPaymentSession: vi.fn(),
+  createPolarPaymentSession: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
@@ -29,6 +33,13 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
 vi.mock("@scalius/core/modules/customers/customers.service", () => ({
   getCustomerOrders: mocks.getCustomerOrders,
   getCustomerOrderDetail: mocks.getCustomerOrderDetail,
+}));
+
+vi.mock("./payment/payment-session-create", () => ({
+  createStripePaymentSession: mocks.createStripePaymentSession,
+  createSSLCommerzPaymentSession: mocks.createSSLCommerzPaymentSession,
+  createPolarPaymentSession: mocks.createPolarPaymentSession,
+  resolveCustomerPaymentSessionRecovery: mocks.resolveCustomerPaymentSessionRecovery,
 }));
 
 import { customerAuthRoutes } from "./customer-auth";
@@ -210,6 +221,49 @@ describe("customer auth private cache policy", () => {
         },
       ],
     });
+    mocks.resolveCustomerPaymentSessionRecovery.mockResolvedValue({
+      eligible: true,
+      gateway: "sslcommerz",
+      paymentType: "balance",
+      amountDue: 900,
+      label: "Pay balance",
+      reason: null,
+      requiresCardForm: false,
+      hostedRedirect: true,
+    });
+    mocks.createSSLCommerzPaymentSession.mockResolvedValue({
+      gateway: "sslcommerz",
+      paymentType: "balance",
+      amount: 900,
+      currency: "BDT",
+      hosted: {
+        gatewayUrl: "https://ssl.example.test/pay",
+        sessionKey: "ssl_session_1",
+      },
+    });
+    mocks.createStripePaymentSession.mockResolvedValue({
+      gateway: "stripe",
+      paymentType: "full",
+      amount: 1200,
+      currency: "bdt",
+      stripe: {
+        clientSecret: "pi_secret_1",
+        paymentIntentId: "pi_1",
+        publishableKey: "pk_test",
+        amount: 1200,
+        currency: "bdt",
+      },
+    });
+    mocks.createPolarPaymentSession.mockResolvedValue({
+      gateway: "polar",
+      paymentType: "full",
+      amount: 1200,
+      currency: "bdt",
+      hosted: {
+        gatewayUrl: "https://polar.example.test/pay",
+        checkoutId: "polar_checkout_1",
+      },
+    });
   });
 
   it("marks customer session reads as private no-store", async () => {
@@ -361,6 +415,13 @@ describe("customer auth private cache policy", () => {
       "customer_1",
       "order_1",
     );
+    expect(mocks.resolveCustomerPaymentSessionRecovery).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        expectedCustomerId: "customer_1",
+      },
+    );
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: {
@@ -393,6 +454,11 @@ describe("customer auth private cache policy", () => {
             label: "Order placed",
           }),
         ]),
+        paymentRecovery: {
+          eligible: true,
+          paymentType: "balance",
+          amountDue: 900,
+        },
       },
     });
   });
@@ -414,6 +480,147 @@ describe("customer auth private cache policy", () => {
 
     expect(response.status).toBe(401);
     expect(mocks.getCustomerOrderDetail).not.toHaveBeenCalled();
+  });
+
+  it("creates customer-owned hosted payment sessions without exposing receipt tokens", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/payment-session",
+      {
+        method: "POST",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-cache, no-store, must-revalidate",
+    );
+    expect(mocks.resolveCustomerPaymentSessionRecovery).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        expectedCustomerId: "customer_1",
+      },
+    );
+    expect(mocks.createSSLCommerzPaymentSession).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        orderId: "order_1",
+        paymentType: "balance",
+        proof: { kind: "customer_account", customerId: "customer_1" },
+        returnTarget: { kind: "customer_account" },
+        expectedCustomerId: "customer_1",
+      }),
+    );
+    const text = await response.text();
+    expect(text).toContain("https://ssl.example.test/pay");
+    expect(text).not.toContain("receiptToken");
+    expect(text).not.toContain("chk_");
+  });
+
+  it("rejects account payment session requests without customer ownership", async () => {
+    const app = createTestApp();
+    mocks.getCustomerBySession.mockResolvedValueOnce({
+      email: "customer@example.com",
+      name: "Customer",
+      phone: "+8801712345678",
+      customerId: null,
+    });
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/payment-session",
+      {
+        method: "POST",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.resolveCustomerPaymentSessionRecovery).not.toHaveBeenCalled();
+    expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects body attempts to override account payment session authority", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/payment-session",
+      {
+        method: "POST",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gateway: "stripe",
+          amount: 1,
+          receiptToken: "chk_attacker",
+        }),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects customer payment sessions when recovery state is not eligible", async () => {
+    const app = createTestApp();
+    mocks.resolveCustomerPaymentSessionRecovery.mockResolvedValueOnce({
+      eligible: false,
+      gateway: null,
+      paymentType: null,
+      amountDue: 0,
+      label: null,
+      reason: "This order is not waiting for an online payment.",
+      blockType: "validation",
+      requiresCardForm: false,
+      hostedRedirect: false,
+    });
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/payment-session",
+      {
+        method: "POST",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
+  });
+
+  it("returns service unavailable when the account recovery gateway is not ready", async () => {
+    const app = createTestApp();
+    mocks.resolveCustomerPaymentSessionRecovery.mockResolvedValueOnce({
+      eligible: false,
+      gateway: "sslcommerz",
+      paymentType: null,
+      amountDue: 0,
+      label: null,
+      reason: "SSLCommerz gateway is not enabled for checkout.",
+      blockType: "unavailable",
+      requiresCardForm: false,
+      hostedRedirect: false,
+    });
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/payment-session",
+      {
+        method: "POST",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
   });
 
   it("clears OTP KV state when queue handoff fails", async () => {

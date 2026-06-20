@@ -2,46 +2,18 @@
 // Hono routes for SSLCommerz payment operations.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { orders, PaymentMethod } from "@scalius/database/schema";
+import { orders } from "@scalius/database/schema";
 import {
-  buildSSLCommerzTranId,
-  initSSLCommerzSession,
   parseSSLCommerzTranId,
 } from "@scalius/core/modules/payments/sslcommerz";
-import {
-  buildPaymentSessionAttemptIdentity,
-  claimPaymentSessionAttempt,
-  markPaymentSessionAttemptCreated,
-  markPaymentSessionAttemptFailed,
-} from "@scalius/core/modules/payments/payment-session-attempts";
-import {
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-  getSSLCommerzSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
-import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
-import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
-import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
-import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
-import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
-import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
-import {
-  createPaymentProviderTimeoutError,
-  isPaymentProviderTimedOut,
-  withPaymentProviderDeadline,
-} from "./payment-provider-deadline";
-
 import { ok } from "../../utils/api-response";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+import { createSSLCommerzPaymentSession } from "./payment-session-create";
 
-type SSLCommerzSessionResponse = {
-  gatewayUrl?: string;
-  sessionKey?: string;
-};
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── POST /session ───────────────────────────────────────────────────────────
 
@@ -53,14 +25,6 @@ const sessionSchema = z.object({
   currency: z.string().optional(),
   retryKey: z.string().trim().min(1).max(128).optional()
 });
-
-function buildSslCallbackUrl(apiBase: string, path: string, params: Record<string, string | undefined>): string {
-  const url = new URL(`${apiBase}${path}`);
-  for (const [key, value] of Object.entries(params)) {
-    if (value) url.searchParams.set(key, value);
-  }
-  return url.toString();
-}
 
 const createSessionRoute = createRoute({
   method: "post",
@@ -96,176 +60,21 @@ app.openapi(createSessionRoute, async (c) => {
   const body = c.req.valid("json");
   await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken, db);
 
-  // Fetch order + customer info
-  const order = await db
-    .select({
-      id: orders.id,
-      totalAmount: orders.totalAmount,
-      customerName: orders.customerName,
-      customerPhone: orders.customerPhone,
-      customerEmail: orders.customerEmail,
-      shippingAddress: orders.shippingAddress,
-      cityName: orders.cityName,
-      status: orders.status,
-      paymentMethod: orders.paymentMethod,
-      paymentStatus: orders.paymentStatus,
-      paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
-      deletedAt: orders.deletedAt,
-      shipmentClaimId: orders.shipmentClaimId,
-      shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt
-    })
-    .from(orders)
-    .where(eq(orders.id, body.orderId))
-    .get();
-
-  if (!order) throw new NotFoundError("Order not found");
-  assertNoActiveShipmentClaim(order);
-  assertPaymentSessionOrderPayable(order);
-  if (order.paymentMethod !== PaymentMethod.SSLCOMMERZ) {
-    throw new ValidationError("Order is not configured for SSLCommerz payment");
-  }
-
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "sslcommerz");
-  const policy = await resolvePaymentSessionPolicy(db, order, {
+  const result = await createSSLCommerzPaymentSession(c, {
+    orderId: body.orderId,
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
-  }, checkoutFlowSettings);
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code;
-
-  const ssl = await getSSLCommerzSettings(
-    db,
-    c.env.CACHE,
-    encryptionKey,
-    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-  );
-
-  if (!ssl) {
-    throw new ServiceUnavailableError("SSLCommerz is not configured. Please set credentials in the admin dashboard.");
-  }
-  if (!ssl.enabled) {
-    throw new ServiceUnavailableError("SSLCommerz gateway is disabled.");
-  }
-
-  const origin = getTrustedApiOrigin(c.env, c.req.url);
-  const apiBase = `${origin}/api/v1`;
-  const callbackParams = {
-    order_id: body.orderId,
-    receipt_token: body.receiptToken,
-    payment_type: policy.paymentType,
-    deposit_amount: policy.paymentType === "deposit" ? String(policy.depositAmount) : undefined,
-  };
-  const successUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/success", callbackParams);
-  const failUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/fail", callbackParams);
-  const cancelUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/cancel", callbackParams);
-  const ipnUrl = `${apiBase}/webhooks/sslcommerz`;
-
-  const attemptIdentity = await buildPaymentSessionAttemptIdentity({
-    orderId: body.orderId,
-    gateway: "sslcommerz",
-    paymentType: policy.paymentType,
-    amount: policy.chargeAmount,
-    currency,
-    receiptToken: body.receiptToken,
-    requestContext: {
-      successUrl,
-      failUrl,
-      cancelUrl,
-      ipnUrl,
-      retryKey: body.retryKey ?? null,
-    },
-  });
-  const transactionId = buildSSLCommerzTranId(body.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
-  const attemptClaim = await claimPaymentSessionAttempt<SSLCommerzSessionResponse>(db, {
-    ...attemptIdentity,
-    providerCorrelationId: transactionId,
-  });
-  if (attemptClaim.status === "replay") {
-    return ok(c, attemptClaim.response);
-  }
-
-  let result: Awaited<ReturnType<typeof initSSLCommerzSession>>;
-  try {
-    result = await withPaymentProviderDeadline(
-      "SSLCommerz",
-      (signal) => initSSLCommerzSession(
-        ssl.storeId,
-        ssl.storePassword,
-        ssl.sandbox,
-        {
-          orderId: body.orderId,
-          transactionId,
-          totalAmount: policy.chargeAmount,
-          currency,
-          successUrl,
-          failUrl,
-          cancelUrl,
-          ipnUrl,
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          customerEmail: order.customerEmail ?? undefined,
-          customerAddress: order.shippingAddress,
-          customerCity: order.cityName ?? undefined,
-          paymentType: policy.paymentType,
-          signal,
-        }
-      )
-    );
-  } catch (error: unknown) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
-      .catch((markError: unknown) => console.error("[payments] Failed to mark SSLCommerz session attempt failed:", markError));
-    throw error;
-  }
-
-  if (!result.success) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create SSLCommerz session")
-      .catch((error: unknown) => console.error("[payments] Failed to mark SSLCommerz session attempt failed:", error));
-    if (isPaymentProviderTimedOut(result)) {
-      throw createPaymentProviderTimeoutError("SSLCommerz");
-    }
-    throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create SSLCommerz session");
-  }
-
-  const responsePayload: SSLCommerzSessionResponse = {
-    gatewayUrl: result.gatewayUrl,
-    sessionKey: result.sessionKey
-  };
-
-  await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
-    providerSessionId: result.sessionKey,
-    providerCorrelationId: transactionId,
-    response: responsePayload,
+    retryKey: body.retryKey,
+    proof: { kind: "receipt", receiptToken: body.receiptToken },
+    returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
   });
 
-  // Save session key to order as a recovery hint; attempt/provider ids carry
-  // the durable idempotency contract.
-  try {
-    if (result.sessionKey) {
-      await db
-        .update(orders)
-        .set({ paymentIntentId: result.sessionKey, updatedAt: sql`unixepoch()` })
-        .where(eq(orders.id, body.orderId));
-    }
-  } catch (error: unknown) {
-    console.error("[payments] SSLCommerz session was created, but local order recovery hint failed:", error);
-  }
-
-  return ok(c, responsePayload);
+  return ok(c, result.hosted);
 });
 
 // ─── Redirect handlers ──────────────────────────────────────────────────────
 // SSLCommerz POSTs to these callback URLs. Also handle GET for edge cases.
 // These are NOT OpenAPI routes — external callbacks, not client-consumed APIs.
-
-function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: string): string {
-  const configured = env.PUBLIC_API_BASE_URL?.trim();
-  const base = configured || new URL(requestUrl).origin;
-  return base.replace(/\/+$/, "");
-}
 
 async function extractTranId(c: { req: { method: string; parseBody: () => Promise<Record<string, unknown>>; query: (key: string) => string | undefined } }): Promise<string> {
   if (c.req.method === "POST") {
@@ -326,6 +135,10 @@ function getCallbackDepositAmount(c: { req: { query: (key: string) => string | u
   return Number.isFinite(amount) && amount > 0 ? value : "";
 }
 
+function shouldReturnToAccount(c: { req: { query: (key: string) => string | undefined } }): boolean {
+  return c.req.query("return_to") === "account" || c.req.query("returnTo") === "account";
+}
+
 function buildStorefrontOrderSuccessUrl(
   storefront: string,
   params: {
@@ -347,6 +160,22 @@ function buildStorefrontOrderSuccessUrl(
   return url.toString();
 }
 
+function buildStorefrontAccountOrderUrl(
+  storefront: string,
+  params: {
+    orderId: string;
+    payment: "sslcommerz";
+    result?: "failed" | "cancelled";
+    paymentType?: "full" | "deposit" | "balance" | "";
+  },
+): string {
+  const url = new URL(`${storefront}/account/orders/${encodeURIComponent(params.orderId)}`);
+  url.searchParams.set("payment", params.payment);
+  if (params.result) url.searchParams.set("result", params.result);
+  if (params.paymentType) url.searchParams.set("paymentType", params.paymentType);
+  return url.toString();
+}
+
 async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "failed" | "cancelled"): Promise<string> {
   const orderId = await resolveCallbackOrderId(c);
   const storefront = getStorefrontUrl(c);
@@ -356,6 +185,15 @@ async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "fail
     const db = c.get("db");
     const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) return `${storefront}/checkout?error=invalid_order`;
+  }
+
+  if (shouldReturnToAccount(c) && orderId) {
+    return buildStorefrontAccountOrderUrl(storefront, {
+      orderId,
+      payment: "sslcommerz",
+      result,
+      paymentType: getCallbackPaymentType(c),
+    });
   }
 
   if (!receiptToken) {

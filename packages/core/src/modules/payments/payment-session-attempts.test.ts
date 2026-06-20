@@ -80,6 +80,37 @@ describe("payment session attempts", () => {
     expect(fake.rows[0]?.attempts).toBe(2);
     expect(fake.rows[0]?.lastError).toBeNull();
   });
+
+  it("builds stable customer-account proof keys without colliding with receipt-token attempts", async () => {
+    const receiptIdentity = await buildIdentity();
+    const accountIdentity = await buildPaymentSessionAttemptIdentity({
+      orderId: "order_1",
+      gateway: "stripe",
+      paymentType: "full",
+      amount: 125,
+      currency: "BDT",
+      proof: { kind: "customer_account", value: "customer_1" },
+      requestContext: {
+        amountInSmallestUnit: 12500,
+        manualCapture: false,
+      },
+    });
+    const repeatedAccountIdentity = await buildPaymentSessionAttemptIdentity({
+      orderId: "order_1",
+      gateway: "stripe",
+      paymentType: "full",
+      amount: 125,
+      currency: "BDT",
+      proof: { kind: "customer_account", value: "customer_1" },
+      requestContext: {
+        amountInSmallestUnit: 12500,
+        manualCapture: false,
+      },
+    });
+
+    expect(accountIdentity.attemptKey).toBe(repeatedAccountIdentity.attemptKey);
+    expect(accountIdentity.attemptKey).not.toBe(receiptIdentity.attemptKey);
+  });
 });
 
 async function buildIdentity() {

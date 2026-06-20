@@ -37,7 +37,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/meta` | `routes/meta-conversions.ts` | Meta Pixel CAPI |
 | `/storefront` | `routes/storefront.ts` | Homepage data bundle |
 | `/checkout` | `routes/checkout.ts` | Checkout config |
-| `/customer-auth` | `routes/customer-auth.ts` | Customer OTP auth |
+| `/customer-auth` | `routes/customer-auth.ts` | Customer OTP auth, private account order detail, and owned-order payment recovery |
 | `/checkout-languages` | `routes/checkout-languages.ts` | Checkout i18n |
 | `/abandoned-checkouts` | `routes/abandoned-checkouts.ts` | Abandoned checkout tracking |
 | `/locations` | `routes/locations.ts` | City/zone/area hierarchy |
@@ -128,6 +128,8 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/payment/stripe` | `routes/payment/stripe-routes.ts` | Create PaymentIntent |
 | `/payment/sslcommerz` | `routes/payment/sslcommerz-routes.ts` | Create session + redirect handlers |
 | `/payment/polar` | `routes/payment/polar-routes.ts` | Create checkout session + redirect handlers |
+
+`routes/payment/payment-session-create.ts` is the shared session-creation boundary for Stripe, SSLCommerz, and Polar. Receipt-token checkout retries and authenticated customer-account retries both go through it, so gateway freshness, checkout-flow policy, payment-plan preparation, provider deadlines, and `payment_session_attempts` idempotency stay identical across initial checkout and post-sale recovery. Account-owned sessions use a customer-account proof and account return URLs; they never accept or return receipt tokens.
 
 ### Setup & Documentation
 

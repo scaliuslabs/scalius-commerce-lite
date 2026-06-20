@@ -31,10 +31,22 @@ import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import { getCustomerOrderDetail, getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, ServiceUnavailableError } from "../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
+import {
+  conflictResponse,
+  errorResponses,
+  messageResponse,
+  serviceUnavailableResponse,
+  successEnvelope,
+} from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
 import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey, getEncryptionKey } from "../utils/encryption-key";
+import {
+  createPolarPaymentSession,
+  createSSLCommerzPaymentSession,
+  createStripePaymentSession,
+  resolveCustomerPaymentSessionRecovery,
+} from "./payment/payment-session-create";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const customerAuthIntentSchema = z.enum(["sign_in", "sign_up"]);
@@ -563,6 +575,18 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   return ok(c, { orders: result.orders, customer });
 });
 
+const customerPaymentRecoverySchema = z.object({
+  eligible: z.boolean(),
+  gateway: z.enum(["stripe", "sslcommerz", "polar"]).nullable(),
+  paymentType: z.enum(["full", "deposit", "balance"]).nullable(),
+  amountDue: z.number(),
+  label: z.string().nullable(),
+  reason: z.string().nullable(),
+  blockType: z.enum(["validation", "unavailable"]).optional(),
+  requiresCardForm: z.boolean(),
+  hostedRedirect: z.boolean(),
+});
+
 const customerOrderDetailSchema = z.object({
   order: z.object({
     id: z.string(),
@@ -674,6 +698,7 @@ const customerOrderDetailSchema = z.object({
     happenedAt: nullableTimestampSchema,
     details: z.string().nullable().optional(),
   })),
+  paymentRecovery: customerPaymentRecoverySchema,
 });
 
 const getCustomerOrderDetailRoute = createRoute({
@@ -708,9 +733,142 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
   }
 
   const db = c.get("db");
-  const detail = await getCustomerOrderDetail(db, session.customerId, c.req.valid("param").id);
+  const orderId = c.req.valid("param").id;
+  const [detail, paymentRecovery] = await Promise.all([
+    getCustomerOrderDetail(db, session.customerId, orderId),
+    resolveCustomerPaymentSessionRecovery(c, {
+      orderId,
+      expectedCustomerId: session.customerId,
+    }),
+  ]);
 
-  return ok(c, detail);
+  return ok(c, { ...detail, paymentRecovery });
+});
+
+const paymentSessionBaseSchema = z.object({
+  paymentType: z.enum(["full", "deposit", "balance"]),
+  amount: z.number(),
+  currency: z.string(),
+});
+
+const customerPaymentSessionSchema = z.discriminatedUnion("gateway", [
+  paymentSessionBaseSchema.extend({
+    gateway: z.literal("stripe"),
+    stripe: z.object({
+      clientSecret: z.string().optional(),
+      paymentIntentId: z.string().optional(),
+      publishableKey: z.string(),
+      amount: z.number(),
+      currency: z.string(),
+    }),
+  }),
+  paymentSessionBaseSchema.extend({
+    gateway: z.literal("sslcommerz"),
+    hosted: z.object({
+      gatewayUrl: z.string().optional(),
+      sessionKey: z.string().optional(),
+    }),
+  }),
+  paymentSessionBaseSchema.extend({
+    gateway: z.literal("polar"),
+    hosted: z.object({
+      gatewayUrl: z.string().optional(),
+      checkoutId: z.string().optional(),
+    }),
+  }),
+]);
+
+const createCustomerOrderPaymentSessionRoute = createRoute({
+  method: "post",
+  path: "/orders/{id}/payment-session",
+  tags: ["Customer Auth"],
+  summary: "Create an authenticated customer payment session for an owned order",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({}).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Customer payment session created",
+      content: {
+        "application/json": {
+          schema: successEnvelope(customerPaymentSessionSchema),
+        },
+      },
+    },
+    ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+  },
+});
+
+app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+
+  const { session } = await requireCustomerSession(c);
+  if (!session.customerId) {
+    throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
+  }
+
+  const orderId = c.req.valid("param").id;
+  const paymentRecovery = await resolveCustomerPaymentSessionRecovery(c, {
+    orderId,
+    expectedCustomerId: session.customerId,
+  });
+
+  if (!paymentRecovery.eligible || !paymentRecovery.gateway || !paymentRecovery.paymentType) {
+    if (paymentRecovery.blockType === "unavailable") {
+      throw new ServiceUnavailableError(paymentRecovery.reason || "Payment gateway is not available right now.");
+    }
+    throw new ValidationError(paymentRecovery.reason || "This order is not ready for customer payment recovery.");
+  }
+
+  const input = {
+    orderId,
+    paymentType: paymentRecovery.paymentType,
+    proof: { kind: "customer_account" as const, customerId: session.customerId },
+    returnTarget: { kind: "customer_account" as const },
+    expectedCustomerId: session.customerId,
+  };
+
+  if (paymentRecovery.gateway === "stripe") {
+    const result = await createStripePaymentSession(c, input);
+    return ok(c, {
+      gateway: result.gateway,
+      paymentType: result.paymentType,
+      amount: result.amount,
+      currency: result.currency,
+      stripe: result.stripe,
+    });
+  }
+
+  if (paymentRecovery.gateway === "sslcommerz") {
+    const result = await createSSLCommerzPaymentSession(c, input);
+    return ok(c, {
+      gateway: result.gateway,
+      paymentType: result.paymentType,
+      amount: result.amount,
+      currency: result.currency,
+      hosted: result.hosted,
+    });
+  }
+
+  const result = await createPolarPaymentSession(c, input);
+  return ok(c, {
+    gateway: result.gateway,
+    paymentType: result.paymentType,
+    amount: result.amount,
+    currency: result.currency,
+    hosted: result.hosted,
+  });
 });
 
 export { app as customerAuthRoutes };

@@ -47,6 +47,7 @@ src/
     checkout.astro   # Checkout page
     order-success.astro
     account.astro    # Customer account page
+    account/orders/[id].astro # Private order detail, timeline, shipment/payment history, and owned payment recovery
   store/             # Global state (cart.ts, toast)
   middleware.ts      # Edge caching + API context injection
 ```
@@ -193,7 +194,7 @@ Consolidated accessors for Cloudflare Worker bindings. All delegate to `apiConte
 | `shipping.ts` | Shipping methods, locations |
 | `settings.ts` | Site settings, SEO |
 | `storefront.ts` | Homepage data bundle |
-| `customer-auth.ts` | Customer OTP auth API helpers that call the same-origin proxy |
+| `customer-auth.ts` | Customer OTP auth, account order detail, and owned-order payment-session helpers that call the same-origin proxy |
 | `abandoned-checkouts.ts` | Abandoned checkout tracking |
 | `tracking.ts` | Analytics/tracking config |
 
@@ -236,6 +237,10 @@ Gateway-based payment architecture:
 - `handlers/polar.ts` -- Polar redirect
 - `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, renders order summary, renders gateway cards, handles payment processing
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
+
+## Account Order Payments (`src/pages/account/orders/[id].astro`)
+
+The private order-detail page can recover failed or remaining online payments for orders owned by the signed-in customer. It reads the API-provided `paymentRecovery` preview from `GET /api/v1/customer-auth/orders/{id}`, creates sessions through `POST /api/v1/customer-auth/orders/{id}/payment-session`, and sends only an empty JSON body because the API derives gateway, payment type, amount, currency, and proof from the customer session and order state. Stripe mounts a local card form and refreshes the order after confirmation; SSLCommerz and Polar redirect to hosted checkout and return to `/account/orders/{id}` with neutral status query params. This account flow must not use receipt tokens, `/order-success`, cart clearing, or checkout purchase-finalization side effects.
 
 ## SEO Features
 

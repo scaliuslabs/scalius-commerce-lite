@@ -56,15 +56,18 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `cod.ts` | `CODProvider` class, `initCODTracking()`, `recordCODCollection()`, `recordCODFailure()`, `markCODReturned()` | Cash on Delivery tracking; DB-only operations, no external gateway |
 | `process-payment.ts` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()`, `recordWebhookEvent()` | Shared post-payment business logic called by queue consumer |
 | `refund-service.ts` | `processRefund()`, `processReturn()` | Gateway-agnostic refund orchestrator; detects gateway from payment records, validates cumulative refund amounts |
+| `payment-session-attempts.ts` | `buildPaymentSessionAttemptIdentity()`, `claimPaymentSessionAttempt()`, created/failed markers | Durable D1 idempotency for Stripe/SSLCommerz/Polar session creation across receipt-token checkout recovery and customer-account post-sale recovery |
 | `index.ts` | Barrel re-exports | All public exports from the module |
 
 ### API Routes (`apps/api/src/routes/`)
 
 | File | Route Mount | Endpoints |
 |------|-------------|-----------|
+| `payment/payment-session-create.ts` | Shared helper | Common Stripe/SSLCommerz/Polar session creator used by checkout receipt-token routes and customer-account owned-order recovery |
 | `payment/stripe-routes.ts` | `/api/v1/payment/stripe` | `POST /intent` -- Create PaymentIntent |
 | `payment/sslcommerz-routes.ts` | `/api/v1/payment/sslcommerz` | `POST /session` -- Create payment session; `POST /success`, `GET /success` -- redirect handler; `POST /fail`, `GET /fail` -- redirect handler; `POST /cancel`, `GET /cancel` -- redirect handler |
 | `payment/polar-routes.ts` | `/api/v1/payment/polar` | `POST /session` -- Create checkout session; `GET /success` -- redirect handler; `GET /cancel` -- redirect handler |
+| `customer-auth.ts` | `/api/v1/customer-auth` | `GET /orders/{id}` includes policy-backed `paymentRecovery`; `POST /orders/{id}/payment-session` creates a strict customer-owned retry/pay-balance session |
 | `webhooks/stripe.ts` | `/api/v1/webhooks/stripe` | `POST /` -- Stripe webhook receiver |
 | `webhooks/sslcommerz.ts` | `/api/v1/webhooks/sslcommerz` | `POST /` -- SSLCommerz IPN receiver |
 | `webhooks/polar.ts` | `/api/v1/webhooks/polar` | `POST /` -- Polar webhook receiver |
@@ -84,6 +87,8 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `src/lib/checkout/handlers/stripe.ts` | Stripe handler: creates order, fetches PaymentIntent, dynamically loads Stripe.js, mounts card element, confirms card payment client-side |
 | `src/lib/checkout/handlers/sslcommerz.ts` | SSLCommerz handler: creates order, fetches session, redirects to `gatewayUrl` |
 | `src/lib/checkout/handlers/polar.ts` | Polar handler: creates order, fetches session, redirects to `gatewayUrl` |
+| `src/lib/account-payment-recovery.ts` | Pure account-order payment recovery copy/action helpers plus hosted URL normalization |
+| `src/pages/account/orders/[id].astro` | Private customer order detail page; renders retry/pay-balance UI, Stripe card form, and hosted-gateway redirects without receipt tokens |
 | `src/pages/api/checkout/create-order.ts` | SSR proxy: calls API to create order (API_TOKEN server-side only) |
 | `src/pages/api/checkout/stripe-intent.ts` | SSR proxy: calls `POST /payment/stripe/intent`, unwraps `{success, data}` envelope |
 | `src/pages/api/checkout/sslcommerz-session.ts` | SSR proxy: calls `POST /payment/sslcommerz/session`, unwraps envelope, 15s timeout |
@@ -219,7 +224,7 @@ Failed or abandoned hosted-payment orders are not force-cancelled in webhook han
 
 ### Public Session Policy
 
-Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and fresh checkout settings, and keeps public Stripe sessions on automatic capture. Session creation fresh-reads `payment_methods.enabled_methods`, `siteSettings.checkoutMode`/partial-payment fields, and gateway credentials with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`; this blocks stale checkout tabs from creating new external sessions after a merchant disables/rotates a gateway or switches to Fast COD Only. After those checks and before the provider call, routes claim `payment_session_attempts`; created attempts replay the original public response, and concurrent processing attempts fail fast instead of double-creating gateway sessions.
+Public Stripe, SSLCommerz, and Polar checkout session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and fresh checkout settings, and keeps public Stripe sessions on automatic capture. Authenticated customer-account recovery uses the same shared session creator but swaps the proof to `{ kind: "customer_account" }`, requires the order to belong to the signed-in `customerId`, accepts a strict empty body, and returns hosted gateways to `/account/orders/{id}` instead of `/order-success`. Both paths fresh-read `payment_methods.enabled_methods`, `siteSettings.checkoutMode`/partial-payment fields, and gateway credentials with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`; this blocks stale checkout tabs or account pages from creating new external sessions after a merchant disables/rotates a gateway or switches to Fast COD Only. After those checks and before the provider call, routes claim `payment_session_attempts`; created attempts replay the original response, and concurrent processing attempts fail fast instead of double-creating gateway sessions.
 
 ### Partial Payments (Deposit/Balance)
 
@@ -305,6 +310,8 @@ Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
 | `POST` | `/api/v1/payment/stripe/intent` | Create Stripe PaymentIntent |
 | `POST` | `/api/v1/payment/sslcommerz/session` | Create SSLCommerz session |
 | `POST` | `/api/v1/payment/polar/session` | Create Polar checkout session |
+| `GET` | `/api/v1/customer-auth/orders/{id}` | Private customer order detail with `paymentRecovery` preview |
+| `POST` | `/api/v1/customer-auth/orders/{id}/payment-session` | Private customer-owned retry/pay-balance session creation |
 
 ### Redirect handlers (called by gateways, not consumers)
 

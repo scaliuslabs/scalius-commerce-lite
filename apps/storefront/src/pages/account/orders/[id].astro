@@ -48,6 +48,8 @@ const orderId = Astro.params.id ?? "";
         <div class="flex flex-wrap gap-2" id="orderBadges"></div>
       </div>
 
+      <div id="orderPaymentReturnNotice" class="hidden rounded-xl border p-4 text-sm"></div>
+
       <div class="grid gap-4 md:grid-cols-3">
         <div class="rounded-xl border border-border bg-card p-4">
           <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
@@ -87,6 +89,20 @@ const orderId = Astro.params.id ?? "";
           <section class="rounded-xl border border-border bg-card p-5">
             <h2 class="mb-4 text-lg font-bold text-foreground">Payment</h2>
             <div id="orderPayments" class="space-y-4"></div>
+            <div id="orderPaymentRecovery" class="mt-4 hidden rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <div class="flex flex-col gap-3">
+                <div>
+                  <h3 id="orderPaymentRecoveryTitle" class="font-semibold text-foreground"></h3>
+                  <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
+                </div>
+                <div id="accountStripeSection" class="hidden space-y-2">
+                  <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
+                  <div id="accountStripeError" class="hidden text-xs text-destructive"></div>
+                </div>
+                <p id="orderPaymentRecoveryMessage" class="hidden text-sm"></p>
+                <button type="button" id="orderPaymentRecoveryButton" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"></button>
+              </div>
+            </div>
           </section>
 
           <section class="rounded-xl border border-border bg-card p-5">
@@ -105,18 +121,65 @@ const orderId = Astro.params.id ?? "";
 </Layout>
 
 <script>
-  import { getCustomerOrderDetail, getCustomerSession, type CustomerOrderDetail, type CustomerOrderShipment } from "@/lib/api/customer-auth";
+  import {
+    createCustomerOrderPaymentSession,
+    getCustomerOrderDetail,
+    getCustomerSession,
+    type CustomerOrderDetail,
+    type CustomerOrderPaymentSession,
+    type CustomerOrderShipment,
+  } from "@/lib/api/customer-auth";
+  import {
+    getAccountPaymentRecoveryAction,
+    getAccountPaymentReturnNotice,
+    normalizeHostedGatewayUrl,
+    type AccountPaymentRecoveryAction,
+    type AccountPaymentReturnNotice,
+  } from "@/lib/account-payment-recovery";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
   import { escapeHtml } from "@scalius/shared/html-escape";
   import { getProductImageUrl } from "@/lib/product-media";
 
+  interface StripeInstance {
+    elements(): StripeElements;
+    confirmCardPayment(
+      clientSecret: string,
+      data: { payment_method: { card: StripeCardElement } },
+    ): Promise<{
+      error?: { message?: string };
+      paymentIntent?: { status: string };
+    }>;
+  }
+
+  interface StripeElements {
+    create(
+      type: "card",
+      options?: { style?: Record<string, Record<string, string>> },
+    ): StripeCardElement;
+  }
+
+  interface StripeCardElement {
+    mount(selector: string): void;
+    on(event: string, handler: (e: { error?: { message: string } }) => void): void;
+    unmount?(): void;
+  }
+
   type DetailWindow = Window & {
+    Stripe?: (key: string) => StripeInstance;
     __CURRENCY_SYMBOL__?: string;
     __scaliusOrderDetailBound?: boolean;
     __scaliusOrderDetailRun?: number;
     __scaliusLoadOrderDetail?: () => Promise<void>;
   };
   const detailWindow = window as DetailWindow;
+  let currentDetail: CustomerOrderDetail | null = null;
+  let recoveryAction: AccountPaymentRecoveryAction | null = null;
+  let recoveryLoading = false;
+  let accountStripeInstance: StripeInstance | null = null;
+  let accountStripeCard: StripeCardElement | null = null;
+  let accountStripeClientSecret: string | null = null;
+  let accountStripeOrderId: string | null = null;
+  let stripeScriptPromise: Promise<void> | null = null;
 
   function currentOrderId(): string {
     const pageRoot = document.querySelector("[data-order-detail-page]") as HTMLElement | null;
@@ -160,6 +223,230 @@ const orderId = Astro.params.id ?? "";
     }
   }
 
+  function setRecoveryMessage(message: string | null, tone: "muted" | "error" | "success" = "muted"): void {
+    const el = document.getElementById("orderPaymentRecoveryMessage");
+    if (!el) return;
+    if (!message) {
+      el.textContent = "";
+      el.className = "hidden text-sm";
+      return;
+    }
+    el.textContent = message;
+    el.className = [
+      "text-sm",
+      tone === "error" ? "text-destructive" : tone === "success" ? "text-primary" : "text-muted-foreground",
+    ].join(" ");
+  }
+
+  function setStripeError(message: string | null): void {
+    const el = document.getElementById("accountStripeError");
+    if (!el) return;
+    if (!message) {
+      el.textContent = "";
+      el.classList.add("hidden");
+      return;
+    }
+    el.textContent = message;
+    el.classList.remove("hidden");
+  }
+
+  function setRecoveryButton(labelText: string, disabled = false): void {
+    const button = document.getElementById("orderPaymentRecoveryButton") as HTMLButtonElement | null;
+    if (!button) return;
+    button.textContent = labelText;
+    button.disabled = disabled;
+  }
+
+  function resetAccountStripeState(): void {
+    accountStripeCard?.unmount?.();
+    accountStripeInstance = null;
+    accountStripeCard = null;
+    accountStripeClientSecret = null;
+    accountStripeOrderId = null;
+    setStripeError(null);
+    document.getElementById("accountStripeSection")?.classList.add("hidden");
+  }
+
+  function renderPaymentReturnNotice(): void {
+    const noticeEl = document.getElementById("orderPaymentReturnNotice");
+    if (!noticeEl) return;
+    const params = new URLSearchParams(window.location.search);
+    const notice: AccountPaymentReturnNotice = getAccountPaymentReturnNotice(
+      params.get("payment"),
+      params.get("result"),
+    );
+    if (!notice) {
+      noticeEl.className = "hidden rounded-xl border p-4 text-sm";
+      noticeEl.innerHTML = "";
+      return;
+    }
+
+    const toneClass = notice.tone === "warning"
+      ? "border-amber-500/30 bg-amber-500/10 text-amber-800"
+      : notice.tone === "success"
+        ? "border-primary/30 bg-primary/10 text-primary"
+        : "border-border bg-muted/30 text-foreground";
+    noticeEl.className = `rounded-xl border p-4 text-sm ${toneClass}`;
+    noticeEl.innerHTML = `
+      <p class="font-semibold">${escapeHtml(notice.title)}</p>
+      <p class="mt-1">${escapeHtml(notice.message)}</p>
+    `;
+  }
+
+  function renderPaymentRecovery(detail: CustomerOrderDetail): void {
+    const container = document.getElementById("orderPaymentRecovery");
+    if (!container) return;
+
+    recoveryAction = getAccountPaymentRecoveryAction(detail.paymentRecovery);
+    if (!recoveryAction) {
+      container.classList.add("hidden");
+      resetAccountStripeState();
+      return;
+    }
+
+    const title = document.getElementById("orderPaymentRecoveryTitle");
+    const description = document.getElementById("orderPaymentRecoveryDescription");
+    if (title) title.textContent = recoveryAction.title;
+    if (description) {
+      description.textContent = `${recoveryAction.description} Amount due: ${formatMoney(recoveryAction.amountDue)}.`;
+    }
+    container.classList.remove("hidden");
+    document.getElementById("accountStripeSection")?.classList.toggle("hidden", !accountStripeClientSecret);
+    if (!accountStripeClientSecret) {
+      setRecoveryMessage(null);
+      setRecoveryButton(recoveryAction.buttonLabel, recoveryLoading);
+    }
+  }
+
+  async function loadStripeScript(): Promise<void> {
+    if (detailWindow.Stripe) return;
+    if (stripeScriptPromise) return stripeScriptPromise;
+    stripeScriptPromise = new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector('script[src="https://js.stripe.com/v3/"]') as HTMLScriptElement | null;
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Failed to load Stripe.js")), { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://js.stripe.com/v3/";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Failed to load Stripe.js"));
+      document.head.appendChild(script);
+    });
+    return stripeScriptPromise;
+  }
+
+  async function prepareAccountStripeForm(session: CustomerOrderPaymentSession): Promise<void> {
+    const stripe = session.stripe;
+    if (!stripe?.publishableKey || !stripe.clientSecret) {
+      throw new Error("Card payment could not be initialized. Please try again.");
+    }
+
+    await loadStripeScript();
+    if (!detailWindow.Stripe) {
+      throw new Error("Card payment form is unavailable. Please refresh and try again.");
+    }
+
+    accountStripeClientSecret = stripe.clientSecret;
+    accountStripeOrderId = currentDetail?.order.id ?? null;
+    if (!accountStripeCard) {
+      accountStripeInstance = detailWindow.Stripe(stripe.publishableKey);
+      const elements = accountStripeInstance.elements();
+      accountStripeCard = elements.create("card", {
+        style: {
+          base: { fontSize: "15px", color: "#111", fontFamily: "sans-serif" },
+          invalid: { color: "#e53e3e" },
+        },
+      });
+      accountStripeCard.mount("#accountStripeCardElement");
+      accountStripeCard.on("change", (event) => {
+        setStripeError(event.error?.message ?? null);
+      });
+    }
+
+    document.getElementById("accountStripeSection")?.classList.remove("hidden");
+    setRecoveryMessage("Enter your card details, then confirm payment.", "muted");
+    setRecoveryButton("Confirm card payment");
+  }
+
+  async function confirmAccountStripePayment(): Promise<void> {
+    if (!accountStripeInstance || !accountStripeCard || !accountStripeClientSecret) {
+      setRecoveryMessage("Payment form is not ready yet.", "error");
+      return;
+    }
+
+    recoveryLoading = true;
+    setRecoveryButton("Confirming...", true);
+    setRecoveryMessage("Confirming card payment...", "muted");
+
+    try {
+      const { error, paymentIntent } = await accountStripeInstance.confirmCardPayment(accountStripeClientSecret, {
+        payment_method: { card: accountStripeCard },
+      });
+      if (error) throw new Error(error.message || "Card payment failed");
+
+      if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
+        setRecoveryMessage("Payment submitted. Refreshing the order status...", "success");
+        setRecoveryButton("Refreshing...", true);
+        window.setTimeout(() => void detailWindow.__scaliusLoadOrderDetail?.(), 1500);
+        return;
+      }
+
+      throw new Error("Payment was not completed.");
+    } catch (error: unknown) {
+      setRecoveryMessage(error instanceof Error ? error.message : "Payment could not be completed.", "error");
+      setRecoveryButton("Confirm card payment");
+    } finally {
+      recoveryLoading = false;
+    }
+  }
+
+  async function startAccountPaymentRecovery(): Promise<void> {
+    if (!currentDetail || !recoveryAction || recoveryLoading) return;
+
+    if (
+      recoveryAction.requiresCardForm &&
+      accountStripeClientSecret &&
+      accountStripeOrderId === currentDetail.order.id
+    ) {
+      await confirmAccountStripePayment();
+      return;
+    }
+
+    recoveryLoading = true;
+    setRecoveryButton("Preparing payment...", true);
+    setRecoveryMessage("Preparing secure payment...", "muted");
+    setStripeError(null);
+
+    try {
+      const result = await createCustomerOrderPaymentSession(currentDetail.order.id);
+      if (!result.success || !result.session) {
+        throw new Error(result.error || "Payment could not be prepared.");
+      }
+
+      if (result.session.gateway === "stripe") {
+        await prepareAccountStripeForm(result.session);
+        return;
+      }
+
+      const gatewayUrl = normalizeHostedGatewayUrl(result.session.hosted?.gatewayUrl);
+      if (!gatewayUrl) {
+        throw new Error("Payment gateway did not return a checkout URL. Please try again.");
+      }
+      setRecoveryButton("Redirecting...", true);
+      setRecoveryMessage("Redirecting to the payment gateway...", "muted");
+      window.location.assign(gatewayUrl);
+    } catch (error: unknown) {
+      setRecoveryMessage(error instanceof Error ? error.message : "Payment could not be prepared.", "error");
+      setRecoveryButton(recoveryAction.buttonLabel);
+    } finally {
+      recoveryLoading = false;
+    }
+  }
+
   function trackingUrl(shipment: CustomerOrderShipment): string | null {
     const explicitUrl = safeUrl(shipment.trackingUrl);
     if (explicitUrl) return explicitUrl;
@@ -179,6 +466,7 @@ const orderId = Astro.params.id ?? "";
   }
 
   function renderDetail(detail: CustomerOrderDetail): void {
+    currentDetail = detail;
     const { order } = detail;
     const title = document.getElementById("orderTitle");
     const subtitle = document.getElementById("orderSubtitle");
@@ -308,6 +596,9 @@ const orderId = Astro.params.id ?? "";
         <p>${escapeHtml([order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city].filter(Boolean).join(", "))}</p>
       `;
     }
+
+    renderPaymentReturnNotice();
+    renderPaymentRecovery(detail);
   }
 
   async function loadOrder(): Promise<void> {
@@ -317,6 +608,9 @@ const orderId = Astro.params.id ?? "";
     const orderId = currentOrderId();
 
     if (!orderId) {
+      currentDetail = null;
+      recoveryAction = null;
+      resetAccountStripeState();
       const title = document.getElementById("orderErrorTitle");
       const message = document.getElementById("orderErrorMessage");
       if (title) title.textContent = "Order not found";
@@ -328,6 +622,9 @@ const orderId = Astro.params.id ?? "";
     const session = await getCustomerSession();
     if (detailWindow.__scaliusOrderDetailRun !== run) return;
     if (!session.authenticated) {
+      currentDetail = null;
+      recoveryAction = null;
+      resetAccountStripeState();
       showOnly("unauth");
       return;
     }
@@ -335,6 +632,9 @@ const orderId = Astro.params.id ?? "";
     const result = await getCustomerOrderDetail(orderId);
     if (detailWindow.__scaliusOrderDetailRun !== run) return;
     if (!result.success || !result.detail) {
+      currentDetail = null;
+      recoveryAction = null;
+      resetAccountStripeState();
       const title = document.getElementById("orderErrorTitle");
       const message = document.getElementById("orderErrorMessage");
       if (title) title.textContent = result.status === 404 ? "Order not found" : "Order details unavailable";
@@ -358,6 +658,11 @@ const orderId = Astro.params.id ?? "";
 
   const retryButton = document.getElementById("orderRetry");
   if (retryButton) retryButton.onclick = () => void detailWindow.__scaliusLoadOrderDetail?.();
+
+  const recoveryButton = document.getElementById("orderPaymentRecoveryButton");
+  if (recoveryButton) {
+    (recoveryButton as HTMLButtonElement).onclick = () => void startAccountPaymentRecovery();
+  }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => void detailWindow.__scaliusLoadOrderDetail?.(), { once: true });

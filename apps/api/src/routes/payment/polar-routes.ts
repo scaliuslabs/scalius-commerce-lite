@@ -3,42 +3,14 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { type Database } from "@scalius/database/client";
-import { orders, PaymentMethod } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
-import {
-    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-    getPolarSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
-import {
-    buildPaymentSessionAttemptIdentity,
-    claimPaymentSessionAttempt,
-    markPaymentSessionAttemptCreated,
-    markPaymentSessionAttemptFailed,
-} from "@scalius/core/modules/payments/payment-session-attempts";
-import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
-import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
-import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { getDecimalPlaces } from "@scalius/shared/currency";
-import { NotFoundError, ServiceUnavailableError, ApiError, ValidationError } from "../../utils/api-error";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { orders } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
-import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
-import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
-import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
-import {
-    createPaymentProviderTimeoutError,
-    isPaymentProviderTimedOut,
-    withPaymentProviderDeadline,
-} from "./payment-provider-deadline";
-
 import { ok } from "../../utils/api-response";
-export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
+import { createPolarPaymentSession } from "./payment-session-create";
 
-type PolarSessionResponse = {
-    gatewayUrl?: string;
-    checkoutId?: string;
-};
+export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── POST /session ───────────────────────────────────────────────────────────
 
@@ -89,211 +61,22 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const orderId = body.orderId;
 
     const db: Database = c.get("db");
-    const kv = c.env.CACHE;
-    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
     await validateReceiptToken(c.env.CACHE, orderId, body.receiptToken, db);
 
-    // Validate the order exists
-    const order = await db
-        .select({
-            id: orders.id,
-            totalAmount: orders.totalAmount,
-            status: orders.status,
-            paymentMethod: orders.paymentMethod,
-            paymentStatus: orders.paymentStatus,
-            paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue,
-            deletedAt: orders.deletedAt,
-            shipmentClaimId: orders.shipmentClaimId,
-            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId))
-        .get();
-
-    if (!order) throw new NotFoundError("Order not found");
-    assertNoActiveShipmentClaim(order);
-    assertPaymentSessionOrderPayable(order);
-    if (order.paymentMethod !== PaymentMethod.POLAR) {
-        throw new ValidationError("Order is not configured for Polar payment");
-    }
-
-    const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, kv, encryptionKey, "polar");
-    const policy = await resolvePaymentSessionPolicy(db, order, {
+    const result = await createPolarPaymentSession(c, {
+        orderId,
         paymentType: body.paymentType || body.type,
         depositAmount: body.depositAmount,
-    }, checkoutFlowSettings);
-    await ensurePendingPaymentPlanForSession(db, order, policy);
-
-    // Get configured currency
-    const currencyConfig = await getCurrencyConfig(db);
-    let currency = currencyConfig.code.toLowerCase();
-    let paymentAmount = policy.chargeAmount;
-
-    // Get Polar credentials from DB
-    const polarSettings = await getPolarSettings(
-        db,
-        kv,
-        encryptionKey,
-        FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-    );
-    if (!polarSettings || !polarSettings.enabled) {
-        throw new ServiceUnavailableError("Polar is not configured or disabled");
-    }
-
-    // Polar only supports specific currencies. If the store currency isn't
-    // supported, convert the amount to USD using the configured exchange rate.
-    const POLAR_SUPPORTED_CURRENCIES = new Set([
-        "aed", "ars", "aud", "brl", "cad", "chf", "clp", "cny", "cop", "czk",
-        "dkk", "eur", "gbp", "hkd", "huf", "idr", "ils", "inr", "jpy", "krw",
-        "mxn", "myr", "nok", "nzd", "pen", "php", "pln", "ron", "sar", "sek",
-        "sgd", "thb", "try", "twd", "usd", "zar",
-    ]);
-
-    // Track the original local currency amount before any conversion.
-    // All DB amounts (orders, paymentPlans, orderPayments) must stay in store currency.
-    const originalLocalAmount = paymentAmount;
-    const originalCurrency = currency;
-    let exchangeRate = 1;
-
-    if (!POLAR_SUPPORTED_CURRENCIES.has(currency)) {
-        const rate = currencyConfig.usdExchangeRate;
-        if (!rate || rate <= 0) {
-            throw new ApiError(400, "CURRENCY_ERROR",
-                `Currency "${currency.toUpperCase()}" is not supported by Polar and no USD exchange rate is configured. ` +
-                `Please set a USD exchange rate in Settings > Currency.`
-            );
-        }
-        console.log(`[Polar] Converting ${currency.toUpperCase()} → USD at rate ${rate} for order ${orderId}`);
-        exchangeRate = rate;
-        paymentAmount = Math.round((paymentAmount / rate) * 100) / 100; // Round to 2 decimals
-        currency = "usd";
-    }
-
-    // Convert major-unit amount to smallest currency unit using ISO 4217 decimals.
-    // e.g. USD/BDT: ×100, JPY: ×1, BHD: ×1000
-    const decimals = getDecimalPlaces(currency);
-    const amountInCents = Math.round(paymentAmount * Math.pow(10, decimals));
-
-    const baseUrl = getTrustedApiOrigin(c.env, c.req.url);
-    const callbackParams = {
-        order_id: orderId,
-        receipt_token: body.receiptToken,
-        payment_type: policy.paymentType,
-        deposit_amount: policy.paymentType === "deposit" ? String(policy.depositAmount) : undefined,
-    };
-    const successUrl = buildPolarCallbackUrl(baseUrl, "/api/v1/payment/polar/success", callbackParams);
-    const cancelUrl = buildPolarCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", callbackParams);
-
-    const attemptIdentity = await buildPaymentSessionAttemptIdentity({
-        orderId,
-        gateway: "polar",
-        paymentType: policy.paymentType,
-        amount: paymentAmount,
-        currency,
-        receiptToken: body.receiptToken,
-        requestContext: {
-            amountInSmallestUnit: amountInCents,
-            originalLocalAmount,
-            originalCurrency,
-            exchangeRate,
-            successUrl,
-            cancelUrl,
-            customerName: body.customerName ?? null,
-            customerEmail: body.customerEmail ?? null,
-            retryKey: body.retryKey ?? null,
-        },
-    });
-    const attemptClaim = await claimPaymentSessionAttempt<PolarSessionResponse>(db, attemptIdentity);
-    if (attemptClaim.status === "replay") {
-        return ok(c, attemptClaim.response);
-    }
-
-    let result: Awaited<ReturnType<typeof createPolarCheckout>>;
-    try {
-        result = await withPaymentProviderDeadline(
-            "Polar",
-            (signal, requestTimeoutMs) => createPolarCheckout(polarSettings, {
-                orderId,
-                amount: amountInCents,
-                currency,
-                productId: polarSettings.productId,
-                paymentType: policy.paymentType,
-                successUrl,
-                cancelUrl,
-                customerName: body.customerName,
-                customerEmail: body.customerEmail,
-                metadata: {
-                    orderId,
-                    paymentType: policy.paymentType,
-                    // Roundtrip original amounts through Polar webhook so the queue consumer
-                    // can record paidAmount in store currency, not gateway currency.
-                    originalAmount: String(originalLocalAmount),
-                    originalCurrency,
-                    exchangeRate: String(exchangeRate),
-                },
-                requestTimeoutMs,
-                signal,
-            })
-        );
-    } catch (error: unknown) {
-        await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
-            .catch((markError: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", markError));
-        throw error;
-    }
-
-    if (!result.success || !result.checkoutUrl) {
-        await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create Polar checkout")
-            .catch((error: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", error));
-        if (isPaymentProviderTimedOut(result)) {
-            throw createPaymentProviderTimeoutError("Polar");
-        }
-        throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create Polar checkout");
-    }
-
-    const responsePayload: PolarSessionResponse = {
-        gatewayUrl: result.checkoutUrl,
-        checkoutId: result.checkoutId
-    };
-
-    await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
-        providerSessionId: result.checkoutId,
-        response: responsePayload,
+        retryKey: body.retryKey,
+        proof: { kind: "receipt", receiptToken: body.receiptToken },
+        returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
     });
 
-    // Save the Polar checkout ID to the order as a recovery hint.
-    try {
-        await db
-            .update(orders)
-            .set({
-                paymentIntentId: result.checkoutId,
-                paymentMethod: PaymentMethod.POLAR,
-                updatedAt: sql`unixepoch()`
-            })
-            .where(eq(orders.id, orderId));
-    } catch (error: unknown) {
-        console.error("[payments] Polar session was created, but local order recovery hint failed:", error);
-    }
-
-    return ok(c, responsePayload);
+    return ok(c, result.hosted);
 });
 
 // ─── GET /success ────────────────────────────────────────────────────────────
 // Redirect handlers — not OpenAPI routes (external callbacks)
-
-function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: string): string {
-    const configured = env.PUBLIC_API_BASE_URL?.trim();
-    const base = configured || new URL(requestUrl).origin;
-    return base.replace(/\/+$/, "");
-}
-
-function buildPolarCallbackUrl(baseUrl: string, path: string, params: Record<string, string | undefined>): string {
-    const url = new URL(`${baseUrl}${path}`);
-    for (const [key, value] of Object.entries(params)) {
-        if (value) url.searchParams.set(key, value);
-    }
-    return url.toString();
-}
 
 function getConfiguredStorefrontUrl(env: { STOREFRONT_URL?: string; PUBLIC_STOREFRONT_URL?: string }): string {
     return String(env.STOREFRONT_URL || env.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
@@ -313,6 +96,10 @@ function getCallbackDepositAmount(c: { req: { query: (key: string) => string | u
     if (!value) return "";
     const amount = Number(value);
     return Number.isFinite(amount) && amount > 0 ? value : "";
+}
+
+function shouldReturnToAccount(c: { req: { query: (key: string) => string | undefined } }): boolean {
+    return c.req.query("return_to") === "account" || c.req.query("returnTo") === "account";
 }
 
 function buildStorefrontOrderSuccessUrl(
@@ -336,6 +123,22 @@ function buildStorefrontOrderSuccessUrl(
     return url.toString();
 }
 
+function buildStorefrontAccountOrderUrl(
+    storefront: string,
+    params: {
+        orderId: string;
+        payment: "polar";
+        result?: "cancelled";
+        paymentType?: "full" | "deposit" | "balance" | "";
+    },
+): string {
+    const url = new URL(`${storefront}/account/orders/${encodeURIComponent(params.orderId)}`);
+    url.searchParams.set("payment", params.payment);
+    if (params.result) url.searchParams.set("result", params.result);
+    if (params.paymentType) url.searchParams.set("paymentType", params.paymentType);
+    return url.toString();
+}
+
 async function validateCallbackOrder(db: Pick<Database, "select">, orderId: string, storefrontUrl: string): Promise<string | null> {
     if (!orderId) return null;
     const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
@@ -356,6 +159,13 @@ polarPaymentRoutes.get("/success", async (c) => {
             const db: Database = c.get("db");
             const invalidRedirect = await validateCallbackOrder(db, orderId, storefrontUrl);
             if (invalidRedirect) return c.redirect(invalidRedirect);
+        }
+        if (shouldReturnToAccount(c) && orderId) {
+            return c.redirect(buildStorefrontAccountOrderUrl(storefrontUrl, {
+                orderId,
+                payment: "polar",
+                paymentType,
+            }));
         }
         if (!receiptToken) return c.redirect(`${storefrontUrl}/checkout?error=payment_return_missing_receipt&payment=polar`);
         return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
@@ -383,6 +193,14 @@ polarPaymentRoutes.get("/cancel", async (c) => {
             const db: Database = c.get("db");
             const invalidRedirect = await validateCallbackOrder(db, orderId, storefrontUrl);
             if (invalidRedirect) return c.redirect(invalidRedirect);
+        }
+        if (shouldReturnToAccount(c) && orderId) {
+            return c.redirect(buildStorefrontAccountOrderUrl(storefrontUrl, {
+                orderId,
+                payment: "polar",
+                result: "cancelled",
+                paymentType: getCallbackPaymentType(c),
+            }));
         }
         if (!receiptToken) {
             return c.redirect(`${storefrontUrl}/checkout?error=payment_cancelled&payment=polar`);

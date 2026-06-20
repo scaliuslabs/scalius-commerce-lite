@@ -41,6 +41,25 @@ interface SessionData {
   customer?: CustomerInfo;
 }
 
+interface CustomerOrderPaymentSessionData {
+  gateway: "stripe" | "sslcommerz" | "polar";
+  paymentType: "full" | "deposit" | "balance";
+  amount: number;
+  currency: string;
+  stripe?: {
+    clientSecret?: string;
+    paymentIntentId?: string;
+    publishableKey: string;
+    amount: number;
+    currency: string;
+  };
+  hosted?: {
+    gatewayUrl?: string;
+    sessionKey?: string;
+    checkoutId?: string;
+  };
+}
+
 export type CustomerAuthIntent = "sign_in" | "sign_up";
 export type CustomerOtpChannel = "email" | "sms" | "whatsapp";
 
@@ -279,6 +298,19 @@ export interface CustomerOrderTimelineEvent {
   details?: string | null;
 }
 
+export interface CustomerPaymentRecovery {
+  eligible: boolean;
+  gateway: "stripe" | "sslcommerz" | "polar" | null;
+  paymentType: "full" | "deposit" | "balance" | null;
+  amountDue: number;
+  label: string | null;
+  reason: string | null;
+  requiresCardForm: boolean;
+  hostedRedirect: boolean;
+}
+
+export type CustomerOrderPaymentSession = CustomerOrderPaymentSessionData;
+
 export interface CustomerOrderDetailOrder {
   id: string;
   invoiceNumber: number | null;
@@ -323,6 +355,7 @@ export interface CustomerOrderDetail {
   paymentPlan: CustomerOrderDetailPaymentPlan | null;
   cod: CustomerOrderDetailCod | null;
   notifications: CustomerOrderDetailNotification[];
+  paymentRecovery: CustomerPaymentRecovery;
   timeline: CustomerOrderTimelineEvent[];
 }
 
@@ -418,5 +451,42 @@ export async function getCustomerOrderDetail(orderId: string): Promise<{
     return { success: true, detail };
   } catch {
     return { success: false, error: "Network error" };
+  }
+}
+
+/**
+ * Create a payment session for an order owned by the signed-in customer.
+ * This endpoint never accepts or returns receipt tokens.
+ */
+export async function createCustomerOrderPaymentSession(orderId: string): Promise<{
+  success: boolean;
+  session?: CustomerOrderPaymentSession;
+  error?: string;
+  status?: number;
+}> {
+  if (!orderId) {
+    return { success: false, error: "Order ID is required", status: 400 };
+  }
+
+  try {
+    const res = await fetch(authUrl(`orders/${encodeURIComponent(orderId)}/payment-session`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      body: JSON.stringify({}),
+    });
+    const raw = (await res.json()) as AuthApiEnvelope<CustomerOrderPaymentSessionData>;
+    if (!res.ok) {
+      return {
+        success: false,
+        error: extractError(raw),
+        status: res.status,
+      };
+    }
+    const session = raw.data ?? (raw as unknown as CustomerOrderPaymentSessionData);
+    return { success: true, session };
+  } catch {
+    return { success: false, error: "Network error", status: 0 };
   }
 }
