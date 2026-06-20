@@ -281,7 +281,8 @@ app.route("/orders", orderRoutes);
 // ADMIN API ROUTES
 // ==========================================
 // The /admin/* routes are strictly protected by adminAuthMiddleware.
-// It verifies either a Better Auth session (Astro SSR) or a JWT Bearer token (Decoupled Hono).
+// It verifies an active Better Auth dashboard session; scanner cookies are
+// limited to exact scanner workflow endpoints inside the middleware.
 app.use("/admin/*", cookieOriginGuardMiddleware);
 app.use("/admin/*", adminAuthMiddleware);
 

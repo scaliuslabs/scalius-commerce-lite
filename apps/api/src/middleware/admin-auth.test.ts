@@ -176,6 +176,25 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects Bearer-only admin API requests instead of trusting JWT claims", async () => {
+    mocks.getAuth.mockReturnValue({
+      api: { getSession: vi.fn().mockResolvedValue(null) },
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const context = createContext("/api/v1/admin/products", "GET", {
+      headers: { Authorization: "Bearer valid-looking-admin-jwt" },
+    });
+
+    await expect(adminAuthMiddleware(context as never, next)).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "Admin access requires a valid dashboard session cookie.",
+    });
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(context.header).not.toHaveBeenCalledWith("X-New-Token", expect.any(String));
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("rejects an admin API request when the session has not completed 2FA", async () => {
     mockBetterAuthSession({
       user: { twoFactorEnabled: true },
