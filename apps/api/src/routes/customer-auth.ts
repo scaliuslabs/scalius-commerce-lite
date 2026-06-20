@@ -163,6 +163,7 @@ app.openapi(sendOtpRoute, async (c) => {
 	    ip,
     phone,
     email,
+    emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),

@@ -20002,8 +20002,11 @@ export type GetApiV1AdminSettingsEmailResponses = {
             provider: 'cloudflare' | 'resend';
             apiKey: string;
             sender: string;
+            senderConfigured: boolean;
             cloudflareBindingConfigured: boolean;
             resendConfigured: boolean;
+            ready: boolean;
+            readinessError: string | null;
         };
     };
 };

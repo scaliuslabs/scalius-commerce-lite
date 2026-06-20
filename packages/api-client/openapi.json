@@ -64792,19 +64792,32 @@
                         "sender": {
                           "type": "string"
                         },
+                        "senderConfigured": {
+                          "type": "boolean"
+                        },
                         "cloudflareBindingConfigured": {
                           "type": "boolean"
                         },
                         "resendConfigured": {
                           "type": "boolean"
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        },
+                        "readinessError": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
                         "provider",
                         "apiKey",
                         "sender",
+                        "senderConfigured",
                         "cloudflareBindingConfigured",
-                        "resendConfigured"
+                        "resendConfigured",
+                        "ready",
+                        "readinessError"
                       ]
                     }
                   },

@@ -35,6 +35,7 @@ export interface CustomerAuthPolicyPreset {
   policy: CustomerAuthPolicyConfig;
   requestOptions: CustomerAuthRequestOption[];
   defaultRequestMethod: CustomerAuthRequestMethod;
+  requiresEmailProvider: boolean;
   requiresSmsProvider: boolean;
   requiresWhatsAppProvider: boolean;
 }
@@ -154,6 +155,7 @@ export function resolveCustomerAuthPolicy(value: unknown): CustomerAuthPolicyPre
     policy,
     requestOptions: getCustomerAuthRequestOptions(policy),
     defaultRequestMethod: getCustomerAuthRequestMethodForChannel(policy.defaultOtpChannel),
+    requiresEmailProvider: customerAuthPolicyUsesEmailProvider(policy),
     requiresSmsProvider: customerAuthPolicyUsesSmsProvider(policy),
     requiresWhatsAppProvider: customerAuthPolicyUsesWhatsAppProvider(policy),
   };
@@ -227,8 +229,16 @@ export function customerAuthMethodUsesSmsProvider(value: unknown): boolean {
   return customerAuthPolicyUsesSmsProvider(getCustomerAuthPolicyForMethod(value));
 }
 
+export function customerAuthMethodUsesEmailProvider(value: unknown): boolean {
+  return customerAuthPolicyUsesEmailProvider(getCustomerAuthPolicyForMethod(value));
+}
+
 export function customerAuthMethodUsesWhatsAppProvider(value: unknown): boolean {
   return customerAuthPolicyUsesWhatsAppProvider(getCustomerAuthPolicyForMethod(value));
+}
+
+export function customerAuthPolicyUsesEmailProvider(policyInput: unknown): boolean {
+  return normalizeCustomerAuthPolicy(policyInput).otpChannels.includes("email");
 }
 
 export function customerAuthPolicyUsesSmsProvider(policyInput: unknown): boolean {

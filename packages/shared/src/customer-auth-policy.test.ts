@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  customerAuthMethodUsesEmailProvider,
   customerAuthMethodUsesSmsProvider,
   customerAuthMethodUsesWhatsAppProvider,
+  customerAuthPolicyUsesEmailProvider,
   getCustomerAuthAllowedRequestMethods,
   getCustomerAuthDeliveryChannel,
   getDefaultCustomerAuthRequestMethod,
@@ -39,12 +41,21 @@ describe("customer auth policy", () => {
     expect(getDefaultCustomerAuthRequestMethod(input)).toBe(defaultMethod);
   });
 
-  it("separates SMS and WhatsApp provider requirements", () => {
+  it("separates email, SMS, and WhatsApp provider requirements", () => {
+    expect(customerAuthMethodUsesEmailProvider("email")).toBe(true);
+    expect(customerAuthMethodUsesEmailProvider("both")).toBe(true);
+    expect(customerAuthMethodUsesEmailProvider("sms_otp")).toBe(false);
     expect(customerAuthMethodUsesSmsProvider("sms_otp")).toBe(true);
     expect(customerAuthMethodUsesSmsProvider("both")).toBe(true);
     expect(customerAuthMethodUsesSmsProvider("whatsapp_otp")).toBe(false);
     expect(customerAuthMethodUsesWhatsAppProvider("whatsapp_otp")).toBe(true);
     expect(customerAuthMethodUsesWhatsAppProvider("both")).toBe(false);
+    expect(customerAuthPolicyUsesEmailProvider({
+      otpChannels: ["email", "whatsapp"],
+      requiredContactFields: ["phone"],
+      optionalContactFields: [],
+      defaultOtpChannel: "email",
+    })).toBe(true);
   });
 
   it("labels the phone side of both as SMS, not WhatsApp", () => {

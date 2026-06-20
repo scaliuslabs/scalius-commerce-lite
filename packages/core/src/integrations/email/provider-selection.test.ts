@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendEmail, type EmailRuntimeSettings } from "./index";
-import { getEmailRuntimeSettings } from "./settings";
+import { getEmailProviderReadiness, getEmailRuntimeSettings } from "./settings";
 import { encryptCredentials } from "../../utils/credential-encryption";
 
 const baseSettings: EmailRuntimeSettings = {
   provider: "cloudflare",
   sender: "orders@example.com",
+  senderConfigured: true,
   resendApiKey: null,
   hasResendApiKey: false,
   cloudflareBindingConfigured: false,
@@ -189,8 +190,70 @@ describe("email provider selection", () => {
     expect(settings).toMatchObject({
       provider: "resend",
       sender: "orders@example.com",
+      senderConfigured: true,
       resendApiKey: null,
       hasResendApiKey: false,
+    });
+  });
+
+  it("reports email readiness from Cloudflare, Resend, sender, and credential state", async () => {
+    const key = Buffer.alloc(32, 12).toString("base64");
+    const wrongKey = Buffer.alloc(32, 13).toString("base64");
+    const encryptedResendKey = `enc:${await encryptCredentials("re_live_secret", key)}`;
+
+    await expect(getEmailProviderReadiness({
+      db: createEmailSettingsDb([
+        { key: "email_provider", value: "cloudflare" },
+        { key: "email_sender", value: "orders@example.com" },
+      ]),
+      env: { EMAIL: { send: vi.fn() } },
+    })).resolves.toMatchObject({
+      configured: true,
+      cloudflareBindingConfigured: true,
+      resendConfigured: false,
+      senderConfigured: true,
+      error: null,
+    });
+
+    await expect(getEmailProviderReadiness({
+      db: createEmailSettingsDb([
+        { key: "email_provider", value: "resend" },
+        { key: "email_sender", value: "orders@example.com" },
+        { key: "resend_api_key", value: encryptedResendKey },
+      ]),
+      encryptionKey: wrongKey,
+    })).resolves.toMatchObject({
+      configured: false,
+      cloudflareBindingConfigured: false,
+      resendConfigured: false,
+      senderConfigured: true,
+    });
+
+    await expect(getEmailProviderReadiness({
+      db: createEmailSettingsDb([
+        { key: "email_provider", value: "resend" },
+        { key: "email_sender", value: "orders@example.com" },
+        { key: "resend_api_key", value: encryptedResendKey },
+      ]),
+      env: { EMAIL: { send: vi.fn() } },
+      encryptionKey: wrongKey,
+    })).resolves.toMatchObject({
+      configured: true,
+      cloudflareBindingConfigured: true,
+      resendConfigured: false,
+      senderConfigured: true,
+      error: null,
+    });
+
+    await expect(getEmailProviderReadiness({
+      db: createEmailSettingsDb([
+        { key: "email_provider", value: "cloudflare" },
+      ]),
+      env: { EMAIL: { send: vi.fn() } },
+    })).resolves.toMatchObject({
+      configured: false,
+      senderConfigured: false,
+      error: "Sender email is required before enabling Email OTP.",
     });
   });
 });

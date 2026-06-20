@@ -72,6 +72,13 @@ const readySmsSettings = [
   { key: "active_provider", value: "bdbulksms" },
   { key: "bdbulksms_token", value: "test-token" },
 ];
+const readyEmailSettings = [
+  { key: "email_provider", value: "cloudflare" },
+  { key: "email_sender", value: "orders@example.com" },
+];
+const readyEmailEnv = {
+  EMAIL: { send: vi.fn() },
+};
 
 function createKv(initialValues: Record<string, string> = {}) {
   const store = new Map(Object.entries(initialValues));
@@ -113,6 +120,7 @@ describe("customer auth service intent handling", () => {
     const db = createDb([
       { limit: [baseSiteSettings] },
       { get: null },
+      { all: readyEmailSettings },
     ]);
     const kv = createKv();
 
@@ -124,6 +132,7 @@ describe("customer auth service intent handling", () => {
       phone: "+8801712345678",
       name: "New Customer",
       ip: "unknown",
+      emailEnv: readyEmailEnv,
     });
 
     expect(result).toMatchObject({
@@ -149,13 +158,7 @@ describe("customer auth service intent handling", () => {
     const db = createDb([
       { limit: [baseSiteSettings] },
       { get: null },
-      {
-        get: {
-          id: "cust_existing",
-          email: "buyer@example.com",
-          phone: "+8801712345678",
-        },
-      },
+      { all: readyEmailSettings },
     ]);
     const kv = createKv();
 
@@ -167,6 +170,7 @@ describe("customer auth service intent handling", () => {
       phone: "+8801712345678",
       name: "Buyer",
       ip: "unknown",
+      emailEnv: readyEmailEnv,
     });
 
     expect(result.success).toBe(true);
@@ -285,6 +289,28 @@ describe("customer auth service intent handling", () => {
       name: "Buyer",
       ip: "unknown",
     })).rejects.toThrow("SMS verification is currently unavailable. Contact store support.");
+
+    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects email OTP when no email provider is ready before mutating OTP challenge or rate-limit state", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [] },
+    ]);
+    const kv = createKv();
+
+    await expect(sendOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      name: "Buyer",
+      ip: "203.0.113.20",
+    })).rejects.toThrow("Email verification is currently unavailable. Contact store support.");
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
     expect(kv.get).not.toHaveBeenCalled();

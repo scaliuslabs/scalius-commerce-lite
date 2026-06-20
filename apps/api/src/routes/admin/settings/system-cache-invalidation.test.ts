@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  getEmailProviderReadiness: vi.fn(),
   getEmailRuntimeSettings: vi.fn(),
   readEmailSetting: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
 }));
 
 vi.mock("@scalius/core/integrations/email", () => ({
+  getEmailProviderReadiness: mocks.getEmailProviderReadiness,
   getEmailRuntimeSettings: mocks.getEmailRuntimeSettings,
   readEmailSetting: mocks.readEmailSetting,
 }));
@@ -121,9 +123,21 @@ function createTestApp() {
   mocks.getEmailRuntimeSettings.mockResolvedValue({
     provider: "cloudflare",
     sender: "orders@example.com",
+    senderConfigured: true,
     resendApiKey: null,
     hasResendApiKey: false,
     cloudflareBindingConfigured: true,
+    resendCredentialError: null,
+  });
+  mocks.getEmailProviderReadiness.mockResolvedValue({
+    configured: true,
+    provider: "cloudflare",
+    sender: "orders@example.com",
+    senderConfigured: true,
+    cloudflareBindingConfigured: true,
+    resendConfigured: false,
+    error: null,
+    blockers: [],
   });
   mocks.readEmailSetting.mockResolvedValue("orders@example.com");
   mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
@@ -281,6 +295,68 @@ describe("system settings cache invalidation", () => {
     expect(mocks.upsertSetting).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("rejects email customer auth policy before writes when no email provider is ready", async () => {
+    mocks.getEmailProviderReadiness.mockResolvedValueOnce({
+      configured: false,
+      provider: "cloudflare",
+      sender: "noreply@example.com",
+      senderConfigured: false,
+      cloudflareBindingConfigured: false,
+      resendConfigured: false,
+      error: "Sender email is required before enabling Email OTP.",
+      blockers: [
+        "Sender email is required before enabling Email OTP.",
+        "Configure Cloudflare Email or save a Resend API key before enabling Email OTP.",
+      ],
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      customerAuthPolicy: {
+        otpChannels: ["email"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "email",
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("allows email customer auth policy when Cloudflare Email and sender are ready", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      customerAuthPolicy: {
+        otpChannels: ["email"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "email",
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.getEmailProviderReadiness).toHaveBeenCalledWith({
+      db: expect.anything(),
+      env,
+      encryptionKey: "credential-key",
+    });
+    expect(mocks.upsertSetting).toHaveBeenCalledWith(
+      expect.anything(),
+      "customer_auth",
+      "policy",
+      JSON.stringify({
+        otpChannels: ["email"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "email",
+      }),
+    );
   });
 
   it("rejects WhatsApp customer auth policy before writes when WhatsApp is not ready", async () => {
@@ -496,8 +572,11 @@ describe("system settings cache invalidation", () => {
         provider: "cloudflare",
         apiKey: "",
         sender: "orders@example.com",
+        senderConfigured: true,
         cloudflareBindingConfigured: true,
         resendConfigured: false,
+        ready: true,
+        readinessError: null,
       },
     });
   });

@@ -30,9 +30,11 @@ export interface CloudflareEmailBinding {
 export interface EmailRuntimeSettings {
   provider: "cloudflare" | "resend";
   sender: string;
+  senderConfigured: boolean;
   resendApiKey: string | null;
   hasResendApiKey: boolean;
   cloudflareBindingConfigured: boolean;
+  resendCredentialError?: string | null;
 }
 
 export interface EmailRuntimeContext {

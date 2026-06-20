@@ -24,6 +24,7 @@ import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
     getAuthSettings,
+    getEmailSettings,
     updateAuthSettings,
     getSmsSettings,
     updateSmsSettings,
@@ -32,6 +33,7 @@ import {
     CUSTOMER_AUTH_CHANNEL_OPTIONS,
     CUSTOMER_AUTH_METHODS,
     CUSTOMER_AUTH_OTP_CHANNELS,
+    customerAuthPolicyUsesEmailProvider,
     customerAuthPolicyUsesSmsProvider,
     customerAuthPolicyUsesWhatsAppProvider,
     getCustomerAuthPolicyForMethod,
@@ -69,6 +71,12 @@ interface AuthAndSmsSettings {
     whatsappAccessToken: string;
     whatsappPhoneNumberId: string;
     whatsappTemplateName: string;
+    // Email settings
+    emailSender: string;
+    emailCloudflareConfigured: boolean;
+    emailResendConfigured: boolean;
+    emailReady: boolean;
+    emailReadinessError: string;
     // SMS settings
     smsProvider: string;
     smsProviderConfigured: boolean;
@@ -90,6 +98,11 @@ const defaultValues: AuthAndSmsSettings = {
     whatsappAccessToken: "",
     whatsappPhoneNumberId: "",
     whatsappTemplateName: "auth_otp",
+    emailSender: "",
+    emailCloudflareConfigured: false,
+    emailResendConfigured: false,
+    emailReady: false,
+    emailReadinessError: "",
     smsProvider: "",
     smsProviderConfigured: false,
     smsProviderError: "",
@@ -116,6 +129,18 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
     result.whatsappAccessToken = authData.whatsappAccessToken || "";
     result.whatsappPhoneNumberId = authData.whatsappPhoneNumberId || "";
     result.whatsappTemplateName = authData.whatsappTemplateName || "auth_otp";
+
+    // Email fetch is non-fatal; backend save still enforces readiness.
+    try {
+        const emailData = await getEmailSettings();
+        result.emailSender = emailData.sender || "";
+        result.emailCloudflareConfigured = emailData.cloudflareBindingConfigured === true;
+        result.emailResendConfigured = emailData.resendConfigured === true;
+        result.emailReady = emailData.ready === true;
+        result.emailReadinessError = emailData.readinessError || "";
+    } catch {
+        result.emailReadinessError = "Email readiness could not be checked. Retry or review the Email tab before enabling Email OTP.";
+    }
 
     // SMS fetch is non-fatal
     try {
@@ -192,6 +217,20 @@ function getWhatsAppProviderIssue(values: AuthAndSmsSettings): string | null {
     return null;
 }
 
+function getEmailProviderIssue(values: AuthAndSmsSettings): string | null {
+    if (!values.emailSender.trim()) {
+        return "Sender email is required in the Email tab before enabling Email OTP.";
+    }
+    if (!values.emailCloudflareConfigured && !values.emailResendConfigured) {
+        return values.emailReadinessError
+            || "Configure Cloudflare Email or save a Resend API key in the Email tab before enabling Email OTP.";
+    }
+    if (!values.emailReady && values.emailReadinessError) {
+        return values.emailReadinessError;
+    }
+    return null;
+}
+
 function formatProviderReadinessIssue(issue: string | null | undefined): string {
     if (!issue) return "";
     if (
@@ -206,6 +245,11 @@ function formatProviderReadinessIssue(issue: string | null | undefined): string 
 async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
     const authVerificationMethod = normalizeCustomerAuthMethod(v.authVerificationMethod);
     const customerAuthPolicy = normalizeCustomerAuthPolicy(v.customerAuthPolicy, authVerificationMethod);
+
+    if (customerAuthPolicyUsesEmailProvider(customerAuthPolicy)) {
+        const emailIssue = getEmailProviderIssue(v);
+        if (emailIssue) throw new Error(emailIssue);
+    }
 
     if (customerAuthPolicyUsesSmsProvider(customerAuthPolicy)) {
         const smsIssue = getSmsProviderIssue(v);
@@ -258,6 +302,9 @@ export default function AuthSettingsBuilder() {
         values.customerAuthPolicy,
         values.authVerificationMethod,
     );
+    const emailProviderIssue = customerAuthPolicyUsesEmailProvider(customerAuthPolicy)
+        ? getEmailProviderIssue(values)
+        : null;
     const smsProviderIssue = customerAuthPolicyUsesSmsProvider(customerAuthPolicy)
         ? getSmsProviderIssue(values)
         : null;
@@ -271,7 +318,10 @@ export default function AuthSettingsBuilder() {
     const whatsAppProviderIssue = customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy)
         ? getWhatsAppProviderIssue(values)
         : null;
-    const providerReadinessIssue = smsProviderIssue ?? smsProviderServerIssue ?? whatsAppProviderIssue;
+    const providerReadinessIssue = emailProviderIssue ?? smsProviderIssue ?? smsProviderServerIssue ?? whatsAppProviderIssue;
+    const emailConfigured = customerAuthPolicyUsesEmailProvider(customerAuthPolicy)
+        ? !emailProviderIssue
+        : false;
     const smsConfigured = customerAuthPolicyUsesSmsProvider(customerAuthPolicy)
         ? !smsProviderIssue && !smsProviderServerIssue
         : false;
@@ -281,6 +331,7 @@ export default function AuthSettingsBuilder() {
 
     const getChannelReadinessIssue = (channel: CustomerAuthOtpChannel): string | null => {
         if (!customerAuthPolicy.otpChannels.includes(channel)) return null;
+        if (channel === "email") return emailProviderIssue;
         if (channel === "sms") return smsProviderIssue ?? smsProviderServerIssue;
         if (channel === "whatsapp") return whatsAppProviderIssue;
         return null;
@@ -407,7 +458,7 @@ export default function AuthSettingsBuilder() {
                                         {channelSelected && channelIssue && (
                                             <AlertTriangle className="ml-auto h-4 w-4 text-destructive" />
                                         )}
-                                        {channelSelected && !channelIssue && channel !== "email" && (
+                                        {channelSelected && !channelIssue && (
                                             <CheckCircle2 className="ml-auto h-4 w-4 text-green-500" />
                                         )}
                                     </label>
@@ -563,6 +614,46 @@ export default function AuthSettingsBuilder() {
                                 </div>
                             </div>
                         </CardContent>
+                </Card>
+            )}
+
+            {customerAuthPolicyUsesEmailProvider(customerAuthPolicy) && (
+                <Card className="border-emerald-500/20 dark:bg-emerald-950/10">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            Email OTP Configuration
+                            {emailConfigured && (
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            )}
+                        </CardTitle>
+                        <CardDescription>
+                            Use Cloudflare Email by default or Resend as the fallback provider.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {emailProviderIssue && (
+                            <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertTitle>Email OTP is not ready</AlertTitle>
+                                <AlertDescription>{formatProviderReadinessIssue(emailProviderIssue)}</AlertDescription>
+                            </Alert>
+                        )}
+
+                        <div className="rounded-md border border-border px-3 py-2 text-sm">
+                            <div className="flex items-center gap-2">
+                                {emailConfigured ? (
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                ) : (
+                                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                                )}
+                                <span>
+                                    {emailConfigured
+                                        ? "Email delivery ready"
+                                        : "Review the Email tab before enabling Email OTP"}
+                                </span>
+                            </div>
+                        </div>
+                    </CardContent>
                 </Card>
             )}
 

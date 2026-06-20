@@ -104,8 +104,11 @@ export interface EmailSettingsPayload extends SettingsPayload {
   provider: EmailProvider;
   apiKey: string;
   sender: string;
+  senderConfigured: boolean;
   cloudflareBindingConfigured: boolean;
   resendConfigured: boolean;
+  ready: boolean;
+  readinessError: string | null;
 }
 export type UpdateEmailSettingsInput = SettingsPayload;
 export interface FirebaseSettingsPayload extends SettingsPayload {

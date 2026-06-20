@@ -61,6 +61,16 @@ Admin-facing DB operations for site settings. Cache invalidation stays in route 
 | `getAllowedCountries` | `(db) => { allowedCountries, allowedCountriesMode }` | Reads allowed countries. Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
 | `saveAllowedCountries` | `(db, countries, mode?) => { allowedCountries, allowedCountriesMode }` | Stores as JSON `{ countries: string[], mode: "include" | "exclude" }` in settings table (category=phone, key=allowed_countries) |
 
+## Auth & Checkout Settings Routes
+
+`apps/api/src/routes/admin/settings/system.ts` owns the admin-facing Auth & Access saves. Customer auth policy saves fail closed before writes/cache invalidation when any selected OTP channel is not deliverable:
+
+- Email OTP requires a saved sender address plus Cloudflare `EMAIL` binding or a decryptable Resend key.
+- SMS OTP requires an active supported Bangladesh SMS provider with decryptable credentials.
+- WhatsApp OTP requires access token, phone number ID, and template name.
+
+The public checkout config still exposes only the normalized policy; provider readiness details stay in admin settings endpoints and send-time checks.
+
 ## checkout-config.service.ts
 
 ### `getCheckoutConfig(db, kv?, encryptionKey?)`
