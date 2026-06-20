@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ConflictError } from "@scalius/core/errors";
+import { ConflictError, NotFoundError } from "@scalius/core/errors";
 import { ValidationError } from "../utils/api-error";
 import { errorResponseFromError } from "../utils/api-response";
 
@@ -817,5 +817,38 @@ describe("create order commit/KV ordering", () => {
     expect(kv.put).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
+  });
+
+  it("does not write checkout status or receipt proof when the cart product is unavailable", async () => {
+    const unavailableError = new NotFoundError("Product product_1 not found or is inactive.");
+    mocks.createStorefrontOrder.mockRejectedValue(unavailableError);
+    const { app, kv, queue } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    const responseText = await response.clone().text();
+    expect(response.status, responseText).toBe(404);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Product product_1 not found or is inactive.",
+      },
+    });
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
+      unavailableError,
+    );
   });
 });

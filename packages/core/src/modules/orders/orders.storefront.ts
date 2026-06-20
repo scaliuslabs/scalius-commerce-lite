@@ -138,6 +138,7 @@ export async function createStorefrontOrder(
             storefrontDb
                 .select({
                     id: products.id,
+                    isActive: products.isActive,
                     price: products.price,
                     discountPercentage: products.discountPercentage,
                     discountType: products.discountType,
@@ -148,6 +149,7 @@ export async function createStorefrontOrder(
                 .where(
                     and(
                         sql`${products.id} IN ${productIds}`,
+                        eq(products.isActive, true),
                         isNull(products.deletedAt),
                     ),
                 ),
@@ -203,6 +205,7 @@ export async function createStorefrontOrder(
     const productList = productIds.length > 0
         ? (readResults[4] as {
             id: string;
+            isActive: boolean;
             price: number;
             discountPercentage: number | null;
             discountType: string | null;
@@ -226,9 +229,12 @@ export async function createStorefrontOrder(
             if (!variant) {
                 throw new NotFoundError(`Variant ${item.variantId} not found.`);
             }
+            if (variant.productId !== item.productId) {
+                throw new ValidationError("Selected product variant is no longer available for checkout.");
+            }
         }
         const product = productMap.get(item.productId);
-        if (!product) {
+        if (!product || product.isActive !== true) {
             throw new NotFoundError(`Product ${item.productId} not found or is inactive.`);
         }
     }

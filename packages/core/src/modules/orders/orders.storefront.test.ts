@@ -7,11 +7,22 @@ import type { CreateStorefrontOrderInput } from "./orders.types";
 
 interface ProductRow {
   id: string;
+  isActive: boolean;
   price: number;
   discountPercentage: number | null;
   discountType: string | null;
   discountAmount: number | null;
   freeDelivery: boolean;
+}
+
+interface VariantRow {
+  id: string;
+  productId: string;
+  stock: number;
+  price: number;
+  discountPercentage: number | null;
+  discountType: string | null;
+  discountAmount: number | null;
 }
 
 interface ShippingMethodRow {
@@ -33,11 +44,25 @@ interface LocationRow {
 function createProduct(overrides: Partial<ProductRow> = {}): ProductRow {
   return {
     id: "prod_standard",
+    isActive: true,
     price: 100,
     discountPercentage: null,
     discountType: null,
     discountAmount: null,
     freeDelivery: false,
+    ...overrides,
+  };
+}
+
+function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
+  return {
+    id: "var_standard",
+    productId: "prod_standard",
+    stock: 10,
+    price: 125,
+    discountPercentage: null,
+    discountType: null,
+    discountAmount: null,
     ...overrides,
   };
 }
@@ -112,6 +137,7 @@ function createDbMock(readResults: unknown[]): Database {
 async function placeOrder({
   inputOverrides,
   products = [createProduct()],
+  variants = [],
   locations = [
     createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
     createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
@@ -120,11 +146,12 @@ async function placeOrder({
 }: {
   inputOverrides?: Partial<CreateStorefrontOrderInput>;
   products?: ProductRow[];
+  variants?: VariantRow[];
   locations?: LocationRow[];
   shippingMethods?: ShippingMethodRow[];
 } = {}) {
   const db = createDbMock([
-    [],
+    variants,
     locations,
     [],
     [],
@@ -141,6 +168,44 @@ async function placeOrder({
     vi.fn(() => 0),
   );
 }
+
+describe("createStorefrontOrder product availability verification", () => {
+  it("rejects inactive products from stale carts or direct API payloads", async () => {
+    await expect(
+      placeOrder({
+        products: [createProduct({ isActive: false })],
+      }),
+    ).rejects.toThrow("Product prod_standard not found or is inactive.");
+  });
+
+  it("rejects missing products before building an order payload", async () => {
+    await expect(
+      placeOrder({
+        products: [],
+      }),
+    ).rejects.toThrow("Product prod_standard not found or is inactive.");
+  });
+
+  it("rejects a variant that does not belong to the submitted product", async () => {
+    await expect(
+      placeOrder({
+        inputOverrides: {
+          items: [
+            {
+              productId: "prod_standard",
+              variantId: "var_foreign",
+              quantity: 1,
+              price: 1,
+              productName: "Standard Product",
+              variantLabel: "Foreign Variant",
+            },
+          ],
+        },
+        variants: [createVariant({ id: "var_foreign", productId: "prod_other" })],
+      }),
+    ).rejects.toThrow("Selected product variant is no longer available for checkout.");
+  });
+});
 
 describe("createStorefrontOrder shipping verification", () => {
   it("derives shipping charge from the selected method instead of caller input", async () => {
