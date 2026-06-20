@@ -55,6 +55,7 @@ import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
 import {
   OrderStatus,
+  PaymentPlanStatus,
   PaymentStatus,
   orders as ordersTable,
   paymentPlans as paymentPlansTable,
@@ -88,7 +89,8 @@ interface DbMockOptions {
   checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
-  paymentPlan?: { balanceDue: number; status: string } | null;
+  paymentPlan?: { depositAmount?: number; balanceDue: number; status: string } | null;
+  insertError?: unknown;
 }
 
 function createDbMock(options: string | DbMockOptions = "stripe") {
@@ -102,8 +104,12 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
     values: vi.fn((values: unknown) => {
       insertedValues.push(values);
       return {
-      onConflictDoNothing: vi.fn(async () => undefined),
-      onConflictDoUpdate: vi.fn(async () => undefined),
+      onConflictDoNothing: vi.fn(async () => {
+        if (opts.insertError) throw opts.insertError;
+      }),
+      onConflictDoUpdate: vi.fn(async () => {
+        if (opts.insertError) throw opts.insertError;
+      }),
       };
     }),
   };
@@ -506,6 +512,107 @@ describe("payment session receipt-token proof", () => {
     }));
   });
 
+  it("derives Stripe deposit sessions on the server when the browser omits payment type", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 50,
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      paymentType: "deposit",
+      amount: 50,
+    }));
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: 5000,
+      paymentType: "deposit",
+    }));
+    expect(db.__insertedValues).toContainEqual(expect.objectContaining({
+      orderId: "order_1",
+      depositAmount: 50,
+      balanceDue: 75,
+      status: PaymentPlanStatus.PENDING,
+    }));
+  });
+
+  it("derives full Stripe sessions when the configured deposit is not below the committed order total", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 50,
+      order: {
+        totalAmount: 40,
+        balanceDue: 40,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      paymentType: "full",
+      amount: 40,
+    }));
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: 4000,
+      paymentType: "full",
+    }));
+    expect(db.__insertedValues).toHaveLength(0);
+  });
+
+  it("fails before provider calls when a pending deposit payment plan cannot be persisted", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 50,
+      insertError: new Error("D1 write failed"),
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(500);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+    expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
+  });
+
   it("creates SSLCommerz deposit sessions from configured amount and currency", async () => {
     const { app, db, kv } = createTestApp("valid", {
       paymentMethod: "sslcommerz",
@@ -613,8 +720,9 @@ describe("payment session receipt-token proof", () => {
         balanceDue: 65,
       },
       paymentPlan: {
+        depositAmount: 60,
         balanceDue: 65,
-        status: "deposit_paid",
+        status: PaymentPlanStatus.DEPOSIT_PAID,
       },
     });
 
@@ -645,6 +753,77 @@ describe("payment session receipt-token proof", () => {
       }),
     );
     expect(db.__insertedValues).toHaveLength(0);
+  });
+
+  it("rejects balance sessions until the deposit has been confirmed locally", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.PARTIAL,
+        paidAmount: 60,
+        balanceDue: 65,
+      },
+      paymentPlan: {
+        depositAmount: 60,
+        balanceDue: 65,
+        status: PaymentPlanStatus.PENDING,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          paymentType: "balance",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
+    expect(mocks.initSSLCommerzSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects a second deposit session after a partial payment has been recorded", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 50,
+      order: {
+        paymentStatus: PaymentStatus.PARTIAL,
+        paidAmount: 50,
+        balanceDue: 75,
+      },
+      paymentPlan: {
+        depositAmount: 50,
+        balanceDue: 75,
+        status: PaymentPlanStatus.DEPOSIT_PAID,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.getStripeSettings).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("creates Polar deposit sessions with original store-currency metadata", async () => {

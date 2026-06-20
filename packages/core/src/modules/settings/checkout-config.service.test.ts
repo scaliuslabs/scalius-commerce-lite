@@ -120,6 +120,18 @@ describe("getCheckoutConfig", () => {
         expect(config.checkoutReadiness.ready).toBe(true);
     });
 
+    it("publishes the active default only when it survives public gateway readiness", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "stripe",
+        });
+
+        const config = await getCheckoutConfig(createDb() as never);
+
+        expect(config.gateways.map((gateway) => gateway.id)).toEqual(["stripe", "cod"]);
+        expect(config.activeDefaultMethod).toBe("stripe");
+    });
+
     it("normalizes legacy public auth method values", async () => {
         mocks.getActivePaymentMethods.mockResolvedValue({
             enabledMethods: ["cod"],
@@ -167,6 +179,7 @@ describe("getCheckoutConfig", () => {
         const config = await getCheckoutConfig(createDb() as never);
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
+        expect(config.activeDefaultMethod).toBeUndefined();
         expect(gateways[0].getSettings).toHaveBeenCalledWith(
             expect.anything(),
             undefined,

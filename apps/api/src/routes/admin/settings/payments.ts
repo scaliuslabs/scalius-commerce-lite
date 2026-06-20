@@ -29,7 +29,10 @@ import {
     invalidateSSLCommerzCache,
     invalidatePolarCache
 } from "@scalius/core/modules/payments/gateway-settings";
-import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
+import {
+    getCheckoutFlowValidationIssues,
+    isCheckoutGatewayUsableForFlow,
+} from "@scalius/core/modules/settings/checkout-flow";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
@@ -270,6 +273,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             stripeMap,
             sslMap,
             polarMap,
+            checkoutSettings,
         ] = await Promise.all([
             getStripeSettings(db, kv, encKey, readOptions),
             getSSLCommerzSettings(db, kv, encKey, readOptions),
@@ -277,6 +281,15 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             readStripeSettingsMap(db),
             readSSLCommerzSettingsMap(db),
             readPolarSettingsMap(db),
+            db
+                .select({
+                    checkoutMode: siteSettings.checkoutMode,
+                    partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+                    partialPaymentAmount: siteSettings.partialPaymentAmount,
+                })
+                .from(siteSettings)
+                .limit(1)
+                .then((rows) => rows[0]),
         ]);
         const stripeReadiness = getStripeCheckoutReadiness(
             stripeSettings ?? getEffectiveStripeCheckoutSettings(stripeMap, {}),
@@ -293,31 +306,48 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             enabled: polarMap.enabled !== undefined ? polarMap.enabled !== "false" : hasStoredPolarAccount(polarMap),
         });
 
+        const flowSettings = {
+            checkoutMode: checkoutSettings?.checkoutMode ?? "all",
+            partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
+            partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+        };
+        const flowActiveMethods = activeConfig.enabledMethods.filter((method) =>
+            isCheckoutGatewayUsableForFlow({
+                gatewayId: method,
+                checkoutMode: flowSettings.checkoutMode,
+                partialPaymentEnabled: flowSettings.partialPaymentEnabled,
+                partialPaymentAmount: flowSettings.partialPaymentAmount,
+            }),
+        );
+        const flowDefaultMethod = flowActiveMethods.includes(activeConfig.defaultMethod)
+            ? activeConfig.defaultMethod
+            : (flowActiveMethods[0] ?? activeConfig.defaultMethod);
+
         return ok(c, {
             enabledMethods: rawConfig.enabledMethods,
             defaultMethod: rawConfig.enabledMethods.includes(rawConfig.defaultMethod)
                 ? rawConfig.defaultMethod
                 : (rawConfig.enabledMethods[0] ?? "cod"),
-            activeMethods: activeConfig.enabledMethods,
-            activeDefaultMethod: activeConfig.defaultMethod,
+            activeMethods: flowActiveMethods,
+            activeDefaultMethod: flowDefaultMethod,
             gatewayStatus: {
                 stripe: {
                     ...stripeReadiness,
                     providerEnabled: stripeReadiness.enabled,
                     checkoutSelected: rawConfig.enabledMethods.includes("stripe"),
-                    checkoutVisible: activeConfig.enabledMethods.includes("stripe"),
+                    checkoutVisible: flowActiveMethods.includes("stripe"),
                 },
                 sslcommerz: {
                     ...sslReadiness,
                     providerEnabled: sslReadiness.enabled,
                     checkoutSelected: rawConfig.enabledMethods.includes("sslcommerz"),
-                    checkoutVisible: activeConfig.enabledMethods.includes("sslcommerz"),
+                    checkoutVisible: flowActiveMethods.includes("sslcommerz"),
                 },
                 polar: {
                     ...polarReadiness,
                     providerEnabled: polarReadiness.enabled,
                     checkoutSelected: rawConfig.enabledMethods.includes("polar"),
-                    checkoutVisible: activeConfig.enabledMethods.includes("polar"),
+                    checkoutVisible: flowActiveMethods.includes("polar"),
                 },
                 cod: {
                     configured: true,
@@ -326,7 +356,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                     missingFields: [],
                     providerEnabled: true,
                     checkoutSelected: rawConfig.enabledMethods.includes("cod"),
-                    checkoutVisible: activeConfig.enabledMethods.includes("cod"),
+                    checkoutVisible: flowActiveMethods.includes("cod"),
                 }
             }
         });
@@ -396,6 +426,14 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     });
     if (checkoutFlowIssues.length > 0) {
         throw new ValidationError(checkoutFlowIssues.join(" "));
+    }
+    if (!isCheckoutGatewayUsableForFlow({
+        gatewayId: data.defaultMethod,
+        checkoutMode: checkoutSettings?.checkoutMode,
+        partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
+        partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+    })) {
+        throw new ValidationError("Default method is hidden by the current checkout flow settings.");
     }
 
     await safeBatch(db, [

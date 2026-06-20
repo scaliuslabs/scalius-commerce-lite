@@ -1,6 +1,5 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { createOrder } from "../create-order";
-import { resolveCheckoutPaymentRequest } from "../payment-mode";
 
 declare global {
   interface Window {
@@ -99,18 +98,13 @@ export const stripeHandler: GatewayHandler = {
     }
 
     try {
-      const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "stripe");
+      const createdOrder = await createOrder(ctx.checkoutData, "stripe");
+      const { orderId, receiptToken } = createdOrder;
 
-      // Backend computes amount from DB order -- only send orderId
-      const paymentRequest = resolveCheckoutPaymentRequest(ctx.config, ctx.totalAmount);
       const intentPayload: Record<string, unknown> = {
         orderId,
         receiptToken,
-        paymentType: paymentRequest.paymentType,
       };
-      if (paymentRequest.paymentType === "deposit") {
-        intentPayload.depositAmount = paymentRequest.depositAmount;
-      }
 
       const intentRes = await fetch("/api/checkout/stripe-intent", {
         method: "POST",

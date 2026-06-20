@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
-import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
+import { orders, PaymentMethod } from "@scalius/database/schema";
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import {
   buildPaymentSessionAttemptIdentity,
@@ -24,6 +24,7 @@ import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
+import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -41,7 +42,7 @@ type StripeIntentResponse = {
 const intentSchema = z.object({
   orderId: z.string().min(1),
   receiptToken: z.string().min(1),
-  paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
+  paymentType: z.enum(["full", "deposit", "balance"]).optional(),
   depositAmount: z.number().positive().optional(),
   currency: z.string().length(3).optional(),
   manualCapture: z.boolean().default(false)
@@ -115,6 +116,7 @@ app.openapi(createIntentRoute, async (c) => {
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
   }, checkoutFlowSettings);
+  await ensurePendingPaymentPlanForSession(db, order, policy);
 
   const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
   const currency = currencyConfig.code.toLowerCase();
@@ -189,28 +191,15 @@ app.openapi(createIntentRoute, async (c) => {
     response: responsePayload,
   });
 
-  // Save PaymentIntent ID to order
+  // Save PaymentIntent ID to order. This is a recovery hint; the payment session
+  // attempt row and gateway idempotency key are the durable source of truth.
   try {
     await db
       .update(orders)
       .set({ paymentIntentId: result.paymentIntentId, updatedAt: sql`unixepoch()` })
       .where(eq(orders.id, body.orderId));
-
-    // Create payment plan record for deposit orders
-    if (policy.paymentType === "deposit") {
-      await db.insert(paymentPlans).values({
-        id: crypto.randomUUID(),
-        orderId: body.orderId,
-        totalAmount: order.totalAmount,
-        depositAmount: policy.depositAmount,
-        balanceDue: policy.balanceDue,
-        status: "pending",
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`
-      }).onConflictDoNothing();
-    }
   } catch (error: unknown) {
-    console.error("[payments] Stripe session was created, but local order session side effects failed:", error);
+    console.error("[payments] Stripe session was created, but local order recovery hint failed:", error);
   }
 
   return ok(c, responsePayload);

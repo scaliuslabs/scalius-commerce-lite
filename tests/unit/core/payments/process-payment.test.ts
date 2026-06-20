@@ -300,12 +300,14 @@ function createPaymentDb(options: {
     inventoryPool: string;
     version: number;
   }>;
+  extraSelects?: unknown[];
   batchResults: unknown[];
 }) {
   const selectValues: unknown[] = [
     options.shipmentClaim ?? null,
     options.existingPayment ?? null,
     ...options.orders,
+    ...(options.extraSelects ?? []),
   ];
   let updateCount = 0;
   return {
@@ -342,7 +344,12 @@ describe("processPaymentConfirmed atomic persistence", () => {
         inventoryPool: "regular",
         version: 1,
       }],
-      batchResults: [[[{ id: "ord_test" }], [{ id: "pay_test" }], []]],
+      extraSelects: [{
+        status: "pending",
+        depositAmount: 1000,
+        balanceDue: 1500,
+      }],
+      batchResults: [[[{ id: "ord_test" }], [{ id: "pay_test" }], [{ id: "plan_test" }]]],
     });
     const processPaymentConfirmed = await loadProcessPaymentConfirmed();
 
@@ -375,9 +382,9 @@ describe("processPaymentConfirmed atomic persistence", () => {
         {
           id: "ord_test",
           totalAmount: 2500,
-          paidAmount: 500,
-          balanceDue: 2000,
-          paymentStatus: PaymentStatus.PARTIAL,
+          paidAmount: 0,
+          balanceDue: 2500,
+          paymentStatus: PaymentStatus.UNPAID,
           status: OrderStatus.PENDING,
           inventoryPool: "regular",
           version: 2,
@@ -392,7 +399,7 @@ describe("processPaymentConfirmed atomic persistence", () => {
 
     const result = await processPaymentConfirmed(db as never, {
       orderId: "ord_test",
-      amount: 1000,
+      amount: 2500,
       paymentGateway: "stripe",
       paymentType: "full",
       stripePaymentIntentId: "pi_test",
@@ -420,7 +427,7 @@ describe("processPaymentConfirmed atomic persistence", () => {
 
     const result = await processPaymentConfirmed(db as never, {
       orderId: "ord_test",
-      amount: 1000,
+      amount: 2500,
       paymentGateway: "stripe",
       paymentType: "full",
       stripePaymentIntentId: "pi_test",

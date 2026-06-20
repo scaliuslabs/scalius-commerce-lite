@@ -161,6 +161,10 @@ describe("payment processing idempotency", () => {
           paymentStatus: PaymentStatus.PARTIAL,
           status: OrderStatus.PENDING,
         }),
+        {
+          status: PaymentPlanStatus.DEPOSIT_PAID,
+          balanceDue: 75,
+        },
       ],
       batchResults: [
         [[{ id: "order_1" }], [{ id: "pay_balance" }], [{ id: "plan_1" }]],
@@ -200,6 +204,197 @@ describe("payment processing idempotency", () => {
     expect(updates).toContainEqual(expect.objectContaining({
       status: PaymentPlanStatus.COMPLETED,
     }));
+  });
+
+  it("applies a deposit payment only when the pending plan matches the incoming amount", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        null,
+        createPaymentOrder({
+          totalAmount: 100,
+          paidAmount: 0,
+          balanceDue: 100,
+          paymentStatus: PaymentStatus.UNPAID,
+          status: OrderStatus.PENDING,
+        }),
+        {
+          status: PaymentPlanStatus.PENDING,
+          depositAmount: 50,
+          balanceDue: 50,
+        },
+      ],
+      batchResults: [
+        [[{ id: "order_1" }], [{ id: "pay_deposit" }], [{ id: "plan_1" }]],
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "sslcommerz",
+      paymentType: "deposit",
+      sslcommerzTranId: "order_1_deposit_ABC12345",
+      sslcommerzValId: "val_deposit",
+      sslcommerzBankTranId: "bank_deposit",
+      amount: 50,
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).toMatchObject({
+      orderId: "order_1",
+      amount: 50,
+      paymentType: "deposit",
+      sslcommerzValId: "val_deposit",
+    });
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(updates).toContainEqual(expect.objectContaining({
+      paidAmount: 50,
+      balanceDue: 50,
+      paymentStatus: PaymentStatus.PARTIAL,
+    }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      status: PaymentPlanStatus.DEPOSIT_PAID,
+    }));
+  });
+
+  it("rejects balance confirmations before the deposit plan is marked paid", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        null,
+        createPaymentOrder({
+          totalAmount: 100,
+          paidAmount: 25,
+          balanceDue: 75,
+          paymentStatus: PaymentStatus.PARTIAL,
+        }),
+        {
+          status: PaymentPlanStatus.PENDING,
+          balanceDue: 75,
+        },
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "sslcommerz",
+      paymentType: "balance",
+      sslcommerzTranId: "order_1_balance_ABC12345",
+      sslcommerzValId: "val_balance",
+      amount: 75,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Deposit payment must be confirmed before balance payment",
+      retryable: false,
+    });
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects repeated deposit confirmations after partial money has already been recorded", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        null,
+        createPaymentOrder({
+          totalAmount: 100,
+          paidAmount: 50,
+          balanceDue: 50,
+          paymentStatus: PaymentStatus.PARTIAL,
+        }),
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "sslcommerz",
+      paymentType: "deposit",
+      sslcommerzTranId: "order_1_deposit_RETRY",
+      sslcommerzValId: "val_deposit_retry",
+      amount: 50,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Order already has a partial payment; use a balance payment",
+      retryable: false,
+    });
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects full-payment confirmations whose amount does not match the order total", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        null,
+        createPaymentOrder({ totalAmount: 100, paidAmount: 0, balanceDue: 100 }),
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "stripe",
+      paymentType: "full",
+      stripePaymentIntentId: "pi_wrong_amount",
+      amount: 90,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Full payment amount must match the order total",
+      retryable: false,
+    });
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+  });
+
+  it("does not report success when the payment plan CAS loses after order and payment updates", async () => {
+    const { db, inserts, batch } = createDbMock({
+      selectGetResults: [
+        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        null,
+        createPaymentOrder({
+          totalAmount: 100,
+          paidAmount: 0,
+          balanceDue: 100,
+          paymentStatus: PaymentStatus.UNPAID,
+        }),
+        {
+          status: PaymentPlanStatus.PENDING,
+          depositAmount: 50,
+          balanceDue: 50,
+        },
+      ],
+      batchResults: [
+        [[{ id: "order_1" }], [{ id: "pay_deposit" }], []],
+      ],
+    });
+
+    const result = await processPaymentConfirmed(db as never, {
+      orderId: "order_1",
+      paymentGateway: "sslcommerz",
+      paymentType: "deposit",
+      sslcommerzTranId: "order_1_deposit_ABC12345",
+      sslcommerzValId: "val_deposit",
+      amount: 50,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Payment plan changed concurrently; retry required",
+    });
+    expect(inserts).toHaveLength(1);
+    expect(batch).toHaveBeenCalledTimes(1);
   });
 
   it("dedupes exact duplicate SSLCommerz confirmations by val_id", async () => {

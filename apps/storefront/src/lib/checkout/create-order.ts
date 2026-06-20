@@ -57,7 +57,7 @@ export function parseDiscountInput(checkoutData: Record<string, unknown>): {
 export async function createOrder(
   checkoutData: Record<string, unknown>,
   paymentMethod: PaymentMethod,
-): Promise<{ orderId: string; receiptToken: string }> {
+): Promise<{ orderId: string; receiptToken: string; totalAmount?: number; paymentMethod?: string }> {
   let cartItems: Record<string, { id: string; variantId?: string; quantity: number; price: number }> = {};
   try {
     cartItems = JSON.parse((checkoutData.cartItems as string) || "{}");
@@ -117,7 +117,22 @@ export async function createOrder(
   const data = await res.json();
   const orderId = data.data?.id || data.orderId || data.id || data.order?.id;
   const receiptToken = data.data?.receiptToken || data.receiptToken || data.checkoutToken;
+  const totalAmount = typeof data.data?.totalAmount === "number"
+    ? data.data.totalAmount
+    : typeof data.totalAmount === "number"
+      ? data.totalAmount
+      : undefined;
+  const resolvedPaymentMethod = typeof data.data?.paymentMethod === "string"
+    ? data.data.paymentMethod
+    : typeof data.paymentMethod === "string"
+      ? data.paymentMethod
+      : undefined;
   if (!orderId) throw new Error("Order creation failed");
   if (!receiptToken) throw new Error("Order receipt token missing");
-  return { orderId: orderId as string, receiptToken: receiptToken as string };
+  return {
+    orderId: orderId as string,
+    receiptToken: receiptToken as string,
+    totalAmount,
+    paymentMethod: resolvedPaymentMethod,
+  };
 }

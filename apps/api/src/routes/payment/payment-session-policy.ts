@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { PaymentStatus, paymentPlans, siteSettings } from "@scalius/database/schema";
+import { PaymentPlanStatus, PaymentStatus, paymentPlans, siteSettings } from "@scalius/database/schema";
 import { getUnpayableOrderReason } from "@scalius/core/modules/payments/payable-order";
 import { pricesEqual, roundPrice, subtractPrice } from "@scalius/shared/price-utils";
 import { ValidationError } from "../../utils/api-error";
@@ -63,6 +63,7 @@ async function getPartialPaymentSettings(db: Database): Promise<PartialPaymentSe
 async function getPaymentPlan(db: Database, orderId: string) {
   return db
     .select({
+      depositAmount: paymentPlans.depositAmount,
       balanceDue: paymentPlans.balanceDue,
       status: paymentPlans.status,
     })
@@ -84,11 +85,23 @@ export async function resolvePaymentSessionPolicy(
   requested: RequestedPaymentSession,
   checkoutFlowSettings?: PartialPaymentSettings | null,
 ): Promise<PaymentSessionPolicy> {
-  const paymentType = requested.paymentType ?? "full";
   const orderTotal = assertPositiveAmount(order.totalAmount, "Order total");
-  const getPaymentSettings = () => checkoutFlowSettings
-    ? Promise.resolve(checkoutFlowSettings)
-    : getPartialPaymentSettings(db);
+  let cachedPaymentSettings: PartialPaymentSettings | null | undefined = checkoutFlowSettings;
+  const getPaymentSettings = async () => {
+    if (cachedPaymentSettings !== undefined) return cachedPaymentSettings;
+    cachedPaymentSettings = await getPartialPaymentSettings(db);
+    return cachedPaymentSettings;
+  };
+
+  const inferredPaymentType = await (async (): Promise<PaymentSessionType> => {
+    const settings = await getPaymentSettings();
+    const configuredDeposit = roundPrice(Number(settings?.partialPaymentAmount ?? 0));
+    if (settings?.partialPaymentEnabled && configuredDeposit > 0 && configuredDeposit < orderTotal) {
+      return "deposit";
+    }
+    return "full";
+  })();
+  const paymentType = requested.paymentType ?? inferredPaymentType;
 
   if (requested.depositAmount !== undefined && paymentType !== "deposit") {
     throw new ValidationError("depositAmount is only accepted for deposit payments");
@@ -97,12 +110,16 @@ export async function resolvePaymentSessionPolicy(
   if (paymentType === "deposit") {
     const settings = await getPaymentSettings();
     const configuredDeposit = roundPrice(Number(settings?.partialPaymentAmount ?? 0));
+    const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
 
     if (!settings?.partialPaymentEnabled || configuredDeposit <= 0) {
       throw new ValidationError("Partial payment is not enabled for checkout");
     }
     if (configuredDeposit >= orderTotal) {
       throw new ValidationError("Configured deposit amount must be less than order total");
+    }
+    if (order.paymentStatus === PaymentStatus.PARTIAL || paidAmount > 0) {
+      throw new ValidationError("Order already has a partial payment; use a balance payment");
     }
     if (
       requested.depositAmount !== undefined &&
@@ -112,6 +129,25 @@ export async function resolvePaymentSessionPolicy(
     }
 
     const balanceDue = subtractPrice(orderTotal, configuredDeposit);
+    const plan = await getPaymentPlan(db, order.id);
+    if (plan) {
+      if (plan.status === PaymentPlanStatus.CANCELLED) {
+        throw new ValidationError("Partial payment plan is cancelled");
+      }
+      if (plan.status === PaymentPlanStatus.DEPOSIT_PAID || plan.status === PaymentPlanStatus.COMPLETED) {
+        throw new ValidationError("Deposit payment has already been confirmed");
+      }
+      if (plan.status !== PaymentPlanStatus.PENDING) {
+        throw new ValidationError("Deposit payment plan is not ready");
+      }
+      if (
+        !pricesEqual(roundPrice(plan.depositAmount), configuredDeposit) ||
+        !pricesEqual(roundPrice(plan.balanceDue), balanceDue)
+      ) {
+        throw new ValidationError("Partial payment plan does not match the current order total");
+      }
+    }
+
     return {
       paymentType: "deposit",
       chargeAmount: configuredDeposit,
@@ -122,17 +158,30 @@ export async function resolvePaymentSessionPolicy(
 
   if (paymentType === "balance") {
     const plan = await getPaymentPlan(db, order.id);
-    if (plan?.status === "cancelled" || plan?.status === "completed") {
-      throw new ValidationError("No balance due");
-    }
+    const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
 
-    const storedBalance = plan?.balanceDue ?? order.balanceDue;
-    const balanceDue = roundPrice(Number(storedBalance ?? subtractPrice(orderTotal, Number(order.paidAmount ?? 0))));
-    if (order.paymentStatus === PaymentStatus.UNPAID && !plan) {
+    if (!plan || order.paymentStatus !== PaymentStatus.PARTIAL || paidAmount <= 0) {
       throw new ValidationError("No partial payment has been recorded for this order");
     }
+    if (plan.status === PaymentPlanStatus.CANCELLED || plan.status === PaymentPlanStatus.COMPLETED) {
+      throw new ValidationError("No balance due");
+    }
+    if (plan.status !== PaymentPlanStatus.DEPOSIT_PAID) {
+      throw new ValidationError("Deposit payment must be confirmed before balance payment");
+    }
+
+    const storedBalance = plan.balanceDue ?? order.balanceDue;
+    const balanceDue = roundPrice(Number(storedBalance ?? subtractPrice(orderTotal, paidAmount)));
     if (!Number.isFinite(balanceDue) || balanceDue <= 0) {
       throw new ValidationError("No balance due");
+    }
+    const orderBalanceDue = roundPrice(Number(order.balanceDue ?? subtractPrice(orderTotal, paidAmount)));
+    if (!pricesEqual(balanceDue, orderBalanceDue)) {
+      throw new ValidationError("Payment plan balance does not match the order balance");
+    }
+    const computedOutstanding = subtractPrice(orderTotal, paidAmount);
+    if (!pricesEqual(balanceDue, computedOutstanding)) {
+      throw new ValidationError("Payment plan balance does not match the order payment state");
     }
 
     return {

@@ -1,6 +1,7 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { createOrder } from "../create-order";
 import { resolveCheckoutPaymentRequest } from "../payment-mode";
+import { buildPaymentRecoveryUrl } from "../payment-recovery";
 
 export const polarHandler: GatewayHandler = {
   id: "polar",
@@ -17,18 +18,17 @@ export const polarHandler: GatewayHandler = {
   },
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
+    let createdOrder: Awaited<ReturnType<typeof createOrder>> | null = null;
+    let paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest> | null = null;
     try {
-      const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "polar");
-      const paymentRequest = resolveCheckoutPaymentRequest(ctx.config, ctx.totalAmount);
+      createdOrder = await createOrder(ctx.checkoutData, "polar");
+      const { orderId, receiptToken } = createdOrder;
+      paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
       const sessionPayload: Record<string, unknown> = {
         orderId,
         receiptToken,
-        paymentType: paymentRequest.paymentType,
       };
-      if (paymentRequest.paymentType === "deposit") {
-        sessionPayload.depositAmount = paymentRequest.depositAmount;
-      }
 
       const sessionRes = await fetch("/api/checkout/polar-session", {
         method: "POST",
@@ -51,6 +51,19 @@ export const polarHandler: GatewayHandler = {
         clearCheckoutSessionOnRedirect: true,
       };
     } catch (err: unknown) {
+      if (createdOrder) {
+        return {
+          success: true,
+          redirectUrl: buildPaymentRecoveryUrl({
+            orderId: createdOrder.orderId,
+            receiptToken: createdOrder.receiptToken,
+            gateway: "polar",
+            paymentType: paymentRequest?.paymentType,
+            depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
+          }),
+          clearCheckoutSessionOnRedirect: true,
+        };
+      }
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   },

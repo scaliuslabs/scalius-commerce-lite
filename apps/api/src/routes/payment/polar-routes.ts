@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { type Database } from "@scalius/database/client";
-import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
+import { orders, PaymentMethod } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import {
     FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
@@ -25,6 +25,7 @@ import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
+import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -117,6 +118,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         paymentType: body.paymentType || body.type,
         depositAmount: body.depositAmount,
     }, checkoutFlowSettings);
+    await ensurePendingPaymentPlanForSession(db, order, policy);
 
     // Get configured currency
     const currencyConfig = await getCurrencyConfig(db);
@@ -246,7 +248,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         response: responsePayload,
     });
 
-    // Save the Polar checkout ID to the order
+    // Save the Polar checkout ID to the order as a recovery hint.
     try {
         await db
             .update(orders)
@@ -256,31 +258,8 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
                 updatedAt: sql`unixepoch()`
             })
             .where(eq(orders.id, orderId));
-
-        // Set up payment plan for deposit orders.
-        // Use original local currency amounts — NOT the converted gateway amount.
-        if (policy.paymentType === "deposit") {
-            await db
-                .insert(paymentPlans)
-                .values({
-                    id: crypto.randomUUID(),
-                    orderId,
-                    totalAmount: order.totalAmount,
-                    depositAmount: policy.depositAmount,
-                    balanceDue: policy.balanceDue,
-                    status: "pending"
-                })
-                .onConflictDoUpdate({
-                    target: paymentPlans.orderId,
-                    set: {
-                        depositAmount: policy.depositAmount,
-                        balanceDue: policy.balanceDue,
-                        updatedAt: sql`unixepoch()`
-                    }
-                });
-        }
     } catch (error: unknown) {
-        console.error("[payments] Polar session was created, but local order session side effects failed:", error);
+        console.error("[payments] Polar session was created, but local order recovery hint failed:", error);
     }
 
     return ok(c, responsePayload);

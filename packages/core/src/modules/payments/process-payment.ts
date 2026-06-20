@@ -44,6 +44,163 @@ function failedAttemptCanBePromoted(record: { amount: number; status: string }, 
   return paymentRecordMatchesAmount(record.amount, incomingAmount);
 }
 
+function computedBalanceDue(order: {
+  totalAmount: number;
+  paidAmount: number | null;
+  balanceDue: number | null;
+}): number {
+  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+  const storedBalance = Number(order.balanceDue);
+  if (Number.isFinite(storedBalance)) return roundPrice(storedBalance);
+  return roundPrice(Math.max(0, order.totalAmount - paidAmount));
+}
+
+function validateFullPaymentState(
+  order: {
+    totalAmount: number;
+    paidAmount: number | null;
+    paymentStatus: string;
+  },
+  incomingAmount: number,
+): string | null {
+  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+  if (paidAmount > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
+    return "Order has an outstanding balance; use a balance payment";
+  }
+  if (!pricesEqual(roundPrice(incomingAmount), roundPrice(order.totalAmount))) {
+    return "Full payment amount must match the order total";
+  }
+  return null;
+}
+
+async function validateDepositPaymentState(
+  db: Database,
+  order: {
+    id: string;
+    totalAmount: number;
+    paidAmount: number | null;
+    balanceDue: number | null;
+    paymentStatus: string;
+  },
+  incomingAmount: number,
+): Promise<string | null> {
+  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+  if (paidAmount > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
+    return "Order already has a partial payment; use a balance payment";
+  }
+
+  const plan = await db
+    .select({
+      status: paymentPlans.status,
+      depositAmount: paymentPlans.depositAmount,
+      balanceDue: paymentPlans.balanceDue,
+    })
+    .from(paymentPlans)
+    .where(eq(paymentPlans.orderId, order.id))
+    .get();
+
+  if (!plan) {
+    return "Partial payment plan is missing for this deposit";
+  }
+  if (plan.status === PaymentPlanStatus.CANCELLED) {
+    return "Partial payment plan is cancelled";
+  }
+  if (plan.status === PaymentPlanStatus.DEPOSIT_PAID || plan.status === PaymentPlanStatus.COMPLETED) {
+    return "Deposit payment has already been confirmed";
+  }
+  if (plan.status !== PaymentPlanStatus.PENDING) {
+    return "Deposit payment plan is not ready";
+  }
+  if (!pricesEqual(roundPrice(incomingAmount), roundPrice(plan.depositAmount))) {
+    return "Deposit payment amount must match the pending payment plan";
+  }
+
+  const expectedBalance = roundPrice(Math.max(0, order.totalAmount - roundPrice(incomingAmount)));
+  if (!pricesEqual(roundPrice(plan.balanceDue), expectedBalance)) {
+    return "Deposit payment plan balance does not match the order total";
+  }
+
+  return null;
+}
+
+async function validateBalancePaymentState(
+  db: Database,
+  order: {
+    id: string;
+    totalAmount: number;
+    paidAmount: number | null;
+    balanceDue: number | null;
+    paymentStatus: string;
+  },
+  incomingAmount: number,
+): Promise<string | null> {
+  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+  if (order.paymentStatus !== PaymentStatus.PARTIAL || paidAmount <= 0) {
+    return "No partial payment has been recorded for this order";
+  }
+
+  const plan = await db
+    .select({
+      status: paymentPlans.status,
+      balanceDue: paymentPlans.balanceDue,
+    })
+    .from(paymentPlans)
+    .where(eq(paymentPlans.orderId, order.id))
+    .get();
+
+  if (!plan) {
+    return "No partial payment has been recorded for this order";
+  }
+  if (plan.status === PaymentPlanStatus.CANCELLED || plan.status === PaymentPlanStatus.COMPLETED) {
+    return "No balance due";
+  }
+  if (plan.status !== PaymentPlanStatus.DEPOSIT_PAID) {
+    return "Deposit payment must be confirmed before balance payment";
+  }
+
+  const balanceDue = roundPrice(Number(plan.balanceDue ?? order.balanceDue ?? 0));
+  if (!Number.isFinite(balanceDue) || balanceDue <= 0) {
+    return "No balance due";
+  }
+  const orderBalanceDue = computedBalanceDue(order);
+  if (!pricesEqual(balanceDue, orderBalanceDue)) {
+    return "Payment plan balance does not match the order balance";
+  }
+  const computedOutstanding = roundPrice(Math.max(0, order.totalAmount - paidAmount));
+  if (!pricesEqual(balanceDue, computedOutstanding)) {
+    return "Payment plan balance does not match the order payment state";
+  }
+  if (!pricesEqual(balanceDue, roundPrice(incomingAmount))) {
+    return "Balance payment amount must match the outstanding balance";
+  }
+
+  return null;
+}
+
+async function validateIncomingPaymentState(
+  db: Database,
+  order: {
+    id: string;
+    totalAmount: number;
+    paidAmount: number | null;
+    balanceDue: number | null;
+    paymentStatus: string;
+  },
+  paymentType: string,
+  incomingAmount: number,
+): Promise<string | null> {
+  if (paymentType === "full") {
+    return validateFullPaymentState(order, incomingAmount);
+  }
+  if (paymentType === "deposit") {
+    return validateDepositPaymentState(db, order, incomingAmount);
+  }
+  if (paymentType === "balance") {
+    return validateBalancePaymentState(db, order, incomingAmount);
+  }
+  return "Unsupported payment type";
+}
+
 /**
  * Process a confirmed payment event.
  *
@@ -156,6 +313,16 @@ export async function processPaymentConfirmed(
       return { success: false, error: initialUnpayableReason, retryable: false };
     }
 
+    const initialPaymentStateError = await validateIncomingPaymentState(
+      db,
+      initialOrder,
+      params.paymentType,
+      params.amount,
+    );
+    if (initialPaymentStateError) {
+      return { success: false, error: initialPaymentStateError, retryable: false };
+    }
+
     const currencyConfig = await getCurrencyConfig(db);
     if (!paymentId) {
       paymentId = crypto.randomUUID();
@@ -213,12 +380,39 @@ export async function processPaymentConfirmed(
       if (unpayableReason) {
         return { success: false, error: unpayableReason, retryable: false };
       }
+      if (attempt > 0) {
+        const paymentStateError = await validateIncomingPaymentState(
+          db,
+          order,
+          params.paymentType,
+          params.amount,
+        );
+        if (paymentStateError) {
+          return { success: false, error: paymentStateError, retryable: false };
+        }
+      }
 
       const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
       const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
       const isFullyPaid = pricesEqual(newBalanceDue, 0);
       const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
       const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
+      const paymentPlanReadyPredicate = params.paymentType === "deposit"
+        ? sql`EXISTS (
+            SELECT 1 FROM payment_plans
+            WHERE order_id = ${params.orderId}
+              AND status = ${PaymentPlanStatus.PENDING}
+              AND round(deposit_amount, 2) = round(${params.amount}, 2)
+              AND round(balance_due, 2) = round(${newBalanceDue}, 2)
+          )`
+        : params.paymentType === "balance"
+          ? sql`EXISTS (
+              SELECT 1 FROM payment_plans
+              WHERE order_id = ${params.orderId}
+                AND status = ${PaymentPlanStatus.DEPOSIT_PAID}
+                AND round(balance_due, 2) = round(${params.amount}, 2)
+            )`
+          : sql`1 = 1`;
 
       validateTransition("order", order.status, newStatus);
       validateTransition("payment", order.paymentStatus, newPaymentStatus);
@@ -238,6 +432,7 @@ export async function processPaymentConfirmed(
           isNull(orders.deletedAt),
           notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
           notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
+          paymentPlanReadyPredicate,
           sql`EXISTS (
             SELECT 1 FROM order_payments
             WHERE id = ${paymentId}
@@ -280,7 +475,19 @@ export async function processPaymentConfirmed(
               depositPaidAt: sql`unixepoch()`,
               updatedAt: sql`unixepoch()`,
             })
-            .where(eq(paymentPlans.orderId, params.orderId)),
+            .where(and(
+              eq(paymentPlans.orderId, params.orderId),
+              eq(paymentPlans.status, PaymentPlanStatus.PENDING),
+              sql`EXISTS (
+                SELECT 1 FROM orders
+                WHERE id = ${params.orderId}
+                  AND version = ${nextVersion}
+                  AND paid_amount = ${newPaidAmount}
+                  AND balance_due = ${newBalanceDue}
+                  AND payment_status = ${newPaymentStatus}
+              )`,
+            ))
+            .returning({ id: paymentPlans.id }),
         );
       } else if (params.paymentType === "balance" && isFullyPaid) {
         batchStatements.push(
@@ -291,19 +498,38 @@ export async function processPaymentConfirmed(
               balancePaidAt: sql`unixepoch()`,
               updatedAt: sql`unixepoch()`,
             })
-            .where(eq(paymentPlans.orderId, params.orderId)),
+            .where(and(
+              eq(paymentPlans.orderId, params.orderId),
+              eq(paymentPlans.status, PaymentPlanStatus.DEPOSIT_PAID),
+              sql`EXISTS (
+                SELECT 1 FROM orders
+                WHERE id = ${params.orderId}
+                  AND version = ${nextVersion}
+                  AND paid_amount = ${newPaidAmount}
+                  AND balance_due = ${newBalanceDue}
+                  AND payment_status = ${newPaymentStatus}
+              )`,
+            ))
+            .returning({ id: paymentPlans.id }),
         );
       }
 
       const batchResult = await safeBatch(db, batchStatements) as unknown[];
       const orderUpdate = batchResult[0] as Array<{ id: string }> | undefined;
       const paymentUpdate = batchResult[1] as Array<{ id: string }> | undefined;
+      const planUpdate = batchResult[2] as Array<{ id: string }> | undefined;
 
       if ((orderUpdate?.length ?? 0) === 0 && (paymentUpdate?.length ?? 0) === 0) {
         continue;
       }
       if ((orderUpdate?.length ?? 0) === 0 || (paymentUpdate?.length ?? 0) === 0) {
         return { success: false, error: "Payment application changed concurrently; retry required" };
+      }
+      if (
+        (params.paymentType === "deposit" || (params.paymentType === "balance" && isFullyPaid)) &&
+        (planUpdate?.length ?? 0) === 0
+      ) {
+        return { success: false, error: "Payment plan changed concurrently; retry required" };
       }
 
       paymentApplied = true;
