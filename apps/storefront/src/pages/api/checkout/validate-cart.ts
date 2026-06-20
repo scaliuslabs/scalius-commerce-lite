@@ -1,5 +1,9 @@
 import type { APIRoute } from "astro";
-import { validateCartItems, type CartValidationRequestItem } from "@/lib/api/orders";
+import {
+  validateCartItems,
+  type CartValidationOptions,
+  type CartValidationRequestItem,
+} from "@/lib/api/orders";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -24,6 +28,25 @@ function normalizeItem(value: unknown): CartValidationRequestItem | null {
   };
 }
 
+function optionalString(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function normalizeOptions(payload: unknown): CartValidationOptions {
+  if (!isRecord(payload)) return {};
+  const city = optionalString(payload, "city");
+  const zone = optionalString(payload, "zone");
+  if (!city || !zone) return {};
+
+  return {
+    city,
+    zone,
+    area: optionalString(payload, "area"),
+    shippingMethodId: optionalString(payload, "shippingMethodId"),
+  };
+}
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const payload = await request.json().catch(() => null);
@@ -40,7 +63,7 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    const result = await validateCartItems(items);
+    const result = await validateCartItems(items, normalizeOptions(payload));
     if (!result.success) {
       return new Response(
         JSON.stringify({

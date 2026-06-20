@@ -65,6 +65,20 @@ export type CartValidationResult = {
   }>;
   subtotal: number;
   hasFreeDeliveryProduct: boolean;
+  delivery?: {
+    shippingCharge: number;
+    cityName: string;
+    zoneName: string;
+    areaName: string | null;
+  };
+};
+
+export type CartValidationOptions = {
+  inventoryPool?: "regular" | "preorder" | "backorder";
+  city?: string | null;
+  zone?: string | null;
+  area?: string | null;
+  shippingMethodId?: string | null;
 };
 
 type OrderStatusData = {
@@ -209,6 +223,7 @@ export async function createOrder(
 
 export async function validateCartItems(
   items: CartValidationRequestItem[],
+  options: CartValidationOptions = {},
 ): Promise<{ success: true; data: CartValidationResult } | { success: false; error: string; status?: number; details?: unknown }> {
   try {
     const response = await fetchWithRetry(
@@ -216,7 +231,7 @@ export async function validateCartItems(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, ...options }),
       },
       1,
       8000,

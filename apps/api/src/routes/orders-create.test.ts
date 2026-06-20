@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   commitStorefrontOrderPayload: vi.fn(),
   runStorefrontOrderPostCommitSideEffects: vi.fn(),
   validateStorefrontCartItems: vi.fn(),
+  validateStorefrontDeliveryPreflight: vi.fn(),
   invalidateProductAvailabilityCaches: vi.fn(),
   rateLimit: vi.fn(async () => ({ allowed: true })),
   getClientIp: vi.fn(() => "127.0.0.1"),
@@ -32,6 +33,7 @@ vi.mock("@scalius/core/modules/orders", () => ({
   commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
   runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
   validateStorefrontCartItems: mocks.validateStorefrontCartItems,
+  validateStorefrontDeliveryPreflight: mocks.validateStorefrontDeliveryPreflight,
 }));
 
 vi.mock("../utils/cache-invalidation", () => ({
@@ -95,6 +97,12 @@ beforeEach(() => {
     items: [],
     subtotal: 0,
     hasFreeDeliveryProduct: false,
+  });
+  mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
+    shippingCharge: 60,
+    cityName: "Dhaka",
+    zoneName: "Mirpur",
+    areaName: null,
   });
 });
 
@@ -231,6 +239,104 @@ describe("cart validation preflight", () => {
     });
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.validateStorefrontDeliveryPreflight).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("preflights selected delivery data when cart validation receives city and zone", async () => {
+    const { app, kv, queue } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders/cart-validation",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              cartKey: "line_1",
+              productId: "product_1",
+              variantId: "variant_1",
+              quantity: 1,
+              price: 100,
+              productName: "Queue Product",
+            },
+          ],
+          city: "city_1",
+          zone: "zone_1",
+          area: null,
+          shippingMethodId: "ship_1",
+        }),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        valid: true,
+        delivery: {
+          shippingCharge: 60,
+          cityName: "Dhaka",
+          zoneName: "Mirpur",
+        },
+      },
+    });
+    expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        city: "city_1",
+        zone: "zone_1",
+        area: null,
+        shippingMethodId: "ship_1",
+      },
+      expect.objectContaining({ valid: true }),
+    );
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("surfaces stale delivery choices from cart validation without creating checkout side effects", async () => {
+    mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
+      new ValidationError("A valid active shipping method is required for this order."),
+    );
+    const { app, kv, queue } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders/cart-validation",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              cartKey: "line_1",
+              productId: "product_1",
+              variantId: "variant_1",
+              quantity: 1,
+              price: 100,
+              productName: "Queue Product",
+            },
+          ],
+          city: "city_1",
+          zone: "zone_1",
+          shippingMethodId: "ship_stale",
+        }),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "A valid active shipping method is required for this order.",
+      },
+    });
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 });
@@ -285,6 +391,11 @@ describe("create order commit/KV ordering", () => {
         checkoutToken: "chk_order_1",
       },
       expect.objectContaining({ valid: true }),
+      expect.objectContaining({
+        shippingCharge: 60,
+        cityName: "Dhaka",
+        zoneName: "Mirpur",
+      }),
     );
     expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
       expect.anything(),
@@ -559,6 +670,54 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.buildCheckoutAttemptIdentity).toHaveBeenCalledOnce();
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.validateStorefrontCartItems).toHaveBeenCalledOnce();
+    expect(mocks.validateStorefrontDeliveryPreflight).not.toHaveBeenCalled();
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale delivery choices before policy, rate limiting, or checkout attempt claim", async () => {
+    mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
+      new ValidationError("Selected zone is no longer available for the chosen city."),
+    );
+    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Selected zone is no longer available for the chosen city.",
+      },
+    });
+    expect(mocks.buildCheckoutAttemptIdentity).toHaveBeenCalledOnce();
+    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
+    expect(mocks.validateStorefrontCartItems).toHaveBeenCalledOnce();
+    expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        city: "city_1",
+        zone: "zone_1",
+        area: null,
+        shippingMethodId: undefined,
+      },
+      expect.objectContaining({ valid: true }),
+    );
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
@@ -979,7 +1138,7 @@ describe("create order commit/KV ordering", () => {
   });
 
   it("does not write checkout status or receipt proof when location validation fails", async () => {
-    mocks.createStorefrontOrder.mockRejectedValue(
+    mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("Selected zone is no longer available for the chosen city."),
     );
     const { app, kv, queue } = createTestApp();
@@ -1003,6 +1162,8 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(kv.put).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
   });
