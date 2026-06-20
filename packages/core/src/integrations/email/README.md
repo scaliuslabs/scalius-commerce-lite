@@ -14,9 +14,11 @@ Every email path calls `sendEmail(options, context?)`. The selector reads `email
 - Saved provider is `cloudflare`: Cloudflare binding first, then Resend if a key exists.
 - Saved provider is `resend`: Resend first, then Cloudflare if the binding exists.
 - No saved provider: existing Resend keys preserve legacy behavior; otherwise Cloudflare is preferred.
-- No configured provider: logs the email body locally and does not throw.
+- No configured provider: logs masked metadata only, returns a non-delivered result, and does not leak OTPs, reset links, or invite secrets to logs.
 
 Cloudflare Email Service is the native/default option. Do not add another paid/external email provider without keeping Cloudflare available in API, runtime, UI, and docs.
+
+`getEmailProviderReadiness(context?)` is the shared readiness check for admin policy saves and customer OTP send-time preflights. Email OTP is ready only when a valid `email_sender` is saved and either the Cloudflare `EMAIL` binding is present or a Resend key decrypts with `CREDENTIAL_ENCRYPTION_KEY`. An unreadable Resend key is not considered configured, but Cloudflare remains a valid native fallback when the binding exists.
 
 ## Settings
 
@@ -28,7 +30,7 @@ Category `email` keys:
 
 Admin API:
 
-- `GET /api/v1/admin/settings/email` returns provider, masked Resend key status, sender, and Cloudflare binding status.
+- `GET /api/v1/admin/settings/email` returns provider, masked Resend key status, sender, Cloudflare binding status, and Email OTP readiness.
 - `POST /api/v1/admin/settings/email` saves provider/sender, skips masked keys, encrypts new Resend keys, and allows blank key clearing.
 
 ## Runtime Context

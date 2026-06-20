@@ -8,6 +8,18 @@ import { and, eq } from "drizzle-orm";
 import type { EmailRuntimeContext, EmailRuntimeSettings } from "./provider";
 
 const DEFAULT_FROM = "noreply@example.com";
+const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export interface EmailProviderReadiness {
+  configured: boolean;
+  provider: EmailRuntimeSettings["provider"];
+  sender: string;
+  senderConfigured: boolean;
+  cloudflareBindingConfigured: boolean;
+  resendConfigured: boolean;
+  error: string | null;
+  blockers: string[];
+}
 
 function encryptionKeyFromContext(context?: EmailRuntimeContext): string | undefined {
   return context?.encryptionKey
@@ -52,24 +64,61 @@ export async function getEmailRuntimeSettings(
       : resendApiKey
         ? "resend"
         : "cloudflare";
+    const rawSender = (values.get("email_sender") || "").trim();
+    const senderConfigured = EMAIL_ADDRESS_PATTERN.test(rawSender);
 
     return {
       provider,
-      sender: values.get("email_sender") || DEFAULT_FROM,
+      sender: rawSender || DEFAULT_FROM,
+      senderConfigured,
       resendApiKey,
       hasResendApiKey: Boolean(resendApiKey),
       cloudflareBindingConfigured: Boolean(context?.env?.EMAIL),
+      resendCredentialError: resolvedResendApiKey.error ?? null,
     };
   } catch (error: unknown) {
     console.error("[Email] Failed to load email settings from DB:", error);
     return {
       provider: context?.env?.EMAIL ? "cloudflare" : "resend",
       sender: DEFAULT_FROM,
+      senderConfigured: false,
       resendApiKey: null,
       hasResendApiKey: false,
       cloudflareBindingConfigured: Boolean(context?.env?.EMAIL),
+      resendCredentialError: null,
     };
   }
+}
+
+export async function getEmailProviderReadiness(
+  context?: EmailRuntimeContext,
+): Promise<EmailProviderReadiness> {
+  const settings = await getEmailRuntimeSettings(context);
+  const blockers: string[] = [];
+  const hasProvider = settings.cloudflareBindingConfigured || settings.hasResendApiKey;
+
+  if (!settings.senderConfigured) {
+    blockers.push("Sender email is required before enabling Email OTP.");
+  }
+
+  if (!hasProvider) {
+    blockers.push(
+      settings.resendCredentialError
+        ? settings.resendCredentialError
+        : "Configure Cloudflare Email or save a Resend API key before enabling Email OTP.",
+    );
+  }
+
+  return {
+    configured: blockers.length === 0,
+    provider: settings.provider,
+    sender: settings.sender,
+    senderConfigured: settings.senderConfigured,
+    cloudflareBindingConfigured: settings.cloudflareBindingConfigured,
+    resendConfigured: settings.hasResendApiKey,
+    error: blockers[0] ?? null,
+    blockers,
+  };
 }
 
 export async function readEmailSetting(

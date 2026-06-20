@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
-import { getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
+import { getEmailProviderReadiness, getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import {
     normalizeFirebaseServiceAccountJson,
@@ -22,6 +22,7 @@ import {
     CUSTOMER_AUTH_CONTACT_FIELDS,
     CUSTOMER_AUTH_METHODS,
     CUSTOMER_AUTH_OTP_CHANNELS,
+    customerAuthPolicyUsesEmailProvider,
     customerAuthPolicyUsesSmsProvider,
     customerAuthPolicyUsesWhatsAppProvider,
     getCustomerAuthPolicyForMethod,
@@ -223,6 +224,19 @@ app.openapi(saveAuthRoute, async (c) => {
         if (typeof body.partialPaymentEnabled === "boolean") updates.partialPaymentEnabled = body.partialPaymentEnabled;
         if (typeof body.partialPaymentAmount === "number") updates.partialPaymentAmount = body.partialPaymentAmount;
 
+        if (requestedCustomerAuthPolicy && customerAuthPolicyUsesEmailProvider(requestedCustomerAuthPolicy)) {
+            const emailReadiness = await getEmailProviderReadiness({
+                db,
+                env: c.env as Record<string, unknown>,
+                encryptionKey: credentialEncryptionKey,
+            });
+            if (!emailReadiness.configured) {
+                throw new ValidationError(
+                    `Email OTP cannot be enabled until transactional email is configured. ${emailReadiness.error ?? ""}`.trim(),
+                );
+            }
+        }
+
         if (requestedCustomerAuthPolicy && customerAuthPolicyUsesSmsProvider(requestedCustomerAuthPolicy)) {
             const smsReadiness = await getSmsProviderReadiness(db, credentialEncryptionKey);
             if (!smsReadiness.configured) {
@@ -402,8 +416,11 @@ const getEmailRoute = createRoute({
             provider: z.enum(["cloudflare", "resend"]),
             apiKey: z.string(),
             sender: z.string(),
+            senderConfigured: z.boolean(),
             cloudflareBindingConfigured: z.boolean(),
             resendConfigured: z.boolean(),
+            ready: z.boolean(),
+            readinessError: z.string().nullable(),
         })) } } },
         ...errorResponses,
     }
@@ -416,14 +433,23 @@ app.openapi(getEmailRoute, async (c) => {
             env: c.env as Record<string, unknown>,
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
         });
+        const emailReadiness = await getEmailProviderReadiness({
+            db,
+            env: c.env as Record<string, unknown>,
+            encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+            settings: emailSettings,
+        });
         const sender = await readEmailSetting(db, "email_sender");
 
         return ok(c, {
             provider: emailSettings.provider,
             apiKey: emailSettings.hasResendApiKey ? MASKED : "",
             sender: sender || "",
+            senderConfigured: emailReadiness.senderConfigured,
             cloudflareBindingConfigured: emailSettings.cloudflareBindingConfigured,
             resendConfigured: emailSettings.hasResendApiKey,
+            ready: emailReadiness.configured,
+            readinessError: emailReadiness.error,
         });
 });
 

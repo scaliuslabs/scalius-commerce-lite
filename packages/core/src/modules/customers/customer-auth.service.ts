@@ -32,6 +32,7 @@ import {
 } from "@scalius/shared/customer-auth-policy";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
+import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
 
 // ─────────────────────────────────────────
 // Constants
@@ -79,6 +80,7 @@ export interface SendOtpInput {
     intent?: CustomerAuthIntent;
     phone?: string;
     email?: string;
+    emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
     migrationEncryptionKey?: string;
@@ -379,6 +381,17 @@ export async function sendOtp(
 
     // Resolve and validate the delivery transport before mutating rate-limit or OTP challenge state.
     const transport = getOtpTransport(method, policy, channel);
+    if (channel === "email") {
+        const emailReadiness = await getEmailProviderReadiness({
+            db,
+            env: input.emailEnv,
+            encryptionKey: input.credentialEncryptionKey,
+        });
+        if (!emailReadiness.configured) {
+            console.error(`[CustomerAuth] Email transport unavailable: ${emailReadiness.error ?? "not configured"}`);
+            throw new ServiceUnavailableError("Email verification is currently unavailable. Contact store support.");
+        }
+    }
     if (channel === "whatsapp") {
         const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey, {
             migrateLegacy: true,

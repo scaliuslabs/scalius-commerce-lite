@@ -26,6 +26,7 @@ export {
 export {
   CloudflareEmailProvider,
   ResendEmailProvider,
+  getEmailProviderReadiness,
   getEmailRuntimeSettings,
   readEmailSetting,
 } from "./email/index";
