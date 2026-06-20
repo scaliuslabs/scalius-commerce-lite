@@ -15,6 +15,10 @@ import {
 import { roundPrice } from "@scalius/shared/price-utils";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 
+type ProcessOrderOptions = {
+  customerSessionToken?: string | null;
+};
+
 export async function getCities(): Promise<LocationData[]> {
   try {
     const citiesData = await getCitiesFromApi();
@@ -107,7 +111,10 @@ function validateCartItems(raw: unknown): ValidatedCartItem[] {
   });
 }
 
-export async function processOrder(formData: FormData) {
+export async function processOrder(
+  formData: FormData,
+  options: ProcessOrderOptions = {},
+) {
   try {
     const customerName = formData.get("customerName") as string;
     const rawPhone = (formData.get("customerPhone") as string)?.trim();
@@ -340,7 +347,9 @@ export async function processOrder(formData: FormData) {
       paymentMethod: "cod",
     };
 
-    const result = await createOrder(payload);
+    const result = await createOrder(payload, {
+      customerSessionToken: options.customerSessionToken,
+    });
 
     if (result.success && result.orderId) {
       // If the order was successful, await the deletion of the abandoned checkout record.
