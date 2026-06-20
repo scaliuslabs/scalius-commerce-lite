@@ -6,6 +6,7 @@ import {
   claimCheckoutAttempt,
   markCheckoutAttemptCommitted,
   markCheckoutAttemptFailed,
+  resolveExistingCheckoutAttempt,
 } from "./checkout-attempts";
 import type { CreateStorefrontOrderInput } from "./orders.types";
 
@@ -52,6 +53,27 @@ describe("checkout attempts", () => {
     expect(fake.rows[0]?.attempts).toBe(1);
   });
 
+  it("resolves a committed checkout submit through the read-only precheck", async () => {
+    const fake = createFakeCheckoutAttemptDb();
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+
+    const first = await claimCheckoutAttempt<{ orderId: string }>(fake.db, identity);
+    if (first.status !== "claimed") throw new Error("expected first claim");
+
+    await markCheckoutAttemptCommitted(fake.db, first.attempt, {
+      paymentMethod: "cod",
+      totalAmount: 120,
+      response: { orderId: first.attempt.orderId },
+    });
+
+    await expect(resolveExistingCheckoutAttempt<{ orderId: string }>(fake.db, identity)).resolves.toEqual({
+      status: "replay",
+      response: { orderId: first.attempt.orderId },
+    });
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]?.attempts).toBe(1);
+  });
+
   it("returns the existing processing attempt while the first claim is active", async () => {
     const fake = createFakeCheckoutAttemptDb();
     const identity = await buildCheckoutAttemptIdentity(buildInput());
@@ -68,6 +90,39 @@ describe("checkout attempts", () => {
     });
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attempts).toBe(1);
+  });
+
+  it("resolves an active processing checkout submit through the read-only precheck", async () => {
+    const fake = createFakeCheckoutAttemptDb();
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+
+    const first = await claimCheckoutAttempt(fake.db, identity);
+    if (first.status !== "claimed") throw new Error("expected first claim");
+
+    await expect(resolveExistingCheckoutAttempt(fake.db, identity)).resolves.toEqual({
+      status: "processing",
+      orderId: first.attempt.orderId,
+      checkoutToken: first.attempt.checkoutToken,
+    });
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]?.attempts).toBe(1);
+  });
+
+  it("does not resolve failed or stale processing attempts through the read-only precheck", async () => {
+    const fake = createFakeCheckoutAttemptDb();
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+
+    const first = await claimCheckoutAttempt(fake.db, identity);
+    if (first.status !== "claimed") throw new Error("expected first claim");
+
+    await markCheckoutAttemptFailed(fake.db, first.attempt, new Error("commit failed"));
+    await expect(resolveExistingCheckoutAttempt(fake.db, identity)).resolves.toBeNull();
+
+    fake.rows[0]!.status = "processing";
+    fake.rows[0]!.claimId = "coac_stale";
+    fake.rows[0]!.claimExpiresAt = Math.floor(Date.now() / 1000) - 1;
+
+    await expect(resolveExistingCheckoutAttempt(fake.db, identity)).resolves.toBeNull();
   });
 
   it("reclaims a failed checkout submit while keeping the original order id and receipt token", async () => {
@@ -99,6 +154,7 @@ describe("checkout attempts", () => {
     const changedIdentity = await buildCheckoutAttemptIdentity(buildInput({ shippingCharge: 60 }));
 
     await expect(claimCheckoutAttempt(fake.db, changedIdentity)).rejects.toBeInstanceOf(ConflictError);
+    await expect(resolveExistingCheckoutAttempt(fake.db, changedIdentity)).rejects.toBeInstanceOf(ConflictError);
     expect(fake.rows).toHaveLength(1);
   });
 });

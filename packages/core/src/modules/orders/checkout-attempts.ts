@@ -23,8 +23,14 @@ export interface ClaimedCheckoutAttempt {
 
 export type CheckoutAttemptClaimResult<TResponse> =
   | { status: "claimed"; attempt: ClaimedCheckoutAttempt }
-  | { status: "replay"; response: TResponse }
-  | { status: "processing"; orderId: string; checkoutToken: string };
+  | CheckoutAttemptReplayResult<TResponse>
+  | CheckoutAttemptProcessingResult;
+
+export type CheckoutAttemptReplayResult<TResponse> = { status: "replay"; response: TResponse };
+export type CheckoutAttemptProcessingResult = { status: "processing"; orderId: string; checkoutToken: string };
+export type ExistingCheckoutAttemptResult<TResponse> =
+  | CheckoutAttemptReplayResult<TResponse>
+  | CheckoutAttemptProcessingResult;
 
 const CHECKOUT_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const MAX_ERROR_LENGTH = 500;
@@ -162,6 +168,27 @@ export async function claimCheckoutAttempt<TResponse>(
   };
 }
 
+export async function resolveExistingCheckoutAttempt<TResponse>(
+  db: Database,
+  identity: CheckoutAttemptIdentity,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<ExistingCheckoutAttemptResult<TResponse> | null> {
+  const existing = await selectCheckoutAttemptByKey(db, identity.requestKey);
+  assertSameCheckoutRequest(existing, identity);
+
+  const replay = replayCheckoutAttempt<TResponse>(existing);
+  if (replay) return replay;
+
+  if (!existing || existing.status !== "processing") return null;
+  if (existing.claimExpiresAt == null || existing.claimExpiresAt <= nowSeconds) return null;
+
+  return {
+    status: "processing",
+    orderId: existing.orderId,
+    checkoutToken: existing.checkoutToken,
+  };
+}
+
 export async function markCheckoutAttemptCommitted<TResponse>(
   db: Database,
   attempt: ClaimedCheckoutAttempt,
@@ -231,7 +258,7 @@ async function selectCheckoutAttemptByKey(
 
 function replayCheckoutAttempt<TResponse>(
   row: CheckoutAttemptRow | undefined,
-): CheckoutAttemptClaimResult<TResponse> | null {
+): CheckoutAttemptReplayResult<TResponse> | null {
   if (!row || row.status !== "committed") return null;
   if (!row.responsePayload) {
     throw new ServiceUnavailableError("Checkout replay payload is unavailable. Please try again.");

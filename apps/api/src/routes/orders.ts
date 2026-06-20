@@ -25,6 +25,7 @@ import {
   createStorefrontOrder,
   markCheckoutAttemptCommitted,
   markCheckoutAttemptFailed,
+  resolveExistingCheckoutAttempt,
   runStorefrontOrderPostCommitSideEffects,
   type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
@@ -538,23 +539,48 @@ app.openapi(createOrderRoute, async (c) => {
   let checkoutAttempt: ClaimedCheckoutAttempt | null = null;
   let orderCommitted = false;
 
-  await assertCheckoutOrderPolicy(c, data.customerPhone, data.paymentMethod as CheckoutPaymentMethodId);
-
-  // Rate limit order attempts without punishing legitimate shared-IP buyers.
-  const kv = c.env.CACHE as KVNamespace | undefined;
-  if (kv) {
-    const ip = getClientIp(c.req.raw);
-    const [ipResult, phoneResult] = await Promise.all([
-      rateLimit({ kv, key: `order:ip:${ip}`, limit: 60, windowMs: 60_000 }),
-      rateLimit({ kv, key: `order:phone:${data.customerPhone}`, limit: 5, windowMs: 60_000 }),
-    ]);
-    if (!ipResult.allowed || !phoneResult.allowed) {
-      throw new RateLimitError("Too many order requests. Please try again later.");
-    }
-  }
-
   try {
     const attemptIdentity = await buildCheckoutAttemptIdentity(data);
+    const existingAttempt = await resolveExistingCheckoutAttempt<{
+      checkoutToken: string;
+      receiptToken: string;
+      orderId: string;
+      paymentMethod: string;
+      totalAmount: number;
+      message: string;
+    }>(db, attemptIdentity);
+
+    if (existingAttempt?.status === "replay") {
+      return created(c, existingAttempt.response);
+    }
+
+    if (existingAttempt?.status === "processing") {
+      return c.json({
+        success: true,
+        data: {
+          checkoutToken: existingAttempt.checkoutToken,
+          orderId: existingAttempt.orderId,
+          status: "processing" as const,
+          message: "Order creation is already processing.",
+        },
+      }, 202);
+    }
+
+    await assertCheckoutOrderPolicy(c, data.customerPhone, data.paymentMethod as CheckoutPaymentMethodId);
+
+    // Rate limit new or reclaimable order attempts without punishing legitimate shared-IP buyers.
+    const kv = c.env.CACHE as KVNamespace | undefined;
+    if (kv) {
+      const ip = getClientIp(c.req.raw);
+      const [ipResult, phoneResult] = await Promise.all([
+        rateLimit({ kv, key: `order:ip:${ip}`, limit: 60, windowMs: 60_000 }),
+        rateLimit({ kv, key: `order:phone:${data.customerPhone}`, limit: 5, windowMs: 60_000 }),
+      ]);
+      if (!ipResult.allowed || !phoneResult.allowed) {
+        throw new RateLimitError("Too many order requests. Please try again later.");
+      }
+    }
+
     const attemptClaim = await claimCheckoutAttempt<{
       checkoutToken: string;
       receiptToken: string;
