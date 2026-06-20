@@ -24,6 +24,8 @@ import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
+import { renderCartIssueAction } from "./issue-action";
+import { readAndClearCartRepairState } from "./repair-state";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -356,6 +358,21 @@ function updateCartValidationMessage() {
   }
 }
 
+function applyPendingCartRepairState(): boolean {
+  const state = readAndClearCartRepairState();
+  if (!state) return false;
+
+  if (state.issues.length > 0) {
+    setCartValidationIssues(state.issues, cartStore.get().items);
+  } else {
+    cartValidationIssues = {};
+    cartValidationGlobalError = state.message;
+    updateCartValidationMessage();
+  }
+  updateCheckoutButtonState();
+  return true;
+}
+
 export async function validateCartSnapshot(): Promise<boolean> {
   const { items } = cartStore.get();
   const payloadItems = cartValidationPayload(items);
@@ -422,15 +439,8 @@ function scheduleCartValidation() {
   }, 350);
 }
 
-function renderIssueAction(cartKey: string, issue: CartValidationIssue): string {
-  const jsKey = inlineJsString(cartKey);
-  if (issue.action === "reduce_quantity" && typeof issue.availableQuantity === "number" && issue.availableQuantity > 0) {
-    return `<button type="button" class="text-xs font-semibold text-primary hover:underline" onclick="window.reduceCartIssueItem(${jsKey})">Update quantity</button>`;
-  }
-  if (issue.action === "refresh_item" && typeof issue.currentPrice === "number") {
-    return `<button type="button" class="text-xs font-semibold text-primary hover:underline" onclick="window.refreshCartIssueItem(${jsKey})">Refresh price</button>`;
-  }
-  return `<button type="button" class="text-xs font-semibold text-destructive hover:underline" onclick="window.removeCartIssueItem(${jsKey})">Remove item</button>`;
+export function renderIssueAction(cartKey: string, issue: CartValidationIssue): string {
+  return renderCartIssueAction(cartKey, issue, cartStore.get().items[cartKey]?.slug);
 }
 
 function renderCartItemIssues(cartKey: string): string {
@@ -809,6 +819,9 @@ export async function initCartFunctionality() {
 
   await getLanguageData();
   await renderCartItems();
+  if (applyPendingCartRepairState()) {
+    await renderCartItems();
+  }
   await validateCartSnapshot();
   updateTotals();
   updateCheckoutButtonState();

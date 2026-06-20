@@ -1,5 +1,5 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
-import { createOrder } from "../create-order";
+import { CheckoutOrderError, createOrder } from "../create-order";
 
 export const codHandler: GatewayHandler = {
   id: "cod",
@@ -24,6 +24,9 @@ export const codHandler: GatewayHandler = {
         clearCartOnRedirect: true,
       };
     } catch (err: unknown) {
+      if (err instanceof CheckoutOrderError) {
+        return { success: false, error: err.message, cartIssues: err.cartIssues };
+      }
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   },

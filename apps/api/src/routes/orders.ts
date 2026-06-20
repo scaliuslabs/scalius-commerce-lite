@@ -550,6 +550,7 @@ const createOrderSchema = z.object({
     .nullable(),
   items: z.array(
     z.object({
+      cartKey: z.string().min(1).max(256).optional().nullable(),
       productId: z.string().min(1, "Product is required"),
       variantId: z.string().nullable(),
       quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(99, "Quantity must be at most 99"),
@@ -662,6 +663,7 @@ app.openapi(createOrderRoute, async (c) => {
     const cartValidation = await validateStorefrontCartItems(
       db,
       data.items.map((item) => ({
+        cartKey: item.cartKey,
         productId: item.productId,
         variantId: item.variantId,
         quantity: item.quantity,

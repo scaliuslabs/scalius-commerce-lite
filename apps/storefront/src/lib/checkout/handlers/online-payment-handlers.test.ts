@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../create-order", () => ({
   createOrder: mocks.createOrder,
+  CheckoutOrderError: class CheckoutOrderError extends Error {
+    status = 400;
+    details = undefined;
+    cartIssues = [];
+  },
 }));
 
 import { polarHandler } from "./polar";

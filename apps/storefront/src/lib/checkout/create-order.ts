@@ -3,9 +3,43 @@
  * Shared by all gateway handlers.
  */
 import { getCheckoutErrorMessage } from "./error-messages";
-import type { CreateOrderPayload } from "@/lib/api/types";
+import type { CreateOrderPayload } from "../api/types";
+import type { CartValidationIssue } from "../api/orders";
 
 type PaymentMethod = NonNullable<CreateOrderPayload["paymentMethod"]>;
+
+type CheckoutCartLine = {
+  id: string;
+  variantId?: string;
+  quantity: number;
+  price: number;
+  name?: string;
+  size?: string;
+  color?: string;
+};
+
+type ErrorPayload = {
+  error?: unknown;
+  details?: unknown;
+};
+
+export class CheckoutOrderError extends Error {
+  readonly status: number;
+  readonly details: unknown;
+  readonly cartIssues: CartValidationIssue[];
+
+  constructor(message: string, options: {
+    status: number;
+    details: unknown;
+    cartIssues: CartValidationIssue[];
+  }) {
+    super(message);
+    this.name = "CheckoutOrderError";
+    this.status = options.status;
+    this.details = options.details;
+    this.cartIssues = options.cartIssues;
+  }
+}
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value : String(value ?? "");
@@ -14,6 +48,29 @@ function readString(value: unknown): string {
 function readOptionalString(value: unknown): string | null {
   const str = readString(value).trim();
   return str ? str : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function variantLabelForCartLine(item: CheckoutCartLine): string | null {
+  const parts = [item.size, item.color]
+    .filter((part): part is string => typeof part === "string" && part.trim() !== "")
+    .map((part) => part.trim());
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+function extractCartIssues(payload: ErrorPayload): CartValidationIssue[] {
+  const details = payload.details;
+  if (isRecord(details) && Array.isArray(details.itemIssues)) {
+    return details.itemIssues as CartValidationIssue[];
+  }
+  const error = payload.error;
+  if (isRecord(error) && isRecord(error.details) && Array.isArray(error.details.itemIssues)) {
+    return error.details.itemIssues as CartValidationIssue[];
+  }
+  return [];
 }
 
 export function parseDiscountInput(checkoutData: Record<string, unknown>): {
@@ -58,18 +115,21 @@ export async function createOrder(
   checkoutData: Record<string, unknown>,
   paymentMethod: PaymentMethod,
 ): Promise<{ orderId: string; receiptToken: string; totalAmount?: number; paymentMethod?: string }> {
-  let cartItems: Record<string, { id: string; variantId?: string; quantity: number; price: number }> = {};
+  let cartItems: Record<string, CheckoutCartLine> = {};
   try {
     cartItems = JSON.parse((checkoutData.cartItems as string) || "{}");
   } catch {
     // ignore parse errors
   }
 
-  const items = Object.values(cartItems).map((item) => ({
+  const items = Object.entries(cartItems).map(([cartKey, item]) => ({
+    cartKey,
     productId: item.id,
     variantId: item.variantId && item.variantId !== "default" ? item.variantId : null,
     quantity: item.quantity,
     price: item.price,
+    productName: typeof item.name === "string" ? item.name : null,
+    variantLabel: variantLabelForCartLine(item),
   }));
   const discount = parseDiscountInput(checkoutData);
   const checkoutRequestId = readString(
@@ -108,9 +168,14 @@ export async function createOrder(
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({} as Record<string, unknown>));
-    throw new Error(
+    const err = await res.json().catch(() => ({} as ErrorPayload)) as ErrorPayload;
+    throw new CheckoutOrderError(
       getCheckoutErrorMessage(err, `Order creation failed (${res.status})`),
+      {
+        status: res.status,
+        details: err.details,
+        cartIssues: extractCartIssues(err),
+      },
     );
   }
 

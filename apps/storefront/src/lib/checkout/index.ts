@@ -8,6 +8,8 @@ import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import type { PaymentResult } from "./types";
 import { clearCheckoutSession } from "./session-state";
 import { isDepositPaymentRequired } from "./payment-mode";
+import type { CartValidationIssue, CartValidationRequestItem } from "../api/orders";
+import { writeCartRepairState } from "../cart/repair-state";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -84,6 +86,135 @@ function appendSummaryRow(
   appendTextElement(row, "span", "", label);
   appendTextElement(row, "span", "", value);
   parent.appendChild(row);
+}
+
+type CheckoutCartFreshnessResult = {
+  valid: boolean;
+  issues: CartValidationIssue[];
+  message: string;
+};
+
+type CheckoutCartLine = {
+  id?: unknown;
+  variantId?: unknown;
+  quantity?: unknown;
+  price?: unknown;
+  name?: unknown;
+  size?: unknown;
+  color?: unknown;
+};
+
+function readNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function variantLabelForCheckoutLine(item: CheckoutCartLine): string | null {
+  const parts = [item.size, item.color]
+    .filter((part): part is string => typeof part === "string" && part.trim() !== "")
+    .map((part) => part.trim());
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+export function checkoutCartValidationPayload(
+  data: Record<string, unknown>,
+): CartValidationRequestItem[] {
+  let cartItems: Record<string, CheckoutCartLine> = {};
+  try {
+    const parsed = JSON.parse(String(data.cartItems || "{}")) as unknown;
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      cartItems = parsed as Record<string, CheckoutCartLine>;
+    }
+  } catch {
+    cartItems = {};
+  }
+
+  return Object.entries(cartItems)
+    .map<CartValidationRequestItem | null>(([cartKey, item]) => {
+      if (typeof item.id !== "string" || item.id.trim() === "") return null;
+      const quantity = Math.max(1, Math.floor(readNumber(item.quantity, 1)));
+      const price = readNumber(item.price);
+      return {
+        cartKey,
+        productId: item.id,
+        variantId: typeof item.variantId === "string" && item.variantId !== "default"
+          ? item.variantId
+          : null,
+        quantity,
+        price,
+        productName: typeof item.name === "string" ? item.name : null,
+        variantLabel: variantLabelForCheckoutLine(item),
+      };
+    })
+    .filter((item): item is CartValidationRequestItem => item !== null);
+}
+
+function checkoutFreshnessMessage(
+  json: { error?: unknown; details?: { message?: unknown } } | null,
+  issues: CartValidationIssue[],
+): string {
+  if (issues.length > 0) {
+    return issues.length === 1
+      ? "One cart item changed before payment. Please review it before checkout."
+      : `${issues.length} cart items changed before payment. Please review them before checkout.`;
+  }
+  if (typeof json?.details?.message === "string" && json.details.message.trim()) {
+    return json.details.message;
+  }
+  if (typeof json?.error === "string" && json.error.trim()) {
+    return json.error;
+  }
+  return "Could not verify cart availability. Please review your cart before checkout.";
+}
+
+export async function validateCheckoutCartFreshness(
+  data: Record<string, unknown>,
+): Promise<CheckoutCartFreshnessResult> {
+  const items = checkoutCartValidationPayload(data);
+  if (items.length === 0) {
+    return {
+      valid: false,
+      issues: [],
+      message: "Your cart is empty. Please add items before checkout.",
+    };
+  }
+
+  try {
+    const response = await fetch("/api/checkout/validate-cart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    const json = await response.json().catch(() => null) as {
+      success?: boolean;
+      error?: unknown;
+      data?: { valid: boolean; issues: CartValidationIssue[] };
+      details?: { itemIssues?: CartValidationIssue[]; message?: unknown };
+    } | null;
+    const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
+    const issues = Array.isArray(rawIssues) ? rawIssues : [];
+    const valid = response.ok && json?.success === true && json.data?.valid !== false && issues.length === 0;
+
+    return {
+      valid,
+      issues,
+      message: checkoutFreshnessMessage(json, issues),
+    };
+  } catch {
+    return {
+      valid: false,
+      issues: [],
+      message: "Could not verify cart availability. Please review your cart before checkout.",
+    };
+  }
+}
+
+function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
+  writeCartRepairState({
+    source: "checkout",
+    message: result.message,
+    issues: result.issues,
+  });
+  window.location.href = "/cart?checkoutIssues=1";
 }
 
 // ── Load checkout data ────────────────────────────────────────────────────────
@@ -395,6 +526,16 @@ async function processPayment(): Promise<void> {
   }
 
   try {
+    const freshness = await validateCheckoutCartFreshness(checkoutData);
+    if (!freshness.valid) {
+      if (loadingOverlay) {
+        loadingOverlay.style.display = "none";
+      }
+      isProcessing = false;
+      redirectToCartForRepair(freshness);
+      return;
+    }
+
     // Compute totals for context
     const { total: totalAmount } = getCheckoutTotals(checkoutData);
     const advanceAmount = checkoutConfig.partialPaymentEnabled
@@ -423,6 +564,17 @@ async function processPayment(): Promise<void> {
     }
 
     if (!result.success) {
+      if (result.cartIssues && result.cartIssues.length > 0) {
+        if (loadingOverlay) {
+          loadingOverlay.style.display = "none";
+        }
+        redirectToCartForRepair({
+          valid: false,
+          issues: result.cartIssues,
+          message: result.error || checkoutFreshnessMessage(null, result.cartIssues),
+        });
+        return;
+      }
       throw new Error(result.error || "Payment failed");
     }
   } catch (err: unknown) {
@@ -444,11 +596,18 @@ async function processPayment(): Promise<void> {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-export function initCheckoutPage(): void {
+export async function initCheckoutPage(): Promise<void> {
   checkoutConfig = (window as unknown as Record<string, CheckoutConfig>).__CHECKOUT_CONFIG__;
   if (!checkoutConfig) return;
 
   if (!loadCheckoutData()) return;
+
+  const freshness = await validateCheckoutCartFreshness(checkoutData!);
+  if (!freshness.valid) {
+    redirectToCartForRepair(freshness);
+    return;
+  }
+
   renderSummary();
   renderGateways();
 

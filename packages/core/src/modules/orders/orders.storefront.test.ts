@@ -258,6 +258,7 @@ describe("createStorefrontOrder product availability verification", () => {
         inputOverrides: {
           items: [
             {
+              cartKey: "line_variant_required",
               productId: "prod_standard",
               variantId: null,
               quantity: 1,
@@ -273,8 +274,43 @@ describe("createStorefrontOrder product availability verification", () => {
       details: {
         itemIssues: [
           expect.objectContaining({
+            cartKey: "line_variant_required",
             code: "VARIANT_REQUIRED",
+            action: "select_variant",
             message: "Standard Product needs an option selection before checkout.",
+          }),
+        ],
+      },
+    });
+  });
+
+  it("rejects products without persisted variants as unavailable until product-level inventory exists", async () => {
+    await expect(
+      placeOrder({
+        variants: [],
+        inputOverrides: {
+          items: [
+            {
+              cartKey: "line_no_inventory",
+              productId: "prod_standard",
+              variantId: null,
+              quantity: 1,
+              price: 100,
+              productName: "Standard Product",
+              variantLabel: null,
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            cartKey: "line_no_inventory",
+            code: "PRODUCT_UNAVAILABLE",
+            action: "remove",
+            message: "Standard Product is not available for checkout right now.",
           }),
         ],
       },

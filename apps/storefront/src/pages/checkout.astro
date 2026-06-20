@@ -112,5 +112,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 <script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};`}></script>
 <script>
   import { initCheckoutPage } from "@/lib/checkout";
-  document.addEventListener("DOMContentLoaded", initCheckoutPage);
+  document.addEventListener("DOMContentLoaded", () => {
+    void initCheckoutPage();
+  });
 </script>

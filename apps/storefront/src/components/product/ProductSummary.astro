@@ -34,7 +34,11 @@ const formatPrice = (price: number) =>
     maximumFractionDigits: 2,
   })}`;
 
+const purchaseUnavailable = !product.hasVariants;
 const stockStatus = (() => {
+  if (purchaseUnavailable) {
+    return { text: "Unavailable", color: "text-destructive", bg: "bg-destructive/10" };
+  }
   const totalStock = variants.reduce(
     (sum, variant) => sum + (variant.deletedAt ? 0 : variant.stock),
     0
@@ -249,18 +253,20 @@ const productVariantsJson = serializeJsonForInlineScript(
         <button
           type="button"
           data-action="add-to-cart"
+          disabled={purchaseUnavailable}
           class="flex items-center justify-center rounded-lg border border-primary bg-primary/5 py-2 lg:py-2.5 text-sm font-medium text-primary shadow-sm hover:bg-primary/10 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:border-border disabled:hover:scale-100 cursor-pointer"
-          aria-label="Add to cart"
+          aria-label={purchaseUnavailable ? "Product unavailable" : "Add to cart"}
         >
-          <ShoppingCart className="mr-1.5 h-4 w-4" /> Add to Cart
+          <ShoppingCart className="mr-1.5 h-4 w-4" /> {purchaseUnavailable ? "Unavailable" : "Add to Cart"}
         </button>
         <button
           type="button"
           data-action="buy-now"
+          disabled={purchaseUnavailable}
           class="flex items-center justify-center rounded-lg border border-primary bg-primary py-2 lg:py-2.5 text-sm font-medium text-primary-foreground shadow-md hover:bg-primary/90 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:border-border disabled:hover:scale-100 cursor-pointer"
-          aria-label="Buy now"
+          aria-label={purchaseUnavailable ? "Product unavailable" : "Buy now"}
         >
-          <Check className="mr-1.5 h-4 w-4" /> Buy Now
+          <Check className="mr-1.5 h-4 w-4" /> {purchaseUnavailable ? "Unavailable" : "Buy Now"}
         </button>
       </div>
     </div>
