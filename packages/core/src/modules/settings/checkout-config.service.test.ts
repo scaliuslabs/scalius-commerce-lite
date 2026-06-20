@@ -152,6 +152,21 @@ describe("getCheckoutConfig", () => {
         );
     });
 
+    it("does not publish COD as a partial-payment checkout gateway", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        const config = await getCheckoutConfig(createDb({
+            partialPaymentEnabled: true,
+            partialPaymentAmount: 200,
+        }) as never);
+
+        expect(config.gateways).toEqual([]);
+        expect(config.partialPaymentEnabled).toBe(true);
+    });
+
     it("rejects when payment-method settings cannot be read", async () => {
         mocks.getActivePaymentMethods.mockRejectedValue(new Error("settings unavailable"));
 

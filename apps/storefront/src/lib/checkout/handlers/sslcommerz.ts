@@ -1,5 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { createOrder } from "../create-order";
+import { resolveCheckoutPaymentRequest } from "../payment-mode";
 
 export const sslcommerzHandler: GatewayHandler = {
   id: "sslcommerz",
@@ -18,15 +19,16 @@ export const sslcommerzHandler: GatewayHandler = {
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     try {
       const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "sslcommerz");
+      const paymentRequest = resolveCheckoutPaymentRequest(ctx.config, ctx.totalAmount);
 
       const sessionPayload: Record<string, unknown> = {
         orderId,
         receiptToken,
         currency: (window as unknown as Record<string, unknown>).__CURRENCY_CODE__ || "BDT",
-        paymentType: ctx.config.partialPaymentEnabled ? "deposit" : "full",
+        paymentType: paymentRequest.paymentType,
       };
-      if (ctx.config.partialPaymentEnabled) {
-        sessionPayload.depositAmount = ctx.config.partialPaymentAmount;
+      if (paymentRequest.paymentType === "deposit") {
+        sessionPayload.depositAmount = paymentRequest.depositAmount;
       }
 
       const sessionRes = await fetch("/api/checkout/sslcommerz-session", {

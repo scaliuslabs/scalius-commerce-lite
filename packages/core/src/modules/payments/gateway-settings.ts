@@ -346,12 +346,21 @@ export async function getActivePaymentMethods(
 
   // Parse enabled methods (default: COD only)
   let enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
+  const hasExplicitEnabledMethods = values.enabled_methods !== undefined;
   try {
-    enabledMethods = values.enabled_methods
-      ? JSON.parse(values.enabled_methods)
+    const parsed = values.enabled_methods
+      ? JSON.parse(values.enabled_methods) as unknown
       : ["cod"];
+    enabledMethods = Array.isArray(parsed)
+      ? parsed.filter((method): method is ("stripe" | "sslcommerz" | "polar" | "cod") =>
+          method === "stripe" ||
+          method === "sslcommerz" ||
+          method === "polar" ||
+          method === "cod",
+        )
+      : [];
   } catch {
-    enabledMethods = ["cod"];
+    enabledMethods = hasExplicitEnabledMethods ? [] : ["cod"];
   }
 
   const defaultMethod = (values.default_method as PaymentMethodsConfig["defaultMethod"]) ?? "cod";
@@ -384,8 +393,9 @@ export async function getActivePaymentMethods(
     }
   }
 
-  // Ensure at least COD is available
-  if (validMethods.length === 0) {
+  // Legacy/default stores get COD, but explicit merchant allowlists fail closed
+  // when no selected method is actually usable.
+  if (validMethods.length === 0 && !hasExplicitEnabledMethods) {
     validMethods.push("cod");
   }
 

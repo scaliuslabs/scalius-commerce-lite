@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 const queryOptionMocks = vi.hoisted(() => ({
-  authSettingsQueryOptions: vi.fn(() => ({
-    queryKey: ["settings", "auth"],
+  checkoutFlowSettingsQueryOptions: vi.fn(() => ({
+    queryKey: ["settings", "checkout-flow"],
     queryFn: vi.fn(),
   })),
   paymentMethodsQueryOptions: vi.fn(() => ({
@@ -40,11 +40,11 @@ describe("checkout settings route loader", () => {
       context: { queryClient: { ensureQueryData } },
     });
 
-    expect(queryOptionMocks.authSettingsQueryOptions).toHaveBeenCalledOnce();
+    expect(queryOptionMocks.checkoutFlowSettingsQueryOptions).toHaveBeenCalledOnce();
     expect(queryOptionMocks.paymentMethodsQueryOptions).not.toHaveBeenCalled();
     expect(queryOptionMocks.shippingMethodsQueryOptions).not.toHaveBeenCalled();
     expect(ensureQueryData).toHaveBeenCalledWith({
-      queryKey: ["settings", "auth"],
+      queryKey: ["settings", "checkout-flow"],
       queryFn: expect.any(Function),
     });
   });

@@ -14,6 +14,7 @@ import {
 } from "@scalius/shared/customer-auth-policy";
 import { getRegisteredGateways } from "../payments/gateway-registry";
 import { getActivePaymentMethods } from "../payments/gateway-settings";
+import { isCheckoutGatewayUsableForFlow } from "./checkout-flow";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
@@ -91,6 +92,9 @@ export async function getCheckoutConfig(
         siteSettingsRow?.authVerificationMethod,
     );
 
+    const partialPaymentEnabled = siteSettingsRow?.partialPaymentEnabled ?? false;
+    const partialPaymentAmount = siteSettingsRow?.partialPaymentAmount ?? 0;
+
     const activePaymentMethods = await getActivePaymentMethods(db, kv, encryptionKey, {
         bypassMemoryCache: true,
     });
@@ -100,9 +104,12 @@ export async function getCheckoutConfig(
     const registeredGateways = getRegisteredGateways();
     const candidateGateways = registeredGateways.filter((gw) => {
         if (!allowedGatewayIds.has(gw.id as "stripe" | "sslcommerz" | "polar" | "cod")) return false;
-        if (gw.id === "cod" && checkoutMode === "gateways_only") return false;
-        if (gw.id !== "cod" && checkoutMode === "guest_cod_only") return false;
-        return true;
+        return isCheckoutGatewayUsableForFlow({
+            gatewayId: gw.id,
+            checkoutMode,
+            partialPaymentEnabled,
+            partialPaymentAmount,
+        });
     });
     const settingsResults = await Promise.all(
         candidateGateways.map((gw) =>
@@ -134,8 +141,8 @@ export async function getCheckoutConfig(
             : normalizeCustomerAuthMethod(siteSettingsRow?.authVerificationMethod),
         customerAuthPolicy,
         checkoutMode,
-        partialPaymentEnabled: siteSettingsRow?.partialPaymentEnabled ?? false,
-        partialPaymentAmount: siteSettingsRow?.partialPaymentAmount ?? 0,
+        partialPaymentEnabled,
+        partialPaymentAmount,
         allowedCountries,
         allowedCountriesMode,
         currency: {

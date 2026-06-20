@@ -49,8 +49,20 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
 
 import { paymentSettingsRoutes } from "./payments";
 
-function createTestApp() {
-    const db = { id: "db" };
+function createTestApp(siteSettingsOverrides: Record<string, unknown> = {}) {
+    const db = {
+        id: "db",
+        select: vi.fn(() => ({
+            from: vi.fn(() => ({
+                limit: vi.fn(async () => [{
+                    checkoutMode: "all",
+                    partialPaymentEnabled: false,
+                    partialPaymentAmount: 0,
+                    ...siteSettingsOverrides,
+                }]),
+            })),
+        })),
+    };
     const kv = { id: "gateway-kv" };
     const env = {
         CACHE: { id: "api-cache-kv" },
@@ -70,6 +82,10 @@ function createTestApp() {
     mocks.invalidateStripeCache.mockResolvedValue(undefined);
     mocks.invalidateSSLCommerzCache.mockResolvedValue(undefined);
     mocks.invalidatePolarCache.mockResolvedValue(undefined);
+    mocks.getActivePaymentMethods.mockResolvedValue({ enabledMethods: ["cod"], defaultMethod: "cod" });
+    mocks.getStripeSettings.mockResolvedValue(null);
+    mocks.getSSLCommerzSettings.mockResolvedValue(null);
+    mocks.getPolarSettings.mockResolvedValue(null);
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -102,6 +118,7 @@ describe("payment settings cache invalidation", () => {
 
     it("invalidates API and storefront checkout caches after payment method saves", async () => {
         const { app, env, kv } = createTestApp();
+        mocks.getStripeSettings.mockResolvedValueOnce({ enabled: true });
 
         const response = await postJson(app, env, "/payment-methods", {
             enabledMethods: ["stripe", "cod"],
@@ -114,6 +131,22 @@ describe("payment settings cache invalidation", () => {
             ["checkout"],
             expect.objectContaining({ env }),
         );
+    });
+
+    it("rejects removing every configured online gateway while partial payments are enabled", async () => {
+        const { app, env } = createTestApp({
+            partialPaymentEnabled: true,
+            partialPaymentAmount: 500,
+        });
+
+        const response = await postJson(app, env, "/payment-methods", {
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidatePaymentMethodsCache).not.toHaveBeenCalled();
     });
 
     it("invalidates API and storefront checkout caches after Stripe saves", async () => {
@@ -145,19 +178,68 @@ describe("payment settings cache invalidation", () => {
         expect(response.status, await response.clone().text()).toBe(200);
         expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
         expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
-            { id: "db" },
+            expect.objectContaining({ id: "db" }),
             "stripe",
             "secret_key",
             "sk_live_new",
             "credential-key",
         );
         expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
-            { id: "db" },
+            expect.objectContaining({ id: "db" }),
             "stripe",
             "webhook_secret",
             "whsec_new",
             "credential-key",
         );
+    });
+
+    it("rejects disabling the last configured online gateway while partial payments are enabled", async () => {
+        const { app, env } = createTestApp({
+            partialPaymentEnabled: true,
+            partialPaymentAmount: 500,
+        });
+        mocks.getActivePaymentMethods.mockResolvedValueOnce({
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "stripe",
+        });
+
+        const response = await postJson(app, env, "/stripe", {
+            enabled: false,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
+    });
+
+    it("allows disabling one online gateway while partial payments still have another online gateway", async () => {
+        const { app, env, kv } = createTestApp({
+            partialPaymentEnabled: true,
+            partialPaymentAmount: 500,
+        });
+        mocks.getActivePaymentMethods.mockResolvedValueOnce({
+            enabledMethods: ["stripe", "sslcommerz", "cod"],
+            defaultMethod: "sslcommerz",
+        });
+
+        const response = await postJson(app, env, "/stripe", {
+            enabled: false,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(mocks.upsertSetting).toHaveBeenCalledWith(
+            expect.objectContaining({ id: "db" }),
+            "stripe",
+            "enabled",
+            "false",
+        );
+        expect(mocks.invalidateStripeCache).toHaveBeenCalledWith(kv);
     });
 
     it("invalidates API and storefront checkout caches after SSLCommerz saves", async () => {
@@ -189,7 +271,7 @@ describe("payment settings cache invalidation", () => {
         expect(response.status, await response.clone().text()).toBe(200);
         expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
         expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
-            { id: "db" },
+            expect.objectContaining({ id: "db" }),
             "sslcommerz",
             "store_password",
             "ssl_secret",
@@ -227,14 +309,14 @@ describe("payment settings cache invalidation", () => {
         expect(response.status, await response.clone().text()).toBe(200);
         expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
         expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
-            { id: "db" },
+            expect.objectContaining({ id: "db" }),
             "polar",
             "access_token",
             "polar_token",
             "credential-key",
         );
         expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
-            { id: "db" },
+            expect.objectContaining({ id: "db" }),
             "polar",
             "webhook_secret",
             "polar_webhook",

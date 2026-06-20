@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     Card,
@@ -19,12 +19,32 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Save, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Loader2, Save, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getServerFnError } from "@/lib/api-helpers";
-import { updateAuthSettings } from "@/lib/api-functions/settings";
-import { authSettingsQueryOptions } from "@/lib/api-query-options/settings";
+import { updateAuthSettings, type PaymentMethodsPayload } from "@/lib/api-functions/settings";
+import { checkoutFlowSettingsQueryOptions, paymentMethodsQueryOptions } from "@/lib/api-query-options/settings";
 import { queryKeys } from "@/lib/query-keys";
+
+function buildCheckoutFlowSummary(options: {
+    guestCheckoutEnabled: boolean;
+    checkoutMode: string;
+    partialPaymentEnabled: boolean;
+    partialPaymentAmount: number;
+}): string {
+    if (options.partialPaymentEnabled) {
+        return `Customers pay ৳${options.partialPaymentAmount || 0} online first, then the remaining balance can be collected during fulfillment.`;
+    }
+    if (options.checkoutMode === "guest_cod_only") {
+        return "Customers place COD orders directly from cart without a separate payment-method step.";
+    }
+    if (options.checkoutMode === "gateways_only") {
+        return "Customers must choose an online payment gateway; COD is hidden.";
+    }
+    return options.guestCheckoutEnabled
+        ? "Customers can check out as guests or signed-in customers and choose from available COD/online methods."
+        : "Customers must sign in before checkout and then choose from available COD/online methods.";
+}
 
 export default function CheckoutFlowSettings() {
     const queryClient = useQueryClient();
@@ -33,7 +53,8 @@ export default function CheckoutFlowSettings() {
         isLoading,
         isError,
         refetch,
-    } = useQuery(authSettingsQueryOptions());
+    } = useQuery(checkoutFlowSettingsQueryOptions());
+    const { data: paymentMethods, isLoading: paymentMethodsLoading } = useQuery(paymentMethodsQueryOptions());
     const [saving, setSaving] = useState(false);
 
     const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
@@ -49,8 +70,41 @@ export default function CheckoutFlowSettings() {
         setPartialPaymentAmount(authSettings.partialPaymentAmount || 0);
     }, [authSettings]);
 
+    const activeOnlineMethods = useMemo(() => {
+        const methodsPayload = paymentMethods as PaymentMethodsPayload | undefined;
+        const methods = methodsPayload?.enabledMethods ?? [];
+        return methods.filter((method) => {
+            if (method === "cod") return false;
+            const status = methodsPayload?.gatewayStatus?.[method as keyof PaymentMethodsPayload["gatewayStatus"]];
+            return status?.enabled === true && status?.configured === true;
+        });
+    }, [paymentMethods]);
+
+    const flowIssues = useMemo(() => {
+        if (!partialPaymentEnabled) return [];
+        const issues: string[] = [];
+        if (!Number.isFinite(partialPaymentAmount) || partialPaymentAmount <= 0) {
+            issues.push("Set an advance amount greater than 0.");
+        }
+        if (checkoutMode === "guest_cod_only") {
+            issues.push("Fast COD Only cannot be used with advance payments.");
+        }
+        if (paymentMethods && activeOnlineMethods.length === 0) {
+            issues.push("Enable and configure at least one online gateway in Payment Gateways.");
+        }
+        return issues;
+    }, [activeOnlineMethods.length, checkoutMode, partialPaymentAmount, partialPaymentEnabled, paymentMethods]);
+
+    const flowSummary = buildCheckoutFlowSummary({
+        guestCheckoutEnabled,
+        checkoutMode,
+        partialPaymentEnabled,
+        partialPaymentAmount,
+    });
+
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
+        if (flowIssues.length > 0) return;
         setSaving(true);
 
         const nextSettings = {
@@ -65,13 +119,13 @@ export default function CheckoutFlowSettings() {
                 data: nextSettings,
             });
             queryClient.setQueryData(
-                queryKeys.settings.auth(),
+                queryKeys.settings.checkoutFlow(),
                 (current: Record<string, unknown> | undefined) => ({
                     ...(current ?? {}),
                     ...nextSettings,
                 }),
             );
-            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.auth() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
             toast.success("Checkout flow settings saved successfully!");
         } catch (err) {
             toast.error(getServerFnError(err, "Failed to save checkout flow settings"));
@@ -130,6 +184,34 @@ export default function CheckoutFlowSettings() {
                         />
                     </div>
                 </CardContent>
+            </Card>
+
+            <Card className={flowIssues.length > 0 ? "border-destructive/40 bg-destructive/5" : "border-emerald-500/30 bg-emerald-500/5"}>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        {flowIssues.length > 0 ? (
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                        ) : (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        )}
+                        Customer flow preview
+                    </CardTitle>
+                    <CardDescription>{flowSummary}</CardDescription>
+                </CardHeader>
+                {(flowIssues.length > 0 || (partialPaymentEnabled && paymentMethodsLoading)) && (
+                    <CardContent className="pt-0">
+                        {partialPaymentEnabled && paymentMethodsLoading && (
+                            <p className="text-xs text-muted-foreground">Checking configured online gateways...</p>
+                        )}
+                        {flowIssues.length > 0 && (
+                            <ul className="space-y-1 text-sm text-destructive">
+                                {flowIssues.map((issue) => (
+                                    <li key={issue}>{issue}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </CardContent>
+                )}
             </Card>
 
             <Card>
@@ -217,7 +299,7 @@ export default function CheckoutFlowSettings() {
             <div className="flex justify-end pt-4 border-t border-border">
                 <Button
                     onClick={() => handleSubmit()}
-                    disabled={saving}
+                    disabled={saving || flowIssues.length > 0}
                     className="min-w-[140px]"
                 >
                     {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

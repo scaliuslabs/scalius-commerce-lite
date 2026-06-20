@@ -7,6 +7,7 @@ import { polarHandler } from "./handlers/polar";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import type { PaymentResult } from "./types";
 import { clearCheckoutSession } from "./session-state";
+import { isDepositPaymentRequired } from "./payment-mode";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -85,7 +86,21 @@ function loadCheckoutData(): boolean {
       return false;
     }
     checkoutData = JSON.parse(raw);
-    gateways = gwRaw ? JSON.parse(gwRaw) : checkoutConfig!.gateways;
+    const transferGateways = gwRaw ? JSON.parse(gwRaw) : checkoutConfig!.gateways;
+    const freshGatewayMap = new Map(
+      checkoutConfig!.gateways.map((gateway) => [gateway.id, gateway]),
+    );
+    gateways = Array.isArray(transferGateways)
+      ? transferGateways
+          .map((gateway) => {
+            const id = typeof gateway?.id === "string" ? gateway.id : "";
+            return freshGatewayMap.get(id);
+          })
+          .filter((gateway): gateway is { id: string; [key: string]: unknown } => Boolean(gateway))
+      : checkoutConfig!.gateways;
+    if (gwRaw && gateways.length === 0) {
+      sessionStorage.removeItem("scalius_checkout_gateways");
+    }
     return true;
   } catch {
     window.location.href = "/cart";
@@ -106,12 +121,7 @@ export function renderOrderSummaryDetails(
   } catch {
     // ignore
   }
-  const items = Object.values(cartItems);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = parseFloat(String(data.shippingCharge || "0"));
-  const discount = parseFloat(String(data.discountAmount || "0"));
-  const total = subtotal + shipping - discount;
-
+  const { items, subtotal, shipping, discount, total } = getCheckoutTotals(data, cartItems);
   details.replaceChildren();
   appendSummaryRow(details, `${items.length} item(s)`, currencyFmt(subtotal));
   appendSummaryRow(details, "Shipping", currencyFmt(shipping));
@@ -130,8 +140,8 @@ export function renderOrderSummaryDetails(
     "flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",
   );
 
-  if (config.partialPaymentEnabled && config.partialPaymentAmount > 0) {
-    const advance = Math.min(config.partialPaymentAmount, total);
+  if (isDepositPaymentRequired(config, total)) {
+    const advance = config.partialPaymentAmount;
     const balance = total - advance;
     appendSummaryRow(
       details,
@@ -155,6 +165,34 @@ export function renderOrderSummaryDetails(
   );
 }
 
+function getCheckoutTotals(
+  data: Record<string, unknown>,
+  parsedCartItems?: Record<string, { price: number; quantity: number }>,
+): {
+  items: Array<{ price: number; quantity: number }>;
+  subtotal: number;
+  shipping: number;
+  discount: number;
+  total: number;
+} {
+  let cartItems = parsedCartItems;
+  if (!cartItems) {
+    try {
+      cartItems = JSON.parse(String(data.cartItems || "{}"));
+    } catch {
+      cartItems = {};
+    }
+  }
+  const resolvedCartItems = cartItems ?? {};
+  const items = Object.values(resolvedCartItems);
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const shipping = parseFloat(String(data.shippingCharge || "0"));
+  const discount = parseFloat(String(data.discountAmount || "0"));
+  const total = subtotal + shipping - discount;
+
+  return { items, subtotal, shipping, discount, total };
+}
+
 function renderSummary(): void {
   if (!checkoutData || !checkoutConfig) return;
   const section = document.getElementById("orderSummary");
@@ -169,7 +207,7 @@ function renderSummary(): void {
 // ── Render payment method cards ───────────────────────────────────────────────
 
 function renderGateways(): void {
-  if (!checkoutConfig) return;
+  if (!checkoutConfig || !checkoutData) return;
   const container = document.getElementById("paymentMethods");
   if (!container) return;
   container.innerHTML = "";
@@ -183,6 +221,10 @@ function renderGateways(): void {
     return;
   }
 
+  const { total } = getCheckoutTotals(checkoutData);
+  const depositRequired = isDepositPaymentRequired(checkoutConfig, total);
+  let renderedCount = 0;
+
   for (const gw of gateways) {
     // If partial payment is active, skip COD since online payment is mandatory
     if (checkoutConfig.partialPaymentEnabled && gw.id === "cod") continue;
@@ -193,7 +235,7 @@ function renderGateways(): void {
     // Adjust label if partial payment is required
     let label = meta.label;
     if (checkoutConfig.partialPaymentEnabled && (gw.id === "stripe" || gw.id === "sslcommerz" || gw.id === "polar")) {
-      label = `Pay Advance via ${meta.label}`;
+      label = depositRequired ? `Pay Advance via ${meta.label}` : `Pay Online via ${meta.label}`;
     }
 
     const card = document.createElement("div");
@@ -215,6 +257,12 @@ function renderGateways(): void {
     `;
     card.addEventListener("click", () => selectMethod(gw.id, gw));
     container.appendChild(card);
+    renderedCount += 1;
+  }
+
+  if (renderedCount === 0) {
+    showError("No available payment method can complete this checkout. Please go back to cart or contact the store.");
+    setPayButton("Checkout unavailable", true);
   }
 }
 
@@ -320,17 +368,7 @@ async function processPayment(): Promise<void> {
 
   try {
     // Compute totals for context
-    let cartItems: Record<string, { price: number; quantity: number }> = {};
-    try {
-      cartItems = JSON.parse((checkoutData.cartItems as string) || "{}");
-    } catch {
-      // ignore
-    }
-    const items = Object.values(cartItems);
-    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const shipping = parseFloat((checkoutData.shippingCharge as string) || "0");
-    const discount = parseFloat((checkoutData.discountAmount as string) || "0");
-    const totalAmount = subtotal + shipping - discount;
+    const { total: totalAmount } = getCheckoutTotals(checkoutData);
     const advanceAmount = checkoutConfig.partialPaymentEnabled
       ? Math.min(checkoutConfig.partialPaymentAmount, totalAmount)
       : totalAmount;
