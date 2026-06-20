@@ -5001,6 +5001,10 @@ export type PostApiV1OrdersCartValidationData = {
             variantLabel?: string | null;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
+        shippingMethodId?: string | null;
     };
     path?: never;
     query?: never;
@@ -5071,6 +5075,12 @@ export type PostApiV1OrdersCartValidationResponses = {
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
         };
     };
 };

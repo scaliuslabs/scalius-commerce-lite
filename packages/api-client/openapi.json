@@ -16170,6 +16170,24 @@
                       "backorder"
                     ],
                     "default": "regular"
+                  },
+                  "city": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1
+                  },
+                  "zone": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1
+                  },
+                  "area": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "shippingMethodId": {
+                    "type": "string",
+                    "nullable": true
                   }
                 },
                 "required": [
@@ -16333,6 +16351,30 @@
                         },
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
+                        },
+                        "delivery": {
+                          "type": "object",
+                          "properties": {
+                            "shippingCharge": {
+                              "type": "number"
+                            },
+                            "cityName": {
+                              "type": "string"
+                            },
+                            "zoneName": {
+                              "type": "string"
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "shippingCharge",
+                            "cityName",
+                            "zoneName",
+                            "areaName"
+                          ]
                         }
                       },
                       "required": [

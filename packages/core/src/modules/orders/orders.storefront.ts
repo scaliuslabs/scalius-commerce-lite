@@ -22,58 +22,45 @@ import { ValidationError } from "@scalius/core/errors";
 import type { CreateStorefrontOrderIdentity, CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
 import { validateStorefrontCartItems, type StorefrontCartValidationResult } from "./cart-validation";
 
-/**
- * Validates and prepares a storefront order for queue dispatch.
- * Performs server-side price verification, discount validation, shipping verification,
- * and partial payment checks. Returns a queue payload ready for ORDER_INGEST_QUEUE.
- *
- * @param storefrontDb - The D1 database instance (from c.get("db"))
- * @param data - Parsed and validated order input
- * @param requestUrl - The original request URL
- * @param isDiscountValid - Discount validation function (from discounts route)
- * @param calculateDiscountAmount - Discount calculation function (from discounts route)
- */
-export async function createStorefrontOrder(
+interface LocationRow {
+    id: string;
+    name: string;
+    type: "city" | "zone" | "area";
+    parentId: string | null;
+    isActive: boolean;
+    deletedAt: Date | number | null;
+}
+
+interface ShippingMethodRow {
+    fee: number;
+    isActive: boolean;
+    deletedAt: Date | number | null;
+}
+
+export interface StorefrontDeliveryPreflightInput {
+    city: string;
+    zone: string;
+    area?: string | null;
+    shippingMethodId?: string | null;
+}
+
+export interface StorefrontDeliveryPreflightResult {
+    shippingCharge: number;
+    cityName: string;
+    zoneName: string;
+    areaName: string | null;
+}
+
+export async function validateStorefrontDeliveryPreflight(
     storefrontDb: Database,
-    data: CreateStorefrontOrderInput,
-    requestUrl: string,
-    isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
-    calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number | Promise<number>,
-    identity?: CreateStorefrontOrderIdentity,
-    prevalidatedCart?: StorefrontCartValidationResult,
-): Promise<CreateStorefrontOrderResult> {
-    const cartValidation = prevalidatedCart ?? await validateStorefrontCartItems(
-        storefrontDb,
-        data.items.map((item) => ({
-            cartKey: item.cartKey,
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            price: item.price,
-            productName: item.productName,
-            variantLabel: item.variantLabel,
-        })),
-        { inventoryPool: data.inventoryPool },
-    );
-
-    if (!cartValidation.valid) {
-        throw new ValidationError("Some items in your cart need attention.", {
-            itemIssues: cartValidation.issues,
-        });
-    }
-
-    // ------------------------------------------------------------------
-    // 1. Batched Reads
-    // ------------------------------------------------------------------
+    data: StorefrontDeliveryPreflightInput,
+    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct">,
+): Promise<StorefrontDeliveryPreflightResult> {
     const locationIds = [data.city, data.zone, data.area].filter(
         (id): id is string => typeof id === "string" && id.trim().length > 0,
     );
-    const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
 
-    // Drizzle D1 batch() requires specific tuple types
     const readBatch: unknown[] = [];
-
-    // 1. Locations
     if (locationIds.length > 0) {
         readBatch.push(
             storefrontDb
@@ -98,38 +85,14 @@ export async function createStorefrontOrder(
         readBatch.push(storefrontDb.select().from(deliveryLocations).limit(0));
     }
 
-    // 2. Customer
-    readBatch.push(
-        storefrontDb
-            .select({
-                id: customers.id,
-                totalOrders: customers.totalOrders,
-                totalSpent: customers.totalSpent,
-            })
-            .from(customers)
-            .where(eq(customers.phone, data.customerPhone)),
-    );
-
-    // 3. Discount
-    if (normalizedDiscountCode) {
+    if (!cartValidation.hasFreeDeliveryProduct && data.shippingMethodId) {
         readBatch.push(
             storefrontDb
-                .select({ id: discounts.id })
-                .from(discounts)
-                .where(eq(discounts.code, normalizedDiscountCode)),
-        );
-    } else {
-        readBatch.push(storefrontDb.select().from(discounts).limit(0));
-    }
-
-    // 4. Settings (for partial payment checks)
-    readBatch.push(storefrontDb.select().from(siteSettings).limit(1));
-
-    // 5. Shipping Method
-    if (data.shippingMethodId) {
-        readBatch.push(
-            storefrontDb
-                .select()
+                .select({
+                    fee: shippingMethods.fee,
+                    isActive: shippingMethods.isActive,
+                    deletedAt: shippingMethods.deletedAt,
+                })
                 .from(shippingMethods)
                 .where(
                     and(
@@ -143,42 +106,30 @@ export async function createStorefrontOrder(
         readBatch.push(storefrontDb.select().from(shippingMethods).limit(0));
     }
 
-    // Execute Read Batch
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    const readResults = await storefrontDb.batch(readBatch as any);
+    const [locationRows, shippingMethodRows] = await storefrontDb.batch(readBatch as any);
 
-    // Unpack Results
-    interface LocationRow {
-        id: string;
-        name: string;
-        type: "city" | "zone" | "area";
-        parentId: string | null;
-        isActive: boolean;
-        deletedAt: Date | number | null;
+    const locationResults = Array.isArray(locationRows) ? locationRows as LocationRow[] : [];
+    const locationMap = new Map(locationResults.map((location) => [location.id, location]));
+    const city = locationMap.get(data.city);
+    if (!city || city.type !== "city" || city.parentId !== null || city.isActive !== true || city.deletedAt != null) {
+        throw new ValidationError("Selected city is no longer available for checkout.");
     }
-    const locationResults = locationIds.length > 0 ? (readResults[0] as LocationRow[]) : [] as LocationRow[];
 
-    const customerList = readResults[1] as { id: string; totalOrders: number; totalSpent: number }[];
-    const existingCustomer = customerList.length > 0 ? customerList[0] : undefined;
+    const zone = locationMap.get(data.zone);
+    if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
+        throw new ValidationError("Selected zone is no longer available for the chosen city.");
+    }
 
-    const discountList = data.discountCode ? (readResults[2] as { id: string }[]) : [];
-    const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
+    const area = data.area ? locationMap.get(data.area) : null;
+    if (data.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
+        throw new ValidationError("Selected area is no longer available for the chosen zone.");
+    }
 
-    const settingsList = readResults[3] as Record<string, unknown>[];
-    const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
-
-    const shippingMethodList = readResults[4] as Record<string, unknown>[];
-    const shippingMethod = shippingMethodList.length > 0 ? shippingMethodList[0] as Record<string, unknown> : null;
-
-    const serverItemTotal = cartValidation.subtotal;
-    const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
-    const hasFreeDeliveryProduct = cartValidation.hasFreeDeliveryProduct;
-
-    // Existing storefront behavior: any free-delivery item waives shipping method and charge.
-    let verifiedShippingCharge: number;
-    if (hasFreeDeliveryProduct) {
-        verifiedShippingCharge = 0;
-    } else {
+    let shippingCharge = 0;
+    if (!cartValidation.hasFreeDeliveryProduct) {
+        const shippingMethodList = Array.isArray(shippingMethodRows) ? shippingMethodRows as ShippingMethodRow[] : [];
+        const shippingMethod = shippingMethodList[0] ?? null;
         const shippingMethodIsUsable =
             shippingMethod &&
             shippingMethod.isActive === true &&
@@ -193,8 +144,116 @@ export async function createStorefrontOrder(
             throw new ValidationError("Selected shipping method is misconfigured.");
         }
 
-        verifiedShippingCharge = roundPrice(methodFee);
+        shippingCharge = roundPrice(methodFee);
     }
+
+    return {
+        shippingCharge,
+        cityName: city.name,
+        zoneName: zone.name,
+        areaName: area?.name ?? null,
+    };
+}
+
+/**
+ * Validates and prepares a storefront order for queue dispatch.
+ * Performs server-side price verification, discount validation, shipping verification,
+ * and partial payment checks. Returns a queue payload ready for ORDER_INGEST_QUEUE.
+ *
+ * @param storefrontDb - The D1 database instance (from c.get("db"))
+ * @param data - Parsed and validated order input
+ * @param requestUrl - The original request URL
+ * @param isDiscountValid - Discount validation function (from discounts route)
+ * @param calculateDiscountAmount - Discount calculation function (from discounts route)
+ */
+export async function createStorefrontOrder(
+    storefrontDb: Database,
+    data: CreateStorefrontOrderInput,
+    requestUrl: string,
+    isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
+    calculateDiscountAmount: (db: Database, discount: unknown, total: number, items: unknown[], shippingCost: number) => number | Promise<number>,
+    identity?: CreateStorefrontOrderIdentity,
+    prevalidatedCart?: StorefrontCartValidationResult,
+    prevalidatedDelivery?: StorefrontDeliveryPreflightResult,
+): Promise<CreateStorefrontOrderResult> {
+    const cartValidation = prevalidatedCart ?? await validateStorefrontCartItems(
+        storefrontDb,
+        data.items.map((item) => ({
+            cartKey: item.cartKey,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.price,
+            productName: item.productName,
+            variantLabel: item.variantLabel,
+        })),
+        { inventoryPool: data.inventoryPool },
+    );
+
+    if (!cartValidation.valid) {
+        throw new ValidationError("Some items in your cart need attention.", {
+            itemIssues: cartValidation.issues,
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Batched Reads
+    // ------------------------------------------------------------------
+    const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
+    const deliveryPreflight = prevalidatedDelivery ?? await validateStorefrontDeliveryPreflight(
+        storefrontDb,
+        {
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            shippingMethodId: data.shippingMethodId,
+        },
+        cartValidation,
+    );
+
+    // Drizzle D1 batch() requires specific tuple types
+    const readBatch: unknown[] = [];
+
+    readBatch.push(
+        storefrontDb
+            .select({
+                id: customers.id,
+                totalOrders: customers.totalOrders,
+                totalSpent: customers.totalSpent,
+            })
+            .from(customers)
+            .where(eq(customers.phone, data.customerPhone)),
+    );
+
+    if (normalizedDiscountCode) {
+        readBatch.push(
+            storefrontDb
+                .select({ id: discounts.id })
+                .from(discounts)
+                .where(eq(discounts.code, normalizedDiscountCode)),
+        );
+    } else {
+        readBatch.push(storefrontDb.select().from(discounts).limit(0));
+    }
+
+    readBatch.push(storefrontDb.select().from(siteSettings).limit(1));
+
+    // Execute Read Batch
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    const readResults = await storefrontDb.batch(readBatch as any);
+
+    const customerList = readResults[0] as { id: string; totalOrders: number; totalSpent: number }[];
+    const existingCustomer = customerList.length > 0 ? customerList[0] : undefined;
+
+    const discountList = data.discountCode ? (readResults[1] as { id: string }[]) : [];
+    const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
+
+    const settingsList = readResults[2] as Record<string, unknown>[];
+    const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
+
+    const serverItemTotal = cartValidation.subtotal;
+    const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
+    const verifiedShippingCharge = deliveryPreflight.shippingCharge;
 
     // ------------------------------------------------------------------
     // DISCOUNTS VERIFICATION
@@ -236,27 +295,6 @@ export async function createStorefrontOrder(
         throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
 
-    // Process Location Data
-    const locationMap = new Map(locationResults.map((location: LocationRow) => [location.id, location]));
-    const city = locationMap.get(data.city);
-    if (!city || city.type !== "city" || city.parentId !== null || city.isActive !== true || city.deletedAt != null) {
-        throw new ValidationError("Selected city is no longer available for checkout.");
-    }
-
-    const zone = locationMap.get(data.zone);
-    if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
-        throw new ValidationError("Selected zone is no longer available for the chosen city.");
-    }
-
-    const area = data.area ? locationMap.get(data.area) : null;
-    if (data.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
-        throw new ValidationError("Selected area is no longer available for the chosen zone.");
-    }
-
-    const cityName = city.name;
-    const zoneName = zone.name;
-    const areaName = area?.name ?? null;
-
     // ------------------------------------------------------------------
     // Build Queue Payload
     // ------------------------------------------------------------------
@@ -276,9 +314,9 @@ export async function createStorefrontOrder(
             city: data.city,
             zone: data.zone,
             area: data.area,
-            cityName,
-            zoneName,
-            areaName,
+            cityName: deliveryPreflight.cityName,
+            zoneName: deliveryPreflight.zoneName,
+            areaName: deliveryPreflight.areaName,
             notes: data.notes,
             totalAmount,
             shippingCharge: verifiedShippingCharge,

@@ -27,6 +27,7 @@ import {
   markCheckoutAttemptFailed,
   resolveExistingCheckoutAttempt,
   runStorefrontOrderPostCommitSideEffects,
+  validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
   type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
@@ -476,6 +477,10 @@ const cartValidationRoute = createRoute({
             inventoryPool: z
               .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
               .default(InventoryPool.REGULAR),
+            city: z.string().min(1).optional().nullable(),
+            zone: z.string().min(1).optional().nullable(),
+            area: z.string().optional().nullable(),
+            shippingMethodId: z.string().optional().nullable(),
           }),
         },
       },
@@ -503,6 +508,12 @@ const cartValidationRoute = createRoute({
             })),
             subtotal: z.number(),
             hasFreeDeliveryProduct: z.boolean(),
+            delivery: z.object({
+              shippingCharge: z.number(),
+              cityName: z.string(),
+              zoneName: z.string(),
+              areaName: z.string().nullable(),
+            }).optional(),
           })),
         },
       },
@@ -518,7 +529,21 @@ app.openapi(cartValidationRoute, async (c) => {
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
   });
-  return ok(c, result);
+  if (!result.valid || !data.city || !data.zone) {
+    return ok(c, result);
+  }
+
+  const delivery = await validateStorefrontDeliveryPreflight(
+    db,
+    {
+      city: data.city,
+      zone: data.zone,
+      area: data.area,
+      shippingMethodId: data.shippingMethodId,
+    },
+    result,
+  );
+  return ok(c, { ...result, delivery });
 });
 
 const createOrderSchema = z.object({
@@ -679,6 +704,17 @@ app.openapi(createOrderRoute, async (c) => {
       });
     }
 
+    const deliveryPreflight = await validateStorefrontDeliveryPreflight(
+      db,
+      {
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+        shippingMethodId: data.shippingMethodId,
+      },
+      cartValidation,
+    );
+
     await assertCheckoutOrderPolicy(c, data.customerPhone, data.paymentMethod as CheckoutPaymentMethodId);
 
     // Rate limit new or reclaimable order attempts without punishing legitimate shared-IP buyers.
@@ -739,6 +775,7 @@ app.openapi(createOrderRoute, async (c) => {
         checkoutToken: checkoutAttempt.checkoutToken,
       },
       cartValidation,
+      deliveryPreflight,
     );
 
     const kvKey = `checkout_status:${result.checkoutToken}`;

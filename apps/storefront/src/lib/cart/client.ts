@@ -11,7 +11,7 @@ import {
   removeDiscount,
   type CartItem,
 } from "@/store/cart";
-import type { CartValidationIssue } from "@/lib/api/orders";
+import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import {
   validateDiscount,
   getActiveCheckoutLanguage,
@@ -26,6 +26,7 @@ import { applyCheckoutButtonState } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import { readAndClearCartRepairState } from "./repair-state";
+import { reconcileValidatedCartSnapshot } from "./validation-reconciliation";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -293,6 +294,31 @@ function cartValidationPayload(items: Record<string, CartItem>) {
   }));
 }
 
+function formStringValue(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const input = document.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
+  const value = input?.value?.trim();
+  return value ? value : null;
+}
+
+function cartValidationDeliveryPayload() {
+  const city = formStringValue("city");
+  const zone = formStringValue("zone");
+  if (!city || !zone) return {};
+
+  const meta = document.getElementById("checkout-meta");
+  const shippingMethodId = window.lastShippingEventDetail?.id
+    ?? meta?.dataset.defaultShippingId
+    ?? null;
+
+  return {
+    city,
+    zone,
+    area: formStringValue("area"),
+    shippingMethodId,
+  };
+}
+
 function issueKeyForCart(
   issue: CartValidationIssue,
   items: Record<string, CartItem>,
@@ -390,12 +416,15 @@ export async function validateCartSnapshot(): Promise<boolean> {
     const response = await fetch("/api/checkout/validate-cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: payloadItems }),
+      body: JSON.stringify({
+        items: payloadItems,
+        ...cartValidationDeliveryPayload(),
+      }),
     });
     const json = await response.json().catch(() => null) as {
       success?: boolean;
       error?: string;
-      data?: { valid: boolean; issues: CartValidationIssue[] };
+      data?: CartValidationResult;
       details?: { itemIssues?: CartValidationIssue[]; message?: string };
     } | null;
 
@@ -404,6 +433,11 @@ export async function validateCartSnapshot(): Promise<boolean> {
     }
 
     const issues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
+    if (response.ok && json?.success && json.data) {
+      reconcileValidatedCartSnapshot(json.data, (message) => {
+        showDiscountMessage(message, "info");
+      });
+    }
     setCartValidationIssues(Array.isArray(issues) ? issues : [], cartStore.get().items);
     if (!response.ok || !json?.success) {
       cartValidationGlobalError = issues.length > 0

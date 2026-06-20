@@ -136,8 +136,9 @@ function createOrderInput(overrides: Partial<CreateStorefrontOrderInput> = {}): 
   };
 }
 
-function createDbMock(readResults: unknown[], validationProducts: ProductRow[], validationVariants: VariantRow[]): Database {
+function createDbMock(readResultBatches: unknown[][], validationProducts: ProductRow[], validationVariants: VariantRow[]): Database {
   const selectResults: unknown[] = [validationProducts, validationVariants];
+  const batchResults = [...readResultBatches];
   const statement = {
     where: vi.fn(() => Promise.resolve(selectResults.shift() ?? [])),
     limit: vi.fn(() => ({ statement: "limit" })),
@@ -147,7 +148,7 @@ function createDbMock(readResults: unknown[], validationProducts: ProductRow[], 
     select: vi.fn(() => ({
       from: vi.fn(() => statement),
     })),
-    batch: vi.fn(async () => readResults),
+    batch: vi.fn(async () => batchResults.shift() ?? []),
   } as unknown as Database;
 }
 
@@ -168,13 +169,14 @@ async function placeOrder({
   shippingMethods?: ShippingMethodRow[];
 } = {}) {
   const validationProducts = products.filter((product) => product.isActive === true);
-  const db = createDbMock([
-    locations,
-    [],
-    [],
-    [],
-    shippingMethods,
-  ], validationProducts, variants);
+  const db = createDbMock(
+    [
+      [locations, shippingMethods],
+      [[], [], []],
+    ],
+    validationProducts,
+    variants,
+  );
 
   return createStorefrontOrder(
     db,
