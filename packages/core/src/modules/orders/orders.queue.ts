@@ -20,6 +20,7 @@ import {
     createOrderNotificationOutboxInsertValues,
     recordAndEnqueueOrderNotification,
 } from "../notifications/order-notification-outbox";
+import { getDiscountUsageConstraintError } from "./discount-usage-constraints";
 import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 
 // ── Message type ────────────────────────────────────────────────────────────
@@ -461,6 +462,44 @@ async function retryAfterConfirmedReservationRelease(
     msg.retry({ delaySeconds });
 }
 
+async function failAfterConfirmedReservationRelease(
+    db: ReturnType<typeof getDb>,
+    env: Env,
+    msg: Message<OrderIngestQueueMessage>,
+    reservedEntries: QueuedReservationEntry[],
+    errorMessage: string,
+): Promise<void> {
+    if (reservedEntries.length > 0) {
+        try {
+            const releaseResult = await releaseReservationsByOrder(db, reservedEntries);
+            if (!releaseResult.success) {
+                console.error("[Queue] Isolated terminal-failure release failed:", releaseResult.error);
+                await setCheckoutStatus(
+                    env,
+                    msg.body.checkoutToken,
+                    "failed",
+                    "Order ingestion needs manual inventory reconciliation before retry.",
+                );
+                msg.ack();
+                return;
+            }
+        } catch (releaseErr) {
+            console.error("[Queue] Isolated terminal-failure release failed:", releaseErr);
+            await setCheckoutStatus(
+                env,
+                msg.body.checkoutToken,
+                "failed",
+                "Order ingestion needs manual inventory reconciliation before retry.",
+            );
+            msg.ack();
+            return;
+        }
+    }
+
+    await setCheckoutStatus(env, msg.body.checkoutToken, "failed", errorMessage);
+    msg.ack();
+}
+
 // ── Batch order ingest handler ──────────────────────────────────────────────
 
 /**
@@ -899,6 +938,17 @@ export async function handleOrderIngestBatch(
             } catch (isolatedError: unknown) {
                 const delaySeconds = 15;
                 console.error(`[Queue] Isolated order ingest failed for ${msg.body.orderData.id}:`, isolatedError);
+                const discountConstraintError = getDiscountUsageConstraintError(isolatedError);
+                if (discountConstraintError) {
+                    await failAfterConfirmedReservationRelease(
+                        db,
+                        env,
+                        msg,
+                        orderReservedEntries,
+                        discountConstraintError.message,
+                    );
+                    continue;
+                }
                 await retryAfterConfirmedReservationRelease(
                     db,
                     env,

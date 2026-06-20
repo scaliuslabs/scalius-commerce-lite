@@ -24,6 +24,7 @@ import {
     recordAndEnqueueOrderNotification,
     type OrderNotificationQueue,
 } from "../notifications/order-notification-outbox";
+import { getDiscountUsageConstraintError } from "./discount-usage-constraints";
 import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 import type { OrderIngestQueuePayload } from "./orders.types";
 
@@ -369,8 +370,9 @@ export async function commitStorefrontOrderPayload(
         const writes = buildOrderWriteBatch(db, payload, customer.id);
         await safeBatch(db, writes);
     } catch (error) {
+        const discountConstraintError = getDiscountUsageConstraintError(error);
         await releaseReservedEntries(db, reservedEntries);
-        throw error;
+        throw discountConstraintError ?? error;
     }
 
     await setStorefrontCheckoutStatus(env, payload.checkoutToken, "completed", payload.orderData.id);

@@ -518,6 +518,52 @@ describe("create order commit/KV ordering", () => {
     });
   });
 
+  it("surfaces discount commit validation failures in checkout status and response body", async () => {
+    const discountError = new ValidationError("Discount code has reached its usage limit");
+    mocks.createStorefrontOrder.mockResolvedValue({
+      checkoutToken: "chk_order_discount_limit",
+      orderId: "order_discount_limit",
+      paymentMethod: "cod",
+      totalAmount: 100,
+      queuePayload: { type: "order.ingest", orderData: { id: "order_discount_limit" } },
+    });
+    const { app, kv, queue } = createTestApp();
+    mocks.commitStorefrontOrderPayload.mockRejectedValue(discountError);
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Discount code has reached its usage limit",
+      },
+    });
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
+      discountError,
+    );
+    const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
+    expect(failedStatusWrite?.[0]).toBe("checkout_status:chk_order_discount_limit");
+    expect(JSON.parse(String(failedStatusWrite?.[1]))).toMatchObject({
+      status: "failed",
+      orderId: "order_discount_limit",
+      error: "Discount code has reached its usage limit",
+    });
+  });
+
   it("rejects guest checkout before rate limiting or order creation when merchant disables guests", async () => {
     const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
 
