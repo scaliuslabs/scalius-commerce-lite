@@ -175,6 +175,19 @@ describe("getCheckoutConfig", () => {
         );
     });
 
+    it("does not publish Stripe without a publishable key", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "stripe",
+        });
+        const gateways = mocks.getRegisteredGateways();
+        gateways[0].getSettings.mockResolvedValue({ enabled: true, publishableKey: "" });
+
+        const config = await getCheckoutConfig(createDb() as never);
+
+        expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
+    });
+
     it("does not publish COD as a partial-payment checkout gateway", async () => {
         mocks.getActivePaymentMethods.mockResolvedValue({
             enabledMethods: ["cod"],

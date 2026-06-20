@@ -11,7 +11,13 @@ export const MASKED = "••••••••••••";
 
 // --- Types ---
 
-export interface GatewayStatus { configured: boolean; enabled: boolean; }
+export interface GatewayStatus {
+  configured: boolean;
+  enabled: boolean;
+  usable?: boolean;
+  missingFields?: string[];
+  blockedReason?: string;
+}
 export interface PaymentMethodsData {
   enabledMethods: MethodKey[]; defaultMethod: MethodKey;
   gatewayStatus: Record<MethodKey, GatewayStatus>;

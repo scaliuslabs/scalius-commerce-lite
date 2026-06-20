@@ -155,6 +155,9 @@ export type PaymentMethodKey = "stripe" | "sslcommerz" | "polar" | "cod";
 export interface PaymentGatewayStatus {
   configured: boolean;
   enabled: boolean;
+  usable?: boolean;
+  missingFields?: string[];
+  blockedReason?: string;
 }
 export interface PaymentMethodsPayload {
   enabledMethods: string[];

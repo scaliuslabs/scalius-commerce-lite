@@ -210,6 +210,53 @@ describe("payment gateway settings cache cleanup", () => {
     });
   });
 
+  it("does not make Stripe active without a publishable key", async () => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["stripe"]) },
+        { key: "default_method", value: "stripe" },
+      ],
+      [
+        { key: "secret_key", value: "sk_live_secret" },
+        { key: "webhook_secret", value: "whsec_live" },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, undefined, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: [],
+      defaultMethod: "cod",
+    });
+  });
+
+  it("keeps Stripe active when every checkout-required key is present", async () => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["stripe"]) },
+        { key: "default_method", value: "stripe" },
+      ],
+      [
+        { key: "secret_key", value: "sk_live_secret" },
+        { key: "publishable_key", value: "pk_live_public" },
+        { key: "webhook_secret", value: "whsec_live" },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, undefined, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: ["stripe"],
+      defaultMethod: "stripe",
+    });
+  });
+
   it("fails closed instead of storing provider secrets without an encryption key", async () => {
     const { db } = createDbCapturingInsert();
 

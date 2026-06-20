@@ -156,7 +156,7 @@ export async function getCheckoutConfig(
         const gw = candidateGateways[i];
         if (!gw) continue;
         const gwSettings = settingsResults[i];
-        if (!gwSettings?.enabled) continue;
+        if (!isPublicGatewaySettingsUsable(gw.id, gwSettings)) continue;
 
         gateways.push({
             id: gw.id,
@@ -191,6 +191,17 @@ export async function getCheckoutConfig(
             ? "Checkout is temporarily unavailable while the merchant finishes payment setup."
             : undefined,
     };
+}
+
+function isPublicGatewaySettingsUsable(
+    gatewayId: string,
+    settings: { enabled: boolean; [key: string]: unknown } | null | undefined,
+): settings is { enabled: true; [key: string]: unknown } {
+    if (!settings?.enabled) return false;
+    if (gatewayId === "stripe") {
+        return typeof settings.publishableKey === "string" && settings.publishableKey.trim().length > 0;
+    }
+    return true;
 }
 
 function parseCustomerAuthPolicy(value: string | null | undefined): unknown {

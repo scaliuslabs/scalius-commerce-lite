@@ -59533,6 +59533,18 @@
                                 },
                                 "enabled": {
                                   "type": "boolean"
+                                },
+                                "usable": {
+                                  "type": "boolean"
+                                },
+                                "missingFields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "blockedReason": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
@@ -59548,6 +59560,18 @@
                                 },
                                 "enabled": {
                                   "type": "boolean"
+                                },
+                                "usable": {
+                                  "type": "boolean"
+                                },
+                                "missingFields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "blockedReason": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
@@ -59563,6 +59587,18 @@
                                 },
                                 "enabled": {
                                   "type": "boolean"
+                                },
+                                "usable": {
+                                  "type": "boolean"
+                                },
+                                "missingFields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "blockedReason": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
@@ -59578,6 +59614,18 @@
                                 },
                                 "enabled": {
                                   "type": "boolean"
+                                },
+                                "usable": {
+                                  "type": "boolean"
+                                },
+                                "missingFields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "blockedReason": {
+                                  "type": "string"
                                 }
                               },
                               "required": [

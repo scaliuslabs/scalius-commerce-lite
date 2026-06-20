@@ -116,14 +116,14 @@ export default function CheckoutFlowSettings() {
         return methods.filter((method) => {
             if (method === "cod") return false;
             const status = methodsPayload?.gatewayStatus?.[method as keyof PaymentMethodsPayload["gatewayStatus"]];
-            return status?.enabled === true && status?.configured === true;
+            return status?.usable ?? (status?.enabled === true && status?.configured === true);
         });
     }, [paymentMethods]);
     const codEnabled = useMemo(() => {
         const methodsPayload = paymentMethods as PaymentMethodsPayload | undefined;
         return methodsPayload?.enabledMethods?.includes("cod") === true &&
             methodsPayload.gatewayStatus?.cod?.enabled === true &&
-            methodsPayload.gatewayStatus?.cod?.configured === true;
+            (methodsPayload.gatewayStatus?.cod?.usable ?? methodsPayload.gatewayStatus?.cod?.configured === true);
     }, [paymentMethods]);
 
     const flowIssues = useMemo(() => {
