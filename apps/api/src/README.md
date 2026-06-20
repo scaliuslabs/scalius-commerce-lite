@@ -10,7 +10,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
 | `queue(batch)` | Queues -- payment events, legacy order ingest, OTP, notifications |
-| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, invalidates affected availability caches, and flushes the order notification outbox |
+| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts, expired customer OTP challenges, and expired/old scanner QR claims, invalidates affected availability caches, and flushes the order notification outbox |
 
 ## Route Organization
 
@@ -168,7 +168,7 @@ Then, route-specific middleware:
 
 1. **Better Auth session cookie** -- from the admin dashboard SSR frontend
 2. **JWT Bearer token** -- from decoupled mobile/external apps (auto-refreshes near expiry, returns new token via `X-New-Token` header)
-3. **Scanner session cookie** -- created after QR token exchange by the admin worker; restricted to exact scanner workflow endpoints, role is `scanner` not `admin`
+3. **Scanner session cookie** -- created after the admin worker atomically consumes a D1 scanner QR-token claim; restricted to exact scanner workflow endpoints, role is `scanner` not `admin`
 
 After authentication, it rejects 2FA-enabled admin sessions that have not completed 2FA, except exact `GET /admin/auth/2fa/info`, `POST /admin/auth/2fa/verify`, `POST /admin/auth/2fa/complete-verification`, and `POST /admin/auth/2fa/method` requests. It then performs RBAC: resolves the user's effective permission set via `getUserPermissions()` (which handles super-admin internally), then checks route-specific permissions via `getRoutePermission()` supporting `permission`, `anyOf`, and `allOf` modes. Scanner sessions skip full RBAC but are limited to the scanner allowlist.
 

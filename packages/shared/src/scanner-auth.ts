@@ -2,17 +2,12 @@ export const SCANNER_COOKIE_NAME = "scanner_sid";
 export const SCANNER_TOKEN_TTL_SECONDS = 15 * 60;
 export const SCANNER_SESSION_TTL_SECONDS = 6 * 60 * 60;
 
-export interface ScannerTokenPayload {
-  adminId: string;
-  adminName: string;
-  createdAt: number;
-}
-
 export interface ScannerSessionPayload {
   adminId: string;
   adminName: string;
   createdAt: number;
   lastSeenAt?: number;
+  claimTokenHash?: string;
 }
 
 const SCANNER_API_ALLOWLIST = new Set([
@@ -29,10 +24,6 @@ export async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
-}
-
-export async function getScannerTokenKey(token: string): Promise<string> {
-  return `scanner:token:${await sha256Hex(token)}`;
 }
 
 export async function getScannerSessionKey(sessionId: string): Promise<string> {

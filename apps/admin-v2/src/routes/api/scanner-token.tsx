@@ -1,19 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  consumeScannerTokenClaim,
+  createScannerTokenClaim,
+  type ConsumedScannerTokenClaim,
+} from "@scalius/core/auth";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { UnauthorizedError } from "@scalius/core/errors";
+import { getDb, type Database } from "@scalius/database/client";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   SCANNER_COOKIE_NAME,
   SCANNER_SESSION_TTL_SECONDS,
-  SCANNER_TOKEN_TTL_SECONDS,
   buildScannerSessionCookie,
   getScannerSessionKey,
-  getScannerTokenKey,
   parseCookie,
   type ScannerSessionPayload,
-  type ScannerTokenPayload,
 } from "@scalius/shared/scanner-auth";
 
 interface CloudflareEnv {
+  DB?: D1Database;
   CACHE?: Pick<KVNamespace, "get" | "put" | "delete">;
 }
 
@@ -46,7 +51,32 @@ interface CreateScannerTokenDeps {
     userRole?: string | null,
   ) => Promise<ScannerRbacContext>;
   getEnv?: () => Promise<CloudflareEnv> | CloudflareEnv;
+  getDb?: (env: CloudflareEnv) => Database;
   createToken?: () => Promise<string> | string;
+  createTokenClaim?: (
+    db: Database,
+    input: {
+      token: string;
+      adminId: string;
+      adminName: string;
+      nowMs?: number;
+    },
+  ) => Promise<void>;
+  now?: () => number;
+}
+
+interface ExchangeScannerTokenDeps {
+  getEnv?: () => Promise<CloudflareEnv> | CloudflareEnv;
+  getDb?: (env: CloudflareEnv) => Database;
+  createSessionId?: () => Promise<string> | string;
+  consumeTokenClaim?: (
+    db: Database,
+    input: {
+      token: string;
+      sessionId: string;
+      nowMs?: number;
+    },
+  ) => Promise<ConsumedScannerTokenClaim>;
   now?: () => number;
 }
 
@@ -105,6 +135,14 @@ async function defaultCreateToken(): Promise<string> {
   return nanoid(40);
 }
 
+function getScannerDb(
+  env: CloudflareEnv,
+  getDbOverride?: (env: CloudflareEnv) => Database,
+): Database | null {
+  if (!env.DB) return null;
+  return getDbOverride ? getDbOverride(env) : getDb(env as Env);
+}
+
 export async function handleCreateScannerToken(
   request: Request,
   deps: CreateScannerTokenDeps = {},
@@ -133,19 +171,21 @@ export async function handleCreateScannerToken(
 
   const env = deps.getEnv ? await deps.getEnv() : await defaultGetEnv();
   const kv = env.CACHE;
-  if (!kv) {
-    return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
+  const db = getScannerDb(env, deps.getDb);
+  if (!kv || !db) {
+    return jsonResponse({ success: false, error: "Scanner auth storage unavailable" }, 503);
   }
 
   const token = deps.createToken ? await deps.createToken() : await defaultCreateToken();
-  const payload: ScannerTokenPayload = {
-    adminId: user.id,
-    adminName: user.name || user.email || "",
-    createdAt: deps.now ? deps.now() : Date.now(),
-  };
+  const now = deps.now ? deps.now() : Date.now();
+  const adminName = user.name || user.email || "";
 
-  await kv.put(await getScannerTokenKey(token), JSON.stringify(payload), {
-    expirationTtl: SCANNER_TOKEN_TTL_SECONDS,
+  const createTokenClaimForRequest = deps.createTokenClaim ?? createScannerTokenClaim;
+  await createTokenClaimForRequest(db, {
+    token,
+    adminId: user.id,
+    adminName,
+    nowMs: now,
   });
 
   return jsonResponse({ success: true, token });
@@ -174,10 +214,11 @@ async function refreshScannerSession(
   kv: Pick<KVNamespace, "put">,
   sessionId: string,
   session: ScannerSessionPayload,
+  nowMs = Date.now(),
 ): Promise<Response> {
   const refreshed: ScannerSessionPayload = {
     ...session,
-    lastSeenAt: Date.now(),
+    lastSeenAt: nowMs,
   };
   await kv.put(await getScannerSessionKey(sessionId), JSON.stringify(refreshed), {
     expirationTtl: SCANNER_SESSION_TTL_SECONDS,
@@ -190,6 +231,97 @@ async function refreshScannerSession(
       "Set-Cookie": buildScannerSessionCookie(sessionId, SCANNER_SESSION_TTL_SECONDS, {
         secure: shouldUseSecureCookie(request),
       }),
+    },
+  );
+}
+
+export async function handleExchangeScannerToken(
+  request: Request,
+  deps: ExchangeScannerTokenDeps = {},
+): Promise<Response> {
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token");
+  const now = deps.now ? deps.now() : Date.now();
+
+  const env = deps.getEnv ? await deps.getEnv() : await defaultGetEnv();
+  const kv = env.CACHE;
+  if (!kv) {
+    return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
+  }
+
+  if (!token) {
+    const existingSession = await readScannerSession(request, kv);
+    if (!existingSession) {
+      return jsonResponse({ success: false, error: "Scanner session required" }, 401);
+    }
+    return refreshScannerSession(
+      request,
+      kv,
+      existingSession.sessionId,
+      existingSession.session,
+      now,
+    );
+  }
+
+  const db = getScannerDb(env, deps.getDb);
+  if (!db) {
+    const existingSession = await readScannerSession(request, kv);
+    if (existingSession) {
+      return refreshScannerSession(
+        request,
+        kv,
+        existingSession.sessionId,
+        existingSession.session,
+        now,
+      );
+    }
+    return jsonResponse({ success: false, error: "Scanner auth storage unavailable" }, 503);
+  }
+
+  const sessionId = deps.createSessionId
+    ? await deps.createSessionId()
+    : await defaultCreateToken();
+  let payload: ConsumedScannerTokenClaim;
+
+  try {
+    const consumeTokenClaimForRequest = deps.consumeTokenClaim ?? consumeScannerTokenClaim;
+    payload = await consumeTokenClaimForRequest(db, { token, sessionId, nowMs: now });
+  } catch (error) {
+    if (!(error instanceof UnauthorizedError)) throw error;
+    const existingSession = await readScannerSession(request, kv);
+    if (existingSession) {
+      return refreshScannerSession(
+        request,
+        kv,
+        existingSession.sessionId,
+        existingSession.session,
+        now,
+      );
+    }
+    return jsonResponse({ success: false, error: "Token invalid or expired" }, 401);
+  }
+
+  const session: ScannerSessionPayload = {
+    adminId: payload.adminId,
+    adminName: payload.adminName,
+    createdAt: now,
+    lastSeenAt: now,
+    claimTokenHash: payload.tokenHash,
+  };
+
+  await kv.put(await getScannerSessionKey(sessionId), JSON.stringify(session), {
+    expirationTtl: SCANNER_SESSION_TTL_SECONDS,
+  });
+
+  return jsonResponse(
+    { success: true, valid: true, adminName: payload.adminName },
+    200,
+    {
+      "Set-Cookie": buildScannerSessionCookie(
+        sessionId,
+        SCANNER_SESSION_TTL_SECONDS,
+        { secure: shouldUseSecureCookie(request) },
+      ),
     },
   );
 }
@@ -208,76 +340,7 @@ export const Route = createFileRoute("/api/scanner-token")({
        * GET -- Verify and claim a scanner token.
        */
       GET: async ({ request }) => {
-        const url = new URL(request.url);
-        const token = url.searchParams.get("token");
-
-        const { env } = await import("cloudflare:workers");
-        const kv = (env as CloudflareEnv)?.CACHE;
-        if (!kv) {
-          return jsonResponse({ success: false, error: "KV binding unavailable" }, 503);
-        }
-
-        if (!token) {
-          const existingSession = await readScannerSession(request, kv);
-          if (!existingSession) {
-            return jsonResponse({ success: false, error: "Scanner session required" }, 401);
-          }
-          return refreshScannerSession(
-            request,
-            kv,
-            existingSession.sessionId,
-            existingSession.session,
-          );
-        }
-
-        const raw = await kv.get(await getScannerTokenKey(token));
-        if (!raw) {
-          const existingSession = await readScannerSession(request, kv);
-          if (existingSession) {
-            return refreshScannerSession(
-              request,
-              kv,
-              existingSession.sessionId,
-              existingSession.session,
-            );
-          }
-          return jsonResponse({ success: false, error: "Token invalid or expired" }, 401);
-        }
-
-        let payload: ScannerTokenPayload;
-        try {
-          payload = JSON.parse(raw);
-        } catch {
-          return jsonResponse({ success: false, error: "Corrupt token data" }, 401);
-        }
-
-        // First and only claim: exchange the QR token for an opaque device session.
-        const { nanoid } = await import("nanoid");
-        const sessionId = nanoid(40);
-        const now = Date.now();
-        const session: ScannerSessionPayload = {
-          adminId: payload.adminId,
-          adminName: payload.adminName,
-          createdAt: now,
-          lastSeenAt: now,
-        };
-
-        await kv.put(await getScannerSessionKey(sessionId), JSON.stringify(session), {
-          expirationTtl: SCANNER_SESSION_TTL_SECONDS,
-        });
-        await kv.delete(await getScannerTokenKey(token));
-
-        return jsonResponse(
-          { success: true, valid: true, adminName: payload.adminName },
-          200,
-          {
-            "Set-Cookie": buildScannerSessionCookie(
-              sessionId,
-              SCANNER_SESSION_TTL_SECONDS,
-              { secure: shouldUseSecureCookie(request) },
-            ),
-          },
-        );
+        return handleExchangeScannerToken(request);
       },
     },
   },

@@ -1,7 +1,7 @@
 // src/db/schema/auth.ts
 // Better Auth tables: user, session, account, verification, twoFactor.
 
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
@@ -134,6 +134,23 @@ export const adminSetupRateLimits = sqliteTable("admin_setup_rate_limits", {
     index("admin_setup_rate_limits_window_idx").on(table.windowExpiresAt),
 ]);
 
+export const scannerTokenClaims = sqliteTable("scanner_token_claims", {
+    tokenHash: text("token_hash").primaryKey(),
+    adminId: text("admin_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    adminName: text("admin_name").notNull(),
+    consumedAt: integer("consumed_at"),
+    consumedSessionHash: text("consumed_session_hash"),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("scanner_token_claims_expires_idx").on(table.expiresAt),
+    index("scanner_token_claims_admin_created_idx").on(table.adminId, table.createdAt),
+    uniqueIndex("scanner_token_claims_consumed_session_hash_uq").on(table.consumedSessionHash),
+]);
+
 export type User = InferSelectModel<typeof user>;
 export type Session = InferSelectModel<typeof session>;
 export type Account = InferSelectModel<typeof account>;
@@ -141,3 +158,4 @@ export type Verification = InferSelectModel<typeof verification>;
 export type TwoFactor = InferSelectModel<typeof twoFactor>;
 export type AdminSetupClaim = InferSelectModel<typeof adminSetupClaims>;
 export type AdminSetupRateLimit = InferSelectModel<typeof adminSetupRateLimits>;
+export type ScannerTokenClaim = InferSelectModel<typeof scannerTokenClaims>;
