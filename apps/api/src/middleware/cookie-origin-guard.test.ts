@@ -66,6 +66,46 @@ describe("cookieOriginGuardMiddleware", () => {
     expect(response.status).toBe(200);
   });
 
+  it("rejects production cookie requests from localhost origins unless loopback is explicitly configured", async () => {
+    const { app, env } = createGuardedApp();
+
+    const response = await app.request(
+      "/guarded",
+      {
+        method: "POST",
+        headers: {
+          Cookie: "better-auth.session_token=session.signature",
+          Origin: "http://localhost:4323",
+        },
+      },
+      env,
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("allows localhost cookie requests for local runtime origins", async () => {
+    const { app, env } = createGuardedApp({
+      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
+      STOREFRONT_URL: "http://localhost:4322",
+    });
+
+    const response = await app.request(
+      "/guarded",
+      {
+        method: "POST",
+        headers: {
+          Cookie: "better-auth.session_token=session.signature",
+          Origin: "http://localhost:4323",
+        },
+      },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it("allows service-binding style cookie requests without a browser Origin", async () => {
     const { app, env } = createGuardedApp();
 

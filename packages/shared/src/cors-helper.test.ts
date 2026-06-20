@@ -62,13 +62,37 @@ describe("getCorsOriginContext", () => {
     expect(getOrigin("https://other.example.com")).toBeNull();
   });
 
-  it("allows localhost and loopback development ports without allowing lookalike hosts", async () => {
+  it("does not allow localhost and loopback origins by default in production-like envs", async () => {
     const getOrigin = await getCorsOriginContext({ env: {} });
+
+    expect(getOrigin("http://localhost:4323")).toBeNull();
+    expect(getOrigin("http://127.0.0.1:8787")).toBeNull();
+    expect(getOrigin("http://[::1]:8787")).toBeNull();
+  });
+
+  it("allows localhost and loopback development ports when a first-party runtime URL is loopback", async () => {
+    const getOrigin = await getCorsOriginContext({
+      env: {
+        PUBLIC_API_BASE_URL: "http://localhost:8787",
+      },
+    });
 
     expect(getOrigin("http://localhost:4323")).toBe("http://localhost:4323");
     expect(getOrigin("http://127.0.0.1:8787")).toBe("http://127.0.0.1:8787");
     expect(getOrigin("http://[::1]:8787")).toBe("http://[::1]:8787");
     expect(getOrigin("http://localhost.evil.test:4323")).toBeNull();
     expect(getOrigin("http://127.0.0.10:8787")).toBeNull();
+  });
+
+  it("allows exact explicitly configured localhost origins without enabling every loopback port", async () => {
+    const getOrigin = await getCorsOriginContext({
+      env: {
+        CREDENTIAL_CORS_ALLOWED_ORIGINS: "http://localhost:4323",
+      },
+    });
+
+    expect(getOrigin("http://localhost:4323")).toBe("http://localhost:4323");
+    expect(getOrigin("http://localhost:8787")).toBeNull();
+    expect(getOrigin("http://127.0.0.1:4323")).toBeNull();
   });
 });
