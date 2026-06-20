@@ -23,6 +23,10 @@ type OrderStatusPayload = OrderStatusData & {
   data?: OrderStatusData;
 };
 
+type CreateOrderOptions = {
+  customerSessionToken?: string | null;
+};
+
 /**
  * Submits a new order to the backend.
  * This is an authenticated request.
@@ -32,6 +36,7 @@ type OrderStatusPayload = OrderStatusData & {
  */
 export async function createOrder(
   payload: CreateOrderPayload,
+  options: CreateOrderOptions = {},
 ): Promise<CreateOrderResult> {
   try {
     // Use fetchWithRetry directly for orders because this mutation must not
@@ -42,7 +47,12 @@ export async function createOrder(
       url,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.customerSessionToken
+            ? { "X-Customer-Session": options.customerSessionToken }
+            : {}),
+        },
         body: JSON.stringify(payload),
       },
       0, // Do not retry the actual creation to prevent double ingestion

@@ -216,13 +216,14 @@ Before any writes, `processPaymentConfirmed()` calls `validateTransition()` for 
 
 ### Public Session Policy
 
-Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and site settings, and keeps public Stripe sessions on automatic capture. Session creation fresh-reads `payment_methods.enabled_methods` and gateway credentials with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`; this blocks stale checkout tabs from creating new external sessions after a merchant disables or rotates a gateway.
+Public Stripe, SSLCommerz, and Polar session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{token}` proof, rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and fresh checkout settings, and keeps public Stripe sessions on automatic capture. Session creation fresh-reads `payment_methods.enabled_methods`, `siteSettings.checkoutMode`/partial-payment fields, and gateway credentials with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`; this blocks stale checkout tabs from creating new external sessions after a merchant disables/rotates a gateway or switches to Fast COD Only.
 
 ### Partial Payments (Deposit/Balance)
 
 Payment types: `full`, `deposit`, `balance`.
 
 - **Deposit flow**: API route requires partial payments to be enabled and the requested deposit to match the configured `siteSettings.partialPaymentAmount` for the order. It creates a `paymentPlans` record, creates intent/session for the server-derived deposit amount only, and `processPaymentConfirmed()` sets payment plan status to `deposit_paid`.
+- **Full payment under partial mode**: When partial payment is enabled and the configured deposit is positive and below the order total, public session routes reject caller-selected `full` payments; buyers must start with the server-derived deposit.
 - **Balance flow**: API route computes `balanceDue` from order, creates intent/session for remaining amount. `processPaymentConfirmed()` sets payment plan status to `completed` when balance reaches zero.
 - **Storefront**: When `partialPaymentEnabled` is true in checkout config, COD is hidden and button labels change to "Pay Advance via {gateway}". Advance amount is `min(partialPaymentAmount, totalAmount)`.
 
@@ -259,7 +260,7 @@ Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `g
 
 - Each registration includes: `id`, `name`, `settingsCategory`, `getSettings()` (async DB lookup), `getPublicConfig()` (safe fields to expose), `getCurrencies()` (supported currencies)
 - `checkout.ts` route imports `gateway-settings.ts` for the side-effect, reads `payment_methods.enabled_methods` as the outer allowlist, then calls `getRegisteredGateways()` to dynamically build the checkout config response
-- `checkoutMode` controls gateway visibility: `all` (show everything), `gateways_only` (hide COD), `guest_cod_only` (hide online gateways)
+- `checkoutMode` controls gateway visibility and backend order/session policy: `all` (show everything), `gateways_only` (hide/reject COD), `guest_cod_only` (hide/reject online gateways)
 
 ### Checkout Config Response
 

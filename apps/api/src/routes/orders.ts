@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Database } from "@scalius/database/client";
 
 import {
   orders,
@@ -7,17 +8,22 @@ import {
   products,
   productImages,
   PaymentMethod,
-  InventoryPool
+  InventoryPool,
+  siteSettings
 } from "@scalius/database/schema";
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 import { eq, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
+import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
+import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import {
   commitStorefrontOrderPayload,
   createStorefrontOrder,
   runStorefrontOrderPostCommitSideEffects,
 } from "@scalius/core/modules/orders";
-import { NotFoundError, ValidationError, RateLimitError } from "../utils/api-error";
+import { NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
+import { getEncryptionKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
   RECEIPT_TOKEN_PREFIX,
@@ -26,14 +32,97 @@ import {
 } from "../utils/order-receipt-token";
 
 import { created, ok } from "../utils/api-response";
-import { successEnvelope, errorResponses } from "../schemas/responses";
+import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const CUSTOMER_SESSION_HEADER = "X-Customer-Session";
+const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
+  cod: "Cash on delivery",
+  stripe: "Stripe",
+  sslcommerz: "SSLCommerz",
+  polar: "Polar",
+};
 
 function getOptionalExecutionContext(c: { executionCtx?: ExecutionContext }): ExecutionContext | undefined {
   try {
     return c.executionCtx;
   } catch {
     return undefined;
+  }
+}
+
+function getCustomerSessionTokenFromRequest(c: { req: { header: (name: string) => string | undefined } }): string | null {
+  const explicitSessionToken = c.req.header(CUSTOMER_SESSION_HEADER)?.trim();
+  if (explicitSessionToken) return explicitSessionToken;
+
+  return getSessionCookie(c.req.header("Cookie") ?? null);
+}
+
+async function assertCheckoutOrderPolicy(
+  c: {
+    env: Env;
+    get: (key: "db") => Database;
+    req: { header: (name: string) => string | undefined };
+  },
+  customerPhone: string,
+  paymentMethod: CheckoutPaymentMethodId,
+): Promise<void> {
+  const db = c.get("db");
+  const [checkoutSettings] = await db
+    .select({
+      guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
+      checkoutMode: siteSettings.checkoutMode,
+      partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+      partialPaymentAmount: siteSettings.partialPaymentAmount,
+    })
+    .from(siteSettings)
+    .limit(1);
+
+  let activePaymentMethods: Awaited<ReturnType<typeof getActivePaymentMethods>>;
+  try {
+    activePaymentMethods = await getActivePaymentMethods(
+      db,
+      c.env.CACHE,
+      getEncryptionKey(c.env as Record<string, unknown>),
+      FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
+    );
+  } catch (error) {
+    console.warn("[Orders] Failed to read active payment methods before checkout:", error);
+    throw new ServiceUnavailableError("Checkout payment settings are temporarily unavailable. Please try again shortly.");
+  }
+
+  if (!activePaymentMethods.enabledMethods.includes(paymentMethod)) {
+    throw new ServiceUnavailableError(`${PAYMENT_METHOD_LABELS[paymentMethod]} is not enabled for checkout.`);
+  }
+
+  if (!isCheckoutGatewayUsableForFlow({
+    gatewayId: paymentMethod,
+    checkoutMode: checkoutSettings?.checkoutMode,
+    partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
+    partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+  })) {
+    throw new ValidationError(`${PAYMENT_METHOD_LABELS[paymentMethod]} is not available for the current checkout settings.`);
+  }
+
+  if (checkoutSettings?.guestCheckoutEnabled ?? true) {
+    return;
+  }
+
+  if (!c.env.CACHE) {
+    throw new ServiceUnavailableError("Checkout sign-in is temporarily unavailable. Please try again shortly.");
+  }
+
+  const sessionToken = getCustomerSessionTokenFromRequest(c);
+  if (!sessionToken) {
+    throw new UnauthorizedError("Please sign in before checkout.");
+  }
+
+  const session = await getCustomerBySession(c.env.CACHE, sessionToken);
+  if (!session?.customerId) {
+    throw new UnauthorizedError("Please sign in before checkout.");
+  }
+
+  if (!session.phone || session.phone !== customerPhone) {
+    throw new ValidationError("Checkout phone must match the signed-in customer phone.");
   }
 }
 
@@ -271,12 +360,12 @@ const createOrderSchema = z.object({
     z.object({
       productId: z.string().min(1, "Product is required"),
       variantId: z.string().nullable(),
-      quantity: z.number().min(1, "Quantity must be at least 1"),
+      quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(99, "Quantity must be at most 99"),
       price: z.number().min(0, "Price must be greater than or equal to 0"),
       productName: z.string().optional().nullable(),
       variantLabel: z.string().optional().nullable()
     }),
-  ),
+  ).min(1, "At least one item is required"),
   discountAmount: z
     .number()
     .min(0, "Discount must be greater than or equal to 0")
@@ -324,6 +413,10 @@ const createOrderRoute = createRoute({
       }) } },
     },
     400: errorResponses[400],
+    401: errorResponses[401],
+    429: errorResponses[429],
+    500: errorResponses[500],
+    503: serviceUnavailableResponse,
   }
 });
 
@@ -331,6 +424,8 @@ app.openapi(createOrderRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   const requestUrl = c.req.url;
+
+  await assertCheckoutOrderPolicy(c, data.customerPhone, data.paymentMethod as CheckoutPaymentMethodId);
 
   // Rate limit order attempts without punishing legitimate shared-IP buyers.
   const kv = c.env.CACHE as KVNamespace | undefined;

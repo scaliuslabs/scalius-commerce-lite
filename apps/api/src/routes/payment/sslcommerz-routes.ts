@@ -18,7 +18,7 @@ import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.servi
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
-import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
@@ -68,6 +68,7 @@ const createSessionRoute = createRoute({
       },
     },
     ...errorResponses,
+    503: serviceUnavailableResponse,
   },
 });
 
@@ -106,16 +107,17 @@ app.openapi(createSessionRoute, async (c) => {
     throw new ValidationError("Order is not configured for SSLCommerz payment");
   }
 
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code;
+  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "sslcommerz");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
-  });
+  }, checkoutFlowSettings);
+
+  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+  const currency = currencyConfig.code;
   const transactionId = buildSSLCommerzTranId(body.orderId, policy.paymentType);
 
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "sslcommerz");
   const ssl = await getSSLCommerzSettings(
     db,
     c.env.CACHE,

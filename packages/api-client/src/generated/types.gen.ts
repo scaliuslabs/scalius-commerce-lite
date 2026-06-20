@@ -4872,6 +4872,50 @@ export type PostApiV1OrdersErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1OrdersError = PostApiV1OrdersErrors[keyof PostApiV1OrdersErrors];
@@ -31857,6 +31901,17 @@ export type PostApiV1PaymentStripeIntentErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1PaymentStripeIntentError = PostApiV1PaymentStripeIntentErrors[keyof PostApiV1PaymentStripeIntentErrors];
@@ -31952,6 +32007,17 @@ export type PostApiV1PaymentSslcommerzSessionErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -32055,6 +32121,17 @@ export type PostApiV1PaymentPolarSessionErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;

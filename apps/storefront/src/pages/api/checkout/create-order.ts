@@ -6,11 +6,18 @@ import type { APIRoute } from "astro";
 import { createOrder } from "@/lib/api/orders";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 
+function getCustomerSessionToken(cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/(?:^|;\s*)cs_tok=([^;]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const payload = (await request.json()) as import("@/lib/api/types").CreateOrderPayload;
+    const customerSessionToken = getCustomerSessionToken(request.headers.get("cookie"));
 
-    const result = await createOrder(payload);
+    const result = await createOrder(payload, { customerSessionToken });
 
     if (!result.success) {
       return new Response(JSON.stringify({

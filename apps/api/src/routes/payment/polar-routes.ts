@@ -16,7 +16,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ServiceUnavailableError, ApiError, ValidationError } from "../../utils/api-error";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
-import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
@@ -62,6 +62,7 @@ const createPolarSessionRoute = createRoute({
             },
         },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -99,17 +100,18 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         throw new ValidationError("Order is not configured for Polar payment");
     }
 
-    // Get configured currency
-    const currencyConfig = await getCurrencyConfig(db);
-    let currency = currencyConfig.code.toLowerCase();
+    const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, kv, encryptionKey, "polar");
     const policy = await resolvePaymentSessionPolicy(db, order, {
         paymentType: body.paymentType || body.type,
         depositAmount: body.depositAmount,
-    });
+    }, checkoutFlowSettings);
+
+    // Get configured currency
+    const currencyConfig = await getCurrencyConfig(db);
+    let currency = currencyConfig.code.toLowerCase();
     let paymentAmount = policy.chargeAmount;
 
     // Get Polar credentials from DB
-    await assertGatewayEnabledForCheckout(db, kv, encryptionKey, "polar");
     const polarSettings = await getPolarSettings(
         db,
         kv,

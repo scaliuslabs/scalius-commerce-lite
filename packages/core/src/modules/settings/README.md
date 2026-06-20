@@ -221,6 +221,8 @@ The storefront checkout endpoint returns:
 - `allowedCountriesMode: "include" | "exclude"` -- whether the list is allowlist or blocklist
 - `currency.decimalPlaces: number` -- ISO 4217 decimal places for the configured currency
 
+Storefront order creation must enforce the same effective checkout policy server-side. The API create-order route fresh-checks `guestCheckoutEnabled`, `checkoutMode`, partial-payment settings, and active payment methods before mutating orders; guest-disabled checkout requires a valid customer session whose phone matches the submitted order phone.
+
 ## Dependencies
 
 - `@scalius/database` -- `siteSettings`, `settings` tables
