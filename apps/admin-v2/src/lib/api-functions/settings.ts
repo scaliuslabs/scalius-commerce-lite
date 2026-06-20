@@ -158,10 +158,15 @@ export interface PaymentGatewayStatus {
   usable?: boolean;
   missingFields?: string[];
   blockedReason?: string;
+  providerEnabled?: boolean;
+  checkoutSelected?: boolean;
+  checkoutVisible?: boolean;
 }
 export interface PaymentMethodsPayload {
   enabledMethods: string[];
   defaultMethod: string;
+  activeMethods?: string[];
+  activeDefaultMethod?: string;
   gatewayStatus: Record<PaymentMethodKey, PaymentGatewayStatus>;
 }
 export interface UpdatePaymentMethodsInput {

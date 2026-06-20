@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getActivePaymentMethods,
+  getPolarCheckoutReadiness,
+  getSSLCommerzCheckoutReadiness,
   getStripeSettings,
   invalidatePaymentMethodsCache,
   invalidatePolarCache,
@@ -162,6 +164,7 @@ describe("payment gateway settings cache cleanup", () => {
       [
         { key: "access_token", value: "polar_token" },
         { key: "product_id", value: "polar_product" },
+        { key: "webhook_secret", value: "polar_webhook" },
         { key: "enabled", value: "true" },
       ],
     ]);
@@ -230,6 +233,55 @@ describe("payment gateway settings cache cleanup", () => {
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
+    });
+  });
+
+  it("does not make Polar active without a webhook secret", async () => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["polar"]) },
+        { key: "default_method", value: "polar" },
+      ],
+      [
+        { key: "access_token", value: "polar_token" },
+        { key: "product_id", value: "polar_product" },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, undefined, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: [],
+      defaultMethod: "cod",
+    });
+  });
+
+  it("reports exact SSLCommerz and Polar checkout readiness gaps", () => {
+    expect(getSSLCommerzCheckoutReadiness({
+      storeId: "store_1",
+      storePassword: "",
+      enabled: true,
+    })).toMatchObject({
+      configured: false,
+      enabled: true,
+      usable: false,
+      missingFields: ["storePassword"],
+      blockedReason: expect.stringContaining("store password"),
+    });
+    expect(getPolarCheckoutReadiness({
+      accessToken: "polar_token",
+      productId: "product_1",
+      webhookSecret: "",
+      enabled: true,
+    })).toMatchObject({
+      configured: false,
+      enabled: true,
+      usable: false,
+      missingFields: ["webhookSecret"],
+      blockedReason: expect.stringContaining("webhook secret"),
     });
   });
 

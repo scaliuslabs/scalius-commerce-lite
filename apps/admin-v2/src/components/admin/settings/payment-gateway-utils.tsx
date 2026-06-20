@@ -17,9 +17,13 @@ export interface GatewayStatus {
   usable?: boolean;
   missingFields?: string[];
   blockedReason?: string;
+  providerEnabled?: boolean;
+  checkoutSelected?: boolean;
+  checkoutVisible?: boolean;
 }
 export interface PaymentMethodsData {
   enabledMethods: MethodKey[]; defaultMethod: MethodKey;
+  activeMethods?: MethodKey[]; activeDefaultMethod?: MethodKey;
   gatewayStatus: Record<MethodKey, GatewayStatus>;
 }
 export interface StripeData { secretKey: string; publishableKey: string; webhookSecret: string; enabled: boolean; }

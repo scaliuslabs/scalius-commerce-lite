@@ -255,20 +255,20 @@ All gateway credentials are stored in the `settings` DB table with a `category` 
 | `polar` | `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` |
 | `payment_methods` | `enabled_methods` (JSON array), `default_method` |
 
-Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods` are in-memory cache keys, not persistent credential storage). New Stripe, SSLCommerz, and Polar secret writes require `CREDENTIAL_ENCRYPTION_KEY` and fail before settings writes or cache invalidation if the dedicated key is missing; gateway reads still tolerate legacy plaintext/JWT-encrypted rows through graceful decrypt fallback. Admin save operations clear the specific gateway cache, clear the payment methods cache, best-effort delete any legacy KV entries with the same keys, invalidate API checkout config cache (`api:checkout:config:` and the current `api:checkout:config:v2:` prefix), and purge storefront checkout prefixes. Public checkout config assembly, public session creation, webhook auth/IPN validation, admin payment-method status reads, and refund dispatch pass `FRESH_GATEWAY_SETTINGS_READ_OPTIONS` / `bypassMemoryCache: true` to payment-method and gateway reads because these provider-boundary decisions must honor recent merchant settings across warm Cloudflare Worker isolates.
+Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `gw:payment_methods` are in-memory cache keys, not persistent credential storage). New Stripe, SSLCommerz, and Polar secret writes require `CREDENTIAL_ENCRYPTION_KEY` and fail before settings writes or cache invalidation if the dedicated key is missing; gateway reads still tolerate legacy plaintext/JWT-encrypted rows through graceful decrypt fallback. Checkout readiness is provider-specific: Stripe requires provider enabled + secret key + publishable key + webhook secret; SSLCommerz requires provider enabled + store ID + store password; Polar requires provider enabled + access token + product ID + webhook secret. Admin save operations clear the specific gateway cache, clear the payment methods cache, best-effort delete any legacy KV entries with the same keys, invalidate API checkout config cache (`api:checkout:config:` and the current `api:checkout:config:v2:` prefix), and purge storefront checkout prefixes. Public checkout config assembly, public session creation, webhook auth/IPN validation, admin payment-method status reads, and refund dispatch pass `FRESH_GATEWAY_SETTINGS_READ_OPTIONS` / `bypassMemoryCache: true` to payment-method and gateway reads because these provider-boundary decisions must honor recent merchant settings across warm Cloudflare Worker isolates.
 
 ### Gateway Registry
 
 `gateway-settings.ts` side-effect registers all 4 gateways on import:
 
 - Each registration includes: `id`, `name`, `settingsCategory`, `getSettings()` (async DB lookup), `getPublicConfig()` (safe fields to expose), `getCurrencies()` (supported currencies)
-- `checkout.ts` route imports `gateway-settings.ts` for the side-effect, reads `payment_methods.enabled_methods` as the outer allowlist, then calls `getRegisteredGateways()` to dynamically build the checkout config response
+- `checkout.ts` route imports `gateway-settings.ts` for the side-effect, reads `payment_methods.enabled_methods` as the outer allowlist, then calls `getRegisteredGateways()` to dynamically build the checkout config response. Online gateway registry `getSettings()` functions return `null` unless the gateway is checkout-usable, so future registry callers inherit the same fail-closed behavior.
 - `checkoutMode` controls gateway visibility and backend order/session policy: `all` (show everything), `gateways_only` (hide/reject COD), `guest_cod_only` (hide/reject online gateways)
 
 ### Checkout Config Response
 
 The `GET /checkout/config` endpoint returns:
-- `gateways[]` -- enabled gateways with public config (publishableKey for Stripe, sandbox flag for SSLCommerz/Polar)
+- `gateways[]` -- buyer-visible gateways after raw allowlist, provider readiness, checkout mode, and partial-payment filtering, with public config only (publishableKey for Stripe, sandbox flag for SSLCommerz/Polar)
 - `currency` -- `{ code, symbol, decimalPlaces }` using `getDecimalPlaces()` for ISO 4217 lookup
 - `allowedCountries` + `allowedCountriesMode` -- phone number country restrictions (include/exclude list)
 - `guestCheckoutEnabled`, `authVerificationMethod`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount`

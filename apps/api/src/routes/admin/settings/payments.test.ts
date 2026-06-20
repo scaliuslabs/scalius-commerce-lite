@@ -9,8 +9,10 @@ const mocks = vi.hoisted(() => ({
     getEncryptionKey: vi.fn(),
     requireEncryptionKey: vi.fn(),
     invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+    safeBatch: vi.fn(),
     upsertSetting: vi.fn(),
     upsertEncryptedSetting: vi.fn(),
+    getPaymentMethodPreferences: vi.fn(),
     getActivePaymentMethods: vi.fn(),
     getStripeSettings: vi.fn(),
     getStripeCheckoutReadiness: vi.fn((settings: {
@@ -51,7 +53,78 @@ const mocks = vi.hoisted(() => ({
         Boolean(settings.publishableKey?.trim()) &&
         Boolean(settings.webhookSecret?.trim())
     )),
+    getSSLCommerzCheckoutReadiness: vi.fn((settings: {
+        enabled?: boolean;
+        storeId?: string;
+        storePassword?: string;
+    } | null | undefined) => {
+        const missingFields = [
+            !settings?.storeId?.trim() ? "storeId" : null,
+            !settings?.storePassword?.trim() ? "storePassword" : null,
+        ].filter((field): field is string => Boolean(field));
+        const labels: Record<string, string> = {
+            storeId: "store ID",
+            storePassword: "store password",
+        };
+        const enabled = settings?.enabled === true;
+        return {
+            configured: missingFields.length === 0,
+            enabled,
+            usable: enabled && missingFields.length === 0,
+            missingFields,
+            blockedReason: missingFields.length > 0
+                ? `SSLCommerz needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
+                : undefined,
+        };
+    }),
+    isSSLCommerzCheckoutUsable: vi.fn((settings: {
+        enabled?: boolean;
+        storeId?: string;
+        storePassword?: string;
+    } | null | undefined) => (
+        settings?.enabled === true &&
+        Boolean(settings.storeId?.trim()) &&
+        Boolean(settings.storePassword?.trim())
+    )),
     getSSLCommerzSettings: vi.fn(),
+    getPolarCheckoutReadiness: vi.fn((settings: {
+        enabled?: boolean;
+        accessToken?: string;
+        productId?: string;
+        webhookSecret?: string;
+    } | null | undefined) => {
+        const missingFields = [
+            !settings?.accessToken?.trim() ? "accessToken" : null,
+            !settings?.productId?.trim() ? "productId" : null,
+            !settings?.webhookSecret?.trim() ? "webhookSecret" : null,
+        ].filter((field): field is string => Boolean(field));
+        const labels: Record<string, string> = {
+            accessToken: "access token",
+            productId: "product ID",
+            webhookSecret: "webhook secret",
+        };
+        const enabled = settings?.enabled === true;
+        return {
+            configured: missingFields.length === 0,
+            enabled,
+            usable: enabled && missingFields.length === 0,
+            missingFields,
+            blockedReason: missingFields.length > 0
+                ? `Polar needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
+                : undefined,
+        };
+    }),
+    isPolarCheckoutUsable: vi.fn((settings: {
+        enabled?: boolean;
+        accessToken?: string;
+        productId?: string;
+        webhookSecret?: string;
+    } | null | undefined) => (
+        settings?.enabled === true &&
+        Boolean(settings.accessToken?.trim()) &&
+        Boolean(settings.productId?.trim()) &&
+        Boolean(settings.webhookSecret?.trim())
+    )),
     getPolarSettings: vi.fn(),
     invalidatePaymentMethodsCache: vi.fn(),
     invalidateStripeCache: vi.fn(),
@@ -72,14 +145,24 @@ vi.mock("../../../utils/cache-invalidation", () => ({
     invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
+vi.mock("@scalius/database/client", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@scalius/database/client")>()),
+    safeBatch: mocks.safeBatch,
+}));
+
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
     upsertSetting: mocks.upsertSetting,
     upsertEncryptedSetting: mocks.upsertEncryptedSetting,
+    getPaymentMethodPreferences: mocks.getPaymentMethodPreferences,
     getActivePaymentMethods: mocks.getActivePaymentMethods,
     getStripeSettings: mocks.getStripeSettings,
     getStripeCheckoutReadiness: mocks.getStripeCheckoutReadiness,
     isStripeCheckoutUsable: mocks.isStripeCheckoutUsable,
+    getSSLCommerzCheckoutReadiness: mocks.getSSLCommerzCheckoutReadiness,
+    isSSLCommerzCheckoutUsable: mocks.isSSLCommerzCheckoutUsable,
     getSSLCommerzSettings: mocks.getSSLCommerzSettings,
+    getPolarCheckoutReadiness: mocks.getPolarCheckoutReadiness,
+    isPolarCheckoutUsable: mocks.isPolarCheckoutUsable,
     getPolarSettings: mocks.getPolarSettings,
     invalidatePaymentMethodsCache: mocks.invalidatePaymentMethodsCache,
     invalidateStripeCache: mocks.invalidateStripeCache,
@@ -108,6 +191,11 @@ function createTestApp(
                 })),
             })),
         })),
+        insert: vi.fn(() => ({
+            values: vi.fn(() => ({
+                onConflictDoUpdate: vi.fn(() => ({ statement: "upsert-payment-method-setting" })),
+            })),
+        })),
     };
     const kv = { id: "gateway-kv" };
     const env = {
@@ -122,12 +210,18 @@ function createTestApp(
     mocks.getEncryptionKey.mockReturnValue("enc-key");
     mocks.requireEncryptionKey.mockReturnValue("credential-key");
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+    mocks.safeBatch.mockResolvedValue([]);
     mocks.upsertSetting.mockResolvedValue(undefined);
     mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
     mocks.invalidatePaymentMethodsCache.mockResolvedValue(undefined);
     mocks.invalidateStripeCache.mockResolvedValue(undefined);
     mocks.invalidateSSLCommerzCache.mockResolvedValue(undefined);
     mocks.invalidatePolarCache.mockResolvedValue(undefined);
+    mocks.getPaymentMethodPreferences.mockResolvedValue({
+        enabledMethods: ["cod"],
+        defaultMethod: "cod",
+        hasExplicitEnabledMethods: true,
+    });
     mocks.getActivePaymentMethods.mockResolvedValue({ enabledMethods: ["cod"], defaultMethod: "cod" });
     mocks.getStripeSettings.mockResolvedValue(null);
     mocks.getSSLCommerzSettings.mockResolvedValue(null);
@@ -185,6 +279,13 @@ describe("payment settings cache invalidation", () => {
         });
 
         expect(response.status).toBe(200);
+        expect(mocks.safeBatch).toHaveBeenCalledWith(
+            expect.objectContaining({ id: "db" }),
+            expect.arrayContaining([
+                expect.objectContaining({ statement: "upsert-payment-method-setting" }),
+            ]),
+        );
+        expect(mocks.safeBatch.mock.calls[0]?.[1]).toHaveLength(2);
         expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["checkout"],
@@ -213,6 +314,52 @@ describe("payment settings cache invalidation", () => {
                         enabled: true,
                         usable: false,
                         missingFields: ["publishableKey"],
+                    },
+                },
+            },
+        });
+    });
+
+    it("returns raw selected methods separately from effective active checkout methods", async () => {
+        const { app, env } = createTestApp();
+        mocks.getPaymentMethodPreferences.mockResolvedValueOnce({
+            enabledMethods: ["stripe", "cod"],
+            defaultMethod: "stripe",
+            hasExplicitEnabledMethods: true,
+        });
+        mocks.getActivePaymentMethods.mockResolvedValueOnce({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+        mocks.getStripeSettings.mockResolvedValueOnce({
+            enabled: true,
+            secretKey: "sk_live_existing",
+            publishableKey: "",
+            webhookSecret: "whsec_existing",
+        });
+
+        const response = await getJson(app, env, "/payment-methods");
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        await expect(response.json()).resolves.toMatchObject({
+            success: true,
+            data: {
+                enabledMethods: ["stripe", "cod"],
+                defaultMethod: "stripe",
+                activeMethods: ["cod"],
+                activeDefaultMethod: "cod",
+                gatewayStatus: {
+                    stripe: {
+                        configured: false,
+                        enabled: true,
+                        usable: false,
+                        checkoutSelected: true,
+                        checkoutVisible: false,
+                        missingFields: ["publishableKey"],
+                    },
+                    cod: {
+                        checkoutSelected: true,
+                        checkoutVisible: true,
                     },
                 },
             },
@@ -354,7 +501,9 @@ describe("payment settings cache invalidation", () => {
     });
 
     it("invalidates API and storefront checkout caches after SSLCommerz saves", async () => {
-        const { app, env, kv } = createTestApp();
+        const { app, env, kv } = createTestApp({}, [
+            { key: "store_password", value: "encrypted-password" },
+        ]);
 
         const response = await postJson(app, env, "/sslcommerz", {
             storeId: "store-id",
@@ -370,6 +519,26 @@ describe("payment settings cache invalidation", () => {
             expect.objectContaining({ env }),
         );
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+    });
+
+    it("rejects enabling SSLCommerz when the effective store password is missing", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/sslcommerz", {
+            storeId: "store-id",
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: expect.stringContaining("store password"),
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidateSSLCommerzCache).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving SSLCommerz secrets", async () => {
@@ -391,7 +560,10 @@ describe("payment settings cache invalidation", () => {
     });
 
     it("invalidates API and storefront checkout caches after Polar saves", async () => {
-        const { app, env, kv } = createTestApp();
+        const { app, env, kv } = createTestApp({}, [
+            { key: "access_token", value: "encrypted-token" },
+            { key: "webhook_secret", value: "encrypted-webhook" },
+        ]);
 
         const response = await postJson(app, env, "/polar", {
             productId: "product-id",
@@ -407,6 +579,28 @@ describe("payment settings cache invalidation", () => {
             expect.objectContaining({ env }),
         );
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+    });
+
+    it("rejects enabling Polar when the effective webhook secret is missing", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "access_token", value: "encrypted-token" },
+            { key: "product_id", value: "product-id" },
+        ]);
+
+        const response = await postJson(app, env, "/polar", {
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: expect.stringContaining("webhook secret"),
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidatePolarCache).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving Polar secrets", async () => {
