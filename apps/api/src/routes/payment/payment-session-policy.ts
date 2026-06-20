@@ -4,6 +4,7 @@ import { PaymentStatus, paymentPlans, siteSettings } from "@scalius/database/sch
 import { getUnpayableOrderReason } from "@scalius/core/modules/payments/payable-order";
 import { pricesEqual, roundPrice, subtractPrice } from "@scalius/shared/price-utils";
 import { ValidationError } from "../../utils/api-error";
+import type { CheckoutFlowSettings } from "./payment-method-allowlist";
 
 export type PaymentSessionType = "full" | "deposit" | "balance";
 
@@ -47,7 +48,9 @@ function assertPositiveAmount(value: number, label: string): number {
   return amount;
 }
 
-async function getPartialPaymentSettings(db: Database) {
+type PartialPaymentSettings = Pick<CheckoutFlowSettings, "partialPaymentEnabled" | "partialPaymentAmount">;
+
+async function getPartialPaymentSettings(db: Database): Promise<PartialPaymentSettings | null | undefined> {
   return db
     .select({
       partialPaymentEnabled: siteSettings.partialPaymentEnabled,
@@ -79,16 +82,20 @@ export async function resolvePaymentSessionPolicy(
   db: Database,
   order: PaymentSessionOrder,
   requested: RequestedPaymentSession,
+  checkoutFlowSettings?: PartialPaymentSettings | null,
 ): Promise<PaymentSessionPolicy> {
   const paymentType = requested.paymentType ?? "full";
   const orderTotal = assertPositiveAmount(order.totalAmount, "Order total");
+  const getPaymentSettings = () => checkoutFlowSettings
+    ? Promise.resolve(checkoutFlowSettings)
+    : getPartialPaymentSettings(db);
 
   if (requested.depositAmount !== undefined && paymentType !== "deposit") {
     throw new ValidationError("depositAmount is only accepted for deposit payments");
   }
 
   if (paymentType === "deposit") {
-    const settings = await getPartialPaymentSettings(db);
+    const settings = await getPaymentSettings();
     const configuredDeposit = roundPrice(Number(settings?.partialPaymentAmount ?? 0));
 
     if (!settings?.partialPaymentEnabled || configuredDeposit <= 0) {
@@ -133,6 +140,14 @@ export async function resolvePaymentSessionPolicy(
       chargeAmount: balanceDue,
       balanceDue,
     };
+  }
+
+  if (paymentType === "full") {
+    const settings = await getPaymentSettings();
+    const configuredDeposit = roundPrice(Number(settings?.partialPaymentAmount ?? 0));
+    if (settings?.partialPaymentEnabled && configuredDeposit > 0 && configuredDeposit < orderTotal) {
+      throw new ValidationError("Partial payment is enabled for checkout; use a deposit payment.");
+    }
   }
 
   const paidAmount = roundPrice(Number(order.paidAmount ?? 0));

@@ -73,6 +73,7 @@ type TokenMode = "valid" | "wrong" | "missing";
 interface DbMockOptions {
   paymentMethod?: string;
   order?: Partial<typeof orderRow>;
+  checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
   paymentPlan?: { balanceDue: number; status: string } | null;
@@ -107,6 +108,7 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
         get: vi.fn(async () => {
           if (selectedTable === siteSettingsTable) {
             return {
+              checkoutMode: opts.checkoutMode ?? "all",
               partialPaymentEnabled: opts.partialPaymentEnabled ?? false,
               partialPaymentAmount: opts.partialPaymentAmount ?? 0,
             };
@@ -678,6 +680,109 @@ describe("payment session receipt-token proof", () => {
       undefined,
       expect.objectContaining({ bypassMemoryCache: true }),
     );
+    expect(settings).not.toHaveBeenCalled();
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      settings: mocks.getStripeSettings,
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      settings: mocks.getSSLCommerzSettings,
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      settings: mocks.getPolarSettings,
+      gateway: mocks.createPolarCheckout,
+    },
+  ])("rejects stale $label checkout sessions when checkout mode switches to Fast COD Only", async ({
+    paymentMethod,
+    path,
+    settings,
+    gateway,
+  }) => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod,
+      checkoutMode: "guest_cod_only",
+    });
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(settings).not.toHaveBeenCalled();
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      settings: mocks.getStripeSettings,
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      settings: mocks.getSSLCommerzSettings,
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      settings: mocks.getPolarSettings,
+      gateway: mocks.createPolarCheckout,
+    },
+  ])("rejects full $label payment sessions when partial payment requires a deposit", async ({
+    paymentMethod,
+    path,
+    settings,
+    gateway,
+  }) => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod,
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 50,
+    });
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          paymentType: "full",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
     expect(settings).not.toHaveBeenCalled();
     expect(gateway).not.toHaveBeenCalled();
   });

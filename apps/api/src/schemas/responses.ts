@@ -45,6 +45,11 @@ export const errorResponseSchema = z.object({
   }),
 });
 
+export const serviceUnavailableResponse = {
+  description: "Service unavailable",
+  content: { "application/json": { schema: errorResponseSchema } },
+} as const;
+
 /** Reusable error response definitions for createRoute() responses block. */
 export const errorResponses = {
   400: {

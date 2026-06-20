@@ -15,7 +15,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ApiError } from "../../utils/api-error";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
-import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
@@ -61,6 +61,7 @@ const createIntentRoute = createRoute({
       },
     },
     ...errorResponses,
+    503: serviceUnavailableResponse,
   },
 });
 
@@ -94,15 +95,15 @@ app.openapi(createIntentRoute, async (c) => {
     throw new ValidationError("Order is not configured for Stripe payment");
   }
 
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code.toLowerCase();
+  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+  const checkoutFlowSettings = await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "stripe");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
-  });
+  }, checkoutFlowSettings);
 
-  const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-  await assertGatewayEnabledForCheckout(db, c.env.CACHE, encryptionKey, "stripe");
+  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+  const currency = currencyConfig.code.toLowerCase();
   const stripe = await getStripeSettings(
     db,
     c.env.CACHE,
