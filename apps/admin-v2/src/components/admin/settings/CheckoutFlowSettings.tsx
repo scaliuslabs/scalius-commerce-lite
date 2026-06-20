@@ -102,6 +102,7 @@ export default function CheckoutFlowSettings() {
         isLoading: checkoutReadinessLoading,
         isFetching: checkoutReadinessFetching,
         isError: checkoutReadinessError,
+        error: checkoutReadinessQueryError,
         refetch: refetchCheckoutReadiness,
     } = useQuery(checkoutReadinessQueryOptions());
     const [saving, setSaving] = useState(false);
@@ -165,9 +166,13 @@ export default function CheckoutFlowSettings() {
     const readiness = checkoutReadiness as CheckoutReadinessPayload | undefined;
     const readinessIssues = readiness?.issues ?? [];
     const previewIssues = [...flowIssues, ...readinessIssues];
-    const previewLoading = paymentMethodsLoading || checkoutReadinessLoading;
-    const readinessUnknown = !readiness && !checkoutReadinessLoading;
-    const readinessCheckUnavailable = checkoutReadinessError || readinessUnknown;
+    const readinessPending = checkoutReadinessLoading || (checkoutReadinessFetching && !readiness);
+    const previewLoading = paymentMethodsLoading || readinessPending;
+    const readinessUnknown = !readiness && !readinessPending;
+    const readinessCheckUnavailable = !readinessPending && (checkoutReadinessError || readinessUnknown);
+    const readinessErrorMessage = checkoutReadinessQueryError instanceof Error
+        ? checkoutReadinessQueryError.message
+        : null;
     const previewCardClass = previewIssues.length > 0
         ? "border-destructive/40 bg-destructive/5"
         : readinessCheckUnavailable
@@ -284,14 +289,14 @@ export default function CheckoutFlowSettings() {
                         <ReadinessRow
                             label="Active shipping method"
                             ready={readiness?.hasActiveShippingMethod}
-                            loading={checkoutReadinessLoading || checkoutReadinessFetching}
+                            loading={readinessPending}
                             unknown={readinessUnknown}
                             icon={Truck}
                         />
                         <ReadinessRow
                             label="Active city and zone"
                             ready={readiness?.hasActiveDeliveryHierarchy}
-                            loading={checkoutReadinessLoading || checkoutReadinessFetching}
+                            loading={readinessPending}
                             unknown={readinessUnknown}
                             icon={MapPinned}
                         />
@@ -300,7 +305,15 @@ export default function CheckoutFlowSettings() {
                         <Alert className="border-amber-500/30 bg-amber-500/5">
                             <AlertTriangle className="h-4 w-4 text-amber-500" />
                             <AlertDescription className="flex flex-col gap-3 text-sm text-amber-700 dark:text-amber-400 sm:flex-row sm:items-center sm:justify-between">
-                                <span>Delivery readiness could not be checked. Public checkout still fails closed if shipping setup is incomplete.</span>
+                                <span className="min-w-0">
+                                    <span className="block font-medium">Delivery readiness could not be checked.</span>
+                                    {readinessErrorMessage && (
+                                        <span className="mt-1 block text-xs opacity-85">{readinessErrorMessage}</span>
+                                    )}
+                                    <span className="mt-1 block text-xs opacity-85">
+                                        Public checkout still fails closed if shipping setup is incomplete.
+                                    </span>
+                                </span>
                                 <Button
                                     type="button"
                                     variant="outline"
