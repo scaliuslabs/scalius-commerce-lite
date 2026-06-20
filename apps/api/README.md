@@ -145,7 +145,7 @@ Registered in order in `app.ts`. Every request goes through these global middlew
 
 1. **Per-request init** (`app.use("*")`) -- Calls `getDb(env)`, `initKv(env.CACHE)`, `initStorage(env.BUCKET)`.
 2. **CORS logging** (`app.use("*")`) -- Logs preflight requests for debugging.
-3. **CORS** (`app.use("*")`) -- Dynamic origin validation via `getCorsOriginContext()` from `@scalius/shared`.
+3. **CORS** (`app.use("*")`) -- Dynamic credentialed origin validation via `getCorsOriginContext()` from `@scalius/shared`; wildcards are limited to real `*.domain` subdomains and local `host:*` dev ports.
 4. **Security headers** (`app.use("*")`) -- Adds `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS outside localhost.
 5. **Proxy base URL** (`app.use("*")`) -- Sets `X-Proxy-Base-URL` header from `PUBLIC_API_BASE_URL`.
 
