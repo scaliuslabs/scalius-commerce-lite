@@ -13,6 +13,7 @@ const baseSettings: EmailRuntimeSettings = {
 describe("email provider selection", () => {
   beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
@@ -128,21 +129,34 @@ describe("email provider selection", () => {
     }));
   });
 
-  it("logs locally instead of throwing when no provider is configured", async () => {
+  it("fails without logging email bodies when no provider is configured", async () => {
     await expect(sendEmail(
       {
         to: "buyer@example.com",
         subject: "Order received",
-        html: "<p>Thanks</p>",
+        html: "<p>Your code is 123456</p>",
+        text: "Your code is 123456",
       },
       { settings: baseSettings },
     )).resolves.toMatchObject({
       success: false,
       provider: "log",
+      rawStatus: "No configured email provider available; email not delivered",
     });
 
-    expect(console.log).toHaveBeenCalledWith(
-      "EMAIL (no configured provider available - logging only)",
+    expect(console.warn).toHaveBeenCalledWith(
+      "[Email] No configured provider available; email was not delivered",
+      expect.objectContaining({
+        to: "br***@example.com",
+        contentLogged: false,
+      }),
     );
+    const logOutput = [
+      ...vi.mocked(console.log).mock.calls,
+      ...vi.mocked(console.warn).mock.calls,
+      ...vi.mocked(console.error).mock.calls,
+    ].map((call) => call.map((value) => JSON.stringify(value)).join(" ")).join("\n");
+    expect(logOutput).not.toContain("123456");
+    expect(logOutput).not.toContain("<p>Your code");
   });
 });
