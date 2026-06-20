@@ -1,10 +1,16 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+
+const storefrontRoot = existsSync(resolve(process.cwd(), "apps", "storefront", "src"))
+  ? resolve(process.cwd(), "apps", "storefront")
+  : process.cwd();
+const sourcePath = (...segments: string[]) => resolve(storefrontRoot, "src", ...segments);
 
 describe("order success side effects", () => {
   it("gates cart cleanup and purchase tracking behind final payment state", () => {
     const pageSource = readFileSync(
-      new URL("../pages/order-success.astro", import.meta.url),
+      sourcePath("pages", "order-success.astro"),
       "utf8",
     );
 
@@ -16,11 +22,26 @@ describe("order success side effects", () => {
 
   it("keeps navigation buttons free of cart-clearing side effects", () => {
     const buttonsSource = readFileSync(
-      new URL("../components/OrderSuccessButtons.tsx", import.meta.url),
+      sourcePath("components", "OrderSuccessButtons.tsx"),
       "utf8",
     );
 
     expect(buttonsSource).not.toContain("clearCart");
     expect(buttonsSource).not.toContain("@/store/cart");
+  });
+
+  it("keeps hosted payment retry outside the finalization side-effect path", () => {
+    const pageSource = readFileSync(
+      sourcePath("pages", "order-success.astro"),
+      "utf8",
+    );
+
+    expect(pageSource).toContain("id=\"retryPaymentButton\"");
+    expect(pageSource).toContain("retryKey");
+    const retryScriptIndex = pageSource.indexOf('document.getElementById("retryPaymentButton")');
+    expect(retryScriptIndex).toBeGreaterThan(pageSource.indexOf("clearCart();"));
+    const retryScript = pageSource.slice(retryScriptIndex);
+    expect(retryScript).not.toContain("clearCart");
+    expect(retryScript).not.toContain("trackFbPurchase");
   });
 });

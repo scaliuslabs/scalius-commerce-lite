@@ -95,7 +95,7 @@ export function getOrderSuccessViewState(order: OrderReceipt): OrderSuccessViewS
       shouldFinalizeClientSide: false,
       title: "Payment Needs Attention",
       message:
-        `We found your order #${order.id}, but the payment is not complete. Please retry payment from your account or contact the store before placing the same order again.`,
+        `We found your order #${order.id}, but the payment is not complete. Please retry payment from this receipt when available or contact the store before placing the same order again.`,
       orderStatusLabel: formatOrderSuccessLabel(order.status),
       paymentStatusLabel: formatOrderSuccessLabel(order.paymentStatus),
       badgeClass: "bg-destructive/10 text-destructive",

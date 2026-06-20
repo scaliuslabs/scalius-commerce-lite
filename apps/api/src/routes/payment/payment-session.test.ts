@@ -552,6 +552,9 @@ describe("payment session receipt-token proof", () => {
         totalAmount: 60,
         currency: "BDT",
         paymentType: "deposit",
+        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
+        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
+        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
       }),
     );
   });
@@ -568,6 +571,36 @@ describe("payment session receipt-token proof", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
       "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=sslcommerz",
+    );
+  });
+
+  it("redirects SSLCommerz failed hosted payments back to the receipt recovery page", async () => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
+    );
+  });
+
+  it("redirects SSLCommerz cancelled hosted payments back to the receipt recovery page", async () => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=sslcommerz&result=cancelled&paymentType=full",
     );
   });
 
@@ -656,6 +689,8 @@ describe("payment session receipt-token proof", () => {
         amount: 50,
         currency: "usd",
         paymentType: "deposit",
+        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=55",
+        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=55",
         metadata: expect.objectContaining({
           orderId: "order_1",
           paymentType: "deposit",
@@ -664,6 +699,21 @@ describe("payment session receipt-token proof", () => {
           exchangeRate: "110",
         }),
       }),
+    );
+  });
+
+  it("redirects Polar cancelled hosted payments back to the receipt recovery page", async () => {
+    const { app, kv } = createTestApp("valid", "polar");
+
+    const response = await app.request(
+      "/api/v1/payment/polar/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=polar&result=cancelled&paymentType=full",
     );
   });
 
@@ -974,6 +1024,7 @@ describe("payment session receipt-token proof", () => {
           orderId: "order_1",
           receiptToken: "chk_valid",
           baseUrl: "https://attacker.example",
+          retryKey: "retry_1",
         }),
       },
       envFor(kv),
@@ -985,10 +1036,15 @@ describe("payment session receipt-token proof", () => {
       "password",
       true,
       expect.objectContaining({
-        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid",
-        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1",
-        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1",
+        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
         ipnUrl: "https://api.example.test/api/v1/webhooks/sslcommerz",
+      }),
+    );
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestContext: expect.objectContaining({ retryKey: "retry_1" }),
       }),
     );
   });
@@ -1006,6 +1062,7 @@ describe("payment session receipt-token proof", () => {
           receiptToken: "chk_valid",
           successUrl: "https://attacker.example/success",
           cancelUrl: "https://attacker.example/cancel",
+          retryKey: "retry_2",
         }),
       },
       envFor(kv),
@@ -1015,8 +1072,13 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
       expect.objectContaining({ productId: "polar_product" }),
       expect.objectContaining({
-        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&receipt_token=chk_valid",
-        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1",
+        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+      }),
+    );
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestContext: expect.objectContaining({ retryKey: "retry_2" }),
       }),
     );
   });

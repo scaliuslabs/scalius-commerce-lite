@@ -3,6 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { eq, sql } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
 import {
   buildSSLCommerzTranId,
@@ -43,7 +44,8 @@ const sessionSchema = z.object({
   receiptToken: z.string().min(1),
   paymentType: z.enum(["full", "deposit", "balance"]).default("full"),
   depositAmount: z.number().positive().optional(),
-  currency: z.string().optional()
+  currency: z.string().optional(),
+  retryKey: z.string().trim().min(1).max(128).optional()
 });
 
 function buildSslCallbackUrl(apiBase: string, path: string, params: Record<string, string | undefined>): string {
@@ -147,10 +149,12 @@ app.openapi(createSessionRoute, async (c) => {
   const callbackParams = {
     order_id: body.orderId,
     receipt_token: body.receiptToken,
+    payment_type: policy.paymentType,
+    deposit_amount: policy.paymentType === "deposit" ? String(policy.depositAmount) : undefined,
   };
   const successUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/success", callbackParams);
-  const failUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/fail", { order_id: body.orderId });
-  const cancelUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/cancel", { order_id: body.orderId });
+  const failUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/fail", callbackParams);
+  const cancelUrl = buildSslCallbackUrl(apiBase, "/payment/sslcommerz/cancel", callbackParams);
   const ipnUrl = `${apiBase}/webhooks/sslcommerz`;
 
   const attemptIdentity = await buildPaymentSessionAttemptIdentity({
@@ -165,6 +169,7 @@ app.openapi(createSessionRoute, async (c) => {
       failUrl,
       cancelUrl,
       ipnUrl,
+      retryKey: body.retryKey ?? null,
     },
   });
   const transactionId = buildSSLCommerzTranId(body.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
@@ -289,72 +294,106 @@ function getStorefrontUrl(c: { env?: { STOREFRONT_URL?: string }; req: { url: st
   return new URL(c.req.url).origin;
 }
 
-app.post("/success", async (c) => {
+type SslCallbackContext = {
+  req: {
+    method: string;
+    url: string;
+    parseBody: () => Promise<Record<string, unknown>>;
+    query: (key: string) => string | undefined;
+  };
+  env?: { STOREFRONT_URL?: string };
+  get: (key: "db") => Pick<Database, "select">;
+};
+
+function normalizeCallbackPaymentType(value: string | undefined): "full" | "deposit" | "balance" | "" {
+  if (value === "full" || value === "deposit" || value === "balance") return value;
+  return "";
+}
+
+function getCallbackReceiptToken(c: { req: { query: (key: string) => string | undefined } }): string {
+  return c.req.query("receipt_token") ?? c.req.query("receiptToken") ?? "";
+}
+
+function getCallbackPaymentType(c: { req: { query: (key: string) => string | undefined } }): "full" | "deposit" | "balance" | "" {
+  return normalizeCallbackPaymentType(c.req.query("payment_type") ?? c.req.query("paymentType"));
+}
+
+function getCallbackDepositAmount(c: { req: { query: (key: string) => string | undefined } }): string {
+  const value = c.req.query("deposit_amount") ?? c.req.query("depositAmount") ?? "";
+  if (!value) return "";
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? value : "";
+}
+
+function buildStorefrontOrderSuccessUrl(
+  storefront: string,
+  params: {
+    orderId: string;
+    receiptToken: string;
+    payment: "sslcommerz";
+    result?: "failed" | "cancelled";
+    paymentType?: "full" | "deposit" | "balance" | "";
+    depositAmount?: string;
+  },
+): string {
+  const url = new URL(`${storefront}/order-success`);
+  url.searchParams.set("orderId", params.orderId);
+  url.searchParams.set("token", params.receiptToken);
+  url.searchParams.set("payment", params.payment);
+  if (params.result) url.searchParams.set("result", params.result);
+  if (params.paymentType) url.searchParams.set("paymentType", params.paymentType);
+  if (params.depositAmount) url.searchParams.set("depositAmount", params.depositAmount);
+  return url.toString();
+}
+
+async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "failed" | "cancelled"): Promise<string> {
   const orderId = await resolveCallbackOrderId(c);
   const storefront = getStorefrontUrl(c);
-  const receiptToken = c.req.query("receipt_token") ?? "";
+  const receiptToken = getCallbackReceiptToken(c);
+
   if (orderId) {
     const db = c.get("db");
     const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
+    if (!order) return `${storefront}/checkout?error=invalid_order`;
   }
-  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(orderId)}&token=${encodeURIComponent(receiptToken)}&payment=sslcommerz`);
+
+  if (!receiptToken) {
+    const error = result === "cancelled" ? "payment_cancelled" : "payment_failed";
+    return `${storefront}/cart?error=${error}&orderId=${encodeURIComponent(orderId)}`;
+  }
+
+  return buildStorefrontOrderSuccessUrl(storefront, {
+    orderId,
+    receiptToken,
+    payment: "sslcommerz",
+    result,
+    paymentType: getCallbackPaymentType(c),
+    depositAmount: getCallbackDepositAmount(c),
+  });
+}
+
+app.post("/success", async (c) => {
+  return c.redirect(await buildSslCallbackRedirectUrl(c));
 });
 
 app.get("/success", async (c) => {
-  const orderId = await resolveCallbackOrderId(c);
-  const storefront = getStorefrontUrl(c);
-  const receiptToken = c.req.query("receipt_token") ?? "";
-  if (orderId) {
-    const db = c.get("db");
-    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
-  }
-  return c.redirect(`${storefront}/order-success?orderId=${encodeURIComponent(orderId)}&token=${encodeURIComponent(receiptToken)}&payment=sslcommerz`);
+  return c.redirect(await buildSslCallbackRedirectUrl(c));
 });
 
 app.post("/fail", async (c) => {
-  const orderId = await resolveCallbackOrderId(c);
-  const storefront = getStorefrontUrl(c);
-  if (orderId) {
-    const db = c.get("db");
-    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
-  }
-  return c.redirect(`${storefront}/cart?error=payment_failed&orderId=${encodeURIComponent(orderId)}`);
+  return c.redirect(await buildSslCallbackRedirectUrl(c, "failed"));
 });
 
 app.get("/fail", async (c) => {
-  const orderId = await resolveCallbackOrderId(c);
-  const storefront = getStorefrontUrl(c);
-  if (orderId) {
-    const db = c.get("db");
-    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
-  }
-  return c.redirect(`${storefront}/cart?error=payment_failed&orderId=${encodeURIComponent(orderId)}`);
+  return c.redirect(await buildSslCallbackRedirectUrl(c, "failed"));
 });
 
 app.post("/cancel", async (c) => {
-  const orderId = await resolveCallbackOrderId(c);
-  const storefront = getStorefrontUrl(c);
-  if (orderId) {
-    const db = c.get("db");
-    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
-  }
-  return c.redirect(`${storefront}/cart?error=payment_cancelled&orderId=${encodeURIComponent(orderId)}`);
+  return c.redirect(await buildSslCallbackRedirectUrl(c, "cancelled"));
 });
 
 app.get("/cancel", async (c) => {
-  const orderId = await resolveCallbackOrderId(c);
-  const storefront = getStorefrontUrl(c);
-  if (orderId) {
-    const db = c.get("db");
-    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) return c.redirect(`${storefront}/checkout?error=invalid_order`);
-  }
-  return c.redirect(`${storefront}/cart?error=payment_cancelled&orderId=${encodeURIComponent(orderId)}`);
+  return c.redirect(await buildSslCallbackRedirectUrl(c, "cancelled"));
 });
 
 export const sslcommerzPaymentRoutes = app;
