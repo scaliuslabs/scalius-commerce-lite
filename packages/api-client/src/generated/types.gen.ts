@@ -4753,6 +4753,7 @@ export type GetApiV1OrdersStatusByTokenResponses = {
         data: {
             status: string;
             message: string;
+            orderId?: string;
         };
     };
 };
@@ -4833,6 +4834,7 @@ export type GetApiV1OrdersReceiptByIdResponse = GetApiV1OrdersReceiptByIdRespons
 
 export type PostApiV1OrdersData = {
     body?: {
+        checkoutRequestId: string;
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
@@ -4880,6 +4882,17 @@ export type PostApiV1OrdersErrors = {
      * Unauthorized
      */
     401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -4936,6 +4949,18 @@ export type PostApiV1OrdersResponses = {
             orderId: string;
             paymentMethod: string;
             totalAmount: number;
+            message: string;
+        };
+    };
+    /**
+     * Order submit is already processing
+     */
+    202: {
+        success: true;
+        data: {
+            checkoutToken: string;
+            orderId: string;
+            status: 'processing';
             message: string;
         };
     };

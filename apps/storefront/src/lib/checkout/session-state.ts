@@ -1,6 +1,7 @@
 const CHECKOUT_SESSION_KEYS = [
   "scalius_checkout_data",
   "scalius_checkout_gateways",
+  "checkoutId",
 ] as const;
 
 const LEGACY_ANALYTICS_PII_KEYS = [

@@ -3,6 +3,7 @@ import type { Database } from "@scalius/database/client";
 
 import {
   orders,
+  checkoutAttempts,
   orderItems,
   productVariants,
   products,
@@ -18,9 +19,14 @@ import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/cu
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import {
+  buildCheckoutAttemptIdentity,
+  claimCheckoutAttempt,
   commitStorefrontOrderPayload,
   createStorefrontOrder,
+  markCheckoutAttemptCommitted,
+  markCheckoutAttemptFailed,
   runStorefrontOrderPostCommitSideEffects,
+  type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
 import { invalidateProductAvailabilityCaches } from "../utils/cache-invalidation";
 import { NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
@@ -33,7 +39,7 @@ import {
 } from "../utils/order-receipt-token";
 
 import { created, ok } from "../utils/api-response";
-import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../schemas/responses";
+import { successEnvelope, errorResponses, serviceUnavailableResponse, conflictResponse } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CUSTOMER_SESSION_HEADER = "X-Customer-Session";
 const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
@@ -176,7 +182,11 @@ const getOrderStatusRoute = createRoute({
       description: "Order is processing",
       content: { "application/json": { schema: z.object({
         success: z.literal(true),
-        data: z.object({ status: z.string(), message: z.string() }),
+        data: z.object({
+          status: z.string(),
+          message: z.string(),
+          orderId: z.string().optional(),
+        }),
       }) } },
     },
     400: errorResponses[400],
@@ -202,6 +212,59 @@ app.openapi(getOrderStatusRoute, async (c) => {
   const statusStr = await c.env.CACHE.get(kvKey);
 
   if (!statusStr) {
+    const db = c.get("db");
+    const attempt = await db
+      .select({
+        status: checkoutAttempts.status,
+        orderId: checkoutAttempts.orderId,
+        checkoutToken: checkoutAttempts.checkoutToken,
+        lastError: checkoutAttempts.lastError,
+      })
+      .from(checkoutAttempts)
+      .where(eq(checkoutAttempts.checkoutToken, token))
+      .get();
+
+    if (attempt?.status === "committed") {
+      return ok(c, {
+        status: "completed",
+        orderId: attempt.orderId,
+        receiptToken: attempt.checkoutToken,
+      });
+    }
+
+    if (attempt?.status === "failed") {
+      return ok(c, {
+        status: "failed",
+        orderId: attempt.orderId,
+        error: attempt.lastError || "Order creation failed. Please try again.",
+      });
+    }
+
+    if (attempt?.status === "processing") {
+      const orderExists = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.id, attempt.orderId))
+        .get();
+
+      if (orderExists) {
+        return ok(c, {
+          status: "completed",
+          orderId: attempt.orderId,
+          receiptToken: attempt.checkoutToken,
+        });
+      }
+
+      return c.json({
+        success: true,
+        data: {
+          status: "processing",
+          orderId: attempt.orderId,
+          message: "Order is processing.",
+        },
+      }, 202);
+    }
+
     return c.json({ success: true, data: { status: "processing", message: "Order is waiting in queue." } }, 202);
   }
 
@@ -297,7 +360,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   c.header("Pragma", "no-cache");
   c.header("Expires", "0");
 
-  await validateReceiptToken(c.env.CACHE, id, token);
+  await validateReceiptToken(c.env.CACHE, id, token, db);
 
   const order = await db
     .select({
@@ -365,6 +428,12 @@ app.openapi(getOrderReceiptRoute, async (c) => {
 // ─── POST / ──────────────────────────────────────────────────────────────────
 
 const createOrderSchema = z.object({
+  checkoutRequestId: z
+    .string()
+    .trim()
+    .min(16, "Checkout request id is required")
+    .max(128, "Checkout request id is too long")
+    .regex(/^[A-Za-z0-9:_-]+$/, "Checkout request id contains unsupported characters"),
   customerName: z
     .string()
     .min(3, "Customer name must be at least 3 characters")
@@ -441,8 +510,21 @@ const createOrderRoute = createRoute({
         }),
       }) } },
     },
+    202: {
+      description: "Order submit is already processing",
+      content: { "application/json": { schema: z.object({
+        success: z.literal(true),
+        data: z.object({
+          checkoutToken: z.string(),
+          orderId: z.string(),
+          status: z.literal("processing"),
+          message: z.string(),
+        }),
+      }) } },
+    },
     400: errorResponses[400],
     401: errorResponses[401],
+    409: conflictResponse,
     429: errorResponses[429],
     500: errorResponses[500],
     503: serviceUnavailableResponse,
@@ -453,6 +535,8 @@ app.openapi(createOrderRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   const requestUrl = c.req.url;
+  let checkoutAttempt: ClaimedCheckoutAttempt | null = null;
+  let orderCommitted = false;
 
   await assertCheckoutOrderPolicy(c, data.customerPhone, data.paymentMethod as CheckoutPaymentMethodId);
 
@@ -470,6 +554,34 @@ app.openapi(createOrderRoute, async (c) => {
   }
 
   try {
+    const attemptIdentity = await buildCheckoutAttemptIdentity(data);
+    const attemptClaim = await claimCheckoutAttempt<{
+      checkoutToken: string;
+      receiptToken: string;
+      orderId: string;
+      paymentMethod: string;
+      totalAmount: number;
+      message: string;
+    }>(db, attemptIdentity);
+
+    if (attemptClaim.status === "replay") {
+      return created(c, attemptClaim.response);
+    }
+
+    if (attemptClaim.status === "processing") {
+      return c.json({
+        success: true,
+        data: {
+          checkoutToken: attemptClaim.checkoutToken,
+          orderId: attemptClaim.orderId,
+          status: "processing" as const,
+          message: "Order creation is already processing.",
+        },
+      }, 202);
+    }
+
+    checkoutAttempt = attemptClaim.attempt;
+
     type CartItem = { id: string; price: number; quantity: number; variantId?: string };
     const result = await createStorefrontOrder(
       db,
@@ -483,6 +595,10 @@ app.openapi(createOrderRoute, async (c) => {
         items as CartItem[],
         shippingCost,
       ),
+      {
+        orderId: checkoutAttempt.orderId,
+        checkoutToken: checkoutAttempt.checkoutToken,
+      },
     );
 
     const kvKey = `checkout_status:${result.checkoutToken}`;
@@ -499,6 +615,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     try {
       await commitStorefrontOrderPayload(db, c.env, result.queuePayload);
+      orderCommitted = true;
     } catch (commitError) {
       await c.env.CACHE.put(
         kvKey,
@@ -515,6 +632,29 @@ app.openapi(createOrderRoute, async (c) => {
       throw commitError;
     }
 
+    const responsePayload = {
+      checkoutToken: result.checkoutToken,
+      receiptToken: result.checkoutToken,
+      orderId: result.orderId,
+      paymentMethod: result.paymentMethod,
+      totalAmount: result.totalAmount,
+      message: "Order created",
+    };
+
+    try {
+      await markCheckoutAttemptCommitted(db, checkoutAttempt, {
+        paymentMethod: result.paymentMethod,
+        totalAmount: result.totalAmount,
+        response: responsePayload,
+      });
+    } catch (markError) {
+      console.error("[Orders] Failed to mark checkout attempt committed after order commit:", {
+        orderId: result.orderId,
+        checkoutToken: result.checkoutToken,
+        error: markError,
+      });
+    }
+
     const executionCtx = getOptionalExecutionContext(c);
     const sideEffects = Promise.all([
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.queuePayload),
@@ -526,15 +666,18 @@ app.openapi(createOrderRoute, async (c) => {
       await sideEffects;
     }
 
-    return created(c, {
-      checkoutToken: result.checkoutToken,
-      receiptToken: result.checkoutToken,
-      orderId: result.orderId,
-      paymentMethod: result.paymentMethod,
-      totalAmount: result.totalAmount,
-      message: "Order created",
-    });
+    return created(c, responsePayload);
   } catch (error: unknown) {
+    if (checkoutAttempt && !orderCommitted) {
+      await markCheckoutAttemptFailed(db, checkoutAttempt, error).catch((markError: unknown) => {
+        console.error("[Orders] Failed to mark checkout attempt failed:", {
+          requestKey: checkoutAttempt?.requestKey,
+          orderId: checkoutAttempt?.orderId,
+          error: markError,
+        });
+      });
+    }
+
     if (error instanceof z.ZodError) {
       throw new ValidationError("Invalid input data", error.issues);
     }

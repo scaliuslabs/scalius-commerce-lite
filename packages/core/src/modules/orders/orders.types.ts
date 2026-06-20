@@ -81,6 +81,7 @@ export interface StorefrontOrderItem {
 }
 
 export interface CreateStorefrontOrderInput {
+    checkoutRequestId: string;
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;
@@ -99,6 +100,11 @@ export interface CreateStorefrontOrderInput {
     shippingMethodId?: string | null;
     paymentMethod: string;
     inventoryPool: string;
+}
+
+export interface CreateStorefrontOrderIdentity {
+    orderId: string;
+    checkoutToken: string;
 }
 
 export interface CreateStorefrontOrderResult {

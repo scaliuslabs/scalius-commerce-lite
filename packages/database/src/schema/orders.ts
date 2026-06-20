@@ -1,5 +1,5 @@
 // src/db/schema/orders.ts
-// Order domain tables: orders, orderItems, orderPayments, paymentPlans,
+// Order domain tables: orders, checkoutAttempts, orderItems, orderPayments, paymentPlans,
 // codTracking, webhookEvents, orderNotificationOutbox,
 // orderNotificationDeliveryReceipts, abandonedCheckouts.
 
@@ -72,6 +72,29 @@ export const orders = sqliteTable("orders", {
     index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
     index("orders_customer_phone_idx").on(table.customerPhone),
     index("orders_shipment_claim_idx").on(table.shipmentClaimId, table.shipmentClaimExpiresAt),
+]);
+
+export const checkoutAttempts = sqliteTable("checkout_attempts", {
+    id: text("id").primaryKey(),
+    requestKey: text("request_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    checkoutToken: text("checkout_token").notNull(),
+    orderId: text("order_id").notNull(),
+    status: text("status").notNull().default("processing"),
+    paymentMethod: text("payment_method"),
+    totalAmount: real("total_amount"),
+    responsePayload: text("response_payload"),
+    attempts: integer("attempts").notNull().default(0),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("checkout_attempts_request_key_unique").on(table.requestKey),
+    uniqueIndex("checkout_attempts_checkout_token_unique").on(table.checkoutToken),
+    index("checkout_attempts_order_id_idx").on(table.orderId),
+    index("checkout_attempts_status_claim_idx").on(table.status, table.claimExpiresAt),
 ]);
 
 export const orderItems = sqliteTable("order_items", {
@@ -307,6 +330,7 @@ export const abandonedCheckouts = sqliteTable(
 );
 
 export type Order = InferSelectModel<typeof orders>;
+export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;

@@ -6,6 +6,10 @@ import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
+  buildCheckoutAttemptIdentity: vi.fn(),
+  claimCheckoutAttempt: vi.fn(),
+  markCheckoutAttemptCommitted: vi.fn(),
+  markCheckoutAttemptFailed: vi.fn(),
   commitStorefrontOrderPayload: vi.fn(),
   runStorefrontOrderPostCommitSideEffects: vi.fn(),
   invalidateProductAvailabilityCaches: vi.fn(),
@@ -16,7 +20,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/orders", () => ({
+  buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
+  claimCheckoutAttempt: mocks.claimCheckoutAttempt,
   createStorefrontOrder: mocks.createStorefrontOrder,
+  markCheckoutAttemptCommitted: mocks.markCheckoutAttemptCommitted,
+  markCheckoutAttemptFailed: mocks.markCheckoutAttemptFailed,
   commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
   runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
 }));
@@ -54,12 +62,31 @@ beforeEach(() => {
     enabledMethods: ["cod"],
     defaultMethod: "cod",
   });
+  mocks.buildCheckoutAttemptIdentity.mockResolvedValue({
+    requestKey: "checkout_submit:v1:test",
+    requestHash: "request_hash_1",
+    checkoutRequestId: "checkout_req_123456",
+  });
+  mocks.claimCheckoutAttempt.mockResolvedValue({
+    status: "claimed",
+    attempt: {
+      id: "coa_1",
+      requestKey: "checkout_submit:v1:test",
+      requestHash: "request_hash_1",
+      claimId: "coac_1",
+      orderId: "order_1",
+      checkoutToken: "chk_order_1",
+    },
+  });
+  mocks.markCheckoutAttemptCommitted.mockResolvedValue(undefined);
+  mocks.markCheckoutAttemptFailed.mockResolvedValue(undefined);
   mocks.commitStorefrontOrderPayload.mockResolvedValue(undefined);
   mocks.runStorefrontOrderPostCommitSideEffects.mockResolvedValue(undefined);
   mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
 });
 
 const validOrderBody = {
+  checkoutRequestId: "checkout_req_123456",
   customerName: "Queue Customer",
   customerPhone: "+8801712345678",
   customerEmail: null,
@@ -167,6 +194,34 @@ describe("create order commit/KV ordering", () => {
       "side-effects",
       "availability",
     ]);
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ checkoutRequestId: "checkout_req_123456" }),
+      expect.any(String),
+      expect.any(Function),
+      expect.any(Function),
+      {
+        orderId: "order_1",
+        checkoutToken: "chk_order_1",
+      },
+    );
+    expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: "coa_1",
+        claimId: "coac_1",
+        orderId: "order_1",
+        checkoutToken: "chk_order_1",
+      }),
+      expect.objectContaining({
+        paymentMethod: "cod",
+        totalAmount: 100,
+        response: expect.objectContaining({
+          orderId: "order_1",
+          receiptToken: "chk_order_1",
+        }),
+      }),
+    );
     expect(queue.send).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
       expect.anything(),
@@ -176,6 +231,73 @@ describe("create order commit/KV ordering", () => {
         executionCtx: undefined,
       }),
     );
+  });
+
+  it("replays a committed checkout attempt without creating another order", async () => {
+    mocks.claimCheckoutAttempt.mockResolvedValue({
+      status: "replay",
+      response: {
+        checkoutToken: "chk_replay",
+        receiptToken: "chk_replay",
+        orderId: "order_replay",
+        paymentMethod: "cod",
+        totalAmount: 100,
+        message: "Order created",
+      },
+    });
+    const { app, kv, queue } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    const json = await response.json() as { data: { orderId: string; receiptToken: string } };
+    expect(response.status).toBe(201);
+    expect(json.data).toMatchObject({
+      orderId: "order_replay",
+      receiptToken: "chk_replay",
+    });
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("returns a pollable processing response for an active duplicate checkout submit", async () => {
+    mocks.claimCheckoutAttempt.mockResolvedValue({
+      status: "processing",
+      orderId: "order_processing",
+      checkoutToken: "chk_processing",
+    });
+    const { app, kv, queue } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    const json = await response.json() as { data: { checkoutToken: string; orderId: string; status: string } };
+    expect(response.status).toBe(202);
+    expect(json.data).toEqual({
+      checkoutToken: "chk_processing",
+      orderId: "order_processing",
+      status: "processing",
+      message: "Order creation is already processing.",
+    });
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("keeps a committed order successful when product availability cache invalidation fails", async () => {
@@ -256,6 +378,11 @@ describe("create order commit/KV ordering", () => {
     expect(queue.send).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
+      expect.any(Error),
+    );
     const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
     expect(failedStatusWrite?.[0]).toBe("checkout_status:chk_order_2");
     expect(JSON.parse(String(failedStatusWrite?.[1]))).toMatchObject({
