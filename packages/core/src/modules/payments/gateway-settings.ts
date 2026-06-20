@@ -85,6 +85,22 @@ export interface StripeSettings {
   enabled: boolean;
 }
 
+export type StripeCheckoutRequiredField = "secretKey" | "publishableKey" | "webhookSecret";
+
+const STRIPE_CHECKOUT_FIELD_LABELS: Record<StripeCheckoutRequiredField, string> = {
+  secretKey: "secret key",
+  publishableKey: "publishable key",
+  webhookSecret: "webhook secret",
+};
+
+export interface StripeCheckoutReadiness {
+  configured: boolean;
+  enabled: boolean;
+  usable: boolean;
+  missingFields: StripeCheckoutRequiredField[];
+  blockedReason?: string;
+}
+
 export interface SSLCommerzSettings {
   storeId: string;
   storePassword: string;
@@ -123,6 +139,46 @@ async function readCategory(
 
 const STRIPE_CATEGORY = "stripe";
 const STRIPE_CACHE_KEY = "gw:stripe";
+
+function hasText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export function getStripeCheckoutMissingFields(
+  settings: Partial<Pick<StripeSettings, StripeCheckoutRequiredField>> | null | undefined,
+): StripeCheckoutRequiredField[] {
+  const missing: StripeCheckoutRequiredField[] = [];
+  if (!hasText(settings?.secretKey)) missing.push("secretKey");
+  if (!hasText(settings?.publishableKey)) missing.push("publishableKey");
+  if (!hasText(settings?.webhookSecret)) missing.push("webhookSecret");
+  return missing;
+}
+
+function stripeBlockedReason(missingFields: StripeCheckoutRequiredField[]): string | undefined {
+  if (missingFields.length === 0) return undefined;
+  const labels = missingFields.map((field) => STRIPE_CHECKOUT_FIELD_LABELS[field]);
+  return `Stripe needs ${labels.join(", ")} before it can be shown at checkout.`;
+}
+
+export function getStripeCheckoutReadiness(
+  settings: Partial<StripeSettings> | null | undefined,
+): StripeCheckoutReadiness {
+  const missingFields = getStripeCheckoutMissingFields(settings);
+  const enabled = settings?.enabled === true;
+  return {
+    configured: missingFields.length === 0,
+    enabled,
+    usable: enabled && missingFields.length === 0,
+    missingFields,
+    blockedReason: stripeBlockedReason(missingFields),
+  };
+}
+
+export function isStripeCheckoutUsable(
+  settings: Partial<StripeSettings> | null | undefined,
+): settings is StripeSettings {
+  return getStripeCheckoutReadiness(settings).usable;
+}
 
 export async function getStripeSettings(
   db: Database,
@@ -375,7 +431,7 @@ export async function getActivePaymentMethods(
     }
     if (method === "stripe") {
       const stripe = await getStripeSettings(db, kv, encryptionKey, options);
-      if (stripe && stripe.enabled) {
+      if (isStripeCheckoutUsable(stripe)) {
         validMethods.push("stripe");
       }
     }
@@ -429,10 +485,10 @@ registerGateway({
   settingsCategory: STRIPE_CATEGORY,
   getSettings: async (db, kv, encryptionKey, options) => {
     const s = await getStripeSettings(db, kv, encryptionKey, options);
-    return s ? { ...s, enabled: s.enabled } : null;
+    return isStripeCheckoutUsable(s) ? { ...s, enabled: true } : null;
   },
   getPublicConfig: (s) => ({
-    publishableKey: s.publishableKey,
+    publishableKey: typeof s.publishableKey === "string" ? s.publishableKey.trim() : "",
   }),
   getCurrencies: (localCurrency) => [localCurrency, "usd", "eur", "gbp"],
 });

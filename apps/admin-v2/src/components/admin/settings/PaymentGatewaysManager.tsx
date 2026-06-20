@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-    Loader2, CheckCircle2, ChevronDown, Zap,
+    Loader2, CheckCircle2, ChevronDown, Zap, AlertTriangle,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionContent } from "@/components/ui/accordion";
@@ -133,7 +133,12 @@ export default function PaymentGatewaysManager() {
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
             if (!silent) toast.success("Storefront settings updated");
-        } catch (err) { if (!silent) toast.error(getServerFnError(err, "Error saving payment methods")); }
+            return true;
+        } catch (err) {
+            if (!silent) toast.error(getServerFnError(err, "Error saving payment methods"));
+            else throw err;
+            return false;
+        }
         finally { setSavingMethods(false); }
     };
 
@@ -160,6 +165,9 @@ export default function PaymentGatewaysManager() {
         const st = methods?.gatewayStatus?.[m];
         if (!st?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs Setup</Badge>;
         if (!enabledMethods.has(m)) return <Badge variant="secondary" className="text-xs">Inactive</Badge>;
+        if ((st.usable ?? (st.enabled && st.configured)) === false) {
+            return <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />Blocked</Badge>;
+        }
         if (m === "stripe") {
             const live = stripe.secretKey && stripe.secretKey !== MASKED && stripe.secretKey.startsWith("sk_live_");
             return <Badge variant="default" className="text-xs bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{live ? "Live" : "Test"}</Badge>;
@@ -168,6 +176,20 @@ export default function PaymentGatewaysManager() {
             return <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{ssl.sandbox ? "Sandbox" : "Live"}</Badge>;
         if (m === "polar")
             return <Badge variant="default" className="text-xs bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{polar.sandbox ? "Sandbox" : "Live"}</Badge>;
+        return null;
+    };
+
+    const getGatewayNotice = (m: MethodKey) => {
+        if (m === "cod" || !enabledMethods.has(m)) return null;
+        const st = methods?.gatewayStatus?.[m];
+        if (!st) return null;
+        if (st.blockedReason) return st.blockedReason;
+        if (st.configured && !st.enabled) {
+            return `${META[m].label} has credentials, but the gateway itself is off. Save ${META[m].label} after turning it on.`;
+        }
+        if (st.usable === false) {
+            return `${META[m].label} is selected but cannot be shown to customers yet.`;
+        }
         return null;
     };
 
@@ -208,21 +230,30 @@ export default function PaymentGatewaysManager() {
                     {allMethods.map((method) => {
                         const meta = META[method];
                         const isOpen = expanded.includes(method);
+                        const gatewayNotice = getGatewayNotice(method);
                         return (
                             <AccordionItem key={method} value={method} className={`border rounded-lg overflow-hidden ${meta.borderColor}`}>
-                                <div className={`flex items-center justify-between p-4 ${meta.headerBg}`}>
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <meta.Logo className="h-8 w-8 shrink-0 rounded" />
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <h3 className="text-sm font-medium">{meta.label}</h3>
-                                                {getStatusBadge(method)}
+                                <div className={`p-4 ${meta.headerBg}`}>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <meta.Logo className="h-8 w-8 shrink-0 rounded" />
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h3 className="text-sm font-medium">{meta.label}</h3>
+                                                    {getStatusBadge(method)}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-0.5 truncate">{meta.desc}</p>
                                             </div>
-                                            <p className="text-xs text-muted-foreground mt-0.5 truncate">{meta.desc}</p>
                                         </div>
+                                        <Switch id={`toggle-${method}`} checked={enabledMethods.has(method)} className="shrink-0"
+                                            onCheckedChange={(v) => { toggleMethod(method, v); if (method === "cod") setTimeout(() => saveMethods(true), 100); }} />
                                     </div>
-                                    <Switch id={`toggle-${method}`} checked={enabledMethods.has(method)} className="shrink-0"
-                                        onCheckedChange={(v) => { toggleMethod(method, v); if (method === "cod") setTimeout(() => saveMethods(true), 100); }} />
+                                    {gatewayNotice && (
+                                        <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/25 bg-background/80 px-3 py-2 text-xs text-destructive">
+                                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                            <span>{gatewayNotice}</span>
+                                        </div>
+                                    )}
                                 </div>
                                 {method !== "cod" && (
                                     <AccordionPrimitive.Header className="flex">

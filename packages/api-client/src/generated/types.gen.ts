@@ -18422,18 +18422,30 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                 stripe: {
                     configured: boolean;
                     enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    blockedReason?: string;
                 };
                 sslcommerz: {
                     configured: boolean;
                     enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    blockedReason?: string;
                 };
                 polar: {
                     configured: boolean;
                     enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    blockedReason?: string;
                 };
                 cod: {
                     configured: boolean;
                     enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    blockedReason?: string;
                 };
             };
             [key: string]: unknown;

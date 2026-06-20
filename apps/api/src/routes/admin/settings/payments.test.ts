@@ -13,6 +13,44 @@ const mocks = vi.hoisted(() => ({
     upsertEncryptedSetting: vi.fn(),
     getActivePaymentMethods: vi.fn(),
     getStripeSettings: vi.fn(),
+    getStripeCheckoutReadiness: vi.fn((settings: {
+        enabled?: boolean;
+        secretKey?: string;
+        publishableKey?: string;
+        webhookSecret?: string;
+    } | null | undefined) => {
+        const missingFields = [
+            !settings?.secretKey?.trim() ? "secretKey" : null,
+            !settings?.publishableKey?.trim() ? "publishableKey" : null,
+            !settings?.webhookSecret?.trim() ? "webhookSecret" : null,
+        ].filter((field): field is string => Boolean(field));
+        const labels: Record<string, string> = {
+            secretKey: "secret key",
+            publishableKey: "publishable key",
+            webhookSecret: "webhook secret",
+        };
+        const enabled = settings?.enabled === true;
+        return {
+            configured: missingFields.length === 0,
+            enabled,
+            usable: enabled && missingFields.length === 0,
+            missingFields,
+            blockedReason: missingFields.length > 0
+                ? `Stripe needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
+                : undefined,
+        };
+    }),
+    isStripeCheckoutUsable: vi.fn((settings: {
+        enabled?: boolean;
+        secretKey?: string;
+        publishableKey?: string;
+        webhookSecret?: string;
+    } | null | undefined) => (
+        settings?.enabled === true &&
+        Boolean(settings.secretKey?.trim()) &&
+        Boolean(settings.publishableKey?.trim()) &&
+        Boolean(settings.webhookSecret?.trim())
+    )),
     getSSLCommerzSettings: vi.fn(),
     getPolarSettings: vi.fn(),
     invalidatePaymentMethodsCache: vi.fn(),
@@ -39,6 +77,8 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
     upsertEncryptedSetting: mocks.upsertEncryptedSetting,
     getActivePaymentMethods: mocks.getActivePaymentMethods,
     getStripeSettings: mocks.getStripeSettings,
+    getStripeCheckoutReadiness: mocks.getStripeCheckoutReadiness,
+    isStripeCheckoutUsable: mocks.isStripeCheckoutUsable,
     getSSLCommerzSettings: mocks.getSSLCommerzSettings,
     getPolarSettings: mocks.getPolarSettings,
     invalidatePaymentMethodsCache: mocks.invalidatePaymentMethodsCache,
@@ -49,7 +89,10 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
 
 import { paymentSettingsRoutes } from "./payments";
 
-function createTestApp(siteSettingsOverrides: Record<string, unknown> = {}) {
+function createTestApp(
+    siteSettingsOverrides: Record<string, unknown> = {},
+    settingRows: Array<{ key: string; value: string }> = [],
+) {
     const db = {
         id: "db",
         select: vi.fn(() => ({
@@ -60,6 +103,9 @@ function createTestApp(siteSettingsOverrides: Record<string, unknown> = {}) {
                     partialPaymentAmount: 0,
                     ...siteSettingsOverrides,
                 }]),
+                where: vi.fn(() => ({
+                    all: vi.fn(async () => settingRows),
+                })),
             })),
         })),
     };
@@ -111,6 +157,14 @@ async function postJson(app: OpenAPIHono<{ Bindings: Env }>, env: Env, path: str
     );
 }
 
+async function getJson(app: OpenAPIHono<{ Bindings: Env }>, env: Env, path: string) {
+    return app.request(
+        `/api/v1/admin/settings${path}`,
+        { method: "GET" },
+        env,
+    );
+}
+
 describe("payment settings cache invalidation", () => {
     afterEach(() => {
         vi.clearAllMocks();
@@ -118,7 +172,12 @@ describe("payment settings cache invalidation", () => {
 
     it("invalidates API and storefront checkout caches after payment method saves", async () => {
         const { app, env, kv } = createTestApp();
-        mocks.getStripeSettings.mockResolvedValueOnce({ enabled: true });
+        mocks.getStripeSettings.mockResolvedValueOnce({
+            enabled: true,
+            secretKey: "sk_live_existing",
+            publishableKey: "pk_live_existing",
+            webhookSecret: "whsec_existing",
+        });
 
         const response = await postJson(app, env, "/payment-methods", {
             enabledMethods: ["stripe", "cod"],
@@ -131,6 +190,33 @@ describe("payment settings cache invalidation", () => {
             ["checkout"],
             expect.objectContaining({ env }),
         );
+    });
+
+    it("reports Stripe as not checkout-configured without a publishable key", async () => {
+        const { app, env } = createTestApp();
+        mocks.getStripeSettings.mockResolvedValueOnce({
+            enabled: true,
+            secretKey: "sk_live_existing",
+            publishableKey: "",
+            webhookSecret: "whsec_existing",
+        });
+
+        const response = await getJson(app, env, "/payment-methods");
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        await expect(response.json()).resolves.toMatchObject({
+            success: true,
+            data: {
+                gatewayStatus: {
+                    stripe: {
+                        configured: false,
+                        enabled: true,
+                        usable: false,
+                        missingFields: ["publishableKey"],
+                    },
+                },
+            },
+        });
     });
 
     it("rejects removing every configured online gateway while partial payments are enabled", async () => {
@@ -150,7 +236,10 @@ describe("payment settings cache invalidation", () => {
     });
 
     it("invalidates API and storefront checkout caches after Stripe saves", async () => {
-        const { app, env, kv } = createTestApp();
+        const { app, env, kv } = createTestApp({}, [
+            { key: "secret_key", value: "encrypted-secret" },
+            { key: "webhook_secret", value: "encrypted-webhook" },
+        ]);
 
         const response = await postJson(app, env, "/stripe", {
             publishableKey: "pk_test",
@@ -165,6 +254,28 @@ describe("payment settings cache invalidation", () => {
             expect.objectContaining({ env }),
         );
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+    });
+
+    it("rejects enabling Stripe when the effective publishable key is missing", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "secret_key", value: "encrypted-secret" },
+            { key: "webhook_secret", value: "encrypted-webhook" },
+        ]);
+
+        const response = await postJson(app, env, "/stripe", {
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: expect.stringContaining("publishable key"),
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving Stripe secrets", async () => {
