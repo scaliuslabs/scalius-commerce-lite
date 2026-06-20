@@ -10,7 +10,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
 | `queue(batch)` | Queues -- payment events, order ingest, OTP, notifications |
-| `scheduled(controller)` | Cron -- releases orphaned reservation movements every 15 minutes; existing orders are not expired here |
+| `scheduled(controller)` | Cron -- releases orphaned reservation movements, archives stale hosted-payment orders, prunes old/empty abandoned-checkout rows, and flushes notification outbox records every 15 minutes |
 
 ## Route Organization
 
