@@ -453,9 +453,6 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
           orderId,
           receiptToken,
           paymentType,
-          retryKey: typeof globalThis.crypto?.randomUUID === "function"
-            ? globalThis.crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
           currency: window.__CURRENCY_CODE__ || "BDT",
         };
         if (paymentType === "deposit" && Number.isFinite(depositAmount) && depositAmount > 0) {

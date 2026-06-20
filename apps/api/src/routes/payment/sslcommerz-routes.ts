@@ -29,6 +29,11 @@ import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
+import {
+  createPaymentProviderTimeoutError,
+  isPaymentProviderTimedOut,
+  withPaymentProviderDeadline,
+} from "./payment-provider-deadline";
 
 import { ok } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -185,26 +190,30 @@ app.openapi(createSessionRoute, async (c) => {
 
   let result: Awaited<ReturnType<typeof initSSLCommerzSession>>;
   try {
-    result = await initSSLCommerzSession(
-      ssl.storeId,
-      ssl.storePassword,
-      ssl.sandbox,
-      {
-        orderId: body.orderId,
-        transactionId,
-        totalAmount: policy.chargeAmount,
-        currency,
-        successUrl,
-        failUrl,
-        cancelUrl,
-        ipnUrl,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        customerEmail: order.customerEmail ?? undefined,
-        customerAddress: order.shippingAddress,
-        customerCity: order.cityName ?? undefined,
-        paymentType: policy.paymentType
-      }
+    result = await withPaymentProviderDeadline(
+      "SSLCommerz",
+      (signal) => initSSLCommerzSession(
+        ssl.storeId,
+        ssl.storePassword,
+        ssl.sandbox,
+        {
+          orderId: body.orderId,
+          transactionId,
+          totalAmount: policy.chargeAmount,
+          currency,
+          successUrl,
+          failUrl,
+          cancelUrl,
+          ipnUrl,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          customerEmail: order.customerEmail ?? undefined,
+          customerAddress: order.shippingAddress,
+          customerCity: order.cityName ?? undefined,
+          paymentType: policy.paymentType,
+          signal,
+        }
+      )
     );
   } catch (error: unknown) {
     await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
@@ -215,6 +224,9 @@ app.openapi(createSessionRoute, async (c) => {
   if (!result.success) {
     await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create SSLCommerz session")
       .catch((error: unknown) => console.error("[payments] Failed to mark SSLCommerz session attempt failed:", error));
+    if (isPaymentProviderTimedOut(result)) {
+      throw createPaymentProviderTimeoutError("SSLCommerz");
+    }
     throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create SSLCommerz session");
   }
 
