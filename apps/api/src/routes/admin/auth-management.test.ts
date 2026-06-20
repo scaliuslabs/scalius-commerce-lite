@@ -6,11 +6,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   autoSeedRbacIfNeeded: vi.fn(async () => undefined),
+  claimAdminSetup: vi.fn(async () => ({
+    singletonKey: "first_admin" as const,
+    claimId: "setup_claim_test",
+  })),
+  completeAdminSetupClaimWithUserPromotion: vi.fn(async () => undefined),
   createAuth: vi.fn(),
+  enforceAdminSetupRateLimit: vi.fn(async () => undefined),
+  markAdminSetupClaimCompleted: vi.fn(async () => undefined),
+  markAdminSetupClaimFailed: vi.fn(async () => undefined),
 }));
 
 vi.mock("@scalius/core/auth", () => ({
+  claimAdminSetup: mocks.claimAdminSetup,
+  completeAdminSetupClaimWithUserPromotion: mocks.completeAdminSetupClaimWithUserPromotion,
   createAuth: mocks.createAuth,
+  enforceAdminSetupRateLimit: mocks.enforceAdminSetupRateLimit,
+  markAdminSetupClaimCompleted: mocks.markAdminSetupClaimCompleted,
+  markAdminSetupClaimFailed: mocks.markAdminSetupClaimFailed,
 }));
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
@@ -18,10 +31,19 @@ vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
 }));
 
 import { errorResponseFromError } from "../../utils/api-response";
+import { ConflictError } from "../../utils/api-error";
 import { adminAuthManagementRoutes, authSetupRoutes } from "./auth-management";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.claimAdminSetup.mockResolvedValue({
+    singletonKey: "first_admin",
+    claimId: "setup_claim_test",
+  });
+  mocks.completeAdminSetupClaimWithUserPromotion.mockResolvedValue(undefined);
+  mocks.enforceAdminSetupRateLimit.mockResolvedValue(undefined);
+  mocks.markAdminSetupClaimCompleted.mockResolvedValue(undefined);
+  mocks.markAdminSetupClaimFailed.mockResolvedValue(undefined);
 });
 
 function createDbMock(options: { matchingSession?: boolean } = {}) {
@@ -602,6 +624,100 @@ describe("admin auth management legacy 2FA verification", () => {
 });
 
 describe("first-admin setup recovery", () => {
+  it("claims D1 setup coordination before creating the first admin even when KV is unavailable", async () => {
+    const db = createSetupDbMock();
+    const signUpEmail = vi.fn().mockResolvedValue({
+      user: { id: "new_admin" },
+    });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail,
+      },
+    });
+    const app = createSetupTestApp(db);
+
+    const response = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "cf-connecting-ip": "203.0.113.10",
+      },
+      body: setupRequestBody(),
+    }, {});
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.enforceAdminSetupRateLimit).toHaveBeenCalledWith(db, "203.0.113.10");
+    expect(mocks.claimAdminSetup).toHaveBeenCalledWith(db);
+    expect(signUpEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.claimAdminSetup.mock.invocationCallOrder[0]!)
+      .toBeLessThan(signUpEmail.mock.invocationCallOrder[0]!);
+    expect(mocks.completeAdminSetupClaimWithUserPromotion).toHaveBeenCalledWith(
+      db,
+      {
+        singletonKey: "first_admin",
+        claimId: "setup_claim_test",
+      },
+      { userId: "new_admin" },
+    );
+    expect(mocks.markAdminSetupClaimCompleted).not.toHaveBeenCalled();
+    expect(mocks.markAdminSetupClaimFailed).not.toHaveBeenCalled();
+  });
+
+  it("does not call Better Auth when another setup claim is active", async () => {
+    const db = createSetupDbMock();
+    const signUpEmail = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail,
+      },
+    });
+    mocks.claimAdminSetup.mockRejectedValueOnce(
+      new ConflictError("Admin setup is already in progress. Please wait."),
+    );
+    const app = createSetupTestApp(db);
+
+    const response = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: setupRequestBody(),
+    }, {});
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(409);
+    expect(body.error?.code).toBe("CONFLICT");
+    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(mocks.markAdminSetupClaimCompleted).not.toHaveBeenCalled();
+    expect(mocks.markAdminSetupClaimFailed).not.toHaveBeenCalled();
+  });
+
+  it("marks the setup claim failed when account creation fails after claiming", async () => {
+    const db = createSetupDbMock();
+    const failure = new Error("signup provider unavailable");
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail: vi.fn().mockRejectedValue(failure),
+      },
+    });
+    const app = createSetupTestApp(db);
+
+    const response = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: setupRequestBody(),
+    }, {});
+
+    expect(response.status).toBe(500);
+    expect(mocks.markAdminSetupClaimFailed).toHaveBeenCalledWith(
+      db,
+      {
+        singletonKey: "first_admin",
+        claimId: "setup_claim_test",
+      },
+      failure,
+    );
+    expect(mocks.markAdminSetupClaimCompleted).not.toHaveBeenCalled();
+  });
+
   it("does not promote an existing account when the submitted password cannot authenticate it", async () => {
     const db = createSetupDbMock();
     const signInEmail = vi.fn().mockRejectedValue(new Error("Invalid password"));
@@ -623,6 +739,7 @@ describe("first-admin setup recovery", () => {
     expect(response.status, JSON.stringify(body)).toBe(409);
     expect(body.error?.code).toBe("CONFLICT");
     expect(body.error?.message).toContain("existing password");
+    expect(mocks.completeAdminSetupClaimWithUserPromotion).not.toHaveBeenCalled();
     expect(db.__updateSet).not.toHaveBeenCalled();
     expect(mocks.autoSeedRbacIfNeeded).not.toHaveBeenCalled();
   });
@@ -652,13 +769,19 @@ describe("first-admin setup recovery", () => {
       },
     });
     expect(db.__deleteWhere).toHaveBeenCalledTimes(1);
-    expect(db.__updateSet).toHaveBeenCalledWith({
-      name: "Existing Admin",
-      role: "admin",
-      isSuperAdmin: true,
-      emailVerified: true,
-    });
-    expect(db.__updateWhere).toHaveBeenCalledTimes(1);
+    expect(mocks.completeAdminSetupClaimWithUserPromotion).toHaveBeenCalledWith(
+      db,
+      {
+        singletonKey: "first_admin",
+        claimId: "setup_claim_test",
+      },
+      {
+        userId: "existing_user",
+        name: "Existing Admin",
+      },
+    );
+    expect(db.__updateSet).not.toHaveBeenCalled();
+    expect(db.__updateWhere).not.toHaveBeenCalled();
     expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledTimes(1);
   });
 });

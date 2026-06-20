@@ -135,7 +135,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 
 | Route | Purpose |
 |-------|---------|
-| `/setup` | Initial deployment auth setup at `/api/v1/setup` (bypasses normal auth) |
+| `/setup` | Initial deployment auth setup at `/api/v1/setup` (bypasses normal auth; D1-backed rate limit and singleton setup claim) |
 | `/docs` | Swagger UI |
 | `/openapi.json` | Auto-generated OpenAPI 3.0 spec |
 | `/health` | Health check with cache stats |
