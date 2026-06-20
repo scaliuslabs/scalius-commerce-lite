@@ -5,7 +5,6 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
 import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
-import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { ftsMatch } from "@scalius/core/search";
 
 import { ok, noContent } from "../../utils/api-response";
@@ -14,29 +13,13 @@ import { successEnvelope, messageResponse, noContentResponse, errorResponses } f
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // --- Abandoned Checkouts ---
-const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string | null }): boolean => {
-    if (checkout.customerPhone) return false;
-    try {
-        const data = JSON.parse(checkout.checkoutData);
-        const items = data.items || [];
-        const customerInfo = data.customerInfo || {};
-
-        const hasItems = Array.isArray(items) && items.length > 0;
-        const hasCustomerInfo = Object.values(customerInfo).some((val) => !!val);
-
-        return !hasItems && !hasCustomerInfo;
-    } catch {
-        return true;
-    }
-};
-
 // ── List Abandoned Checkouts ──
 
 const listAbandonedCheckoutsRoute = createRoute({
     method: "get",
     path: "/abandoned-checkouts",
     tags: ["Admin - System Utils"],
-    summary: "List abandoned checkouts with cleanup",
+    summary: "List abandoned checkouts",
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),
@@ -54,30 +37,6 @@ const listAbandonedCheckoutsRoute = createRoute({
 
 app.openapi(listAbandonedCheckoutsRoute, async (c) => {
     const db = c.get("db");
-
-    // --- Perform Cleanup (best-effort, don't fail the request) ---
-    try {
-        const thirtyDaysAgoTimestamp = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
-        await db.delete(abandonedCheckouts).where(sql`${abandonedCheckouts.createdAt} <= ${thirtyDaysAgoTimestamp}`);
-
-        const oneHourAgoTimestamp = Math.floor((Date.now() - 60 * 60 * 1000) / 1000);
-        const staleOrderCleanup = await archiveStaleIncompleteOrders(db, oneHourAgoTimestamp);
-        if (staleOrderCleanup.failed > 0) {
-            console.error("Some stale incomplete orders could not be archived:", staleOrderCleanup.errors);
-        }
-
-        const candidatesForDeletion = await db.select().from(abandonedCheckouts).where(sql`${abandonedCheckouts.updatedAt} <= ${oneHourAgoTimestamp}`);
-
-        const emptyCheckoutIds = candidatesForDeletion
-            .filter((c) => isCheckoutEmpty({ checkoutData: c.checkoutData, customerPhone: c.customerPhone }))
-            .map((c) => c.id);
-
-        if (emptyCheckoutIds.length > 0) {
-            await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, emptyCheckoutIds));
-        }
-    } catch (cleanupErr) {
-        console.error("Abandoned checkout cleanup failed (non-fatal):", cleanupErr);
-    }
 
     // --- Fetch Data for UI ---
     try {

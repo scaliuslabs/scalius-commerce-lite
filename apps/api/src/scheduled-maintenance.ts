@@ -1,5 +1,6 @@
 import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
 import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
@@ -7,6 +8,9 @@ import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation"
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
 export const STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES = 60;
+export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
+export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
+export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 10;
 
 export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionContext): Promise<void> {
@@ -50,6 +54,27 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
       `, limit=${result.limit}, hasMore=${result.hasMore}` +
       (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
   );
+
+  const abandonedCheckoutCleanup = await cleanupStaleAbandonedCheckouts(db, Math.floor(Date.now() / 1000), {
+    retentionDays: ABANDONED_CHECKOUT_RETENTION_DAYS,
+    emptyMaxAgeMinutes: EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
+    limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
+  });
+  if (
+    abandonedCheckoutCleanup.scannedExpired > 0 ||
+    abandonedCheckoutCleanup.deletedExpired > 0 ||
+    abandonedCheckoutCleanup.scannedEmpty > 0 ||
+    abandonedCheckoutCleanup.deletedEmpty > 0 ||
+    abandonedCheckoutCleanup.hasMore
+  ) {
+    console.log(
+      `[scheduled] Abandoned checkout cleanup: scannedExpired=${abandonedCheckoutCleanup.scannedExpired}, ` +
+        `deletedExpired=${abandonedCheckoutCleanup.deletedExpired}, ` +
+        `scannedEmpty=${abandonedCheckoutCleanup.scannedEmpty}, ` +
+        `deletedEmpty=${abandonedCheckoutCleanup.deletedEmpty}, ` +
+        `limit=${abandonedCheckoutCleanup.limit}, hasMore=${abandonedCheckoutCleanup.hasMore}`,
+    );
+  }
 
   const notificationOutbox = await flushPendingOrderNotificationOutbox({
     db,

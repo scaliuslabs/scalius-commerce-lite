@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
     db,
     getDb: vi.fn(() => db),
     releaseExpiredReservations: vi.fn(),
+    cleanupStaleAbandonedCheckouts: vi.fn(),
     archiveStaleIncompleteOrders: vi.fn(),
     flushPendingOrderNotificationOutbox: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
@@ -18,6 +19,10 @@ vi.mock("@scalius/database/client", () => ({
 
 vi.mock("@scalius/core/modules/inventory", () => ({
   releaseExpiredReservations: mocks.releaseExpiredReservations,
+}));
+
+vi.mock("@scalius/core/modules/orders/abandoned-checkout-cleanup", () => ({
+  cleanupStaleAbandonedCheckouts: mocks.cleanupStaleAbandonedCheckouts,
 }));
 
 vi.mock("@scalius/core/modules/orders/stale-incomplete-orders", () => ({
@@ -33,6 +38,9 @@ vi.mock("./utils/cache-invalidation", () => ({
 }));
 
 import {
+  ABANDONED_CHECKOUT_RETENTION_DAYS,
+  ABANDONED_CHECKOUT_SWEEP_LIMIT,
+  EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
   INVENTORY_EXPIRY_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
@@ -77,6 +85,14 @@ describe("runScheduledMaintenance", () => {
       archivedOrderIds: [],
       errors: [],
     });
+    mocks.cleanupStaleAbandonedCheckouts.mockResolvedValue({
+      scannedExpired: 0,
+      deletedExpired: 0,
+      scannedEmpty: 0,
+      deletedEmpty: 0,
+      limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
+      hasMore: false,
+    });
     mocks.flushPendingOrderNotificationOutbox.mockResolvedValue({
       scanned: 0,
       enqueued: 0,
@@ -113,6 +129,14 @@ describe("runScheduledMaintenance", () => {
       archivedOrderIds: ["order_1"],
       errors: [],
     });
+    mocks.cleanupStaleAbandonedCheckouts.mockResolvedValue({
+      scannedExpired: 2,
+      deletedExpired: 1,
+      scannedEmpty: 3,
+      deletedEmpty: 2,
+      limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
+      hasMore: false,
+    });
     mocks.flushPendingOrderNotificationOutbox.mockResolvedValue({
       scanned: 1,
       enqueued: 1,
@@ -130,6 +154,15 @@ describe("runScheduledMaintenance", () => {
       mocks.db,
       Math.floor(now.getTime() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60,
       { limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT },
+    );
+    expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalledWith(
+      mocks.db,
+      Math.floor(now.getTime() / 1000),
+      {
+        retentionDays: ABANDONED_CHECKOUT_RETENTION_DAYS,
+        emptyMaxAgeMinutes: EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
+        limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
+      },
     );
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenNthCalledWith(
       1,
@@ -156,6 +189,7 @@ describe("runScheduledMaintenance", () => {
     await runScheduledMaintenance(createEnv(), createExecutionContext());
 
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
   });
 });
