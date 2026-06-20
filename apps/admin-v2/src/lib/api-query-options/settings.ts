@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
+  type CheckoutReadinessPayload,
   getAuthSettings,
   getCheckoutReadiness,
   getFirebaseSettings,
@@ -9,12 +10,45 @@ import {
   getPaymentMethods,
   getThemeSettings,
 } from "../api-functions/settings";
+import { extractApiError, unwrapEnvelope } from "../api-helpers";
 import { queryKeys } from "../query-keys";
 export { currencySettingsQueryOptions } from "./currency";
 export { storefrontUrlQueryOptions } from "./storefront-url";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
+
+async function getCheckoutReadinessForQuery(): Promise<CheckoutReadinessPayload> {
+  if (typeof window === "undefined") {
+    return getCheckoutReadiness();
+  }
+
+  const response = await fetch("/api/v1/admin/settings/checkout-readiness", {
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // The status code below is still more useful than hiding the transport failure.
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      extractApiError(
+        body,
+        `Dashboard could not check checkout readiness (${response.status}).`,
+      ),
+    );
+  }
+
+  return unwrapEnvelope<CheckoutReadinessPayload>(body);
+}
 
 export const generalSettingsQueryOptions = () =>
   queryOptions({
@@ -40,7 +74,7 @@ export const checkoutFlowSettingsQueryOptions = () =>
 export const checkoutReadinessQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutReadiness(),
-    queryFn: () => getCheckoutReadiness(),
+    queryFn: () => getCheckoutReadinessForQuery(),
     staleTime: MODERATE_STALE_TIME_MS,
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
