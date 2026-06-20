@@ -49,7 +49,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `price-utils.ts` | Float-safe price arithmetic via `currency.js` | `roundPrice()`, `addPrices()`, `subtractPrice()`, `pricesEqual()`, `calculatePercentageDiscount()` |
 | `image-optimizer.ts` | Cloudflare Image Resizing URL generation | `getOptimizedImageUrl()`, `getOriginalImageUrl()`, `isR2Image()`, `getOptimizedImageProps()`, `getResponsiveSrcSet()`, `ImagePresets` |
 | `media-url.ts` | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
-| `cors-helper.ts` | Dynamic CORS origin validation from env + KV | `getCorsOriginContext()` |
+| `cors-helper.ts` | Dynamic credentialed CORS origin validation from env + KV with exact origins, safe `*.domain` subdomain wildcards, and `host:*` dev ports | `getCorsOriginContext()` |
 | `rate-limit.ts` | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
 | `customer-utils.ts` | Phone validation (E.164), customer stats | `validateAndFormatPhone()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
 | `order-utils.ts` | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |

@@ -8,22 +8,63 @@ export const getCorsOriginContext = async (c: CorsContext) => {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return "*";
 
-    const isAllowed = allowedOrigins.some((allowedOrigin) => {
-      if (allowedOrigin === "*") return true;
-      if (allowedOrigin === origin) return true;
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (!normalizedOrigin) return null;
 
-      // Handle wildcard patterns like https://*.scalius.com
-      if (allowedOrigin.includes("*")) {
-        const pattern = allowedOrigin.replace(/\*/g, ".*");
-        return new RegExp(`^${pattern}$`).test(origin);
-      }
+    const isAllowed = allowedOrigins.some((allowedOrigin) =>
+      isAllowedOriginMatch(allowedOrigin, normalizedOrigin),
+    );
 
-      return false;
-    });
-
-    return isAllowed ? origin : null;
+    return isAllowed ? normalizedOrigin : null;
   };
 };
+
+function normalizeOrigin(origin: string): string | null {
+  try {
+    return new URL(origin.trim()).origin;
+  } catch {
+    return null;
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isAllowedOriginMatch(allowedOrigin: string, origin: string): boolean {
+  const allowed = allowedOrigin.trim();
+  if (!allowed) return false;
+  if (allowed === "*") return true;
+
+  if (!allowed.includes("*")) {
+    return normalizeOrigin(allowed) === origin;
+  }
+
+  const match = /^(https?:\/\/)(.+)$/i.exec(allowed);
+  if (!match) return false;
+
+  const scheme = match[1]!;
+  const hostAndPort = match[2]!;
+  const portWildcard = hostAndPort.endsWith(":*");
+  const hostPattern = portWildcard ? hostAndPort.slice(0, -2) : hostAndPort;
+
+  if (hostPattern.startsWith("*.")) {
+    const baseHost = hostPattern.slice(2);
+    if (!baseHost || baseHost.includes("*")) return false;
+
+    const subdomainPattern = `[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?`;
+    const portPattern = portWildcard ? `(?::\\d{1,5})` : "";
+    const pattern = `^${escapeRegExp(scheme)}(?:${subdomainPattern}\\.)+${escapeRegExp(baseHost)}${portPattern}$`;
+    return new RegExp(pattern, "i").test(origin);
+  }
+
+  if (portWildcard && !hostPattern.includes("*")) {
+    const pattern = `^${escapeRegExp(scheme)}${escapeRegExp(hostPattern)}:\\d{1,5}$`;
+    return new RegExp(pattern, "i").test(origin);
+  }
+
+  return false;
+}
 
 async function getAllowedCorsOrigins(c: CorsContext): Promise<string[]> {
   // Try to get from KV, fallback to env
