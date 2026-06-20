@@ -158,6 +158,12 @@ All 9 statuses that trigger notifications are covered. Each dispatches to enable
 - **Restore**: Clears `deletedAt`, but does not secretly change order status. `incomplete`, `pending`, `processing`, and `confirmed` orders with `inventoryAction = "restored"` re-reserve variant inventory and become `reserved`; if there are no variant items they become `none`. `cancelled`, `returned`, and `refunded` restored orders remain `restored`. Shipped/delivered/completed/partially-refunded restored orders reject until inventory/status are explicitly reconciled. Existing `reserved` or `deducted` actions are accepted only for compatible statuses, and re-reservations are compensated if the final restore CAS fails.
 - **Bulk delete**: Iterates and applies inventory release per order. For permanent: deletes items first, then orders (FK ordering fixed).
 
+### Stale Hosted-Payment Cleanup
+
+`archiveStaleIncompleteOrders()` is the only scheduled path that may move an existing stale checkout order. It handles hosted-payment methods only (`stripe`, `sslcommerz`, `polar`), requires `status = incomplete`, `paymentStatus` of `unpaid` or `failed`, `paidAmount <= 0`, no soft delete, no active shipment claim, no pending/succeeded `order_payments`, and no live `payment_session_attempts` processing lease. Each order must win a guarded cancelled claim before inventory is released through `applyInventoryForStatusChange(db, orderId, "cancelled")`; release failure rolls the claim back to `incomplete`.
+
+After release succeeds, the final archive soft-deletes the order, marks inventory restored, conditionally cancels a pending payment plan only when the order finalization actually won, and writes the `abandoned_checkouts` snapshot after finalization. The API scheduled worker runs it with a 60-minute grace period and a batch limit of 25, then invalidates product availability caches for archived order ids.
+
 ## Queue Processing
 
 Two queues are relevant:

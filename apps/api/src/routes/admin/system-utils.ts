@@ -3,11 +3,9 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
-import { sql, inArray, desc, asc, and, count, eq, isNull } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
-import { abandonedCheckouts, orderPayments, orders, OrderStatus, PaymentRecordStatus, PaymentStatus, adminFcmTokens } from "@scalius/database/schema";
-import { applyInventoryForStatusChange } from "@scalius/core/modules/inventory";
-import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "@scalius/core/modules/orders/shipment-claim";
+import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
+import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
+import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { ftsMatch } from "@scalius/core/search";
 
 import { ok, noContent } from "../../utils/api-response";
@@ -16,12 +14,6 @@ import { successEnvelope, messageResponse, noContentResponse, errorResponses } f
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // --- Abandoned Checkouts ---
-type AbandonedCheckoutCleanupResult = {
-    archived: number;
-    failed: number;
-    errors: Array<{ orderId: string; error: string }>;
-};
-
 const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string | null }): boolean => {
     if (checkout.customerPhone) return false;
     try {
@@ -37,131 +29,6 @@ const isCheckoutEmpty = (checkout: { checkoutData: string; customerPhone: string
         return true;
     }
 };
-
-const noActivePaymentClaimCondition = sql`NOT EXISTS (
-    SELECT 1 FROM ${orderPayments}
-    WHERE ${orderPayments.orderId} = ${orders.id}
-      AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.SUCCEEDED})
-)`;
-
-async function rollbackStaleIncompleteCleanupClaim(
-    db: Database,
-    orderId: string,
-    claimedVersion: number,
-): Promise<void> {
-    await db.update(orders)
-        .set({
-            status: OrderStatus.INCOMPLETE,
-            version: sql`${orders.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(orders.id, orderId),
-            eq(orders.version, claimedVersion),
-            eq(orders.status, OrderStatus.CANCELLED),
-            eq(orders.paymentStatus, PaymentStatus.UNPAID),
-            isNull(orders.deletedAt),
-        ));
-}
-
-export async function archiveStaleIncompleteOrders(
-    db: Database,
-    cutoffTimestamp: number,
-): Promise<AbandonedCheckoutCleanupResult> {
-    const result: AbandonedCheckoutCleanupResult = {
-        archived: 0,
-        failed: 0,
-        errors: [],
-    };
-
-    const incompleteOrders = await db.select().from(orders).where(
-        and(
-            eq(orders.status, OrderStatus.INCOMPLETE),
-            sql`${orders.createdAt} <= ${cutoffTimestamp}`,
-            isNull(orders.deletedAt),
-        ),
-    );
-
-    for (const order of incompleteOrders) {
-        try {
-            if (hasActiveShipmentClaim(order)) {
-                continue;
-            }
-
-            const claimedVersion = order.version + 1;
-            const claim = await db.update(orders)
-                .set({
-                    status: OrderStatus.CANCELLED,
-                    version: claimedVersion,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(and(
-                    eq(orders.id, order.id),
-                    eq(orders.version, order.version),
-                    eq(orders.status, OrderStatus.INCOMPLETE),
-                    eq(orders.paymentStatus, PaymentStatus.UNPAID),
-                    sql`${orders.paidAmount} <= 0`,
-                    isNull(orders.deletedAt),
-                    sql`${orders.createdAt} <= ${cutoffTimestamp}`,
-                    noActiveShipmentClaimCondition(),
-                    noActivePaymentClaimCondition,
-                ))
-                .returning({ id: orders.id });
-
-            if (claim.length === 0) {
-                continue;
-            }
-
-            if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
-                try {
-                    await applyInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED);
-                } catch (error) {
-                    await rollbackStaleIncompleteCleanupClaim(db, order.id, claimedVersion);
-                    throw error;
-                }
-            }
-
-            const finalized = await db.update(orders)
-                .set({
-                    deletedAt: sql`unixepoch()`,
-                    inventoryAction: "restored",
-                    version: sql`${orders.version} + 1`,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(and(
-                    eq(orders.id, order.id),
-                    eq(orders.version, claimedVersion),
-                    eq(orders.status, OrderStatus.CANCELLED),
-                    eq(orders.paymentStatus, PaymentStatus.UNPAID),
-                    isNull(orders.deletedAt),
-                    noActivePaymentClaimCondition,
-                ))
-                .returning({ id: orders.id });
-
-            if (finalized.length === 0) {
-                throw new Error("Stale order cleanup changed concurrently before final archive");
-            }
-
-            await db.insert(abandonedCheckouts).values({
-                id: `ab_ch_sys_${order.id}`,
-                checkoutId: order.id,
-                customerPhone: order.customerPhone,
-                checkoutData: JSON.stringify(order),
-                createdAt: order.createdAt || new Date(),
-                updatedAt: order.updatedAt || new Date()
-            }).onConflictDoNothing();
-
-            result.archived++;
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            result.failed++;
-            result.errors.push({ orderId: order.id, error: message });
-            console.error(`Failed to archive stale incomplete order ${order.id}:`, error);
-        }
-    }
-
-    return result;
-}
 
 // ── List Abandoned Checkouts ──
 

@@ -121,13 +121,13 @@ Dispatches `PaymentQueueMessage` types:
 | Message Type | Handler | Action |
 |------|---------|--------|
 | `payment.stripe.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`), records payment, updates order, applies inventory |
-| `payment.stripe.failed` | `processPaymentFailed()` | Marks order as failed if no prior payments |
+| `payment.stripe.failed` | `processPaymentFailed()` | Marks order as failed if no prior payments; stale incomplete hosted-payment cleanup handles later archive/release after the scheduled grace period |
 | `payment.stripe.canceled` | `releaseOrderInventory()` | Releases reserved inventory |
 | `payment.stripe.refunded` | (audit only) | Logs refund event; actual refund handled synchronously |
 | `payment.sslcommerz.confirmed` | `processPaymentConfirmed()` | Amount already in major unit (no conversion), records payment |
-| `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed |
+| `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed; scheduled stale cleanup handles later archive/release |
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`) |
-| `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed |
+| `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed; scheduled stale cleanup handles later archive/release |
 | `payment.polar.refunded` | `processPolarWebhookRefund()` | CAS-updates payment and allowed order status transitions; releases inventory on pre-fulfillment full refund |
 
 ## Provider Details
@@ -214,6 +214,8 @@ Before any writes, `processPaymentConfirmed()` calls `validateTransition()` for 
 
 - Order: `incomplete -> pending` (on first payment)
 - Payment: `unpaid -> partial` or `unpaid -> paid` (depending on whether balance reaches zero)
+
+Failed or abandoned hosted-payment orders are not force-cancelled in webhook handlers. The scheduled API maintenance path calls `archiveStaleIncompleteOrders()` after the 60-minute grace period; it skips active payment/session/shipment claims, releases inventory through the normal order transition helper, conditionally cancels pending payment plans only after order finalization wins, archives the abandoned-checkout snapshot, and invalidates affected product availability caches.
 
 ### Public Session Policy
 
