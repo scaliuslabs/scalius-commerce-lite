@@ -745,7 +745,7 @@ describe("create order commit/KV ordering", () => {
       totalAmount: 100,
       queuePayload: { type: "order.ingest", orderData: { id: "order_3" } },
     });
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -762,7 +762,7 @@ describe("create order commit/KV ordering", () => {
 
     const responseText = await response.clone().text();
     expect(response.status, responseText).toBe(201);
-    expect(mocks.getCustomerBySession).toHaveBeenCalledWith(kv, "session_1");
+    expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "session_1", undefined);
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
   });
 

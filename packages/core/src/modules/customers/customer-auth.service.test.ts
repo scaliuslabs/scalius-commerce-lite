@@ -14,7 +14,13 @@ vi.mock("./customer-auth-otp-challenges", () => ({
   cleanupExpiredCustomerAuthOtpChallenges: challengeMocks.cleanupExpiredCustomerAuthOtpChallenges,
 }));
 
-import { sendOtp, verifyOtp } from "./customer-auth.service";
+import {
+  cleanupExpiredCustomerSessions,
+  deleteCustomerSession,
+  getCustomerBySession,
+  sendOtp,
+  verifyOtp,
+} from "./customer-auth.service";
 
 const baseSiteSettings = {
   id: "site_settings_1",
@@ -30,7 +36,8 @@ const baseSiteSettings = {
 
 function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?: unknown[] }>) {
   const queue = [...selectResults];
-  const insertValues = vi.fn(async () => undefined);
+  const insertValues = vi.fn(async (_values: unknown) => undefined);
+  const insertCalls: Array<{ table: unknown; values: unknown }> = [];
   return {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -50,10 +57,14 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?:
         })),
       })),
     })),
-    insert: vi.fn(() => ({
-      values: insertValues,
+    insert: vi.fn((table: unknown) => ({
+      values: vi.fn(async (values: unknown) => {
+        insertCalls.push({ table, values });
+        return insertValues(values);
+      }),
     })),
     insertValues,
+    insertCalls,
   };
 }
 
@@ -299,6 +310,7 @@ describe("customer auth service intent handling", () => {
       name: "Buyer",
       email: "tampered@example.com",
       encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
     });
 
     expect(result.success).toBe(true);
@@ -306,6 +318,17 @@ describe("customer auth service intent handling", () => {
       email: "original@example.com",
       phone: "+8801712345678",
     }));
+    const sessionInsert = db.insertCalls.find(({ values }) => {
+      const row = values as Record<string, unknown>;
+      return typeof row.tokenHash === "string" && row.customerId === result.session?.customerId;
+    });
+    expect(sessionInsert?.values).toMatchObject({
+      customerId: result.session?.customerId,
+      revokedAt: null,
+    });
+    expect((sessionInsert?.values as { tokenHash?: string }).tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(sessionInsert?.values)).not.toContain(result.session?.token);
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects verify payloads that try to reinterpret a phone OTP as email verification", async () => {
@@ -411,5 +434,90 @@ describe("customer auth service intent handling", () => {
 
     expect(db.insertValues).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("customer auth D1 sessions", () => {
+  function createSessionReadDb(row: unknown) {
+    const get = vi.fn(async () => row);
+    const where = vi.fn(() => ({ get }));
+    const innerJoin = vi.fn(() => ({ where }));
+    const from = vi.fn(() => ({ innerJoin }));
+    const select = vi.fn(() => ({ from }));
+    return { db: { select }, get, where, innerJoin, from, select };
+  }
+
+  it("reads customer sessions from a live D1 customer row", async () => {
+    const { db } = createSessionReadDb({
+      tokenHash: "hash",
+      customerId: "cust_1",
+      expiresAt: 4_200,
+      createdAt: 3_000,
+      customerName: "Buyer",
+      customerEmail: "buyer@example.com",
+      customerPhone: "+8801712345678",
+    });
+
+    const session = await getCustomerBySession(db as never, "raw-session-token", "session-key");
+
+    expect(session).toEqual({
+      token: "raw-session-token",
+      email: "buyer@example.com",
+      name: "Buyer",
+      phone: "+8801712345678",
+      customerId: "cust_1",
+      createdAt: 3_000_000,
+      expiresAt: 4_200_000,
+    });
+  });
+
+  it("returns null when no active non-deleted D1 session row is found", async () => {
+    const { db } = createSessionReadDb(null);
+
+    await expect(getCustomerBySession(db as never, "missing-session", "session-key")).resolves.toBeNull();
+  });
+
+  it("revokes customer sessions instead of deleting raw-token KV keys", async () => {
+    const where = vi.fn(async () => undefined);
+    const set = vi.fn(() => ({ where }));
+    const update = vi.fn(() => ({ set }));
+    const db = { update };
+
+    await deleteCustomerSession(db as never, "raw-session-token", "session-key");
+
+    expect(update).toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({
+      revokedAt: expect.any(Number),
+      updatedAt: expect.any(Number),
+    }));
+    expect(JSON.stringify(set.mock.calls)).not.toContain("raw-session-token");
+  });
+
+  it("cleans expired and old revoked customer sessions in bounded batches", async () => {
+    const limit = vi.fn(async () => [
+      { tokenHash: "hash_1" },
+      { tokenHash: "hash_2" },
+      { tokenHash: "hash_3" },
+    ]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where }));
+    const select = vi.fn(() => ({ from }));
+    const deleteWhere = vi.fn(async () => undefined);
+    const deleteFrom = vi.fn(() => ({ where: deleteWhere }));
+    const db = { select, delete: deleteFrom };
+
+    const result = await cleanupExpiredCustomerSessions(db as never, 10_000, {
+      limit: 2,
+      revokedRetentionSeconds: 60,
+    });
+
+    expect(result).toEqual({
+      scanned: 2,
+      deleted: 2,
+      limit: 2,
+      hasMore: true,
+    });
+    expect(deleteFrom).toHaveBeenCalled();
+    expect(deleteWhere).toHaveBeenCalled();
   });
 });

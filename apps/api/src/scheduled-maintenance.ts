@@ -3,7 +3,10 @@ import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
 import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
-import { cleanupExpiredCustomerAuthOtpChallenges } from "@scalius/core/modules/customers/customer-auth.service";
+import {
+  cleanupExpiredCustomerAuthOtpChallenges,
+  cleanupExpiredCustomerSessions,
+} from "@scalius/core/modules/customers/customer-auth.service";
 import { cleanupExpiredScannerTokenClaims } from "@scalius/core/auth";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
@@ -15,6 +18,7 @@ export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 10;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
+export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 
 export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionContext): Promise<void> {
@@ -100,6 +104,17 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
       `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
         `deleted=${customerAuthOtpCleanup.deleted}, limit=${customerAuthOtpCleanup.limit}, ` +
         `hasMore=${customerAuthOtpCleanup.hasMore}`,
+    );
+  }
+
+  const customerSessionCleanup = await cleanupExpiredCustomerSessions(db, Math.floor(Date.now() / 1000), {
+    limit: CUSTOMER_SESSION_SWEEP_LIMIT,
+  });
+  if (customerSessionCleanup.scanned > 0 || customerSessionCleanup.hasMore) {
+    console.log(
+      `[scheduled] Customer session cleanup: scanned=${customerSessionCleanup.scanned}, ` +
+        `deleted=${customerSessionCleanup.deleted}, limit=${customerSessionCleanup.limit}, ` +
+        `hasMore=${customerSessionCleanup.hasMore}`,
     );
   }
 

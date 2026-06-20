@@ -3,13 +3,13 @@
 //
 // Endpoints (mounted at /api/v1/customer-auth):
 //   POST /send-otp   — generate & deliver a 6-digit OTP (5-min D1 challenge)
-//   POST /verify-otp — atomically verify OTP, create 30-day session in KV, set cookie
+//   POST /verify-otp — atomically verify OTP, create 30-day D1 session, set cookie
 //   GET  /me         — return session customer info (reads cookie)
-//   POST /logout     — delete session from KV, clear cookie
+//   POST /logout     — revoke D1 session, clear cookie
 //   PUT  /profile    — update customer profile
 //   GET  /orders     — return orders for authenticated customer
 //
-// Session storage: Cloudflare KV (binding: CACHE), prefix "cust_session:"
+// Session storage: D1 customer_sessions table keyed by HMAC token hash.
 // OTP challenges:  D1 table "customer_auth_otp_challenges", key prefix "cust_otp:"
 // Cookie name:     "cs_tok" (httpOnly, SameSite=Strict, Secure)
 
@@ -41,7 +41,7 @@ import {
 } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
 import { ok } from "../utils/api-response";
-import { getCredentialEncryptionKey, getEncryptionKey } from "../utils/encryption-key";
+import { getCredentialEncryptionKey, getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import {
   createPolarPaymentSession,
   createSSLCommerzPaymentSession,
@@ -67,7 +67,11 @@ async function requireCustomerSession(c: Context<{ Bindings: Env }>) {
     throw new UnauthorizedError("Authentication required");
   }
 
-  const session = await getCustomerBySession(c.env.CACHE, token);
+  const session = await getCustomerBySession(
+    c.get("db"),
+    token,
+    getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+  );
 
   if (!session) {
     throw new UnauthorizedError("Session expired. Please log in again.");
@@ -289,6 +293,7 @@ app.openapi(verifyOtpRoute, async (c) => {
     phone,
     email,
     encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    sessionHashKey: getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
   });
 
   if (!result.success) {
@@ -351,8 +356,11 @@ app.openapi(getMeRoute, async (c) => {
     return ok(c, { authenticated: false });
   }
 
-  const kv = c.env.CACHE;
-  const session = await getCustomerBySession(kv, token);
+  const session = await getCustomerBySession(
+    c.get("db"),
+    token,
+    getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+  );
 
   if (!session) {
     return ok(c, { authenticated: false });
@@ -398,15 +406,19 @@ app.openapi(logoutRoute, async (c) => {
     c.header("Set-Cookie", `cs_auth=; Max-Age=0; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
   }
 
-  // Delete KV session (best-effort)
+  // Revoke D1 session (best-effort after cookie clear)
   try {
     const cookieHeader = c.req.header("Cookie") || null;
     const token = getSessionCookie(cookieHeader);
     if (token) {
-      await deleteCustomerSession(c.env.CACHE, token);
+      await deleteCustomerSession(
+        c.get("db"),
+        token,
+        getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+      );
     }
   } catch (error: unknown) {
-    console.error("[CustomerAuth] KV session delete failed:", error);
+    console.error("[CustomerAuth] D1 session revoke failed:", error);
   }
 
   return ok(c, { message: "Logged out successfully" });
@@ -465,8 +477,11 @@ app.openapi(updateProfileRoute, async (c) => {
     throw new UnauthorizedError("Authentication required");
   }
 
-  const kv = c.env.CACHE;
-  const session = await getCustomerBySession(kv, token);
+  const session = await getCustomerBySession(
+    c.get("db"),
+    token,
+    getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+  );
 
   if (!session) {
     throw new UnauthorizedError("Session expired. Please log in again.");
@@ -484,7 +499,7 @@ app.openapi(updateProfileRoute, async (c) => {
   if (body.zoneName?.trim()) updates.zoneName = body.zoneName.trim();
 
   const db = c.get("db");
-  const result = await updateCustomerProfile(db, kv, session, token, updates);
+  const result = await updateCustomerProfile(db, session, updates);
 
   return ok(c, {
     customer: {

@@ -5,6 +5,7 @@ import {
     codTracking,
     customers,
     customerHistory,
+    customerSessions,
     deliveryLocations,
     deliveryProviders,
     deliveryShipments,
@@ -339,6 +340,10 @@ export async function deleteCustomer(db: Database, id: string): Promise<void> {
 
     await db.batch([
         db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+        db
+            .update(customerSessions)
+            .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+            .where(and(eq(customerSessions.customerId, id), isNull(customerSessions.revokedAt))),
         db.insert(customerHistory).values({
             id: "hist_" + nanoid(),
             customerId: id,
@@ -360,6 +365,7 @@ export async function deleteCustomer(db: Database, id: string): Promise<void> {
 
 export async function permanentlyDeleteCustomer(db: Database, id: string): Promise<void> {
     await db.batch([
+        db.delete(customerSessions).where(eq(customerSessions.customerId, id)),
         db.delete(customerHistory).where(eq(customerHistory.customerId, id)),
         db.delete(customers).where(eq(customers.id, id)),
     ] as Parameters<Database["batch"]>[0]);
@@ -371,10 +377,19 @@ export async function restoreCustomer(db: Database, id: string): Promise<void> {
 
 export async function bulkDeleteCustomers(db: Database, ids: string[], permanent = false): Promise<void> {
     if (permanent) {
-        await db.delete(customerHistory).where(inArray(customerHistory.customerId, ids));
-        await db.delete(customers).where(inArray(customers.id, ids));
+        await db.batch([
+            db.delete(customerSessions).where(inArray(customerSessions.customerId, ids)),
+            db.delete(customerHistory).where(inArray(customerHistory.customerId, ids)),
+            db.delete(customers).where(inArray(customers.id, ids)),
+        ] as Parameters<Database["batch"]>[0]);
     } else {
-        await db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inArray(customers.id, ids));
+        await db.batch([
+            db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inArray(customers.id, ids)),
+            db
+                .update(customerSessions)
+                .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                .where(and(inArray(customerSessions.customerId, ids), isNull(customerSessions.revokedAt))),
+        ] as Parameters<Database["batch"]>[0]);
     }
 }
 

@@ -1,5 +1,6 @@
 // src/db/schema/customers.ts
-// Customer domain tables: customers, customerHistory, customerAuthOtpChallenges, authOtpDeliveryReceipts.
+// Customer domain tables: customers, customerHistory, customerAuthOtpChallenges,
+// authOtpDeliveryReceipts, customerSessions.
 
 import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -82,6 +83,20 @@ export const customerAuthOtpChallenges = sqliteTable("customer_auth_otp_challeng
     index("customer_auth_otp_challenges_status_expires_idx").on(table.status, table.expiresAt),
 ]);
 
+export const customerSessions = sqliteTable("customer_sessions", {
+    tokenHash: text("token_hash").primaryKey(),
+    customerId: text("customer_id")
+        .notNull()
+        .references(() => customers.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at").notNull(),
+    revokedAt: integer("revoked_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("customer_sessions_customer_id_idx").on(table.customerId),
+    index("customer_sessions_active_expiry_idx").on(table.revokedAt, table.expiresAt),
+]);
+
 export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts", {
     id: text("id").primaryKey(),
     deliveryKey: text("delivery_key").notNull(),
@@ -119,4 +134,5 @@ export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts",
 export type Customer = InferSelectModel<typeof customers>;
 export type CustomerHistory = InferSelectModel<typeof customerHistory>;
 export type CustomerAuthOtpChallenge = InferSelectModel<typeof customerAuthOtpChallenges>;
+export type CustomerSessionRow = InferSelectModel<typeof customerSessions>;
 export type AuthOtpDeliveryReceipt = InferSelectModel<typeof authOtpDeliveryReceipts>;

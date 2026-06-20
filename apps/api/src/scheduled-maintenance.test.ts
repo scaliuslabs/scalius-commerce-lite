@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     archiveStaleIncompleteOrders: vi.fn(),
     flushPendingOrderNotificationOutbox: vi.fn(),
     cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
+    cleanupExpiredCustomerSessions: vi.fn(),
     cleanupExpiredScannerTokenClaims: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
   };
@@ -37,6 +38,7 @@ vi.mock("@scalius/core/modules/notifications", () => ({
 
 vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   cleanupExpiredCustomerAuthOtpChallenges: mocks.cleanupExpiredCustomerAuthOtpChallenges,
+  cleanupExpiredCustomerSessions: mocks.cleanupExpiredCustomerSessions,
 }));
 
 vi.mock("@scalius/core/auth", () => ({
@@ -53,6 +55,7 @@ import {
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
   INVENTORY_EXPIRY_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
+  CUSTOMER_SESSION_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
@@ -117,6 +120,12 @@ describe("runScheduledMaintenance", () => {
       limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.cleanupExpiredCustomerSessions.mockResolvedValue({
+      scanned: 0,
+      deleted: 0,
+      limit: CUSTOMER_SESSION_SWEEP_LIMIT,
+      hasMore: false,
+    });
     mocks.cleanupExpiredScannerTokenClaims.mockResolvedValue({
       scanned: 0,
       deleted: 0,
@@ -179,6 +188,12 @@ describe("runScheduledMaintenance", () => {
       limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.cleanupExpiredCustomerSessions.mockResolvedValue({
+      scanned: 2,
+      deleted: 2,
+      limit: CUSTOMER_SESSION_SWEEP_LIMIT,
+      hasMore: false,
+    });
 
     await runScheduledMaintenance(env, executionCtx);
 
@@ -222,6 +237,11 @@ describe("runScheduledMaintenance", () => {
       Math.floor(now.getTime() / 1000),
       { limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT },
     );
+    expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalledWith(
+      mocks.db,
+      Math.floor(now.getTime() / 1000),
+      { limit: CUSTOMER_SESSION_SWEEP_LIMIT },
+    );
     expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalledWith(
       mocks.db,
       {
@@ -240,6 +260,7 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalled();
+    expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
     expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalled();
   });
 });

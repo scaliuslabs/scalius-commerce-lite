@@ -117,6 +117,7 @@ the schema declarations are the source of truth.
 |-------|---------|
 | `customers` | Customer records. `phone` (unique), order totals, last order timestamp, address IDs/names |
 | `customerHistory` | Change audit log. `changeType` ("created"/"updated"/"deleted") |
+| `customerSessions` | Storefront customer sessions keyed by HMAC token hash. Active reads join `customers` and reject revoked/expired/deleted-customer sessions |
 | `authOtpDeliveryReceipts` | Customer OTP delivery receipt fence. One row per OTP attempt/channel, with recipient hash/mask, provider refs, claim lease, retry status, and OTP expiry |
 
 ### `orders.ts` -- Order Domain
@@ -303,6 +304,7 @@ Notable migrations:
 - `0049` -- Durable `checkout_attempts` table for synchronous storefront checkout idempotency
 - `0050` -- Immutable `discount_customer_redemptions` claims for one-per-customer discount enforcement
 - `0051` -- D1-backed `customer_auth_otp_challenges` for atomic customer OTP attempt accounting and one-time consumption
+- `0054` -- D1-backed `customer_sessions` keyed by HMAC token hash for revocable storefront customer sessions
 
 Validate migration metadata after schema or migration edits:
 

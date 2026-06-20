@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getCredentialEncryptionKey,
+  getCustomerSessionHashKey,
   getEncryptionKey,
   requireEncryptionKey,
 } from "./encryption-key";
@@ -30,5 +31,17 @@ describe("encryption key helpers", () => {
     expect(requireEncryptionKey({ CREDENTIAL_ENCRYPTION_KEY: "credential-key" })).toBe(
       "credential-key",
     );
+  });
+
+  it("prefers auth secrets for customer session token hashing", () => {
+    expect(
+      getCustomerSessionHashKey({
+        BETTER_AUTH_SECRET: "better-auth-secret",
+        JWT_SECRET: "jwt-secret",
+        CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+      }),
+    ).toBe("better-auth-secret");
+    expect(getCustomerSessionHashKey({ JWT_SECRET: "jwt-secret" })).toBe("jwt-secret");
+    expect(getCustomerSessionHashKey({ CREDENTIAL_ENCRYPTION_KEY: "credential-key" })).toBe("credential-key");
   });
 });
