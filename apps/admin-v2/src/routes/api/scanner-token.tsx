@@ -21,10 +21,15 @@ interface ScannerAuthUser {
   name?: string | null;
   email?: string | null;
   role?: string | null;
+  twoFactorEnabled?: boolean | null;
+}
+
+interface ScannerAuthSession {
+  twoFactorVerified?: boolean | null;
 }
 
 interface ScannerAuthResult {
-  session?: unknown;
+  session?: ScannerAuthSession | null;
   user?: ScannerAuthUser | null;
 }
 
@@ -69,6 +74,13 @@ function canMintScannerToken(rbac: ScannerRbacContext): boolean {
   );
 }
 
+function isAdminTwoFactorVerified(authResult: ScannerAuthResult): boolean {
+  return (
+    authResult.user?.twoFactorEnabled !== true ||
+    authResult.session?.twoFactorVerified === true
+  );
+}
+
 async function defaultGetAuthSession(headers: Headers): Promise<ScannerAuthResult | null> {
   const { getAuthSession } = await import("~/lib/auth.server");
   return getAuthSession(headers) as Promise<ScannerAuthResult | null>;
@@ -102,6 +114,10 @@ export async function handleCreateScannerToken(
 
   if (!authResult?.session || !authResult?.user) {
     return jsonResponse({ success: false, error: "Authentication required" }, 401);
+  }
+
+  if (!isAdminTwoFactorVerified(authResult)) {
+    return jsonResponse({ success: false, error: "Two-factor verification required" }, 403);
   }
 
   const user = authResult.user;

@@ -76,6 +76,8 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 - Settings (12+ tabs: general, checkout, payments, delivery, notifications, auth, theme, cache, etc.)
 - Invoice PDF generation, Scanner/QR app
 
+Scanner QR token minting is a privileged same-origin admin action. It requires an authenticated admin session with 2FA already verified when 2FA is enabled, then `products.view` plus `products.edit` RBAC or super-admin access before any KV token is written.
+
 ## Key Files
 
 | File | Purpose |
