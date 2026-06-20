@@ -10,7 +10,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
 | `queue(batch)` | Queues -- payment events, legacy order ingest, OTP, notifications |
-| `scheduled(controller)` | Cron -- releases at most 50 orphaned reservation movement groups per run, invalidates affected availability caches, and flushes the order notification outbox; existing orders are not expired here |
+| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, invalidates affected availability caches, and flushes the order notification outbox |
 
 ## Route Organization
 
@@ -263,7 +263,7 @@ Stock-changing paths must keep product availability fresh without broad catalog 
 - `invalidateProductAvailabilityCacheSubjects(subjects, c, db)` after the write commits when subjects were preloaded before a destructive write; pass `db` so product shortcodes embedded in CMS pages can be found and purged too.
 - `invalidateProductAvailabilityCaches(db, input, c)` for normal post-commit order/payment/delivery/cron paths.
 
-The helper deletes exact API product detail keys, query-varied product detail keys, product-search keys, and `api:search:*`, then schedules storefront exact data keys (`product_slug_${slug}`, `product_variants_${productId}`) plus exact product HTML paths (`/products/${slug}`) with `bumpVersion: false`. When a changed product slug appears in a published CMS page shortcode, it also purges that page's exact API page-render pattern, `page_render_${slug}_` data generation, and CMS HTML path; if the affected page count exceeds `MAX_STOREFRONT_EXACT_HTML_PATHS`, the purge bumps the global HTML version instead of silently leaving excess pages stale. Exact storefront HTML paths are relative-only, canonicalized with the shared HTML cache-path rules before dedupe/capping, and capped at `MAX_STOREFRONT_EXACT_HTML_PATHS` (`20`) before the purge request is sent. Current call sites cover admin order create/edit/delete/restore/permanent-delete, bulk/manual shipment/status/COD/fulfillment/refund/return paths, order ingest/payment queue mutations, delivery webhook reconciliation, admin shipment refresh, admin inventory variant adjustments (`/{variantId}/adjust`, `/stock-adjust`, `/stock-set`), and the scheduled bounded orphan-reservation sweep. That sweep logs `limit` and `hasMore`; a `hasMore=true` result means the next cron run should continue draining the orphan backlog rather than widening a single Worker invocation.
+The helper deletes exact API product detail keys, query-varied product detail keys, product-search keys, and `api:search:*`, then schedules storefront exact data keys (`product_slug_${slug}`, `product_variants_${productId}`) plus exact product HTML paths (`/products/${slug}`) with `bumpVersion: false`. When a changed product slug appears in a published CMS page shortcode, it also purges that page's exact API page-render pattern, `page_render_${slug}_` data generation, and CMS HTML path; if the affected page count exceeds `MAX_STOREFRONT_EXACT_HTML_PATHS`, the purge bumps the global HTML version instead of silently leaving excess pages stale. Exact storefront HTML paths are relative-only, canonicalized with the shared HTML cache-path rules before dedupe/capping, and capped at `MAX_STOREFRONT_EXACT_HTML_PATHS` (`20`) before the purge request is sent. Current call sites cover admin order create/edit/delete/restore/permanent-delete, bulk/manual shipment/status/COD/fulfillment/refund/return paths, order ingest/payment queue mutations, delivery webhook reconciliation, admin shipment refresh, admin inventory variant adjustments (`/{variantId}/adjust`, `/stock-adjust`, `/stock-set`), the scheduled bounded orphan-reservation sweep, and scheduled stale hosted-payment order archival. Scheduled sweeps log `limit` and `hasMore`; a `hasMore=true` result means the next cron run should continue draining the backlog rather than widening a single Worker invocation.
 
 Admin inventory stock edits are availability-only changes. They should pass the affected `variantId` to `invalidateProductAvailabilityCaches()` after the core stock operation commits, and should not call `invalidateCatalogCaches("products", c)` unless product/catalog metadata changed too.
 
@@ -302,13 +302,13 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 | Message Type | Handler | Action |
 |---|---|---|
 | `payment.stripe.confirmed` | `processPaymentConfirmed()` | Convert smallest-unit->major-unit via `getDecimalPlaces()` (ISO 4217), record payment |
-| `payment.stripe.failed` | `processPaymentFailed()` | Mark order failed |
+| `payment.stripe.failed` | `processPaymentFailed()` | Mark order failed; stale incomplete hosted-payment cleanup cancels/releases after the scheduled grace period if no active payment/session claim wins |
 | `payment.stripe.canceled` | `releaseOrderInventory()` | Release reserved stock |
 | `payment.stripe.refunded` | (audit only) | Log refund event (refunds are admin-initiated synchronously) |
 | `payment.sslcommerz.confirmed` | `processPaymentConfirmed()` | Amount already in major unit, record payment |
-| `payment.sslcommerz.failed` | `processPaymentFailed()` | Mark order failed |
+| `payment.sslcommerz.failed` | `processPaymentFailed()` | Mark order failed; scheduled stale cleanup owns later archive/release |
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Convert smallest-unit->major-unit via `getDecimalPlaces()` |
-| `payment.polar.failed` | `processPaymentFailed()` | Mark order failed |
+| `payment.polar.failed` | `processPaymentFailed()` | Mark order failed; scheduled stale cleanup owns later archive/release |
 | `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund (can originate from Polar dashboard) |
 | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status notifications across enabled channels (email, SMS via 4 providers, Meta WhatsApp template message, FCM push). Queue messages with `outboxId` create per-channel delivery receipts so retries skip accepted/skipped targets and keep the parent outbox retryable while any enabled target is retryable. |
 | `auth.send_otp` | Email / WhatsApp / SMS | Claim `auth_otp_delivery_receipts`, skip terminal/expired OTP attempts, then send via email (`sendEmail()` with Cloudflare Email Service default and Resend fallback), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers). Resend receives `deliveryKey` as `Idempotency-Key`; GenNet receives a deterministic receipt-derived `csms_id`. |

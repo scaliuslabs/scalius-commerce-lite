@@ -1,17 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { abandonedCheckouts, OrderStatus, orders, PaymentStatus } from "@scalius/database/schema";
+import {
+    abandonedCheckouts,
+    orders,
+    PaymentMethod,
+    paymentPlans,
+    PaymentPlanStatus,
+    PaymentStatus,
+    OrderStatus,
+} from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 
 const mocks = vi.hoisted(() => ({
     applyInventoryForStatusChange: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/inventory", () => ({
+vi.mock("../inventory", () => ({
     applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { archiveStaleIncompleteOrders } from "./system-utils";
+import { archiveStaleIncompleteOrders } from "./stale-incomplete-orders";
 
 type Operation = {
     op: string;
@@ -21,11 +29,30 @@ type Operation = {
     status?: string;
 };
 
+type ReturningRows = Array<{ id: string }>;
+
+type MockStatement =
+    | {
+        kind: "update";
+        table: unknown;
+        values: Record<string, unknown>;
+    }
+    | {
+        kind: "update-returning";
+        table: unknown;
+        values: Record<string, unknown>;
+        then<TResult1 = ReturningRows, TResult2 = never>(
+            onfulfilled?: ((value: ReturningRows) => TResult1 | PromiseLike<TResult1>) | null,
+            onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+        ): Promise<TResult1 | TResult2>;
+    };
+
 type StaleOrder = {
     id: string;
     customerPhone: string | null;
     inventoryAction: string;
     status: string;
+    paymentMethod: string;
     paymentStatus: string;
     paidAmount: number;
     deletedAt: number | null;
@@ -42,6 +69,7 @@ function staleOrder(overrides: Partial<StaleOrder> = {}): StaleOrder {
         customerPhone: overrides.customerPhone ?? "+8801712345678",
         inventoryAction: overrides.inventoryAction ?? "reserved",
         status: overrides.status ?? OrderStatus.INCOMPLETE,
+        paymentMethod: overrides.paymentMethod ?? PaymentMethod.STRIPE,
         paymentStatus: overrides.paymentStatus ?? PaymentStatus.UNPAID,
         paidAmount: overrides.paidAmount ?? 0,
         deletedAt: overrides.deletedAt ?? null,
@@ -55,14 +83,32 @@ function staleOrder(overrides: Partial<StaleOrder> = {}): StaleOrder {
 
 function createDbMock(staleOrders: StaleOrder[]) {
     const operations: Operation[] = [];
-    const updateResults: Array<Array<{ id: string }>> = [];
+    const updateResults: Array<ReturningRows> = [];
+
+    const makeReturningStatement = (
+        table: unknown,
+        values: Record<string, unknown>,
+    ): MockStatement => ({
+        kind: "update-returning",
+        table,
+        values,
+        then<TResult1 = ReturningRows, TResult2 = never>(
+            onfulfilled?: ((value: ReturningRows) => TResult1 | PromiseLike<TResult1>) | null,
+            onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+        ) {
+            return Promise.resolve(updateResults.shift() ?? [{ id: "order_1" }])
+                .then(onfulfilled, onrejected);
+        },
+    });
 
     const db = {
         select: vi.fn(() => ({
             from(table: unknown) {
                 operations.push({ op: "select.from", table });
                 return {
-                    where: async () => staleOrders,
+                    where: () => ({
+                        limit: async (limit: number) => staleOrders.slice(0, limit),
+                    }),
                 };
             },
         })),
@@ -87,10 +133,10 @@ function createDbMock(staleOrders: StaleOrder[]) {
                     return {
                         where: () => {
                             operations.push({ op: "update.where", table });
+                            const statement: MockStatement = { kind: "update", table, values };
                             return {
-                                returning: async () => {
-                                    return updateResults.shift() ?? [{ id: "order_1" }];
-                                },
+                                ...statement,
+                                returning: () => makeReturningStatement(table, values),
                             };
                         },
                     };
@@ -98,7 +144,16 @@ function createDbMock(staleOrders: StaleOrder[]) {
             };
         }),
         delete: vi.fn(() => {
-            throw new Error("orders must not be hard-deleted by abandoned checkout cleanup");
+            throw new Error("orders must not be hard-deleted by stale incomplete cleanup");
+        }),
+        batch: vi.fn(async (statements: MockStatement[]) => {
+            operations.push({ op: "batch", values: { count: statements.length } });
+            return statements.map((statement) => {
+                if (statement.kind === "update-returning") {
+                    return updateResults.shift() ?? [{ id: "order_1" }];
+                }
+                return [];
+            });
         }),
     };
 
@@ -111,7 +166,7 @@ describe("archiveStaleIncompleteOrders", () => {
         vi.spyOn(console, "error").mockImplementation(() => undefined);
     });
 
-    it("releases reserved inventory before archiving and soft-deleting stale incomplete orders", async () => {
+    it("releases reserved inventory before archiving and soft-deleting stale unpaid incomplete orders", async () => {
         const { db, rawDb, operations } = createDbMock([staleOrder()]);
         mocks.applyInventoryForStatusChange.mockImplementation(async (_db, orderId: string, status: string) => {
             operations.push({ op: "inventory.release", orderId, status });
@@ -120,7 +175,15 @@ describe("archiveStaleIncompleteOrders", () => {
 
         const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
 
-        expect(result).toEqual({ archived: 1, failed: 0, errors: [] });
+        expect(result).toMatchObject({
+            found: 1,
+            limit: 25,
+            hasMore: false,
+            archived: 1,
+            failed: 0,
+            archivedOrderIds: ["order_1"],
+            errors: [],
+        });
         expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.CANCELLED);
         expect(rawDb.delete).not.toHaveBeenCalled();
 
@@ -158,6 +221,48 @@ describe("archiveStaleIncompleteOrders", () => {
                 inventoryAction: "restored",
             },
         });
+        expect(operations.some((entry) =>
+            entry.op === "update.set" &&
+            entry.table === paymentPlans &&
+            entry.values?.status === PaymentPlanStatus.CANCELLED
+        )).toBe(true);
+    });
+
+    it("archives failed hosted-payment orders after the stale cutoff", async () => {
+        const { db } = createDbMock([
+            staleOrder({
+                id: "failed_order",
+                paymentStatus: PaymentStatus.FAILED,
+            }),
+        ]);
+        mocks.applyInventoryForStatusChange.mockResolvedValue("restored");
+
+        const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
+
+        expect(result).toMatchObject({
+            archived: 1,
+            failed: 0,
+            archivedOrderIds: ["failed_order"],
+        });
+        expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "failed_order", OrderStatus.CANCELLED);
+    });
+
+    it("bounds each sweep and reports when more candidates remain", async () => {
+        const { db } = createDbMock([
+            staleOrder({ id: "order_1", inventoryAction: "none" }),
+            staleOrder({ id: "order_2", inventoryAction: "none" }),
+            staleOrder({ id: "order_3", inventoryAction: "none" }),
+        ]);
+
+        const result = await archiveStaleIncompleteOrders(db, 1_765_000_000, { limit: 2 });
+
+        expect(result).toMatchObject({
+            found: 2,
+            limit: 2,
+            hasMore: true,
+            archived: 2,
+            archivedOrderIds: ["order_1", "order_2"],
+        });
     });
 
     it("does not archive or delete an order when inventory release fails", async () => {
@@ -166,9 +271,10 @@ describe("archiveStaleIncompleteOrders", () => {
 
         const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             archived: 0,
             failed: 1,
+            archivedOrderIds: [],
             errors: [{ orderId: "order_1", error: "release failed" }],
         });
         expect(rawDb.delete).not.toHaveBeenCalled();
@@ -189,7 +295,7 @@ describe("archiveStaleIncompleteOrders", () => {
 
         const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
 
-        expect(result).toEqual({ archived: 1, failed: 0, errors: [] });
+        expect(result).toMatchObject({ archived: 1, failed: 0, errors: [] });
         expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
         expect(rawDb.delete).not.toHaveBeenCalled();
         expect(operations.some((entry) => entry.op === "insert.values")).toBe(true);
@@ -202,7 +308,7 @@ describe("archiveStaleIncompleteOrders", () => {
 
         const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
 
-        expect(result).toEqual({ archived: 0, failed: 0, errors: [] });
+        expect(result).toMatchObject({ archived: 0, failed: 0, errors: [] });
         expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
         expect(rawDb.delete).not.toHaveBeenCalled();
         expect(operations.some((entry) => entry.op.startsWith("insert"))).toBe(false);
@@ -215,13 +321,59 @@ describe("archiveStaleIncompleteOrders", () => {
 
         const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             archived: 0,
             failed: 1,
+            archivedOrderIds: [],
             errors: [{ orderId: "order_1", error: "Stale order cleanup changed concurrently before final archive" }],
         });
         expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
         expect(rawDb.delete).not.toHaveBeenCalled();
         expect(operations.some((entry) => entry.op.startsWith("insert"))).toBe(false);
     });
+
+    it("skips active shipment claims even if a stale row is returned by a stale query plan", async () => {
+        const { db, operations } = createDbMock([
+            staleOrder({
+                shipmentClaimId: "ship_claim_active",
+                shipmentClaimExpiresAt: Math.floor(Date.now() / 1000) + 300,
+            }),
+        ]);
+
+        const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
+
+        expect(result).toMatchObject({ found: 1, archived: 0, failed: 0 });
+        expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+        expect(operations.some((entry) => entry.op === "update.set")).toBe(false);
+    });
+
+    it("skips non-recoverable payment states returned by a stale query plan", async () => {
+        const { db, operations } = createDbMock([
+            staleOrder({
+                paymentStatus: PaymentStatus.PARTIAL,
+                paidAmount: 100,
+            }),
+        ]);
+
+        const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
+
+        expect(result).toMatchObject({ found: 1, archived: 0, failed: 0 });
+        expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+        expect(operations.some((entry) => entry.op === "update.set")).toBe(false);
+    });
+
+    it("skips COD orders returned by a stale query plan", async () => {
+        const { db, operations } = createDbMock([
+            staleOrder({
+                paymentMethod: PaymentMethod.COD,
+            }),
+        ]);
+
+        const result = await archiveStaleIncompleteOrders(db, 1_765_000_000);
+
+        expect(result).toMatchObject({ found: 1, archived: 0, failed: 0 });
+        expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+        expect(operations.some((entry) => entry.op === "update.set")).toBe(false);
+    });
+
 });
