@@ -18,6 +18,10 @@ const orderRow = {
   zoneName: "Gulshan",
   areaName: null,
   status: "pending",
+  paymentMethod: "sslcommerz",
+  paymentStatus: "partial",
+  paidAmount: 100,
+  balanceDue: 150,
   createdAt: 1_700_000_000,
   updatedAt: 1_700_000_100,
 };
@@ -151,11 +155,16 @@ describe("order receipt route", () => {
       id: "order_1",
       customerName: "Receipt Customer",
       shippingAddress: "123 Receipt Street",
+      paymentMethod: "sslcommerz",
+      paymentStatus: "partial",
+      paidAmount: 100,
+      balanceDue: 150,
       items: itemRows,
     });
     expect(body.data?.order).not.toHaveProperty("customerPhone");
     expect(body.data?.order).not.toHaveProperty("customerEmail");
     expect(body.data?.order).not.toHaveProperty("customerId");
+    expect(body.data?.order).not.toHaveProperty("paymentIntentId");
     expect(body.data?.order).not.toHaveProperty("shipments");
     expect(body.data?.order).not.toHaveProperty("deliveryProviders");
   });

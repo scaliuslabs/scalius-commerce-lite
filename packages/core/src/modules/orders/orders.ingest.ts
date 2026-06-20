@@ -24,6 +24,7 @@ import {
     recordAndEnqueueOrderNotification,
     type OrderNotificationQueue,
 } from "../notifications/order-notification-outbox";
+import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 import type { OrderIngestQueuePayload } from "./orders.types";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
@@ -316,16 +317,18 @@ function buildOrderWriteBatch(
         );
     }
 
-    writes.push(
-        db.insert(orderNotificationOutbox).values(createOrderNotificationOutboxInsertValues({
-            dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
-            orderId: od.id,
-            customerEmail: od.customerEmail ?? undefined,
-            customerName: od.customerName,
-            notificationType: "order_created",
-            source: "storefront-order",
-        })),
-    );
+    if (shouldCreateOrderCreatedNotification(od)) {
+        writes.push(
+            db.insert(orderNotificationOutbox).values(createOrderNotificationOutboxInsertValues({
+                dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
+                orderId: od.id,
+                customerEmail: od.customerEmail ?? undefined,
+                customerName: od.customerName,
+                notificationType: "order_created",
+                source: "storefront-order",
+            })),
+        );
+    }
 
     if (payload.discountUsage) {
         writes.push(
@@ -387,6 +390,10 @@ export async function runStorefrontOrderPostCommitSideEffects(
         await initCODTracking(db, { orderId: payload.orderData.id }).catch((error: unknown) =>
             console.error("[orders/ingest] COD tracking init failed for order", payload.orderData.id, error),
         );
+    }
+
+    if (!shouldCreateOrderCreatedNotification(payload.orderData)) {
+        return;
     }
 
     try {

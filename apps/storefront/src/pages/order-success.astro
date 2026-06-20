@@ -2,6 +2,11 @@
 import Layout from "@/layouts/Layout.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
 import { getOrderReceipt, getLayoutData, type OrderReceipt, type OrderItem, type LayoutData } from "@/lib/api";
+import {
+  createPurchaseTrackingPayload,
+  formatOrderSuccessLabel,
+  getOrderSuccessViewState,
+} from "@/lib/order-success-state";
 
 
 const orderId = Astro.url.searchParams.get("orderId");
@@ -51,35 +56,43 @@ if (recoveryState) {
 }
 
 const orderItemsFromApi: OrderItem[] = order?.items || [];
+const orderSuccessView = order ? getOrderSuccessViewState(order) : null;
+const purchaseTrackingPayload =
+  order && orderSuccessView?.shouldFinalizeClientSide
+    ? createPurchaseTrackingPayload(order, orderItemsFromApi)
+    : null;
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 ---
 
-<Layout title={order ? "Order Successful" : "Order Recovery"} layoutData={layoutData}>
+<Layout title={orderSuccessView?.title ?? "Order Recovery"} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section
     class="container mx-auto px-4 py-8 max-w-2xl"
-    data-fb-order-details={order ? JSON.stringify({
-      order,
-      items: orderItemsFromApi,
-    }) : undefined}
-    data-order-success-state={order ? "success" : "recovery"}
+    data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
+    data-order-success-state={orderSuccessView?.kind ?? "recovery"}
+    data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
   >
-    {order ? (
+    {order && orderSuccessView ? (
     <div class="text-center mb-8 animate-fade-in">
-      <div class="success-checkmark">
-        <div class="check-icon">
-          <span class="icon-line line-tip"></span>
-          <span class="icon-line line-long"></span>
-          <div class="icon-circle"></div>
-          <div class="icon-fix"></div>
+      {orderSuccessView.shouldFinalizeClientSide ? (
+        <div class="success-checkmark">
+          <div class="check-icon">
+            <span class="icon-line line-tip"></span>
+            <span class="icon-line line-long"></span>
+            <div class="icon-circle"></div>
+            <div class="icon-fix"></div>
+          </div>
         </div>
-      </div>
-      <h1 class="text-2xl font-bold mb-2">Order Placed Successfully!</h1>
-      <p class="text-gray-600">
-        Thank you for your order, #{order.id}. We'll start processing it right
-        away.
-      </p>
+      ) : (
+        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive/10 text-destructive" : "bg-amber-100 text-amber-700"}`}>
+          <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"}></path>
+          </svg>
+        </div>
+      )}
+      <h1 class="text-2xl font-bold mb-2">{orderSuccessView.title}</h1>
+      <p class="text-gray-600">{orderSuccessView.message}</p>
     </div>
 
     <div class="space-y-6 animate-slide-up">
@@ -111,8 +124,19 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
           <div class="flex justify-between">
             <span class="text-gray-600">Order Status:</span>
             <span
-              class="font-medium capitalize bg-primary/20 text-primary px-2 py-0.5 rounded-full text-sm"
-              >{order.status === "incomplete" ? "Processing" : order.status}</span
+              class={`font-medium px-2 py-0.5 rounded-full text-sm ${orderSuccessView.badgeClass}`}
+              >{orderSuccessView.orderStatusLabel}</span
+            >
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Payment Method:</span>
+            <span class="font-medium">{formatOrderSuccessLabel(order.paymentMethod)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Payment Status:</span>
+            <span
+              class={`font-medium px-2 py-0.5 rounded-full text-sm ${orderSuccessView.badgeClass}`}
+              >{orderSuccessView.paymentStatusLabel}</span
             >
           </div>
           <div class="flex justify-between">
@@ -135,6 +159,26 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
                 <span class="text-gray-600">Discount:</span>
                 <span class="font-medium text-primary">
                   -{currencySymbol}{(order.discountAmount ?? 0).toFixed(2)}
+                </span>
+              </div>
+            )
+          }
+          {
+            order.paidAmount > 0 && (
+              <div class="flex justify-between">
+                <span class="text-gray-600">Paid Amount:</span>
+                <span class="font-medium text-emerald-700">
+                  {currencySymbol}{order.paidAmount.toFixed(2)}
+                </span>
+              </div>
+            )
+          }
+          {
+            order.balanceDue > 0 && (
+              <div class="flex justify-between">
+                <span class="text-gray-600">Balance Due:</span>
+                <span class="font-medium">
+                  {currencySymbol}{order.balanceDue.toFixed(2)}
                 </span>
               </div>
             )
@@ -280,14 +324,14 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 
 <script>
   import { trackFbPurchase } from "@/lib/analytics";
-  import type { OrderItem, OrderReceipt } from "@/lib/api";
   import { clearCheckoutSession } from "@/lib/checkout/session-state";
+  import type { PurchaseTrackingPayload } from "@/lib/order-success-state";
   import { claimMetaPurchaseTracking } from "@/lib/tracking/meta-purchase-guard";
   import { clearCart } from "@/store/cart";
 
   document.addEventListener("DOMContentLoaded", () => {
     const mainElement = document.querySelector(
-      "[data-order-success-state='success'][data-fb-order-details]"
+      "[data-order-finalize='true'][data-fb-order-details]"
     ) as HTMLElement | null;
     if (!mainElement) {
       return;
@@ -299,13 +343,12 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
       return;
     }
 
-    clearCheckoutSession();
-    clearCart();
-
     try {
-      const parsedData: { order: OrderReceipt; items: OrderItem[] } =
-        JSON.parse(orderDataAttr);
+      const parsedData: PurchaseTrackingPayload = JSON.parse(orderDataAttr);
       const { order, items: orderItems } = parsedData;
+
+      clearCheckoutSession();
+      clearCart();
 
       setTimeout(() => {
         if (!order || !orderItems) {

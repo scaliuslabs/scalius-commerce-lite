@@ -392,6 +392,10 @@ export interface OrderReceipt {
   zoneName: string | null;
   areaName: string | null;
   status: string;
+  paymentMethod: string | null;
+  paymentStatus: string;
+  paidAmount: number;
+  balanceDue: number;
   createdAt: string | null;
   updatedAt: string | null;
   items: OrderItem[];

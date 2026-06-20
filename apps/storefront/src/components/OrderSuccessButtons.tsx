@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { clearCart } from "@/store/cart";
 import { useEffect, useState } from "react";
 
 export default function OrderSuccessButtons() {
@@ -7,19 +6,15 @@ export default function OrderSuccessButtons() {
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Clear the cart when the component mounts
-    console.log("Order success page loaded, clearing cart");
-    clearCart();
     setIsCustomerAuthenticated(document.cookie.includes("cs_auth=1"));
 
-    // Trigger animation after a short delay
     setTimeout(() => {
       setIsAnimated(true);
     }, 300);
   }, []);
 
   const handleContinueShopping = () => {
-    window.location.href = "/?clearCart=true";
+    window.location.href = "/";
   };
 
   const handlePrintOrder = () => {

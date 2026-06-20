@@ -33,6 +33,7 @@ import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/c
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
+import { enqueueOrderCreatedNotificationForOrder } from "./utils/order-notification-queue";
 import {
   claimAuthOtpDeliveryReceipt,
   createAuthOtpDeliveryTarget,
@@ -62,6 +63,27 @@ function assertPaymentConfirmed(
       return;
     }
     throw new Error(`${gateway} payment confirmation failed for order ${orderId}: ${result.error ?? "unknown error"}`);
+  }
+}
+
+async function enqueueOrderCreatedAfterPaymentConfirmed(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  orderId: string,
+  gateway: "stripe" | "sslcommerz" | "polar",
+): Promise<void> {
+  const result = await enqueueOrderCreatedNotificationForOrder({
+    db,
+    queue: env.ORDER_NOTIFICATIONS_QUEUE,
+    orderId,
+    source: `payment-${gateway}-confirmed`,
+    retryOnQueueFailure: true,
+  });
+
+  if (!result.enqueued) {
+    console.warn(
+      `[Queue] order_created notification for confirmed ${gateway} order ${orderId} recorded but not enqueued: ${result.skippedReason}`,
+    );
   }
 }
 
@@ -262,6 +284,7 @@ async function processQueueMessage(
       assertPaymentConfirmed(result, "stripe", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+        await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "stripe");
       }
       console.log(`[Queue] Stripe payment confirmed for order ${payload.orderId}`);
       break;
@@ -303,6 +326,7 @@ async function processQueueMessage(
       assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+        await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "sslcommerz");
       }
       console.log(`[Queue] SSLCommerz payment confirmed for order ${payload.orderId}`);
       break;
@@ -349,6 +373,7 @@ async function processQueueMessage(
       assertPaymentConfirmed(result, "polar", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+        await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "polar");
       }
       console.log(`[Queue] Polar payment confirmed for order ${payload.orderId} (recorded: ${recordAmount}, gateway: ${gatewayAmountMajor} ${polarCurrency})`);
       break;
