@@ -4878,9 +4878,9 @@ export type PostApiV1OrdersError = PostApiV1OrdersErrors[keyof PostApiV1OrdersEr
 
 export type PostApiV1OrdersResponses = {
     /**
-     * Order placed in processing queue
+     * Order created
      */
-    202: {
+    201: {
         success: true;
         data: {
             checkoutToken: string;

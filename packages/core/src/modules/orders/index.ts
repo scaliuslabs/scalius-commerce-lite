@@ -4,5 +4,6 @@ export * from "./orders.types";
 export * from "./orders.admin";
 export * from "./orders.fulfillment";
 export * from "./orders.storefront";
+export * from "./orders.ingest";
 export * from "./orders.validation";
 export * from "./order-state-machine";

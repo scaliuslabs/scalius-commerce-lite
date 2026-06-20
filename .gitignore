@@ -39,12 +39,15 @@ tests/
 .idea/
 .vercel
 /Docs
+!/docs/
 /.agent
 /.agents
 /.claude
 skills-lock.json
 /temp-doc
 /tanstack-router
-/docs
+/docs/*
+!/docs/research/
+!/docs/research/*.md
 /.github
 CLAUDE.md

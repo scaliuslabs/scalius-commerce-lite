@@ -641,7 +641,7 @@ const layoutData = await getLayoutData();
     accountWindow.__scaliusAccountPageBound = true;
     document.addEventListener("astro:page-load", () => void initializeAccountPage());
     window.addEventListener("customer-login", () => {
-      window.location.reload();
+      void initializeAccountPage();
     });
   }
 

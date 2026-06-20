@@ -1,16 +1,20 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
+  commitStorefrontOrderPayload: vi.fn(),
+  runStorefrontOrderPostCommitSideEffects: vi.fn(),
   rateLimit: vi.fn(async () => ({ allowed: true })),
   getClientIp: vi.fn(() => "127.0.0.1"),
 }));
 
 vi.mock("@scalius/core/modules/orders", () => ({
   createStorefrontOrder: mocks.createStorefrontOrder,
+  commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
+  runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
 }));
 
 vi.mock("@scalius/shared/rate-limit", () => ({
@@ -19,6 +23,13 @@ vi.mock("@scalius/shared/rate-limit", () => ({
 }));
 
 import { orderRoutes } from "./orders";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.rateLimit.mockResolvedValue({ allowed: true });
+  mocks.getClientIp.mockReturnValue("127.0.0.1");
+  mocks.runStorefrontOrderPostCommitSideEffects.mockResolvedValue(undefined);
+});
 
 const validOrderBody = {
   customerName: "Queue Customer",
@@ -45,7 +56,7 @@ const validOrderBody = {
   inventoryPool: "regular",
 };
 
-function createTestApp(options: { queueSend?: () => Promise<void> } = {}) {
+function createTestApp() {
   const calls: string[] = [];
   const kv = {
     get: vi.fn(async () => null),
@@ -56,7 +67,6 @@ function createTestApp(options: { queueSend?: () => Promise<void> } = {}) {
   const queue = {
     send: vi.fn(async () => {
       calls.push("queue:send");
-      await options.queueSend?.();
     }),
   };
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -73,8 +83,8 @@ function createTestApp(options: { queueSend?: () => Promise<void> } = {}) {
   return { app, kv, queue, calls };
 }
 
-describe("create order queue/KV ordering", () => {
-  it("writes checkout and receipt KV before sending the order ingest queue message", async () => {
+describe("create order commit/KV ordering", () => {
+  it("writes checkout and receipt KV before synchronously committing the order", async () => {
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_order_1",
       orderId: "order_1",
@@ -83,6 +93,12 @@ describe("create order queue/KV ordering", () => {
       queuePayload: { type: "order.ingest", orderData: { id: "order_1" } },
     });
     const { app, kv, queue, calls } = createTestApp();
+    mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
+      calls.push("commit");
+    });
+    mocks.runStorefrontOrderPostCommitSideEffects.mockImplementation(async () => {
+      calls.push("side-effects");
+    });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -95,16 +111,17 @@ describe("create order queue/KV ordering", () => {
     );
 
     const responseText = await response.clone().text();
-    expect(response.status, responseText).toBe(202);
+    expect(response.status, responseText).toBe(201);
     expect(calls).toEqual([
       "kv:checkout_status:chk_order_1",
       "kv:order_receipt:chk_order_1",
-      "queue:send",
+      "commit",
+      "side-effects",
     ]);
-    expect(queue.send).toHaveBeenCalledWith({ type: "order.ingest", orderData: { id: "order_1" } });
+    expect(queue.send).not.toHaveBeenCalled();
   });
 
-  it("marks checkout failed if queue send fails after KV state is created", async () => {
+  it("marks checkout failed if synchronous order commit fails after KV state is created", async () => {
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_order_2",
       orderId: "order_2",
@@ -112,10 +129,13 @@ describe("create order queue/KV ordering", () => {
       totalAmount: 100,
       queuePayload: { type: "order.ingest", orderData: { id: "order_2" } },
     });
-    const { app, kv, queue, calls } = createTestApp({
-      queueSend: async () => {
-        throw new Error("queue unavailable");
-      },
+    const { app, kv, queue, calls } = createTestApp();
+    mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
+      calls.push("commit");
+      throw new Error("commit unavailable");
+    });
+    mocks.runStorefrontOrderPostCommitSideEffects.mockImplementation(async () => {
+      calls.push("side-effects");
     });
 
     const response = await app.request(
@@ -132,9 +152,11 @@ describe("create order queue/KV ordering", () => {
     expect(calls).toEqual([
       "kv:checkout_status:chk_order_2",
       "kv:order_receipt:chk_order_2",
-      "queue:send",
+      "commit",
       "kv:checkout_status:chk_order_2",
     ]);
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
     expect(failedStatusWrite?.[0]).toBe("checkout_status:chk_order_2");
     expect(JSON.parse(String(failedStatusWrite?.[1]))).toMatchObject({

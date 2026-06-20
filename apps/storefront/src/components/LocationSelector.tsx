@@ -15,6 +15,16 @@ interface LocationSelectorProps {
   zoneLabel?: string;
   areaLabel?: string;
   showAreaField?: boolean;
+  onSelectionChange?: (selection: LocationSelection) => void;
+}
+
+export interface LocationSelection {
+  cityId: string;
+  cityName: string;
+  zoneId: string;
+  zoneName: string;
+  areaId: string;
+  areaName: string;
 }
 
 export default function LocationSelector({
@@ -23,6 +33,7 @@ export default function LocationSelector({
   zoneLabel = "Zone",
   areaLabel = "Area (Optional)",
   showAreaField = true,
+  onSelectionChange,
 }: LocationSelectorProps) {
   const [selectedCity, setSelectedCity] = useState<string>("");
   const [selectedZone, setSelectedZone] = useState<string>("");
@@ -98,13 +109,22 @@ export default function LocationSelector({
       setSelectedZone(zone.id);
       dispatchZoneSelected(zone.id, nextZones);
 
-      const nextAreas = await loadAreas(zone.id);
+      const nextAreas = showAreaField ? await loadAreas(zone.id) : [];
       const area = resolveLocationOption(nextAreas, detail.area, detail.areaName);
-      if (area) {
-        setSelectedArea(area.id);
+      const areaId = area?.id ?? "";
+      if (areaId) {
+        setSelectedArea(areaId);
       }
+      onSelectionChange?.({
+        cityId: city.id,
+        cityName: city.name,
+        zoneId: zone.id,
+        zoneName: zone.name,
+        areaId,
+        areaName: area?.name ?? "",
+      });
     },
-    [cities, dispatchZoneSelected, loadAreas, loadZones],
+    [cities, dispatchZoneSelected, loadAreas, loadZones, onSelectionChange, showAreaField],
   );
 
   useEffect(() => {
@@ -117,26 +137,58 @@ export default function LocationSelector({
   }, [prefillLocation]);
 
   const handleCityChange = (value: string) => {
+    const city = cities.find((item) => item.id === value);
     setSelectedCity(value);
     setSelectedZone("");
     setSelectedArea("");
     setZones([]);
     setAreas([]);
+    onSelectionChange?.({
+      cityId: value,
+      cityName: city?.name || "",
+      zoneId: "",
+      zoneName: "",
+      areaId: "",
+      areaName: "",
+    });
     void loadZones(value);
   };
 
   const handleZoneChange = (value: string) => {
+    const city = cities.find((item) => item.id === selectedCity);
+    const zone = zones.find((item) => item.id === value);
     setSelectedZone(value);
     setSelectedArea("");
     setAreas([]);
-    if (value) {
+    onSelectionChange?.({
+      cityId: selectedCity,
+      cityName: city?.name || "",
+      zoneId: value,
+      zoneName: zone?.name || "",
+      areaId: "",
+      areaName: "",
+    });
+    if (value && showAreaField) {
       void loadAreas(value);
+      dispatchZoneSelected(value);
+    } else if (value) {
       dispatchZoneSelected(value);
     }
   };
 
   const handleAreaChange = (value: string) => {
+    const city = cities.find((item) => item.id === selectedCity);
+    const zone = zones.find((item) => item.id === selectedZone);
+    const area = areas.find((item) => item.id === value);
     setSelectedArea(value);
+    onSelectionChange?.({
+      cityId: selectedCity,
+      cityName: city?.name || "",
+      zoneId: selectedZone,
+      zoneName: zone?.name || "",
+      areaId: value,
+      areaName: area?.name || "",
+    });
   };
 
   // Convert data to dropdown options format

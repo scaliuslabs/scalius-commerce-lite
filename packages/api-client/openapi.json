@@ -15654,8 +15654,8 @@
           }
         },
         "responses": {
-          "202": {
-            "description": "Order placed in processing queue",
+          "201": {
+            "description": "Order created",
             "content": {
               "application/json": {
                 "schema": {
