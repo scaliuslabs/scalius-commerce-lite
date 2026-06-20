@@ -22,6 +22,7 @@ import {
   createStorefrontOrder,
   runStorefrontOrderPostCommitSideEffects,
 } from "@scalius/core/modules/orders";
+import { invalidateProductAvailabilityCaches } from "../utils/cache-invalidation";
 import { NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
 import { getEncryptionKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
@@ -47,6 +48,26 @@ function getOptionalExecutionContext(c: { executionCtx?: ExecutionContext }): Ex
     return c.executionCtx;
   } catch {
     return undefined;
+  }
+}
+
+async function invalidateStorefrontOrderAvailabilityCaches(
+  db: Database,
+  env: Env,
+  orderId: string,
+  executionCtx: ExecutionContext | undefined,
+): Promise<void> {
+  try {
+    await invalidateProductAvailabilityCaches(
+      db,
+      { orderIds: [orderId] },
+      { env, executionCtx },
+    );
+  } catch (error) {
+    console.error("[Orders] Failed to invalidate product availability caches after order commit:", {
+      orderId,
+      error,
+    });
   }
 }
 
@@ -494,8 +515,11 @@ app.openapi(createOrderRoute, async (c) => {
       throw commitError;
     }
 
-    const sideEffects = runStorefrontOrderPostCommitSideEffects(db, c.env, result.queuePayload);
     const executionCtx = getOptionalExecutionContext(c);
+    const sideEffects = Promise.all([
+      runStorefrontOrderPostCommitSideEffects(db, c.env, result.queuePayload),
+      invalidateStorefrontOrderAvailabilityCaches(db, c.env, result.orderId, executionCtx),
+    ]).then(() => undefined);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {
       executionCtx.waitUntil(sideEffects);
     } else {

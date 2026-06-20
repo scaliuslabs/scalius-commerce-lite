@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
   commitStorefrontOrderPayload: vi.fn(),
   runStorefrontOrderPostCommitSideEffects: vi.fn(),
+  invalidateProductAvailabilityCaches: vi.fn(),
   rateLimit: vi.fn(async () => ({ allowed: true })),
   getClientIp: vi.fn(() => "127.0.0.1"),
   getCustomerBySession: vi.fn(),
@@ -18,6 +19,10 @@ vi.mock("@scalius/core/modules/orders", () => ({
   createStorefrontOrder: mocks.createStorefrontOrder,
   commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
   runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
+}));
+
+vi.mock("../utils/cache-invalidation", () => ({
+  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
 }));
 
 vi.mock("@scalius/shared/rate-limit", () => ({
@@ -51,6 +56,7 @@ beforeEach(() => {
   });
   mocks.commitStorefrontOrderPayload.mockResolvedValue(undefined);
   mocks.runStorefrontOrderPostCommitSideEffects.mockResolvedValue(undefined);
+  mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
 });
 
 const validOrderBody = {
@@ -138,6 +144,9 @@ describe("create order commit/KV ordering", () => {
     mocks.runStorefrontOrderPostCommitSideEffects.mockImplementation(async () => {
       calls.push("side-effects");
     });
+    mocks.invalidateProductAvailabilityCaches.mockImplementation(async () => {
+      calls.push("availability");
+    });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -156,8 +165,58 @@ describe("create order commit/KV ordering", () => {
       "kv:order_receipt:chk_order_1",
       "commit",
       "side-effects",
+      "availability",
     ]);
     expect(queue.send).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      expect.anything(),
+      { orderIds: ["order_1"] },
+      expect.objectContaining({
+        env: expect.objectContaining({ CACHE: kv }),
+        executionCtx: undefined,
+      }),
+    );
+  });
+
+  it("keeps a committed order successful when product availability cache invalidation fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      mocks.createStorefrontOrder.mockResolvedValue({
+        checkoutToken: "chk_order_cache_failure",
+        orderId: "order_cache_failure",
+        paymentMethod: "cod",
+        totalAmount: 100,
+        queuePayload: { type: "order.ingest", orderData: { id: "order_cache_failure" } },
+      });
+      mocks.invalidateProductAvailabilityCaches.mockRejectedValue(new Error("cache unavailable"));
+      const { app, kv, queue } = createTestApp();
+
+      const response = await app.request(
+        "/api/v1/orders",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(validOrderBody),
+        },
+        { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      );
+
+      const responseText = await response.clone().text();
+      expect(response.status, responseText).toBe(201);
+      expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
+      expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledOnce();
+      expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+        expect.anything(),
+        { orderIds: ["order_cache_failure"] },
+        expect.any(Object),
+      );
+      expect(consoleError).toHaveBeenCalledWith(
+        "[Orders] Failed to invalidate product availability caches after order commit:",
+        expect.objectContaining({ orderId: "order_cache_failure" }),
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("marks checkout failed if synchronous order commit fails after KV state is created", async () => {
@@ -196,6 +255,7 @@ describe("create order commit/KV ordering", () => {
     ]);
     expect(queue.send).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
     expect(failedStatusWrite?.[0]).toBe("checkout_status:chk_order_2");
     expect(JSON.parse(String(failedStatusWrite?.[1]))).toMatchObject({
