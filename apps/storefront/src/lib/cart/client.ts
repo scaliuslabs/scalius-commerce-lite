@@ -18,6 +18,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
+import { applyCheckoutButtonState } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 
 /**
@@ -376,16 +377,22 @@ export async function renderCartItems() {
   await updateTotals();
 }
 
-function updateCheckoutButtonState() {
+export function updateCheckoutButtonState() {
   const submitButton = document.getElementById(
     "submitButton",
   ) as HTMLButtonElement;
   if (!submitButton) return;
+  const meta = document.getElementById("checkout-meta") as HTMLElement | null;
+  const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
+  const unavailableMessage =
+    meta?.dataset.checkoutUnavailableMessage ||
+    "Checkout is temporarily unavailable. Please try again shortly.";
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
-  submitButton.disabled = isEmpty;
-  submitButton.classList.toggle("opacity-50", isEmpty);
-  submitButton.classList.toggle("cursor-not-allowed", isEmpty);
-  submitButton.title = isEmpty ? "Your cart is empty" : "";
+  applyCheckoutButtonState(submitButton, {
+    checkoutUnavailable,
+    unavailableMessage,
+    isEmpty,
+  });
 }
 
 // --- Analytics & Event Tracking ---

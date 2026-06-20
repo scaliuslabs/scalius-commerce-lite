@@ -176,6 +176,9 @@ export function useDeliveryLocations() {
           queryClient.invalidateQueries({
             queryKey: queryKeys.settings.deliveryLocationsAll(),
           });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.settings.checkoutReadiness(),
+          });
           break;
         }
         if (data.status === "error") {

@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { CheckoutLanguageData } from "../api/types";
+import { applyCheckoutButtonState } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 
 const maliciousEmptyCartText =
@@ -98,5 +99,34 @@ describe("renderEmptyCartState", () => {
     expect(
       (window as typeof window & { __continuePwned?: boolean }).__continuePwned,
     ).toBeUndefined();
+  });
+});
+
+describe("updateCheckoutButtonState", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div
+        id="checkout-meta"
+        data-checkout-unavailable="true"
+        data-checkout-unavailable-message="Checkout setup is incomplete."
+      ></div>
+      <button id="submitButton">Place Order</button>
+    `;
+  });
+
+  it("keeps submit disabled when checkout is unavailable even with cart items", () => {
+    const submitButton = document.getElementById(
+      "submitButton",
+    ) as HTMLButtonElement;
+    applyCheckoutButtonState(submitButton, {
+      checkoutUnavailable: true,
+      unavailableMessage: "Checkout setup is incomplete.",
+      isEmpty: false,
+    });
+
+    expect(submitButton.disabled).toBe(true);
+    expect(submitButton.classList.contains("opacity-50")).toBe(true);
+    expect(submitButton.classList.contains("cursor-not-allowed")).toBe(true);
+    expect(submitButton.title).toBe("Checkout setup is incomplete.");
   });
 });

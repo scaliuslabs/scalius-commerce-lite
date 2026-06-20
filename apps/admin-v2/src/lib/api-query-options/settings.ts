@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getAuthSettings,
+  getCheckoutReadiness,
   getFirebaseSettings,
   getGeneralSettings,
   getMetaConversionsLogs,
@@ -34,6 +35,13 @@ export const checkoutFlowSettingsQueryOptions = () =>
     queryKey: queryKeys.settings.checkoutFlow(),
     queryFn: () => getAuthSettings(),
     staleTime: CONFIG_STALE_TIME_MS,
+  });
+
+export const checkoutReadinessQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.settings.checkoutReadiness(),
+    queryFn: () => getCheckoutReadiness(),
+    staleTime: MODERATE_STALE_TIME_MS,
   });
 
 export const firebaseSettingsQueryOptions = () =>

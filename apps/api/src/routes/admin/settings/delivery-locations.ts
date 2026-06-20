@@ -3,6 +3,7 @@ import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
+import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-readiness";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getEncryptionKey } from "../../../utils/encryption-key";
 
@@ -11,7 +12,49 @@ import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } f
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
+const CHECKOUT_BREAKING_LOCATION_MESSAGE =
+    "This change would make checkout unavailable. Keep at least one active city with an active zone.";
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+
+async function assertDeliveryLocationsCanBeRemovedFromCheckout(
+    db: Parameters<typeof getCheckoutReadiness>[0],
+    ids: readonly string[],
+) {
+    const [currentReadiness, nextReadiness] = await Promise.all([
+        getCheckoutReadiness(db),
+        getCheckoutReadiness(db, { excludeDeliveryLocationIds: ids }),
+    ]);
+    if (currentReadiness.ready && !nextReadiness.ready) {
+        throw new ValidationError([CHECKOUT_BREAKING_LOCATION_MESSAGE, ...nextReadiness.issues].join(" "));
+    }
+}
+
+async function assertAllDeliveryLocationsCanBeRemovedFromCheckout(
+    db: Parameters<typeof getCheckoutReadiness>[0],
+) {
+    const currentReadiness = await getCheckoutReadiness(db);
+    if (currentReadiness.ready) {
+        throw new ValidationError([
+            CHECKOUT_BREAKING_LOCATION_MESSAGE,
+            "Deleting all delivery locations would remove every active city and zone.",
+        ].join(" "));
+    }
+}
+
+async function isActiveCity(db: Parameters<typeof getCheckoutReadiness>[0], id: string | null | undefined) {
+    if (!id) return false;
+    const row = await db
+        .select({ id: deliveryLocations.id })
+        .from(deliveryLocations)
+        .where(and(
+            eq(deliveryLocations.id, id),
+            eq(deliveryLocations.type, "city"),
+            eq(deliveryLocations.isActive, true),
+            isNull(deliveryLocations.deletedAt),
+        ))
+        .get();
+    return !!row;
+}
 
 const parseJsonObject = (value: string | null): Record<string, unknown> => {
     try {
@@ -183,6 +226,7 @@ app.openapi(deleteAllRoute, async (c) => {
         throw new ValidationError("Must confirm deletion by setting confirmDeleteAll: true");
     }
     const db = c.get("db");
+    await assertAllDeliveryLocationsCanBeRemovedFromCheckout(db);
     await db.delete(deliveryLocations);
     await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
     return ok(c, { message: "All delivery locations have been permanently deleted." });
@@ -209,6 +253,8 @@ app.openapi(bulkDeleteRoute, async (c) => {
         const db = c.get("db");
         const { ids } = c.req.valid("json");
         if (ids.length === 0) throw new ValidationError("An array of location IDs is required");
+
+        await assertDeliveryLocationsCanBeRemovedFromCheckout(db, ids);
 
         await db
             .update(deliveryLocations)
@@ -275,6 +321,28 @@ app.openapi(updateLocationRoute, async (c) => {
         const db = c.get("db");
         const { id } = c.req.valid("param");
         const parsedData = c.req.valid("json");
+        const currentLocation = await db
+            .select({
+                id: deliveryLocations.id,
+                type: deliveryLocations.type,
+                parentId: deliveryLocations.parentId,
+                isActive: deliveryLocations.isActive,
+            })
+            .from(deliveryLocations)
+            .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)))
+            .get();
+
+        if (!currentLocation) throw new NotFoundError("Location not found");
+
+        const removesCurrentLocationFromReadiness =
+            currentLocation.isActive &&
+            (parsedData.isActive === false ||
+                (currentLocation.type === "zone" &&
+                    parsedData.parentId !== undefined &&
+                    !(await isActiveCity(db, parsedData.parentId))));
+        if (removesCurrentLocationFromReadiness) {
+            await assertDeliveryLocationsCanBeRemovedFromCheckout(db, [id]);
+        }
 
         const updateData: Record<string, unknown> = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
         if (parsedData.name !== undefined) updateData.name = parsedData.name;
@@ -327,6 +395,21 @@ app.openapi(deleteLocationRoute, async (c) => {
     try {
         const db = c.get("db");
         const { id } = c.req.valid("param");
+        const currentLocation = await db
+            .select({
+                id: deliveryLocations.id,
+                type: deliveryLocations.type,
+                isActive: deliveryLocations.isActive,
+            })
+            .from(deliveryLocations)
+            .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)))
+            .get();
+
+        if (!currentLocation) throw new NotFoundError("Location not found");
+        if (currentLocation.isActive && (currentLocation.type === "city" || currentLocation.type === "zone")) {
+            await assertDeliveryLocationsCanBeRemovedFromCheckout(db, [id]);
+        }
+
         await db
             .update(deliveryLocations)
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })

@@ -35,7 +35,11 @@ const [
   getCheckoutConfig(),
 ]);
 const shippingMethods: ShippingMethod[] = shippingMethodsResponse || [];
-const checkoutUnavailable = checkoutConfig.unavailable === true || checkoutConfig.gateways.length === 0;
+const checkoutUnavailable =
+  checkoutConfig.unavailable === true ||
+  checkoutConfig.gateways.length === 0 ||
+  shippingMethods.length === 0 ||
+  cities.length === 0;
 const checkoutUnavailableMessage =
   checkoutConfig.unavailableMessage || "Checkout is temporarily unavailable. Please try again shortly.";
 const codOnly = !checkoutUnavailable && isCodOnly(checkoutConfig);

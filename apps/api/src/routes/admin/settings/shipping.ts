@@ -3,15 +3,31 @@ import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { sql, eq, and, or, isNull, like, asc, desc } from "drizzle-orm";
 import { shippingMethods } from "@scalius/database/schema";
-import { NotFoundError, ConflictError } from "../../../utils/api-error";
+import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-readiness";
+import { NotFoundError, ConflictError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../../schemas/responses";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
+const CHECKOUT_BREAKING_SHIPPING_MESSAGE =
+    "This change would make checkout unavailable. Keep at least one active shipping method.";
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
+
+async function assertShippingMethodCanBeRemovedFromCheckout(
+    db: Parameters<typeof getCheckoutReadiness>[0],
+    id: string,
+) {
+    const [currentReadiness, nextReadiness] = await Promise.all([
+        getCheckoutReadiness(db),
+        getCheckoutReadiness(db, { excludeShippingMethodIds: [id] }),
+    ]);
+    if (currentReadiness.ready && !nextReadiness.ready) {
+        throw new ValidationError([CHECKOUT_BREAKING_SHIPPING_MESSAGE, ...nextReadiness.issues].join(" "));
+    }
+}
 
 const createShippingMethodSchema = z.object({
     name: z.string().min(1, "Name is required").max(100),
@@ -261,6 +277,10 @@ app.openapi(updateRoute, (async (c: AppRouteContext<typeof updateRoute>) => {
             throw new NotFoundError("Shipping method not found");
         }
 
+        if (currentMethod.isActive && currentMethod.deletedAt === null && data.isActive === false) {
+            await assertShippingMethodCanBeRemovedFromCheckout(db, id);
+        }
+
         if (data.name && data.name !== currentMethod.name) {
             const existingMethodWithName = await db
                 .select()
@@ -324,13 +344,20 @@ app.openapi(deleteRoute, async (c) => {
 
     try {
         const existingMethod = await db
-            .select({ id: shippingMethods.id })
+            .select({
+                id: shippingMethods.id,
+                isActive: shippingMethods.isActive,
+            })
             .from(shippingMethods)
             .where(and(eq(shippingMethods.id, id), isNull(shippingMethods.deletedAt)))
             .get();
 
         if (!existingMethod) {
             throw new NotFoundError("Shipping method not found or already deleted");
+        }
+
+        if (existingMethod.isActive) {
+            await assertShippingMethodCanBeRemovedFromCheckout(db, id);
         }
 
         await db
@@ -423,13 +450,21 @@ app.openapi(permanentDeleteRoute, async (c) => {
 
     try {
         const existingMethod = await db
-            .select({ id: shippingMethods.id, deletedAt: shippingMethods.deletedAt })
+            .select({
+                id: shippingMethods.id,
+                isActive: shippingMethods.isActive,
+                deletedAt: shippingMethods.deletedAt,
+            })
             .from(shippingMethods)
             .where(eq(shippingMethods.id, id))
             .get();
 
         if (!existingMethod) {
             throw new NotFoundError("Shipping method not found");
+        }
+
+        if (existingMethod.isActive && existingMethod.deletedAt === null) {
+            await assertShippingMethodCanBeRemovedFromCheckout(db, id);
         }
 
         await db.delete(shippingMethods).where(eq(shippingMethods.id, id));

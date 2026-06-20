@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getSmsProviderReadiness: vi.fn(),
   normalizeFirebaseServiceAccountJson: vi.fn(),
   saveFirebaseServiceAccountJson: vi.fn(),
+  getCheckoutReadiness: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
     try {
       return c.executionCtx;
@@ -33,6 +34,10 @@ vi.mock("../../../utils/kv-cache", () => ({
 
 vi.mock("@scalius/core/modules/settings", () => ({
   invalidateSiteSettingsCache: mocks.invalidateSiteSettingsCache,
+}));
+
+vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
+  getCheckoutReadiness: mocks.getCheckoutReadiness,
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
@@ -136,6 +141,12 @@ function createTestApp() {
   });
   mocks.normalizeFirebaseServiceAccountJson.mockImplementation((value: string) => value.trim());
   mocks.saveFirebaseServiceAccountJson.mockResolvedValue(undefined);
+  mocks.getCheckoutReadiness.mockResolvedValue({
+    ready: true,
+    hasActiveShippingMethod: true,
+    hasActiveDeliveryHierarchy: true,
+    issues: [],
+  });
   mocks.getActivePaymentMethods.mockResolvedValue({
     enabledMethods: ["sslcommerz"],
     defaultMethod: "sslcommerz",
@@ -152,6 +163,22 @@ function createTestApp() {
   app.route("/admin/settings", systemSettingsRoutes);
 
   return { app, env, executionCtx, kv };
+}
+
+function requestGet(
+  app: OpenAPIHono<{ Bindings: Env }>,
+  env: Env,
+  executionCtx:
+    | { waitUntil: ReturnType<typeof vi.fn>; passThroughOnException: ReturnType<typeof vi.fn> }
+    | undefined,
+  path: string,
+) {
+  return app.request(
+    `/api/v1/admin/settings${path}`,
+    { method: "GET" },
+    env,
+    executionCtx as never,
+  );
 }
 
 function requestJson(
@@ -197,6 +224,40 @@ describe("system settings cache invalidation", () => {
       ["checkout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("returns checkout readiness from the shared checker", async () => {
+    mocks.getCheckoutReadiness.mockResolvedValueOnce({
+      ready: false,
+      hasActiveShippingMethod: true,
+      hasActiveDeliveryHierarchy: false,
+      issues: ["Add at least one active city with an active zone before checkout can accept orders."],
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestGet(app, env, executionCtx, "/checkout-readiness");
+    const body = await response.json() as {
+      success: boolean;
+      data: {
+        ready: boolean;
+        hasActiveShippingMethod: boolean;
+        hasActiveDeliveryHierarchy: boolean;
+        issues: string[];
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      data: {
+        ready: false,
+        hasActiveShippingMethod: true,
+        hasActiveDeliveryHierarchy: false,
+      },
+    });
+    expect(body.data.issues).toEqual([
+      "Add at least one active city with an active zone before checkout can accept orders.",
+    ]);
   });
 
   it("rejects SMS customer auth policy before writes when no SMS provider is ready", async () => {

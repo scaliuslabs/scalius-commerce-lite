@@ -241,6 +241,9 @@ export function useShippingMethods() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.settings.shippingMethods(),
         });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.settings.checkoutReadiness(),
+        });
         setSelectedMethods(new Set());
       } catch (error: unknown) {
         toast.error(
