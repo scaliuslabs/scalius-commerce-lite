@@ -12,7 +12,11 @@ import {
     saveFirebaseServiceAccountJson,
 } from "@scalius/core/integrations/firebase/settings";
 import { getWhatsAppCloudApiSettings, saveWhatsAppAccessToken } from "@scalius/core/integrations/whatsapp";
-import { upsertEncryptedSetting, upsertSetting } from "@scalius/core/modules/payments/gateway-settings";
+import {
+    getActivePaymentMethods,
+    upsertEncryptedSetting,
+    upsertSetting,
+} from "@scalius/core/modules/payments/gateway-settings";
 import {
     CUSTOMER_AUTH_CONTACT_FIELDS,
     CUSTOMER_AUTH_METHODS,
@@ -22,6 +26,7 @@ import {
     normalizeCustomerAuthMethod,
     normalizeCustomerAuthPolicy,
 } from "@scalius/shared/customer-auth-policy";
+import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
 import {
     getOptionalExecutionContext,
     invalidateApiAndScheduleStorefrontGroups,
@@ -148,6 +153,7 @@ app.openapi(saveAuthRoute, async (c) => {
         if (!existingSettings) throw new ValidationError("Base Site Settings must be configured first");
 
         const updates: Partial<typeof siteSettings.$inferInsert> = {};
+        let customerAuthPolicyValue: string | undefined;
 
         if (body.customerAuthPolicy) {
             const customerAuthPolicy = normalizeCustomerAuthPolicy(
@@ -155,16 +161,11 @@ app.openapi(saveAuthRoute, async (c) => {
                 body.authVerificationMethod ?? existingSettings.authVerificationMethod,
             );
             updates.authVerificationMethod = getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy);
-            await upsertSetting(db, "customer_auth", "policy", JSON.stringify(customerAuthPolicy));
+            customerAuthPolicyValue = JSON.stringify(customerAuthPolicy);
         } else if (body.authVerificationMethod) {
             const authVerificationMethod = normalizeCustomerAuthMethod(body.authVerificationMethod);
             updates.authVerificationMethod = authVerificationMethod;
-            await upsertSetting(
-                db,
-                "customer_auth",
-                "policy",
-                JSON.stringify(getCustomerAuthPolicyForMethod(authVerificationMethod)),
-            );
+            customerAuthPolicyValue = JSON.stringify(getCustomerAuthPolicyForMethod(authVerificationMethod));
         }
         if (typeof body.guestCheckoutEnabled === "boolean") updates.guestCheckoutEnabled = body.guestCheckoutEnabled;
         if (typeof body.whatsappPhoneNumberId === "string" || body.whatsappPhoneNumberId === null) {
@@ -178,6 +179,37 @@ app.openapi(saveAuthRoute, async (c) => {
         }
         if (typeof body.partialPaymentEnabled === "boolean") updates.partialPaymentEnabled = body.partialPaymentEnabled;
         if (typeof body.partialPaymentAmount === "number") updates.partialPaymentAmount = body.partialPaymentAmount;
+
+        const shouldValidateCheckoutFlow =
+            body.checkoutMode !== undefined ||
+            typeof body.partialPaymentEnabled === "boolean" ||
+            typeof body.partialPaymentAmount === "number";
+        if (shouldValidateCheckoutFlow) {
+            const nextCheckoutMode = updates.checkoutMode ?? existingSettings.checkoutMode;
+            const nextPartialPaymentEnabled = updates.partialPaymentEnabled ?? existingSettings.partialPaymentEnabled;
+            const nextPartialPaymentAmount = updates.partialPaymentAmount ?? existingSettings.partialPaymentAmount;
+            const activePaymentMethods = nextPartialPaymentEnabled
+                ? await getActivePaymentMethods(
+                    db,
+                    getKv(),
+                    getEncryptionKey(c.env as Record<string, unknown>),
+                    { bypassMemoryCache: true },
+                )
+                : undefined;
+            const checkoutFlowIssues = getCheckoutFlowValidationIssues({
+                checkoutMode: nextCheckoutMode,
+                partialPaymentEnabled: nextPartialPaymentEnabled,
+                partialPaymentAmount: nextPartialPaymentAmount,
+                availablePaymentMethods: activePaymentMethods?.enabledMethods,
+            });
+            if (checkoutFlowIssues.length > 0) {
+                throw new ValidationError(checkoutFlowIssues.join(" "));
+            }
+        }
+
+        if (customerAuthPolicyValue !== undefined) {
+            await upsertSetting(db, "customer_auth", "policy", customerAuthPolicyValue);
+        }
 
         if (Object.keys(updates).length > 0) {
             await db

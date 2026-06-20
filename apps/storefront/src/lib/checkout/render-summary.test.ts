@@ -7,6 +7,7 @@ import {
   shouldClearCheckoutBeforeRedirect,
   shouldClearCheckoutSessionBeforeRedirect,
 } from "./index";
+import { resolveCheckoutPaymentRequest } from "./payment-mode";
 import type { CheckoutConfig } from "./types";
 
 const baseConfig: CheckoutConfig = {
@@ -40,6 +41,61 @@ describe("renderOrderSummaryDetails", () => {
     expect(details.querySelector("script")).toBeNull();
     expect(details.textContent).toContain('<img src=x onerror="window.__pwned=true">');
     expect(details.textContent).toContain("<script>window.__pwned=true</script>");
+  });
+
+  it("does not show an advance payment row when the deposit would cover the full order", () => {
+    const details = document.createElement("div");
+
+    renderOrderSummaryDetails(
+      details,
+      {
+        cartItems: JSON.stringify({
+          line_1: { price: 100, quantity: 2 },
+        }),
+        shippingCharge: "0",
+        discountAmount: "0",
+        customerName: "Buyer",
+        shippingAddress: "Dhaka",
+      },
+      {
+        ...baseConfig,
+        partialPaymentEnabled: true,
+        partialPaymentAmount: 500,
+      },
+    );
+
+    expect(details.textContent).not.toContain("Advance Payment Required");
+    expect(details.textContent).not.toContain("Balance Due on Delivery");
+  });
+});
+
+describe("resolveCheckoutPaymentRequest", () => {
+  it("uses a full payment request when the configured deposit is not less than the total", () => {
+    expect(
+      resolveCheckoutPaymentRequest({
+        ...baseConfig,
+        partialPaymentEnabled: true,
+        partialPaymentAmount: 500,
+      }, 500),
+    ).toEqual({ paymentType: "full" });
+
+    expect(
+      resolveCheckoutPaymentRequest({
+        ...baseConfig,
+        partialPaymentEnabled: true,
+        partialPaymentAmount: 600,
+      }, 500),
+    ).toEqual({ paymentType: "full" });
+  });
+
+  it("uses a deposit payment request only for positive deposits below the order total", () => {
+    expect(
+      resolveCheckoutPaymentRequest({
+        ...baseConfig,
+        partialPaymentEnabled: true,
+        partialPaymentAmount: 200,
+      }, 500),
+    ).toEqual({ paymentType: "deposit", depositAmount: 200 });
   });
 });
 

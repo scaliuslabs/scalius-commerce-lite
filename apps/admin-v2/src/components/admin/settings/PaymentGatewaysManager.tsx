@@ -2,6 +2,7 @@
 // Accordion-based payment gateway management with lazy-loaded credentials.
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,7 @@ import {
 } from "./payment-gateway-utils";
 import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
 import { getServerFnError } from "@/lib/api-helpers";
+import { queryKeys } from "@/lib/query-keys";
 import {
     getPaymentMethods,
     updatePaymentMethods,
@@ -44,6 +46,7 @@ import {
 // --- Main Component ---
 
 export default function PaymentGatewaysManager() {
+    const queryClient = useQueryClient();
     const [loading, setLoading] = useState(true);
     const [methods, setMethods] = useState<PaymentMethodsData | null>(null);
     const [enabledMethods, setEnabledMethods] = useState<Set<MethodKey>>(new Set(["cod"]));
@@ -127,8 +130,10 @@ export default function PaymentGatewaysManager() {
         setSavingMethods(true);
         try {
             await updatePaymentMethods({ data: { enabledMethods: Array.from(enabledMethods), defaultMethod } });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
             if (!silent) toast.success("Storefront settings updated");
-        } catch { if (!silent) toast.error("Error saving payment methods"); }
+        } catch (err) { if (!silent) toast.error(getServerFnError(err, "Error saving payment methods")); }
         finally { setSavingMethods(false); }
     };
 

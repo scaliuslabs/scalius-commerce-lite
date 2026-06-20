@@ -185,6 +185,31 @@ describe("payment gateway settings cache cleanup", () => {
     });
   });
 
+  it.each([
+    ["explicit empty allowlist", []],
+    ["invalid explicit allowlist shape", { method: "cod" }],
+    ["unconfigured explicit online method", ["stripe"]],
+  ])("fails closed for %s instead of falling back to COD", async (_label, enabledMethods) => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(enabledMethods) },
+        { key: "default_method", value: "cod" },
+      ],
+      [],
+      [],
+      [],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, undefined, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: [],
+      defaultMethod: "cod",
+    });
+  });
+
   it("fails closed instead of storing provider secrets without an encryption key", async () => {
     const { db } = createDbCapturingInsert();
 

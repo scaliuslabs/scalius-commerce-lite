@@ -193,6 +193,7 @@ export const queryKeys = {
     seo: () => ["settings", "seo"] as const,
     security: () => ["settings", "security"] as const,
     auth: () => ["settings", "auth"] as const,
+    checkoutFlow: () => ["settings", "checkout-flow"] as const,
     email: () => ["settings", "email"] as const,
     firebase: () => ["settings", "firebase"] as const,
     business: () => ["settings", "business"] as const,

@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { settings } from "@scalius/database/schema";
+import { settings, siteSettings } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
 import { eq } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
@@ -21,13 +22,57 @@ import {
     invalidateSSLCommerzCache,
     invalidatePolarCache
 } from "@scalius/core/modules/payments/gateway-settings";
+import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
+type OnlineGatewayId = "stripe" | "sslcommerz" | "polar";
+const GATEWAY_LABELS: Record<OnlineGatewayId, string> = {
+    stripe: "Stripe",
+    sslcommerz: "SSLCommerz",
+    polar: "Polar",
+};
 const CHECKOUT_CACHE_GROUPS = ["checkout"];
 
 async function invalidateCheckoutCaches(c: { env: Env; executionCtx?: ExecutionContext }): Promise<void> {
     await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+}
+
+async function assertDisablingGatewayKeepsCheckoutFlow(
+    db: Database,
+    env: Env,
+    gatewayId: OnlineGatewayId,
+): Promise<void> {
+    const [checkoutSettings] = await db
+        .select({
+            checkoutMode: siteSettings.checkoutMode,
+            partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+            partialPaymentAmount: siteSettings.partialPaymentAmount,
+        })
+        .from(siteSettings)
+        .limit(1);
+
+    if (!checkoutSettings?.partialPaymentEnabled) return;
+
+    const activePaymentMethods = await getActivePaymentMethods(
+        db,
+        getKv(),
+        getEncryptionKey(env as Record<string, unknown>),
+        { bypassMemoryCache: true },
+    );
+    const nextPaymentMethods = activePaymentMethods.enabledMethods.filter((method) => method !== gatewayId);
+    const checkoutFlowIssues = getCheckoutFlowValidationIssues({
+        checkoutMode: checkoutSettings.checkoutMode,
+        partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+        partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+        availablePaymentMethods: nextPaymentMethods,
+    });
+
+    if (checkoutFlowIssues.length > 0) {
+        throw new ValidationError(
+            `Cannot disable ${GATEWAY_LABELS[gatewayId]} while partial payment is active. ${checkoutFlowIssues.join(" ")}`,
+        );
+    }
 }
 
 // ─────────────────────────────────────────
@@ -131,12 +176,45 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         throw new ValidationError("Default method must be one of the enabled methods");
     }
 
+    const kv = getKv();
+    const encKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const readOptions = { bypassMemoryCache: true };
+    const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
+        getStripeSettings(db, kv, encKey, readOptions),
+        getSSLCommerzSettings(db, kv, encKey, readOptions),
+        getPolarSettings(db, kv, encKey, readOptions),
+    ]);
+    const usableMethods = data.enabledMethods.filter((method) => {
+        if (method === "cod") return true;
+        if (method === "stripe") return stripeSettings?.enabled === true;
+        if (method === "sslcommerz") return sslSettings?.enabled === true;
+        if (method === "polar") return polarSettings?.enabled === true;
+        return false;
+    });
+
+    const [checkoutSettings] = await db
+        .select({
+            checkoutMode: siteSettings.checkoutMode,
+            partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+            partialPaymentAmount: siteSettings.partialPaymentAmount,
+        })
+        .from(siteSettings)
+        .limit(1);
+    const checkoutFlowIssues = getCheckoutFlowValidationIssues({
+        checkoutMode: checkoutSettings?.checkoutMode,
+        partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
+        partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+        availablePaymentMethods: usableMethods,
+    });
+    if (checkoutFlowIssues.length > 0) {
+        throw new ValidationError(checkoutFlowIssues.join(" "));
+    }
+
     await Promise.all([
         upsertSetting(db, "payment_methods", "enabled_methods", JSON.stringify(data.enabledMethods)),
         upsertSetting(db, "payment_methods", "default_method", data.defaultMethod),
     ]);
 
-    const kv = getKv();
     await Promise.all([
         invalidatePaymentMethodsCache(kv),
         invalidateCheckoutCaches(c),
@@ -203,6 +281,10 @@ app.openapi(saveStripeRoute, async (c) => {
         const encKey = hasSecretWrite
             ? requireEncryptionKey(c.env as Record<string, unknown>)
             : undefined;
+
+        if (body.enabled === false) {
+            await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "stripe");
+        }
 
         if (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) ops.push(upsertEncryptedSetting(db, "stripe", "secret_key", body.secretKey.trim(), encKey));
         if (body.publishableKey !== undefined && body.publishableKey !== MASKED) ops.push(upsertSetting(db, "stripe", "publishable_key", body.publishableKey.trim()));
@@ -276,6 +358,10 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         const encKey = hasSecretWrite
             ? requireEncryptionKey(c.env as Record<string, unknown>)
             : undefined;
+
+        if (body.enabled === false) {
+            await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "sslcommerz");
+        }
 
         if (body.storeId && body.storeId.trim()) ops.push(upsertSetting(db, "sslcommerz", "store_id", body.storeId.trim()));
         if (body.storePassword && body.storePassword !== MASKED && body.storePassword.trim()) ops.push(upsertEncryptedSetting(db, "sslcommerz", "store_password", body.storePassword.trim(), encKey));
@@ -354,6 +440,10 @@ app.openapi(savePolarRoute, async (c) => {
         const encKey = hasSecretWrite
             ? requireEncryptionKey(c.env as Record<string, unknown>)
             : undefined;
+
+        if (body.enabled === false) {
+            await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "polar");
+        }
 
         if (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ops.push(upsertEncryptedSetting(db, "polar", "access_token", body.accessToken.trim(), encKey));
         if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertEncryptedSetting(db, "polar", "webhook_secret", body.webhookSecret.trim(), encKey));

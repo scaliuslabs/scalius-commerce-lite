@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
       return undefined;
     }
   }),
+  getActivePaymentMethods: vi.fn(),
   upsertEncryptedSetting: vi.fn(),
   upsertSetting: vi.fn(),
 }));
@@ -39,6 +40,7 @@ vi.mock("../../../utils/cache-invalidation", () => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
+  getActivePaymentMethods: mocks.getActivePaymentMethods,
   upsertEncryptedSetting: mocks.upsertEncryptedSetting,
   upsertSetting: mocks.upsertSetting,
 }));
@@ -124,6 +126,10 @@ function createTestApp() {
   mocks.saveWhatsAppAccessToken.mockResolvedValue(undefined);
   mocks.normalizeFirebaseServiceAccountJson.mockImplementation((value: string) => value.trim());
   mocks.saveFirebaseServiceAccountJson.mockResolvedValue(undefined);
+  mocks.getActivePaymentMethods.mockResolvedValue({
+    enabledMethods: ["sslcommerz"],
+    defaultMethod: "sslcommerz",
+  });
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -181,6 +187,24 @@ describe("system settings cache invalidation", () => {
       ["checkout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("rejects partial payment settings when no online gateway is available", async () => {
+    mocks.getActivePaymentMethods.mockResolvedValueOnce({
+      enabledMethods: ["cod"],
+      defaultMethod: "cod",
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      checkoutMode: "all",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 500,
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
   it("saves a new WhatsApp access token through encrypted credential storage", async () => {

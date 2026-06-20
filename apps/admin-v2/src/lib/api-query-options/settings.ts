@@ -29,6 +29,13 @@ export const authSettingsQueryOptions = () =>
     staleTime: CONFIG_STALE_TIME_MS,
   });
 
+export const checkoutFlowSettingsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.settings.checkoutFlow(),
+    queryFn: () => getAuthSettings(),
+    staleTime: CONFIG_STALE_TIME_MS,
+  });
+
 export const firebaseSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.firebase(),
