@@ -59637,6 +59637,15 @@
                         "defaultMethod": {
                           "type": "string"
                         },
+                        "activeMethods": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "activeDefaultMethod": {
+                          "type": "string"
+                        },
                         "gatewayStatus": {
                           "type": "object",
                           "properties": {
@@ -59660,6 +59669,15 @@
                                 },
                                 "blockedReason": {
                                   "type": "string"
+                                },
+                                "providerEnabled": {
+                                  "type": "boolean"
+                                },
+                                "checkoutSelected": {
+                                  "type": "boolean"
+                                },
+                                "checkoutVisible": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -59687,6 +59705,15 @@
                                 },
                                 "blockedReason": {
                                   "type": "string"
+                                },
+                                "providerEnabled": {
+                                  "type": "boolean"
+                                },
+                                "checkoutSelected": {
+                                  "type": "boolean"
+                                },
+                                "checkoutVisible": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -59714,6 +59741,15 @@
                                 },
                                 "blockedReason": {
                                   "type": "string"
+                                },
+                                "providerEnabled": {
+                                  "type": "boolean"
+                                },
+                                "checkoutSelected": {
+                                  "type": "boolean"
+                                },
+                                "checkoutVisible": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -59741,6 +59777,15 @@
                                 },
                                 "blockedReason": {
                                   "type": "string"
+                                },
+                                "providerEnabled": {
+                                  "type": "boolean"
+                                },
+                                "checkoutSelected": {
+                                  "type": "boolean"
+                                },
+                                "checkoutVisible": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [

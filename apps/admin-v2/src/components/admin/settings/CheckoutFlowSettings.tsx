@@ -41,10 +41,12 @@ function buildCheckoutFlowSummary(options: {
     partialPaymentAmount: number;
 }): string {
     if (options.partialPaymentEnabled) {
-        return `Customers pay ৳${options.partialPaymentAmount || 0} online first, then the remaining balance can be collected during fulfillment.`;
+        return `Customers pay ৳${options.partialPaymentAmount || 0} online first. COD is hidden at checkout while this is on.`;
     }
     if (options.checkoutMode === "guest_cod_only") {
-        return "Customers place COD orders directly from cart without a separate payment-method step.";
+        return options.guestCheckoutEnabled
+            ? "Customers place COD orders directly from cart without a separate payment-method step."
+            : "Customers must sign in first, then place COD orders without a separate payment-method step.";
     }
     if (options.checkoutMode === "gateways_only") {
         return "Customers must choose an online payment gateway; COD is hidden.";
@@ -314,8 +316,10 @@ export default function CheckoutFlowSettings() {
                                 <SelectValue placeholder="Select checkout mode" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">Standard (All Methods Available)</SelectItem>
-                                <SelectItem value="guest_cod_only">Fast COD Only (Direct from Cart)</SelectItem>
+                                <SelectItem value="all">Standard (COD and online methods allowed)</SelectItem>
+                                <SelectItem value="guest_cod_only">
+                                    {guestCheckoutEnabled ? "Fast COD Only (Direct from Cart)" : "Authenticated COD Only (No online payment)"}
+                                </SelectItem>
                                 <SelectItem value="gateways_only">Online Gateways Only (No COD)</SelectItem>
                             </SelectContent>
                         </Select>
@@ -327,7 +331,7 @@ export default function CheckoutFlowSettings() {
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base">Partial Payment / Advance Deposit</CardTitle>
                     <CardDescription>
-                        Require customers to pay a specific amount upfront to confirm their order. Useful for COD orders.
+                        Collect a fixed online advance payment before order confirmation. COD is hidden at checkout while this is on.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -358,7 +362,7 @@ export default function CheckoutFlowSettings() {
                                     onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
                                 />
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Customers must pay this flat amount via an online gateway to successfully place an order.
+                                    Must be greater than 0 and charged through an online gateway. Carts at or below this amount pay the full total online.
                                 </p>
                             </div>
 

@@ -2,7 +2,7 @@
 // Accordion-based payment gateway management with lazy-loaded credentials.
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,7 @@ import {
 import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
 import { getServerFnError } from "@/lib/api-helpers";
 import { queryKeys } from "@/lib/query-keys";
+import { checkoutFlowSettingsQueryOptions } from "@/lib/api-query-options/settings";
 import {
     getPaymentMethods,
     updatePaymentMethods,
@@ -47,6 +48,7 @@ import {
 
 export default function PaymentGatewaysManager() {
     const queryClient = useQueryClient();
+    const { data: checkoutFlowSettings } = useQuery(checkoutFlowSettingsQueryOptions());
     const [loading, setLoading] = useState(true);
     const [methods, setMethods] = useState<PaymentMethodsData | null>(null);
     const [enabledMethods, setEnabledMethods] = useState<Set<MethodKey>>(new Set(["cod"]));
@@ -121,9 +123,6 @@ export default function PaymentGatewaysManager() {
             if (defaultMethod === method) setDefaultMethod(Array.from(next)[0] as MethodKey);
         }
         setEnabledMethods(next);
-        if (method === "stripe") setStripe(p => ({ ...p, enabled: on }));
-        if (method === "sslcommerz") setSsl(p => ({ ...p, enabled: on }));
-        if (method === "polar") setPolar(p => ({ ...p, enabled: on }));
     };
 
     const saveMethods = async (silent = false) => {
@@ -146,7 +145,8 @@ export default function PaymentGatewaysManager() {
         setSaving(true);
         try {
             await updatePaymentGatewaySettings({ data: { gateway: gw, settings: body as unknown as SettingsPayload } });
-            await saveMethods(true);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
             toast.success(`${META[gw].label} settings saved`);
             loadedGateways.current.delete(gw);
             await Promise.all([loadMethods(), loadCreds(gw)]);
@@ -156,35 +156,65 @@ export default function PaymentGatewaysManager() {
         finally { setSaving(false); }
     };
 
+    const methodAllowedByFlow = useCallback((method: MethodKey) => {
+        const checkoutMode = checkoutFlowSettings?.checkoutMode ?? "all";
+        const partialPaymentEnabled = checkoutFlowSettings?.partialPaymentEnabled === true;
+        const partialPaymentAmount = checkoutFlowSettings?.partialPaymentAmount ?? 0;
+        if (partialPaymentEnabled && partialPaymentAmount > 0) return method !== "cod";
+        if (checkoutMode === "guest_cod_only") return method === "cod";
+        if (checkoutMode === "gateways_only") return method !== "cod";
+        return true;
+    }, [checkoutFlowSettings]);
+
+    const getFlowHiddenReason = useCallback((method: MethodKey) => {
+        const checkoutMode = checkoutFlowSettings?.checkoutMode ?? "all";
+        const partialPaymentEnabled = checkoutFlowSettings?.partialPaymentEnabled === true;
+        const partialPaymentAmount = checkoutFlowSettings?.partialPaymentAmount ?? 0;
+        if (partialPaymentEnabled && partialPaymentAmount > 0 && method === "cod") {
+            return "COD is hidden while Online advance deposit is enabled.";
+        }
+        if (checkoutMode === "guest_cod_only" && method !== "cod") {
+            return "Fast COD Only hides online gateways from customers.";
+        }
+        if (checkoutMode === "gateways_only" && method === "cod") {
+            return "Online Gateways Only hides COD from customers.";
+        }
+        return null;
+    }, [checkoutFlowSettings]);
+
     const getStatusBadge = (m: MethodKey) => {
+        const selected = enabledMethods.has(m);
+        const flowAllowed = methodAllowedByFlow(m);
         if (m === "cod") {
-            return enabledMethods.has("cod")
-                ? <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" /> Active</Badge>
-                : <Badge variant="secondary" className="text-xs">Inactive</Badge>;
+            if (!selected) return <Badge variant="secondary" className="text-xs">Hidden</Badge>;
+            if (!flowAllowed) return <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-700 dark:text-amber-400">Hidden by flow</Badge>;
+            return <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" /> Visible</Badge>;
         }
         const st = methods?.gatewayStatus?.[m];
-        if (!st?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs Setup</Badge>;
-        if (!enabledMethods.has(m)) return <Badge variant="secondary" className="text-xs">Inactive</Badge>;
-        if ((st.usable ?? (st.enabled && st.configured)) === false) {
+        const providerEnabled = st?.providerEnabled ?? st?.enabled === true;
+        const usable = st?.usable ?? (providerEnabled && st?.configured === true);
+        if (!st?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs setup</Badge>;
+        if (!providerEnabled) return <Badge variant="secondary" className="text-xs">Provider off</Badge>;
+        if (selected && !usable) {
             return <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />Blocked</Badge>;
         }
-        if (m === "stripe") {
-            const live = stripe.secretKey && stripe.secretKey !== MASKED && stripe.secretKey.startsWith("sk_live_");
-            return <Badge variant="default" className="text-xs bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{live ? "Live" : "Test"}</Badge>;
+        if (!selected) return <Badge variant="secondary" className="text-xs">Hidden</Badge>;
+        if (!flowAllowed) return <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-700 dark:text-amber-400">Hidden by flow</Badge>;
+        if (usable) {
+            return <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />Visible</Badge>;
         }
-        if (m === "sslcommerz")
-            return <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{ssl.sandbox ? "Sandbox" : "Live"}</Badge>;
-        if (m === "polar")
-            return <Badge variant="default" className="text-xs bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />{polar.sandbox ? "Sandbox" : "Live"}</Badge>;
-        return null;
+        return <Badge variant="outline" className="text-xs text-muted-foreground">Ready</Badge>;
     };
 
     const getGatewayNotice = (m: MethodKey) => {
-        if (m === "cod" || !enabledMethods.has(m)) return null;
+        if (!enabledMethods.has(m)) return null;
+        const flowHiddenReason = getFlowHiddenReason(m);
+        if (flowHiddenReason) return flowHiddenReason;
+        if (m === "cod") return null;
         const st = methods?.gatewayStatus?.[m];
         if (!st) return null;
         if (st.blockedReason) return st.blockedReason;
-        if (st.configured && !st.enabled) {
+        if (st.configured && !(st.providerEnabled ?? st.enabled)) {
             return `${META[m].label} has credentials, but the gateway itself is off. Save ${META[m].label} after turning it on.`;
         }
         if (st.usable === false) {
@@ -202,11 +232,11 @@ export default function PaymentGatewaysManager() {
             {/* Gateway Preferences */}
             <Card>
                 <CardHeader className="pb-3 border-b border-border">
-                    <CardTitle className="text-base font-semibold">Gateway Preferences</CardTitle>
-                    <CardDescription>Configure which payment method is selected by default.</CardDescription>
+                    <CardTitle className="text-base font-semibold">Checkout Visibility</CardTitle>
+                    <CardDescription>Choose which ready payment methods customers can see, and which one is selected first.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-4 flex items-center justify-between pb-4">
-                    <span className="text-sm font-medium">Default Payment Method</span>
+                    <span className="text-sm font-medium">Default selected checkout method</span>
                     <Select value={defaultMethod} onValueChange={(v) => setDefaultMethod(v as MethodKey)}>
                         <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -219,7 +249,7 @@ export default function PaymentGatewaysManager() {
                 <CardFooter className="pt-0 justify-end">
                     <Button variant="secondary" size="sm" onClick={() => saveMethods()} disabled={savingMethods}>
                         {savingMethods && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-                        Save Preference
+                        Save checkout visibility
                     </Button>
                 </CardFooter>
             </Card>
@@ -245,8 +275,15 @@ export default function PaymentGatewaysManager() {
                                                 <p className="text-xs text-muted-foreground mt-0.5 truncate">{meta.desc}</p>
                                             </div>
                                         </div>
-                                        <Switch id={`toggle-${method}`} checked={enabledMethods.has(method)} className="shrink-0"
-                                            onCheckedChange={(v) => { toggleMethod(method, v); if (method === "cod") setTimeout(() => saveMethods(true), 100); }} />
+                                        <div className="flex shrink-0 flex-col items-end gap-1">
+                                            <Switch
+                                                id={`toggle-${method}`}
+                                                checked={enabledMethods.has(method)}
+                                                aria-label={`Show ${meta.label} at checkout`}
+                                                onCheckedChange={(v) => toggleMethod(method, v)}
+                                            />
+                                            <span className="text-[11px] leading-none text-muted-foreground">Show at checkout</span>
+                                        </div>
                                     </div>
                                     {gatewayNotice && (
                                         <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/25 bg-background/80 px-3 py-2 text-xs text-destructive">
@@ -306,6 +343,17 @@ function StripeForm({ s, set, conf, saving, onSave }: {
 }) {
     return (
         <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2">
+            <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
+                <div className="space-y-0.5">
+                    <Label htmlFor="stripe-enabled" className="text-sm">Provider enabled</Label>
+                    <p className="text-xs text-muted-foreground">Allows Stripe sessions after credentials are complete.</p>
+                </div>
+                <Switch
+                    id="stripe-enabled"
+                    checked={s.enabled}
+                    onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
+                />
+            </div>
             <div className="space-y-1.5">
                 <Label htmlFor="stripe-secret" className="flex items-center gap-1.5 text-sm">
                     Secret Key {conf.secret && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
@@ -341,6 +389,17 @@ function SSLForm({ s, set, conf, saving, onSave }: {
 }) {
     return (
         <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2">
+            <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
+                <div className="space-y-0.5">
+                    <Label htmlFor="ssl-enabled" className="text-sm">Provider enabled</Label>
+                    <p className="text-xs text-muted-foreground">Allows SSLCommerz sessions after credentials are complete.</p>
+                </div>
+                <Switch
+                    id="ssl-enabled"
+                    checked={s.enabled}
+                    onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
+                />
+            </div>
             <SandboxToggle checked={s.sandbox} onChange={(v) => set((p) => ({ ...p, sandbox: v }))} />
             {!s.sandbox && s.enabled && <LiveWarning message="Live mode enabled. Real payments will be processed." />}
             <div className="space-y-1.5">

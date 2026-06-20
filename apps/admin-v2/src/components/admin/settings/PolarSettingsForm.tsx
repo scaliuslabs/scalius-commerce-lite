@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { CheckCircle2, HelpCircle } from "lucide-react";
 import {
   type PolarData,
@@ -23,6 +24,17 @@ interface PolarFormProps {
 export function PolarForm({ s, set, conf, saving, onSave, onHelp }: PolarFormProps) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2">
+      <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
+        <div className="space-y-0.5">
+          <Label htmlFor="polar-enabled" className="text-sm">Provider enabled</Label>
+          <p className="text-xs text-muted-foreground">Allows Polar sessions after credentials are complete.</p>
+        </div>
+        <Switch
+          id="polar-enabled"
+          checked={s.enabled}
+          onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
+        />
+      </div>
       <SandboxToggle checked={s.sandbox} onChange={(v) => set((p) => ({ ...p, sandbox: v }))}
         extra={<Button type="button" variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground h-7" onClick={onHelp}>
           <HelpCircle className="h-3.5 w-3.5" /> Setup Guide
@@ -61,7 +73,7 @@ export function PolarSetupGuide() {
     { t: "Generate an Access Token", c: <>Go to <ExtLink href="https://polar.sh/settings">Organization Settings</ExtLink> &rarr; <strong>Access Tokens</strong> &rarr; Create a token with <code className="bg-muted px-1 rounded text-xs">checkouts:write</code> scope.</> },
     { t: "Create a Generic Product", c: <>In Polar Dashboard &rarr; <strong>Products</strong> &rarr; Create a product. Copy the <strong>Product ID</strong> from the &hellip; menu.</> },
     { t: "Configure Webhooks", c: <>Add endpoint <code className="block bg-muted px-3 py-2 rounded text-xs break-all mt-1">https://your-domain.com/api/v1/webhooks/polar</code>Select events: <code className="bg-muted px-1 rounded text-xs">checkout.updated</code> and <code className="bg-muted px-1 rounded text-xs">order.paid</code>.</> },
-    { t: "Enable & Save", c: <>Toggle <strong>Enable gateway</strong> on, then click <strong>Save Polar</strong>.</> },
+    { t: "Enable & Save", c: <>Turn <strong>Provider enabled</strong> on, click <strong>Save Polar</strong>, then use <strong>Show at checkout</strong> on the gateway card when you are ready for customers to see it.</> },
   ];
   return (
     <div className="space-y-4 text-sm">

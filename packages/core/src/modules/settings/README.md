@@ -67,7 +67,7 @@ Admin-facing DB operations for site settings. Cache invalidation stays in route 
 
 Assembles the full checkout configuration for the storefront. Returns a `CheckoutConfig` object.
 
-Uses `Promise.all()` to fetch site settings, currency rows, and allowed countries in parallel. Resolves enabled payment gateways dynamically from the gateway registry.
+Uses `Promise.all()` to fetch site settings, currency rows, and allowed countries in parallel. Resolves enabled payment gateways dynamically from the gateway registry after intersecting the raw merchant allowlist with provider readiness.
 
 ```typescript
 interface CheckoutConfig {
@@ -97,6 +97,7 @@ interface CheckoutConfig {
 - `all` -- show all enabled gateways
 - `gateways_only` -- hide COD
 - `guest_cod_only` -- hide online gateways (Stripe, SSLCommerz, Polar)
+- `partialPaymentEnabled` with a positive amount -- hide COD and require at least one usable online gateway
 
 ## CurrencyConfig Type
 
@@ -189,16 +190,18 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 ### `payments.ts` -- Payment gateway settings
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/payment-methods` | Get enabled methods + default + gateway status (stripe/sslcommerz/polar/cod) |
-| POST | `/payment-methods` | Save enabled methods + default. Validates default is in enabled list. Invalidates checkout config/cache |
+| GET | `/payment-methods` | Get raw merchant-selected methods/default, effective active methods/default, and gateway readiness (`configured`, `providerEnabled`, `checkoutSelected`, `checkoutVisible`, `usable`, `missingFields`, `blockedReason`) |
+| POST | `/payment-methods` | Atomically save enabled methods + default. Validates default is in enabled list, selected gateways are checkout-usable, and the current checkout flow still has a compatible method. Invalidates checkout config/cache |
 | GET | `/stripe` | Get Stripe keys (masks secret + webhook) |
-| POST | `/stripe` | Save Stripe keys. Invalidates stripe, payment methods, and checkout config/cache |
+| POST | `/stripe` | Save Stripe keys/provider enabled state. Rejects enabled saves until secret key, publishable key, and webhook secret are effectively present. Invalidates stripe, payment methods, and checkout config/cache |
 | GET | `/sslcommerz` | Get SSLCommerz credentials (masks password) |
-| POST | `/sslcommerz` | Save SSLCommerz credentials. Invalidates sslcommerz, payment methods, and checkout config/cache |
+| POST | `/sslcommerz` | Save SSLCommerz credentials/provider enabled state. Rejects enabled saves until store ID and store password are effectively present. Invalidates sslcommerz, payment methods, and checkout config/cache |
 | GET | `/polar` | Get Polar credentials (masks token + webhook) |
-| POST | `/polar` | Save Polar credentials. Invalidates polar, payment methods, and checkout config/cache |
+| POST | `/polar` | Save Polar credentials/provider enabled state. Rejects enabled saves until access token, product ID, and webhook secret are effectively present. Invalidates polar, payment methods, and checkout config/cache |
 
 Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Reads keep graceful legacy fallback so existing plaintext/JWT-encrypted rows can still be migrated.
+
+Provider readiness and storefront visibility are separate concepts. A gateway can be configured but provider-disabled, provider-enabled but hidden by checkout visibility, or selected for checkout but hidden by checkout-flow policy such as partial payment hiding COD. Keep admin copy and API responses explicit about those states instead of collapsing them into one "enabled" flag.
 
 WhatsApp access-token saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY`. Runtime reads may pass the tolerant `getEncryptionKey()` output so old plaintext/JWT-era rows continue to work, but legacy migration and legacy-column cleanup must also receive `migrationEncryptionKey` from `getCredentialEncryptionKey()`; without that dedicated key, reads do not create encrypted rows and do not clear `site_settings.whatsapp_access_token`.
 
@@ -216,7 +219,7 @@ List, create, update, test connection, delete. Persistent credential saves requi
 ## Checkout Config (Storefront)
 
 The storefront checkout endpoint returns:
-- `gateways` filtered by `payment_methods.enabled_methods`, each gateway's own enabled/configured state, and `checkoutMode`
+- `gateways` filtered by `payment_methods.enabled_methods`, each gateway's own enabled/configured state, checkout flow policy, and partial-payment policy
 - `allowedCountries: string[]` -- country codes for phone validation
 - `allowedCountriesMode: "include" | "exclude"` -- whether the list is allowlist or blocklist
 - `currency.decimalPlaces: number` -- ISO 4217 decimal places for the configured currency

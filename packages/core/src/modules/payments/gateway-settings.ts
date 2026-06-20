@@ -108,12 +108,43 @@ export interface SSLCommerzSettings {
   enabled: boolean;
 }
 
+export type SSLCommerzCheckoutRequiredField = "storeId" | "storePassword";
+
+const SSLCOMMERZ_CHECKOUT_FIELD_LABELS: Record<SSLCommerzCheckoutRequiredField, string> = {
+  storeId: "store ID",
+  storePassword: "store password",
+};
+
+export interface SSLCommerzCheckoutReadiness {
+  configured: boolean;
+  enabled: boolean;
+  usable: boolean;
+  missingFields: SSLCommerzCheckoutRequiredField[];
+  blockedReason?: string;
+}
+
 export interface PolarSettings {
   accessToken: string;
   webhookSecret: string;
   productId: string;
   sandbox: boolean;
   enabled: boolean;
+}
+
+export type PolarCheckoutRequiredField = "accessToken" | "productId" | "webhookSecret";
+
+const POLAR_CHECKOUT_FIELD_LABELS: Record<PolarCheckoutRequiredField, string> = {
+  accessToken: "access token",
+  productId: "product ID",
+  webhookSecret: "webhook secret",
+};
+
+export interface PolarCheckoutReadiness {
+  configured: boolean;
+  enabled: boolean;
+  usable: boolean;
+  missingFields: PolarCheckoutRequiredField[];
+  blockedReason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +258,41 @@ export async function invalidateStripeCache(kv?: KVNamespace): Promise<void> {
 const SSL_CATEGORY = "sslcommerz";
 const SSL_CACHE_KEY = "gw:sslcommerz";
 
+export function getSSLCommerzCheckoutMissingFields(
+  settings: Partial<Pick<SSLCommerzSettings, SSLCommerzCheckoutRequiredField>> | null | undefined,
+): SSLCommerzCheckoutRequiredField[] {
+  const missing: SSLCommerzCheckoutRequiredField[] = [];
+  if (!hasText(settings?.storeId)) missing.push("storeId");
+  if (!hasText(settings?.storePassword)) missing.push("storePassword");
+  return missing;
+}
+
+function sslCommerzBlockedReason(missingFields: SSLCommerzCheckoutRequiredField[]): string | undefined {
+  if (missingFields.length === 0) return undefined;
+  const labels = missingFields.map((field) => SSLCOMMERZ_CHECKOUT_FIELD_LABELS[field]);
+  return `SSLCommerz needs ${labels.join(", ")} before it can be shown at checkout.`;
+}
+
+export function getSSLCommerzCheckoutReadiness(
+  settings: Partial<SSLCommerzSettings> | null | undefined,
+): SSLCommerzCheckoutReadiness {
+  const missingFields = getSSLCommerzCheckoutMissingFields(settings);
+  const enabled = settings?.enabled === true;
+  return {
+    configured: missingFields.length === 0,
+    enabled,
+    usable: enabled && missingFields.length === 0,
+    missingFields,
+    blockedReason: sslCommerzBlockedReason(missingFields),
+  };
+}
+
+export function isSSLCommerzCheckoutUsable(
+  settings: Partial<SSLCommerzSettings> | null | undefined,
+): settings is SSLCommerzSettings {
+  return getSSLCommerzCheckoutReadiness(settings).usable;
+}
+
 export async function getSSLCommerzSettings(
   db: Database,
   kv?: KVNamespace,
@@ -273,6 +339,42 @@ export async function invalidateSSLCommerzCache(kv?: KVNamespace): Promise<void>
 
 const POLAR_CATEGORY = "polar";
 const POLAR_CACHE_KEY = "gw:polar";
+
+export function getPolarCheckoutMissingFields(
+  settings: Partial<Pick<PolarSettings, PolarCheckoutRequiredField>> | null | undefined,
+): PolarCheckoutRequiredField[] {
+  const missing: PolarCheckoutRequiredField[] = [];
+  if (!hasText(settings?.accessToken)) missing.push("accessToken");
+  if (!hasText(settings?.productId)) missing.push("productId");
+  if (!hasText(settings?.webhookSecret)) missing.push("webhookSecret");
+  return missing;
+}
+
+function polarBlockedReason(missingFields: PolarCheckoutRequiredField[]): string | undefined {
+  if (missingFields.length === 0) return undefined;
+  const labels = missingFields.map((field) => POLAR_CHECKOUT_FIELD_LABELS[field]);
+  return `Polar needs ${labels.join(", ")} before it can be shown at checkout.`;
+}
+
+export function getPolarCheckoutReadiness(
+  settings: Partial<PolarSettings> | null | undefined,
+): PolarCheckoutReadiness {
+  const missingFields = getPolarCheckoutMissingFields(settings);
+  const enabled = settings?.enabled === true;
+  return {
+    configured: missingFields.length === 0,
+    enabled,
+    usable: enabled && missingFields.length === 0,
+    missingFields,
+    blockedReason: polarBlockedReason(missingFields),
+  };
+}
+
+export function isPolarCheckoutUsable(
+  settings: Partial<PolarSettings> | null | undefined,
+): settings is PolarSettings {
+  return getPolarCheckoutReadiness(settings).usable;
+}
 
 export async function getPolarSettings(
   db: Database,
@@ -372,6 +474,59 @@ export interface PaymentMethodsConfig {
   defaultMethod: "stripe" | "sslcommerz" | "polar" | "cod";
 }
 
+export interface PaymentMethodPreferences {
+  /** Raw merchant-selected checkout allowlist before gateway readiness filtering. */
+  enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
+  /** Raw merchant-selected default before gateway readiness filtering. */
+  defaultMethod: "stripe" | "sslcommerz" | "polar" | "cod";
+  /** Whether the allowlist was explicitly saved by the merchant. */
+  hasExplicitEnabledMethods: boolean;
+}
+
+function parsePaymentMethodPreferences(
+  values: Record<string, string>,
+): PaymentMethodPreferences {
+  let enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
+  const hasExplicitEnabledMethods = values.enabled_methods !== undefined;
+  try {
+    const parsed = values.enabled_methods
+      ? JSON.parse(values.enabled_methods) as unknown
+      : ["cod"];
+    enabledMethods = Array.isArray(parsed)
+      ? parsed.filter((method): method is ("stripe" | "sslcommerz" | "polar" | "cod") =>
+          method === "stripe" ||
+          method === "sslcommerz" ||
+          method === "polar" ||
+          method === "cod",
+        )
+      : [];
+  } catch {
+    enabledMethods = hasExplicitEnabledMethods ? [] : ["cod"];
+  }
+
+  const storedDefault = values.default_method;
+  const defaultMethod = (
+    storedDefault === "stripe" ||
+    storedDefault === "sslcommerz" ||
+    storedDefault === "polar" ||
+    storedDefault === "cod"
+  )
+    ? storedDefault
+    : "cod";
+
+  return {
+    enabledMethods,
+    defaultMethod,
+    hasExplicitEnabledMethods,
+  };
+}
+
+export async function getPaymentMethodPreferences(
+  db: Database,
+): Promise<PaymentMethodPreferences> {
+  return parsePaymentMethodPreferences(await readCategory(db, PAYMENT_METHODS_CATEGORY));
+}
+
 /**
  * Get active payment methods for the storefront.
  *
@@ -397,29 +552,11 @@ export async function getActivePaymentMethods(
     if (kvEntry) await kv.delete(PAYMENT_METHODS_CACHE_KEY);
   }
 
-  // Read payment methods settings
-  const values = await readCategory(db, PAYMENT_METHODS_CATEGORY);
-
-  // Parse enabled methods (default: COD only)
-  let enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
-  const hasExplicitEnabledMethods = values.enabled_methods !== undefined;
-  try {
-    const parsed = values.enabled_methods
-      ? JSON.parse(values.enabled_methods) as unknown
-      : ["cod"];
-    enabledMethods = Array.isArray(parsed)
-      ? parsed.filter((method): method is ("stripe" | "sslcommerz" | "polar" | "cod") =>
-          method === "stripe" ||
-          method === "sslcommerz" ||
-          method === "polar" ||
-          method === "cod",
-        )
-      : [];
-  } catch {
-    enabledMethods = hasExplicitEnabledMethods ? [] : ["cod"];
-  }
-
-  const defaultMethod = (values.default_method as PaymentMethodsConfig["defaultMethod"]) ?? "cod";
+  const {
+    enabledMethods,
+    defaultMethod,
+    hasExplicitEnabledMethods,
+  } = await getPaymentMethodPreferences(db);
 
   // Cross-check: only include methods with valid credentials
   const validMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[] = [];
@@ -437,13 +574,13 @@ export async function getActivePaymentMethods(
     }
     if (method === "sslcommerz") {
       const ssl = await getSSLCommerzSettings(db, kv, encryptionKey, options);
-      if (ssl && ssl.enabled) {
+      if (isSSLCommerzCheckoutUsable(ssl)) {
         validMethods.push("sslcommerz");
       }
     }
     if (method === "polar") {
       const polar = await getPolarSettings(db, kv, encryptionKey, options);
-      if (polar && polar.enabled) {
+      if (isPolarCheckoutUsable(polar)) {
         validMethods.push("polar");
       }
     }
@@ -499,7 +636,7 @@ registerGateway({
   settingsCategory: SSL_CATEGORY,
   getSettings: async (db, kv, encryptionKey, options) => {
     const s = await getSSLCommerzSettings(db, kv, encryptionKey, options);
-    return s ? { ...s, enabled: s.enabled } : null;
+    return isSSLCommerzCheckoutUsable(s) ? { ...s, enabled: true } : null;
   },
   getPublicConfig: (s) => ({
     sandbox: s.sandbox,
@@ -513,7 +650,7 @@ registerGateway({
   settingsCategory: POLAR_CATEGORY,
   getSettings: async (db, kv, encryptionKey, options) => {
     const s = await getPolarSettings(db, kv, encryptionKey, options);
-    return s ? { ...s, enabled: s.enabled } : null;
+    return isPolarCheckoutUsable(s) ? { ...s, enabled: true } : null;
   },
   getPublicConfig: (s) => ({
     sandbox: s.sandbox,

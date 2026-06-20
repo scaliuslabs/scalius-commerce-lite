@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { settings, siteSettings } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
-import { eq } from "drizzle-orm";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { eq, sql } from "drizzle-orm";
 import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
@@ -13,12 +13,17 @@ import { successEnvelope, messageResponse, errorResponses } from "../../../schem
 import {
     upsertSetting,
     upsertEncryptedSetting,
+    getPaymentMethodPreferences,
     getActivePaymentMethods,
     getStripeSettings,
     getStripeCheckoutReadiness,
+    getSSLCommerzCheckoutReadiness,
     getSSLCommerzSettings,
+    getPolarCheckoutReadiness,
     getPolarSettings,
     isStripeCheckoutUsable,
+    isSSLCommerzCheckoutUsable,
+    isPolarCheckoutUsable,
     invalidatePaymentMethodsCache,
     invalidateStripeCache,
     invalidateSSLCommerzCache,
@@ -109,14 +114,36 @@ const savePolarSchema = z.object({
 
 type SaveStripeInput = z.infer<typeof saveStripeSchema>;
 type StripeSettingsMap = Record<string, string | undefined>;
+type SSLCommerzSettingsMap = Record<string, string | undefined>;
+type PolarSettingsMap = Record<string, string | undefined>;
 
-async function readStripeSettingsMap(db: Database): Promise<StripeSettingsMap> {
+async function readSettingsMap(db: Database, category: string): Promise<Record<string, string | undefined>> {
     const rows = await db
         .select({ key: settings.key, value: settings.value })
         .from(settings)
-        .where(eq(settings.category, "stripe"))
+        .where(eq(settings.category, category))
         .all();
     return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+async function readStripeSettingsMap(db: Database): Promise<StripeSettingsMap> {
+    return readSettingsMap(db, "stripe");
+}
+
+async function readSSLCommerzSettingsMap(db: Database): Promise<SSLCommerzSettingsMap> {
+    return readSettingsMap(db, "sslcommerz");
+}
+
+async function readPolarSettingsMap(db: Database): Promise<PolarSettingsMap> {
+    return readSettingsMap(db, "polar");
+}
+
+function hasStoredSSLCommerzAccount(map: SSLCommerzSettingsMap): boolean {
+    return Boolean(map.store_id?.trim() && map.store_password?.trim());
+}
+
+function hasStoredPolarAccount(map: PolarSettingsMap): boolean {
+    return Boolean(map.access_token?.trim() && map.product_id?.trim());
 }
 
 function storedMarker(value: string | undefined): string {
@@ -148,17 +175,65 @@ function getEffectiveStripeCheckoutSettings(map: StripeSettingsMap, body: SaveSt
     };
 }
 
+function getEffectiveSSLCommerzCheckoutSettings(map: SSLCommerzSettingsMap, body: z.infer<typeof saveSSLCommerzSchema>) {
+    const existingEnabled = map.enabled !== undefined
+        ? map.enabled !== "false"
+        : hasStoredSSLCommerzAccount(map);
+
+    return {
+        storeId: effectivePlainValue(body.storeId, map.store_id),
+        storePassword: effectiveSecretValue(body.storePassword, map.store_password),
+        sandbox: body.sandbox ?? map.sandbox !== "false",
+        enabled: body.enabled ?? existingEnabled,
+    };
+}
+
+function getEffectivePolarCheckoutSettings(map: PolarSettingsMap, body: z.infer<typeof savePolarSchema>) {
+    const existingEnabled = map.enabled !== undefined
+        ? map.enabled !== "false"
+        : hasStoredPolarAccount(map);
+
+    return {
+        accessToken: effectiveSecretValue(body.accessToken, map.access_token),
+        webhookSecret: effectiveSecretValue(body.webhookSecret, map.webhook_secret),
+        productId: effectivePlainValue(body.productId, map.product_id),
+        sandbox: body.sandbox ?? map.sandbox !== "false",
+        enabled: body.enabled ?? existingEnabled,
+    };
+}
+
+function buildUpsertSettingStatement(db: Database, category: string, key: string, value: string) {
+    return db
+        .insert(settings)
+        .values({
+            id: crypto.randomUUID(),
+            key,
+            value,
+            type: "string",
+            category,
+        })
+        .onConflictDoUpdate({
+            target: [settings.key, settings.category],
+            set: { value, updatedAt: sql`unixepoch()` },
+        });
+}
+
 const gatewayStatusSchema = z.object({
     configured: z.boolean(),
     enabled: z.boolean(),
     usable: z.boolean().optional(),
     missingFields: z.array(z.string()).optional(),
     blockedReason: z.string().optional(),
+    providerEnabled: z.boolean().optional(),
+    checkoutSelected: z.boolean().optional(),
+    checkoutVisible: z.boolean().optional(),
 });
 
 const paymentMethodsResponseSchema = z.object({
     enabledMethods: z.array(z.string()),
     defaultMethod: z.string(),
+    activeMethods: z.array(z.string()).optional(),
+    activeDefaultMethod: z.string().optional(),
     gatewayStatus: z.object({
         stripe: gatewayStatusSchema,
         sslcommerz: gatewayStatusSchema,
@@ -183,33 +258,76 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         const kv = getKv();
         const encKey = getEncryptionKey(c.env as Record<string, unknown>);
         const readOptions = { bypassMemoryCache: true };
-        const config = await getActivePaymentMethods(db, kv, encKey, readOptions);
+        const [rawConfig, activeConfig] = await Promise.all([
+            getPaymentMethodPreferences(db),
+            getActivePaymentMethods(db, kv, encKey, readOptions),
+        ]);
 
-        const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
+        const [
+            stripeSettings,
+            sslSettings,
+            polarSettings,
+            stripeMap,
+            sslMap,
+            polarMap,
+        ] = await Promise.all([
             getStripeSettings(db, kv, encKey, readOptions),
             getSSLCommerzSettings(db, kv, encKey, readOptions),
             getPolarSettings(db, kv, encKey, readOptions),
+            readStripeSettingsMap(db),
+            readSSLCommerzSettingsMap(db),
+            readPolarSettingsMap(db),
         ]);
+        const stripeReadiness = getStripeCheckoutReadiness(
+            stripeSettings ?? getEffectiveStripeCheckoutSettings(stripeMap, {}),
+        );
+        const sslReadiness = getSSLCommerzCheckoutReadiness(sslSettings ?? {
+            storeId: sslMap.store_id ?? "",
+            storePassword: storedMarker(sslMap.store_password),
+            enabled: sslMap.enabled !== undefined ? sslMap.enabled !== "false" : hasStoredSSLCommerzAccount(sslMap),
+        });
+        const polarReadiness = getPolarCheckoutReadiness(polarSettings ?? {
+            accessToken: storedMarker(polarMap.access_token),
+            productId: polarMap.product_id ?? "",
+            webhookSecret: storedMarker(polarMap.webhook_secret),
+            enabled: polarMap.enabled !== undefined ? polarMap.enabled !== "false" : hasStoredPolarAccount(polarMap),
+        });
 
         return ok(c, {
-            ...config,
+            enabledMethods: rawConfig.enabledMethods,
+            defaultMethod: rawConfig.enabledMethods.includes(rawConfig.defaultMethod)
+                ? rawConfig.defaultMethod
+                : (rawConfig.enabledMethods[0] ?? "cod"),
+            activeMethods: activeConfig.enabledMethods,
+            activeDefaultMethod: activeConfig.defaultMethod,
             gatewayStatus: {
-                stripe: getStripeCheckoutReadiness(stripeSettings),
+                stripe: {
+                    ...stripeReadiness,
+                    providerEnabled: stripeReadiness.enabled,
+                    checkoutSelected: rawConfig.enabledMethods.includes("stripe"),
+                    checkoutVisible: activeConfig.enabledMethods.includes("stripe"),
+                },
                 sslcommerz: {
-                    configured: !!sslSettings,
-                    enabled: sslSettings?.enabled ?? false,
-                    usable: sslSettings?.enabled === true,
-                    missingFields: sslSettings ? [] : ["storeId", "storePassword"],
-                    blockedReason: sslSettings ? undefined : "SSLCommerz needs a store ID and store password before it can be shown at checkout.",
+                    ...sslReadiness,
+                    providerEnabled: sslReadiness.enabled,
+                    checkoutSelected: rawConfig.enabledMethods.includes("sslcommerz"),
+                    checkoutVisible: activeConfig.enabledMethods.includes("sslcommerz"),
                 },
                 polar: {
-                    configured: !!polarSettings,
-                    enabled: polarSettings?.enabled ?? false,
-                    usable: polarSettings?.enabled === true,
-                    missingFields: polarSettings ? [] : ["accessToken", "productId"],
-                    blockedReason: polarSettings ? undefined : "Polar needs an access token and product ID before it can be shown at checkout.",
+                    ...polarReadiness,
+                    providerEnabled: polarReadiness.enabled,
+                    checkoutSelected: rawConfig.enabledMethods.includes("polar"),
+                    checkoutVisible: activeConfig.enabledMethods.includes("polar"),
                 },
-                cod: { configured: true, enabled: true, usable: true, missingFields: [] }
+                cod: {
+                    configured: true,
+                    enabled: true,
+                    usable: true,
+                    missingFields: [],
+                    providerEnabled: true,
+                    checkoutSelected: rawConfig.enabledMethods.includes("cod"),
+                    checkoutVisible: activeConfig.enabledMethods.includes("cod"),
+                }
             }
         });
 });
@@ -246,17 +364,19 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     if (data.enabledMethods.includes("stripe") && !stripeReadiness.usable) {
         throw new ValidationError(stripeReadiness.blockedReason ?? "Stripe is not ready for checkout.");
     }
-    if (data.enabledMethods.includes("sslcommerz") && sslSettings?.enabled !== true) {
-        throw new ValidationError("SSLCommerz must be enabled and fully configured before it can be shown at checkout.");
+    const sslReadiness = getSSLCommerzCheckoutReadiness(sslSettings);
+    const polarReadiness = getPolarCheckoutReadiness(polarSettings);
+    if (data.enabledMethods.includes("sslcommerz") && !sslReadiness.usable) {
+        throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
     }
-    if (data.enabledMethods.includes("polar") && polarSettings?.enabled !== true) {
-        throw new ValidationError("Polar must be enabled and fully configured before it can be shown at checkout.");
+    if (data.enabledMethods.includes("polar") && !polarReadiness.usable) {
+        throw new ValidationError(polarReadiness.blockedReason ?? "Polar is not ready for checkout.");
     }
     const usableMethods = data.enabledMethods.filter((method) => {
         if (method === "cod") return true;
         if (method === "stripe") return isStripeCheckoutUsable(stripeSettings);
-        if (method === "sslcommerz") return sslSettings?.enabled === true;
-        if (method === "polar") return polarSettings?.enabled === true;
+        if (method === "sslcommerz") return isSSLCommerzCheckoutUsable(sslSettings);
+        if (method === "polar") return isPolarCheckoutUsable(polarSettings);
         return false;
     });
 
@@ -278,9 +398,9 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         throw new ValidationError(checkoutFlowIssues.join(" "));
     }
 
-    await Promise.all([
-        upsertSetting(db, "payment_methods", "enabled_methods", JSON.stringify(data.enabledMethods)),
-        upsertSetting(db, "payment_methods", "default_method", data.defaultMethod),
+    await safeBatch(db, [
+        buildUpsertSettingStatement(db, "payment_methods", "enabled_methods", JSON.stringify(data.enabledMethods)),
+        buildUpsertSettingStatement(db, "payment_methods", "default_method", data.defaultMethod),
     ]);
 
     await Promise.all([
@@ -410,7 +530,7 @@ app.openapi(getSSLCommerzRoute, async (c) => {
             storeId: map.store_id ?? "",
             storePassword: map.store_password ? MASKED : "",
             sandbox: map.sandbox !== "false",
-            enabled: map.enabled !== "false"
+            enabled: map.enabled !== undefined ? map.enabled !== "false" : hasStoredSSLCommerzAccount(map)
         });
 });
 
@@ -430,6 +550,12 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
+        const existingMap = await readSSLCommerzSettingsMap(db);
+        const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(existingMap, body);
+        const sslReadiness = getSSLCommerzCheckoutReadiness(effectiveSettings);
+        if (sslReadiness.enabled && !sslReadiness.configured) {
+            throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
+        }
         const hasSecretWrite = Boolean(body.storePassword && body.storePassword !== MASKED && body.storePassword.trim());
         const encKey = hasSecretWrite
             ? requireEncryptionKey(c.env as Record<string, unknown>)
@@ -489,7 +615,7 @@ app.openapi(getPolarRoute, async (c) => {
             webhookSecret: map.webhook_secret ? MASKED : "",
             productId: map.product_id ?? "",
             sandbox: map.sandbox !== "false",
-            enabled: map.enabled !== "false"
+            enabled: map.enabled !== undefined ? map.enabled !== "false" : hasStoredPolarAccount(map)
         });
 });
 
@@ -509,6 +635,12 @@ app.openapi(savePolarRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
+        const existingMap = await readPolarSettingsMap(db);
+        const effectiveSettings = getEffectivePolarCheckoutSettings(existingMap, body);
+        const polarReadiness = getPolarCheckoutReadiness(effectiveSettings);
+        if (polarReadiness.enabled && !polarReadiness.configured) {
+            throw new ValidationError(polarReadiness.blockedReason ?? "Polar is not ready for checkout.");
+        }
         const hasSecretWrite = Boolean(
             (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ||
             (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()),

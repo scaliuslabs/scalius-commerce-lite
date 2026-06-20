@@ -18447,6 +18447,8 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
         data: {
             enabledMethods: Array<string>;
             defaultMethod: string;
+            activeMethods?: Array<string>;
+            activeDefaultMethod?: string;
             gatewayStatus: {
                 stripe: {
                     configured: boolean;
@@ -18454,6 +18456,9 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     usable?: boolean;
                     missingFields?: Array<string>;
                     blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
                 };
                 sslcommerz: {
                     configured: boolean;
@@ -18461,6 +18466,9 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     usable?: boolean;
                     missingFields?: Array<string>;
                     blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
                 };
                 polar: {
                     configured: boolean;
@@ -18468,6 +18476,9 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     usable?: boolean;
                     missingFields?: Array<string>;
                     blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
                 };
                 cod: {
                     configured: boolean;
@@ -18475,6 +18486,9 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     usable?: boolean;
                     missingFields?: Array<string>;
                     blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
                 };
             };
             [key: string]: unknown;
