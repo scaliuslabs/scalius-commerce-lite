@@ -306,12 +306,12 @@ export default function CheckoutFlowSettings() {
                             <AlertTriangle className="h-4 w-4 text-amber-500" />
                             <AlertDescription className="flex flex-col gap-3 text-sm text-amber-700 dark:text-amber-400 sm:flex-row sm:items-center sm:justify-between">
                                 <span className="min-w-0">
-                                    <span className="block font-medium">Delivery readiness could not be checked.</span>
+                                    <span className="block font-medium">Checkout readiness status could not be refreshed.</span>
                                     {readinessErrorMessage && (
                                         <span className="mt-1 block text-xs opacity-85">{readinessErrorMessage}</span>
                                     )}
                                     <span className="mt-1 block text-xs opacity-85">
-                                        Public checkout still fails closed if shipping setup is incomplete.
+                                        This is an admin status check. Public checkout still fails closed if delivery setup is incomplete.
                                     </span>
                                 </span>
                                 <Button
