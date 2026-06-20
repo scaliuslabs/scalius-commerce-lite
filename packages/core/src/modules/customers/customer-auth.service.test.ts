@@ -194,6 +194,8 @@ describe("customer auth service intent handling", () => {
     const [, storedRaw] = kv.put.mock.calls.find(([key]) => key === "cust_otp:sms:+8801712345678") ?? [];
     const stored = JSON.parse(storedRaw as string) as StoredOtp;
     expect(stored).toMatchObject({
+      method: "phone",
+      identifier: "+8801712345678",
       contactEmail: "buyer@example.com",
       phone: "+8801712345678",
       intent: "sign_up",
@@ -242,6 +244,8 @@ describe("customer auth service intent handling", () => {
       [otpKey]: JSON.stringify({
         code: "123456",
         email: "original@example.com",
+        method: "phone",
+        identifier: "+8801712345678",
         contactEmail: "original@example.com",
         phone: "+8801712345678",
         expiresAt: Date.now() + 300_000,
@@ -268,6 +272,99 @@ describe("customer auth service intent handling", () => {
     }));
   });
 
+  it("rejects verify payloads that try to reinterpret a phone OTP as email verification", async () => {
+    const db = createDb([]);
+    const kv = createKv({
+      "cust_otp:sms:+8801712345678": JSON.stringify({
+        code: "123456",
+        email: "original@example.com",
+        method: "phone",
+        identifier: "+8801712345678",
+        contactEmail: "original@example.com",
+        phone: "+8801712345678",
+        expiresAt: Date.now() + 300_000,
+        attempts: 0,
+        intent: "sign_up",
+        channel: "sms",
+      } satisfies StoredOtp),
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "email",
+      channel: "sms",
+      identifier: "+8801712345678",
+      code: "123456",
+      name: "Buyer",
+      phone: "+8801712345678",
+    })).rejects.toThrow("Valid email address required");
+
+    expect(kv.delete).not.toHaveBeenCalled();
+    expect(db.insertValues).not.toHaveBeenCalled();
+  });
+
+  it("rejects OTP records whose stored destination does not match the verify request", async () => {
+    const otpKey = "cust_otp:email:buyer@example.com";
+    const db = createDb([]);
+    const kv = createKv({
+      [otpKey]: JSON.stringify({
+        code: "123456",
+        email: "buyer@example.com",
+        method: "phone",
+        identifier: "+8801712345678",
+        contactEmail: "buyer@example.com",
+        phone: "+8801712345678",
+        expiresAt: Date.now() + 300_000,
+        attempts: 0,
+        intent: "sign_up",
+        channel: "email",
+      } satisfies StoredOtp),
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+      phone: "+8801712345678",
+    })).rejects.toThrow("Verification code does not match the requested contact. Please request a new code.");
+
+    expect(kv.delete).not.toHaveBeenCalled();
+    expect(db.insertValues).not.toHaveBeenCalled();
+  });
+
+  it("clears legacy OTP records that do not carry pinned method metadata", async () => {
+    const otpKey = "cust_otp:email:buyer@example.com";
+    const db = createDb([]);
+    const kv = createKv({
+      [otpKey]: JSON.stringify({
+        code: "123456",
+        email: "buyer@example.com",
+        contactEmail: "buyer@example.com",
+        phone: "+8801712345678",
+        expiresAt: Date.now() + 300_000,
+        attempts: 0,
+        intent: "sign_up",
+        channel: "email",
+      }),
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+      phone: "+8801712345678",
+    })).rejects.toThrow("Verification code could not be verified. Please request a new code.");
+
+    expect(kv.delete).toHaveBeenCalledWith(otpKey);
+    expect(db.insertValues).not.toHaveBeenCalled();
+  });
+
   it("rechecks required email policy during phone OTP account creation verification", async () => {
     const otpKey = "cust_otp:sms:+8801712345678";
     const db = createDb([
@@ -289,6 +386,8 @@ describe("customer auth service intent handling", () => {
       [otpKey]: JSON.stringify({
         code: "123456",
         email: "+8801712345678",
+        method: "phone",
+        identifier: "+8801712345678",
         phone: "+8801712345678",
         expiresAt: Date.now() + 300_000,
         attempts: 0,
