@@ -7,6 +7,8 @@ import { User, Mail, Smartphone, X } from "lucide-react";
 import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type CustomerInfo } from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/client";
+import type { LocationData } from "@/lib/api";
+import LocationSelector, { type LocationSelection } from "@/components/LocationSelector";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
@@ -62,8 +64,9 @@ export default function AuthModal() {
   const [profileAddress, setProfileAddress] = useState("");
   const [profileCity, setProfileCity] = useState("");
   const [profileZone, setProfileZone] = useState("");
-  const [cities, setCities] = useState<{ id: string; name: string }[]>([]);
-  const [zones, setZones] = useState<{ id: string; name: string }[]>([]);
+  const [profileCityName, setProfileCityName] = useState("");
+  const [profileZoneName, setProfileZoneName] = useState("");
+  const [cities, setCities] = useState<LocationData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
@@ -119,7 +122,6 @@ export default function AuthModal() {
         if (state.authenticated && state.customer) {
           setCustomer(state.customer);
           setStep("authenticated");
-          dispatchLoginEvent(state.customer);
         }
       });
     };
@@ -156,29 +158,28 @@ export default function AuthModal() {
     if (step === "profile_setup") {
       fetch(createApiUrl("/locations/cities"))
         .then((res) => res.json())
-        .then((data: { success: boolean; data: { id: string; name: string }[] }) => {
+        .then((data: { success: boolean; data: LocationData[] }) => {
           if (data.success) setCities(data.data);
         })
         .catch(console.error);
     }
   }, [step]);
 
-  // Fetch zones when city changes
+  // Clear stale profile location labels when the profile step is reset.
   useEffect(() => {
-    if (profileCity && step === "profile_setup") {
-      fetch(createApiUrl(`/locations/zones?cityId=${profileCity}`))
-        .then((res) => res.json())
-        .then((data: { success: boolean; data: { id: string; name: string }[] }) => {
-          if (data.success) {
-            setZones(data.data);
-            setProfileZone("");
-          }
-        })
-        .catch(console.error);
-    } else {
-      setZones([]);
-    }
+    if (step !== "profile_setup" || profileCity) return;
+    setProfileZone("");
+    setProfileCityName("");
+    setProfileZoneName("");
   }, [profileCity, step]);
+
+  const handleProfileLocationChange = (selection: LocationSelection) => {
+    setProfileCity(selection.cityId);
+    setProfileZone(selection.zoneId);
+    setProfileCityName(selection.cityName);
+    setProfileZoneName(selection.zoneName);
+    setError("");
+  };
 
   const dispatchLoginEvent = (customerData: CustomerInfo) => {
     window.dispatchEvent(new CustomEvent("customer-login", {
@@ -286,16 +287,13 @@ export default function AuthModal() {
     setLoading(true);
     setError("");
 
-    const selectedCity = cities.find((c) => c.id === profileCity);
-    const selectedZone = zones.find((z) => z.id === profileZone);
-
     const res = await updateCustomerProfile({
       name: profileName.trim(),
       address: profileAddress.trim(),
       city: profileCity,
       zone: profileZone,
-      cityName: selectedCity?.name || "",
-      zoneName: selectedZone?.name || "",
+      cityName: profileCityName,
+      zoneName: profileZoneName,
     });
     setLoading(false);
 
@@ -305,8 +303,10 @@ export default function AuthModal() {
         ...customer!,
         name: profileName.trim(),
         address: profileAddress.trim(),
-        cityName: selectedCity?.name || "",
-        zoneName: selectedZone?.name || "",
+        city: profileCity,
+        zone: profileZone,
+        cityName: profileCityName,
+        zoneName: profileZoneName,
       };
       setCustomer(updatedCustomer);
       setStep("authenticated");
@@ -330,6 +330,12 @@ export default function AuthModal() {
     setPhoneInput("");
     setEmailInput("");
     setOtp("");
+    setProfileName("");
+    setProfileAddress("");
+    setProfileCity("");
+    setProfileZone("");
+    setProfileCityName("");
+    setProfileZoneName("");
     window.dispatchEvent(new CustomEvent("customer-logout"));
   };
 
@@ -584,34 +590,14 @@ export default function AuthModal() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">City</label>
-                  <select
-                    value={profileCity}
-                    onChange={(e) => { setProfileCity(e.target.value); setError(""); }}
-                    className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none transition-all"
-                  >
-                    <option value="" disabled>Select City</option>
-                    {cities.map((city) => (
-                      <option key={city.id} value={city.id}>{city.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">Zone</label>
-                  <select
-                    value={profileZone}
-                    onChange={(e) => { setProfileZone(e.target.value); setError(""); }}
-                    disabled={!profileCity || zones.length === 0}
-                    className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none transition-all disabled:opacity-50 disabled:bg-muted"
-                  >
-                    <option value="" disabled>Select Zone</option>
-                    {zones.map((zone) => (
-                      <option key={zone.id} value={zone.id}>{zone.name}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <LocationSelector
+                  cities={cities}
+                  cityLabel="City"
+                  zoneLabel="Zone"
+                  showAreaField={false}
+                  onSelectionChange={handleProfileLocationChange}
+                />
               </div>
             </div>
 

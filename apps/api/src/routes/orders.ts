@@ -12,7 +12,11 @@ import {
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 import { eq, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { createStorefrontOrder } from "@scalius/core/modules/orders";
+import {
+  commitStorefrontOrderPayload,
+  createStorefrontOrder,
+  runStorefrontOrderPostCommitSideEffects,
+} from "@scalius/core/modules/orders";
 import { NotFoundError, ValidationError, RateLimitError } from "../utils/api-error";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
@@ -21,9 +25,17 @@ import {
   validateReceiptToken,
 } from "../utils/order-receipt-token";
 
-import { ok } from "../utils/api-response";
+import { created, ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+function getOptionalExecutionContext(c: { executionCtx?: ExecutionContext }): ExecutionContext | undefined {
+  try {
+    return c.executionCtx;
+  } catch {
+    return undefined;
+  }
+}
 
 const unixToDate = (timestamp: number | null): Date | null => {
   if (!timestamp) return null;
@@ -297,8 +309,8 @@ const createOrderRoute = createRoute({
     }
   },
   responses: {
-    202: {
-      description: "Order placed in processing queue",
+    201: {
+      description: "Order created",
       content: { "application/json": { schema: z.object({
         success: z.literal(true),
         data: z.object({
@@ -316,19 +328,22 @@ const createOrderRoute = createRoute({
 });
 
 app.openapi(createOrderRoute, async (c) => {
-  // Rate limit: 5 order creations per minute per IP
-  const kv = c.env.CACHE as KVNamespace | undefined;
-  if (kv) {
-    const ip = getClientIp(c.req.raw);
-    const result = await rateLimit({ kv, key: `order:${ip}`, limit: 5, windowMs: 60_000 });
-    if (!result.allowed) {
-      throw new RateLimitError("Too many order requests. Please try again later.");
-    }
-  }
-
   const db = c.get("db");
   const data = c.req.valid("json");
   const requestUrl = c.req.url;
+
+  // Rate limit order attempts without punishing legitimate shared-IP buyers.
+  const kv = c.env.CACHE as KVNamespace | undefined;
+  if (kv) {
+    const ip = getClientIp(c.req.raw);
+    const [ipResult, phoneResult] = await Promise.all([
+      rateLimit({ kv, key: `order:ip:${ip}`, limit: 60, windowMs: 60_000 }),
+      rateLimit({ kv, key: `order:phone:${data.customerPhone}`, limit: 5, windowMs: 60_000 }),
+    ]);
+    if (!ipResult.allowed || !phoneResult.allowed) {
+      throw new RateLimitError("Too many order requests. Please try again later.");
+    }
+  }
 
   try {
     type CartItem = { id: string; price: number; quantity: number; variantId?: string };
@@ -346,7 +361,6 @@ app.openapi(createOrderRoute, async (c) => {
       ),
     );
 
-    // Write initial pending state to KV so the Storefront can poll it
     const kvKey = `checkout_status:${result.checkoutToken}`;
     await c.env.CACHE.put(
       kvKey,
@@ -359,38 +373,40 @@ app.openapi(createOrderRoute, async (c) => {
       { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
     );
 
-    // Dispatch only after KV polling/receipt state exists. If the send fails,
-    // keep the checkout token terminal instead of leaving the browser polling.
     try {
-      await c.env.ORDER_INGEST_QUEUE.send(result.queuePayload);
-    } catch (queueError) {
+      await commitStorefrontOrderPayload(db, c.env, result.queuePayload);
+    } catch (commitError) {
       await c.env.CACHE.put(
         kvKey,
         JSON.stringify({
           status: "failed",
           orderId: result.orderId,
-          error: "Order queue is unavailable. Please try again.",
+          error: commitError instanceof ValidationError
+            ? commitError.message
+            : "Order creation failed. Please try again.",
           updatedAt: Date.now(),
         }),
         { expirationTtl: 86400 },
       );
-      throw queueError;
+      throw commitError;
     }
 
-    return c.json(
-      {
-        success: true,
-        data: {
-          checkoutToken: result.checkoutToken,
-          receiptToken: result.checkoutToken,
-          orderId: result.orderId,
-          paymentMethod: result.paymentMethod,
-          totalAmount: result.totalAmount,
-          message: "Order placed in processing queue"
-        }
-      },
-      202,
-    );
+    const sideEffects = runStorefrontOrderPostCommitSideEffects(db, c.env, result.queuePayload);
+    const executionCtx = getOptionalExecutionContext(c);
+    if (executionCtx && typeof executionCtx.waitUntil === "function") {
+      executionCtx.waitUntil(sideEffects);
+    } else {
+      await sideEffects;
+    }
+
+    return created(c, {
+      checkoutToken: result.checkoutToken,
+      receiptToken: result.checkoutToken,
+      orderId: result.orderId,
+      paymentMethod: result.paymentMethod,
+      totalAmount: result.totalAmount,
+      message: "Order created",
+    });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       throw new ValidationError("Invalid input data", error.issues);

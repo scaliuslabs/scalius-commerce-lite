@@ -34,10 +34,9 @@ export async function createOrder(
   payload: CreateOrderPayload,
 ): Promise<CreateOrderResult> {
   try {
-    // Use fetchWithRetry directly for orders because:
-    // 1. We need retries=0 to prevent double ingestion
-    // 2. We need 15s timeout for this heavy endpoint
-    // 3. The 202 polling logic requires raw response access
+    // Use fetchWithRetry directly for orders because this mutation must not
+    // be retried automatically. The 202 branch below is legacy compatibility;
+    // the normal buyer path returns a committed order synchronously.
     const url = createApiUrl("/orders");
     const response = await fetchWithRetry(
       url,
