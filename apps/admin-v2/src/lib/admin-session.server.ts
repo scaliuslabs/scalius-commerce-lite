@@ -39,9 +39,65 @@ function truthy(value: number | boolean | null | undefined): boolean {
   return value === true || value === 1;
 }
 
-export function getAdminSessionTokenFromCookieHeader(
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function constantTimeStringEqual(a: string, b: string): boolean {
+  let mismatch = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    mismatch |= (a.charCodeAt(index) || 0) ^ (b.charCodeAt(index) || 0);
+  }
+  return mismatch === 0;
+}
+
+async function signBetterAuthCookieValue(value: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(value),
+  );
+  return encodeBase64(new Uint8Array(signature));
+}
+
+export async function verifyBetterAuthSignedCookieValue(
+  signedValue: string,
+  secret: string | null | undefined,
+): Promise<string | null> {
+  const trimmedSecret = secret?.trim();
+  if (!trimmedSecret) return null;
+
+  const separatorIndex = signedValue.lastIndexOf(".");
+  if (separatorIndex <= 0 || separatorIndex === signedValue.length - 1) {
+    return null;
+  }
+
+  const token = signedValue.slice(0, separatorIndex).trim();
+  const signature = signedValue.slice(separatorIndex + 1).trim();
+  if (!token || !signature) return null;
+
+  const expectedSignature = await signBetterAuthCookieValue(token, trimmedSecret);
+  if (!constantTimeStringEqual(signature, expectedSignature)) return null;
+
+  return token;
+}
+
+export async function getAdminSessionTokenFromCookieHeader(
   cookieHeader: string | null | undefined,
-): string | null {
+  secret: string | null | undefined,
+): Promise<string | null> {
   const cookie = cookieHeader?.trim();
   if (!cookie) return null;
 
@@ -57,10 +113,10 @@ export function getAdminSessionTokenFromCookieHeader(
 
     try {
       const decoded = decodeURIComponent(rawValue);
-      const token = decoded.split(".")[0]?.trim();
+      const token = await verifyBetterAuthSignedCookieValue(decoded, secret);
       if (token) return token;
     } catch {
-      const token = rawValue.split(".")[0]?.trim();
+      const token = await verifyBetterAuthSignedCookieValue(rawValue, secret);
       if (token) return token;
     }
   }
@@ -71,8 +127,9 @@ export function getAdminSessionTokenFromCookieHeader(
 export async function getAdminSessionFromCookieHeader(
   db: AdminDb,
   cookieHeader: string | null | undefined,
+  secret: string | null | undefined,
 ): Promise<AdminSessionRecord | null> {
-  const token = getAdminSessionTokenFromCookieHeader(cookieHeader);
+  const token = await getAdminSessionTokenFromCookieHeader(cookieHeader, secret);
   if (!token) return null;
 
   const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");

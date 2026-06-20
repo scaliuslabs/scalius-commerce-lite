@@ -92,6 +92,7 @@ export const getSessionInfo = createServerFn().handler(async () => {
   const authResult = await getAdminSessionFromCookieHeader(
     env.DB,
     getRequestHeader("cookie"),
+    env.BETTER_AUTH_SECRET,
   );
   if (!authResult) return null;
 
@@ -153,6 +154,7 @@ export const loginPageGuard = createServerFn().handler(async () => {
   const authResult = await getAdminSessionFromCookieHeader(
     env.DB,
     getRequestHeader("cookie"),
+    env.BETTER_AUTH_SECRET,
   );
   if (authResult?.session && authResult?.user) {
     const twoFactorVerified = authResult.session.twoFactorVerified === true;
@@ -192,6 +194,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   const authResult = await getAdminSessionFromCookieHeader(
     env.DB,
     getRequestHeader("cookie"),
+    env.BETTER_AUTH_SECRET,
   );
   if (!authResult?.session || !authResult?.user) {
     throw redirect({ to: "/auth/login" });
@@ -240,6 +243,7 @@ export const redirectIfAuthenticated = createServerFn().handler(async () => {
   const authResult = await getAdminSessionFromCookieHeader(
     env.DB,
     getRequestHeader("cookie"),
+    env.BETTER_AUTH_SECRET,
   );
   if (authResult?.session) {
     throw redirect({ to: "/admin" });

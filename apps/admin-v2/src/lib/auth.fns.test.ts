@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  cfEnv: {} as { DB?: unknown },
+  cfEnv: {} as { BETTER_AUTH_SECRET?: string; DB?: unknown },
   retryTransientD1: vi.fn((operation: () => unknown) => operation()),
   getRequestHeader: vi.fn(),
   loadUserPermissions: vi.fn(),
@@ -88,10 +88,37 @@ function createAdminGuardDb(sessionRow: Record<string, unknown> | null) {
   };
 }
 
+const TEST_SECRET = "test-better-auth-secret";
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+async function signCookieValue(token: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(TEST_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(token),
+  );
+  return `${token}.${encodeBase64(new Uint8Array(signature))}`;
+}
+
 describe("admin setup guard cache", () => {
   beforeEach(async () => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    mocks.cfEnv.BETTER_AUTH_SECRET = TEST_SECRET;
     mocks.retryTransientD1.mockImplementation((operation: () => unknown) => operation());
     mocks.getRequestHeader.mockReturnValue("");
     mocks.loadUserPermissions.mockResolvedValue({
@@ -186,7 +213,7 @@ describe("admin setup guard cache", () => {
       isSuperAdmin: 1,
     });
     mocks.cfEnv.DB = db.db;
-    mocks.getRequestHeader.mockReturnValue("better-auth.session_token=token.signature");
+    mocks.getRequestHeader.mockReturnValue(`better-auth.session_token=${await signCookieValue("token")}`);
     mocks.loadUserPermissions.mockResolvedValue({
       permissions: new Set(["orders.read"]),
       isSuperAdmin: true,
