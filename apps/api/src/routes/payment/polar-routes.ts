@@ -9,6 +9,12 @@ import {
     FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
     getPolarSettings,
 } from "@scalius/core/modules/payments/gateway-settings";
+import {
+    buildPaymentSessionAttemptIdentity,
+    claimPaymentSessionAttempt,
+    markPaymentSessionAttemptCreated,
+    markPaymentSessionAttemptFailed,
+} from "@scalius/core/modules/payments/payment-session-attempts";
 import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
@@ -22,6 +28,11 @@ import { assertGatewayEnabledForCheckout } from "./payment-method-allowlist";
 
 import { ok } from "../../utils/api-response";
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
+
+type PolarSessionResponse = {
+    gatewayUrl?: string;
+    checkoutId?: string;
+};
 
 // ─── POST /session ───────────────────────────────────────────────────────────
 
@@ -163,68 +174,111 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const successUrl = `${baseUrl}/api/v1/payment/polar/success?order_id=${encodeURIComponent(orderId)}${receiptQuery}`;
     const cancelUrl = `${baseUrl}/api/v1/payment/polar/cancel?order_id=${encodeURIComponent(orderId)}`;
 
-    const result = await createPolarCheckout(polarSettings, {
+    const attemptIdentity = await buildPaymentSessionAttemptIdentity({
         orderId,
-        amount: amountInCents,
-        currency,
-        productId: polarSettings.productId,
+        gateway: "polar",
         paymentType: policy.paymentType,
-        successUrl,
-        cancelUrl,
-        customerName: body.customerName,
-        customerEmail: body.customerEmail,
-        metadata: {
-            orderId,
-            paymentType: policy.paymentType,
-            // Roundtrip original amounts through Polar webhook so the queue consumer
-            // can record paidAmount in store currency, not gateway currency.
-            originalAmount: String(originalLocalAmount),
+        amount: paymentAmount,
+        currency,
+        receiptToken: body.receiptToken,
+        requestContext: {
+            amountInSmallestUnit: amountInCents,
+            originalLocalAmount,
             originalCurrency,
-            exchangeRate: String(exchangeRate),
-        }
+            exchangeRate,
+            successUrl,
+            cancelUrl,
+            customerName: body.customerName ?? null,
+            customerEmail: body.customerEmail ?? null,
+        },
     });
+    const attemptClaim = await claimPaymentSessionAttempt<PolarSessionResponse>(db, attemptIdentity);
+    if (attemptClaim.status === "replay") {
+        return ok(c, attemptClaim.response);
+    }
+
+    let result: Awaited<ReturnType<typeof createPolarCheckout>>;
+    try {
+        result = await createPolarCheckout(polarSettings, {
+            orderId,
+            amount: amountInCents,
+            currency,
+            productId: polarSettings.productId,
+            paymentType: policy.paymentType,
+            successUrl,
+            cancelUrl,
+            customerName: body.customerName,
+            customerEmail: body.customerEmail,
+            metadata: {
+                orderId,
+                paymentType: policy.paymentType,
+                // Roundtrip original amounts through Polar webhook so the queue consumer
+                // can record paidAmount in store currency, not gateway currency.
+                originalAmount: String(originalLocalAmount),
+                originalCurrency,
+                exchangeRate: String(exchangeRate),
+            }
+        });
+    } catch (error: unknown) {
+        await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
+            .catch((markError: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", markError));
+        throw error;
+    }
 
     if (!result.success || !result.checkoutUrl) {
+        await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create Polar checkout")
+            .catch((error: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", error));
         throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create Polar checkout");
     }
 
-    // Save the Polar checkout ID to the order
-    await db
-        .update(orders)
-        .set({
-            paymentIntentId: result.checkoutId,
-            paymentMethod: PaymentMethod.POLAR,
-            updatedAt: sql`unixepoch()`
-        })
-        .where(eq(orders.id, orderId));
-
-    // Set up payment plan for deposit orders.
-    // Use original local currency amounts — NOT the converted gateway amount.
-    if (policy.paymentType === "deposit") {
-        await db
-            .insert(paymentPlans)
-            .values({
-                id: crypto.randomUUID(),
-                orderId,
-                totalAmount: order.totalAmount,
-                depositAmount: policy.depositAmount,
-                balanceDue: policy.balanceDue,
-                status: "pending"
-            })
-            .onConflictDoUpdate({
-                target: paymentPlans.orderId,
-                set: {
-                    depositAmount: policy.depositAmount,
-                    balanceDue: policy.balanceDue,
-                    updatedAt: sql`unixepoch()`
-                }
-            });
-    }
-
-    return ok(c, {
+    const responsePayload: PolarSessionResponse = {
         gatewayUrl: result.checkoutUrl,
         checkoutId: result.checkoutId
+    };
+
+    await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
+        providerSessionId: result.checkoutId,
+        response: responsePayload,
     });
+
+    // Save the Polar checkout ID to the order
+    try {
+        await db
+            .update(orders)
+            .set({
+                paymentIntentId: result.checkoutId,
+                paymentMethod: PaymentMethod.POLAR,
+                updatedAt: sql`unixepoch()`
+            })
+            .where(eq(orders.id, orderId));
+
+        // Set up payment plan for deposit orders.
+        // Use original local currency amounts — NOT the converted gateway amount.
+        if (policy.paymentType === "deposit") {
+            await db
+                .insert(paymentPlans)
+                .values({
+                    id: crypto.randomUUID(),
+                    orderId,
+                    totalAmount: order.totalAmount,
+                    depositAmount: policy.depositAmount,
+                    balanceDue: policy.balanceDue,
+                    status: "pending"
+                })
+                .onConflictDoUpdate({
+                    target: paymentPlans.orderId,
+                    set: {
+                        depositAmount: policy.depositAmount,
+                        balanceDue: policy.balanceDue,
+                        updatedAt: sql`unixepoch()`
+                    }
+                });
+        }
+    } catch (error: unknown) {
+        console.error("[payments] Polar session was created, but local order session side effects failed:", error);
+    }
+
+    return ok(c, responsePayload);
 });
 
 // ─── GET /success ────────────────────────────────────────────────────────────

@@ -337,6 +337,13 @@
       "when": 1781872014753,
       "tag": "0047_auth_admin_exists_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1781935411323,
+      "tag": "0048_payment_session_attempts",
+      "breakpoints": true
     }
   ]
 }

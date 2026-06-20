@@ -34,6 +34,8 @@ export interface CreateStripePaymentIntentParams {
   paymentType: PaymentType;
   /** Set to true for manual capture (authorise now, capture on fulfilment) */
   manualCapture?: boolean;
+  /** Provider-side idempotency key for checkout/session retries */
+  idempotencyKey?: string;
   metadata?: Record<string, string>;
 }
 

@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   getSSLCommerzSettings: vi.fn(),
   getPolarSettings: vi.fn(),
   getCurrencyConfig: vi.fn(),
+  buildPaymentSessionAttemptIdentity: vi.fn(),
+  claimPaymentSessionAttempt: vi.fn(),
+  markPaymentSessionAttemptCreated: vi.fn(),
+  markPaymentSessionAttemptFailed: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/payments/stripe", () => ({
@@ -39,6 +43,13 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
+vi.mock("@scalius/core/modules/payments/payment-session-attempts", () => ({
+  buildPaymentSessionAttemptIdentity: mocks.buildPaymentSessionAttemptIdentity,
+  claimPaymentSessionAttempt: mocks.claimPaymentSessionAttempt,
+  markPaymentSessionAttemptCreated: mocks.markPaymentSessionAttemptCreated,
+  markPaymentSessionAttemptFailed: mocks.markPaymentSessionAttemptFailed,
+}));
+
 import { polarPaymentRoutes } from "./polar-routes";
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
@@ -49,6 +60,7 @@ import {
   paymentPlans as paymentPlansTable,
   siteSettings as siteSettingsTable,
 } from "@scalius/database/schema";
+import { ConflictError } from "../../utils/api-error";
 
 const orderRow = {
   id: "order_1",
@@ -204,6 +216,32 @@ beforeEach(() => {
     checkoutUrl: "https://polar.example.test/pay",
     checkoutId: "polar_checkout_1",
   });
+  mocks.buildPaymentSessionAttemptIdentity.mockImplementation(async (input: {
+    orderId: string;
+    gateway: string;
+    paymentType: string;
+    amount: number;
+    currency: string;
+  }) => ({
+    attemptKey: `payment_session:${input.gateway}:hash_${input.orderId}_${input.paymentType}`,
+    requestHash: `hash_${input.orderId}_${input.paymentType}`,
+    transactionSuffix: "ABC12345",
+    orderId: input.orderId,
+    gateway: input.gateway,
+    paymentType: input.paymentType,
+    amount: input.amount,
+    currency: input.currency.toLowerCase(),
+  }));
+  mocks.claimPaymentSessionAttempt.mockResolvedValue({
+    status: "claimed",
+    attempt: {
+      id: "psa_1",
+      attemptKey: "payment_session:stripe:hash_order_1_full",
+      claimId: "psac_1",
+    },
+  });
+  mocks.markPaymentSessionAttemptCreated.mockResolvedValue(undefined);
+  mocks.markPaymentSessionAttemptFailed.mockResolvedValue(undefined);
 });
 
 describe("payment session receipt-token proof", () => {
@@ -627,6 +665,143 @@ describe("payment session receipt-token proof", () => {
         }),
       }),
     );
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      gateway: mocks.createPolarCheckout,
+    },
+  ])("replays a created $label session without a second provider call", async ({ paymentMethod, path, gateway }) => {
+    const { app, db, kv } = createTestApp("valid", paymentMethod);
+    mocks.claimPaymentSessionAttempt.mockResolvedValueOnce({
+      status: "claimed",
+      attempt: {
+        id: "psa_1",
+        attemptKey: `payment_session:${paymentMethod}:hash_order_1_full`,
+        claimId: "psac_1",
+      },
+    });
+
+    const first = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+    const firstJson = await first.json() as { data: Record<string, unknown> };
+    mocks.claimPaymentSessionAttempt.mockResolvedValueOnce({
+      status: "replay",
+      response: firstJson.data,
+    });
+
+    const second = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({ success: true, data: firstJson.data });
+    expect(gateway).toHaveBeenCalledTimes(1);
+    expect(mocks.markPaymentSessionAttemptCreated).toHaveBeenCalledTimes(1);
+    expect(mocks.markPaymentSessionAttemptCreated).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
+      expect.objectContaining({ response: firstJson.data }),
+    );
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      gateway: mocks.createPolarCheckout,
+    },
+  ])("does not create a second $label session while an attempt is already processing", async ({
+    paymentMethod,
+    path,
+    gateway,
+  }) => {
+    mocks.claimPaymentSessionAttempt.mockRejectedValueOnce(
+      new ConflictError("A payment session is already being created for this order. Please try again shortly."),
+    );
+    const { app, kv } = createTestApp("valid", paymentMethod);
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(409);
+    expect(gateway).not.toHaveBeenCalled();
+    expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
+  });
+
+  it("marks failed Stripe attempts before surfacing provider creation errors", async () => {
+    mocks.createPaymentIntent.mockResolvedValueOnce({
+      success: false,
+      error: "Stripe unavailable",
+    });
+    const { app, db, kv } = createTestApp("valid", "stripe");
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(500);
+    expect(mocks.markPaymentSessionAttemptFailed).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
+      "Stripe unavailable",
+    );
+    expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -82,3 +82,18 @@ export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory, r
 // --- Refund service ---
 export { processRefund, processReturn } from "./refund-service";
 export type { RefundRequest, RefundResult as RefundServiceResult } from "./refund-service";
+
+// --- Public payment session attempts ---
+export {
+  buildPaymentSessionAttemptIdentity,
+  claimPaymentSessionAttempt,
+  markPaymentSessionAttemptCreated,
+  markPaymentSessionAttemptFailed,
+} from "./payment-session-attempts";
+export type {
+  PaymentSessionGateway,
+  PaymentSessionAttemptIdentity,
+  ClaimPaymentSessionAttemptInput,
+  ClaimedPaymentSessionAttempt,
+  PaymentSessionAttemptClaimResult,
+} from "./payment-session-attempts";

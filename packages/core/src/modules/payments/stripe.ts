@@ -47,7 +47,7 @@ export async function createPaymentIntent(
   try {
     const stripe = getStripe(secretKey);
 
-    const intent = await stripe.paymentIntents.create({
+    const intentParams: Stripe.PaymentIntentCreateParams = {
       amount: Math.round(params.amount), // Must be integer
       currency: params.currency.toLowerCase(),
       capture_method: params.manualCapture ? "manual" : "automatic",
@@ -56,7 +56,11 @@ export async function createPaymentIntent(
         paymentType: params.paymentType,
         ...params.metadata,
       },
-    });
+    };
+
+    const intent = params.idempotencyKey
+      ? await stripe.paymentIntents.create(intentParams, { idempotencyKey: params.idempotencyKey })
+      : await stripe.paymentIntents.create(intentParams);
 
     return {
       success: true,
