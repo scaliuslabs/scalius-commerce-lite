@@ -285,59 +285,14 @@ function assertPolicyRequiredFields(
     }
 }
 
-async function assertAuthIntentCanProceed(
-    db: Database,
-    input: {
-        intent: CustomerAuthIntent;
-        method: "email" | "phone";
-        normalizedIdentifier: string;
-        email?: string;
-        phone?: string;
-    },
-): Promise<void> {
-    const email = getPrimaryEmail(input.method, input.normalizedIdentifier, input.email);
-    const phone = getPrimaryPhone(input.method, input.normalizedIdentifier, input.phone);
-
-    if (input.intent === "sign_in") {
-        const existing = input.method === "email" && email
-            ? await db.select().from(customers).where(eq(customers.email, email)).get()
-            : await db.select().from(customers).where(eq(customers.phone, input.normalizedIdentifier)).get();
-
-        if (!existing) {
-            throw new ValidationError(
-                input.method === "email"
-                    ? "No account was found for this email. Create an account instead."
-                    : "No account was found for this phone number. Create an account instead.",
-            );
-        }
-        return;
-    }
-
-    if (input.method === "email" && !phone) {
-        throw new ValidationError("Phone number is required to create an account with email OTP.");
-    }
-
-    if (email) {
-        const emailExists = await db.select().from(customers).where(eq(customers.email, email)).get();
-        if (emailExists) {
-            throw new ValidationError("An account already exists for this email. Sign in instead.");
-        }
-    }
-
-    if (phone) {
-        const phoneExists = await db.select().from(customers).where(eq(customers.phone, phone)).get();
-        if (phoneExists) {
-            throw new ValidationError("An account already exists for this phone number. Sign in instead.");
-        }
-    }
-}
-
 // ─────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────
 
 /**
  * Handles OTP generation, rate limiting, and queueing for delivery.
+ * Send-time checks intentionally avoid account existence lookups so registration
+ * state is disclosed only after a valid OTP proves contact ownership.
  * Returns a queue payload that the route should send to AUTH_OTP_QUEUE.
  *
  * @throws {ValidationError} if the identifier is missing or malformed
@@ -376,14 +331,6 @@ export async function sendOtp(
     assertPolicyRequiredFields(policy, {
         intent,
         channel,
-        method,
-        normalizedIdentifier,
-        email: input.email,
-        phone: input.phone,
-    });
-
-    await assertAuthIntentCanProceed(db, {
-        intent,
         method,
         normalizedIdentifier,
         email: input.email,
@@ -470,7 +417,7 @@ export async function sendOtp(
 
     return {
         success: true,
-        message: `Verification code sent${method === "email" ? " to your email" : ` via ${transport.label}`}`,
+        message: "Verification code sent. Please check your selected contact.",
         queuePayload,
         otpStorageKey: otpKey,
         deliveryKey,

@@ -45,6 +45,7 @@ function inlineJsString(value: string): string {
 let globalLangData: CheckoutLanguageData | null = null;
 let hasTrackedInitiateCheckout = false;
 let cartValidationIssues: Record<string, CartValidationIssue[]> = {};
+let cartValidationGlobalError = "";
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 
@@ -311,6 +312,7 @@ function setCartValidationIssues(
   issues: CartValidationIssue[],
   items: Record<string, CartItem>,
 ) {
+  cartValidationGlobalError = "";
   const grouped: Record<string, CartValidationIssue[]> = {};
   for (const issue of issues) {
     const key = issueKeyForCart(issue, items);
@@ -329,10 +331,11 @@ function cartIssueCount(): number {
 }
 
 function hasBlockingCartIssues(): boolean {
-  return cartIssueCount() > 0;
+  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0;
 }
 
 function cartBlockedMessage(): string {
+  if (cartValidationGlobalError) return cartValidationGlobalError;
   const count = Object.keys(cartValidationIssues).length;
   if (count <= 0) return "";
   return count === 1
@@ -360,6 +363,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
 
   if (payloadItems.length === 0) {
     cartValidationIssues = {};
+    cartValidationGlobalError = "";
     updateCartValidationMessage();
     updateCheckoutButtonState();
     return true;
@@ -373,8 +377,9 @@ export async function validateCartSnapshot(): Promise<boolean> {
     });
     const json = await response.json().catch(() => null) as {
       success?: boolean;
+      error?: string;
       data?: { valid: boolean; issues: CartValidationIssue[] };
-      details?: { itemIssues?: CartValidationIssue[] };
+      details?: { itemIssues?: CartValidationIssue[]; message?: string };
     } | null;
 
     if (sequence !== cartValidationSequence) {
@@ -383,6 +388,14 @@ export async function validateCartSnapshot(): Promise<boolean> {
 
     const issues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     setCartValidationIssues(Array.isArray(issues) ? issues : [], cartStore.get().items);
+    if (!response.ok || !json?.success) {
+      cartValidationGlobalError = issues.length > 0
+        ? ""
+        : json?.error
+          || json?.details?.message
+          || "Could not verify cart availability. Please refresh and try again.";
+      updateCartValidationMessage();
+    }
     await renderCartItems();
     updateCheckoutButtonState();
 
@@ -394,13 +407,15 @@ export async function validateCartSnapshot(): Promise<boolean> {
   } catch (error) {
     console.warn("Could not refresh cart availability before checkout.", error);
     cartValidationIssues = {};
+    cartValidationGlobalError = "Could not verify cart availability. Please refresh and try again.";
     updateCartValidationMessage();
     updateCheckoutButtonState();
-    return true;
+    return false;
   }
 }
 
 function scheduleCartValidation() {
+  cartValidationSequence += 1;
   if (cartValidationTimer) clearTimeout(cartValidationTimer);
   cartValidationTimer = setTimeout(() => {
     void validateCartSnapshot();

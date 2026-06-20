@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getCustomerAuthAlternateIntent,
+  getCustomerAuthAlternateIntentLabel,
   getCustomerAuthInputError,
   resolveCustomerAuthUi,
 } from "./customer-auth-ui";
@@ -93,5 +95,13 @@ describe("customer auth UI policy", () => {
       identifier: "+8801712345678",
       emailInput: "not-an-email",
     })).toBe("Enter a valid email address, or leave it blank.");
+  });
+
+  it("maps post-OTP intent errors to safe alternate actions", () => {
+    expect(getCustomerAuthAlternateIntent("An account already exists for this phone number. Sign in instead.")).toBe("sign_in");
+    expect(getCustomerAuthAlternateIntent("No account was found for this email. Create an account instead.")).toBe("sign_up");
+    expect(getCustomerAuthAlternateIntent("Incorrect code. Please try again.")).toBeNull();
+    expect(getCustomerAuthAlternateIntentLabel("sign_in")).toBe("Sign in with this contact");
+    expect(getCustomerAuthAlternateIntentLabel("sign_up")).toBe("Create an account with this contact");
   });
 });

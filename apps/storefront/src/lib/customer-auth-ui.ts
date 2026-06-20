@@ -127,3 +127,14 @@ export function getCustomerAuthInputError(input: CustomerAuthInputState): string
 
   return null;
 }
+
+export function getCustomerAuthAlternateIntent(error: string | null | undefined): "sign_in" | "sign_up" | null {
+  const message = error?.toLowerCase() ?? "";
+  if (message.includes("sign in instead")) return "sign_in";
+  if (message.includes("create an account instead")) return "sign_up";
+  return null;
+}
+
+export function getCustomerAuthAlternateIntentLabel(intent: "sign_in" | "sign_up"): string {
+  return intent === "sign_in" ? "Sign in with this contact" : "Create an account with this contact";
+}
