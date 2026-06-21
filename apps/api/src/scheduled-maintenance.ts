@@ -5,6 +5,7 @@ import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
+  cleanupExpiredCustomerAuthOtpRateLimits,
   cleanupExpiredCustomerSessions,
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { cleanupExpiredScannerTokenClaims } from "@scalius/core/auth";
@@ -18,6 +19,7 @@ export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 10;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
+export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 
@@ -104,6 +106,17 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
       `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
         `deleted=${customerAuthOtpCleanup.deleted}, limit=${customerAuthOtpCleanup.limit}, ` +
         `hasMore=${customerAuthOtpCleanup.hasMore}`,
+    );
+  }
+
+  const customerAuthOtpRateLimitCleanup = await cleanupExpiredCustomerAuthOtpRateLimits(db, Math.floor(Date.now() / 1000), {
+    limit: CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
+  });
+  if (customerAuthOtpRateLimitCleanup.scanned > 0 || customerAuthOtpRateLimitCleanup.hasMore) {
+    console.log(
+      `[scheduled] Customer auth OTP rate-limit cleanup: scanned=${customerAuthOtpRateLimitCleanup.scanned}, ` +
+        `deleted=${customerAuthOtpRateLimitCleanup.deleted}, limit=${customerAuthOtpRateLimitCleanup.limit}, ` +
+        `hasMore=${customerAuthOtpRateLimitCleanup.hasMore}`,
     );
   }
 

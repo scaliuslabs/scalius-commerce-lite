@@ -10,6 +10,7 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 | `customers.service.ts` | Admin CRUD: `listCustomers`, `createCustomer`, `updateCustomer`, `deleteCustomer`, `permanentlyDeleteCustomer`, `restoreCustomer`, `bulkDeleteCustomers`, `getCustomerById`; storefront account order history/detail via `getCustomerOrders()` and `getCustomerOrderDetail()` with customer-scoped order facts. Re-exports schemas from `customers.validation.ts`. |
 | `customers.validation.ts` | Canonical Zod schemas: `createCustomerSchema` (uses `phoneNumberSchema` from `@scalius/shared/customer-utils`), `updateCustomerSchema` (partial). Imported by both service and API routes. |
 | `customer-auth.service.ts` | Storefront auth: `sendOtp()`, `verifyOtp()`, `getCustomerBySession()`, `deleteCustomerSession()`, `updateCustomerProfile()`. Cookie/session helpers. Imported directly by path (not through `index.ts`) |
+| `customer-auth-rate-limit.ts` | D1-authoritative OTP send throttling for client IP buckets, plus bounded cleanup of expired windows |
 | `otp-transport.ts` | `OtpTransport` interface + three implementations: `EmailOtpTransport`, `SmsOtpTransport`, `WhatsAppOtpTransport`. Factory: `getOtpTransport()` |
 | `otp-delivery-receipts.ts` | D1 receipt helper for OTP delivery claims, accepted/failed/skipped marks, recipient hashing/masking, and provider client references |
 
@@ -50,7 +51,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 ### OTP Authentication (`customer-auth.service.ts`)
 
 **Flow:**
-1. `sendOtp()` -- validates sign-in vs sign-up intent as challenge metadata, validates identifier and secondary contact formats, normalizes phone to E.164, resolves the advanced customer-auth policy from `settings.customer_auth/policy` with `siteSettings.authVerificationMethod` fallback, requires phone collection for customer identity, resolves/validates the selected transport, verifies Email/SMS/WhatsApp provider readiness with the dedicated credential key before challenge mutation, passes a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min via KV), enforces per-channel identifier cooldown (2 min) through the D1 challenge upsert, generates 6-digit cryptographic OTP, stores only an HMAC code hash plus intent/channel/pinned-contact metadata in `customer_auth_otp_challenges` with 5-min TTL, and returns a generic queue payload with `deliveryKey` + `otpExpiresAt`. It intentionally does not look up account existence before sending, so sign-in/sign-up registration state is disclosed only after a valid OTP proves contact ownership.
+1. `sendOtp()` -- validates sign-in vs sign-up intent as challenge metadata, validates identifier and secondary contact formats, normalizes phone to E.164, resolves the advanced customer-auth policy from `settings.customer_auth/policy` with `siteSettings.authVerificationMethod` fallback, requires phone collection for customer identity, resolves/validates the selected transport, verifies Email/SMS/WhatsApp provider readiness with the dedicated credential key before challenge mutation, passes a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min) through D1 `customer_auth_otp_rate_limits`, enforces per-channel identifier cooldown (2 min) through the D1 challenge upsert, generates 6-digit cryptographic OTP, stores only an HMAC code hash plus intent/channel/pinned-contact metadata in `customer_auth_otp_challenges` with 5-min TTL, and returns a generic queue payload with `deliveryKey` + `otpExpiresAt`. It intentionally does not look up account existence before sending, so sign-in/sign-up registration state is disclosed only after a valid OTP proves contact ownership.
 2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after challenge creation, it deletes the exact D1 challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
@@ -122,7 +123,7 @@ Astro page (SSR) -> loader (apiGet) -> admin proxy -> API worker -> customers.se
 
 ### Storefront Auth
 ```
-Browser -> storefront same-origin proxy (/api/customer-auth/*) -> API worker (service binding) -> customer-auth.service -> D1 (OTP challenges/customers/customer_sessions) + KV (coarse rate limits)
+Browser -> storefront same-origin proxy (/api/customer-auth/*) -> API worker (service binding) -> customer-auth.service -> D1 (OTP challenges/rate limits/customers/customer_sessions)
 ```
 
 The storefront proxy rewrites cookies (strips `Domain=`, changes `SameSite=None` to `Lax`) to ensure browser compatibility. A separate `/api/auth/logout` proxy handles logout with explicit cookie clearing.
@@ -139,11 +140,11 @@ Customer account payment recovery -> API customer-auth route -> shared payment-s
 
 ## Dependencies
 
-- `@scalius/database` -- `customers`, `customerHistory`, `customerAuthOtpChallenges`, `customerSessions`, `authOtpDeliveryReceipts`, `deliveryLocations`, `deliveryShipments`, `deliveryProviders`, `siteSettings`, `orders`
+- `@scalius/database` -- `customers`, `customerHistory`, `customerAuthOtpChallenges`, `customerAuthOtpRateLimits`, `customerSessions`, `authOtpDeliveryReceipts`, `deliveryLocations`, `deliveryShipments`, `deliveryProviders`, `siteSettings`, `orders`
 - `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `validateAndFormatPhone`, `isValidPhoneNumber`, `formatPhoneForDisplay`, `calculateCustomerStats`
 - `@scalius/core/errors` -- `ValidationError`, `ForbiddenError`, `RateLimitError`, `ServiceUnavailableError`
 - `@scalius/core/search` -- `ftsMatch` for FTS5 search
-- Cloudflare KV (`CACHE` binding) -- coarse IP rate limiting only for customer auth; OTP verification and customer sessions are D1 authority
+- Cloudflare KV (`CACHE` binding) -- no customer-auth OTP send/verify/session authority; legacy/generic cache binding only
 
 ## DB Schema
 
@@ -174,6 +175,11 @@ Customer account payment recovery -> API customer-auth route -> shared payment-s
 - `expiresAt`, `revokedAt`, `createdAt`, `updatedAt`
 - `customer_sessions_customer_id_idx` supports customer delete/revoke paths
 - `customer_sessions_active_expiry_idx` supports active-session reads and scheduled cleanup
+
+**`customerAuthOtpRateLimits`** table:
+- `key` (PK) is a hashed bucket like `customer_auth_otp:ip:{digest}`, never a raw IP address
+- `scope` is currently `"ip"`; `attempts` and `windowExpiresAt` enforce the 5-per-10-minute send window through guarded D1 writes
+- `customer_auth_otp_rate_limits_window_idx` supports scheduled cleanup of expired windows
 
 **`authOtpDeliveryReceipts`** table:
 - `id` (PK, `aor_` prefix), `deliveryKey` (unique), `purpose` (`customer_login` today), `method`, `channel`, `provider`

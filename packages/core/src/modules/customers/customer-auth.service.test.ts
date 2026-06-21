@@ -6,12 +6,21 @@ const challengeMocks = vi.hoisted(() => ({
   deleteCustomerAuthOtpChallenge: vi.fn(),
   cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
 }));
+const rateLimitMocks = vi.hoisted(() => ({
+  enforceCustomerAuthOtpIpRateLimit: vi.fn(),
+  cleanupExpiredCustomerAuthOtpRateLimits: vi.fn(),
+}));
 
 vi.mock("./customer-auth-otp-challenges", () => ({
   persistCustomerAuthOtpChallenge: challengeMocks.persistCustomerAuthOtpChallenge,
   claimCustomerAuthOtpChallenge: challengeMocks.claimCustomerAuthOtpChallenge,
   deleteCustomerAuthOtpChallenge: challengeMocks.deleteCustomerAuthOtpChallenge,
   cleanupExpiredCustomerAuthOtpChallenges: challengeMocks.cleanupExpiredCustomerAuthOtpChallenges,
+}));
+
+vi.mock("./customer-auth-rate-limit", () => ({
+  enforceCustomerAuthOtpIpRateLimit: rateLimitMocks.enforceCustomerAuthOtpIpRateLimit,
+  cleanupExpiredCustomerAuthOtpRateLimits: rateLimitMocks.cleanupExpiredCustomerAuthOtpRateLimits,
 }));
 
 import {
@@ -114,6 +123,7 @@ describe("customer auth service intent handling", () => {
       attempts: 1,
       maxAttempts: 5,
     });
+    rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mockResolvedValue(undefined);
   });
 
   it("does not reveal duplicate phone during email OTP account creation before OTP proof", async () => {
@@ -152,6 +162,17 @@ describe("customer auth service intent handling", () => {
     );
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
+    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        ip: "unknown",
+      }),
+    );
+    const rateLimitCallOrder = rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mock.invocationCallOrder[0];
+    const challengeCallOrder = challengeMocks.persistCustomerAuthOtpChallenge.mock.invocationCallOrder[0];
+    expect(rateLimitCallOrder).toBeDefined();
+    expect(challengeCallOrder).toBeDefined();
+    expect(rateLimitCallOrder!).toBeLessThan(challengeCallOrder!);
   });
 
   it("allows existing customers to sign in with email OTP without duplicate-phone account creation checks", async () => {
@@ -189,6 +210,40 @@ describe("customer auth service intent handling", () => {
         intent: "sign_in",
       }),
     );
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects rate-limited OTP sends before mutating challenge state", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: readyEmailSettings },
+    ]);
+    const kv = createKv();
+    rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mockRejectedValueOnce(
+      new Error("Too many requests from this IP. Please try again later."),
+    );
+
+    await expect(sendOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      name: "Buyer",
+      ip: "203.0.113.20",
+      emailEnv: readyEmailEnv,
+      encryptionKey: "otp-signing-key",
+    })).rejects.toThrow("Too many requests from this IP. Please try again later.");
+
+    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
+    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        ip: "203.0.113.20",
+        hashKey: "otp-signing-key",
+      }),
+    );
+    expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -291,6 +346,7 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("SMS verification is currently unavailable. Contact store support.");
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
+    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });

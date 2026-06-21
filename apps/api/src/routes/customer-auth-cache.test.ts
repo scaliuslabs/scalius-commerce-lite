@@ -324,6 +324,109 @@ describe("customer auth private cache policy", () => {
     );
   });
 
+  it("uses CF-Connecting-IP for customer OTP rate-limit identity over spoofed XFF", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "https://api.scalius.com/api/v1/customer-auth/send-otp",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "203.0.113.10",
+          "X-Forwarded-For": "198.51.100.99",
+        },
+        body: JSON.stringify({
+          method: "email",
+          channel: "email",
+          identifier: "buyer@example.com",
+        }),
+      },
+      {
+        CACHE: {},
+        PUBLIC_API_BASE_URL: "https://api.scalius.com",
+        AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+      } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.sendOtp).toHaveBeenCalledWith(
+      expect.anything(),
+      {},
+      expect.objectContaining({
+        ip: "203.0.113.10",
+      }),
+    );
+  });
+
+  it("ignores spoofable XFF for customer OTP identity outside loopback runtimes", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "https://api.scalius.com/api/v1/customer-auth/send-otp",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "198.51.100.99",
+        },
+        body: JSON.stringify({
+          method: "email",
+          channel: "email",
+          identifier: "buyer@example.com",
+        }),
+      },
+      {
+        CACHE: {},
+        PUBLIC_API_BASE_URL: "https://api.scalius.com",
+        AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+      } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.sendOtp).toHaveBeenCalledWith(
+      expect.anything(),
+      {},
+      expect.objectContaining({
+        ip: "unknown",
+      }),
+    );
+  });
+
+  it("allows parsed XFF for customer OTP identity in loopback local development", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "http://localhost:8787/api/v1/customer-auth/send-otp",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "198.51.100.77, 198.51.100.88",
+        },
+        body: JSON.stringify({
+          method: "email",
+          channel: "email",
+          identifier: "buyer@example.com",
+        }),
+      },
+      {
+        CACHE: {},
+        PUBLIC_API_BASE_URL: "http://localhost:8787",
+        AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+      } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.sendOtp).toHaveBeenCalledWith(
+      expect.anything(),
+      {},
+      expect.objectContaining({
+        ip: "198.51.100.77",
+      }),
+    );
+  });
+
   it("sets both session and readable auth mirror cookies after OTP verification", async () => {
     const app = createTestApp();
 

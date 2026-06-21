@@ -393,6 +393,13 @@
       "when": 1782065855372,
       "tag": "0055_default_sku_inventory_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1782072000000,
+      "tag": "0056_customer_auth_otp_rate_limits",
+      "breakpoints": true
     }
   ]
 }

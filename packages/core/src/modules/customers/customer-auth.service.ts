@@ -8,7 +8,6 @@ import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-o
 import type { Database } from "@scalius/database/client";
 import {
     ValidationError,
-    RateLimitError,
     ForbiddenError,
     ServiceUnavailableError,
     UnauthorizedError,
@@ -21,6 +20,10 @@ import {
     deleteCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
 } from "./customer-auth-otp-challenges";
+import {
+    cleanupExpiredCustomerAuthOtpRateLimits,
+    enforceCustomerAuthOtpIpRateLimit,
+} from "./customer-auth-rate-limit";
 import { validateAndFormatPhone, isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
@@ -45,7 +48,11 @@ export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
 const OTP_RESEND_COOLDOWN_SECONDS = 120;
 const OTP_MAX_ATTEMPTS = 5;
 
-export { deleteCustomerAuthOtpChallenge, cleanupExpiredCustomerAuthOtpChallenges };
+export {
+    deleteCustomerAuthOtpChallenge,
+    cleanupExpiredCustomerAuthOtpChallenges,
+    cleanupExpiredCustomerAuthOtpRateLimits,
+};
 
 function getOtpStorageKey(channel: CustomerAuthOtpChannel, normalizedIdentifier: string): string {
     return `${OTP_PREFIX}${channel}:${normalizedIdentifier}`;
@@ -340,7 +347,7 @@ function assertPolicyRequiredFields(
  */
 export async function sendOtp(
     db: Database,
-    kv: KVNamespace,
+    _kv: KVNamespace,
     input: SendOtpInput,
 ): Promise<SendOtpResult> {
     const { method, identifier, name, ip } = input;
@@ -414,22 +421,10 @@ export async function sendOtp(
         throw new ServiceUnavailableError(configError);
     }
 
-    // IP-based Rate Limiting (max 5 requests per 10 minutes per IP)
-    if (ip !== "unknown") {
-        const ipRateKey = `rate_limit_ip:${ip}`;
-        const rlWindow = 600;
-        let ipCount = 0;
-        const countRaw = await kv.get(ipRateKey);
-        if (countRaw) {
-            ipCount = parseInt(countRaw, 10);
-        }
-
-        if (ipCount >= 5) {
-            throw new RateLimitError("Too many requests from this IP. Please try again later.", rlWindow);
-        }
-
-        await kv.put(ipRateKey, (ipCount + 1).toString(), { expirationTtl: rlWindow });
-    }
+    await enforceCustomerAuthOtpIpRateLimit(db, {
+        ip,
+        hashKey: input.encryptionKey,
+    });
 
     // Generate and persist an atomic D1 challenge. KV is intentionally not the
     // OTP authority; it cannot safely count attempts or consume one-time codes.

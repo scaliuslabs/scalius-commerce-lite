@@ -97,6 +97,17 @@ export const customerSessions = sqliteTable("customer_sessions", {
     index("customer_sessions_active_expiry_idx").on(table.revokedAt, table.expiresAt),
 ]);
 
+export const customerAuthOtpRateLimits = sqliteTable("customer_auth_otp_rate_limits", {
+    key: text("key").primaryKey(),
+    scope: text("scope", { enum: ["ip"] }).notNull().default("ip"),
+    attempts: integer("attempts").notNull().default(0),
+    windowExpiresAt: integer("window_expires_at").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("customer_auth_otp_rate_limits_window_idx").on(table.windowExpiresAt),
+]);
+
 export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts", {
     id: text("id").primaryKey(),
     deliveryKey: text("delivery_key").notNull(),
@@ -135,4 +146,5 @@ export type Customer = InferSelectModel<typeof customers>;
 export type CustomerHistory = InferSelectModel<typeof customerHistory>;
 export type CustomerAuthOtpChallenge = InferSelectModel<typeof customerAuthOtpChallenges>;
 export type CustomerSessionRow = InferSelectModel<typeof customerSessions>;
+export type CustomerAuthOtpRateLimit = InferSelectModel<typeof customerAuthOtpRateLimits>;
 export type AuthOtpDeliveryReceipt = InferSelectModel<typeof authOtpDeliveryReceipts>;
