@@ -15,7 +15,6 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import {
@@ -27,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
+import { getSortableStyle } from "../shared/sortable-style";
 
 export interface SortableDataTableContentProps<TData> {
   table: Table<TData>;
@@ -53,10 +53,7 @@ function SortableTableRow<TData>({
     isDragging,
   } = useSortable({ id: row.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = getSortableStyle(transform, transition);
 
   return (
     <TableRow

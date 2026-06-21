@@ -39,8 +39,8 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
+import { getSortableStyle } from "../shared/sortable-style";
 import type { NavigationItem } from "./types";
 import { MAX_NAV_DEPTH, getDepthColor } from "./types";
 
@@ -101,10 +101,7 @@ export const SortableNavItem = React.memo(function SortableNavItem({
   } = useSortable({ id: item.id });
 
   const style = useMemo(
-    () => ({
-      transform: CSS.Transform.toString(transform),
-      transition,
-    }),
+    () => getSortableStyle(transform, transition),
     [transform, transition],
   );
 

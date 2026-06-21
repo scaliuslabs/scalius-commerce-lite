@@ -22,7 +22,6 @@ import {
   rectSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import {
   X,
@@ -34,6 +33,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import type { MediaFile } from "@/components/admin/media-manager/types";
+import { getSortableStyle } from "./shared/sortable-style";
 
 interface DraggableImageGalleryProps {
   images: MediaFile[];
@@ -68,10 +68,7 @@ function SortableImage({
     isDragging,
   } = useSortable({ id: image.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = getSortableStyle(transform, transition);
 
   return (
     <div

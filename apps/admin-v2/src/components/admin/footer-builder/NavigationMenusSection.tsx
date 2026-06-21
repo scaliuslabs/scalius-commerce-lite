@@ -26,9 +26,9 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
 import { NavigationBuilder } from "../navigation/NavigationBuilder";
+import { getSortableStyle } from "../shared/sortable-style";
 import type { FooterMenu, NavigationItem } from "./types";
 
 interface NavigationMenusSectionProps {
@@ -57,10 +57,7 @@ const SortableMenuCard = React.memo(function SortableMenuCard({
   } = useSortable({ id: menu.id });
 
   const style = useMemo(
-    () => ({
-      transform: CSS.Transform.toString(transform),
-      transition,
-    }),
+    () => getSortableStyle(transform, transition),
     [transform, transition],
   );
 
