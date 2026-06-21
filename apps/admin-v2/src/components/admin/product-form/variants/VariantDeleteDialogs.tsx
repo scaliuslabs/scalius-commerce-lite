@@ -32,7 +32,7 @@ export function VariantDeleteDialogs({
       <PermanentDeleteConfirmDialog
         open={!!variantToDelete}
         onOpenChange={(open) => !open && onCancelDelete()}
-        entityName="variant"
+        entityName="option"
         isLoading={isLoading}
         onConfirm={onConfirmDelete}
       />
@@ -40,7 +40,7 @@ export function VariantDeleteDialogs({
       <ConfirmDialog
         open={isBulkDeleteDialogOpen}
         onOpenChange={onCloseBulkDeleteDialog}
-        title={`Delete ${selectedCount} variants?`}
+        title={`Delete ${selectedCount} options?`}
         description="This action is permanent and cannot be undone."
         confirmLabel="Confirm Delete"
         loadingLabel="Deleting..."

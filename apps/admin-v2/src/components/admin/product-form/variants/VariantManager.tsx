@@ -15,12 +15,14 @@ import { VariantActionsToolbar } from "./VariantActionsToolbar";
 import { VariantTable } from "./VariantTable";
 import { VariantStatsDisplay } from "./VariantStatsDisplay";
 import { VariantDeleteDialogs } from "./VariantDeleteDialogs";
+import { SimpleProductSkuPanel } from "./SimpleProductSkuPanel";
 import { useVariantOperations } from "./hooks/useVariantOperations";
 import {
   filterVariants,
   sortVariants,
   getVariantStats,
 } from "./utils/variantHelpers";
+import { getVariantManagementMode } from "./utils/variantMode";
 import type {
   ProductVariant,
   VariantFormValues,
@@ -100,6 +102,16 @@ export function VariantManager({
     );
   }, [variants]);
 
+  const variantMode = useMemo(
+    () => getVariantManagementMode(localVariants),
+    [localVariants],
+  );
+  const matrixVariants = useMemo(() => {
+    if (variantMode.mode === "optioned") return variantMode.variants;
+    if (variantMode.mode === "simple" && isAdding) return [];
+    return localVariants;
+  }, [isAdding, localVariants, variantMode]);
+
   // Filter and sort variants
   const filters: VariantFilters = useMemo(
     () => ({
@@ -111,9 +123,9 @@ export function VariantManager({
   );
 
   const filteredAndSortedVariants = useMemo(() => {
-    const filtered = filterVariants(localVariants, filters);
+    const filtered = filterVariants(matrixVariants, filters);
     return sortVariants(filtered, sort);
-  }, [localVariants, filters, sort]);
+  }, [matrixVariants, filters, sort]);
 
   const selectableFilteredVariants = useMemo(
     () => filteredAndSortedVariants.filter((variant) => !variant.isDefault),
@@ -121,7 +133,7 @@ export function VariantManager({
   );
 
   // Variant statistics
-  const stats = useMemo(() => getVariantStats(localVariants), [localVariants]);
+  const stats = useMemo(() => getVariantStats(matrixVariants), [matrixVariants]);
 
   // Save variant (create or update)
   const handleSaveVariant = async (
@@ -161,6 +173,24 @@ export function VariantManager({
   const handleCancelEdit = () => {
     setIsAdding(false);
     setEditingVariantId(null);
+  };
+
+  const handleSaveSimpleSku = async (
+    variantId: string,
+    values: VariantFormValues,
+  ): Promise<boolean> => {
+    setIsSubmitting(true);
+    try {
+      const savedVariant = await updateVariant(productId, variantId, values);
+      if (!savedVariant) return false;
+      setLocalVariants((prev) =>
+        prev.map((variant) => (variant.id === savedVariant.id ? savedVariant : variant)),
+      );
+      onVariantChange?.();
+      return true;
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Bulk Edit Mode
@@ -313,6 +343,25 @@ export function VariantManager({
     onVariantChange?.();
   };
 
+  if (variantMode.mode === "simple" && !isAdding) {
+    return (
+      <SimpleProductSkuPanel
+        variant={variantMode.variant}
+        onSave={handleSaveSimpleSku}
+        onAddOption={() => {
+          setIsAdding(true);
+          setEditingVariantId(null);
+        }}
+        isSubmitting={isSubmitting}
+      />
+    );
+  }
+
+  const isFirstOptionSetup = variantMode.mode === "simple" && isAdding;
+  const description = isFirstOptionSetup
+    ? "Add the first size or color option. The simple SKU stays protected and hidden from this table."
+    : "Manage customer choices, option-specific pricing, and stock.";
+
   return (
     <>
       <Card className="border-none shadow-none bg-transparent sm:bg-card">
@@ -320,7 +369,7 @@ export function VariantManager({
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
               <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
-                Product Variants
+                Product Options
                 {stats.total > 0 && (
                   <span className="text-xs font-normal text-muted-foreground">
                     ({stats.total} total)
@@ -328,14 +377,14 @@ export function VariantManager({
                 )}
               </CardTitle>
               <CardDescription className="mt-0 text-xs text-muted-foreground">
-                Manage size, color, inventory, and variant-specific pricing.
+                {description}
               </CardDescription>
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 flex-wrap sm:flex-nowrap w-full sm:w-auto mt-2 sm:mt-0">
               <VariantStatsDisplay stats={stats} symbol={symbol} />
 
-              {stats.total > 0 && (
+              {stats.total > 0 && !isFirstOptionSetup && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -352,27 +401,29 @@ export function VariantManager({
         </CardHeader>
 
         <CardContent className="space-y-2 p-0">
-          <VariantActionsToolbar
-            productSlug={productSlug}
-            variants={localVariants}
-            selectedCount={selectedVariants.size}
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            sortField={sort.field}
-            sortOrder={sort.order}
-            onSortChange={(field, order) => setSort({ field, order })}
-            onAddVariant={() => {
-              setIsAdding(true);
-              setEditingVariantId(null);
-            }}
-            onBulkDelete={handleBulkDelete}
-            onBulkGenerate={handleBulkGenerate}
-            onImport={handleImport}
-            disabled={isAnyRowEditing || isBulkEditing}
-            isBulkEditing={isBulkEditing}
-            onToggleBulkEdit={handleToggleBulkEdit}
-            onSaveBulkEdit={handleSaveBulkEdit}
-          />
+          {!isFirstOptionSetup && (
+            <VariantActionsToolbar
+              productSlug={productSlug}
+              variants={matrixVariants}
+              selectedCount={selectedVariants.size}
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              sortField={sort.field}
+              sortOrder={sort.order}
+              onSortChange={(field, order) => setSort({ field, order })}
+              onAddVariant={() => {
+                setIsAdding(true);
+                setEditingVariantId(null);
+              }}
+              onBulkDelete={handleBulkDelete}
+              onBulkGenerate={handleBulkGenerate}
+              onImport={handleImport}
+              disabled={isAnyRowEditing || isBulkEditing}
+              isBulkEditing={isBulkEditing}
+              onToggleBulkEdit={handleToggleBulkEdit}
+              onSaveBulkEdit={handleSaveBulkEdit}
+            />
+          )}
 
           <VariantTable
             variants={filteredAndSortedVariants}
@@ -401,15 +452,15 @@ export function VariantManager({
           {/* Variant count footer */}
           {localVariants.length > 0 && !isAdding && (
             <div className="p-2 sm:p-3 border-t text-xs text-muted-foreground text-center sm:text-left">
-              {filteredAndSortedVariants.length !== localVariants.length ? (
+              {filteredAndSortedVariants.length !== matrixVariants.length ? (
                 <span>
                   Showing {filteredAndSortedVariants.length} of{" "}
-                  {localVariants.length} variants
+                  {matrixVariants.length} options
                 </span>
               ) : (
                 <span>
-                  {localVariants.length} variant
-                  {localVariants.length !== 1 ? "s" : ""}
+                  {matrixVariants.length} option
+                  {matrixVariants.length !== 1 ? "s" : ""}
                 </span>
               )}
             </div>

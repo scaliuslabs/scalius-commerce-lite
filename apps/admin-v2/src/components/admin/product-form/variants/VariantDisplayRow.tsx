@@ -107,7 +107,7 @@ export function VariantDisplayRow({
           onCheckedChange={() => {
             if (!isProtectedDefaultSku) onToggleSelection(variant.id);
           }}
-          aria-label={`Select variant ${variant.sku}`}
+          aria-label={`Select option ${variant.sku}`}
           disabled={isAnyRowEditing || isProtectedDefaultSku}
           className="h-3.5 w-3.5"
         />
@@ -221,13 +221,13 @@ export function VariantDisplayRow({
               disabled={isAnyRowEditing}
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
-              <span className="sr-only">Variant Actions</span>
+              <span className="sr-only">Option actions</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-[160px]">
             <DropdownMenuItem onClick={() => onEdit(variant.id)}>
               <Pencil className="mr-2 h-3.5 w-3.5" />
-              Edit Variant
+              Edit Option
             </DropdownMenuItem>
             {!isProtectedDefaultSku && (
               <DropdownMenuItem onClick={() => onDuplicate(variant.id)}>
@@ -249,7 +249,7 @@ export function VariantDisplayRow({
                   className="text-destructive focus:text-destructive focus:bg-destructive/10"
                 >
                   <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Delete Variant
+                  Delete Option
                 </DropdownMenuItem>
               </>
             )}

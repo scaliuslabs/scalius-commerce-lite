@@ -59,7 +59,14 @@ function defaultVariantValues(productId: string, price: number) {
 }
 
 function isSimpleDefaultSkuSet(variants: Array<{ isDefault: boolean; size: string | null; color: string | null }>): boolean {
-    return variants.length === 1 && (variants[0]?.isDefault === true || (!variants[0]?.size && !variants[0]?.color));
+    return variants.length === 1 && variants[0]?.isDefault === true && !hasVariantOption(variants[0]);
+}
+
+function hasInvalidSkuTopology(variants: Array<{ isDefault: boolean; size: string | null; color: string | null }>): boolean {
+    return variants.some((variant) =>
+        (variant.isDefault && hasVariantOption(variant)) ||
+        (!variant.isDefault && !hasVariantOption(variant))
+    );
 }
 
 function normalizeVariantOption(value: string | null | undefined): string | null {
@@ -704,6 +711,8 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
 
     if (data.isActive && activeVariants.length === 0) {
         batchOps.push(db.insert(productVariants).values(defaultVariantValues(id, data.price)));
+    } else if (hasInvalidSkuTopology(activeVariants)) {
+        throw new ValidationError("Product SKU data is invalid: default SKUs must be optionless, and non-default SKUs must include at least one customer option.");
     } else if (isSimpleDefaultSkuSet(activeVariants)) {
         batchOps.push(
             db
@@ -879,11 +888,10 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
         const nextColor = "color" in fieldsToUpdate
             ? normalizeVariantOption(fieldsToUpdate.color)
             : normalizeVariantOption(currentVariant.color);
-        if (currentVariant.isDefault) {
-            if (nextSize || nextColor) {
-                throw new ValidationError("The simple product SKU cannot be turned into an option. Add a new variant instead.");
-            }
-        } else if (!hasVariantOption({ size: nextSize, color: nextColor })) {
+        if (currentVariant.isDefault || !hasVariantOption(currentVariant)) {
+            throw new ValidationError("The simple product SKU cannot be bulk edited from the generic option editor.");
+        }
+        if (!hasVariantOption({ size: nextSize, color: nextColor })) {
             throw new ValidationError("Normal variants must include at least one customer option, such as size or color.");
         }
 
@@ -939,7 +947,8 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
                     .where(
                         and(
                             eq(productVariants.id, id),
-                            eq(productVariants.productId, productId)
+                            eq(productVariants.productId, productId),
+                            isNull(productVariants.deletedAt)
                         )
                     )
                     .returning({ id: productVariants.id })

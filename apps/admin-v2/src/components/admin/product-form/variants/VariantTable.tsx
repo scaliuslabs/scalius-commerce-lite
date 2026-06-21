@@ -78,7 +78,7 @@ export function VariantTable({
                   }}
                   onCheckedChange={onToggleAllSelection}
                   disabled={isAnyRowEditing || selectableVariants.length === 0}
-                  aria-label="Select all variants"
+                  aria-label="Select all options"
                   className="h-3.5 w-3.5"
                 />
               </TableHead>
@@ -99,7 +99,7 @@ export function VariantTable({
               <TableRow>
                 <TableCell colSpan={10} className="h-24 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
-                    <p className="text-sm">No variants yet</p>
+                    <p className="text-sm">No options yet</p>
                     <Button
                       variant="outline"
                       size="sm"
@@ -107,7 +107,7 @@ export function VariantTable({
                       className="mt-2"
                     >
                       <Plus className="mr-1 h-3 w-3" />
-                      Add Variant
+                      Add Option
                     </Button>
                   </div>
                 </TableCell>
@@ -160,7 +160,7 @@ export function VariantTable({
         </Table>
       </div>
 
-      {/* Add variant button at the bottom - only show if not adding */}
+      {/* Add option button at the bottom - only show if not adding */}
       {!isAdding && variants.length > 0 && (
         <div className="flex justify-start pt-2">
           <Button
@@ -171,7 +171,7 @@ export function VariantTable({
             className="h-8 text-xs"
           >
             <Plus className="mr-1 h-3 w-3" />
-            Add Variant
+            Add Option
           </Button>
         </div>
       )}

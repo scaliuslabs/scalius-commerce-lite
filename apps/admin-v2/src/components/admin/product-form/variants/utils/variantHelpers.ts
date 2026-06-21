@@ -118,11 +118,7 @@ export function generateVariantCombinations(
 ): BulkGeneratedVariant[] {
   const combinations: BulkGeneratedVariant[] = [];
 
-  // If no sizes or colors, create a single variant
   if (options.sizes.length === 0 && options.colors.length === 0) {
-    combinations.push(
-      createVariantFromOptions(options, null, null, 1, productSlug)
-    );
     return combinations;
   }
 

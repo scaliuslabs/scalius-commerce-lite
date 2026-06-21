@@ -118,7 +118,7 @@ export function BulkVariantGenerator({
       setDiscountValue(null);
       setOpen(false);
     } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Failed to generate variants:", error);
+      if (import.meta.env.DEV) console.error("Failed to generate options:", error);
     } finally {
       setIsGenerating(false);
     }
@@ -137,10 +137,10 @@ export function BulkVariantGenerator({
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
-            Bulk Variant Generator
+            Bulk Option Generator
           </DialogTitle>
           <DialogDescription className="text-base mt-2">
-            Generate multiple variants at once by combining sizes and colors.
+            Generate multiple options at once by combining sizes and colors.
             All combinations will be created automatically.
           </DialogDescription>
         </DialogHeader>
@@ -222,7 +222,7 @@ export function BulkVariantGenerator({
             )}
             {isGenerating
               ? "Generating..."
-              : `Generate ${previewVariants.length} Variant${previewVariants.length !== 1 ? "s" : ""}`}
+              : `Generate ${previewVariants.length} Option${previewVariants.length !== 1 ? "s" : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

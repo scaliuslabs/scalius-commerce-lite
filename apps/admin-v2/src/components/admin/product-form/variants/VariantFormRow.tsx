@@ -14,7 +14,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Loader2, X, Save, Sparkles } from "lucide-react";
-import { variantFormSchema, type VariantFormValues, type ProductVariant } from "./types";
+import { variantOptionFormSchema, type VariantFormValues, type ProductVariant } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
 import { generateEAN13 } from "@scalius/shared/barcode-utils";
 
@@ -35,7 +35,7 @@ export function VariantFormRow({
   const isEditMode = !!initialData?.id;
 
   const form = useForm<VariantFormValues>({
-    resolver: zodResolver(variantFormSchema),
+    resolver: zodResolver(variantOptionFormSchema),
     defaultValues: initialData || {
       size: "",
       color: "",
@@ -52,6 +52,14 @@ export function VariantFormRow({
   });
 
   const handleSubmit: SubmitHandler<VariantFormValues> = async (values) => {
+    const hasCustomerOption = Boolean(values.size?.trim() || values.color?.trim());
+    if (!hasCustomerOption) {
+      const message = "Add a size, color, or both.";
+      form.setError("size", { type: "manual", message });
+      form.setError("color", { type: "manual", message });
+      return;
+    }
+
     const success = await onSave(values);
     if (success) {
       form.reset();
@@ -344,6 +352,7 @@ export function VariantFormRow({
               onClick={onCancel}
               className="h-9 w-9 text-muted-foreground hover:text-foreground"
               disabled={isSubmitting}
+              aria-label={isEditMode ? "Cancel option edit" : "Cancel option creation"}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -353,6 +362,7 @@ export function VariantFormRow({
               onClick={form.handleSubmit(handleSubmit)}
               disabled={isSubmitting}
               className="h-9 w-9"
+              aria-label={isEditMode ? "Save option" : "Create option"}
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkCreateProductVariants,
@@ -27,6 +27,25 @@ import {
   invalidateProductStatsQueries,
   queryKeys,
 } from "./shared";
+
+function invalidateProductVariantMutationQueries(
+  queryClient: QueryClient,
+  productId: string,
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+  invalidateProductLookupQueries(queryClient);
+  invalidateProductStatsQueries(queryClient);
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.detail(productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.variants(productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.variantSortOrder(productId),
+  });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() });
+}
 
 export function useCreateProduct() {
   const queryClient = useQueryClient();
@@ -147,16 +166,11 @@ export function useCreateProductVariant() {
       variant: ProductVariantInput;
     }) => createProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.variants(variables.productId),
-      });
-      toast.success("Variant created");
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success("Option created");
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create variant")),
+      toast.error(getServerFnError(err, "Failed to create option")),
   });
 }
 
@@ -169,16 +183,11 @@ export function useUpdateProductVariant() {
       variant: ProductVariantInput;
     }) => updateProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.variants(variables.productId),
-      });
-      toast.success("Variant updated");
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success("SKU saved");
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update variant")),
+      toast.error(getServerFnError(err, "Failed to save SKU")),
   });
 }
 
@@ -188,16 +197,11 @@ export function useDeleteProductVariant() {
     mutationFn: (data: { productId: string; variantId: string }) =>
       deleteProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.variants(variables.productId),
-      });
-      toast.success("Variant deleted");
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success("Option deleted");
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to delete variant")),
+      toast.error(getServerFnError(err, "Failed to delete option")),
   });
 }
 
@@ -209,16 +213,11 @@ export function useBulkCreateProductVariants() {
       variants: BulkProductVariantInput[];
     }) => bulkCreateProductVariants({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.variants(variables.productId),
-      });
-      toast.success("Variants created");
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success("Options created");
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create variants")),
+      toast.error(getServerFnError(err, "Failed to create options")),
   });
 }
 
@@ -230,16 +229,11 @@ export function useBulkUpdateProductVariants() {
       updates: ProductVariantUpdateInput[];
     }) => bulkUpdateProductVariants({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.variants(variables.productId),
-      });
-      toast.success("Variants updated");
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success("Options updated");
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update variants")),
+      toast.error(getServerFnError(err, "Failed to update options")),
   });
 }
 
@@ -249,16 +243,11 @@ export function useBulkDeleteProductVariants() {
     mutationFn: (data: { productId: string; variantIds: string[] }) =>
       bulkDeleteProductVariants({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.variants(variables.productId),
-      });
-      toast.success(`${variables.variantIds.length} variants deleted`);
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success(`${variables.variantIds.length} options deleted`);
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to delete variants")),
+      toast.error(getServerFnError(err, "Failed to delete options")),
   });
 }
 
@@ -268,15 +257,10 @@ export function useDuplicateProductVariant() {
     mutationFn: (data: { productId: string; variantId: string }) =>
       duplicateProductVariant({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.variants(variables.productId),
-      });
-      toast.success("Variant duplicated");
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success("Option duplicated");
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to duplicate variant")),
+      toast.error(getServerFnError(err, "Failed to duplicate option")),
   });
 }

@@ -47,7 +47,7 @@ export function VariantImportExport({
     const { variantsToCsv, downloadCsv } = await import("./utils/csvHelpers");
     const csv = variantsToCsv(variants);
     const timestamp = new Date().toISOString().split("T")[0];
-    downloadCsv(csv, `variants-${timestamp}.csv`);
+    downloadCsv(csv, `options-${timestamp}.csv`);
   };
 
   const handleDownloadTemplate = async () => {
@@ -55,7 +55,7 @@ export function VariantImportExport({
       "./utils/csvHelpers"
     );
     const template = generateCsvTemplate();
-    downloadCsv(template, "variant-template.csv");
+    downloadCsv(template, "option-template.csv");
   };
 
   const handleFileSelect = async (
@@ -90,20 +90,21 @@ export function VariantImportExport({
         fileInputRef.current.value = "";
       }
     } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Failed to import variants:", error);
+      if (import.meta.env.DEV) console.error("Failed to import options:", error);
     } finally {
       setIsImporting(false);
     }
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="contents">
       {/* Export Button */}
       <Button
         variant="outline"
         size="sm"
         onClick={handleExport}
         disabled={disabled || variants.length === 0}
+        className="h-8 w-full justify-center text-xs sm:w-auto"
       >
         <Download className="mr-2 h-4 w-4" />
         Export CSV
@@ -112,22 +113,22 @@ export function VariantImportExport({
       {/* Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={disabled}>
+          <Button variant="outline" size="sm" disabled={disabled} className="h-8 w-full justify-center text-xs sm:w-auto">
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
         </DialogTrigger>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Import Variants from CSV</DialogTitle>
+            <DialogTitle>Import Options from CSV</DialogTitle>
             <DialogDescription>
-              Upload a CSV file with variant data. Download the template to see
+              Upload a CSV file with option data. Download the template to see
               the expected format.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="flex gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -164,7 +165,7 @@ export function VariantImportExport({
                     <CheckCircle2 className="h-4 w-4" />
                     <AlertTitle>Ready to Import</AlertTitle>
                     <AlertDescription>
-                      {importResult.imported} variant
+                      {importResult.imported} option
                       {importResult.imported !== 1 ? "s" : ""} will be imported.
                     </AlertDescription>
                   </Alert>
