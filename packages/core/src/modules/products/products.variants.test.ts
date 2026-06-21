@@ -98,6 +98,78 @@ describe("product variant SKU rules", () => {
         expect(deleteCalled).toBe(false);
     });
 
+    it("rejects deleting the final customer option from an active product", async () => {
+        let selectCount = 0;
+        let deleteCalled = false;
+        const dbWithFinalOption = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                return {
+                                    get: async () => {
+                                        if (selectCount === 1) {
+                                            return { id: "var_option", isDefault: false };
+                                        }
+                                        if (selectCount === 2) {
+                                            return { isActive: true };
+                                        }
+                                        return { count: 0 };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            delete() {
+                deleteCalled = true;
+                return {};
+            },
+        };
+
+        await expect(
+            deleteVariant(dbWithFinalOption as never, "prod_1", "var_option"),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(deleteCalled).toBe(false);
+    });
+
+    it("rejects bulk deleting the final customer option from an active product", async () => {
+        let selectCount = 0;
+        let deleteCalled = false;
+        const dbWithFinalOption = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                return {
+                                    get: async () => {
+                                        if (selectCount === 1) return null;
+                                        if (selectCount === 2) return { isActive: true };
+                                        return { count: 0 };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            delete() {
+                deleteCalled = true;
+                return {};
+            },
+        };
+
+        await expect(
+            bulkDeleteVariants(dbWithFinalOption as never, "prod_1", ["var_option"]),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(deleteCalled).toBe(false);
+    });
+
     it("rejects non-default SKUs that still have no customer option", async () => {
         const dbWithInvalidSku = {
             select() {

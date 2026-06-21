@@ -300,6 +300,19 @@ describe("admin route graph boundaries", () => {
     expect(authClientSource).not.toContain("window.location.href");
   });
 
+  it("keeps admin login credentials out of the URL before hydration", () => {
+    const loginFormSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "LoginForm.tsx"),
+      "utf8",
+    );
+
+    expect(loginFormSource).toContain('method="post"');
+    expect(loginFormSource).toContain('action="/auth/login"');
+    expect(loginFormSource).toContain("const [isHydrated, setIsHydrated] = useState(false)");
+    expect(loginFormSource).toContain("setIsHydrated(true)");
+    expect(loginFormSource).toContain("disabled={!isHydrated || isLoading}");
+  });
+
   it("keeps admin navigation from doing focus refetch stampedes", () => {
     const routerSource = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
     const queryClientSource = readFileSync(

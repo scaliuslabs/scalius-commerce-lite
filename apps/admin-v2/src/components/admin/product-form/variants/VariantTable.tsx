@@ -35,6 +35,7 @@ interface VariantTableProps {
   draftUpdates?: Record<string, Record<string, unknown>>;
   onBulkEditChange?: (variantId: string, field: string, value: string | number | null) => void;
   productName?: string;
+  addVariantDefaults?: Partial<VariantFormValues>;
 }
 
 export function VariantTable({
@@ -56,6 +57,7 @@ export function VariantTable({
   draftUpdates,
   onBulkEditChange,
   productName,
+  addVariantDefaults,
 }: VariantTableProps) {
   const selectableVariants = variants.filter((variant) => !variant.isDefault);
   const selectedSelectableCount = selectableVariants.filter((variant) => selectedVariants.has(variant.id)).length;
@@ -151,6 +153,7 @@ export function VariantTable({
 
             {isAdding && (
               <VariantFormRow
+                defaultValues={addVariantDefaults}
                 onSave={onSaveVariant}
                 onCancel={onCancelEdit}
                 isSubmitting={isSubmitting}

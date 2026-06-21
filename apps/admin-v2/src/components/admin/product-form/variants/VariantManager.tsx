@@ -10,7 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowUpDown, PackageCheck } from "lucide-react";
 import { VariantActionsToolbar } from "./VariantActionsToolbar";
 import { VariantTable } from "./VariantTable";
 import { VariantStatsDisplay } from "./VariantStatsDisplay";
@@ -30,6 +31,76 @@ import type {
   VariantFilters,
   VariantSort,
 } from "./types";
+
+function SimpleSkuTransitionSummary({
+  variant,
+  symbol,
+  onCancel,
+}: {
+  variant: ProductVariant;
+  symbol: string;
+  onCancel: () => void;
+}) {
+  const inventoryTracked = variant.trackInventory !== false;
+  const available = Math.max(0, variant.stock - (variant.reservedStock ?? 0));
+
+  return (
+    <div className="mx-2 rounded-md border border-sky-200 bg-sky-50/70 p-3 text-sky-950 sm:mx-3 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2">
+          <PackageCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              <span>Current simple SKU</span>
+              <Badge variant="outline" className="h-5 border-sky-300 bg-white/70 px-1.5 text-[10px] text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">
+                Protected
+              </Badge>
+              {inventoryTracked ? (
+                <Badge variant="outline" className="h-5 border-emerald-300 bg-white/70 px-1.5 text-[10px] text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  {available} available
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="h-5 border-emerald-300 bg-white/70 px-1.5 text-[10px] text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  Always available
+                </Badge>
+              )}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sky-800 dark:text-sky-200">
+              <span className="font-mono">{variant.sku}</span>
+              <span suppressHydrationWarning>
+                {symbol}
+                {variant.price.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </div>
+          </div>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onCancel} className="h-8 shrink-0 bg-background text-xs">
+          Keep simple product
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function firstOptionDefaultsFromSimpleSku(variant: ProductVariant): Partial<VariantFormValues> {
+  return {
+    size: "",
+    color: "",
+    weight: variant.weight,
+    sku: "",
+    barcode: null,
+    barcodeType: null,
+    price: variant.price,
+    stock: variant.stock,
+    trackInventory: variant.trackInventory ?? true,
+    discountType: variant.discountType,
+    discountPercentage: variant.discountType === "percentage" ? variant.discountPercentage : null,
+    discountAmount: variant.discountType === "flat" ? variant.discountAmount : null,
+  };
+}
 
 const VariantSortModal = lazy(() =>
   import("./VariantSortModal").then((module) => ({
@@ -106,6 +177,13 @@ export function VariantManager({
     () => getVariantManagementMode(localVariants),
     [localVariants],
   );
+  const simpleVariantForSetup = variantMode.mode === "simple" ? variantMode.variant : null;
+  const reservedVariants = variantMode.mode === "optioned" && variantMode.hiddenSimpleSku
+    ? [variantMode.hiddenSimpleSku]
+    : [];
+  const addVariantDefaults = simpleVariantForSetup
+    ? firstOptionDefaultsFromSimpleSku(simpleVariantForSetup)
+    : undefined;
   const matrixVariants = useMemo(() => {
     if (variantMode.mode === "optioned") return variantMode.variants;
     if (variantMode.mode === "simple" && isAdding) return [];
@@ -304,19 +382,21 @@ export function VariantManager({
     generatedVariants: BulkGeneratedVariant[],
   ) => {
     const created = await bulkCreateVariants(productId, generatedVariants);
-    if (created.length > 0) {
-      setLocalVariants((prev) => [...prev, ...created]);
-      onVariantChange?.();
+    if (created.length === 0) {
+      throw new Error("No options were created.");
     }
+    setLocalVariants((prev) => [...prev, ...created]);
+    onVariantChange?.();
   };
 
   // Import variants from CSV
   const handleImport = async (importedVariants: BulkGeneratedVariant[]) => {
     const created = await bulkCreateVariants(productId, importedVariants);
-    if (created.length > 0) {
-      setLocalVariants((prev) => [...prev, ...created]);
-      onVariantChange?.();
+    if (created.length === 0) {
+      throw new Error("No options were imported.");
     }
+    setLocalVariants((prev) => [...prev, ...created]);
+    onVariantChange?.();
   };
 
   // Selection handlers
@@ -359,7 +439,7 @@ export function VariantManager({
 
   const isFirstOptionSetup = variantMode.mode === "simple" && isAdding;
   const description = isFirstOptionSetup
-    ? "Add the first size or color option. The simple SKU stays protected and hidden from this table."
+    ? "Create the first size or color choice. The simple SKU stays protected while option SKUs take over selling."
     : "Manage customer choices, option-specific pricing, and stock.";
 
   return (
@@ -405,6 +485,7 @@ export function VariantManager({
             <VariantActionsToolbar
               productSlug={productSlug}
               variants={matrixVariants}
+              reservedVariants={reservedVariants}
               selectedCount={selectedVariants.size}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
@@ -424,6 +505,14 @@ export function VariantManager({
               onSaveBulkEdit={handleSaveBulkEdit}
             />
           )}
+
+          {isFirstOptionSetup && simpleVariantForSetup ? (
+            <SimpleSkuTransitionSummary
+              variant={simpleVariantForSetup}
+              symbol={symbol}
+              onCancel={handleCancelEdit}
+            />
+          ) : null}
 
           <VariantTable
             variants={filteredAndSortedVariants}
@@ -447,6 +536,7 @@ export function VariantManager({
             draftUpdates={draftBulkUpdates}
             onBulkEditChange={handleBulkEditChange}
             productName={productName}
+            addVariantDefaults={isFirstOptionSetup ? addVariantDefaults : undefined}
           />
 
           {/* Variant count footer */}

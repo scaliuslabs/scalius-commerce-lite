@@ -20,6 +20,7 @@ import { generateEAN13 } from "@scalius/shared/barcode-utils";
 
 interface VariantFormRowProps {
   initialData?: ProductVariant;
+  defaultValues?: Partial<VariantFormValues>;
   onSave: (values: VariantFormValues) => Promise<boolean>;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -27,6 +28,7 @@ interface VariantFormRowProps {
 
 export function VariantFormRow({
   initialData,
+  defaultValues,
   onSave,
   onCancel,
   isSubmitting,
@@ -45,9 +47,11 @@ export function VariantFormRow({
       barcodeType: null,
       price: 0,
       stock: 0,
+      trackInventory: true,
       discountType: "percentage",
       discountPercentage: null,
       discountAmount: null,
+      ...defaultValues,
     },
   });
 

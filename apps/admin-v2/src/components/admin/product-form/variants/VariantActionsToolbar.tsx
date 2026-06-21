@@ -37,6 +37,7 @@ const BulkVariantGenerator = lazy(() =>
 interface VariantActionsToolbarProps {
   productSlug?: string;
   variants: ProductVariant[];
+  reservedVariants?: ProductVariant[];
   selectedCount: number;
   searchTerm: string;
   onSearchChange: (term: string) => void;
@@ -56,6 +57,7 @@ interface VariantActionsToolbarProps {
 export function VariantActionsToolbar({
   productSlug,
   variants,
+  reservedVariants = [],
   selectedCount,
   searchTerm,
   onSearchChange,
@@ -72,6 +74,9 @@ export function VariantActionsToolbar({
   disabled,
 }: VariantActionsToolbarProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const skuConflictVariants = reservedVariants.length > 0
+    ? [...variants, ...reservedVariants]
+    : variants;
 
   const sortOptions: Array<{ label: string; field: SortField }> = [
     { label: "SKU", field: "sku" },
@@ -167,13 +172,14 @@ export function VariantActionsToolbar({
                 )}
                 <VariantImportExport
                   variants={variants}
+                  reservedVariants={reservedVariants}
                   onImport={onImport}
                   disabled={disabled}
                 />
 
                 <LazyBulkVariantGenerator
                   productSlug={productSlug}
-                  existingVariants={variants}
+                  existingVariants={skuConflictVariants}
                   onGenerate={onBulkGenerate}
                   disabled={disabled}
                 />

@@ -35,6 +35,10 @@ function assertNormalVariantHasCustomerOption(value: { size?: string | null; col
     }
 }
 
+function customerOptionPredicate() {
+    return sql`(trim(coalesce(${productVariants.size}, '')) <> '' OR trim(coalesce(${productVariants.color}, '')) <> '')`;
+}
+
 // ─────────────────────────────────────────
 // Barcode lookup
 // ─────────────────────────────────────────
@@ -331,17 +335,18 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
         .from(products)
         .where(eq(products.id, productId))
         .get();
-    const remainingVariantCount = await db
+    const remainingCustomerOptionCount = await db
         .select({ count: sql<number>`count(*)` })
         .from(productVariants)
         .where(and(
             eq(productVariants.productId, productId),
             ne(productVariants.id, variantId),
             isNull(productVariants.deletedAt),
+            customerOptionPredicate(),
         ))
         .get();
-    if (product?.isActive && (remainingVariantCount?.count ?? 0) === 0) {
-        throw new ValidationError("Deactivate this product before removing its final SKU.");
+    if (product?.isActive && (remainingCustomerOptionCount?.count ?? 0) === 0) {
+        throw new ValidationError("Add another size or color option, or deactivate this product, before removing its final customer option.");
     }
 
     await db.delete(productVariants).where(eq(productVariants.id, variantId));
@@ -494,17 +499,18 @@ export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, p
         .from(products)
         .where(eq(products.id, productId))
         .get();
-    const remainingVariantCount = await db
+    const remainingCustomerOptionCount = await db
         .select({ count: sql<number>`count(*)` })
         .from(productVariants)
         .where(and(
             eq(productVariants.productId, productId),
             not(inArray(productVariants.id, variantIds)),
             isNull(productVariants.deletedAt),
+            customerOptionPredicate(),
         ))
         .get();
-    if (product?.isActive && (remainingVariantCount?.count ?? 0) === 0) {
-        throw new ValidationError("Deactivate this product before removing its final SKU.");
+    if (product?.isActive && (remainingCustomerOptionCount?.count ?? 0) === 0) {
+        throw new ValidationError("Add another size or color option, or deactivate this product, before removing the final customer option.");
     }
 
     await db

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, Loader2, Lock, Mail } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -40,6 +40,11 @@ export function LoginForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,7 +91,7 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent className="px-0 pb-0">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form method="post" action="/auth/login" onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div
               role="alert"
@@ -111,7 +116,7 @@ export function LoginForm() {
                 autoComplete="email"
                 autoFocus
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 className="h-11 pl-10"
               />
             </div>
@@ -138,7 +143,7 @@ export function LoginForm() {
                 placeholder="Enter your password"
                 autoComplete="current-password"
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 className="h-11 pl-10"
               />
             </div>
@@ -149,13 +154,13 @@ export function LoginForm() {
               type="checkbox"
               checked={rememberMe}
               onChange={(event) => setRememberMe(event.target.checked)}
-              disabled={isLoading}
+              disabled={!isHydrated || isLoading}
               className="h-4 w-4 rounded border-input accent-primary"
             />
             Keep me signed in
           </label>
 
-          <Button type="submit" className="h-11 w-full" disabled={isLoading}>
+          <Button type="submit" className="h-11 w-full" disabled={!isHydrated || isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
