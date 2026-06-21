@@ -10,6 +10,9 @@ import { and, sql, eq, inArray, isNull, ne, not } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
+import { safeBatch } from "@scalius/database/client";
+import { checkAndAlertLowStock } from "../inventory/alerts";
+import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
     createVariantSchema,
     updateVariantSchema,
@@ -176,11 +179,13 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
     return variant;
 }
 
-export async function updateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>) {
+export async function updateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>, adminUserId?: string) {
     const existingVariant = await db
         .select({
             id: productVariants.id,
             isDefault: productVariants.isDefault,
+            stock: productVariants.stock,
+            stockVersion: productVariants.stockVersion,
         })
         .from(productVariants)
         .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
@@ -210,23 +215,67 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         throw new ConflictError("A variant with this SKU already exists");
     }
 
+    const updateValues = {
+        size,
+        color,
+        weight: data.weight,
+        sku: data.sku,
+        price: data.price,
+        trackInventory: data.trackInventory ?? true,
+        barcode: data.barcode || null,
+        barcodeType: data.barcodeType || null,
+        discountType: data.discountType || "percentage",
+        discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
+        discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
+        updatedAt: sql`unixepoch()`,
+    };
+
+    if (data.stock !== existingVariant.stock) {
+        const delta = data.stock - existingVariant.stock;
+        const movementInsert = buildStockMovementClaim(db, {
+            movementId: crypto.randomUUID(),
+            variantId,
+            stockVersion: existingVariant.stockVersion,
+            quantity: delta,
+            previousStock: existingVariant.stock,
+            newStock: data.stock,
+            notes: "Stocktake: Product variant edit",
+            adminUserId,
+        });
+        const variantUpdate = db
+            .update(productVariants)
+            .set({
+                ...updateValues,
+                stock: data.stock,
+                stockVersion: sql`${productVariants.stockVersion} + 1`,
+            })
+            .where(and(
+                eq(productVariants.id, variantId),
+                eq(productVariants.productId, productId),
+                eq(productVariants.stockVersion, existingVariant.stockVersion),
+                isNull(productVariants.deletedAt),
+            ))
+            .returning();
+
+        const [movementRows, variantRows] = await safeBatch(
+            db,
+            [movementInsert, variantUpdate] as never,
+        ) as [Array<{ id: string }>, Array<typeof productVariants.$inferSelect>];
+
+        if ((movementRows?.length ?? 0) === 0 || (variantRows?.length ?? 0) === 0) {
+            throw new ConflictError("Stock changed concurrently before variant update could be saved");
+        }
+
+        if (delta < 0) {
+            await checkAndAlertLowStock(db, variantId);
+        }
+
+        return variantRows[0];
+    }
+
     const [variant] = await db
         .update(productVariants)
-        .set({
-            size,
-            color,
-            weight: data.weight,
-            sku: data.sku,
-            price: data.price,
-            stock: data.stock,
-            trackInventory: data.trackInventory ?? true,
-            barcode: data.barcode || null,
-            barcodeType: data.barcodeType || null,
-            discountType: data.discountType || "percentage",
-            discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
-            discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
-            updatedAt: sql`unixepoch()`,
-        })
+        .set(updateValues)
         .where(eq(productVariants.id, variantId))
         .returning();
 
@@ -306,9 +355,13 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
             weight: existingVariant.weight,
             sku: newSku,
             price: existingVariant.price,
-            stock: existingVariant.stock,
+            stock: 0,
+            reservedStock: 0,
+            preorderStock: 0,
             isDefault: false,
             trackInventory: existingVariant.trackInventory,
+            version: 1,
+            stockVersion: 1,
             barcode: existingVariant.barcode,
             barcodeType: existingVariant.barcodeType,
             discountType: existingVariant.discountType,

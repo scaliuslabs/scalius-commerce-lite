@@ -17,6 +17,8 @@ import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "./products.types";
 import { safeBatch, type Database } from "@scalius/database/client";
+import { checkAndAlertLowStock } from "../inventory/alerts";
+import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 
 function createDefaultSku(productId: string): string {
     return `SIMPLE-${productId}`;
@@ -822,8 +824,27 @@ export async function bulkDeleteProducts(db: Database, productIds: string[], per
 /**
  * Bulk updates given product variants using an array of updates.
  */
-export async function bulkUpdateVariants(db: Database, productId: string, updates: Array<{ id: string; size?: string | null; color?: string | null; weight?: number | null; sku?: string; price?: number; stock?: number }>) {
+type BulkVariantUpdate = {
+    id: string;
+    size?: string | null;
+    color?: string | null;
+    weight?: number | null;
+    sku?: string;
+    price?: number;
+    stock?: number;
+    trackInventory?: boolean;
+    barcode?: string | null;
+    barcodeType?: "ean13" | "upc" | "isbn" | "gtin" | "custom" | null;
+};
+
+export async function bulkUpdateVariants(db: Database, productId: string, updates: BulkVariantUpdate[], adminUserId?: string) {
     const statements = [];
+    const stockResultPairs: Array<{
+        variantId: string;
+        movementIndex: number;
+        updateIndex: number;
+        delta: number;
+    }> = [];
     const ids = updates.map((update) => update.id).filter(Boolean);
     const currentVariants = ids.length > 0
         ? await db
@@ -832,6 +853,8 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
                 isDefault: productVariants.isDefault,
                 size: productVariants.size,
                 color: productVariants.color,
+                stock: productVariants.stock,
+                stockVersion: productVariants.stockVersion,
             })
             .from(productVariants)
             .where(and(
@@ -843,8 +866,8 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
     const currentVariantById = new Map(currentVariants.map((variant) => [variant.id, variant]));
 
     for (const update of updates) {
-        const { id, ...fieldsToUpdate } = update;
-        if (Object.keys(fieldsToUpdate).length === 0) continue;
+        const { id, stock, ...fieldsToUpdate } = update;
+        if (Object.keys(fieldsToUpdate).length === 0 && stock === undefined) continue;
         const currentVariant = currentVariantById.get(id);
         if (!currentVariant) {
             throw new NotFoundError("Variant not found");
@@ -870,25 +893,71 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
             ...("color" in fieldsToUpdate ? { color: nextColor } : {}),
         };
 
-        statements.push(
-            db
-                .update(productVariants)
-                .set({
-                    ...normalizedFieldsToUpdate,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(
-                    and(
-                        eq(productVariants.id, id),
-                        eq(productVariants.productId, productId)
+        if (stock !== undefined && stock !== currentVariant.stock) {
+            const delta = stock - currentVariant.stock;
+            const movementIndex = statements.length;
+            statements.push(buildStockMovementClaim(db, {
+                movementId: crypto.randomUUID(),
+                variantId: id,
+                stockVersion: currentVariant.stockVersion,
+                quantity: delta,
+                previousStock: currentVariant.stock,
+                newStock: stock,
+                notes: "Stocktake: Product variant bulk edit",
+                adminUserId,
+            }));
+
+            const updateIndex = statements.length;
+            statements.push(
+                db
+                    .update(productVariants)
+                    .set({
+                        ...normalizedFieldsToUpdate,
+                        stock,
+                        stockVersion: sql`${productVariants.stockVersion} + 1`,
+                        updatedAt: sql`unixepoch()`,
+                    })
+                    .where(
+                        and(
+                            eq(productVariants.id, id),
+                            eq(productVariants.productId, productId),
+                            eq(productVariants.stockVersion, currentVariant.stockVersion),
+                            isNull(productVariants.deletedAt),
+                        )
                     )
-                )
-        );
+                    .returning({ id: productVariants.id })
+            );
+            stockResultPairs.push({ variantId: id, movementIndex, updateIndex, delta });
+        } else if (Object.keys(normalizedFieldsToUpdate).length > 0) {
+            statements.push(
+                db
+                    .update(productVariants)
+                    .set({
+                        ...normalizedFieldsToUpdate,
+                        updatedAt: sql`unixepoch()`,
+                    })
+                    .where(
+                        and(
+                            eq(productVariants.id, id),
+                            eq(productVariants.productId, productId)
+                        )
+                    )
+                    .returning({ id: productVariants.id })
+            );
+        }
     }
 
     if (statements.length > 0) {
-        // Drizzle D1 batch() requires specific tuple types — safe to cast
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        await db.batch(statements as any);
+        const batchResults = await safeBatch(db, statements as never) as Array<Array<{ id: string }> | undefined>;
+        for (const pair of stockResultPairs) {
+            const movementRows = batchResults[pair.movementIndex];
+            const updateRows = batchResults[pair.updateIndex];
+            if ((movementRows?.length ?? 0) === 0 || (updateRows?.length ?? 0) === 0) {
+                throw new ConflictError("Stock changed concurrently before variant bulk update could be saved");
+            }
+            if (pair.delta < 0) {
+                await checkAndAlertLowStock(db, pair.variantId);
+            }
+        }
     }
 }

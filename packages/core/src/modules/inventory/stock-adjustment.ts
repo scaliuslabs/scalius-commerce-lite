@@ -1,12 +1,13 @@
 // packages/core/src/modules/inventory/stock-adjustment.ts
-// Dedicated stock adjustment operations for barcode scanner workflow.
+// Dedicated stock adjustment operations for barcode scanner and stocktake workflows.
 
 import { productVariants, products, productImages } from "@scalius/database/schema";
+import { safeBatch } from "@scalius/database/client";
 import { eq, sql, and, isNull } from "drizzle-orm";
-import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import { buildStockMovementClaim } from "./stock-movement-claims";
 
 const MAX_CAS_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -23,6 +24,68 @@ export interface StockSetResult {
   previousStock: number;
   newStock: number;
   delta: number;
+}
+
+type StockVariantState = {
+  id: string;
+  stock: number;
+  stockVersion: number;
+};
+
+async function applyStrictStockSet(
+  db: Database,
+  variant: StockVariantState,
+  targetStock: number,
+  notes: string,
+  adminUserId?: string,
+): Promise<StockSetResult> {
+  const previousStock = variant.stock;
+  const delta = targetStock - previousStock;
+
+  if (delta === 0) {
+    return { variantId: variant.id, previousStock, newStock: targetStock, delta: 0 };
+  }
+
+  const movementInsert = buildStockMovementClaim(db, {
+    movementId: crypto.randomUUID(),
+    variantId: variant.id,
+    stockVersion: variant.stockVersion,
+    quantity: delta,
+    previousStock,
+    newStock: targetStock,
+    notes,
+    adminUserId,
+  });
+  const stockUpdate = db
+    .update(productVariants)
+    .set({
+      stock: targetStock,
+      stockVersion: sql`${productVariants.stockVersion} + 1`,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(
+      and(
+        eq(productVariants.id, variant.id),
+        eq(productVariants.stockVersion, variant.stockVersion),
+        isNull(productVariants.deletedAt),
+      ),
+    )
+    .returning({ id: productVariants.id });
+
+  const [movementRows, updateRows] = await safeBatch(
+    db,
+    [movementInsert, stockUpdate] as never,
+  ) as { id: string }[][];
+
+  if ((movementRows?.length ?? 0) > 0 && (updateRows?.length ?? 0) > 0) {
+    if (delta < 0) {
+      await checkAndAlertLowStock(db, variant.id);
+    }
+
+    return { variantId: variant.id, previousStock, newStock: targetStock, delta };
+  }
+
+  throw new ConflictError("Stock changed concurrently before movement could be recorded");
 }
 
 /**
@@ -46,7 +109,7 @@ export async function adjustStock(
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
-      .where(eq(productVariants.id, variantId))
+      .where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt)))
       .get();
 
     if (!variant) {
@@ -56,37 +119,16 @@ export async function adjustStock(
     const previousStock = variant.stock;
     const newStock = Math.max(0, previousStock + delta);
 
-    const result = await db
-      .update(productVariants)
-      .set({
-        stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
-        stockVersion: sql`${productVariants.stockVersion} + 1`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(
-        and(
-          eq(productVariants.id, variantId),
-          eq(productVariants.stockVersion, variant.stockVersion),
-        ),
-      )
-      .returning({ id: productVariants.id });
-
-    if (result.length > 0) {
-      await recordMovement(db, {
-        variantId,
-        type: "adjusted",
-        quantity: delta,
-        previousStock,
+    try {
+      return await applyStrictStockSet(
+        db,
+        variant,
         newStock,
-        notes: reason ? `Scanner adjustment: ${reason}` : "Scanner adjustment",
-        createdBy: adminUserId,
-      });
-
-      if (delta < 0) {
-        await checkAndAlertLowStock(db, variantId);
-      }
-
-      return { variantId, previousStock, newStock, delta };
+        reason ? `Scanner adjustment: ${reason}` : "Scanner adjustment",
+        adminUserId,
+      );
+    } catch (error) {
+      if (!(error instanceof ConflictError)) throw error;
     }
 
     // CAS conflict — retry with backoff
@@ -122,7 +164,7 @@ export async function setStock(
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
-      .where(eq(productVariants.id, variantId))
+      .where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt)))
       .get();
 
     if (!variant) {
@@ -130,46 +172,24 @@ export async function setStock(
     }
 
     const previousStock = variant.stock;
-    const delta = targetStock - previousStock;
 
     // No change needed
-    if (delta === 0) {
+    if (targetStock === previousStock) {
       return { variantId, previousStock, newStock: targetStock, delta: 0 };
     }
 
-    const result = await db
-      .update(productVariants)
-      .set({
-        stock: targetStock,
-        stockVersion: sql`${productVariants.stockVersion} + 1`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(
-        and(
-          eq(productVariants.id, variantId),
-          eq(productVariants.stockVersion, variant.stockVersion),
-        ),
-      )
-      .returning({ id: productVariants.id });
-
-    if (result.length > 0) {
-      await recordMovement(db, {
-        variantId,
-        type: "adjusted",
-        quantity: delta,
-        previousStock,
-        newStock: targetStock,
-        notes: reason
+    try {
+      return await applyStrictStockSet(
+        db,
+        variant,
+        targetStock,
+        reason
           ? `Stocktake: ${reason}`
           : `Stocktake: set from ${previousStock} to ${targetStock}`,
-        createdBy: adminUserId,
-      });
-
-      if (delta < 0) {
-        await checkAndAlertLowStock(db, variantId);
-      }
-
-      return { variantId, previousStock, newStock: targetStock, delta };
+        adminUserId,
+      );
+    } catch (error) {
+      if (!(error instanceof ConflictError)) throw error;
     }
 
     // CAS conflict — retry with backoff

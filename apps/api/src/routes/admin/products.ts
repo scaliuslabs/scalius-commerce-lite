@@ -578,8 +578,9 @@ app.openapi(updateVariantRoute, async (c) => {
     const db = c.get("db");
     const { id, variantId } = c.req.valid("param");
     const data = c.req.valid("json");
+    const user = c.get("user");
     try {
-        const result = await ProductsVariants.updateVariant(db, id, variantId, data);
+        const result = await ProductsVariants.updateVariant(db, id, variantId, data, user?.id);
         if (!result) throw new NotFoundError("Variant not found");
         await invalidateProductCatalogCaches(db, c, [id]);
         return ok(c, result);
@@ -708,8 +709,9 @@ app.openapi(bulkUpdateVariantsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
+    const user = c.get("user");
     if (data.updates.length === 0) throw new ValidationError("No updates provided");
-    await ProductsAdmin.bulkUpdateVariants(db, id, data.updates);
+    await ProductsAdmin.bulkUpdateVariants(db, id, data.updates, user?.id);
     await invalidateProductCatalogCaches(db, c, [id]);
     return ok(c, {});
 });

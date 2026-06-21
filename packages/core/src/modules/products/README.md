@@ -149,9 +149,12 @@ Storefront category ([slug].astro)
 
 4. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
 
-5. **Product-form stock edits bypass movement logging**: Variant edit and bulk edit can still write `stock` directly. The storefront/order authority is guarded, but the ideal stock-management path is to route stock changes through inventory adjustment services so `stockVersion` and movement history remain complete.
+5. **Simple/optioned transitions need a guided workflow**: The backend is SKU-first, but the admin UX still exposes variants as a table instead of a first-class `simple` vs `optioned` product mode with explicit transition copy/stock migration/cached-cart invalidation guidance.
 
-6. **Simple/optioned transitions need a guided workflow**: The backend is SKU-first, but the admin UX still exposes variants as a table instead of a first-class `simple` vs `optioned` product mode with explicit transition copy/stock migration/cached-cart invalidation guidance.
+## Inventory Rules
+
+- Product variant edit and bulk edit split `stock` out of ordinary metadata writes. Existing-SKU stock changes must batch the movement claim with the guarded variant stock/`stockVersion` update so `inventory_movements`, stock, and low-stock checks stay in sync.
+- Variant duplication copies merchandising fields only. The new SKU starts with zero physical stock; merchants must perform an explicit stocktake/adjustment to add sellable quantity.
 
 ## Dependencies
 
