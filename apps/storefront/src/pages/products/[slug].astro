@@ -83,6 +83,18 @@ const pageTitle = product.metaTitle || product.name;
 const pageDescription = cleanMetaDescription;
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const quickBuyNoticeByError: Record<string, string> = {
+  product_unavailable: "This item is not available right now.",
+  variant_required: "Please choose an available option before buying.",
+  variant_not_found: "That option is no longer available. Please choose another option.",
+  out_of_stock: "This item is out of stock right now.",
+  invalid_quantity: "Please choose a quantity between 1 and 99.",
+  quantity_unavailable: "The requested quantity is not available. Please lower the quantity.",
+  price_changed: "This item's price changed. Please review it before buying.",
+  validation_unavailable: "We could not refresh this item. Please try again.",
+  processing_failed: "We could not prepare this item. Please try again.",
+};
+const quickBuyNotice = quickBuyNoticeByError[Astro.url.searchParams.get("error") ?? ""] ?? null;
 
 // --- SEO: per SEO-01, SEO-02, OG-01, OG-05 ---
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
@@ -280,6 +292,7 @@ const productCategoryAnalytics = productCategory
           colorOptions={colorOptions}
           isVariantSpecificImagesEnabled={isVariantSpecificImagesEnabled}
           currencySymbol={currencySymbol}
+          quickBuyNotice={quickBuyNotice}
         />
       </div>
     </section>

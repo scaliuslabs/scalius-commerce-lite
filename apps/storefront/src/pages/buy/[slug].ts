@@ -4,10 +4,54 @@ import { getLayoutData } from "@/lib/api/storefront";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { validateCartItems, type CartValidationIssue } from "@/lib/api/orders";
 import type { CartItem } from "@/store/cart";
+import type { ProductVariant } from "@/lib/api/types";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
 export const prerender = false;
+
+function parseQuickBuyQuantity(value: string | null): number | null {
+  if (!value) return 1;
+  if (!/^\d+$/.test(value)) return null;
+  const quantity = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99) return null;
+  return quantity;
+}
+
+function productRedirect(slug: string, error: string): Response {
+  return new Response(null, {
+    status: 307,
+    headers: { Location: `/products/${slug}?error=${encodeURIComponent(error)}` },
+  });
+}
+
+function issueToQuickBuyError(issue: CartValidationIssue | undefined): string {
+  if (!issue) return "validation_unavailable";
+  switch (issue.code) {
+    case "PRODUCT_UNAVAILABLE":
+      return "product_unavailable";
+    case "VARIANT_REQUIRED":
+      return "variant_required";
+    case "VARIANT_UNAVAILABLE":
+    case "VARIANT_MISMATCH":
+      return "variant_not_found";
+    case "QUANTITY_UNAVAILABLE":
+      return issue.availableQuantity && issue.availableQuantity > 0
+        ? "quantity_unavailable"
+        : "out_of_stock";
+    case "PRICE_CHANGED":
+      return "price_changed";
+    default:
+      return "validation_unavailable";
+  }
+}
+
+function variantLabel(variant: ProductVariant | null): string | null {
+  if (!variant) return null;
+  const parts = [variant.size, variant.color].filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
 
 export const GET: APIRoute = async ({ params, url }) => {
   const { slug } = params;
@@ -36,39 +80,30 @@ export const GET: APIRoute = async ({ params, url }) => {
         : [];
     const hasCustomerOptions = optionVariants.length > 0;
     if (buyerVariants.length === 0) {
-      return new Response(null, {
-        status: 307,
-        headers: { Location: `/products/${slug}?error=product_unavailable` },
-      });
+      return productRedirect(slug, "product_unavailable");
     }
     const layoutData = await getLayoutData();
     setRuntimeImageCdnPolicy(layoutData?.media);
     const currencyCode = layoutData?.currency?.code ?? "BDT";
     const searchParams = url.searchParams;
     const requestedVariantId = searchParams.get("variant");
-    const quantity = parseInt(searchParams.get("qty") || "1", 10) || 1;
+    const quantity = parseQuickBuyQuantity(searchParams.get("qty"));
+    if (quantity === null) {
+      return productRedirect(slug, "invalid_quantity");
+    }
 
     let itemToAdd: (typeof variants)[0] | null = null;
     if (requestedVariantId) {
       itemToAdd = buyerVariants.find((v) => v.id === requestedVariantId) || null;
       if (!itemToAdd) {
-        return new Response(null, {
-          status: 307,
-          headers: { Location: `/products/${slug}?error=variant_not_found` },
-        });
+        return productRedirect(slug, "variant_not_found");
       }
     } else if (hasCustomerOptions) {
-      return new Response(null, {
-        status: 307,
-        headers: { Location: `/products/${slug}?error=variant_required` },
-      });
+      return productRedirect(slug, "variant_required");
     } else if (buyerVariants.length === 1) {
       itemToAdd = buyerVariants[0];
     } else {
-      return new Response(null, {
-        status: 307,
-        headers: { Location: `/products/${slug}?error=variant_required` },
-      });
+      return productRedirect(slug, "variant_required");
     }
 
     let finalPrice = product.discountedPrice;
@@ -115,6 +150,28 @@ export const GET: APIRoute = async ({ params, url }) => {
       }
     }
 
+    const validation = await validateCartItems([{
+      cartKey: `quick_buy:${product.id}:${itemToAdd?.id ?? "base"}`,
+      productId: product.id,
+      variantId: itemToAdd?.id ?? null,
+      quantity,
+      price: finalPrice,
+      productName: product.name,
+      variantLabel: variantLabel(itemToAdd),
+    }]);
+    if (!validation.success) {
+      return productRedirect(slug, "validation_unavailable");
+    }
+    if (!validation.data.valid) {
+      return productRedirect(slug, issueToQuickBuyError(validation.data.issues[0]));
+    }
+
+    const validatedItem = validation.data.items[0];
+    if (!validatedItem) {
+      return productRedirect(slug, "validation_unavailable");
+    }
+    finalPrice = validatedItem.unitPrice;
+
     const primaryImageUrl =
       images.find((img) => img.isPrimary && hasProductImage(img.url))?.url ||
       images.find((img) => hasProductImage(img.url))?.url ||
@@ -130,14 +187,14 @@ export const GET: APIRoute = async ({ params, url }) => {
     const cartItem: CartItem = {
       id: product.id,
       slug: product.slug,
-      name: product.name,
+      name: validatedItem.productName,
       price: finalPrice,
       image: cartImageUrl,
-      quantity: quantity,
-      variantId: itemToAdd?.id,
+      quantity,
+      variantId: validatedItem.variantId ?? itemToAdd?.id,
       size: itemToAdd?.size || undefined,
       color: itemToAdd?.color || undefined,
-      freeDelivery: product.freeDelivery,
+      freeDelivery: validatedItem.freeDelivery,
     };
 
     const variantIdForAnalytics = cartItem.variantId || cartItem.id;
