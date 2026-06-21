@@ -21,8 +21,8 @@ import {
   sortableKeyboardCoordinates,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
+import { getSortableStyle } from "./sortable-style";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,7 +36,7 @@ export interface SortableItemRenderProps {
   /** Ref to set on the item's root DOM node */
   ref: (node: HTMLElement | null) => void;
   /** Style to apply on the item's root DOM node (transform + transition) */
-  style: React.CSSProperties;
+  style: React.CSSProperties | undefined;
 }
 
 export interface SortableListProps<T extends { id: string }> {
@@ -75,11 +75,7 @@ export function useSortableItem(id: string): SortableItemRenderProps {
 
   return {
     ref: setNodeRef,
-    style: {
-      transform: CSS.Transform.toString(transform),
-      transition: transition ?? undefined,
-      opacity: isDragging ? 0.5 : 1,
-    },
+    style: getSortableStyle(transform, transition, isDragging ? { opacity: 0.5 } : undefined),
     dragHandleProps: {
       ...attributes,
       ...listeners,

@@ -27,11 +27,11 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
+import { getSortableStyle } from "../../shared/sortable-style";
 import {
   getVariantSortOrder,
   updateVariantSortOrder,
@@ -67,10 +67,7 @@ function SortableVariantItem({
     isDragging,
   } = useSortable({ id: item.value });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = getSortableStyle(transform, transition);
 
   return (
     <div

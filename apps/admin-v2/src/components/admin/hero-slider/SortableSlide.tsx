@@ -1,8 +1,8 @@
 import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { SlideRow } from "./SlideRow";
 import type { SliderImage } from "./helpers";
+import { getSortableStyle } from "../shared/sortable-style";
 
 interface SortableSlideProps {
   image: SliderImage;
@@ -28,10 +28,7 @@ export function SortableSlide({
     isDragging,
   } = useSortable({ id: image.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = getSortableStyle(transform, transition);
 
   const dragHandle = (
     <div

@@ -28,11 +28,11 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import type { SocialLink } from "./builder-types";
 import type { MediaFile } from "@/components/admin/media-manager/types";
+import { getSortableStyle } from "./sortable-style";
 
 interface SocialLinksSectionProps {
   social: SocialLink[];
@@ -65,10 +65,7 @@ const SortableSocialLink = React.memo(function SortableSocialLink({
   } = useSortable({ id: link.id });
 
   const style = useMemo(
-    () => ({
-      transform: CSS.Transform.toString(transform),
-      transition,
-    }),
+    () => getSortableStyle(transform, transition),
     [transform, transition],
   );
 

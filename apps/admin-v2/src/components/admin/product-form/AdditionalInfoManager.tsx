@@ -22,9 +22,9 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@scalius/shared/utils";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { getSortableStyle } from "../shared/sortable-style";
 
 
 export interface RichContentItem {
@@ -61,10 +61,7 @@ function SortableRichContentItem({
     transition,
   } = useSortable({ id: item.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = getSortableStyle(transform, transition);
 
   const form = useForm<{ title: string; content: string }>({
     resolver: zodResolver(itemSchema),
