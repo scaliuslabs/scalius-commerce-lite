@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   validateCartItems,
   type CartValidationOptions,
@@ -48,6 +49,13 @@ function normalizeOptions(payload: unknown): CartValidationOptions {
 }
 
 export const POST: APIRoute = async ({ request }) => {
+  if (shouldRejectCrossOriginCookieRequest(request)) {
+    return new Response(JSON.stringify({ success: false, error: "Cross-origin cookie request denied" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const payload = await request.json().catch(() => null);
     const rawItems = isRecord(payload) && Array.isArray(payload.items) ? payload.items : [];
