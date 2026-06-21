@@ -9,7 +9,7 @@ Modern admin dashboard built with **TanStack Start** (full-stack React framework
 - **UI**: React 19 + shadcn/ui + Tailwind CSS v4 + Radix primitives
 - **Tables**: TanStack Table with server-side pagination
 - **Forms**: React Hook Form + Zod validation
-- **Rich Text**: Sanitized read-only previews with deferred Tiptap editor loading (images, tables, YouTube, resizable images)
+- **Rich Text**: Sanitized rich previews that auto-mount a deferred Tiptap editor on visibility/interaction (images, tables, YouTube, resizable images)
 - **DnD**: dnd-kit (sortable lists, collection reorder)
 - **Charts**: Recharts (dashboard analytics)
 - **Auth**: Better Auth (email/password + optional 2FA)

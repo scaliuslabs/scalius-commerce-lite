@@ -687,7 +687,7 @@ describe("admin route graph boundaries", () => {
     expect(collectionSource).toContain("Collection product label prefetch skipped");
   });
 
-  it("keeps deferred rich-text previews rendered without eager editor imports", () => {
+  it("keeps deferred rich-text editing lazy without a manual edit gate", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),
       "utf8",
@@ -696,7 +696,13 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("import { RichContent } from \"../rich-content\"");
     expect(source).toContain("<RichContent content={content} variant=\"compact\" />");
     expect(source).toContain("const TiptapEditor = lazy(");
+    expect(source).toContain("loadTiptapEditorModule");
+    expect(source).toContain("IntersectionObserver");
+    expect(source).toContain("requestIdleCallback");
     expect(source).not.toContain("from \"./TiptapEditor\"");
     expect(source).not.toContain("toPlainTextPreview");
+    expect(source).not.toContain("PencilLine");
+    expect(source).not.toContain("editLabel");
+    expect(source).not.toContain("setIsEditing");
   });
 });
