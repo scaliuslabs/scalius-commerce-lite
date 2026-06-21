@@ -12,6 +12,7 @@ interface TiptapEditorProps {
   placeholder?: string;
   className?: string;
   compact?: boolean;
+  autoFocus?: boolean;
 }
 
 export function TiptapEditor({
@@ -20,9 +21,11 @@ export function TiptapEditor({
   placeholder = "Write something...",
   className,
   compact = false,
+  autoFocus = false,
 }: TiptapEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const hasAutoFocusedRef = useRef(false);
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -139,6 +142,17 @@ export function TiptapEditor({
       editorInstance.commands.setContent(content, { emitUpdate: false });
     }
   }, [content, editorInstance, isMounted]);
+
+  useEffect(() => {
+    if (!autoFocus || !editorInstance || !isMounted || hasAutoFocusedRef.current) {
+      return;
+    }
+
+    hasAutoFocusedRef.current = true;
+    queueMicrotask(() => {
+      editorInstance.commands.focus("end");
+    });
+  }, [autoFocus, editorInstance, isMounted]);
 
   if (!isMounted) {
     return (

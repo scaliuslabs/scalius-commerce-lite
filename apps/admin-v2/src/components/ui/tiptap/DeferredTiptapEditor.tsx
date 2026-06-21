@@ -1,13 +1,20 @@
-import { lazy, Suspense, useState } from "react";
-import { PencilLine } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
-import { Button } from "../button";
 import { RichContent } from "../rich-content";
 
-const TiptapEditor = lazy(() =>
-  import("./TiptapEditor").then((module) => ({
+let tiptapEditorModulePromise: Promise<{
+  default: typeof import("./TiptapEditor").TiptapEditor;
+}> | null = null;
+
+function loadTiptapEditorModule() {
+  tiptapEditorModulePromise ??= import("./TiptapEditor").then((module) => ({
     default: module.TiptapEditor,
-  })),
+  }));
+  return tiptapEditorModulePromise;
+}
+
+const TiptapEditor = lazy(() =>
+  loadTiptapEditorModule(),
 );
 
 const RICH_CONTENT_BLOCK_RE = /<(img|video|iframe|table|hr)\b/i;
@@ -29,7 +36,6 @@ interface DeferredTiptapEditorProps {
   placeholder?: string;
   className?: string;
   compact?: boolean;
-  editLabel?: string;
 }
 
 function EditorLoadingShell({
@@ -58,12 +64,65 @@ export function DeferredTiptapEditor({
   placeholder = "Write something...",
   className,
   compact = false,
-  editLabel = "Edit",
 }: DeferredTiptapEditorProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldMountEditor, setShouldMountEditor] = useState(false);
+  const [autoFocusEditor, setAutoFocusEditor] = useState(false);
   const hasContent = hasRenderableContent(content);
 
-  if (isEditing) {
+  const mountEditor = useCallback(() => {
+    setAutoFocusEditor(true);
+    setShouldMountEditor(true);
+  }, []);
+
+  useEffect(() => {
+    if (shouldMountEditor || typeof window === "undefined") return undefined;
+
+    let cancelled = false;
+    let idleHandle: number | null = null;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    let observer: IntersectionObserver | null = null;
+
+    const preloadAndMount = () => {
+      void loadTiptapEditorModule().then(() => {
+        if (!cancelled) setShouldMountEditor(true);
+      });
+    };
+
+    const schedulePreload = () => {
+      if ("requestIdleCallback" in window) {
+        idleHandle = window.requestIdleCallback(preloadAndMount, { timeout: 1200 });
+        return;
+      }
+      timeoutHandle = setTimeout(preloadAndMount, 250);
+    };
+
+    if ("IntersectionObserver" in window && containerRef.current) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            observer?.disconnect();
+            schedulePreload();
+          }
+        },
+        { rootMargin: "180px" },
+      );
+      observer.observe(containerRef.current);
+    } else {
+      schedulePreload();
+    }
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+      if (idleHandle !== null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    };
+  }, [shouldMountEditor]);
+
+  if (shouldMountEditor) {
     return (
       <Suspense
         fallback={
@@ -76,16 +135,29 @@ export function DeferredTiptapEditor({
           placeholder={placeholder}
           className={className}
           compact={compact}
+          autoFocus={autoFocusEditor}
         />
       </Suspense>
     );
   }
 
   return (
-    <div className={cn("overflow-hidden rounded-md border bg-background", className)}>
+    <div
+      ref={containerRef}
+      className={cn(
+        "overflow-hidden rounded-md border bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        className,
+      )}
+      role="textbox"
+      tabIndex={0}
+      aria-multiline="true"
+      aria-label="Rich text editor"
+      onFocus={mountEditor}
+      onPointerDown={mountEditor}
+    >
       <div
         className={cn(
-          "p-4 text-sm",
+          "cursor-text p-4 text-sm",
           compact ? "min-h-[180px]" : "min-h-[200px]",
         )}
       >
@@ -101,18 +173,6 @@ export function DeferredTiptapEditor({
             placeholder
           )}
         </div>
-      </div>
-      <div className="flex justify-end border-t bg-muted/20 px-3 py-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label="Edit rich text content"
-          onClick={() => setIsEditing(true)}
-        >
-          <PencilLine className="h-3.5 w-3.5" />
-          {editLabel}
-        </Button>
       </div>
     </div>
   );
