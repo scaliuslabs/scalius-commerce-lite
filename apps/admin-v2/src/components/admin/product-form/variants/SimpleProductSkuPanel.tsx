@@ -84,7 +84,7 @@ export function SimpleProductSkuPanel({
   const stock = Number(form.watch("stock") ?? 0);
   const available = Math.max(0, stock - (variant.reservedStock ?? 0));
 
-  const handleSubmit: SubmitHandler<VariantFormValues> = async (values) => {
+  const saveSimpleSku = async (values: VariantFormValues): Promise<boolean> => {
     const success = await onSave(variant.id, {
       ...values,
       size: null,
@@ -94,6 +94,24 @@ export function SimpleProductSkuPanel({
     if (success) {
       form.reset({ ...values, size: null, color: null });
     }
+    return success;
+  };
+
+  const handleSubmit: SubmitHandler<VariantFormValues> = async (values) => {
+    await saveSimpleSku(values);
+  };
+
+  const handleSetUpOptions = async () => {
+    if (!form.formState.isDirty) {
+      onAddOption();
+      return;
+    }
+
+    const isValid = await form.trigger();
+    if (!isValid) return;
+
+    const success = await saveSimpleSku(form.getValues());
+    if (success) onAddOption();
   };
 
   return (
@@ -108,13 +126,13 @@ export function SimpleProductSkuPanel({
           <div>
             <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
               <Package className="h-4 w-4 text-muted-foreground" />
-              Inventory & SKU
+              Simple Product SKU
               <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
                 Simple product
               </Badge>
             </CardTitle>
             <CardDescription className="mt-1 text-xs text-muted-foreground">
-              This product has one sellable SKU and no customer options.
+              One SKU, no size or color choices.
             </CardDescription>
           </div>
 
@@ -136,9 +154,16 @@ export function SimpleProductSkuPanel({
                 Always available
               </Badge>
             )}
-            <Button type="button" variant="outline" size="sm" onClick={onAddOption} className="h-8 text-xs">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSetUpOptions}
+              disabled={isSubmitting}
+              className="h-8 text-xs"
+            >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add size/color option
+              Set up options
             </Button>
           </div>
         </div>

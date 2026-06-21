@@ -27,12 +27,14 @@ import type {
 
 interface VariantImportExportProps {
   variants: ProductVariant[];
+  reservedVariants?: ProductVariant[];
   onImport: (variants: BulkGeneratedVariant[]) => Promise<void>;
   disabled?: boolean;
 }
 
 export function VariantImportExport({
   variants,
+  reservedVariants = [],
   onImport,
   disabled,
 }: VariantImportExportProps) {
@@ -70,7 +72,7 @@ export function VariantImportExport({
       const { parseCsvToVariants } = await import("./utils/csvHelpers");
       const result = parseCsvToVariants(
         csvText,
-        variants.map((variant) => variant.sku),
+        [...variants, ...reservedVariants].map((variant) => variant.sku),
       );
       setImportResult(result);
     };

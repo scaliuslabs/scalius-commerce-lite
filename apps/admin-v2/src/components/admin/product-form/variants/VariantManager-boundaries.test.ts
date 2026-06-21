@@ -32,6 +32,8 @@ describe("VariantManager product mode boundaries", () => {
 
   it("keeps protected simple SKUs out of the customer-option matrix", () => {
     const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+    const toolbarSource = readFileSync(VARIANT_TOOLBAR_SOURCE, "utf8");
+    const tableSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
 
     expect(source).toContain("const matrixVariants = useMemo");
     expect(source).toContain('if (variantMode.mode === "optioned") return variantMode.variants;');
@@ -39,6 +41,9 @@ describe("VariantManager product mode boundaries", () => {
     expect(source).toContain("const filtered = filterVariants(matrixVariants, filters)");
     expect(source).toContain("getVariantStats(matrixVariants)");
     expect(source).toContain("variants={matrixVariants}");
+    expect(source).toContain("reservedVariants={reservedVariants}");
+    expect(toolbarSource).toContain("skuConflictVariants");
+    expect(tableSource).toContain("addVariantDefaults");
   });
 
   it("uses merchant-facing SKU language for simple products and option language for option tables", () => {
@@ -47,9 +52,9 @@ describe("VariantManager product mode boundaries", () => {
     const tableSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
     const rowSource = readFileSync(VARIANT_ROW_SOURCE, "utf8");
 
-    expect(simpleSource).toContain("Inventory & SKU");
-    expect(simpleSource).toContain("This product has one sellable SKU and no customer options.");
-    expect(simpleSource).toContain("Add size/color option");
+    expect(simpleSource).toContain("Simple Product SKU");
+    expect(simpleSource).toContain("One SKU, no size or color choices.");
+    expect(simpleSource).toContain("Set up options");
     expect(simpleSource).toContain("Price and discount stay in Pricing.");
     expect(simpleSource).not.toContain('name="price"');
     expect(simpleSource).not.toContain("Discount type");
@@ -59,5 +64,35 @@ describe("VariantManager product mode boundaries", () => {
     expect(rowSource).toContain("Option actions");
     expect(rowSource).toContain("Edit Option");
     expect(rowSource).toContain("Delete Option");
+  });
+
+  it("saves dirty simple SKU changes before entering first option setup", () => {
+    const simpleSource = readFileSync(SIMPLE_SKU_PANEL_SOURCE, "utf8");
+
+    expect(simpleSource).toContain("const handleSetUpOptions = async () =>");
+    expect(simpleSource).toContain("form.formState.isDirty");
+    expect(simpleSource).toContain("const isValid = await form.trigger()");
+    expect(simpleSource).toContain("saveSimpleSku(form.getValues())");
+  });
+
+  it("prefills first option setup from the protected simple SKU without reusing its SKU", () => {
+    const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+    const rowSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
+
+    expect(source).toContain("function firstOptionDefaultsFromSimpleSku");
+    expect(source).toContain('sku: ""');
+    expect(source).toContain("price: variant.price");
+    expect(source).toContain("trackInventory: variant.trackInventory ?? true");
+    expect(source).toContain("addVariantDefaults={isFirstOptionSetup ? addVariantDefaults : undefined}");
+    expect(rowSource).toContain("defaultValues={addVariantDefaults}");
+  });
+
+  it("keeps bulk/import dialogs open when no options are created", () => {
+    const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+    const importSource = readFileSync(VARIANT_TOOLBAR_SOURCE, "utf8");
+
+    expect(source).toContain('throw new Error("No options were created.")');
+    expect(source).toContain('throw new Error("No options were imported.")');
+    expect(importSource).toContain("reservedVariants");
   });
 });
