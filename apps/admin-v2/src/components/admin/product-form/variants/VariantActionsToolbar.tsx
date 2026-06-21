@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-  Filter,
+  ArrowUpDown,
   Loader2,
   Plus,
   Search,
@@ -96,11 +96,11 @@ export function VariantActionsToolbar({
       {/* Top Row - Main Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Left Side - Search and Filter */}
-        <div className="flex items-center gap-2 flex-1 min-w-[250px]">
-          <div className="relative flex-1 max-w-[280px]">
+        <div className="flex w-full items-center gap-2 sm:min-w-[250px] sm:flex-1">
+          <div className="relative min-w-0 flex-1 sm:max-w-[280px]">
             <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search variants..."
+              placeholder="Search options..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
               className="pl-8 h-8 text-xs"
@@ -123,15 +123,15 @@ export function VariantActionsToolbar({
             onClick={() => setShowFilters(!showFilters)}
             className="h-8 text-xs px-2.5 gap-1.5"
           >
-            <Filter className="h-3.5 w-3.5" />
-            {showFilters ? "Hide Filter" : "Filter"}
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            {showFilters ? "Hide Sort" : "Sort"}
           </Button>
         </div>
 
         {/* Right Side - Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           {selectedCount > 0 && (
-            <div className="flex items-center gap-2 mr-1">
+            <div className="flex w-full items-center gap-2 sm:mr-1 sm:w-auto">
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal">
                 {selectedCount} selected
               </Badge>
@@ -148,20 +148,20 @@ export function VariantActionsToolbar({
             </div>
           )}
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
             {isBulkEditing ? (
               <>
-                <Button variant="ghost" size="sm" onClick={onToggleBulkEdit} className="h-8 text-xs">
+                <Button variant="ghost" size="sm" onClick={onToggleBulkEdit} className="h-8 w-full text-xs sm:w-auto">
                   Cancel
                 </Button>
-                <Button size="sm" onClick={onSaveBulkEdit} className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                <Button size="sm" onClick={onSaveBulkEdit} className="h-8 w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:w-auto">
                   Save Changes
                 </Button>
               </>
             ) : (
               <>
                 {variants.length > 0 && (
-                  <Button variant="outline" size="sm" onClick={onToggleBulkEdit} disabled={disabled} className="h-8 text-xs">
+                  <Button variant="outline" size="sm" onClick={onToggleBulkEdit} disabled={disabled} className="h-8 w-full text-xs sm:w-auto">
                     Spreadsheet Edit
                   </Button>
                 )}
@@ -178,9 +178,9 @@ export function VariantActionsToolbar({
                   disabled={disabled}
                 />
 
-                <Button size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 text-xs bg-primary text-primary-foreground">
+                <Button size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 w-full text-xs bg-primary text-primary-foreground sm:w-auto">
                   <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Add Variant
+                  Add Option
                 </Button>
               </>
             )}
@@ -188,7 +188,7 @@ export function VariantActionsToolbar({
         </div>
       </div>
 
-      {/* Second Row - Sort and Filters (Collapsible) */}
+      {/* Second Row - Sort controls (Collapsible) */}
       {showFilters && (
         <div className="flex flex-wrap items-center gap-2.5 p-2 bg-muted/40 rounded-md border text-xs">
           <div className="flex items-center gap-2">
@@ -246,6 +246,7 @@ function LazyBulkVariantGenerator({
         size="sm"
         disabled={disabled}
         onClick={() => setShouldLoad(true)}
+        className="h-8 w-full justify-center text-xs sm:w-auto"
       >
         <Sparkles className="mr-2 h-4 w-4" />
         Bulk Generate
@@ -256,7 +257,7 @@ function LazyBulkVariantGenerator({
   return (
     <Suspense
       fallback={
-        <Button variant="outline" size="sm" disabled>
+        <Button variant="outline" size="sm" disabled className="h-8 w-full justify-center text-xs sm:w-auto">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           Bulk Generate
         </Button>

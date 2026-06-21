@@ -184,8 +184,11 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         .select({
             id: productVariants.id,
             isDefault: productVariants.isDefault,
+            size: productVariants.size,
+            color: productVariants.color,
             stock: productVariants.stock,
             stockVersion: productVariants.stockVersion,
+            trackInventory: productVariants.trackInventory,
         })
         .from(productVariants)
         .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
@@ -197,7 +200,8 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
 
     const size = normalizeOptionValue(data.size);
     const color = normalizeOptionValue(data.color);
-    if (existingVariant.isDefault) {
+    const existingIsSimpleSku = existingVariant.isDefault;
+    if (existingIsSimpleSku) {
         if (size || color) {
             throw new ValidationError("The simple product SKU cannot be turned into an option. Add a new variant instead.");
         }
@@ -215,18 +219,36 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         throw new ConflictError("A variant with this SKU already exists");
     }
 
+    const simpleProductPricing = existingIsSimpleSku
+        ? await db
+            .select({
+                price: products.price,
+            })
+            .from(products)
+            .where(and(eq(products.id, productId), isNull(products.deletedAt)))
+            .get()
+        : null;
+
+    if (existingIsSimpleSku && !simpleProductPricing) {
+        throw new NotFoundError("Product not found");
+    }
+
     const updateValues = {
         size,
         color,
         weight: data.weight,
         sku: data.sku,
-        price: data.price,
-        trackInventory: data.trackInventory ?? true,
+        price: simpleProductPricing?.price ?? data.price,
+        trackInventory: data.trackInventory ?? existingVariant.trackInventory,
         barcode: data.barcode || null,
         barcodeType: data.barcodeType || null,
-        discountType: data.discountType || "percentage",
-        discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
-        discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
+        discountType: existingIsSimpleSku ? "percentage" : data.discountType || "percentage",
+        discountPercentage: existingIsSimpleSku
+            ? 0
+            : (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
+        discountAmount: existingIsSimpleSku
+            ? 0
+            : (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
         updatedAt: sql`unixepoch()`,
     };
 
@@ -276,7 +298,11 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
     const [variant] = await db
         .update(productVariants)
         .set(updateValues)
-        .where(eq(productVariants.id, variantId))
+        .where(and(
+            eq(productVariants.id, variantId),
+            eq(productVariants.productId, productId),
+            isNull(productVariants.deletedAt),
+        ))
         .returning();
 
     return variant;
@@ -284,13 +310,20 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
 
 export async function deleteVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string) {
     const existingVariant = await db
-        .select({ id: productVariants.id })
+        .select({
+            id: productVariants.id,
+            isDefault: productVariants.isDefault,
+        })
         .from(productVariants)
         .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
         .get();
 
     if (!existingVariant) {
         throw new NotFoundError("Variant not found");
+    }
+
+    if (existingVariant.isDefault) {
+        throw new ValidationError("The protected simple product SKU cannot be deleted from the generic option editor.");
     }
 
     const product = await db
@@ -441,6 +474,20 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
 
 export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, productId: string, variantIds: string[]) {
     if (variantIds.length === 0) throw new ValidationError("No variant IDs provided");
+
+    const protectedVariant = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(and(
+            eq(productVariants.productId, productId),
+            inArray(productVariants.id, variantIds),
+            eq(productVariants.isDefault, true),
+            isNull(productVariants.deletedAt),
+        ))
+        .get();
+    if (protectedVariant) {
+        throw new ValidationError("The protected simple product SKU cannot be deleted from the generic option editor.");
+    }
 
     const product = await db
         .select({ isActive: products.isActive })

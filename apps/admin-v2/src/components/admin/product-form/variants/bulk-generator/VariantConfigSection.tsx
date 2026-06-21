@@ -177,7 +177,7 @@ export const VariantConfigSection = React.memo(
               Auto-generate EAN-13 barcodes
             </label>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Each variant gets a unique barcode for scanning and label printing
+              Each option gets a unique barcode for scanning and label printing
             </p>
           </div>
         </div>

@@ -67,6 +67,22 @@ export const variantFormSchema = z.object({
   }
 });
 
+export const variantOptionFormSchema = variantFormSchema.superRefine((data, ctx) => {
+  if (data.size?.trim() || data.color?.trim()) return;
+
+  const message = "Add a size, color, or both.";
+  ctx.addIssue({
+    code: "custom",
+    message,
+    path: ["size"],
+  });
+  ctx.addIssue({
+    code: "custom",
+    message,
+    path: ["color"],
+  });
+});
+
 export type VariantFormValues = z.infer<typeof variantFormSchema>;
 
 // --- Bulk Generation Types ---

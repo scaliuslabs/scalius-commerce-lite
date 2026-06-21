@@ -76,7 +76,7 @@ export const VariantPreviewTable = React.memo(function VariantPreviewTable({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-semibold">
-          Preview ({previewVariants.length} variant
+          Preview ({previewVariants.length} option
           {previewVariants.length !== 1 ? "s" : ""})
         </Label>
         {skuConflicts.length > 0 && (
@@ -109,7 +109,7 @@ export const VariantPreviewTable = React.memo(function VariantPreviewTable({
                 >
                   <div className="text-muted-foreground">
                     <p className="text-sm">
-                      Add sizes and/or colors to preview variants
+                      Add sizes and/or colors to preview options
                     </p>
                     <p className="text-xs mt-1">
                       All combinations will be shown here

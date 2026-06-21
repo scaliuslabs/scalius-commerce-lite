@@ -178,7 +178,7 @@ export function ProductForm({
             <div className="mt-4">
               <InfoBanner
                 title="Next Steps"
-                message="After creating this product, you can add variants (different sizes, colors, or SKUs) and manage inventory on the edit page."
+                message="After creating this product, manage its Inventory & SKU or add size/color options from the edit page."
               />
             </div>
           )}

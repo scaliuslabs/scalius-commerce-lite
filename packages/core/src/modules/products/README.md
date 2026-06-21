@@ -152,11 +152,11 @@ Storefront category ([slug].astro)
 
 4. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
 
-5. **Simple/optioned transitions need a guided workflow**: The backend is SKU-first, but the admin UX still exposes variants as a table instead of a first-class `simple` vs `optioned` product mode with explicit transition copy/stock migration/cached-cart invalidation guidance.
+5. **Simple/optioned transitions need a guided stock workflow**: The backend is SKU-first. Admin edit now presents one protected default no-option SKU as an `Inventory & SKU` panel, hides that SKU from optioned product tables, and rejects non-default/no-option SKUs everywhere new option rows can be created. The remaining workflow gap is deliberate conversion UX: merchants need explicit stock/price copy-or-merge choices when a tracked simple SKU becomes optioned, and an optioned -> simple flow with cached-cart invalidation guidance.
 
 ## Inventory Rules
 
-- Migration `0055_default_sku_inventory_tracking` established the SKU-first columns/backfill. Migration `0057_simple_sku_legacy_repair` repairs later legacy/demo drift: active products with zero active SKUs receive an untracked hidden default SKU, and sole zero-stock/no-movement no-option SKUs are normalized to untracked simple defaults.
+- Migration `0055_default_sku_inventory_tracking` established the SKU-first columns/backfill. Migration `0057_simple_sku_legacy_repair` was a one-time data repair that gave active SKU-less products a protected untracked default SKU. Current runtime rules are strict: protected default SKUs must stay optionless, and every non-default SKU must expose at least one customer option.
 - Product variant edit and bulk edit split `stock` out of ordinary metadata writes. Existing-SKU stock changes must batch the movement claim with the guarded variant stock/`stockVersion` update so `inventory_movements`, stock, and low-stock checks stay in sync.
 - Variant duplication copies merchandising fields only. The new SKU starts with zero physical stock; merchants must perform an explicit stocktake/adjustment to add sellable quantity.
 

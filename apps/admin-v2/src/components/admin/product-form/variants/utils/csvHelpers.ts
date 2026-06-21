@@ -203,11 +203,16 @@ function parseVariantRow(
 
   const barcode = readColumn(values, column.barcode).trim();
   const barcodeType = parseBarcodeType(readColumn(values, column.barcodeType));
+  const size = readColumn(values, column.size).trim() || null;
+  const color = readColumn(values, column.color).trim() || null;
+  if (!size && !color) {
+    throw new Error("Size or Color is required for product options");
+  }
 
   return {
     sku,
-    size: readColumn(values, column.size).trim() || null,
-    color: readColumn(values, column.color).trim() || null,
+    size,
+    color,
     weight,
     barcode: barcode || null,
     barcodeType,

@@ -105,4 +105,19 @@ describe("variant CSV helpers", () => {
       { row: 4, error: "Invalid discount type: seasonal" },
     ]);
   });
+
+  it("rejects imported option rows without size or color", () => {
+    const rows = [
+      "SKU,Size,Color,Price,Stock",
+      "NO-OPTION,,,12,1",
+    ].join("\n");
+    const result = parseCsvToVariants(rows);
+
+    expect(result.success).toBe(false);
+    expect(result.imported).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.errors).toEqual([
+      { row: 2, error: "Size or Color is required for product options" },
+    ]);
+  });
 });
