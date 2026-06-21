@@ -27,6 +27,8 @@ interface VariantRow {
   allowPreorder: boolean;
   allowBackorder: boolean;
   backorderLimit: number;
+  isDefault: boolean;
+  trackInventory: boolean;
   price: number;
   discountPercentage: number | null;
   discountType: string | null;
@@ -75,6 +77,8 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
     allowPreorder: false,
     allowBackorder: false,
     backorderLimit: 0,
+    isDefault: false,
+    trackInventory: true,
     price: 125,
     discountPercentage: null,
     discountType: null,
@@ -270,6 +274,7 @@ describe("createStorefrontOrder product availability verification", () => {
             },
           ],
         },
+        variants: [createVariant({ size: "M" })],
       }),
     ).rejects.toMatchObject({
       message: "Some items in your cart need attention.",
@@ -310,6 +315,105 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [
           expect.objectContaining({
             cartKey: "line_no_inventory",
+            code: "PRODUCT_UNAVAILABLE",
+            action: "remove",
+            message: "Standard Product is not available for checkout right now.",
+          }),
+        ],
+      },
+    });
+  });
+
+  it("accepts variantless simple products by resolving their hidden default SKU", async () => {
+    const result = await placeOrder({
+      variants: [createVariant({ isDefault: true, trackInventory: false })],
+      inputOverrides: {
+        items: [
+          {
+            cartKey: "line_simple",
+            productId: "prod_standard",
+            variantId: null,
+            quantity: 1,
+            price: 125,
+            productName: "Standard Product",
+            variantLabel: null,
+          },
+        ],
+      },
+    });
+
+    expect(result.queuePayload.orderData.inventoryAction).toBe("none");
+    expect(result.queuePayload.items[0]).toEqual(
+      expect.objectContaining({
+        variantId: "var_standard",
+        inventoryTracked: false,
+      }),
+    );
+  });
+
+  it("rejects stale hidden default SKU carts after a product gains customer options", async () => {
+    await expect(
+      placeOrder({
+        variants: [
+          createVariant({ id: "var_default", isDefault: true, trackInventory: false }),
+          createVariant({ id: "var_option_m", size: "M", price: 125 }),
+        ],
+        inputOverrides: {
+          items: [
+            {
+              cartKey: "line_old_simple",
+              productId: "prod_standard",
+              variantId: "var_default",
+              quantity: 1,
+              price: 125,
+              productName: "Standard Product",
+              variantLabel: null,
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            cartKey: "line_old_simple",
+            code: "VARIANT_REQUIRED",
+            action: "select_variant",
+            message: "Standard Product needs an option selection before checkout.",
+          }),
+        ],
+      },
+    });
+  });
+
+  it("rejects ambiguous no-option SKU sets that customers cannot select between", async () => {
+    await expect(
+      placeOrder({
+        variants: [
+          createVariant({ id: "var_default", isDefault: true, trackInventory: false }),
+          createVariant({ id: "var_extra_no_option", price: 125 }),
+        ],
+        inputOverrides: {
+          items: [
+            {
+              cartKey: "line_ambiguous",
+              productId: "prod_standard",
+              variantId: null,
+              quantity: 1,
+              price: 125,
+              productName: "Standard Product",
+              variantLabel: null,
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            cartKey: "line_ambiguous",
             code: "PRODUCT_UNAVAILABLE",
             action: "remove",
             message: "Standard Product is not available for checkout right now.",

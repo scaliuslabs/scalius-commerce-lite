@@ -30,6 +30,7 @@ export async function restoreDeductedStock(
       id: productVariants.id,
       stock: productVariants.stock,
       preorderStock: productVariants.preorderStock,
+      trackInventory: productVariants.trackInventory,
     })
     .from(productVariants)
     .where(eq(productVariants.id, variantId))
@@ -46,6 +47,10 @@ export async function restoreDeductedStock(
   }
 
   const previousStock = pool === "preorder" ? variant.preorderStock : variant.stock;
+
+  if (!variant.trackInventory) {
+    return { success: true, variantId, previousStock, newStock: previousStock };
+  }
 
   const updateSet =
     pool === "regular"

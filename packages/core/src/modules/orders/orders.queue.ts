@@ -539,7 +539,7 @@ export async function handleOrderIngestBatch(
 
             // Accumulate inventory reservation entries for this order
             const orderReservationEntries = payload.items
-                .filter((item): item is OrderIngestItem & { variantId: string } => item.variantId !== null)
+                .filter((item): item is OrderIngestItem & { variantId: string } => item.variantId !== null && item.inventoryTracked !== false)
                 .map((item) => ({
                     variantId: item.variantId,
                     quantity: item.quantity,
@@ -656,6 +656,7 @@ export async function handleOrderIngestBatch(
                             price: item.price,
                             productName: item.productName,
                             variantLabel: item.variantLabel,
+                            inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
                             fulfillmentStatus: "pending" as const,
                             createdAt: sql`unixepoch()`,
                         })),

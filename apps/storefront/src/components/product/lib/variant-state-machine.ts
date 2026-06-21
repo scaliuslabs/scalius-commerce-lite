@@ -24,6 +24,8 @@ export interface Variant {
   discountAmount: number;
   stock: number;
   reservedStock?: number;
+  isDefault?: boolean;
+  trackInventory?: boolean;
   colorSortOrder: number;
   sizeSortOrder: number;
 }
@@ -97,6 +99,10 @@ function addToMapArray(
   map.set(key, [value]);
 }
 
+function isVariantAvailable(variant: Pick<Variant, "stock" | "reservedStock" | "trackInventory">): boolean {
+  return variant.trackInventory === false || (variant.stock - (variant.reservedStock ?? 0)) > 0;
+}
+
 /**
  * Build a reusable index for fast availability + lookup.
  * Construct once per product page.
@@ -122,7 +128,7 @@ export function createVariantIndex(variants: Variant[]): VariantIndex {
       variantBySizeColor.set(`${v.size}||${v.color}`, v);
     }
 
-    if ((v.stock - (v.reservedStock ?? 0)) > 0) {
+    if (isVariantAvailable(v)) {
       if (v.size) inStockSizes.add(v.size);
       if (v.color) inStockColors.add(v.color);
 
@@ -350,7 +356,7 @@ export function validateSelection(
   }
 
   // Check stock
-  if ((variant.stock - (variant.reservedStock ?? 0)) <= 0) {
+  if (!isVariantAvailable(variant)) {
     return {
       valid: false,
       error: "Selected option out of stock",

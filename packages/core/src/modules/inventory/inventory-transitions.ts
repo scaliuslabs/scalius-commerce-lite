@@ -834,7 +834,11 @@ async function getOrderInventoryEntries(
     inventoryPool: string,
 ): Promise<ReservationEntry[]> {
     const items = await db
-        .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+        .select({
+            variantId: orderItems.variantId,
+            quantity: orderItems.quantity,
+            inventoryTracked: orderItems.inventoryTracked,
+        })
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId))
         .all();
@@ -842,7 +846,7 @@ async function getOrderInventoryEntries(
     const pool = normalizeInventoryPool(inventoryPool);
 
     return items
-        .filter((i) => i.variantId !== null)
+        .filter((i) => i.variantId !== null && i.inventoryTracked)
         .map((i) => ({
             variantId: i.variantId as string,
             quantity: i.quantity,

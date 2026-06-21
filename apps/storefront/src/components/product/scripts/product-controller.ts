@@ -370,7 +370,7 @@ function handleAddToCart(redirect: boolean) {
   )
     return;
 
-  if (container.dataset.productHasVariants !== "true") {
+  if (state.variants.length === 0) {
     showToast("This product is not available for checkout right now.", "error");
     return;
   }

@@ -212,7 +212,7 @@ async function assertDiscountUsageStillAvailable(
 function getReservationEntries(payload: OrderIngestQueuePayload): ReservationEntry[] {
     if (payload.orderData.inventoryAction !== "reserved") return [];
     return payload.items
-        .filter((item): item is OrderIngestQueuePayload["items"][number] & { variantId: string } => item.variantId !== null)
+        .filter((item): item is OrderIngestQueuePayload["items"][number] & { variantId: string } => item.variantId !== null && item.inventoryTracked !== false)
         .map((item) => ({
             variantId: item.variantId,
             quantity: item.quantity,
@@ -353,6 +353,7 @@ function buildOrderWriteBatch(
                     price: item.price,
                     productName: item.productName,
                     variantLabel: item.variantLabel,
+                    inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
                     fulfillmentStatus: "pending" as const,
                     createdAt: sql`unixepoch()`,
                 })),

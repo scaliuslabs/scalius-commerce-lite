@@ -141,6 +141,8 @@ export interface ProductVariantDto {
   stock: number;
   reservedStock: number;
   preorderStock?: number;
+  isDefault?: boolean;
+  trackInventory?: boolean;
   lowStockThreshold?: number | null;
   allowPreorder?: boolean;
   preorderDate?: NullableTimestamp;
@@ -192,6 +194,7 @@ export interface ProductVariantInput {
   sku: string;
   price: number;
   stock: number;
+  trackInventory?: boolean;
   barcode?: string | null;
   barcodeType?: BarcodeType | string | null;
   discountType?: ProductDiscountType;
@@ -215,6 +218,7 @@ export interface ProductVariantUpdateInput {
   sku?: string;
   price?: number;
   stock?: number;
+  trackInventory?: boolean;
   barcode?: string | null;
   barcodeType?: BarcodeType | string | null;
 }

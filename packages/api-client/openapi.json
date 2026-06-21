@@ -81051,6 +81051,12 @@
                                     "preorderStock": {
                                       "type": "number"
                                     },
+                                    "isDefault": {
+                                      "type": "boolean"
+                                    },
+                                    "trackInventory": {
+                                      "type": "boolean"
+                                    },
                                     "lowStockThreshold": {
                                       "type": "number",
                                       "nullable": true
@@ -83518,6 +83524,12 @@
                               "preorderStock": {
                                 "type": "number"
                               },
+                              "isDefault": {
+                                "type": "boolean"
+                              },
+                              "trackInventory": {
+                                "type": "boolean"
+                              },
                               "lowStockThreshold": {
                                 "type": "number",
                                 "nullable": true
@@ -85099,6 +85111,9 @@
                     "type": "number",
                     "minimum": 0
                   },
+                  "trackInventory": {
+                    "type": "boolean"
+                  },
                   "barcode": {
                     "type": "string",
                     "nullable": true,
@@ -85196,6 +85211,12 @@
                         },
                         "preorderStock": {
                           "type": "number"
+                        },
+                        "isDefault": {
+                          "type": "boolean"
+                        },
+                        "trackInventory": {
+                          "type": "boolean"
                         },
                         "lowStockThreshold": {
                           "type": "number",
@@ -85624,6 +85645,12 @@
                               "preorderStock": {
                                 "type": "number"
                               },
+                              "isDefault": {
+                                "type": "boolean"
+                              },
+                              "trackInventory": {
+                                "type": "boolean"
+                              },
                               "lowStockThreshold": {
                                 "type": "number",
                                 "nullable": true
@@ -86043,6 +86070,9 @@
                     "type": "number",
                     "minimum": 0
                   },
+                  "trackInventory": {
+                    "type": "boolean"
+                  },
                   "barcode": {
                     "type": "string",
                     "nullable": true,
@@ -86140,6 +86170,12 @@
                         },
                         "preorderStock": {
                           "type": "number"
+                        },
+                        "isDefault": {
+                          "type": "boolean"
+                        },
+                        "trackInventory": {
+                          "type": "boolean"
                         },
                         "lowStockThreshold": {
                           "type": "number",
@@ -86820,6 +86856,9 @@
                           "type": "number",
                           "minimum": 0
                         },
+                        "trackInventory": {
+                          "type": "boolean"
+                        },
                         "barcode": {
                           "type": "string",
                           "nullable": true,
@@ -86940,6 +86979,12 @@
                               },
                               "preorderStock": {
                                 "type": "number"
+                              },
+                              "isDefault": {
+                                "type": "boolean"
+                              },
+                              "trackInventory": {
+                                "type": "boolean"
                               },
                               "lowStockThreshold": {
                                 "type": "number",
@@ -87645,6 +87690,9 @@
                           "type": "number",
                           "minimum": 0
                         },
+                        "trackInventory": {
+                          "type": "boolean"
+                        },
                         "barcode": {
                           "type": "string",
                           "nullable": true,
@@ -88019,6 +88067,12 @@
                         },
                         "preorderStock": {
                           "type": "number"
+                        },
+                        "isDefault": {
+                          "type": "boolean"
+                        },
+                        "trackInventory": {
+                          "type": "boolean"
                         },
                         "lowStockThreshold": {
                           "type": "number",

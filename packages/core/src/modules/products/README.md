@@ -28,7 +28,7 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
-- Default variant synthesis remains a storefront detail-read compatibility shim for products with no variants, but it is not a purchasability signal. The product page and quick-buy route fail closed when `product.hasVariants === false`, and checkout/cart validation rejects variantless buyer lines until product-level inventory exists end to end.
+- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, no size/color); optioned products require an explicit selected SKU; SKU-less products fail closed. The storefront no longer synthesizes fake `default` variants.
 
 ## Data Flow
 
@@ -69,7 +69,7 @@ Storefront category ([slug].astro)
 | `products.types.ts` | Zod schemas for variant operations (`createVariantSchema`, `updateVariantSchema`, `bulkVariantSchema`, `bulkCreateVariantsSchema`, `bulkDeleteVariantsSchema`, `bulkUpdateVariantsSchema`, `updateSortOrderSchema`) and TypeScript interfaces (`ProductWithDetails`, `ProductListItem`, `StorefrontProductFilterInput`). Discount percentage capped at 0-100 in all schemas. |
 | `products.validation.ts` | Zod schemas for product create/update: `createProductSchema`, `updateProductSchema` with shared sub-schemas for images, attributes (`{attributeId, value}`), and additional info (`{id, title, content, sortOrder}`). Discount percentage capped at 0-100. |
 | `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`, `bulkUpdateVariants`). `getProducts` returns `discountType` and `discountAmount`. `getProductDetails` fetches `productRichContent` and `productAttributeValues`. All variant queries filter `deletedAt IS NULL`. |
-| `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation (percentage and flat), feature extraction, legacy default variant synthesis for detail compatibility, and attribute-based filtering. All variant queries filter `isNull(deletedAt)`; buyer purchase flows must use `product.hasVariants`/cart validation rather than synthetic defaults as inventory proof. |
+| `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation (percentage and flat), feature extraction, SKU/default-SKU metadata, and attribute-based filtering. All variant queries filter `isNull(deletedAt)`; buyer purchase flows must use real variant rows and cart validation as inventory proof. |
 | `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `duplicateVariant`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. |
 
 ## API Endpoints

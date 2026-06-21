@@ -110,6 +110,7 @@ export const orderItems = sqliteTable("order_items", {
     price: real("price").notNull(),
     productName: text("product_name"),
     variantLabel: text("variant_label"),
+    inventoryTracked: integer("inventory_tracked", { mode: "boolean" }).notNull().default(true),
     fulfillmentStatus: text("fulfillment_status").notNull().default(ItemFulfillmentStatus.PENDING),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()

@@ -63,6 +63,8 @@ export const productVariantSchema = z
     stock: z.number(),
     reservedStock: z.number(),
     preorderStock: z.number().optional(),
+    isDefault: z.boolean().optional(),
+    trackInventory: z.boolean().optional(),
     lowStockThreshold: z.number().nullable().optional(),
     allowPreorder: z.boolean().optional(),
     preorderDate: optionalNullableTimestampSchema,

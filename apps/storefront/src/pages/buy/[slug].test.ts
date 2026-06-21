@@ -56,4 +56,95 @@ describe("/buy/[slug]", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("Location")).toBe("/products/cotton-panjabi?error=product_unavailable");
   });
+
+  it("creates quick-buy cart data for simple products with a hidden default SKU", async () => {
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: {
+        id: "prod_1",
+        slug: "cotton-panjabi",
+        name: "Cotton Panjabi",
+        discountedPrice: 150,
+        price: 150,
+        discountType: null,
+        discountAmount: null,
+        discountPercentage: null,
+        freeDelivery: false,
+        hasVariants: true,
+        imageUrl: null,
+      },
+      images: [],
+      variants: [{ id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null }],
+      category: null,
+    });
+
+    const response = await GET({
+      params: { slug: "cotton-panjabi" },
+      url: new URL("https://storefront.example.test/buy/cotton-panjabi"),
+    } as never);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain("var_default_prod_1");
+  });
+
+  it("requires an explicit variant for optioned products", async () => {
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: {
+        id: "prod_1",
+        slug: "cotton-panjabi",
+        name: "Cotton Panjabi",
+        discountedPrice: 150,
+        price: 150,
+        discountType: null,
+        discountAmount: null,
+        discountPercentage: null,
+        freeDelivery: false,
+        hasVariants: true,
+        imageUrl: null,
+      },
+      images: [],
+      variants: [{ id: "var_m", productId: "prod_1", price: 150, size: "M", color: null }],
+      category: null,
+    });
+
+    const response = await GET({
+      params: { slug: "cotton-panjabi" },
+      url: new URL("https://storefront.example.test/buy/cotton-panjabi"),
+    } as never);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("Location")).toBe("/products/cotton-panjabi?error=variant_required");
+  });
+
+  it("does not accept a hidden default SKU after customer options exist", async () => {
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: {
+        id: "prod_1",
+        slug: "cotton-panjabi",
+        name: "Cotton Panjabi",
+        discountedPrice: 150,
+        price: 150,
+        discountType: null,
+        discountAmount: null,
+        discountPercentage: null,
+        freeDelivery: false,
+        hasVariants: true,
+        imageUrl: null,
+      },
+      images: [],
+      variants: [
+        { id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null, isDefault: true },
+        { id: "var_m", productId: "prod_1", price: 150, size: "M", color: null, isDefault: false },
+      ],
+      category: null,
+    });
+
+    const response = await GET({
+      params: { slug: "cotton-panjabi" },
+      url: new URL("https://storefront.example.test/buy/cotton-panjabi?variant=var_default_prod_1"),
+    } as never);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("Location")).toBe("/products/cotton-panjabi?error=variant_not_found");
+  });
 });

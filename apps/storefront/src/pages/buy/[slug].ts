@@ -25,7 +25,17 @@ export const GET: APIRoute = async ({ params, url }) => {
     }
 
     const { product, images, variants, category } = productData;
-    if (!product.hasVariants) {
+    const activeRealVariants = variants.filter((variant) => variant.id !== "default" && !variant.deletedAt);
+    const optionVariants = activeRealVariants.filter(
+      (variant) => !variant.isDefault && (Boolean(variant.size) || Boolean(variant.color)),
+    );
+    const buyerVariants = optionVariants.length > 0
+      ? optionVariants
+      : activeRealVariants.length === 1
+        ? activeRealVariants
+        : [];
+    const hasCustomerOptions = optionVariants.length > 0;
+    if (buyerVariants.length === 0) {
       return new Response(null, {
         status: 307,
         headers: { Location: `/products/${slug}?error=product_unavailable` },
@@ -40,15 +50,25 @@ export const GET: APIRoute = async ({ params, url }) => {
 
     let itemToAdd: (typeof variants)[0] | null = null;
     if (requestedVariantId) {
-      itemToAdd = variants.find((v) => v.id === requestedVariantId) || null;
+      itemToAdd = buyerVariants.find((v) => v.id === requestedVariantId) || null;
       if (!itemToAdd) {
         return new Response(null, {
           status: 307,
           headers: { Location: `/products/${slug}?error=variant_not_found` },
         });
       }
-    } else if (variants.length > 0) {
-      itemToAdd = variants[0];
+    } else if (hasCustomerOptions) {
+      return new Response(null, {
+        status: 307,
+        headers: { Location: `/products/${slug}?error=variant_required` },
+      });
+    } else if (buyerVariants.length === 1) {
+      itemToAdd = buyerVariants[0];
+    } else {
+      return new Response(null, {
+        status: 307,
+        headers: { Location: `/products/${slug}?error=variant_required` },
+      });
     }
 
     let finalPrice = product.discountedPrice;

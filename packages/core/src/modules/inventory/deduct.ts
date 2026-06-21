@@ -39,6 +39,7 @@ export async function deductStock(
         stock: productVariants.stock,
         reservedStock: productVariants.reservedStock,
         preorderStock: productVariants.preorderStock,
+        trackInventory: productVariants.trackInventory,
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
@@ -56,6 +57,10 @@ export async function deductStock(
     }
 
     const previousStock = pool === "preorder" ? variant.preorderStock : variant.stock;
+
+    if (!variant.trackInventory) {
+      return { success: true, variantId, previousStock, newStock: previousStock };
+    }
 
     // Build the update: always release the reservation; for regular pool also
     // decrement the physical stock counter.

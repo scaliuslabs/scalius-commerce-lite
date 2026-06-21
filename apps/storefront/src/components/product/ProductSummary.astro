@@ -34,13 +34,17 @@ const formatPrice = (price: number) =>
     maximumFractionDigits: 2,
   })}`;
 
-const purchaseUnavailable = !product.hasVariants;
+const sellableVariants = variants.filter((variant) => !variant.deletedAt && variant.id !== "default");
+const purchaseUnavailable = sellableVariants.length === 0;
 const stockStatus = (() => {
   if (purchaseUnavailable) {
     return { text: "Unavailable", color: "text-destructive", bg: "bg-destructive/10" };
   }
-  const totalStock = variants.reduce(
-    (sum, variant) => sum + (variant.deletedAt ? 0 : variant.stock),
+  if (sellableVariants.some((variant) => variant.trackInventory === false)) {
+    return { text: "In Stock", color: "text-primary", bg: "bg-primary/10" };
+  }
+  const totalStock = sellableVariants.reduce(
+    (sum, variant) => sum + Math.max(0, variant.stock - (variant.reservedStock ?? 0)),
     0
   );
   if (totalStock > 50)

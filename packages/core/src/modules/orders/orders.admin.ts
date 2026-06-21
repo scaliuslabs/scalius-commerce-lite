@@ -530,8 +530,10 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     // and holds stock atomically. If any variant has insufficient stock,
     // the order creation fails immediately with a clear error.
     const orderId = generateOrderId();
-    const reservationEntries: ReservationEntry[] = data.items
-        .filter((item): item is typeof item & { variantId: string } => item.variantId !== null)
+    const trackingByVariantId = await loadVariantTrackingMap(db, data.items);
+    const trackedItems = withInventoryTracking(data.items, trackingByVariantId);
+    const reservationEntries: ReservationEntry[] = trackedItems
+        .filter((item): item is typeof item & { variantId: string } => item.variantId !== null && item.inventoryTracked)
         .map((item) => ({
             variantId: item.variantId,
             quantity: item.quantity,
@@ -648,13 +650,14 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     if (data.items.length > 0) {
         writeBatch.push(
             db.insert(orderItems).values(
-                data.items.map((item) => ({
+                trackedItems.map((item) => ({
                     id: generateOrderId(),
                     orderId,
                     productId: item.productId,
                     variantId: item.variantId,
                     quantity: item.quantity,
                     price: item.price,
+                    inventoryTracked: item.inventoryTracked,
                     createdAt: sql`unixepoch()`,
                 })),
             ),
@@ -697,6 +700,7 @@ interface UpdateOrderItem {
     variantId: string | null;
     quantity: number;
     price: number;
+    inventoryTracked?: boolean;
 }
 
 interface UpdateOrderData {
@@ -718,15 +722,43 @@ interface UpdateOrderData {
 }
 
 function buildInventoryEntries(
-    items: { variantId: string | null; quantity: number }[],
+    items: { variantId: string | null; quantity: number; inventoryTracked?: boolean }[],
     pool: NonNullable<ReservationEntry["pool"]>,
 ): ReservationEntry[] {
     const merged = new Map<string, number>();
     for (const item of items) {
-        if (!item.variantId) continue;
+        if (!item.variantId || item.inventoryTracked === false) continue;
         merged.set(item.variantId, (merged.get(item.variantId) ?? 0) + item.quantity);
     }
     return Array.from(merged.entries()).map(([variantId, quantity]) => ({ variantId, quantity, pool }));
+}
+
+async function loadVariantTrackingMap(
+    db: Database,
+    items: { variantId: string | null }[],
+): Promise<Map<string, boolean>> {
+    const variantIds = [...new Set(items.map((item) => item.variantId).filter((id): id is string => Boolean(id)))];
+    if (variantIds.length === 0) return new Map();
+
+    const rows = await db
+        .select({
+            id: productVariants.id,
+            trackInventory: productVariants.trackInventory,
+        })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds));
+
+    return new Map(rows.map((row) => [row.id, row.trackInventory]));
+}
+
+function withInventoryTracking<T extends { variantId: string | null }>(
+    items: T[],
+    trackingByVariantId: Map<string, boolean>,
+): Array<T & { inventoryTracked: boolean }> {
+    return items.map((item) => ({
+        ...item,
+        inventoryTracked: item.variantId ? trackingByVariantId.get(item.variantId) ?? true : false,
+    }));
 }
 
 function computeInventoryDeltas(
@@ -954,12 +986,14 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     }
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    const trackingByVariantId = await loadVariantTrackingMap(db, data.items);
+    const trackedNewItems = withInventoryTracking(data.items, trackingByVariantId);
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
     const existingInventoryAction = existingOrder.inventoryAction as string;
     const targetRestoresStock = isStockRestoreStatus(data.status);
     const targetDeductsStock = isStockDeductStatus(data.status);
     const oldEntries = buildInventoryEntries(existingItems, pool);
-    const newEntries = buildInventoryEntries(data.items, pool);
+    const newEntries = buildInventoryEntries(trackedNewItems, pool);
     const { positiveEntries, negativeEntries } = computeInventoryDeltas(oldEntries, newEntries, pool);
 
     const totalAmount = subtractPrice(
@@ -1110,13 +1144,14 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
 
         const itemReplacementStatements: SQLiteBatchItem[] = [db.delete(orderItems).where(eq(orderItems.orderId, id))];
         if (data.items.length > 0) {
-            itemReplacementStatements.push(db.insert(orderItems).values(data.items.map((item) => ({
+            itemReplacementStatements.push(db.insert(orderItems).values(trackedNewItems.map((item) => ({
                 id: "item_" + nanoid(),
                 orderId: id,
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,
                 price: item.price,
+                inventoryTracked: item.inventoryTracked,
                 createdAt: sql`unixepoch()`,
             }))));
         }

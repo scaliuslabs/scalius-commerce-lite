@@ -14,6 +14,7 @@ export const createVariantSchema = z.object({
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: z.number().min(0, "Price must be greater than or equal to 0"),
     stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
     discountType: z.enum(["percentage", "flat"]).optional(),
@@ -40,6 +41,7 @@ export const bulkVariantSchema = z.object({
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: z.number().min(0, "Price must be greater than or equal to 0"),
     stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
     discountType: z.enum(["percentage", "flat"]),
@@ -67,6 +69,7 @@ export const bulkUpdateVariantsSchema = z.object({
             sku: z.string().optional(),
             price: z.number().min(0).optional(),
             stock: z.number().min(0).optional(),
+            trackInventory: z.boolean().optional(),
             barcode: z.string().max(50).nullable().optional(),
             barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).nullable().optional(),
         })
