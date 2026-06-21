@@ -30,6 +30,10 @@ vi.mock("@/lib/safe-json", () => ({
   serializeJsonForInlineScript: (value: unknown) => JSON.stringify(value),
 }));
 
+vi.mock("@/lib/product-sellable-variants", async () => (
+  await import("../../lib/product-sellable-variants")
+));
+
 import { GET } from "./[slug]";
 
 function validCartValidation(overrides: Record<string, unknown> = {}) {

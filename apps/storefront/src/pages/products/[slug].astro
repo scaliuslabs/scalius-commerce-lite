@@ -13,6 +13,7 @@ import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
+import { resolveBuyerVariants, getBuyerStockSummary } from "@/lib/product-sellable-variants";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -38,15 +39,9 @@ if (!productData) {
 
 const { product, category, images, variants, relatedProducts } = productData;
 const productWidgets = fetchedProductWidgets ?? [];
-const activeRealVariants = variants.filter((variant) => !variant.deletedAt && variant.id !== "default");
-const optionVariants = activeRealVariants.filter(
-  (variant) => !variant.isDefault && (Boolean(variant.size) || Boolean(variant.color)),
-);
-const buyerVariants = optionVariants.length > 0
-  ? optionVariants
-  : activeRealVariants.length === 1
-    ? activeRealVariants
-    : [];
+const buyerVariantResolution = resolveBuyerVariants(variants);
+const buyerVariants = buyerVariantResolution.variants;
+const buyerStockSummary = getBuyerStockSummary(buyerVariants);
 
 const isVariantSpecificImagesEnabled = !!product.metaDescription?.includes(
   "<!--variant_images:enabled-->",
@@ -164,7 +159,9 @@ const productJsonLd = serializeJsonForInlineScript({
     priceCurrency: currencyCode,
     price: product.discountedPrice.toFixed(2),
     priceValidUntil: priceValidUntil,
-    availability: "https://schema.org/InStock",
+    availability: buyerStockSummary.canPurchaseAny
+      ? "https://schema.org/InStock"
+      : "https://schema.org/OutOfStock",
     itemCondition: "https://schema.org/NewCondition",
     seller: { "@type": "Organization", name: storeName },
   },

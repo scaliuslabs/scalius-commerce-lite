@@ -402,6 +402,8 @@ function handleAddToCart(redirect: boolean) {
     price: priceRes.finalPrice,
     quantity,
     stock: validation.variant?.stock,
+    reservedStock: validation.variant?.reservedStock,
+    trackInventory: validation.variant?.trackInventory,
     variantId: validation.variant?.id,
     size: state.selection.selectedSize,
     color: state.selection.selectedColor,

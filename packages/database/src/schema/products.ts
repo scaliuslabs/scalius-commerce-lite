@@ -100,6 +100,8 @@ export const productVariants = sqliteTable("product_variants", {
     index("product_variants_barcode_idx").on(table.barcode),
     index("product_variants_default_idx").on(table.productId, table.isDefault, table.deletedAt),
     index("product_variants_track_inventory_idx").on(table.trackInventory, table.deletedAt),
+    // Manual migration 0055 also creates this partial unique index (not expressible in Drizzle):
+    // product_variants_one_default_per_product_idx ON (product_id) WHERE is_default = true AND deleted_at IS NULL
 ]);
 
 export const categories = sqliteTable(

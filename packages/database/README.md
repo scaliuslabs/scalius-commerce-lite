@@ -305,6 +305,8 @@ Notable migrations:
 - `0050` -- Immutable `discount_customer_redemptions` claims for one-per-customer discount enforcement
 - `0051` -- D1-backed `customer_auth_otp_challenges` for atomic customer OTP attempt accounting and one-time consumption
 - `0054` -- D1-backed `customer_sessions` keyed by HMAC token hash for revocable storefront customer sessions
+- `0055` -- SKU-first inventory model: hidden/default simple-product SKUs, `track_inventory`, and untracked historical variantless order items
+- `0057` -- Legacy/demo simple-SKU repair for active products with zero active SKUs or one zero-stock no-option SKU
 
 Validate migration metadata after schema or migration edits:
 
@@ -328,4 +330,5 @@ Drizzle config (`drizzle.config.ts`):
 ## Known Gaps
 
 - No FTS5 virtual tables in the Drizzle schema -- FTS5 tables are created via raw SQL in migration `0016_fts5_search.sql` and queried via helpers in `@scalius/core/search/fts5.ts`.
+- Partial unique indexes are documented beside the table definitions but remain raw-SQL migration concerns; for example `product_variants_one_default_per_product_idx` enforces at most one active hidden default SKU per product.
 - Several JSON columns (`headerConfig`, `footerConfig`, etc.) are typed as plain `text()` -- there are no Drizzle JSON mode annotations or Zod validators at the schema level. Validation happens in the service layer.
