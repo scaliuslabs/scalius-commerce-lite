@@ -4,15 +4,11 @@ import {
   createOrder,
   type CreateOrderPayload,
   getCities as getCitiesFromApi,
-  getZones,
-  getAreas,
-  getProductBySlug,
-  getShippingMethods,
   validateDiscount,
   type LocationData,
   deleteAbandonedCheckout,
 } from "@/lib/api";
-import { roundPrice } from "@scalius/shared/price-utils";
+import { validateCartItems as validateCartItemsWithApi } from "@/lib/api/orders";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 
 type ProcessOrderOptions = {
@@ -47,7 +43,7 @@ interface ValidatedCartItem {
   freeDelivery?: boolean;
 }
 
-function validateCartItems(raw: unknown): ValidatedCartItem[] {
+function parseCartItems(raw: unknown): ValidatedCartItem[] {
   if (raw === null || typeof raw !== "object") {
     throw new Error("Cart data must be a non-null object.");
   }
@@ -111,6 +107,11 @@ function validateCartItems(raw: unknown): ValidatedCartItem[] {
   });
 }
 
+function displayVariantLabel(item: ValidatedCartItem): string | null {
+  const parts = [item.size, item.color].filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
+
 export async function processOrder(
   formData: FormData,
   options: ProcessOrderOptions = {},
@@ -145,7 +146,7 @@ export async function processOrder(
 
     const cartItems = JSON.parse(cartItemsJson);
     // Validate cart item shape and value ranges (defense against crafted form data)
-    const cartItemsArray = validateCartItems(cartItems);
+    const cartItemsArray = parseCartItems(cartItems);
 
     if (
       !customerName ||
@@ -161,147 +162,57 @@ export async function processOrder(
       );
     }
 
-    let cityName: string | undefined = undefined;
-    let zoneName: string | undefined = undefined;
-    let areaName: string | undefined = undefined;
-
-    try {
-      const allCities = await getCitiesFromApi();
-      const city = allCities?.find((c) => c.id === cityId);
-      if (city) cityName = city.name;
-
-      if (zoneId) {
-        const allZones = await getZones(cityId);
-        const zone = allZones?.find((z) => z.id === zoneId);
-        if (zone) zoneName = zone.name;
-      }
-
-      if (areaId && zoneId) {
-        const allAreas = await getAreas(zoneId);
-        const area = allAreas?.find((a) => a.id === areaId);
-        if (area) areaName = area.name;
-      }
-    } catch (locationError: unknown) {
-      console.error("Error fetching location names:", locationError);
-    }
-
-    let shippingCharge = 0;
-    const allShippingMethods = await getShippingMethods();
-    const selectedMethod = allShippingMethods?.find(
-      (method) => method.id === shippingLocationId,
-    );
-    if (selectedMethod) {
-      shippingCharge = selectedMethod.fee;
-    } else {
-      throw new Error("Invalid shipping method selected.");
-    }
-
-    // --- PERFORMANCE OPTIMIZATION: Fetch all product data in parallel ---
-    const productPromises = cartItemsArray.map((item) =>
-      getProductBySlug(item.slug || item.id),
-    );
-    const productDataResults = await Promise.all(productPromises);
-
-    const processedItems: CreateOrderPayload["items"] = [];
-    let subtotal = 0;
-
-    for (let i = 0; i < cartItemsArray.length; i++) {
-      const item = cartItemsArray[i];
-      const productData = productDataResults[i];
-
-      // Quantity bounds already validated by validateCartItems()
-
-      if (!productData) {
-        throw new Error(`Product "${item.name}" is no longer available.`);
-      }
-
-      const { product, variants } = productData;
-      let finalPrice = product.discountedPrice;
-      let variantId: string | null = null;
-      let availableStock = 0;
-
-      if (item.variantId && item.variantId !== "default") {
-        const variant = variants.find((v) => v.id === item.variantId);
-        if (variant) {
-          variantId = variant.id;
-          const variantPrice = variant.price || product.price;
-
-          // Use variant-specific discount if available, otherwise use product discount
-          const hasVariantDiscount =
-            (variant.discountType === "flat" && variant.discountAmount) ||
-            (variant.discountType === "percentage" &&
-              variant.discountPercentage);
-
-          if (hasVariantDiscount) {
-            if (variant.discountType === "flat" && variant.discountAmount) {
-              finalPrice = Math.max(
-                0,
-                roundPrice(variantPrice - variant.discountAmount),
-              );
-            } else if (
-              variant.discountType === "percentage" &&
-              variant.discountPercentage
-            ) {
-              finalPrice = roundPrice(
-                variantPrice * (1 - variant.discountPercentage / 100),
-              );
-            }
-          } else {
-            // Apply product-level discount
-            if (product.discountType === "flat" && product.discountAmount) {
-              finalPrice = Math.max(
-                0,
-                roundPrice(variantPrice - product.discountAmount),
-              );
-            } else if (
-              product.discountType === "percentage" &&
-              product.discountPercentage
-            ) {
-              finalPrice = roundPrice(
-                variantPrice * (1 - product.discountPercentage / 100),
-              );
-            } else {
-              finalPrice = variantPrice;
-            }
-          }
-
-          availableStock = variant.stock - (variant.reservedStock ?? 0);
-        } else {
-          throw new Error(
-            `Selected variant for "${product.name}" is no longer available.`,
-          );
-        }
-      } else {
-        // If no variant is specified, stock is the sum of all available variants
-        availableStock = variants.reduce((sum, v) => sum + (v.stock - (v.reservedStock ?? 0)), 0);
-      }
-
-      if (availableStock < item.quantity) {
-        throw new Error(
-          `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${item.quantity}`,
-        );
-      }
-
-      subtotal += roundPrice(finalPrice * item.quantity);
-      processedItems.push({
-        productId: product.id,
-        variantId: variantId,
+    const cartValidation = await validateCartItemsWithApi(
+      cartItemsArray.map((item, index) => ({
+        cartKey: `cod:${item.id}:${item.variantId || "base"}:${index}`,
+        productId: item.id,
+        variantId: item.variantId && item.variantId !== "default" ? item.variantId : null,
         quantity: item.quantity,
-        price: finalPrice,
-      });
-    }
-
-    subtotal = roundPrice(subtotal);
-
-    // Check if any product in the order qualifies for free delivery.
-    // This must match the client-side logic so the order total is consistent
-    // with what the customer saw at checkout.
-    const hasFreeDeliveryProduct = productDataResults.some(
-      (data) => data?.product?.freeDelivery === true,
+        price: item.price,
+        productName: item.name,
+        variantLabel: displayVariantLabel(item),
+      })),
+      {
+        city: cityId,
+        zone: zoneId,
+        area: areaId,
+        shippingMethodId: shippingLocationId,
+      },
     );
-    if (hasFreeDeliveryProduct) {
-      shippingCharge = 0;
+
+    if (!cartValidation.success) {
+      throw new Error(cartValidation.error || "Cart validation failed. Please refresh your cart and try again.");
     }
+    if (!cartValidation.data.valid) {
+      const firstIssue = cartValidation.data.issues[0];
+      throw new Error(firstIssue?.message || "Some items in your cart need attention before checkout.");
+    }
+    if (!cartValidation.data.delivery) {
+      throw new Error("Delivery information is no longer available. Please refresh checkout and try again.");
+    }
+
+    const processedItems: CreateOrderPayload["items"] = cartValidation.data.items.map((item) => ({
+      cartKey: item.cartKey,
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      price: item.unitPrice,
+      productName: item.productName,
+      variantLabel: item.variantLabel,
+    }));
+    const subtotal = cartValidation.data.subtotal;
+    const shippingCharge = cartValidation.data.delivery.shippingCharge;
+    const cityName = cartValidation.data.delivery.cityName;
+    const zoneName = cartValidation.data.delivery.zoneName;
+    const areaName = cartValidation.data.delivery.areaName;
+    const discountValidationItems = cartValidation.data.items.map((item) => ({
+      id: item.productId,
+      name: item.productName,
+      price: item.unitPrice,
+      quantity: item.quantity,
+      ...(item.variantId ? { variantId: item.variantId } : {}),
+      freeDelivery: item.freeDelivery,
+    }));
 
     let discountAmount: number | null = null;
     let discountCode: string | null = null;
@@ -312,7 +223,7 @@ export async function processOrder(
       const validationResult = await validateDiscount(
         discountData.code,
         subtotal,
-        Object.values(cartItems),
+        discountValidationItems,
         shippingCharge,
         customerPhone,
       );

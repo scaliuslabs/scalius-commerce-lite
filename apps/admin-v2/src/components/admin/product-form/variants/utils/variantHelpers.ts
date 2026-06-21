@@ -217,6 +217,10 @@ export function getStockStatus(stock: number): "out-of-stock" | "low" | "in-stoc
   return "in-stock";
 }
 
+export function isInventoryTracked(variant: Pick<ProductVariant, "trackInventory">): boolean {
+  return variant.trackInventory !== false;
+}
+
 // formatDate imported from @scalius/shared/utils
 
 /**
@@ -256,6 +260,8 @@ export function duplicateVariant(
     price: variant.price,
     stock: variant.stock,
     reservedStock: 0,
+    isDefault: false,
+    trackInventory: variant.trackInventory,
     barcode: variant.barcode,
     barcodeType: variant.barcodeType,
     discountType: variant.discountType,
@@ -275,13 +281,15 @@ export function isSkuUnique(sku: string, variants: ProductVariant[], excludeId?:
  * Get variant statistics
  */
 export function getVariantStats(variants: ProductVariant[]) {
-  const totalStock = variants.reduce((sum, v) => sum + (v.stock - (v.reservedStock ?? 0)), 0);
-  const totalValue = variants.reduce((sum, v) => sum + v.price * (v.stock - (v.reservedStock ?? 0)), 0);
+  const trackedVariants = variants.filter(isInventoryTracked);
+  const totalStock = trackedVariants.reduce((sum, v) => sum + (v.stock - (v.reservedStock ?? 0)), 0);
+  const totalValue = trackedVariants.reduce((sum, v) => sum + v.price * (v.stock - (v.reservedStock ?? 0)), 0);
   const averagePrice =
     variants.length > 0 ? variants.reduce((sum, v) => sum + v.price, 0) / variants.length : 0;
-  const lowStockCount = variants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "low").length;
-  const outOfStockCount = variants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "out-of-stock")
+  const lowStockCount = trackedVariants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "low").length;
+  const outOfStockCount = trackedVariants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "out-of-stock")
     .length;
+  const untrackedCount = variants.length - trackedVariants.length;
 
   return {
     total: variants.length,
@@ -290,5 +298,6 @@ export function getVariantStats(variants: ProductVariant[]) {
     averagePrice: Math.round(averagePrice * 100) / 100,
     lowStockCount,
     outOfStockCount,
+    untrackedCount,
   };
 }

@@ -40,6 +40,9 @@ function normalizeVariant(variant: RawProductVariant): ProductVariant {
     sku: variant.sku || "",
     price: variant.price ?? 0,
     stock: variant.stock ?? 0,
+    reservedStock: variant.reservedStock ?? 0,
+    isDefault: variant.isDefault ?? false,
+    trackInventory: variant.trackInventory ?? true,
     discountType: variant.discountType ?? null,
     discountPercentage: variant.discountPercentage ?? null,
     discountAmount: variant.discountAmount ?? null,
@@ -108,10 +111,10 @@ export function OrderItemsSection() {
     setHasMore(endIndex < filteredProducts.length);
   };
 
-  const focusItemInputs = (hasVariants: boolean) => {
+  const focusItemInputs = (needsVariantChoice: boolean) => {
     setTimeout(() => {
       const variantSelect = document.getElementById("variant-select-trigger");
-      if (variantSelect && hasVariants) {
+      if (variantSelect && needsVariantChoice) {
         variantSelect.focus();
       } else {
         const quantityInput = document.getElementById("quantity-input");
@@ -128,12 +131,12 @@ export function OrderItemsSection() {
       knownVariants.length === 0 && (product.variantCount ?? 0) > 0;
 
     setSelectedProduct({ ...product, variants: knownVariants });
-    setSelectedVariant("");
+    setSelectedVariant(knownVariants.length === 1 ? knownVariants[0]!.id : "");
     setQuantity(1);
     setIsLoadingVariants(shouldLoadVariants);
 
     if (!shouldLoadVariants) {
-      focusItemInputs(knownVariants.length > 0);
+      focusItemInputs(knownVariants.length > 1);
       return;
     }
 
@@ -142,17 +145,19 @@ export function OrderItemsSection() {
       .then((result) => {
         if (variantLoadTokenRef.current !== loadToken) return;
         const variants = normalizeVariants(result);
+        const nextSelectedVariant = variants.length === 1 ? variants[0]!.id : "";
         setSelectedProduct((current) =>
           current?.id === product.id
             ? { ...current, variants, variantCount: variants.length }
             : current,
         );
-        focusItemInputs(variants.length > 0);
+        setSelectedVariant(nextSelectedVariant);
+        focusItemInputs(variants.length > 1);
       })
       .catch((error: unknown) => {
         if (variantLoadTokenRef.current !== loadToken) return;
         console.error("Error loading product variants:", error);
-        toast.error("Could not load product variants. You can still add the main product.");
+        toast.error("Could not load product SKUs. Please try again before adding this item.");
         focusItemInputs(false);
       })
       .finally(() => {
@@ -204,8 +209,21 @@ export function OrderItemsSection() {
   const handleAddItem = () => {
     if (!selectedProduct || isLoadingVariants) return;
 
-    const variant = selectedVariant ? selectedProduct.variants.find((v) => v.id === selectedVariant) : null;
-    let basePrice = variant ? variant.price : selectedProduct.price;
+    const activeVariants = selectedProduct.variants.filter((variant) => variant.id);
+    const variant = selectedVariant
+      ? activeVariants.find((v) => v.id === selectedVariant)
+      : activeVariants.length === 1
+        ? activeVariants[0]
+        : null;
+    if (!variant) {
+      toast.error(
+        activeVariants.length === 0
+          ? "This product has no active SKU. Add a SKU before creating an order."
+          : "Choose a SKU before adding this product.",
+      );
+      return;
+    }
+    let basePrice = variant.price;
 
     // Variant discount overrides product discount
     const variantHasDiscount = variant && (
@@ -229,7 +247,7 @@ export function OrderItemsSection() {
       ...form.getValues("items"),
       {
         productId: selectedProduct.id,
-        variantId: selectedVariant || null,
+        variantId: variant.id,
         quantity,
         price: basePrice,
       },

@@ -57,8 +57,10 @@ export function VariantTable({
   onBulkEditChange,
   productName,
 }: VariantTableProps) {
-  const allSelected = variants.length > 0 && selectedVariants.size === variants.length;
-  const someSelected = selectedVariants.size > 0 && selectedVariants.size < variants.length;
+  const selectableVariants = variants.filter((variant) => !variant.isDefault);
+  const selectedSelectableCount = selectableVariants.filter((variant) => selectedVariants.has(variant.id)).length;
+  const allSelected = selectableVariants.length > 0 && selectedSelectableCount === selectableVariants.length;
+  const someSelected = selectedSelectableCount > 0 && selectedSelectableCount < selectableVariants.length;
 
   return (
     <div className="space-y-0">
@@ -75,7 +77,7 @@ export function VariantTable({
                     }
                   }}
                   onCheckedChange={onToggleAllSelection}
-                  disabled={isAnyRowEditing}
+                  disabled={isAnyRowEditing || selectableVariants.length === 0}
                   aria-label="Select all variants"
                   className="h-3.5 w-3.5"
                 />

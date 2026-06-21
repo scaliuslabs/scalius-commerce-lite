@@ -37,6 +37,9 @@ export function ItemSelection({
 }: ItemSelectionProps) {
   const { refs } = useOrderForm();
   const { symbol } = useCurrency();
+  const hasSkus = selectedProduct.variants.length > 0;
+  const needsSkuSelection = selectedProduct.variants.length > 1 && !selectedVariant;
+  const addDisabled = isLoadingVariants || !hasSkus || needsSkuSelection;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 border rounded-md bg-muted/20 items-end">
@@ -66,13 +69,13 @@ export function ItemSelection({
 
       <div>
         <FormLabel htmlFor="variant-select-trigger" className="mb-2 block">
-          Variant (Optional)
+          SKU
         </FormLabel>
         <Select
           value={selectedVariant}
-          disabled={isLoadingVariants}
+          disabled={isLoadingVariants || selectedProduct.variants.length <= 1}
           onValueChange={(value) => {
-            setSelectedVariant(value === "none" ? "" : value);
+            setSelectedVariant(value);
             setTimeout(
               () => document.getElementById("quantity-input")?.focus(),
               0
@@ -89,10 +92,9 @@ export function ItemSelection({
               }
             }}
           >
-            <SelectValue placeholder={isLoadingVariants ? "Loading variants..." : "Select variant"} />
+            <SelectValue placeholder={isLoadingVariants ? "Loading SKUs..." : hasSkus ? "Select SKU" : "No active SKU"} />
           </SelectTrigger>
           <SelectContent className="max-h-[300px]">
-            <SelectItem value="none">No variant (Main product)</SelectItem>
             {selectedProduct.variants
               .filter((variant) => variant.id)
               .map((variant) => {
@@ -103,15 +105,17 @@ export function ItemSelection({
                   ]
                     .filter(Boolean)
                     .join(", ") ||
+                  (variant.isDefault ? "Simple product SKU" : null) ||
                   variant.sku ||
-                  "Variant";
+                  "SKU";
+                const available = (variant.stock ?? 0) - (variant.reservedStock ?? 0);
 
                 return (
                   <SelectItem key={variant.id} value={variant.id}>
                     <div className="flex flex-col w-full">
                       <span className="font-medium">{variantLabel}</span>
                       <div className="flex justify-between text-xs text-muted-foreground mt-1 w-full">
-                        <span>Stock: {variant.stock}</span>
+                        <span>{variant.trackInventory === false ? "Stock: not tracked" : `Available: ${available}`}</span>
                         <span className="ml-4">
                           {selectedProduct.discountPercentage ? (
                             <span className="text-green-600">
@@ -162,12 +166,12 @@ export function ItemSelection({
         <Button
           type="button"
           onClick={handleAddItem}
-          disabled={isLoadingVariants}
+          disabled={addDisabled}
           className="w-full"
           ref={refs.addItemButtonRef}
         >
           <Plus className="mr-2 h-4 w-4" />
-          {isLoadingVariants ? "Loading Variants..." : "Add Item"}
+          {isLoadingVariants ? "Loading SKUs..." : "Add Item"}
         </Button>
       </div>
     </div>
