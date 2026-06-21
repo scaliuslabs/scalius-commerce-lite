@@ -17,6 +17,21 @@ import {
     bulkVariantSchema,
 } from "./products.types";
 
+function normalizeOptionValue(value: string | null | undefined): string | null {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+}
+
+function hasCustomerOption(value: { size?: string | null; color?: string | null }): boolean {
+    return Boolean(normalizeOptionValue(value.size) || normalizeOptionValue(value.color));
+}
+
+function assertNormalVariantHasCustomerOption(value: { size?: string | null; color?: string | null }) {
+    if (!hasCustomerOption(value)) {
+        throw new ValidationError("Add at least one customer option, such as size or color. Products without options use the built-in simple SKU.");
+    }
+}
+
 // ─────────────────────────────────────────
 // Barcode lookup
 // ─────────────────────────────────────────
@@ -122,6 +137,9 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
 }
 
 export async function createVariant(db: DrizzleD1Database<typeof schema>, productId: string, data: z.infer<typeof createVariantSchema>) {
+    assertNormalVariantHasCustomerOption(data);
+    const size = normalizeOptionValue(data.size);
+    const color = normalizeOptionValue(data.color);
     const existingVariant = await db
         .select({ id: productVariants.id })
         .from(productVariants)
@@ -137,8 +155,8 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
         .values({
             id: "var_" + nanoid(),
             productId,
-            size: data.size,
-            color: data.color,
+            size,
+            color,
             weight: data.weight,
             sku: data.sku,
             price: data.price,
@@ -160,13 +178,26 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
 
 export async function updateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>) {
     const existingVariant = await db
-        .select({ id: productVariants.id })
+        .select({
+            id: productVariants.id,
+            isDefault: productVariants.isDefault,
+        })
         .from(productVariants)
         .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
         .get();
 
     if (!existingVariant) {
         throw new NotFoundError("Variant not found");
+    }
+
+    const size = normalizeOptionValue(data.size);
+    const color = normalizeOptionValue(data.color);
+    if (existingVariant.isDefault) {
+        if (size || color) {
+            throw new ValidationError("The simple product SKU cannot be turned into an option. Add a new variant instead.");
+        }
+    } else {
+        assertNormalVariantHasCustomerOption({ size, color });
     }
 
     const existingSkuVariant = await db
@@ -182,8 +213,8 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
     const [variant] = await db
         .update(productVariants)
         .set({
-            size: data.size,
-            color: data.color,
+            size,
+            color,
             weight: data.weight,
             sku: data.sku,
             price: data.price,
@@ -245,6 +276,10 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
         throw new NotFoundError("Variant not found");
     }
 
+    if (existingVariant.isDefault || !hasCustomerOption(existingVariant)) {
+        throw new ValidationError("The simple product SKU cannot be duplicated as a normal variant. Add a size or color variant instead.");
+    }
+
     let newSku = `${existingVariant.sku}-COPY`;
     let counter = 1;
 
@@ -288,6 +323,7 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
 }
 
 export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, productId: string, variants: z.infer<typeof bulkVariantSchema>[]) {
+    variants.forEach(assertNormalVariantHasCustomerOption);
     const skus = variants.map((v) => v.sku);
     const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
 
@@ -308,8 +344,8 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
     const variantsToCreate = variants.map((variant) => ({
         id: "var_" + nanoid(),
         productId,
-        size: variant.size || null,
-        color: variant.color || null,
+        size: normalizeOptionValue(variant.size),
+        color: normalizeOptionValue(variant.color),
         weight: variant.weight || null,
         sku: variant.sku,
         price: variant.price ?? 0,

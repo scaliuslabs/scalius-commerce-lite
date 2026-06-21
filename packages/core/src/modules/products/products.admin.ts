@@ -60,6 +60,15 @@ function isSimpleDefaultSkuSet(variants: Array<{ isDefault: boolean; size: strin
     return variants.length === 1 && (variants[0]?.isDefault === true || (!variants[0]?.size && !variants[0]?.color));
 }
 
+function normalizeVariantOption(value: string | null | undefined): string | null {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+}
+
+function hasVariantOption(value: { size?: string | null; color?: string | null }): boolean {
+    return Boolean(normalizeVariantOption(value.size) || normalizeVariantOption(value.color));
+}
+
 // ─────────────────────────────────────────
 // Admin read queries
 // ─────────────────────────────────────────
@@ -815,15 +824,57 @@ export async function bulkDeleteProducts(db: Database, productIds: string[], per
  */
 export async function bulkUpdateVariants(db: Database, productId: string, updates: Array<{ id: string; size?: string | null; color?: string | null; weight?: number | null; sku?: string; price?: number; stock?: number }>) {
     const statements = [];
+    const ids = updates.map((update) => update.id).filter(Boolean);
+    const currentVariants = ids.length > 0
+        ? await db
+            .select({
+                id: productVariants.id,
+                isDefault: productVariants.isDefault,
+                size: productVariants.size,
+                color: productVariants.color,
+            })
+            .from(productVariants)
+            .where(and(
+                eq(productVariants.productId, productId),
+                inArray(productVariants.id, ids),
+                isNull(productVariants.deletedAt),
+            ))
+        : [];
+    const currentVariantById = new Map(currentVariants.map((variant) => [variant.id, variant]));
+
     for (const update of updates) {
         const { id, ...fieldsToUpdate } = update;
         if (Object.keys(fieldsToUpdate).length === 0) continue;
+        const currentVariant = currentVariantById.get(id);
+        if (!currentVariant) {
+            throw new NotFoundError("Variant not found");
+        }
+
+        const nextSize = "size" in fieldsToUpdate
+            ? normalizeVariantOption(fieldsToUpdate.size)
+            : normalizeVariantOption(currentVariant.size);
+        const nextColor = "color" in fieldsToUpdate
+            ? normalizeVariantOption(fieldsToUpdate.color)
+            : normalizeVariantOption(currentVariant.color);
+        if (currentVariant.isDefault) {
+            if (nextSize || nextColor) {
+                throw new ValidationError("The simple product SKU cannot be turned into an option. Add a new variant instead.");
+            }
+        } else if (!hasVariantOption({ size: nextSize, color: nextColor })) {
+            throw new ValidationError("Normal variants must include at least one customer option, such as size or color.");
+        }
+
+        const normalizedFieldsToUpdate = {
+            ...fieldsToUpdate,
+            ...("size" in fieldsToUpdate ? { size: nextSize } : {}),
+            ...("color" in fieldsToUpdate ? { color: nextColor } : {}),
+        };
 
         statements.push(
             db
                 .update(productVariants)
                 .set({
-                    ...fieldsToUpdate,
+                    ...normalizedFieldsToUpdate,
                     updatedAt: sql`unixepoch()`,
                 })
                 .where(

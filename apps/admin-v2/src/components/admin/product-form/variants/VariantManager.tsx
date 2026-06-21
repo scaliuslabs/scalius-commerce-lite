@@ -115,6 +115,11 @@ export function VariantManager({
     return sortVariants(filtered, sort);
   }, [localVariants, filters, sort]);
 
+  const selectableFilteredVariants = useMemo(
+    () => filteredAndSortedVariants.filter((variant) => !variant.isDefault),
+    [filteredAndSortedVariants],
+  );
+
   // Variant statistics
   const stats = useMemo(() => getVariantStats(localVariants), [localVariants]);
 
@@ -296,9 +301,9 @@ export function VariantManager({
 
   const toggleAllSelection = () => {
     setSelectedVariants((prev) =>
-      prev.size === filteredAndSortedVariants.length
+      selectableFilteredVariants.length > 0 && selectableFilteredVariants.every((variant) => prev.has(variant.id))
         ? new Set()
-        : new Set(filteredAndSortedVariants.map((v) => v.id)),
+        : new Set(selectableFilteredVariants.map((v) => v.id)),
     );
   };
 

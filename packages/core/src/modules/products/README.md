@@ -28,7 +28,7 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
-- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, no size/color); optioned products require an explicit selected SKU; SKU-less products fail closed. The storefront no longer synthesizes fake `default` variants.
+- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, no size/color); optioned products require an explicit selected SKU; SKU-less products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. The storefront no longer synthesizes fake `default` variants.
 
 ## Data Flow
 
@@ -70,7 +70,7 @@ Storefront category ([slug].astro)
 | `products.validation.ts` | Zod schemas for product create/update: `createProductSchema`, `updateProductSchema` with shared sub-schemas for images, attributes (`{attributeId, value}`), and additional info (`{id, title, content, sortOrder}`). Discount percentage capped at 0-100. |
 | `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`, `bulkUpdateVariants`). `getProducts` returns `discountType` and `discountAmount`. `getProductDetails` fetches `productRichContent` and `productAttributeValues`. All variant queries filter `deletedAt IS NULL`. |
 | `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation (percentage and flat), feature extraction, SKU/default-SKU metadata, and attribute-based filtering. All variant queries filter `isNull(deletedAt)`; buyer purchase flows must use real variant rows and cart validation as inventory proof. |
-| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `duplicateVariant`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. |
+| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `duplicateVariant`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. Normal variants must have a customer option; hidden/simple default SKUs cannot be duplicated or converted into option rows through this API. |
 
 ## API Endpoints
 
@@ -148,6 +148,10 @@ Storefront category ([slug].astro)
 3. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
 
 4. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
+
+5. **Product-form stock edits bypass movement logging**: Variant edit and bulk edit can still write `stock` directly. The storefront/order authority is guarded, but the ideal stock-management path is to route stock changes through inventory adjustment services so `stockVersion` and movement history remain complete.
+
+6. **Simple/optioned transitions need a guided workflow**: The backend is SKU-first, but the admin UX still exposes variants as a table instead of a first-class `simple` vs `optioned` product mode with explicit transition copy/stock migration/cached-cart invalidation guidance.
 
 ## Dependencies
 

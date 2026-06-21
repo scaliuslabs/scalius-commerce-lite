@@ -63,6 +63,13 @@ type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ORDER_LIST_LIMIT = 100;
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
 
+function assertAdminOrderItemsUseSkus(items: Array<{ productId: string; variantId: string | null }>) {
+    const missingSku = items.find((item) => !item.variantId);
+    if (missingSku) {
+        throw new ValidationError(`Every manual order item must use a product SKU. Select a SKU for product ${missingSku.productId}.`);
+    }
+}
+
 function normalizeListPositiveInteger(value: number | undefined, fallback: number, max?: number): number {
     if (!Number.isFinite(value)) return fallback;
     const integer = Math.trunc(value as number);
@@ -477,6 +484,7 @@ export async function getOrderDetails(
  *   4. If batch fails, release all reservations (no orphaned holds)
  */
 export async function createOrder(db: Database, data: CreateOrderInput): Promise<{ id: string }> {
+    assertAdminOrderItemsUseSkus(data.items);
     // Calculate total amount
     const totalAmount = subtractPrice(
         addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
@@ -944,6 +952,7 @@ async function compensatePreWriteInventory(
 }
 
 export async function updateOrder(db: Database, id: string, data: UpdateOrderData): Promise<{ id: string }> {
+    assertAdminOrderItemsUseSkus(data.items);
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     const locationMap = new Map<string, string>();
     if (locationIds.length > 0) {

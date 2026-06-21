@@ -18,6 +18,7 @@ import {
   getDiscountDisplay,
   getStockStatus,
   hasDiscount,
+  isInventoryTracked,
 } from "./utils/variantHelpers";
 import { useCurrency } from "@/hooks/use-currency";
 import { cn } from "@scalius/shared/utils";
@@ -84,8 +85,11 @@ export function VariantDisplayRow({
   productName = "",
 }: VariantDisplayRowProps) {
   const { symbol } = useCurrency();
-  const availableStock = variant.stock - variant.reservedStock;
-  const stockStatus = getStockStatus(availableStock);
+  const inventoryTracked = isInventoryTracked(variant);
+  const isSimpleDefaultSku = variant.isDefault && !variant.size && !variant.color;
+  const isProtectedDefaultSku = variant.isDefault === true;
+  const availableStock = inventoryTracked ? variant.stock - variant.reservedStock : null;
+  const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
   const hasVariantDiscount = hasDiscount(variant);
 
   return (
@@ -100,9 +104,11 @@ export function VariantDisplayRow({
       <TableCell className="w-10 pl-3 pr-1 py-2">
         <Checkbox
           checked={isSelected}
-          onCheckedChange={() => onToggleSelection(variant.id)}
+          onCheckedChange={() => {
+            if (!isProtectedDefaultSku) onToggleSelection(variant.id);
+          }}
           aria-label={`Select variant ${variant.sku}`}
-          disabled={isAnyRowEditing}
+          disabled={isAnyRowEditing || isProtectedDefaultSku}
           className="h-3.5 w-3.5"
         />
       </TableCell>
@@ -110,6 +116,16 @@ export function VariantDisplayRow({
       <TableCell className="py-2">
         <div className="font-medium font-mono text-xs text-foreground flex items-center gap-1.5">
           {variant.sku}
+          {isSimpleDefaultSku && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-900/30 dark:text-sky-300">
+              SIMPLE
+            </Badge>
+          )}
+          {!inventoryTracked && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300">
+              NOT TRACKED
+            </Badge>
+          )}
           {hasVariantDiscount && (
             <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 leading-none bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800">
               SALE
@@ -139,9 +155,9 @@ export function VariantDisplayRow({
         )}
       </TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{variant.size || "—"}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{variant.size || (isSimpleDefaultSku ? "Default" : "—")}</TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{variant.color || "—"}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{variant.color || (isSimpleDefaultSku ? "Default" : "—")}</TableCell>
 
       <TableCell className="py-2 text-xs text-muted-foreground">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
 
@@ -151,8 +167,12 @@ export function VariantDisplayRow({
 
       {/* On Hand */}
       <TableCell className="py-2">
-        <span className="text-xs font-medium text-foreground">{variant.stock}</span>
-        {variant.reservedStock > 0 && (
+        {inventoryTracked ? (
+          <span className="text-xs font-medium text-foreground">{variant.stock}</span>
+        ) : (
+          <span className="text-xs font-medium text-muted-foreground">Not tracked</span>
+        )}
+        {inventoryTracked && variant.reservedStock > 0 && (
           <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium ml-1" title={`${variant.reservedStock} reserved by orders`}>
             ({variant.reservedStock} rsv)
           </span>
@@ -162,10 +182,16 @@ export function VariantDisplayRow({
       {/* Available */}
       <TableCell className="py-2">
         <div className="flex items-center gap-1">
-          <span className={cn(
-            "text-xs font-semibold",
-            availableStock <= 0 ? "text-red-600 dark:text-red-400" : availableStock <= 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-500"
-          )}>{availableStock}</span>
+          {availableStock === null ? (
+            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900">
+              ALWAYS
+            </Badge>
+          ) : (
+            <span className={cn(
+              "text-xs font-semibold",
+              availableStock <= 0 ? "text-red-600 dark:text-red-400" : availableStock <= 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-500"
+            )}>{availableStock}</span>
+          )}
           {stockStatus === "out-of-stock" && (
             <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800">
               OUT
@@ -203,24 +229,30 @@ export function VariantDisplayRow({
               <Pencil className="mr-2 h-3.5 w-3.5" />
               Edit Variant
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDuplicate(variant.id)}>
-              <Copy className="mr-2 h-3.5 w-3.5" />
-              Duplicate
-            </DropdownMenuItem>
+            {!isProtectedDefaultSku && (
+              <DropdownMenuItem onClick={() => onDuplicate(variant.id)}>
+                <Copy className="mr-2 h-3.5 w-3.5" />
+                Duplicate
+              </DropdownMenuItem>
+            )}
             {variant.barcode && (
               <DropdownMenuItem onClick={() => printBarcodeLabel(variant, productName)}>
                 <Printer className="mr-2 h-3.5 w-3.5" />
                 Print Label
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => onDelete(variant.id)}
-              className="text-destructive focus:text-destructive focus:bg-destructive/10"
-            >
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Delete Variant
-            </DropdownMenuItem>
+            {!isProtectedDefaultSku && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onDelete(variant.id)}
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                  Delete Variant
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </TableCell>
