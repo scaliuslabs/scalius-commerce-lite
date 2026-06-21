@@ -6,7 +6,7 @@ import {
     products,
     productVariants,
 } from "@scalius/database/schema";
-import { and, sql, eq, isNull } from "drizzle-orm";
+import { and, sql, eq, inArray, isNull, ne, not } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
@@ -96,6 +96,8 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
             price: productVariants.price,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
+            isDefault: productVariants.isDefault,
+            trackInventory: productVariants.trackInventory,
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
@@ -112,7 +114,7 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
         )
         .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
 
-    return variants.map((variant: { id: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: string; updatedAt: string }) => ({
+    return variants.map((variant: { id: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: string; updatedAt: string }) => ({
         ...variant,
         createdAt: new Date(variant.createdAt),
         updatedAt: new Date(variant.updatedAt),
@@ -141,6 +143,8 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
             sku: data.sku,
             price: data.price,
             stock: data.stock,
+            isDefault: false,
+            trackInventory: data.trackInventory ?? true,
             barcode: data.barcode || null,
             barcodeType: data.barcodeType || null,
             discountType: data.discountType || "percentage",
@@ -184,6 +188,7 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
             sku: data.sku,
             price: data.price,
             stock: data.stock,
+            trackInventory: data.trackInventory ?? true,
             barcode: data.barcode || null,
             barcodeType: data.barcodeType || null,
             discountType: data.discountType || "percentage",
@@ -206,6 +211,24 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
 
     if (!existingVariant) {
         throw new NotFoundError("Variant not found");
+    }
+
+    const product = await db
+        .select({ isActive: products.isActive })
+        .from(products)
+        .where(eq(products.id, productId))
+        .get();
+    const remainingVariantCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(productVariants)
+        .where(and(
+            eq(productVariants.productId, productId),
+            ne(productVariants.id, variantId),
+            isNull(productVariants.deletedAt),
+        ))
+        .get();
+    if (product?.isActive && (remainingVariantCount?.count ?? 0) === 0) {
+        throw new ValidationError("Deactivate this product before removing its final SKU.");
     }
 
     await db.delete(productVariants).where(eq(productVariants.id, variantId));
@@ -249,6 +272,8 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
             sku: newSku,
             price: existingVariant.price,
             stock: existingVariant.stock,
+            isDefault: false,
+            trackInventory: existingVariant.trackInventory,
             barcode: existingVariant.barcode,
             barcodeType: existingVariant.barcodeType,
             discountType: existingVariant.discountType,
@@ -289,6 +314,8 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
         sku: variant.sku,
         price: variant.price ?? 0,
         stock: variant.stock ?? 0,
+        isDefault: false,
+        trackInventory: variant.trackInventory ?? true,
         reservedStock: 0,
         preorderStock: 0,
         version: 1,
@@ -326,9 +353,27 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
 export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, productId: string, variantIds: string[]) {
     if (variantIds.length === 0) throw new ValidationError("No variant IDs provided");
 
+    const product = await db
+        .select({ isActive: products.isActive })
+        .from(products)
+        .where(eq(products.id, productId))
+        .get();
+    const remainingVariantCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(productVariants)
+        .where(and(
+            eq(productVariants.productId, productId),
+            not(inArray(productVariants.id, variantIds)),
+            isNull(productVariants.deletedAt),
+        ))
+        .get();
+    if (product?.isActive && (remainingVariantCount?.count ?? 0) === 0) {
+        throw new ValidationError("Deactivate this product before removing its final SKU.");
+    }
+
     await db
         .delete(productVariants)
-        .where(sql`${productVariants.id} IN ${variantIds} AND ${productVariants.productId} = ${productId}`);
+        .where(and(inArray(productVariants.id, variantIds), eq(productVariants.productId, productId)));
 }
 
 export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string) {

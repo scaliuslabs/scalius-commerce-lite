@@ -49,12 +49,13 @@ export async function checkAndAlertLowStock(
       stock: productVariants.stock,
       reservedStock: productVariants.reservedStock,
       lowStockThreshold: productVariants.lowStockThreshold,
+      trackInventory: productVariants.trackInventory,
     })
     .from(productVariants)
     .where(eq(productVariants.id, variantId))
     .get();
 
-  if (!variant || variant.lowStockThreshold === null || variant.lowStockThreshold <= 0) {
+  if (!variant || !variant.trackInventory || variant.lowStockThreshold === null || variant.lowStockThreshold <= 0) {
     // No threshold configured — nothing to do
     return null;
   }

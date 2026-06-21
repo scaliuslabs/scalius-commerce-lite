@@ -18,6 +18,48 @@ import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/err
 import type { ProductWithDetails } from "./products.types";
 import { safeBatch, type Database } from "@scalius/database/client";
 
+function createDefaultSku(productId: string): string {
+    return `SIMPLE-${productId}`;
+}
+
+function createDefaultVariantId(productId: string): string {
+    return `var_default_${productId}`;
+}
+
+function defaultVariantValues(productId: string, price: number) {
+    return {
+        id: createDefaultVariantId(productId),
+        productId,
+        size: null,
+        color: null,
+        weight: null,
+        sku: createDefaultSku(productId),
+        price,
+        stock: 0,
+        reservedStock: 0,
+        preorderStock: 0,
+        isDefault: true,
+        trackInventory: false,
+        version: 1,
+        stockVersion: 1,
+        allowPreorder: false,
+        allowBackorder: false,
+        backorderLimit: 0,
+        discountPercentage: 0,
+        discountType: "percentage" as const,
+        discountAmount: 0,
+        colorSortOrder: 0,
+        sizeSortOrder: 0,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+        deletedAt: null,
+    };
+}
+
+function isSimpleDefaultSkuSet(variants: Array<{ isDefault: boolean; size: string | null; color: string | null }>): boolean {
+    return variants.length === 1 && (variants[0]?.isDefault === true || (!variants[0]?.size && !variants[0]?.color));
+}
+
 // ─────────────────────────────────────────
 // Admin read queries
 // ─────────────────────────────────────────
@@ -490,6 +532,7 @@ export async function createProduct(db: Database, data: CreateProductInput): Pro
             updatedAt: sql`unixepoch()`,
             deletedAt: null,
         }),
+        db.insert(productVariants).values(defaultVariantValues(productId, data.price)),
     ];
 
     if (data.images.length > 0) {
@@ -591,6 +634,16 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
             sortOrder: item.sortOrder,
         }));
 
+    const activeVariants = await db
+        .select({
+            id: productVariants.id,
+            isDefault: productVariants.isDefault,
+            size: productVariants.size,
+            color: productVariants.color,
+        })
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
+
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [
         db.update(products)
@@ -636,6 +689,23 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
 
     if (contentToInsert.length > 0) {
         batchOps.push(db.insert(productRichContent).values(contentToInsert));
+    }
+
+    if (data.isActive && activeVariants.length === 0) {
+        batchOps.push(db.insert(productVariants).values(defaultVariantValues(id, data.price)));
+    } else if (isSimpleDefaultSkuSet(activeVariants)) {
+        batchOps.push(
+            db
+                .update(productVariants)
+                .set({
+                    price: data.price,
+                    discountType: "percentage",
+                    discountPercentage: 0,
+                    discountAmount: 0,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(eq(productVariants.id, activeVariants[0]!.id)),
+        );
     }
 
     // Drizzle D1 batch() requires specific tuple types — safe to cast

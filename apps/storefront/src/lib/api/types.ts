@@ -137,6 +137,8 @@ export interface ProductVariant {
   price: number;
   stock: number;
   reservedStock?: number;
+  isDefault?: boolean;
+  trackInventory?: boolean;
   discountType: "percentage" | "flat" | null;
   discountPercentage: number | null;
   discountAmount: number | null;

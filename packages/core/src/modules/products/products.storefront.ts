@@ -432,6 +432,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             price: productVariants.price,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
+            isDefault: productVariants.isDefault,
+            trackInventory: productVariants.trackInventory,
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
@@ -445,7 +447,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         }).from(productVariants)
             .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
             .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt)
-            .all().then((res: Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null }>) => ({ type: "variants", data: res })),
+            .all().then((res: Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null }>) => ({ type: "variants", data: res })),
 
         db.select({
             id: productRichContent.id,
@@ -531,32 +533,17 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
     const hasVariants = variants.length > 0;
 
-    interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
     interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; }
     const typedVariants = variants as VariantResult[];
     const typedImages = images as ImageResult[];
 
-    const formattedVariants = hasVariants
-        ? typedVariants.map((v) => ({
+    const formattedVariants = typedVariants.map((v) => ({
             ...v,
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(v.updatedAt)?.toISOString() || null,
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
-        }))
-        : [{
-            id: "default",
-            productId: product.id,
-            size: null, color: null, weight: null,
-            sku: `SKU-${product.id}`,
-            price: product.price,
-            stock: 999999, // Not inventory-managed — always available for purchase
-            discountType: "percentage",
-            discountPercentage: 0,
-            discountAmount: 0,
-            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
-            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
-            deletedAt: null,
-        }];
+        }));
 
     return {
         product: {
@@ -656,6 +643,9 @@ export async function searchStorefrontProducts(
                         sku: productVariants.sku,
                         price: productVariants.price,
                         stock: productVariants.stock,
+                        reservedStock: productVariants.reservedStock,
+                        isDefault: productVariants.isDefault,
+                        trackInventory: productVariants.trackInventory,
                         discountType: productVariants.discountType,
                         discountPercentage: productVariants.discountPercentage,
                         discountAmount: productVariants.discountAmount,
@@ -665,7 +655,7 @@ export async function searchStorefrontProducts(
                     .from(productVariants)
                     .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
                     .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder)
-                    .all() as Promise<Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null }>>,
+                    .all() as Promise<Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null }>>,
             ])
             : [[], []];
 

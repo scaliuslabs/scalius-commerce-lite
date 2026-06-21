@@ -29,6 +29,7 @@ export async function releaseReservation(
       stock: productVariants.stock,
       reservedStock: productVariants.reservedStock,
       preorderStock: productVariants.preorderStock,
+      trackInventory: productVariants.trackInventory,
     })
     .from(productVariants)
     .where(eq(productVariants.id, variantId))
@@ -45,6 +46,10 @@ export async function releaseReservation(
   }
 
   const previousStock = pool === "preorder" ? variant.preorderStock : variant.stock;
+
+  if (!variant.trackInventory) {
+    return { success: true, variantId, previousStock, newStock: previousStock };
+  }
 
   await db
     .update(productVariants)

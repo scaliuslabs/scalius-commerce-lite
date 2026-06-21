@@ -549,7 +549,7 @@ vi.mock("../../../../packages/core/src/modules/inventory/alerts", () => ({
 let applyInventoryForStatusChange: typeof import("../../../../packages/core/src/modules/inventory/inventory-transitions").applyInventoryForStatusChange;
 
 const TRANSITION_ORDER_ID = "ord_inventory_hardening";
-const TRANSITION_ITEM = { variantId: "var_1", quantity: 2 };
+const TRANSITION_ITEM = { variantId: "var_1", quantity: 2, inventoryTracked: true };
 const TRANSITION_VARIANT = {
   id: "var_1",
   stock: 10,

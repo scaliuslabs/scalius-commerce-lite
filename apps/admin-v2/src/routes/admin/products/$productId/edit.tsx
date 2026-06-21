@@ -74,6 +74,8 @@ function EditProductPage() {
       price: v.price ?? 0,
       stock: v.stock,
       reservedStock: v.reservedStock,
+      isDefault: v.isDefault,
+      trackInventory: v.trackInventory,
       barcode: v.barcode || null,
       barcodeType: (v.barcodeType || null) as LocalProductVariant["barcodeType"],
       discountType: (v.discountType || "percentage") as "percentage" | "flat",

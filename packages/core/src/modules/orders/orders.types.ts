@@ -153,6 +153,7 @@ export interface OrderIngestQueuePayload {
         price: number;
         productName: string | null;
         variantLabel: string | null;
+        inventoryTracked?: boolean;
     }[];
     discountUsage: { discountId: string; amountDiscounted: number } | null;
     requestUrl: string;

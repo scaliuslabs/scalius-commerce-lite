@@ -13,6 +13,8 @@ export interface ProductVariant {
   price: number;
   stock: number;
   reservedStock: number;
+  isDefault?: boolean;
+  trackInventory?: boolean;
   barcode: string | null;
   barcodeType: "ean13" | "upc" | "isbn" | "gtin" | "custom" | null;
   discountType: "percentage" | "flat";
@@ -45,6 +47,7 @@ export const variantFormSchema = z.object({
     .number({ message: "Stock is required." })
     .int("Stock must be a whole number.")
     .min(0, "Stock cannot be negative."),
+  trackInventory: z.boolean().optional(),
   discountType: z.enum(["percentage", "flat"]),
   discountPercentage: z.coerce
     .number({ message: "Must be a number" })
@@ -86,6 +89,7 @@ export interface BulkGeneratedVariant {
   sku: string;
   price: number;
   stock: number;
+  trackInventory?: boolean;
   weight: number | null;
   discountType: "percentage" | "flat";
   discountPercentage: number | null;

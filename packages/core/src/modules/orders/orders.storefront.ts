@@ -253,6 +253,7 @@ export async function createStorefrontOrder(
 
     const serverItemTotal = cartValidation.subtotal;
     const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
+    const inventoryTrackedByIndex = new Map(cartValidation.items.map((item) => [item.index, item.inventoryTracked]));
     const verifiedShippingCharge = deliveryPreflight.shippingCharge;
 
     // ------------------------------------------------------------------
@@ -328,15 +329,16 @@ export async function createStorefrontOrder(
             balanceDue: totalAmount,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: data.inventoryPool,
-            inventoryAction: data.items.some(item => item.variantId !== null) ? "reserved" : "none",
+            inventoryAction: cartValidation.items.some(item => item.variantId !== null && item.inventoryTracked) ? "reserved" : "none",
         },
         items: data.items.map((item, idx) => ({
             productId: item.productId,
-            variantId: item.variantId,
+            variantId: validatedItemByIndex.get(idx)?.variantId ?? item.variantId,
             quantity: item.quantity,
             price: validatedItemByIndex.get(idx)?.unitPrice ?? item.price,
             productName: validatedItemByIndex.get(idx)?.productName ?? item.productName ?? null,
             variantLabel: validatedItemByIndex.get(idx)?.variantLabel ?? item.variantLabel ?? null,
+            inventoryTracked: inventoryTrackedByIndex.get(idx) ?? false,
         })),
         discountUsage: appliedDiscountId && verifiedDiscountAmount > 0 ? {
             discountId: appliedDiscountId,

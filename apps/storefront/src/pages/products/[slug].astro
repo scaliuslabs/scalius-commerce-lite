@@ -38,6 +38,15 @@ if (!productData) {
 
 const { product, category, images, variants, relatedProducts } = productData;
 const productWidgets = fetchedProductWidgets ?? [];
+const activeRealVariants = variants.filter((variant) => !variant.deletedAt && variant.id !== "default");
+const optionVariants = activeRealVariants.filter(
+  (variant) => !variant.isDefault && (Boolean(variant.size) || Boolean(variant.color)),
+);
+const buyerVariants = optionVariants.length > 0
+  ? optionVariants
+  : activeRealVariants.length === 1
+    ? activeRealVariants
+    : [];
 
 const isVariantSpecificImagesEnabled = !!product.metaDescription?.includes(
   "<!--variant_images:enabled-->",
@@ -51,7 +60,7 @@ const discountedPrice = product.discountedPrice;
 const productCategory = category ?? null;
 
 const sizeOrderMap = new Map<string, number>();
-variants.forEach((v) => {
+buyerVariants.forEach((v) => {
   if (v.size && !sizeOrderMap.has(v.size)) {
     sizeOrderMap.set(v.size, v.sizeSortOrder);
   }
@@ -61,7 +70,7 @@ const sizeOptions = Array.from(sizeOrderMap.entries())
   .map((entry) => entry[0]);
 
 const colorOrderMap = new Map<string, number>();
-variants.forEach((v) => {
+buyerVariants.forEach((v) => {
   if (v.color && !colorOrderMap.has(v.color)) {
     colorOrderMap.set(v.color, v.colorSortOrder);
   }
@@ -121,7 +130,7 @@ const brandAttribute = product.attributes?.find(
 const brandName = brandAttribute?.value || storeName;
 
 // Primary SKU
-const primarySku = variants[0]?.sku || product.id;
+const primarySku = buyerVariants[0]?.sku || product.id;
 
 // priceValidUntil -- end of next year, ISO 8601 date
 const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31)
@@ -228,7 +237,7 @@ const productCategoryAnalytics = productCategory
     data-product-discount-percentage={String(product.discountPercentage || 0)}
     data-product-discount-amount={String(product.discountAmount || 0)}
     data-product-free-delivery={product.freeDelivery.toString()}
-    data-product-has-variants={product.hasVariants.toString()}
+    data-product-has-variants={(buyerVariants.length > 0).toString()}
     data-fb-product-details={JSON.stringify({
       id: product.id,
       slug: product.slug,
@@ -236,7 +245,7 @@ const productCategoryAnalytics = productCategory
       discountedPrice: discountedPrice,
     })}
     data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
-    data-fb-variants-details={JSON.stringify(variants.slice(0, 1))}
+    data-fb-variants-details={JSON.stringify(buyerVariants.slice(0, 1))}
   >
     <WidgetPlacementZone
       widgets={productWidgets}
@@ -266,7 +275,7 @@ const productCategoryAnalytics = productCategory
         <ProductSummary
           product={product}
           category={productCategory}
-          variants={variants}
+          variants={buyerVariants}
           sizeOptions={sizeOptions}
           colorOptions={colorOptions}
           isVariantSpecificImagesEnabled={isVariantSpecificImagesEnabled}

@@ -188,6 +188,7 @@ export interface ProductVariant {
   discountPercentage: number | null;
   discountAmount: number | null;
   isDefault?: boolean;
+  trackInventory?: boolean;
   isActive?: boolean;
   version: number;
   stockVersion: number;
@@ -258,6 +259,7 @@ export interface ProductVariantDetail {
   weight: number | null;
   supplier: string | null;
   isDefault: boolean;
+  trackInventory?: boolean;
   isActive: boolean;
   version: number;
   stockVersion: number;

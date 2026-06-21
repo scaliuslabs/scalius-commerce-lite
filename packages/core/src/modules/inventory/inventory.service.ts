@@ -20,7 +20,10 @@ export async function getInventoryOverview(db: Database, params: {
     const offset = (page - 1) * limit;
 
     if (section === "variants") {
-        const conditions: (SQL | undefined)[] = [isNull(productVariants.deletedAt)];
+        const conditions: (SQL | undefined)[] = [
+            isNull(productVariants.deletedAt),
+            eq(productVariants.trackInventory, true),
+        ];
 
         if (status === "low") {
             conditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock}) > 0 AND (${productVariants.stock} - ${productVariants.reservedStock}) <= COALESCE(${productVariants.lowStockThreshold}, 5)`);
@@ -86,7 +89,7 @@ export async function getInventoryOverview(db: Database, params: {
                 lowStockCount: sql<number>`SUM(CASE WHEN (${productVariants.stock} - ${productVariants.reservedStock}) > 0 AND (${productVariants.stock} - ${productVariants.reservedStock}) <= COALESCE(${productVariants.lowStockThreshold}, 5) THEN 1 ELSE 0 END)`,
             })
             .from(productVariants)
-            .where(isNull(productVariants.deletedAt))
+            .where(and(isNull(productVariants.deletedAt), eq(productVariants.trackInventory, true)))
             .get();
 
         return {

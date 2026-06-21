@@ -69,6 +69,8 @@ export const productVariants = sqliteTable("product_variants", {
     stock: integer("stock").notNull().default(0),
     reservedStock: integer("reserved_stock").notNull().default(0),
     preorderStock: integer("preorder_stock").notNull().default(0),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    trackInventory: integer("track_inventory", { mode: "boolean" }).notNull().default(true),
     version: integer("version").notNull().default(1), // Optimistic locking
     /** Optimistic locking for stock-specific operations (separate from general version) */
     stockVersion: integer("stock_version").notNull().default(1),
@@ -96,6 +98,8 @@ export const productVariants = sqliteTable("product_variants", {
     index("product_variants_product_id_idx").on(table.productId),
     uniqueIndex("product_variants_sku_unique_idx").on(table.sku),
     index("product_variants_barcode_idx").on(table.barcode),
+    index("product_variants_default_idx").on(table.productId, table.isDefault, table.deletedAt),
+    index("product_variants_track_inventory_idx").on(table.trackInventory, table.deletedAt),
 ]);
 
 export const categories = sqliteTable(

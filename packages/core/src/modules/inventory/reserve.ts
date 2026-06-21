@@ -38,6 +38,7 @@ export async function reserveStock(
         allowPreorder: productVariants.allowPreorder,
         allowBackorder: productVariants.allowBackorder,
         backorderLimit: productVariants.backorderLimit,
+        trackInventory: productVariants.trackInventory,
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
@@ -59,6 +60,15 @@ export async function reserveStock(
         previousStock: 0,
         newStock: 0,
         error: `Variant ${variantId} not found`,
+      };
+    }
+
+    if (!variant.trackInventory) {
+      return {
+        success: true,
+        variantId,
+        previousStock: variant.stock,
+        newStock: variant.stock,
       };
     }
 
@@ -304,10 +314,16 @@ export async function reserveStockBatch(
       };
     }
 
+    const trackedEntries = entries.filter((entry) => variants.get(entry.variantId)?.trackInventory !== false);
+    const trackedMovementEntries = movementEntries.filter((entry) => variants.get(entry.variantId)?.trackInventory !== false);
+    if (trackedEntries.length === 0) {
+      return { success: true, results: buildReservationSuccessResults(entries, variants, pool) };
+    }
+
     // Phase 3: Build strict movement claims and all CAS update queries.
     const movementClaims = await buildReservationMovementClaims(
       db,
-      movementEntries,
+      trackedMovementEntries,
       variants,
       pool,
       options,
@@ -315,7 +331,7 @@ export async function reserveStockBatch(
     const movementQueries = movementClaims.map((claim) =>
       buildReservationMovementInsert(db, claim, variants.get(claim.variantId)!)
     );
-    const updateQueries = entries.map((entry) => {
+    const updateQueries = trackedEntries.map((entry) => {
       const variant = variants.get(entry.variantId)!;
       const updateSet =
         pool === "preorder"
@@ -362,7 +378,7 @@ export async function reserveStockBatch(
       console.error("[inventory/reserve] Batch execution failed:", err);
       return {
         success: false,
-        results: entries.map((e) => ({
+        results: trackedEntries.map((e) => ({
           success: false,
           variantId: e.variantId,
           previousStock: 0,
@@ -395,7 +411,7 @@ export async function reserveStockBatch(
 
     if (failedMovementIndices.length > 0 || failedUpdateIndices.length > 0) {
       // CAS conflict on some variants — roll back all successful claims/updates
-      const rollbackQueries = entries
+      const rollbackQueries = trackedEntries
         .filter((_, i) => !failedUpdateIndices.includes(i))
         .map((entry) => {
           return db
@@ -432,11 +448,12 @@ export async function reserveStockBatch(
 
       return {
         success: false,
-        results: entries.map((e, i) => {
+        results: entries.map((e) => {
           const movementFailed = failedMovementIndices.some(
             (movementIndex) => movementClaims[movementIndex]?.variantId === e.variantId,
           );
-          const updateFailed = failedUpdateIndices.includes(i);
+          const trackedIndex = trackedEntries.findIndex((entry) => entry.variantId === e.variantId);
+          const updateFailed = trackedIndex >= 0 && failedUpdateIndices.includes(trackedIndex);
           return {
             success: !movementFailed && !updateFailed,
             variantId: e.variantId,
@@ -454,18 +471,7 @@ export async function reserveStockBatch(
     }
 
     // Phase 6: All succeeded
-    const results: StockOperationResult[] = [];
-    for (const entry of entries) {
-      const variant = variants.get(entry.variantId)!;
-      const previousStock = pool === "preorder" ? variant.preorderStock : variant.stock;
-      const newStock = pool === "preorder"
-        ? variant.preorderStock - entry.quantity
-        : variant.stock;
-
-      results.push({ success: true, variantId: entry.variantId, previousStock, newStock });
-    }
-
-    return { success: true, results };
+    return { success: true, results: buildReservationSuccessResults(entries, variants, pool) };
   }
 
   // Should not reach here, but satisfy TypeScript
@@ -484,6 +490,7 @@ type ReservationVariantState = {
   allowPreorder: boolean;
   allowBackorder: boolean;
   backorderLimit: number;
+  trackInventory: boolean;
   stockVersion: number;
 };
 
@@ -678,17 +685,7 @@ async function resolveDuplicateReservationBatch(
 
   return {
     success: true,
-    results: entries.map((entry) => {
-      const variant = variants.get(entry.variantId)!;
-      return {
-        success: true,
-        variantId: entry.variantId,
-        previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
-        newStock: pool === "preorder"
-          ? variant.preorderStock - entry.quantity
-          : variant.stock,
-      };
-    }),
+    results: buildReservationSuccessResults(entries, variants, pool),
   };
 }
 
@@ -716,19 +713,27 @@ export async function validateStockBatchAvailability(
 
   return {
     success: true,
-    results: entries.map((entry) => {
-      const variant = variantLoad.variants.get(entry.variantId)!;
-      return {
-        success: true,
-        variantId: entry.variantId,
-        previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
-        newStock:
-          pool === "preorder"
-            ? variant.preorderStock - entry.quantity
-            : variant.stock,
-      };
-    }),
+    results: buildReservationSuccessResults(entries, variantLoad.variants, pool),
   };
+}
+
+function buildReservationSuccessResults(
+  entries: ReservationBatchItem[],
+  variants: Map<string, ReservationVariantState>,
+  pool: ReservationPool,
+): StockOperationResult[] {
+  return entries.map((entry) => {
+    const variant = variants.get(entry.variantId)!;
+    return {
+      success: true,
+      variantId: entry.variantId,
+      previousStock: pool === "preorder" ? variant.preorderStock : variant.stock,
+      newStock:
+        pool === "preorder" && variant.trackInventory
+          ? variant.preorderStock - entry.quantity
+          : variant.stock,
+    };
+  });
 }
 
 function mergeReservationItemsByVariant(items: ReservationBatchItem[]): ReservationBatchItem[] {
@@ -763,6 +768,7 @@ async function loadReservationVariantStates(
         allowPreorder: productVariants.allowPreorder,
         allowBackorder: productVariants.allowBackorder,
         backorderLimit: productVariants.backorderLimit,
+        trackInventory: productVariants.trackInventory,
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
@@ -851,10 +857,15 @@ function validateStockAvailability(
     allowPreorder: boolean;
     allowBackorder: boolean;
     backorderLimit: number;
+    trackInventory: boolean;
   },
   quantity: number,
   pool: "regular" | "preorder" | "backorder"
 ): string | null {
+  if (!variant.trackInventory) {
+    return null;
+  }
+
   if (pool === "preorder") {
     if (!variant.allowPreorder) {
       return `Pre-order not allowed for variant ${variant.id}`;

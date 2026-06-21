@@ -53,6 +53,7 @@ export interface StorefrontCartValidatedItem {
     productName: string;
     variantLabel: string | null;
     freeDelivery: boolean;
+    inventoryTracked: boolean;
     availableQuantity: number | null;
 }
 
@@ -85,6 +86,8 @@ interface VariantRow {
     stock: number;
     reservedStock: number;
     preorderStock: number;
+    isDefault: boolean;
+    trackInventory: boolean;
     allowPreorder: boolean;
     allowBackorder: boolean;
     backorderLimit: number;
@@ -133,6 +136,10 @@ function calculateUnitPrice(product: ProductRow, variant: VariantRow | null): nu
 }
 
 function availableForVariant(variant: VariantRow, pool: InventoryPool): number {
+    if (!variant.trackInventory) {
+        return Number.POSITIVE_INFINITY;
+    }
+
     if (pool === "preorder") {
         return variant.allowPreorder ? Math.max(0, variant.preorderStock) : 0;
     }
@@ -212,6 +219,8 @@ export async function validateStorefrontCartItems(
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
                 preorderStock: productVariants.preorderStock,
+                isDefault: productVariants.isDefault,
+                trackInventory: productVariants.trackInventory,
                 allowPreorder: productVariants.allowPreorder,
                 allowBackorder: productVariants.allowBackorder,
                 backorderLimit: productVariants.backorderLimit,
@@ -255,7 +264,10 @@ export async function validateStorefrontCartItems(
         }
 
         const productVariantsForProduct = variantsByProduct.get(product.id) ?? [];
-        const requestedVariant = item.variantId ? variantMap.get(item.variantId) : null;
+        const hasCustomerOptions = productVariantsForProduct.some((variant) =>
+            !variant.isDefault && (Boolean(variant.size) || Boolean(variant.color))
+        );
+        let requestedVariant = item.variantId ? variantMap.get(item.variantId) : null;
         const requestedVariantLabel = displayVariantLabel(item, requestedVariant ?? undefined);
 
         if (item.variantId) {
@@ -280,15 +292,50 @@ export async function validateStorefrontCartItems(
                 });
                 return;
             }
+            if (hasCustomerOptions && (requestedVariant.isDefault || (!requestedVariant.size && !requestedVariant.color))) {
+                addIssue(issues, item, index, {
+                    code: "VARIANT_REQUIRED",
+                    action: "select_variant",
+                    message: `${product.name} needs an option selection before checkout.`,
+                    productName: product.name,
+                    variantLabel: null,
+                });
+                return;
+            }
         } else if (productVariantsForProduct.length > 0) {
-            addIssue(issues, item, index, {
-                code: "VARIANT_REQUIRED",
-                action: "select_variant",
-                message: `${product.name} needs an option selection before checkout.`,
-                productName: product.name,
-                variantLabel: null,
-            });
-            return;
+            const defaultVariants = productVariantsForProduct.filter((variant) => variant.isDefault);
+            const soleNoOptionVariant =
+                productVariantsForProduct.length === 1 &&
+                !productVariantsForProduct[0]!.size &&
+                !productVariantsForProduct[0]!.color
+                    ? productVariantsForProduct[0]!
+                    : null;
+
+            if (hasCustomerOptions) {
+                addIssue(issues, item, index, {
+                    code: "VARIANT_REQUIRED",
+                    action: "select_variant",
+                    message: `${product.name} needs an option selection before checkout.`,
+                    productName: product.name,
+                    variantLabel: null,
+                });
+                return;
+            }
+
+            if (defaultVariants.length === 1 && productVariantsForProduct.length === 1) {
+                requestedVariant = defaultVariants[0]!;
+            } else if (soleNoOptionVariant) {
+                requestedVariant = soleNoOptionVariant;
+            } else {
+                addIssue(issues, item, index, {
+                    code: "PRODUCT_UNAVAILABLE",
+                    action: "remove",
+                    message: `${product.name} is not available for checkout right now.`,
+                    productName: product.name,
+                    variantLabel: null,
+                });
+                return;
+            }
         } else {
             addIssue(issues, item, index, {
                 code: "PRODUCT_UNAVAILABLE",
@@ -343,6 +390,7 @@ export async function validateStorefrontCartItems(
             productName: product.name,
             variantLabel: requestedVariantLabel,
             freeDelivery: product.freeDelivery,
+            inventoryTracked: variant?.trackInventory ?? false,
             availableQuantity: Number.isFinite(availableQuantity) ? availableQuantity : null,
         });
     });

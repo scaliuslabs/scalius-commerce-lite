@@ -24853,6 +24853,8 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     stock: number;
                     reservedStock: number;
                     preorderStock?: number;
+                    isDefault?: boolean;
+                    trackInventory?: boolean;
                     lowStockThreshold?: number | null;
                     allowPreorder?: boolean;
                     preorderDate?: string | number | null;
@@ -25674,6 +25676,8 @@ export type GetApiV1AdminProductsByIdResponses = {
                 stock: number;
                 reservedStock: number;
                 preorderStock?: number;
+                isDefault?: boolean;
+                trackInventory?: boolean;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
                 preorderDate?: string | number | null;
@@ -26124,6 +26128,8 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 stock: number;
                 reservedStock: number;
                 preorderStock?: number;
+                isDefault?: boolean;
+                trackInventory?: boolean;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
                 preorderDate?: string | number | null;
@@ -26157,6 +26163,7 @@ export type PostApiV1AdminProductsByIdVariantsData = {
         sku: string;
         price: number;
         stock: number;
+        trackInventory?: boolean;
         barcode?: string | null;
         barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
         discountType?: 'percentage' | 'flat';
@@ -26258,6 +26265,8 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             stock: number;
             reservedStock: number;
             preorderStock?: number;
+            isDefault?: boolean;
+            trackInventory?: boolean;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
             preorderDate?: string | number | null;
@@ -26380,6 +26389,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         sku: string;
         price: number;
         stock: number;
+        trackInventory?: boolean;
         barcode?: string | null;
         barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
         discountType?: 'percentage' | 'flat';
@@ -26482,6 +26492,8 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             stock: number;
             reservedStock: number;
             preorderStock?: number;
+            isDefault?: boolean;
+            trackInventory?: boolean;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
             preorderDate?: string | number | null;
@@ -26515,6 +26527,7 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateData = {
             sku: string;
             price: number;
             stock: number;
+            trackInventory?: boolean;
             barcode?: string | null;
             barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
             discountType: 'percentage' | 'flat';
@@ -26620,6 +26633,8 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateResponses = {
                 stock: number;
                 reservedStock: number;
                 preorderStock?: number;
+                isDefault?: boolean;
+                trackInventory?: boolean;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
                 preorderDate?: string | number | null;
@@ -26747,6 +26762,7 @@ export type PostApiV1AdminProductsByIdVariantsBulkUpdateData = {
             sku?: string;
             price?: number;
             stock?: number;
+            trackInventory?: boolean;
             barcode?: string | null;
             barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
         }>;
@@ -26941,6 +26957,8 @@ export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateResponses = {
             stock: number;
             reservedStock: number;
             preorderStock?: number;
+            isDefault?: boolean;
+            trackInventory?: boolean;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
             preorderDate?: string | number | null;
