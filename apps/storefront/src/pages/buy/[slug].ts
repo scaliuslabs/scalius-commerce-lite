@@ -8,6 +8,7 @@ import { validateCartItems, type CartValidationIssue } from "@/lib/api/orders";
 import type { CartItem } from "@/store/cart";
 import type { ProductVariant } from "@/lib/api/types";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
 
 export const prerender = false;
 
@@ -69,16 +70,9 @@ export const GET: APIRoute = async ({ params, url }) => {
     }
 
     const { product, images, variants, category } = productData;
-    const activeRealVariants = variants.filter((variant) => variant.id !== "default" && !variant.deletedAt);
-    const optionVariants = activeRealVariants.filter(
-      (variant) => !variant.isDefault && (Boolean(variant.size) || Boolean(variant.color)),
-    );
-    const buyerVariants = optionVariants.length > 0
-      ? optionVariants
-      : activeRealVariants.length === 1
-        ? activeRealVariants
-        : [];
-    const hasCustomerOptions = optionVariants.length > 0;
+    const buyerVariantResolution = resolveBuyerVariants(variants);
+    const buyerVariants = buyerVariantResolution.variants;
+    const hasCustomerOptions = buyerVariantResolution.hasCustomerOptions;
     if (buyerVariants.length === 0) {
       return productRedirect(slug, "product_unavailable");
     }

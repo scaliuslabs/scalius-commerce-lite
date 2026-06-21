@@ -28,7 +28,8 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
-- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, no size/color); optioned products require an explicit selected SKU; SKU-less products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. The storefront no longer synthesizes fake `default` variants.
+- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, no size/color); optioned products require an explicit selected SKU; SKU-less or ambiguous no-option products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. The storefront no longer synthesizes fake `default` variants.
+- Storefront buyer availability uses `apps/storefront/src/lib/product-sellable-variants.ts` so product detail, JSON-LD, stock badges, and `/buy/{slug}` all classify simple/optioned/unavailable products through one resolver.
 
 ## Data Flow
 
@@ -52,6 +53,8 @@ Storefront ([slug].astro)
       --> apps/api/src/routes/products.ts [Hono route, 1h cache middleware]
         --> packages/core/src/modules/products/products.storefront.ts [getStorefrontProductBySlug]
           --> D1: parallel queries for images, variants, richContent, attributes, category, relatedProducts
+        --> apps/storefront/src/lib/product-sellable-variants.ts [buyer-visible SKU resolver]
+          --> simple: one active no-option SKU; optioned: customer-option SKUs only; fake "default"/ambiguous rows fail closed
 
 Storefront category ([slug].astro)
   --> apps/storefront/src/lib/api/products.ts [getProductsByCategory, edge-cached]
@@ -153,6 +156,7 @@ Storefront category ([slug].astro)
 
 ## Inventory Rules
 
+- Migration `0055_default_sku_inventory_tracking` established the SKU-first columns/backfill. Migration `0057_simple_sku_legacy_repair` repairs later legacy/demo drift: active products with zero active SKUs receive an untracked hidden default SKU, and sole zero-stock/no-movement no-option SKUs are normalized to untracked simple defaults.
 - Product variant edit and bulk edit split `stock` out of ordinary metadata writes. Existing-SKU stock changes must batch the movement claim with the guarded variant stock/`stockVersion` update so `inventory_movements`, stock, and low-stock checks stay in sync.
 - Variant duplication copies merchandising fields only. The new SKU starts with zero physical stock; merchants must perform an explicit stocktake/adjustment to add sellable quantity.
 

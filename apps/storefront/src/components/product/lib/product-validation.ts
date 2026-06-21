@@ -82,7 +82,7 @@ export function isStockAvailable(
     return {
       available: false,
       maxAvailable: stock,
-      error: `Only ${stock} items available`,
+      error: `Only ${stock} item${stock === 1 ? "" : "s"} available`,
     };
   }
 
@@ -218,6 +218,8 @@ export function validateAddToCart(input: {
   price?: number;
   quantity?: number;
   stock?: number;
+  reservedStock?: number;
+  trackInventory?: boolean;
   variantId?: string;
   size?: string;
   color?: string;
@@ -248,9 +250,10 @@ export function validateAddToCart(input: {
   }
 
   // Validate stock
-  if (input.stock !== undefined) {
+  if (input.trackInventory !== false && input.stock !== undefined) {
+    const availableStock = Math.max(0, input.stock - (input.reservedStock ?? 0));
     const stockValidation = isStockAvailable(
-      input.stock,
+      availableStock,
       quantityValidation.value,
     );
     if (!stockValidation.available) {

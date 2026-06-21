@@ -8,6 +8,7 @@ import {
 } from "./lib/pricing-engine";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 
 interface Props {
   product: Product;
@@ -36,25 +37,11 @@ const formatPrice = (price: number) =>
     maximumFractionDigits: 2,
   })}`;
 
-const sellableVariants = variants.filter((variant) => !variant.deletedAt && variant.id !== "default");
-const purchaseUnavailable = sellableVariants.length === 0;
-const stockStatus = (() => {
-  if (purchaseUnavailable) {
-    return { text: "Unavailable", color: "text-destructive", bg: "bg-destructive/10" };
-  }
-  if (sellableVariants.some((variant) => variant.trackInventory === false)) {
-    return { text: "In Stock", color: "text-primary", bg: "bg-primary/10" };
-  }
-  const totalStock = sellableVariants.reduce(
-    (sum, variant) => sum + Math.max(0, variant.stock - (variant.reservedStock ?? 0)),
-    0
-  );
-  if (totalStock > 50)
-    return { text: "In Stock", color: "text-primary", bg: "bg-primary/10" };
-  if (totalStock > 0)
-    return { text: "Low Stock", color: "text-primary", bg: "bg-primary/10" };
-  return { text: "Out of Stock", color: "text-destructive", bg: "bg-destructive/10" };
-})();
+const buyerStockSummary = getBuyerStockSummary(variants);
+const purchaseUnavailable = !buyerStockSummary.canPurchaseAny;
+const stockStatus = buyerStockSummary.tone === "available"
+  ? { text: buyerStockSummary.text, color: "text-primary", bg: "bg-primary/10" }
+  : { text: buyerStockSummary.text, color: "text-destructive", bg: "bg-destructive/10" };
 
 const basePrice = product.price;
 const discountedPrice = product.discountedPrice;
