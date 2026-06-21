@@ -1,10 +1,10 @@
 import { productVariants, products, inventoryMovements, productLowStockAlerts } from "@scalius/database/schema";
 import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
-import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { buildStockMovementClaim } from "./stock-movement-claims";
 
 export async function getInventoryOverview(db: Database, params: {
     section: string;
@@ -203,7 +203,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
                 stockVersion: productVariants.stockVersion,
             })
             .from(productVariants)
-            .where(eq(productVariants.id, variantId))
+            .where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt)))
             .get();
 
         if (!variant) {
@@ -211,44 +211,60 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
         }
 
         const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;
+        const newStock = Math.max(0, previousStock + delta);
+        const effectiveDelta = newStock - previousStock;
+
+        if (effectiveDelta === 0) {
+            return {
+                variantId,
+                previousStock,
+                newStock,
+                delta: 0,
+            };
+        }
 
         const updateSet = pool === "preorderStock"
             ? {
-                preorderStock: sql`MAX(0, ${productVariants.preorderStock} + ${delta})`,
+                preorderStock: newStock,
                 stockVersion: sql`${productVariants.stockVersion} + 1`,
                 updatedAt: sql`unixepoch()`,
             }
             : {
-                stock: sql`MAX(0, ${productVariants.stock} + ${delta})`,
+                stock: newStock,
                 stockVersion: sql`${productVariants.stockVersion} + 1`,
                 updatedAt: sql`unixepoch()`,
             };
 
-        const result = await db
+        const movementInsert = buildStockMovementClaim(db, {
+            movementId: crypto.randomUUID(),
+            variantId,
+            stockVersion: variant.stockVersion,
+            quantity: effectiveDelta,
+            previousStock,
+            newStock,
+            notes: `Manual adjustment (${payload.reason})${payload.notes ? `: ${payload.notes}` : ""}`,
+            adminUserId,
+        });
+
+        const stockUpdate = db
             .update(productVariants)
             .set(updateSet)
             .where(
                 and(
                     eq(productVariants.id, variantId),
-                    eq(productVariants.stockVersion, variant.stockVersion)
+                    eq(productVariants.stockVersion, variant.stockVersion),
+                    isNull(productVariants.deletedAt),
                 )
             )
             .returning({ id: productVariants.id });
 
-        if (result.length > 0) {
-            const newStock = Math.max(0, previousStock + delta);
+        const [movementRows, updateRows] = await safeBatch(
+            db,
+            [movementInsert, stockUpdate] as never,
+        ) as { id: string }[][];
 
-            await recordMovement(db, {
-                variantId,
-                type: "adjusted",
-                quantity: delta,
-                previousStock,
-                newStock,
-                notes: `Manual adjustment (${payload.reason})${payload.notes ? `: ${payload.notes}` : ""}`,
-                createdBy: adminUserId,
-            });
-
-            if (delta < 0 && pool === "stock") {
+        if ((movementRows?.length ?? 0) > 0 && (updateRows?.length ?? 0) > 0) {
+            if (effectiveDelta < 0 && pool === "stock") {
                 await checkAndAlertLowStock(db, variantId);
             }
 
@@ -256,7 +272,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
                 variantId,
                 previousStock,
                 newStock,
-                delta,
+                delta: effectiveDelta,
             };
         }
 
