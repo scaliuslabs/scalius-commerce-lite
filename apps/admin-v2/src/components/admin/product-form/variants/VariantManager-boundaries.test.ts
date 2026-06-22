@@ -38,6 +38,12 @@ const BULK_PREVIEW_SOURCE = fileURLToPath(
 const CSV_HELPERS_SOURCE = fileURLToPath(
   new URL("./utils/csvHelpers.ts", import.meta.url),
 );
+const ORDER_ITEM_SELECTION_SOURCE = fileURLToPath(
+  new URL("../../order-form/ItemSelection.tsx", import.meta.url),
+);
+const PRODUCT_VIEW_SOURCE = fileURLToPath(
+  new URL("../../ProductView.tsx", import.meta.url),
+);
 
 describe("VariantManager product mode boundaries", () => {
   it("routes one protected no-option SKU to the simple inventory panel", () => {
@@ -73,27 +79,50 @@ describe("VariantManager product mode boundaries", () => {
     const tableSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
     const rowSource = readFileSync(VARIANT_ROW_SOURCE, "utf8");
     const statsSource = readFileSync(VARIANT_STATS_SOURCE, "utf8");
+    const orderItemSelectionSource = readFileSync(ORDER_ITEM_SELECTION_SOURCE, "utf8");
+    const productViewSource = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
-    expect(simpleSource).toContain("Simple Product SKU");
+    expect(simpleSource).toContain("Product SKU");
     expect(simpleSource).toContain("One SKU, no size or color choices.");
     expect(simpleSource).toContain("No stock limit");
     expect(simpleSource).toContain("Set up options");
+    expect(simpleSource).toContain("No customer options");
     expect(simpleSource).toContain("Price and discount stay in Pricing.");
     expect(simpleSource).not.toContain('name="price"');
     expect(simpleSource).not.toContain("Discount type");
     expect(toolbarSource).toContain("Search options...");
     expect(toolbarSource).toContain("Add Option");
     expect(tableSource).toContain("No options yet");
+    expect(tableSource).toContain("VariantMobileCard");
+    expect(tableSource).toContain("const showMobileCards");
+    expect(tableSource).toContain("md:hidden");
+    expect(tableSource).toContain("hidden md:block");
+    expect(tableSource).toContain('const editLabel = isProtectedDefaultSku ? "Edit product SKU" : "Edit option"');
+    expect(tableSource).toContain("aria-label={editLabel}");
+    expect(tableSource).toContain("Price");
+    expect(tableSource).toContain("Available");
+    expect(tableSource).toContain("On hand");
     expect(rowSource).toContain("Option actions");
-    expect(rowSource).toContain("Edit Option");
-    expect(rowSource).toContain("Delete Option");
-    expect(rowSource).toContain("SIMPLE SKU");
-    expect(rowSource).toContain("NO LIMIT");
+    expect(rowSource).toContain("Edit option");
+    expect(rowSource).toContain("Edit product SKU");
+    expect(rowSource).toContain("Delete option");
+    expect(rowSource).toContain("Product SKU");
+    expect(rowSource).toContain("No size");
+    expect(rowSource).toContain("No color");
     expect(rowSource).toContain("No stock limit");
+    expect(rowSource).not.toContain("SIMPLE SKU");
+    expect(rowSource).not.toContain("NO LIMIT");
     expect(rowSource).not.toContain("NOT TRACKED");
     expect(rowSource).not.toContain("ALWAYS");
     expect(statsSource).toContain("no stock limit");
     expect(statsSource).not.toContain("Not tracked");
+    expect(orderItemSelectionSource).toContain("Product SKU");
+    expect(orderItemSelectionSource).toContain("No stock limit");
+    expect(orderItemSelectionSource).not.toContain("Simple product SKU");
+    expect(orderItemSelectionSource).not.toContain("Stock: not tracked");
+    expect(productViewSource).toContain("Product SKU");
+    expect(productViewSource).toContain("No stock limit");
+    expect(productViewSource).not.toContain("Simple product SKU");
   });
 
   it("saves dirty simple SKU changes before entering first option setup", () => {

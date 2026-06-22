@@ -12,7 +12,8 @@ describe("ProductView inventory presentation boundaries", () => {
 
     expect(source).toContain("trackInventory?: boolean | null");
     expect(source).toContain("v.trackInventory !== false");
-    expect(source).toContain("Simple product SKU");
+    expect(source).toContain("Product SKU");
+    expect(source).not.toContain("Simple product SKU");
     expect(source).toContain("No stock limit");
     expect(source).toContain("available === null");
     expect(source).not.toContain("const available = v.stock - v.reservedStock");

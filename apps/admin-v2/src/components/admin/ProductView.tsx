@@ -331,7 +331,7 @@ export function ProductView({ product }: ProductViewProps) {
                       const inventoryTracked = v.trackInventory !== false;
                       const available = inventoryTracked ? Math.max(0, v.stock - v.reservedStock) : null;
                       const attributes = isSimpleDefaultSku
-                        ? "Simple product SKU"
+                        ? "Product SKU"
                         : [
                             v.size && `Size: ${v.size}`,
                             v.color && `Color: ${v.color}`,

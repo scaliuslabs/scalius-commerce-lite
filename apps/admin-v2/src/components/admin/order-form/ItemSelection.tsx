@@ -105,7 +105,7 @@ export function ItemSelection({
                   ]
                     .filter(Boolean)
                     .join(", ") ||
-                  (variant.isDefault ? "Simple product SKU" : null) ||
+                  (variant.isDefault ? "Product SKU" : null) ||
                   variant.sku ||
                   "SKU";
                 const available = (variant.stock ?? 0) - (variant.reservedStock ?? 0);
@@ -115,7 +115,7 @@ export function ItemSelection({
                     <div className="flex flex-col w-full">
                       <span className="font-medium">{variantLabel}</span>
                       <div className="flex justify-between text-xs text-muted-foreground mt-1 w-full">
-                        <span>{variant.trackInventory === false ? "Stock: not tracked" : `Available: ${available}`}</span>
+                        <span>{variant.trackInventory === false ? "No stock limit" : `Available: ${available}`}</span>
                         <span className="ml-4">
                           {selectedProduct.discountPercentage ? (
                             <span className="text-green-600">

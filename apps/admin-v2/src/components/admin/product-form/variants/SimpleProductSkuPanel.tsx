@@ -126,9 +126,9 @@ export function SimpleProductSkuPanel({
           <div>
             <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
               <Package className="h-4 w-4 text-muted-foreground" />
-              Simple Product SKU
+              Product SKU
               <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
-                Simple product
+                No options
               </Badge>
             </CardTitle>
             <CardDescription className="mt-1 text-xs text-muted-foreground">
@@ -351,7 +351,7 @@ export function SimpleProductSkuPanel({
               <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
                 <div className="mb-1 flex items-center gap-2 font-medium text-foreground">
                   <Boxes className="h-3.5 w-3.5" />
-                  Simple product
+                  No customer options
                 </div>
                 Size and color stay empty here. Price and discount stay in Pricing.
               </div>
