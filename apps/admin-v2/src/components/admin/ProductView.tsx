@@ -43,6 +43,8 @@ interface ProductVariant {
   price: number | null;
   stock: number;
   reservedStock: number;
+  isDefault?: boolean | null;
+  trackInventory?: boolean | null;
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
   deletedAt: Date | string | number | null;
@@ -325,23 +327,30 @@ export function ProductView({ product }: ProductViewProps) {
                   </TableHeader>
                   <TableBody>
                     {product.variants.map((v) => {
-                      const available = v.stock - v.reservedStock;
+                      const isSimpleDefaultSku = v.isDefault === true && !v.size && !v.color;
+                      const inventoryTracked = v.trackInventory !== false;
+                      const available = inventoryTracked ? Math.max(0, v.stock - v.reservedStock) : null;
+                      const attributes = isSimpleDefaultSku
+                        ? "Simple product SKU"
+                        : [
+                            v.size && `Size: ${v.size}`,
+                            v.color && `Color: ${v.color}`,
+                            v.weight && `${v.weight}g`,
+                          ].filter(Boolean).join(" • ") || "—";
                       return (
                         <TableRow key={v.id} className="hover:bg-muted/30">
                           <TableCell className="py-2.5 pl-4 font-mono text-xs font-medium">{v.sku}</TableCell>
                           <TableCell className="py-2.5 text-xs text-muted-foreground">
-                            {[
-                              v.size && `Size: ${v.size}`,
-                              v.color && `Color: ${v.color}`,
-                              v.weight && `${v.weight}g`,
-                            ].filter(Boolean).join(" • ") || "—"}
+                            {attributes}
                           </TableCell>
                           <TableCell className="py-2.5 text-xs font-medium text-right text-foreground">
                             {symbol}{(v.price ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </TableCell>
-                          <TableCell className="py-2.5 text-xs text-right text-muted-foreground">{v.stock}</TableCell>
+                          <TableCell className="py-2.5 text-xs text-right text-muted-foreground">
+                            {inventoryTracked ? v.stock : "No stock limit"}
+                          </TableCell>
                           <TableCell className="py-2.5 text-right">
-                            {v.reservedStock > 0 ? (
+                            {inventoryTracked && v.reservedStock > 0 ? (
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium border-amber-200 text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 h-5">
                                 {v.reservedStock}
                               </Badge>
@@ -350,12 +359,18 @@ export function ProductView({ product }: ProductViewProps) {
                             )}
                           </TableCell>
                           <TableCell className="py-2.5 text-right pr-4">
-                            <span className={cn(
-                              "text-xs font-bold",
-                              available <= 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-500"
-                            )}>
-                              {available}
-                            </span>
+                            {available === null ? (
+                              <Badge variant="outline" className="h-5 border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                No stock limit
+                              </Badge>
+                            ) : (
+                              <span className={cn(
+                                "text-xs font-bold",
+                                available <= 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-500"
+                              )}>
+                                {available}
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

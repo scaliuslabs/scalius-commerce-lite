@@ -151,7 +151,7 @@ export function SimpleProductSkuPanel({
               </Badge>
             ) : (
               <Badge variant="outline" className="h-6 border-emerald-200 bg-emerald-50 px-2 text-xs text-emerald-700">
-                Always available
+                No stock limit
               </Badge>
             )}
             <Button
@@ -340,7 +340,7 @@ export function SimpleProductSkuPanel({
                 <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Check className="h-4 w-4" />
-                    Always available
+                    No stock limit
                   </div>
                   <p className="mt-1 text-xs text-emerald-800">
                     Stock numbers are ignored while tracking is off.

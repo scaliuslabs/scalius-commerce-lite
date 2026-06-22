@@ -118,12 +118,12 @@ export function VariantDisplayRow({
           {variant.sku}
           {isSimpleDefaultSku && (
             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-900/30 dark:text-sky-300">
-              SIMPLE
+              SIMPLE SKU
             </Badge>
           )}
           {!inventoryTracked && (
             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300">
-              NOT TRACKED
+              NO LIMIT
             </Badge>
           )}
           {hasVariantDiscount && (
@@ -170,7 +170,7 @@ export function VariantDisplayRow({
         {inventoryTracked ? (
           <span className="text-xs font-medium text-foreground">{variant.stock}</span>
         ) : (
-          <span className="text-xs font-medium text-muted-foreground">Not tracked</span>
+          <span className="text-xs font-medium text-muted-foreground">No stock limit</span>
         )}
         {inventoryTracked && variant.reservedStock > 0 && (
           <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium ml-1" title={`${variant.reservedStock} reserved by orders`}>
@@ -184,7 +184,7 @@ export function VariantDisplayRow({
         <div className="flex items-center gap-1">
           {availableStock === null ? (
             <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900">
-              ALWAYS
+              No stock limit
             </Badge>
           ) : (
             <span className={cn(
