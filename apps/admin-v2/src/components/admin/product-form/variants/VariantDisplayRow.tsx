@@ -101,17 +101,18 @@ export function VariantDisplayRow({
   const editLabel = isSimpleDefaultSku ? "Edit product SKU" : "Edit option";
   const optionOneLabel = variant.size || (isSimpleDefaultSku ? "No option" : "—");
   const optionTwoLabel = variant.color || (isSimpleDefaultSku ? "No option" : "—");
+  const cellClass = "h-10 border-r px-2 py-1.5 align-middle last:border-r-0";
 
   return (
     <TableRow
       key={variant.id}
       data-state={isSelected ? "selected" : undefined}
       className={cn(
-        "group transition-colors hover:bg-muted/50",
+        "group h-10 transition-colors hover:bg-muted/40",
         isSelected && "bg-muted"
       )}
     >
-      <TableCell className="w-10 pl-3 pr-1 py-2">
+      <TableCell className={cn(cellClass, "w-10 pl-3 pr-1")}>
         <Checkbox
           checked={isSelected}
           onCheckedChange={() => {
@@ -123,17 +124,12 @@ export function VariantDisplayRow({
         />
       </TableCell>
 
-      <TableCell className="py-2">
-        <div className="font-medium font-mono text-xs text-foreground flex items-center gap-1.5">
-          {variant.sku}
+      <TableCell className={cn(cellClass, "min-w-[140px]")}>
+        <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-medium text-foreground">
+          <span className="truncate">{variant.sku}</span>
           {isSimpleDefaultSku && (
             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-900/30 dark:text-sky-300">
               Product SKU
-            </Badge>
-          )}
-          {!inventoryTracked && (
-            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300">
-              No stock limit
             </Badge>
           )}
           {hasVariantDiscount && (
@@ -142,40 +138,19 @@ export function VariantDisplayRow({
             </Badge>
           )}
         </div>
-        {variant.barcode && (
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-[10px] text-muted-foreground font-mono">{variant.barcode}</span>
-            {variant.barcodeType && (
-              <span className="text-[10px] text-muted-foreground uppercase">({variant.barcodeType})</span>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Print barcode label"
-              onClick={(e) => {
-                e.stopPropagation();
-                printBarcodeLabel(variant, productName);
-              }}
-            >
-              <Printer className="h-2.5 w-2.5" />
-            </Button>
-          </div>
-        )}
       </TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{optionOneLabel}</TableCell>
+      <TableCell className={cn(cellClass, "text-xs text-muted-foreground")}>{optionOneLabel}</TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{optionTwoLabel}</TableCell>
+      <TableCell className={cn(cellClass, "text-xs text-muted-foreground")}>{optionTwoLabel}</TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
+      <TableCell className={cn(cellClass, "text-xs text-muted-foreground")}>{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
 
-      <TableCell className="py-2 text-xs font-medium text-foreground">
+      <TableCell className={cn(cellClass, "text-xs font-medium text-foreground")}>
         <span suppressHydrationWarning>{symbol}{variant.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
       </TableCell>
 
-      <TableCell className="py-2">
+      <TableCell className={cellClass}>
         <Badge
           variant="outline"
           className={cn(
@@ -190,11 +165,11 @@ export function VariantDisplayRow({
       </TableCell>
 
       {/* On Hand */}
-      <TableCell className="py-2">
+      <TableCell className={cellClass}>
         {inventoryTracked ? (
           <span className="text-xs font-medium text-foreground">{variant.stock}</span>
         ) : (
-          <span className="text-xs font-medium text-muted-foreground">No stock limit</span>
+          <span className="text-xs font-medium text-muted-foreground">-</span>
         )}
         {inventoryTracked && variant.reservedStock > 0 && (
           <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium ml-1" title={`${variant.reservedStock} reserved by orders`}>
@@ -204,7 +179,7 @@ export function VariantDisplayRow({
       </TableCell>
 
       {/* Available */}
-      <TableCell className="py-2">
+      <TableCell className={cellClass}>
         <div className="flex items-center gap-1">
           {availableStock === null ? (
             <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900">
@@ -229,13 +204,19 @@ export function VariantDisplayRow({
         </div>
       </TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">{getDiscountDisplay(variant, symbol)}</TableCell>
+      <TableCell className={cn(cellClass, "whitespace-nowrap text-xs text-muted-foreground")}>{getDiscountDisplay(variant, symbol)}</TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">
+      <TableCell className={cn(cellClass, "whitespace-nowrap text-xs text-muted-foreground")}>
         <span suppressHydrationWarning>{formatDate(variant.updatedAt)}</span>
       </TableCell>
 
-      <TableCell className="pr-3 py-2">
+      <TableCell
+        className={cn(
+          cellClass,
+          "sticky right-0 z-10 w-[72px] bg-card pr-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)] group-hover:bg-muted/40",
+          isSelected && "bg-muted",
+        )}
+      >
         <div className="flex items-center justify-end gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
