@@ -17,6 +17,7 @@ const baseVariant: ProductVariant = {
   price: 299.99,
   stock: 50,
   reservedStock: 0,
+  trackInventory: true,
   discountType: "percentage",
   discountPercentage: 10,
   discountAmount: null,
@@ -45,6 +46,7 @@ describe("variant CSV helpers", () => {
         barcodeType: "ean13",
         price: 299.99,
         stock: 50,
+        trackInventory: true,
         discountType: "percentage",
         discountPercentage: 10,
         discountAmount: null,
@@ -62,6 +64,7 @@ describe("variant CSV helpers", () => {
       barcodeType: "ean13",
       price: 299.99,
       stock: 50,
+      trackInventory: true,
     });
   });
 
@@ -89,20 +92,22 @@ describe("variant CSV helpers", () => {
 
   it("rejects malformed numeric fields and unknown discount types", () => {
     const invalidRows = [
-      "SKU,Price,Stock,Discount Type,Discount Value",
-      "BAD-PRICE,12abc,1,percentage,",
-      "BAD-STOCK,12,1.5,percentage,",
-      "BAD-DISCOUNT,12,1,seasonal,",
+      "SKU,Size,Price,Stock,Track Stock,Discount Type,Discount Value",
+      "BAD-PRICE,M,12abc,1,yes,percentage,",
+      "BAD-STOCK,M,12,1.5,yes,percentage,",
+      "BAD-DISCOUNT,M,12,1,yes,seasonal,",
+      "BAD-TRACK,M,12,1,maybe,percentage,",
     ].join("\n");
     const result = parseCsvToVariants(invalidRows);
 
     expect(result.success).toBe(false);
     expect(result.imported).toBe(0);
-    expect(result.failed).toBe(3);
+    expect(result.failed).toBe(4);
     expect(result.errors).toEqual([
       { row: 2, error: "Invalid price" },
       { row: 3, error: "Invalid stock" },
       { row: 4, error: "Invalid discount type: seasonal" },
+      { row: 5, error: "Invalid track stock value: maybe" },
     ]);
   });
 
@@ -118,6 +123,25 @@ describe("variant CSV helpers", () => {
     expect(result.failed).toBe(1);
     expect(result.errors).toEqual([
       { row: 2, error: "Size or Color is required for product options" },
+    ]);
+  });
+
+  it("exports and imports no-limit stock options", () => {
+    const csv = variantsToCsv([{ ...baseVariant, trackInventory: false }]);
+
+    expect(csv.split("\n")[0]).toContain('"Track Stock"');
+    expect(csv.split("\n")[1]).toContain('"no"');
+
+    const result = parseCsvToVariants([
+      "SKU,Size,Color,Price,Stock,Track Stock",
+      "SKU-002,M,,199,0,no",
+      "SKU-003,L,,199,0,unlimited",
+    ].join("\n"));
+
+    expect(result.success).toBe(true);
+    expect(result.variants).toEqual([
+      expect.objectContaining({ sku: "SKU-002", trackInventory: false }),
+      expect.objectContaining({ sku: "SKU-003", trackInventory: false }),
     ]);
   });
 });

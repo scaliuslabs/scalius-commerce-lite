@@ -179,6 +179,7 @@ function createVariantFromOptions(
     sku,
     price: options.basePrice,
     stock: options.baseStock,
+    trackInventory: options.trackInventory,
     weight: options.baseWeight,
     discountType: options.discountType,
     discountPercentage:
@@ -208,9 +209,15 @@ export function calculateEffectivePrice(variant: ProductVariant): number {
  * Get stock level status
  */
 export function getStockStatus(stock: number): "out-of-stock" | "low" | "in-stock" {
-  if (stock === 0) return "out-of-stock";
+  if (stock <= 0) return "out-of-stock";
   if (stock <= 10) return "low";
   return "in-stock";
+}
+
+export function getAvailableStock(
+  variant: Pick<ProductVariant, "stock" | "reservedStock">
+): number {
+  return Math.max(0, variant.stock - (variant.reservedStock ?? 0));
 }
 
 export function isInventoryTracked(variant: Pick<ProductVariant, "trackInventory">): boolean {
@@ -278,12 +285,12 @@ export function isSkuUnique(sku: string, variants: ProductVariant[], excludeId?:
  */
 export function getVariantStats(variants: ProductVariant[]) {
   const trackedVariants = variants.filter(isInventoryTracked);
-  const totalStock = trackedVariants.reduce((sum, v) => sum + (v.stock - (v.reservedStock ?? 0)), 0);
-  const totalValue = trackedVariants.reduce((sum, v) => sum + v.price * (v.stock - (v.reservedStock ?? 0)), 0);
+  const totalStock = trackedVariants.reduce((sum, v) => sum + getAvailableStock(v), 0);
+  const totalValue = trackedVariants.reduce((sum, v) => sum + v.price * getAvailableStock(v), 0);
   const averagePrice =
     variants.length > 0 ? variants.reduce((sum, v) => sum + v.price, 0) / variants.length : 0;
-  const lowStockCount = trackedVariants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "low").length;
-  const outOfStockCount = trackedVariants.filter((v) => getStockStatus(v.stock - (v.reservedStock ?? 0)) === "out-of-stock")
+  const lowStockCount = trackedVariants.filter((v) => getStockStatus(getAvailableStock(v)) === "low").length;
+  const outOfStockCount = trackedVariants.filter((v) => getStockStatus(getAvailableStock(v)) === "out-of-stock")
     .length;
   const untrackedCount = variants.length - trackedVariants.length;
 

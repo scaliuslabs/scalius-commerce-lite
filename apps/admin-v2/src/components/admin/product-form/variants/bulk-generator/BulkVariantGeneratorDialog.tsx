@@ -60,6 +60,7 @@ export function BulkVariantGenerator({
   const [colors, setColors] = useState<string[]>([]);
   const [basePrice, setBasePrice] = useState<number>(0);
   const [baseStock, setBaseStock] = useState<number>(0);
+  const [trackInventory, setTrackInventory] = useState(true);
   const [baseWeight, setBaseWeight] = useState<number | null>(null);
   const [skuTemplate, setSkuTemplate] = useState("{RANDOM}-{SIZE}-{COLOR}");
   const [discountType, setDiscountType] = useState<"percentage" | "flat">(
@@ -74,6 +75,7 @@ export function BulkVariantGenerator({
       colors,
       basePrice,
       baseStock,
+      trackInventory,
       baseWeight,
       skuTemplate,
       discountType,
@@ -86,6 +88,7 @@ export function BulkVariantGenerator({
     colors,
     basePrice,
     baseStock,
+    trackInventory,
     baseWeight,
     skuTemplate,
     discountType,
@@ -114,6 +117,7 @@ export function BulkVariantGenerator({
       setColors([]);
       setBasePrice(0);
       setBaseStock(0);
+      setTrackInventory(true);
       setBaseWeight(null);
       setDiscountValue(null);
       setOpen(false);
@@ -177,6 +181,8 @@ export function BulkVariantGenerator({
               onBasePriceChange={setBasePrice}
               baseStock={baseStock}
               onBaseStockChange={setBaseStock}
+              trackInventory={trackInventory}
+              onTrackInventoryChange={setTrackInventory}
               baseWeight={baseWeight}
               onBaseWeightChange={setBaseWeight}
               discountType={discountType}

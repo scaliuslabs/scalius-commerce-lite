@@ -20,6 +20,24 @@ const VARIANT_ROW_SOURCE = fileURLToPath(
 const VARIANT_STATS_SOURCE = fileURLToPath(
   new URL("./VariantStatsDisplay.tsx", import.meta.url),
 );
+const VARIANT_FORM_ROW_SOURCE = fileURLToPath(
+  new URL("./VariantFormRow.tsx", import.meta.url),
+);
+const VARIANT_BULK_EDIT_ROW_SOURCE = fileURLToPath(
+  new URL("./VariantBulkEditRow.tsx", import.meta.url),
+);
+const BULK_GENERATOR_SOURCE = fileURLToPath(
+  new URL("./bulk-generator/BulkVariantGeneratorDialog.tsx", import.meta.url),
+);
+const BULK_CONFIG_SOURCE = fileURLToPath(
+  new URL("./bulk-generator/VariantConfigSection.tsx", import.meta.url),
+);
+const BULK_PREVIEW_SOURCE = fileURLToPath(
+  new URL("./bulk-generator/VariantPreviewTable.tsx", import.meta.url),
+);
+const CSV_HELPERS_SOURCE = fileURLToPath(
+  new URL("./utils/csvHelpers.ts", import.meta.url),
+);
 
 describe("VariantManager product mode boundaries", () => {
   it("routes one protected no-option SKU to the simple inventory panel", () => {
@@ -87,14 +105,14 @@ describe("VariantManager product mode boundaries", () => {
     expect(simpleSource).toContain("saveSimpleSku(form.getValues())");
   });
 
-  it("prefills first option setup from the protected simple SKU without reusing its SKU", () => {
+  it("prefills first option setup from the protected simple SKU without reusing its SKU or no-limit state", () => {
     const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
     const rowSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
 
     expect(source).toContain("function firstOptionDefaultsFromSimpleSku");
     expect(source).toContain('sku: ""');
     expect(source).toContain("price: variant.price");
-    expect(source).toContain("trackInventory: variant.trackInventory ?? true");
+    expect(source).toContain("trackInventory: true");
     expect(source).toContain("addVariantDefaults={isFirstOptionSetup ? addVariantDefaults : undefined}");
     expect(rowSource).toContain("defaultValues={addVariantDefaults}");
   });
@@ -106,5 +124,30 @@ describe("VariantManager product mode boundaries", () => {
     expect(source).toContain('throw new Error("No options were created.")');
     expect(source).toContain('throw new Error("No options were imported.")');
     expect(importSource).toContain("reservedVariants");
+  });
+
+  it("keeps stock-limit controls visible across row edit, spreadsheet edit, bulk generation, and CSV", () => {
+    const formRowSource = readFileSync(VARIANT_FORM_ROW_SOURCE, "utf8");
+    const bulkEditSource = readFileSync(VARIANT_BULK_EDIT_ROW_SOURCE, "utf8");
+    const generatorSource = readFileSync(BULK_GENERATOR_SOURCE, "utf8");
+    const configSource = readFileSync(BULK_CONFIG_SOURCE, "utf8");
+    const previewSource = readFileSync(BULK_PREVIEW_SOURCE, "utf8");
+    const csvSource = readFileSync(CSV_HELPERS_SOURCE, "utf8");
+    const managerSource = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+
+    expect(formRowSource).toContain('name="trackInventory"');
+    expect(formRowSource).toContain("Track stock for this option");
+    expect(formRowSource).toContain("No stock limit");
+    expect(formRowSource).toContain("Math.max(0");
+    expect(bulkEditSource).toContain("'trackInventory'");
+    expect(bulkEditSource).toContain("Track stock for option");
+    expect(bulkEditSource).toContain("No stock limit");
+    expect(generatorSource).toContain("const [trackInventory, setTrackInventory] = useState(true)");
+    expect(generatorSource).toContain("trackInventory,");
+    expect(configSource).toContain("Track stock for generated options");
+    expect(previewSource).toContain("variant.trackInventory === false");
+    expect(csvSource).toContain('"Track Stock"');
+    expect(csvSource).toContain("parseTrackInventory");
+    expect(managerSource).toContain("delete withoutIgnoredStock.stock");
   });
 });
