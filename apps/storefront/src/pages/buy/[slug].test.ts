@@ -63,6 +63,18 @@ function validCartValidation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function simpleDefaultVariant() {
+  return {
+    id: "var_default_prod_1",
+    productId: "prod_1",
+    price: 150,
+    size: null,
+    color: null,
+    isDefault: true,
+    deletedAt: null,
+  };
+}
+
 describe("/buy/[slug]", () => {
   beforeEach(() => {
     mocks.getProductBySlug.mockReset();
@@ -116,7 +128,7 @@ describe("/buy/[slug]", () => {
         imageUrl: null,
       },
       images: [],
-      variants: [{ id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null }],
+      variants: [simpleDefaultVariant()],
       category: null,
     });
 
@@ -220,7 +232,7 @@ describe("/buy/[slug]", () => {
         imageUrl: null,
       },
       images: [],
-      variants: [{ id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null }],
+      variants: [simpleDefaultVariant()],
       category: null,
     });
     mocks.validateCartItems.mockResolvedValueOnce({
@@ -270,7 +282,7 @@ describe("/buy/[slug]", () => {
         imageUrl: null,
       },
       images: [],
-      variants: [{ id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null }],
+      variants: [simpleDefaultVariant()],
       category: null,
     });
 
@@ -300,7 +312,7 @@ describe("/buy/[slug]", () => {
         imageUrl: null,
       },
       images: [],
-      variants: [{ id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null }],
+      variants: [simpleDefaultVariant()],
       category: null,
     });
     mocks.validateCartItems.mockResolvedValueOnce({
@@ -351,7 +363,7 @@ describe("/buy/[slug]", () => {
         imageUrl: null,
       },
       images: [],
-      variants: [{ id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null }],
+      variants: [simpleDefaultVariant()],
       category: null,
     });
     mocks.validateCartItems.mockResolvedValueOnce({

@@ -58,6 +58,22 @@ describe("product sellable variant resolution", () => {
     });
   });
 
+  it("does not treat a non-default no-option SKU as a simple product", () => {
+    const resolution = resolveBuyerVariants([
+      variant({
+        id: "var_bad_simple",
+        isDefault: false,
+        trackInventory: false,
+      }),
+    ]);
+
+    expect(resolution).toMatchObject({
+      mode: "ambiguous",
+      variants: [],
+      hasCustomerOptions: false,
+    });
+  });
+
   it("uses only customer-option SKUs when hidden defaults coexist with real options", () => {
     const hiddenDefault = variant({
       id: "var_default_prod_1",

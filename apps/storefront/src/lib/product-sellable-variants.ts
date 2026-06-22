@@ -60,7 +60,11 @@ export function resolveBuyerVariants<TVariant extends BuyerVariant>(
     };
   }
 
-  if (activeVariants.length === 1 && !hasCustomerOption(activeVariants[0]!)) {
+  if (
+    activeVariants.length === 1 &&
+    activeVariants[0]?.isDefault === true &&
+    !hasCustomerOption(activeVariants[0])
+  ) {
     return {
       mode: "simple",
       variants: [activeVariants[0]!],

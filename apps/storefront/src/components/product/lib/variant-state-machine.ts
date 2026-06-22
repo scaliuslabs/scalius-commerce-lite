@@ -326,7 +326,11 @@ export function validateSelection(
 ): ValidationResult {
   // Check if product has variants
   if (index.variants.length === 0) {
-    return { valid: true, error: null, variant: null };
+    return {
+      valid: false,
+      error: "This product is not available for checkout right now.",
+      variant: null,
+    };
   }
 
   const options = index.options;
@@ -404,7 +408,7 @@ export function getSelectionStatus(
 } {
   if (variants.length === 0) {
     return {
-      isComplete: true,
+      isComplete: false,
       requiredFields: [],
       missingFields: [],
     };

@@ -4,6 +4,7 @@
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import { publicProductHasBuyerResolvableSku } from "../products/products.public-eligibility";
 
 export interface PublicAttributeFilter {
     id: string;
@@ -81,6 +82,7 @@ export async function getPublicFilterableAttributes(db: Database): Promise<{ fil
                 eq(productAttributeValues.productId, products.id),
                 eq(products.isActive, true),
                 isNull(products.deletedAt),
+                publicProductHasBuyerResolvableSku(),
             ),
         )
         .where(inArray(productAttributeValues.attributeId, attributeIds));
@@ -131,6 +133,7 @@ export async function getPublicAttributesByCategory(
                 eq(products.categoryId, categoryId),
                 eq(products.isActive, true),
                 isNull(products.deletedAt),
+                publicProductHasBuyerResolvableSku(),
             ),
         );
 
@@ -161,6 +164,15 @@ export async function getPublicAttributesByProductIds(
                 eq(productAttributeValues.attributeId, productAttributes.id),
                 eq(productAttributes.filterable, true),
                 isNull(productAttributes.deletedAt),
+            ),
+        )
+        .innerJoin(
+            products,
+            and(
+                eq(productAttributeValues.productId, products.id),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+                publicProductHasBuyerResolvableSku(),
             ),
         )
         .where(inArray(productAttributeValues.productId, productIds));
