@@ -536,32 +536,28 @@ const layoutData = await getLayoutData();
       fCity.innerHTML = '<option value="">Select City</option>';
       cities.forEach(city => {
         const option = document.createElement("option");
-        option.value = city.id; // API requires external names mostly, let's store name as value if needed, or rely on id.
+        option.value = city.id;
         option.textContent = city.name;
-        // if value comes down as name we need to match it, LocationData has {id, name}
-        // Actually ProfileUpdateData uses 'cityName'. We should set value to name for the form submit.
-        option.value = city.name; 
-        option.dataset.id = city.id; 
         fCity.appendChild(option);
       });
 
-      const initialCityName = dbCustomer?.cityName || dbCustomer?.city || latestOrder?.cityName || "";
-      let initialCityId = "";
+      let initialCityId = dbCustomer?.city || "";
+      const initialCityName = dbCustomer?.cityName || latestOrder?.cityName || "";
 
-      if (initialCityName) {
-        // Find city option by name and select it
-        const cityOption = Array.from(fCity.options).find(opt => opt.value === initialCityName);
+      if (initialCityId || initialCityName) {
+        const cityOption = Array.from(fCity.options).find((opt) =>
+          opt.value === initialCityId || opt.textContent === initialCityName
+        );
         if (cityOption) {
           fCity.value = cityOption.value;
-          initialCityId = cityOption.dataset.id || "";
+          initialCityId = cityOption.value;
         }
       }
 
       // Handle city change
       fCity.onchange = async (e) => {
         const target = e.target as HTMLSelectElement;
-        const selectedOption = target.options[target.selectedIndex];
-        const cityId = selectedOption?.dataset?.id;
+        const cityId = target.value;
         
         fZone.innerHTML = '<option value="">Select Zone</option>';
         fZone.disabled = true;
@@ -570,7 +566,7 @@ const layoutData = await getLayoutData();
           const zones = await getZones(cityId) || [];
           zones.forEach(zone => {
             const option = document.createElement("option");
-            option.value = zone.name;
+            option.value = zone.id;
             option.textContent = zone.name;
             fZone.appendChild(option);
           });
@@ -584,15 +580,18 @@ const layoutData = await getLayoutData();
         fZone.innerHTML = '<option value="">Select Zone</option>';
         zones.forEach(zone => {
           const option = document.createElement("option");
-          option.value = zone.name;
+          option.value = zone.id;
           option.textContent = zone.name;
           fZone.appendChild(option);
         });
         fZone.disabled = false;
         
-        const initialZoneName = dbCustomer?.zoneName || dbCustomer?.zone || latestOrder?.zoneName || "";
-        if (initialZoneName) {
-          const zoneOption = Array.from(fZone.options).find(opt => opt.value === initialZoneName);
+        const initialZoneId = dbCustomer?.zone || "";
+        const initialZoneName = dbCustomer?.zoneName || latestOrder?.zoneName || "";
+        if (initialZoneId || initialZoneName) {
+          const zoneOption = Array.from(fZone.options).find((opt) =>
+            opt.value === initialZoneId || opt.textContent === initialZoneName
+          );
           if (zoneOption) fZone.value = zoneOption.value;
         }
       }
@@ -627,8 +626,8 @@ const layoutData = await getLayoutData();
       const res = await updateCustomerProfile({
         name: fName,
         address: fAddress,
-        cityName: fCity,
-        zoneName: fZone,
+        city: fCity,
+        zone: fZone,
       });
 
       btn.disabled = false;

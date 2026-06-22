@@ -585,7 +585,8 @@ const submitLabel = codOnly
     if (customer?.phone) {
       // PhoneField is a React component — dispatch custom event to update its state
       const phone = normalizePhone(customer.phone);
-      if (phone) {
+      const phoneInput = document.getElementById("customerPhone") as HTMLInputElement | null;
+      if (phone && !phoneInput?.value) {
         window.dispatchEvent(new CustomEvent("phone-prefill", { detail: phone }));
       }
     }
@@ -603,6 +604,9 @@ const submitLabel = codOnly
   const fillLocationDropdowns = (customer: CustomerAutofillProfile) => {
     try {
       if (!customer?.cityName && !customer?.city) return;
+      const existingCity = document.querySelector<HTMLInputElement>('input[name="city"]')?.value;
+      const existingZone = document.querySelector<HTMLInputElement>('input[name="zone"]')?.value;
+      if (existingCity || existingZone) return;
       window.dispatchEvent(new CustomEvent("location-prefill", {
         detail: {
           city: customer.city,

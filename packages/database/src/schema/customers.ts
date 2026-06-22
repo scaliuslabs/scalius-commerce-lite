@@ -18,6 +18,8 @@ export const customers = sqliteTable("customers", {
     cityName: text("city_name"),
     zoneName: text("zone_name"),
     areaName: text("area_name"),
+    profileCompletionRequiredAt: integer("profile_completion_required_at", { mode: "timestamp" }),
+    profileCompletedAt: integer("profile_completed_at", { mode: "timestamp" }),
     totalOrders: integer("total_orders").notNull().default(0),
     totalSpent: real("total_spent").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),

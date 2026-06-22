@@ -2547,7 +2547,20 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
         success: true;
         data: {
             customer?: {
-                [key: string]: unknown;
+                identifier?: string;
+                email: string;
+                name: string;
+                phone?: string | null;
+                customerId?: string | null;
+                address?: string | null;
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+                cityName?: string | null;
+                zoneName?: string | null;
+                areaName?: string | null;
+                profileComplete: boolean;
+                needsProfileCompletion: boolean;
             };
             isNewUser?: boolean;
         };
@@ -2643,10 +2656,20 @@ export type GetApiV1CustomerAuthMeResponses = {
         data: {
             authenticated: boolean;
             customer?: {
+                identifier?: string;
                 email: string;
                 name: string;
-                phone: string | null;
-                customerId: string | null;
+                phone?: string | null;
+                customerId?: string | null;
+                address?: string | null;
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+                cityName?: string | null;
+                zoneName?: string | null;
+                areaName?: string | null;
+                profileComplete: boolean;
+                needsProfileCompletion: boolean;
             };
         };
     };
@@ -2752,8 +2775,10 @@ export type PutApiV1CustomerAuthProfileData = {
         address?: string;
         city?: string;
         zone?: string;
+        area?: string;
         cityName?: string;
         zoneName?: string;
+        areaName?: string;
     };
     path?: never;
     query?: never;
@@ -2839,12 +2864,20 @@ export type PutApiV1CustomerAuthProfileResponses = {
         success: true;
         data: {
             customer: {
+                identifier?: string;
                 email: string;
                 name: string;
-                phone?: string;
-                address?: string;
-                cityName?: string;
-                zoneName?: string;
+                phone?: string | null;
+                customerId?: string | null;
+                address?: string | null;
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+                cityName?: string | null;
+                zoneName?: string | null;
+                areaName?: string | null;
+                profileComplete: boolean;
+                needsProfileCompletion: boolean;
             };
         };
     };
@@ -2967,6 +3000,8 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 zoneName?: string | null;
                 city?: string | null;
                 zone?: string | null;
+                area?: string | null;
+                areaName?: string | null;
             };
         };
     };

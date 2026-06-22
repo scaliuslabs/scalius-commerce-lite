@@ -415,10 +415,12 @@ export async function getCustomerOrders(
             email: dbCustomer.email || "",
             phone: dbCustomer.phone || "",
             address: dbCustomer.address,
-            cityName: dbCustomer.cityName,
-            zoneName: dbCustomer.zoneName,
             city: dbCustomer.city,
             zone: dbCustomer.zone,
+            area: dbCustomer.area,
+            cityName: dbCustomer.cityName,
+            zoneName: dbCustomer.zoneName,
+            areaName: dbCustomer.areaName,
         }
         : null;
 

@@ -55,7 +55,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after challenge creation, it deletes the exact D1 challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
-5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, atomically consumes the matching channel-scoped D1 challenge, atomically increments wrong-code attempts, rechecks sign-up collection policy, uses the phone/email fields pinned when the OTP was issued, and on success signs in an existing customer or creates a new customer only for explicit `sign_up` intent before creating a 30-day D1 session keyed by an HMAC token hash. Unknown sign-in and duplicate sign-up guidance happens here, after OTP proof, not at send time.
+5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, atomically consumes the matching channel-scoped D1 challenge, atomically increments wrong-code attempts, rechecks sign-up collection policy, uses the phone/email fields pinned when the OTP was issued, and on success signs in an existing customer or creates a new customer only for explicit `sign_up` intent before creating a 30-day D1 session keyed by an HMAC token hash. New sign-ups set `profileCompletionRequiredAt` until the required delivery profile is complete. Unknown sign-in and duplicate sign-up guidance happens here, after OTP proof, not at send time.
 
 **Delivery idempotency:**
 - Email sends pass `deliveryKey` as `idempotencyKey`; Resend forwards it as `Idempotency-Key`, while Cloudflare Email stores the returned `messageId`
@@ -68,9 +68,9 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 - Companion cookie: `cs_auth` (non-HttpOnly, for client-side auth state detection)
 - Session TTL: 30 days
 - `customer_sessions` stores only `tokenHash`, `customerId`, expiry/revocation timestamps, and audit timestamps. The raw cookie token is never persisted.
-- `getCustomerBySession()` hashes the cookie token, requires an active non-expired session row, joins the live `customers` row, and rejects soft-deleted/missing customers.
+- `getCustomerBySession()` hashes the cookie token, requires an active non-expired session row, joins the live `customers` row, rejects soft-deleted/missing customers, and returns the canonical profile projection including address, city/zone/area IDs, resolved labels, `profileComplete`, and `needsProfileCompletion`.
 - `deleteCustomerSession()` revokes the D1 row; scheduled maintenance deletes expired and old revoked rows in bounded batches.
-- `updateCustomerProfile()` updates the DB record and returns a fresh customer/session projection from D1.
+- `updateCustomerProfile()` validates active delivery-location hierarchy, stores canonical city/zone/area IDs plus resolved labels, updates profile-completion timestamps, and returns a fresh customer/session projection from D1.
 
 **Transport selection and collection policy:**
 - Phone number collection is a platform invariant for customer identity, checkout, delivery, fraud checks, SMS OTP, and WhatsApp OTP. Do not add a merchant setting that makes phone optional or uncollected.
@@ -82,7 +82,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 **Auto-registration:**
 - Only explicit `sign_up` OTPs can create customers; explicit `sign_in` OTPs require an existing account and return a customer-facing "Create an account instead" error when none exists.
 - New customer creation always requires a phone number and rejects duplicate phone/email before account creation.
-- New customers get a bare-bones record (no address/location)
+- New customers get a bare-bones record (no address/location) with `profileCompletionRequiredAt` set; storefront profile setup must keep resuming until name, address, city, and zone are saved or the customer signs out.
 
 ## API Endpoints
 
@@ -108,7 +108,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 | POST | `/verify-otp` | `verifyOtp` | Verify OTP, create session, set cookies |
 | GET | `/me` | `getCustomerBySession` | Return session info or `{ authenticated: false }` |
 | POST | `/logout` | `deleteCustomerSession` | Revoke D1 session, clear cookies |
-| PUT | `/profile` | `updateCustomerProfile` | Update name/address/city/zone |
+| PUT | `/profile` | `updateCustomerProfile` | Update name/address/city/zone/area through canonical active delivery-location IDs |
 | GET | `/orders` | `getCustomerOrders` | Customer's latest 50 orders matched by `customerId` only, with items, product names/images, and one latest shipment summary for tracking display |
 | GET | `/orders/{id}` | `getCustomerOrderDetail` + API payment recovery preview | Customer-scoped order detail, items, shipments, payments, payment plan, COD, notification receipts, timeline, and policy-backed `paymentRecovery` preview |
 | POST | `/orders/{id}/payment-session` | API payment session creation | Create an owned-order Stripe/SSLCommerz/Polar payment session from the customer session and order state; strict empty body; no receipt-token input/output |
@@ -152,6 +152,7 @@ Customer account payment recovery -> API customer-auth route -> shared payment-s
 - `id` (PK, `cust_` prefix from admin, nanoid from auth), `name`, `email` (nullable, indexed), `phone` (unique, indexed)
 - `address`, `city`, `zone`, `area` (location IDs), `cityName`, `zoneName`, `areaName` (denormalized display names)
 - `totalOrders`, `totalSpent`, `lastOrderAt` (materialized by orders domain)
+- `profileCompletionRequiredAt`, `profileCompletedAt`
 - `createdAt`, `updatedAt`, `deletedAt` (soft delete)
 
 **`customerHistory`** table:
@@ -202,8 +203,6 @@ Customer account payment recovery -> API customer-auth route -> shared payment-s
 
 3. **SMS transport**: `SmsOtpTransport.validateConfig()` returns `null` because SMS provider selection lives in settings. Queue delivery fails/retries with a receipt error if `getActiveSmsProvider()` cannot resolve a configured provider. Supported providers: smsnetbd, bdbulksms, mimsms, gennet.
 
-4. **Profile response limitations**: `updateCustomerProfile()` returns the fresh identity projection plus submitted address/location fields. Full persisted address/location reads still come from account/order profile endpoints rather than the auth session object.
+4. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
-5. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
-
-6. **Customer order list is intentionally capped**: `/customer-auth/orders` remains a latest-50 list endpoint with only summary shipment data. Full payment/shipment/notification timeline data belongs on `/customer-auth/orders/{id}`. Cursor pagination for older account orders and customer-facing return/cancel eligibility are still not implemented.
+5. **Customer order list is intentionally capped**: `/customer-auth/orders` remains a latest-50 list endpoint with only summary shipment data. Full payment/shipment/notification timeline data belongs on `/customer-auth/orders/{id}`. Cursor pagination for older account orders and customer-facing return/cancel eligibility are still not implemented.

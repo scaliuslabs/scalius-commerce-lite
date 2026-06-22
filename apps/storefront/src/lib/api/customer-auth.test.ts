@@ -90,6 +90,46 @@ describe("customer auth API helpers", () => {
     });
   });
 
+  it("preserves delivery profile and completion flags from session reads", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        authenticated: true,
+        customer: {
+          customerId: "customer_1",
+          email: "customer@example.com",
+          name: "Customer",
+          phone: "+8801712345678",
+          address: "House 1",
+          city: "city_dhaka",
+          zone: "zone_mirpur",
+          area: "area_1",
+          cityName: "Dhaka",
+          zoneName: "Mirpur",
+          areaName: "Section 10",
+          profileComplete: true,
+          needsProfileCompletion: false,
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    await expect(getCustomerSession()).resolves.toMatchObject({
+      authenticated: true,
+      customer: {
+        customerId: "customer_1",
+        address: "House 1",
+        city: "city_dhaka",
+        zone: "zone_mirpur",
+        area: "area_1",
+        cityName: "Dhaka",
+        zoneName: "Mirpur",
+        areaName: "Section 10",
+        profileComplete: true,
+        needsProfileCompletion: false,
+      },
+    });
+  });
+
   it("marks retryable session read failures as unavailable instead of logged out", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       success: false,

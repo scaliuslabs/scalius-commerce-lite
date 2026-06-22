@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   deleteCustomerAuthOtpChallenge: vi.fn(),
   getCustomerBySession: vi.fn(),
+  updateCustomerProfile: vi.fn(),
   getCustomerOrders: vi.fn(),
   getCustomerOrderDetail: vi.fn(),
   resolveCustomerPaymentSessionRecovery: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   deleteCustomerAuthOtpChallenge: mocks.deleteCustomerAuthOtpChallenge,
   getCustomerBySession: mocks.getCustomerBySession,
   deleteCustomerSession: vi.fn(),
-  updateCustomerProfile: vi.fn(),
+  updateCustomerProfile: mocks.updateCustomerProfile,
   getSessionCookie: mocks.getSessionCookie,
   getCookieConfig: vi.fn(() => ({ sameSite: "Lax", domainAttr: "" })),
   buildSetCookieHeader: vi.fn(() => "cs_tok=session_1; Path=/; HttpOnly"),
@@ -84,6 +85,47 @@ describe("customer auth private cache policy", () => {
       name: "Customer",
       phone: "+8801712345678",
       customerId: "customer_1",
+      address: "House 1",
+      city: "city_dhaka",
+      zone: "zone_mirpur",
+      area: "area_1",
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: "Section 10",
+      profileComplete: true,
+      needsProfileCompletion: false,
+    });
+    mocks.updateCustomerProfile.mockResolvedValue({
+      session: {
+        email: "customer@example.com",
+        name: "Customer",
+        phone: "+8801712345678",
+        customerId: "customer_1",
+        address: "House 1",
+        city: "city_dhaka",
+        zone: "zone_mirpur",
+        area: "area_1",
+        cityName: "Dhaka",
+        zoneName: "Mirpur",
+        areaName: "Section 10",
+        profileComplete: true,
+        needsProfileCompletion: false,
+      },
+      customer: {
+        email: "customer@example.com",
+        name: "Customer",
+        phone: "+8801712345678",
+        customerId: "customer_1",
+        address: "House 1",
+        city: "city_dhaka",
+        zone: "zone_mirpur",
+        area: "area_1",
+        cityName: "Dhaka",
+        zoneName: "Mirpur",
+        areaName: "Section 10",
+        profileComplete: true,
+        needsProfileCompletion: false,
+      },
     });
     mocks.getCustomerOrders.mockResolvedValue({
       orders: [
@@ -283,6 +325,85 @@ describe("customer auth private cache policy", () => {
     );
     expect(response.headers.get("Pragma")).toBe("no-cache");
     expect(response.headers.get("Expires")).toBe("0");
+  });
+
+  it("returns the canonical delivery profile from customer session reads", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/me",
+      { headers: { Cookie: "cs_tok=session_1" } },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        authenticated: true,
+        customer: {
+          customerId: "customer_1",
+          address: "House 1",
+          city: "city_dhaka",
+          zone: "zone_mirpur",
+          area: "area_1",
+          cityName: "Dhaka",
+          zoneName: "Mirpur",
+          areaName: "Section 10",
+          profileComplete: true,
+          needsProfileCompletion: false,
+        },
+      },
+    });
+  });
+
+  it("updates customer profiles through the canonical profile service", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/profile",
+      {
+        method: "PUT",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Customer",
+          address: "House 1",
+          city: "city_dhaka",
+          zone: "zone_mirpur",
+          area: "area_1",
+          cityName: "Forged City",
+          zoneName: "Forged Zone",
+        }),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.updateCustomerProfile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerId: "customer_1" }),
+      expect.objectContaining({
+        name: "Customer",
+        address: "House 1",
+        city: "city_dhaka",
+        zone: "zone_mirpur",
+        area: "area_1",
+      }),
+    );
+    expect(JSON.stringify(mocks.updateCustomerProfile.mock.calls[0]?.[2])).not.toContain("Forged City");
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        customer: {
+          address: "House 1",
+          city: "city_dhaka",
+          zone: "zone_mirpur",
+          area: "area_1",
+          profileComplete: true,
+          needsProfileCompletion: false,
+        },
+      },
+    });
   });
 
   it("passes customer auth intent, channel, and secondary contact fields to OTP service", async () => {

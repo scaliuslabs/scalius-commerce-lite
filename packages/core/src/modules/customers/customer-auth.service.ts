@@ -3,7 +3,7 @@
 // Used by the customer-auth route handler (apps/api/src/routes/customer-auth.ts).
 
 import { nanoid } from "nanoid";
-import { customers, customerSessions, siteSettings, settings as genericSettings } from "@scalius/database/schema";
+import { customers, customerSessions, deliveryLocations, siteSettings, settings as genericSettings } from "@scalius/database/schema";
 import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
@@ -72,6 +72,15 @@ export interface CustomerSession {
     name: string;
     phone?: string;
     customerId?: string;
+    address?: string | null;
+    city?: string | null;
+    zone?: string | null;
+    area?: string | null;
+    cityName?: string | null;
+    zoneName?: string | null;
+    areaName?: string | null;
+    profileComplete: boolean;
+    needsProfileCompletion: boolean;
     createdAt: number;
     expiresAt: number;
 }
@@ -133,6 +142,15 @@ export interface VerifyOtpResult {
         email: string;
         phone?: string;
         customerId?: string;
+        address?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
+        cityName?: string | null;
+        zoneName?: string | null;
+        areaName?: string | null;
+        profileComplete: boolean;
+        needsProfileCompletion: boolean;
     };
 }
 
@@ -330,6 +348,148 @@ function assertPolicyRequiredFields(
     }
 }
 
+type CustomerAuthProfileRow = typeof customers.$inferSelect;
+
+export interface CustomerAuthProfile {
+    identifier?: string;
+    name: string;
+    email: string;
+    phone?: string;
+    customerId?: string;
+    address?: string | null;
+    city?: string | null;
+    zone?: string | null;
+    area?: string | null;
+    cityName?: string | null;
+    zoneName?: string | null;
+    areaName?: string | null;
+    profileComplete: boolean;
+    needsProfileCompletion: boolean;
+}
+
+interface ResolvedCustomerLocation {
+    city: string | null;
+    zone: string | null;
+    area: string | null;
+    cityName: string | null;
+    zoneName: string | null;
+    areaName: string | null;
+}
+
+function normalizeOptionalProfileText(value: string | null | undefined): string | null {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
+}
+
+function hasRequiredCustomerProfileFields(row: {
+    name?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    city?: string | null;
+    zone?: string | null;
+}): boolean {
+    return Boolean(
+        row.name?.trim() &&
+        row.phone?.trim() &&
+        row.address?.trim() &&
+        row.city?.trim() &&
+        row.zone?.trim(),
+    );
+}
+
+function buildCustomerAuthProfile(row: CustomerAuthProfileRow, identifier?: string): CustomerAuthProfile {
+    const profileComplete = hasRequiredCustomerProfileFields(row);
+    return {
+        identifier,
+        name: row.name || "Customer",
+        email: row.email ?? "",
+        phone: row.phone,
+        customerId: row.id,
+        address: row.address ?? null,
+        city: row.city ?? null,
+        zone: row.zone ?? null,
+        area: row.area ?? null,
+        cityName: row.cityName ?? null,
+        zoneName: row.zoneName ?? null,
+        areaName: row.areaName ?? null,
+        profileComplete,
+        needsProfileCompletion: !profileComplete && row.profileCompletionRequiredAt != null,
+    };
+}
+
+async function getActiveCustomerById(db: Database, customerId: string): Promise<CustomerAuthProfileRow | null> {
+    const row = await db
+        .select()
+        .from(customers)
+        .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
+        .get();
+    return row ?? null;
+}
+
+async function resolveActiveCustomerLocation(
+    db: Database,
+    input: { city: string | null; zone: string | null; area: string | null },
+): Promise<ResolvedCustomerLocation> {
+    if (!input.city && !input.zone && !input.area) {
+        return {
+            city: null,
+            zone: null,
+            area: null,
+            cityName: null,
+            zoneName: null,
+            areaName: null,
+        };
+    }
+
+    if (!input.city || !input.zone) {
+        throw new ValidationError("City and zone are required to save a delivery profile.");
+    }
+
+    const locationIds = [input.city, input.zone, input.area].filter(
+        (id): id is string => typeof id === "string" && id.trim().length > 0,
+    );
+    const rows = await db
+        .select({
+            id: deliveryLocations.id,
+            name: deliveryLocations.name,
+            type: deliveryLocations.type,
+            parentId: deliveryLocations.parentId,
+            isActive: deliveryLocations.isActive,
+            deletedAt: deliveryLocations.deletedAt,
+        })
+        .from(deliveryLocations)
+        .where(and(
+            inArray(deliveryLocations.id, locationIds),
+            eq(deliveryLocations.isActive, true),
+            isNull(deliveryLocations.deletedAt),
+        ));
+
+    const locationMap = new Map(rows.map((row) => [row.id, row]));
+    const city = locationMap.get(input.city);
+    if (!city || city.type !== "city" || city.parentId !== null || city.isActive !== true || city.deletedAt != null) {
+        throw new ValidationError("Selected city is no longer available.");
+    }
+
+    const zone = locationMap.get(input.zone);
+    if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
+        throw new ValidationError("Selected zone is no longer available for the chosen city.");
+    }
+
+    const area = input.area ? locationMap.get(input.area) : null;
+    if (input.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
+        throw new ValidationError("Selected area is no longer available for the chosen zone.");
+    }
+
+    return {
+        city: city.id,
+        zone: zone.id,
+        area: area?.id ?? null,
+        cityName: city.name,
+        zoneName: zone.name,
+        areaName: area?.name ?? null,
+    };
+}
+
 // ─────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────
@@ -510,8 +670,8 @@ export async function verifyOtp(
     let customerId: string | undefined;
     let customerName = name;
     let resolvedEmail = method === "email" ? normalizedIdentifier : verifiedEmail;
-    let resolvedPhone = method === "phone" ? normalizedIdentifier : verifiedPhone;
     let isNewUser = false;
+    let customerProfileRow: CustomerAuthProfileRow | null | undefined;
 
     try {
         if (intent === "sign_up") {
@@ -538,10 +698,10 @@ export async function verifyOtp(
                         : "No account was found for this phone number. Create an account instead.",
                 );
             }
+            customerProfileRow = existing;
             customerId = existing.id;
             customerName = existing.name || name;
             resolvedEmail = existing.email || resolvedEmail;
-            resolvedPhone = existing.phone || resolvedPhone;
         } else {
             if (existing) {
                 throw new ValidationError(
@@ -554,7 +714,6 @@ export async function verifyOtp(
                 if (!verifiedPhone) {
                     throw new ValidationError("Phone number is required to create an account with email OTP.");
                 }
-                resolvedPhone = verifiedPhone;
             }
 
             if (resolvedEmail) {
@@ -576,19 +735,44 @@ export async function verifyOtp(
 
             // Create new customer record — use "cust_" prefix for consistency with customers.service.ts
             customerId = "cust_" + nanoid();
+            const profileRequiredAt = new Date();
 
             // Determine phone value
             const customerPhone = phoneForNewCustomer;
-            resolvedPhone = phoneForNewCustomer;
 
-            await db.insert(customers).values({
+            const newCustomerValues = {
                 id: customerId,
                 name: customerName,
                 email: resolvedEmail || null,
                 phone: customerPhone || "",
+                profileCompletionRequiredAt: profileRequiredAt,
+                profileCompletedAt: null,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
-            });
+            };
+
+            await db.insert(customers).values(newCustomerValues);
+            customerProfileRow = {
+                id: customerId,
+                name: customerName,
+                email: resolvedEmail || null,
+                phone: customerPhone || "",
+                address: null,
+                city: null,
+                zone: null,
+                area: null,
+                cityName: null,
+                zoneName: null,
+                areaName: null,
+                profileCompletionRequiredAt: profileRequiredAt,
+                profileCompletedAt: null,
+                totalOrders: 0,
+                totalSpent: 0,
+                lastOrderAt: null,
+                createdAt: profileRequiredAt,
+                updatedAt: profileRequiredAt,
+                deletedAt: null,
+            };
             isNewUser = true;
         }
     } catch (dbError: unknown) {
@@ -604,6 +788,16 @@ export async function verifyOtp(
         throw new ServiceUnavailableError("Customer session could not be created. Please try again.");
     }
 
+    if (!customerProfileRow) {
+        customerProfileRow = await getActiveCustomerById(db, customerId);
+    }
+
+    if (!customerProfileRow) {
+        throw new ServiceUnavailableError("Customer profile could not be read. Please try again.");
+    }
+
+    const customerProfile = buildCustomerAuthProfile(customerProfileRow, identifier);
+
     // Create session. The raw bearer token is only returned for the httpOnly
     // cookie; D1 stores an HMAC hash so a database leak cannot replay sessions.
     const nowMs = Date.now();
@@ -613,10 +807,19 @@ export async function verifyOtp(
     const tokenHash = await hashCustomerSessionToken(sessionToken, input.sessionHashKey);
     const session: CustomerSession = {
         token: sessionToken,
-        email: resolvedEmail || "",
-        name: customerName,
-        phone: resolvedPhone,
+        email: customerProfile.email,
+        name: customerProfile.name,
+        phone: customerProfile.phone,
         customerId,
+        address: customerProfile.address,
+        city: customerProfile.city,
+        zone: customerProfile.zone,
+        area: customerProfile.area,
+        cityName: customerProfile.cityName,
+        zoneName: customerProfile.zoneName,
+        areaName: customerProfile.areaName,
+        profileComplete: customerProfile.profileComplete,
+        needsProfileCompletion: customerProfile.needsProfileCompletion,
         createdAt: nowMs,
         expiresAt: sessionExpiresAtSeconds * 1000,
     };
@@ -635,11 +838,8 @@ export async function verifyOtp(
         session,
         isNewUser,
         customer: {
+            ...customerProfile,
             identifier,
-            name: session.name,
-            email: session.email,
-            phone: session.phone,
-            customerId: session.customerId,
         },
     };
 }
@@ -667,6 +867,15 @@ export async function getCustomerBySession(
             customerName: customers.name,
             customerEmail: customers.email,
             customerPhone: customers.phone,
+            customerAddress: customers.address,
+            customerCity: customers.city,
+            customerZone: customers.zone,
+            customerArea: customers.area,
+            customerCityName: customers.cityName,
+            customerZoneName: customers.zoneName,
+            customerAreaName: customers.areaName,
+            customerProfileCompletionRequiredAt: customers.profileCompletionRequiredAt,
+            customerProfileCompletedAt: customers.profileCompletedAt,
         })
         .from(customerSessions)
         .innerJoin(customers, eq(customerSessions.customerId, customers.id))
@@ -682,12 +891,29 @@ export async function getCustomerBySession(
         return null;
     }
 
+    const profileComplete = hasRequiredCustomerProfileFields({
+        name: row.customerName,
+        phone: row.customerPhone,
+        address: row.customerAddress,
+        city: row.customerCity,
+        zone: row.customerZone,
+    });
+
     return {
         token: sessionToken,
         email: row.customerEmail ?? "",
         name: row.customerName,
         phone: row.customerPhone,
         customerId: row.customerId,
+        address: row.customerAddress ?? null,
+        city: row.customerCity ?? null,
+        zone: row.customerZone ?? null,
+        area: row.customerArea ?? null,
+        cityName: row.customerCityName ?? null,
+        zoneName: row.customerZoneName ?? null,
+        areaName: row.customerAreaName ?? null,
+        profileComplete,
+        needsProfileCompletion: !profileComplete && row.customerProfileCompletionRequiredAt != null,
         createdAt: row.createdAt * 1000,
         expiresAt: row.expiresAt * 1000,
     };
@@ -720,50 +946,84 @@ export async function updateCustomerProfile(
     db: Database,
     session: CustomerSession,
     updates: Record<string, string | undefined>,
-): Promise<{ session: CustomerSession; updates: Record<string, string | undefined> }> {
+): Promise<{ session: CustomerSession; customer: CustomerAuthProfile }> {
     if (!session.customerId) {
         throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
     }
 
+    const existing = await getActiveCustomerById(db, session.customerId);
+    if (!existing) {
+        throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
+    }
+
+    const nextName = updates.name !== undefined
+        ? normalizeOptionalProfileText(updates.name)
+        : existing.name;
+    if (!nextName) {
+        throw new ValidationError("Name is required to save your profile.");
+    }
+
+    const nextAddress = updates.address !== undefined
+        ? normalizeOptionalProfileText(updates.address)
+        : existing.address;
+    const nextLocationInput = {
+        city: updates.city !== undefined ? normalizeOptionalProfileText(updates.city) : existing.city,
+        zone: updates.zone !== undefined ? normalizeOptionalProfileText(updates.zone) : existing.zone,
+        area: updates.area !== undefined ? normalizeOptionalProfileText(updates.area) : existing.area,
+    };
+    const resolvedLocation = await resolveActiveCustomerLocation(db, nextLocationInput);
+    const mergedProfile = {
+        name: nextName,
+        phone: existing.phone,
+        address: nextAddress,
+        city: resolvedLocation.city,
+        zone: resolvedLocation.zone,
+    };
+    const profileComplete = hasRequiredCustomerProfileFields(mergedProfile);
+
     const dbUpdates: Record<string, unknown> = {
+        name: nextName,
+        address: nextAddress,
+        city: resolvedLocation.city,
+        zone: resolvedLocation.zone,
+        area: resolvedLocation.area,
+        cityName: resolvedLocation.cityName,
+        zoneName: resolvedLocation.zoneName,
+        areaName: resolvedLocation.areaName,
+        profileCompletedAt: profileComplete ? sql`coalesce(${customers.profileCompletedAt}, unixepoch())` : null,
         updatedAt: sql`unixepoch()`,
     };
-    if (updates.name) dbUpdates.name = updates.name;
-    if (updates.address) dbUpdates.address = updates.address;
-    if (updates.city) dbUpdates.city = updates.city;
-    if (updates.zone) dbUpdates.zone = updates.zone;
-    if (updates.cityName) dbUpdates.cityName = updates.cityName;
-    if (updates.zoneName) dbUpdates.zoneName = updates.zoneName;
 
     await db
         .update(customers)
         .set(dbUpdates)
         .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)));
 
-    const customer = await db
-        .select({
-            id: customers.id,
-            name: customers.name,
-            email: customers.email,
-            phone: customers.phone,
-        })
-        .from(customers)
-        .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)))
-        .get();
+    const customer = await getActiveCustomerById(db, session.customerId);
 
     if (!customer) {
         throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
     }
 
+    const authProfile = buildCustomerAuthProfile(customer);
     const updatedSession: CustomerSession = {
         ...session,
-        email: customer.email ?? "",
-        name: customer.name,
-        phone: customer.phone,
+        email: authProfile.email,
+        name: authProfile.name,
+        phone: authProfile.phone,
+        address: authProfile.address,
+        city: authProfile.city,
+        zone: authProfile.zone,
+        area: authProfile.area,
+        cityName: authProfile.cityName,
+        zoneName: authProfile.zoneName,
+        areaName: authProfile.areaName,
+        profileComplete: authProfile.profileComplete,
+        needsProfileCompletion: authProfile.needsProfileCompletion,
         customerId: customer.id,
     };
 
-    return { session: updatedSession, updates };
+    return { session: updatedSession, customer: authProfile };
 }
 
 export async function cleanupExpiredCustomerSessions(
