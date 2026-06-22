@@ -10,7 +10,7 @@
  *   1. node scripts/generate-build-id.js  — stamp build with unique ID for cache busting
  *   2. astro check                        — TypeScript type checking
  *   3. astro build                        — compile Astro SSR + client assets
- *   4. wrangler deploy                    — upload and activate the Worker
+ *   4. wrangler deploy --config dist/server/wrangler.json — upload and activate the generated Worker
  */
 
 import { execSync } from "child_process";
@@ -40,8 +40,8 @@ function run(cmd, label) {
         // 3. Build (SSR + client assets)
         run("npx astro build", "Build storefront");
 
-        // 4. Deploy to Cloudflare Workers
-        run("npx wrangler deploy", "Deploy Worker to Cloudflare");
+        // 4. Deploy to Cloudflare Workers using Astro's generated Worker config.
+        run("npx wrangler deploy --config dist/server/wrangler.json", "Deploy Worker to Cloudflare");
 
         console.log("\n✓ Deploy complete.");
     } catch {

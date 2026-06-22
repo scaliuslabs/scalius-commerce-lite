@@ -4,7 +4,7 @@ Astro 7 SSR customer-facing storefront deployed as a Cloudflare Worker. Communic
 
 ## Entry Point
 
-Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-ready Wrangler config at `dist/server/wrangler.json`. The source `wrangler.jsonc` is the adapter input for bindings, vars, compatibility settings, and routes; production deploys must run after `astro build` and use the generated config.
+Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-ready Wrangler config at `dist/server/wrangler.json`. The source `wrangler.jsonc` is the adapter input for bindings, vars, and compatibility settings; production deploys must run after `astro build` and use the generated config. The production custom domain is currently managed in Cloudflare outside this source config, so do not add `route`/`routes` unless route ownership moves into IaC.
 
 ## Tech Stack
 
