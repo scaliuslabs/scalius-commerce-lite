@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { storefrontSourcePath } from "./test-source-paths";
 
-const STOREFRONT_SRC_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const STOREFRONT_SRC_ROOT = storefrontSourcePath();
 
 function indexAfter(source: string, needle: string, after: number): number {
   const index = source.indexOf(needle, after);
