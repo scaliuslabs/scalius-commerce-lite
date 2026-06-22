@@ -8,7 +8,7 @@ import {
   type LocationData,
   deleteAbandonedCheckout,
 } from "@/lib/api";
-import { validateCartItems as validateCartItemsWithApi } from "@/lib/api/orders";
+import { validateCartItems as validateCartItemsWithApi, type CartValidationIssue } from "@/lib/api/orders";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 
 type ProcessOrderOptions = {
@@ -31,6 +31,7 @@ export async function getCities(): Promise<LocationData[]> {
  * or injection via crafted form data.
  */
 interface ValidatedCartItem {
+  cartKey: string;
   id: string;
   slug?: string;
   name: string;
@@ -48,12 +49,12 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
     throw new Error("Cart data must be a non-null object.");
   }
 
-  const entries = Object.values(raw as Record<string, unknown>);
+  const entries = Object.entries(raw as Record<string, unknown>);
   if (entries.length === 0) {
     throw new Error("Cart is empty.");
   }
 
-  return entries.map((entry, idx) => {
+  return entries.map(([cartKey, entry], idx) => {
     if (entry === null || typeof entry !== "object") {
       throw new Error(`Cart item at index ${idx} is not an object.`);
     }
@@ -93,6 +94,7 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
     };
 
     return {
+      cartKey,
       id: item.id as string,
       slug: optionalStr("slug"),
       name: item.name as string,
@@ -110,6 +112,35 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
 function displayVariantLabel(item: ValidatedCartItem): string | null {
   const parts = [item.size, item.color].filter((value): value is string => Boolean(value));
   return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCartValidationIssue(value: unknown): value is CartValidationIssue {
+  return (
+    isRecord(value) &&
+    typeof value.index === "number" &&
+    typeof value.productId === "string" &&
+    typeof value.message === "string"
+  );
+}
+
+function itemIssuesFromDetails(details: unknown): CartValidationIssue[] | undefined {
+  if (!isRecord(details) || !Array.isArray(details.itemIssues)) return undefined;
+  const issues = details.itemIssues.filter(isCartValidationIssue);
+  return issues.length > 0 ? issues : undefined;
+}
+
+function failedOrder(message: string, itemIssues?: CartValidationIssue[]) {
+  return {
+    success: false,
+    error: { message },
+    ...(itemIssues && itemIssues.length > 0
+      ? { details: { itemIssues } }
+      : {}),
+  };
 }
 
 export async function processOrder(
@@ -163,8 +194,8 @@ export async function processOrder(
     }
 
     const cartValidation = await validateCartItemsWithApi(
-      cartItemsArray.map((item, index) => ({
-        cartKey: `cod:${item.id}:${item.variantId || "base"}:${index}`,
+      cartItemsArray.map((item) => ({
+        cartKey: item.cartKey,
         productId: item.id,
         variantId: item.variantId && item.variantId !== "default" ? item.variantId : null,
         quantity: item.quantity,
@@ -181,11 +212,17 @@ export async function processOrder(
     );
 
     if (!cartValidation.success) {
-      throw new Error(cartValidation.error || "Cart validation failed. Please refresh your cart and try again.");
+      return failedOrder(
+        cartValidation.error || "Cart validation failed. Please refresh your cart and try again.",
+        itemIssuesFromDetails(cartValidation.details),
+      );
     }
     if (!cartValidation.data.valid) {
       const firstIssue = cartValidation.data.issues[0];
-      throw new Error(firstIssue?.message || "Some items in your cart need attention before checkout.");
+      return failedOrder(
+        firstIssue?.message || "Some items in your cart need attention before checkout.",
+        cartValidation.data.issues,
+      );
     }
     if (!cartValidation.data.delivery) {
       throw new Error("Delivery information is no longer available. Please refresh checkout and try again.");

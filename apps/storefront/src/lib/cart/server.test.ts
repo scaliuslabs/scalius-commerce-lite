@@ -97,7 +97,7 @@ describe("cart server order processing", () => {
         items: [
           {
             index: 0,
-            cartKey: "cod:product-1:variant_1:0",
+            cartKey: "line_1",
             productId: "product-1",
             variantId: "variant_1",
             quantity: 1,
@@ -148,7 +148,7 @@ describe("cart server order processing", () => {
     expect(mocks.validateCartItems).toHaveBeenCalledWith(
       [
         expect.objectContaining({
-          cartKey: "cod:product-1:variant_1:0",
+          cartKey: "line_1",
           productId: "product-1",
           variantId: "variant_1",
           price: 100,
@@ -183,7 +183,7 @@ describe("cart server order processing", () => {
         items: [
           {
             index: 0,
-            cartKey: "cod:simple_product:default:0",
+            cartKey: "line_1",
             productId: "simple_product",
             variantId: "var_default_simple",
             quantity: 2,
@@ -244,7 +244,7 @@ describe("cart server order processing", () => {
         items: [
           {
             index: 0,
-            cartKey: "cod:product-1:variant_1:0",
+            cartKey: "line_1",
             productId: "product-1",
             variantId: "variant_1",
             quantity: 1,
@@ -301,23 +301,23 @@ describe("cart server order processing", () => {
   });
 
   it("blocks COD order creation when cart validation returns item issues", async () => {
+    const issue = {
+      index: 0,
+      cartKey: "line_1",
+      productId: "product-1",
+      variantId: null,
+      code: "PRODUCT_UNAVAILABLE" as const,
+      action: "remove" as const,
+      message: "Product 1 is no longer available.",
+      productName: "Product 1",
+      variantLabel: null,
+      requestedQuantity: 1,
+    };
     mocks.validateCartItems.mockResolvedValueOnce({
       success: true,
       data: {
         valid: false,
-        issues: [
-          {
-            index: 0,
-            productId: "product-1",
-            variantId: null,
-            code: "PRODUCT_UNAVAILABLE",
-            action: "remove",
-            message: "Product 1 is no longer available.",
-            productName: "Product 1",
-            variantLabel: null,
-            requestedQuantity: 1,
-          },
-        ],
+        issues: [issue],
         items: [],
         subtotal: 0,
         hasFreeDeliveryProduct: false,
@@ -329,7 +329,115 @@ describe("cart server order processing", () => {
     expect(result).toEqual({
       success: false,
       error: { message: "Product 1 is no longer available." },
+      details: { itemIssues: [issue] },
     });
     expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("returns all cart validation item issues with original cart keys for COD repair", async () => {
+    const formData = buildCodFormData();
+    formData.set("cartItems", JSON.stringify({
+      line_a: {
+        id: "product-a",
+        slug: "product-a",
+        name: "Product A",
+        price: 100,
+        quantity: 2,
+        variantId: "variant_a",
+      },
+      line_b: {
+        id: "product-b",
+        slug: "product-b",
+        name: "Product B",
+        price: 200,
+        quantity: 1,
+        variantId: "variant_b",
+      },
+    }));
+    const issues = [
+      {
+        index: 0,
+        cartKey: "line_a",
+        productId: "product-a",
+        variantId: "variant_a",
+        code: "QUANTITY_UNAVAILABLE" as const,
+        action: "reduce_quantity" as const,
+        message: "Only 1 Product A left.",
+        productName: "Product A",
+        variantLabel: null,
+        requestedQuantity: 2,
+        availableQuantity: 1,
+      },
+      {
+        index: 1,
+        cartKey: "line_b",
+        productId: "product-b",
+        variantId: "variant_b",
+        code: "PRODUCT_UNAVAILABLE" as const,
+        action: "remove" as const,
+        message: "Product B is no longer available.",
+        productName: "Product B",
+        variantLabel: null,
+        requestedQuantity: 1,
+      },
+    ];
+    mocks.validateCartItems.mockResolvedValueOnce({
+      success: true,
+      data: {
+        valid: false,
+        issues,
+        items: [],
+        subtotal: 0,
+        hasFreeDeliveryProduct: false,
+      },
+    });
+
+    const result = await processOrder(formData);
+
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ cartKey: "line_a", productId: "product-a" }),
+        expect.objectContaining({ cartKey: "line_b", productId: "product-b" }),
+      ],
+      expect.any(Object),
+    );
+    expect(result).toEqual({
+      success: false,
+      error: { message: "Only 1 Product A left." },
+      details: { itemIssues: issues },
+    });
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("preserves late create-order item issues for COD cart repair", async () => {
+    const issue = {
+      index: 0,
+      cartKey: "line_1",
+      productId: "product-1",
+      variantId: "variant_1",
+      code: "PRICE_CHANGED" as const,
+      action: "refresh_item" as const,
+      message: "Product 1 price changed.",
+      productName: "Product 1",
+      variantLabel: null,
+      requestedQuantity: 1,
+      submittedPrice: 100,
+      currentPrice: 120,
+    };
+    mocks.createOrder.mockResolvedValueOnce({
+      success: false,
+      error: "Some items in your cart need attention.",
+      details: { itemIssues: [issue] },
+      status: 400,
+    });
+
+    const result = await processOrder(buildCodFormData());
+
+    expect(result).toEqual({
+      success: false,
+      error: "Some items in your cart need attention.",
+      details: { itemIssues: [issue] },
+      status: 400,
+    });
   });
 });

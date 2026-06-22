@@ -9,6 +9,11 @@ import { applyCheckoutButtonState } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import { reconcileValidatedCartSnapshot } from "./validation-reconciliation";
+import {
+  getBulkCartRepairActionCounts,
+  renderBulkCartRepairActions,
+  selectCartKeysForBulkRepair,
+} from "./bulk-repair-actions";
 
 const maliciousEmptyCartText =
   '</h3><img src=x onerror="window.__emptyCartPwned=true"><h3>';
@@ -144,6 +149,98 @@ describe("renderIssueAction", () => {
     expect(html).toContain("Choose option");
     expect(html).toContain('href="/products/cotton-panjabi"');
     expect(html).not.toContain("Remove item");
+  });
+});
+
+describe("bulk cart repair actions", () => {
+  const issues: Record<string, CartValidationIssue[]> = {
+    remove_line: [
+      {
+        index: 0,
+        cartKey: "remove_line",
+        productId: "prod_removed",
+        variantId: null,
+        code: "PRODUCT_UNAVAILABLE",
+        action: "remove",
+        message: "This product is no longer available.",
+        productName: "Removed product",
+        variantLabel: null,
+        requestedQuantity: 1,
+      },
+    ],
+    reduce_line: [
+      {
+        index: 1,
+        cartKey: "reduce_line",
+        productId: "prod_low",
+        variantId: "var_low",
+        code: "QUANTITY_UNAVAILABLE",
+        action: "reduce_quantity",
+        message: "Only 2 left.",
+        productName: "Low stock product",
+        variantLabel: null,
+        requestedQuantity: 5,
+        availableQuantity: 2,
+      },
+    ],
+    sold_out_line: [
+      {
+        index: 2,
+        cartKey: "sold_out_line",
+        productId: "prod_sold",
+        variantId: "var_sold",
+        code: "QUANTITY_UNAVAILABLE",
+        action: "reduce_quantity",
+        message: "Sold out.",
+        productName: "Sold out product",
+        variantLabel: null,
+        requestedQuantity: 1,
+        availableQuantity: 0,
+      },
+    ],
+    refresh_line: [
+      {
+        index: 3,
+        cartKey: "refresh_line",
+        productId: "prod_price",
+        variantId: "var_price",
+        code: "PRICE_CHANGED",
+        action: "refresh_item",
+        message: "Price changed.",
+        productName: "Price product",
+        variantLabel: null,
+        requestedQuantity: 1,
+        submittedPrice: 100,
+        currentPrice: 120,
+      },
+    ],
+  };
+
+  it("counts and selects safe bulk repair targets by action", () => {
+    expect(getBulkCartRepairActionCounts(issues)).toEqual({
+      remove: 2,
+      reduceQuantity: 1,
+      refreshPrice: 1,
+    });
+    expect(selectCartKeysForBulkRepair(issues, "remove")).toEqual([
+      "remove_line",
+      "sold_out_line",
+    ]);
+    expect(selectCartKeysForBulkRepair(issues, "reduce_quantity")).toEqual([
+      "reduce_line",
+    ]);
+    expect(selectCartKeysForBulkRepair(issues, "refresh_item")).toEqual([
+      "refresh_line",
+    ]);
+  });
+
+  it("renders only available bulk repair buttons", () => {
+    const html = renderBulkCartRepairActions(issues);
+
+    expect(html).toContain("Remove unavailable (2)");
+    expect(html).toContain("Update quantities (1)");
+    expect(html).toContain("Refresh prices (1)");
+    expect(html).toContain("window.bulkRemoveCartIssueItems()");
   });
 });
 

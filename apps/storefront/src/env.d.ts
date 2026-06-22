@@ -188,6 +188,9 @@ interface Window {
   removeCartIssueItem?: (cartKey: string) => void;
   reduceCartIssueItem?: (cartKey: string) => void;
   refreshCartIssueItem?: (cartKey: string) => void;
+  bulkRemoveCartIssueItems?: () => void;
+  bulkReduceCartIssueItems?: () => void;
+  bulkRefreshCartIssueItems?: () => void;
   removeDiscountCode?: () => void;
 
   // Note: Stripe type is declared in checkout/handlers/stripe.ts with its full interface
