@@ -5,13 +5,77 @@ import { addPrices } from "./price-utils";
 // Re-export for consumers that need direct validation (e.g. customer-auth)
 export { isValidPhoneNumber } from "libphonenumber-js";
 
+export type PhoneCountryPolicyMode = "include" | "exclude";
+
+export interface PhoneCountryPolicy {
+  countries?: readonly string[];
+  mode?: PhoneCountryPolicyMode;
+}
+
+type PhoneCountryPolicyInput = readonly string[] | PhoneCountryPolicy | undefined;
+type ParsedPhoneNumber = NonNullable<ReturnType<typeof parsePhoneNumber>>;
+
+export function normalizePhoneCountryCodes(countries: readonly string[] | undefined): string[] {
+  const normalized = new Set<string>();
+  for (const country of countries ?? []) {
+    const code = country.trim().toUpperCase();
+    if (/^[A-Z]{2}$/.test(code)) {
+      normalized.add(code);
+    }
+  }
+  return [...normalized];
+}
+
+export function normalizePhoneCountryPolicy(policy: PhoneCountryPolicyInput): Required<PhoneCountryPolicy> {
+  if (Array.isArray(policy)) {
+    return {
+      countries: normalizePhoneCountryCodes(policy),
+      mode: "include",
+    };
+  }
+
+  const objectPolicy = policy as PhoneCountryPolicy | undefined;
+  return {
+    countries: normalizePhoneCountryCodes(objectPolicy?.countries),
+    mode: objectPolicy?.mode === "exclude" ? "exclude" : "include",
+  };
+}
+
+function assertParsedPhoneCountryAllowed(parsed: ParsedPhoneNumber, policy: PhoneCountryPolicyInput): void {
+  const normalizedPolicy = normalizePhoneCountryPolicy(policy);
+  if (normalizedPolicy.countries.length === 0) return;
+
+  const restrictedCountries = new Set(normalizedPolicy.countries);
+  const country = parsed.country?.toUpperCase();
+  const countryLabel = country ?? "this country";
+  const isConfiguredCountry = country ? restrictedCountries.has(country) : false;
+
+  if (normalizedPolicy.mode === "include" && !isConfiguredCountry) {
+    throw new Error(`Phone numbers from ${countryLabel} are not accepted`);
+  }
+
+  if (normalizedPolicy.mode === "exclude" && isConfiguredCountry) {
+    throw new Error(`Phone numbers from ${countryLabel} are not accepted`);
+  }
+}
+
+export function assertPhoneCountryAllowed(input: string, policy: PhoneCountryPolicyInput): void {
+  const trimmed = input.trim();
+  if (!trimmed) throw new Error("Phone number is required");
+
+  const parsed = parsePhoneNumber(trimmed);
+  if (!parsed) throw new Error("Could not parse phone number");
+
+  assertParsedPhoneCountryAllowed(parsed, policy);
+}
+
 /**
  * Validate and format a phone number to E.164.
  * Returns the E.164 string or throws with a clear message.
  */
 export function validateAndFormatPhone(
   input: string,
-  allowedCountries?: string[],
+  allowedCountries?: PhoneCountryPolicyInput,
 ): string {
   const trimmed = input.trim();
   if (!trimmed) throw new Error("Phone number is required");
@@ -23,11 +87,7 @@ export function validateAndFormatPhone(
   const parsed = parsePhoneNumber(trimmed);
   if (!parsed) throw new Error("Could not parse phone number");
 
-  if (allowedCountries && allowedCountries.length > 0 && parsed.country) {
-    if (!allowedCountries.includes(parsed.country)) {
-      throw new Error(`Phone numbers from ${parsed.country} are not accepted`);
-    }
-  }
+  assertParsedPhoneCountryAllowed(parsed, allowedCountries);
 
   return parsed.format("E.164");
 }

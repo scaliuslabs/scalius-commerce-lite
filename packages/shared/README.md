@@ -52,7 +52,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus optional explicit credentialed-CORS env origins; merchant CSP/KV domains are intentionally excluded | `getCorsOriginContext()` |
 | `request-origin-guard.ts` | Same-origin guard for unsafe cookie-bearing browser requests used by admin/storefront proxy routes before forwarding or mutating session state | `shouldRejectCrossOriginCookieRequest()` |
 | `rate-limit.ts` | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
-| `customer-utils.ts` | Phone validation (E.164), customer stats | `validateAndFormatPhone()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
+| `customer-utils.ts` | Phone validation (E.164), include/exclude country policy checks, customer stats | `validateAndFormatPhone()`, `assertPhoneCountryAllowed()`, `normalizePhoneCountryPolicy()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
 | `order-utils.ts` | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |
 | `json-repair.ts` | Multi-strategy JSON parsing for LLM responses | `extractAndParseJSON()`, `repairJSON()`, `aggressiveRepairJSON()`, `parseJSONSafely()`, `validateWidgetJSON()` |
 | `tag-parser.ts` | XML-like tag extraction for LLM widget responses | `parseTagBasedResponse()`, `validateParsedWidget()`, `StreamingTagParser`, `getTagBasedExampleFormat()` |

@@ -50,19 +50,23 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?:
   const insertCalls: Array<{ table: unknown; values: unknown }> = [];
   return {
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
+        from: vi.fn(() => ({
         limit: vi.fn(async () => {
           const result = queue.shift();
           return result?.limit ?? [];
         }),
         where: vi.fn(() => ({
           get: vi.fn(async () => {
-            const result = queue.shift();
-            return result?.get ?? null;
+            const result = queue[0];
+            if (!result || !("get" in result)) return null;
+            queue.shift();
+            return result.get ?? null;
           }),
           all: vi.fn(async () => {
-            const result = queue.shift();
-            return result?.all ?? [];
+            const result = queue[0];
+            if (!result || !("all" in result)) return [];
+            queue.shift();
+            return result.all ?? [];
           }),
         })),
       })),
@@ -297,6 +301,56 @@ describe("customer auth service intent handling", () => {
     );
   });
 
+  it("rejects disallowed primary phone OTP sends before rate limits or challenge mutation", async () => {
+    const db = createDb([
+      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { get: null },
+      { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
+      { all: readySmsSettings },
+    ]);
+    const kv = createKv();
+
+    await expect(sendOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "phone",
+      channel: "sms",
+      identifier: "+14155552671",
+      name: "Buyer",
+      ip: "unknown",
+    })).rejects.toThrow("Phone numbers from US are not accepted");
+
+    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
+    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects disallowed secondary signup phones before email OTP challenge mutation", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
+      { all: readyEmailSettings },
+    ]);
+    const kv = createKv();
+
+    await expect(sendOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      phone: "+14155552671",
+      name: "Buyer",
+      ip: "unknown",
+      emailEnv: readyEmailEnv,
+    })).rejects.toThrow("Phone numbers from US are not accepted");
+
+    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
+    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
   it("pins the account creation contact fields accepted when the OTP is issued", async () => {
     const db = createDb([
       { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
@@ -416,6 +470,42 @@ describe("customer auth service intent handling", () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
+  it("rejects a now-disallowed pinned OTP phone before customer or session creation", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:email:buyer@example.com",
+      method: "email",
+      channel: "email",
+      intent: "sign_up",
+      identifier: "buyer@example.com",
+      contactEmail: "buyer@example.com",
+      phone: "+14155552671",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("Phone numbers from US are not accepted");
+
+    expect(challengeMocks.claimCustomerAuthOtpChallenge).toHaveBeenCalledOnce();
+    expect(db.insertValues).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
   it("rejects verify payloads that try to reinterpret a phone OTP as email verification", async () => {
     const db = createDb([]);
     const kv = createKv();
@@ -436,7 +526,10 @@ describe("customer auth service intent handling", () => {
   });
 
   it("bubbles OTP challenge destination mismatches before account mutation", async () => {
-    const db = createDb([]);
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+    ]);
     const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
       new Error("Verification code does not match the requested contact. Please request a new code."),
@@ -457,7 +550,10 @@ describe("customer auth service intent handling", () => {
   });
 
   it("does not read legacy KV OTP records during verification", async () => {
-    const db = createDb([]);
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+    ]);
     const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
       new Error("No verification code found. Please request a new one."),
@@ -615,6 +711,13 @@ describe("customer auth D1 sessions", () => {
         from: vi.fn(() => {
           if (db.select.mock.calls.length === 2) {
             return {
+              where: vi.fn(() => ({
+                get: vi.fn(async () => null),
+              })),
+            };
+          }
+          if (db.select.mock.calls.length === 3) {
+            return {
               where: vi.fn(async () => [
                 { id: "city_dhaka", name: "Dhaka", type: "city", parentId: null, isActive: true, deletedAt: null },
                 { id: "zone_mirpur", name: "Mirpur", type: "zone", parentId: "city_dhaka", isActive: true, deletedAt: null },
@@ -683,6 +786,65 @@ describe("customer auth D1 sessions", () => {
       profileComplete: true,
       needsProfileCompletion: false,
     });
+  });
+
+  it("rejects profile completion when the existing customer phone is no longer allowed", async () => {
+    const getResults = [
+      {
+        id: "cust_us",
+        name: "Buyer",
+        email: "buyer@example.com",
+        phone: "+14155552671",
+        address: null,
+        city: null,
+        zone: null,
+        area: null,
+        cityName: null,
+        zoneName: null,
+        areaName: null,
+        profileCompletionRequiredAt: 3_000,
+        profileCompletedAt: null,
+        totalOrders: 0,
+        totalSpent: 0,
+        lastOrderAt: null,
+        createdAt: 2_000,
+        updatedAt: 2_000,
+        deletedAt: null,
+      },
+      { value: JSON.stringify({ countries: ["BD"], mode: "include" }) },
+    ];
+    const update = vi.fn();
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            get: vi.fn(async () => getResults.shift() ?? null),
+          })),
+        })),
+      })),
+      update,
+    };
+
+    await expect(updateCustomerProfile(
+      db as never,
+      {
+        token: "raw-session-token",
+        email: "buyer@example.com",
+        name: "Buyer",
+        phone: "+14155552671",
+        customerId: "cust_us",
+        profileComplete: false,
+        needsProfileCompletion: true,
+        createdAt: 2_000_000,
+        expiresAt: 4_200_000,
+      },
+      {
+        name: "Buyer",
+        address: "House 1",
+      },
+    )).rejects.toThrow("Phone numbers from US are not accepted");
+
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("returns null when no active non-deleted D1 session row is found", async () => {

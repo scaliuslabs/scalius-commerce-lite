@@ -24,7 +24,7 @@ import {
     cleanupExpiredCustomerAuthOtpRateLimits,
     enforceCustomerAuthOtpIpRateLimit,
 } from "./customer-auth-rate-limit";
-import { validateAndFormatPhone, isValidPhoneNumber } from "@scalius/shared/customer-utils";
+import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
     normalizeCustomerAuthMethod,
@@ -36,6 +36,7 @@ import {
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
+import { getAllowedCountries } from "../settings/site-settings.service";
 
 // ─────────────────────────────────────────
 // Constants
@@ -224,14 +225,16 @@ function parseStoredCustomerAuthPolicy(value: string | null | undefined): unknow
 async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
     settings: typeof siteSettings.$inferSelect;
     policy: CustomerAuthPolicyConfig;
+    phoneCountryPolicy: PhoneCountryPolicy;
 }> {
-    const [settingsRow, policyRow] = await Promise.all([
+    const [settingsRow, policyRow, allowedCountriesConfig] = await Promise.all([
         db.select().from(siteSettings).limit(1).then((rows) => rows[0] ?? null),
         db.select({ value: genericSettings.value })
             .from(genericSettings)
             .where(and(eq(genericSettings.category, "customer_auth"), eq(genericSettings.key, "policy")))
             .get()
             .catch(() => null),
+        getAllowedCountries(db),
     ]);
 
     if (!settingsRow) {
@@ -244,6 +247,10 @@ async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
             parseStoredCustomerAuthPolicy(policyRow?.value),
             settingsRow.authVerificationMethod,
         ),
+        phoneCountryPolicy: {
+            countries: allowedCountriesConfig.allowedCountries,
+            mode: allowedCountriesConfig.allowedCountriesMode,
+        },
     };
 }
 
@@ -260,7 +267,19 @@ function isValidEmailAddress(value: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function normalizePrimaryIdentifier(method: "email" | "phone", identifier: string): string {
+function normalizePhoneOrThrow(phone: string, phoneCountryPolicy?: PhoneCountryPolicy): string {
+    try {
+        return validateAndFormatPhone(phone, phoneCountryPolicy);
+    } catch (error) {
+        throw new ValidationError(error instanceof Error ? error.message : "Valid phone number required");
+    }
+}
+
+function normalizePrimaryIdentifier(
+    method: "email" | "phone",
+    identifier: string,
+    phoneCountryPolicy?: PhoneCountryPolicy,
+): string {
     if (method === "email") {
         if (!isValidEmailAddress(identifier)) {
             throw new ValidationError("Valid email address required");
@@ -268,19 +287,21 @@ function normalizePrimaryIdentifier(method: "email" | "phone", identifier: strin
         return identifier.trim().toLowerCase();
     }
 
-    if (!isValidPhoneNumber(identifier)) {
-        throw new ValidationError("Valid phone number required");
-    }
-    return validateAndFormatPhone(identifier);
+    return normalizePhoneOrThrow(identifier, phoneCountryPolicy);
 }
 
 function getPrimaryEmail(method: "email" | "phone", identifier: string, email?: string): string | undefined {
     return method === "email" ? identifier.trim().toLowerCase() : normalizeEmail(email);
 }
 
-function getPrimaryPhone(method: "email" | "phone", identifier: string, phone?: string): string | undefined {
-    if (method === "phone") return validateAndFormatPhone(identifier);
-    return phone ? validateAndFormatPhone(phone) : undefined;
+function getPrimaryPhone(
+    method: "email" | "phone",
+    identifier: string,
+    phone?: string,
+    phoneCountryPolicy?: PhoneCountryPolicy,
+): string | undefined {
+    if (method === "phone") return normalizePhoneOrThrow(identifier, phoneCountryPolicy);
+    return phone ? normalizePhoneOrThrow(phone, phoneCountryPolicy) : undefined;
 }
 
 async function hashCustomerSessionToken(sessionToken: string, sessionHashKey: string | undefined): Promise<string> {
@@ -313,13 +334,13 @@ function requireCustomerSessionHashKey(sessionHashKey: string | undefined): stri
 function assertSecondaryContactFormats(input: {
     email?: string;
     phone?: string;
-}): void {
+}, phoneCountryPolicy?: PhoneCountryPolicy): void {
     const email = normalizeEmail(input.email);
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw new ValidationError("Valid email address required");
     }
-    if (input.phone && !isValidPhoneNumber(input.phone)) {
-        throw new ValidationError("Valid phone number required");
+    if (input.phone) {
+        normalizePhoneOrThrow(input.phone, phoneCountryPolicy);
     }
 }
 
@@ -333,11 +354,12 @@ function assertPolicyRequiredFields(
         email?: string;
         phone?: string;
     },
+    phoneCountryPolicy?: PhoneCountryPolicy,
 ): void {
     if (input.intent !== "sign_up") return;
 
     const email = getPrimaryEmail(input.method, input.normalizedIdentifier, input.email);
-    const phone = getPrimaryPhone(input.method, input.normalizedIdentifier, input.phone);
+    const phone = getPrimaryPhone(input.method, input.normalizedIdentifier, input.phone, phoneCountryPolicy);
 
     if (isContactFieldRequiredForAuthChannel(policy, input.channel, "email") && !email) {
         throw new ValidationError("Email address is required to create an account.");
@@ -518,15 +540,21 @@ export async function sendOtp(
         throw new ValidationError("Contact identifier required (email or phone)");
     }
 
+    normalizePrimaryIdentifier(method, identifier);
     assertSecondaryContactFormats({
         email: input.email,
         phone: input.phone,
     });
 
-    // Normalize phone identifier to E.164 for consistent storage/lookup
-    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier);
+    const { settings, policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
 
-    const { settings, policy } = await getCustomerAuthRuntimePolicy(db);
+    assertSecondaryContactFormats({
+        email: input.email,
+        phone: input.phone,
+    }, phoneCountryPolicy);
+
+    // Normalize phone identifier to E.164 for consistent storage/lookup
+    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier, phoneCountryPolicy);
     const channel = resolveCustomerAuthChannelForRequest(policy, method, input.channel);
 
     if (!channel) {
@@ -540,11 +568,11 @@ export async function sendOtp(
         normalizedIdentifier,
         email: input.email,
         phone: input.phone,
-    });
+    }, phoneCountryPolicy);
 
     const otpKey = getOtpStorageKey(channel, normalizedIdentifier);
     const contactEmail = getPrimaryEmail(method, normalizedIdentifier, input.email);
-    const contactPhone = getPrimaryPhone(method, normalizedIdentifier, input.phone);
+    const contactPhone = getPrimaryPhone(method, normalizedIdentifier, input.phone, phoneCountryPolicy);
 
     // Resolve and validate the delivery transport before mutating rate-limit or OTP challenge state.
     const transport = getOtpTransport(method, policy, channel);
@@ -645,11 +673,18 @@ export async function verifyOtp(
     if (!identifier || !code) {
         throw new ValidationError("Contact identifier and code are required");
     }
+
+    normalizePrimaryIdentifier(method, identifier);
     assertSecondaryContactFormats({ email, phone });
+
+    const runtimePolicy = await getCustomerAuthRuntimePolicy(db);
+    const { phoneCountryPolicy } = runtimePolicy;
+
+    assertSecondaryContactFormats({ email, phone }, phoneCountryPolicy);
 
     // Normalize the primary destination exactly as sendOtp() did. Verification
     // payloads prove an OTP; they may not reinterpret which contact was verified.
-    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier);
+    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier, phoneCountryPolicy);
 
     const channel = input.channel ?? getFallbackOtpChannel(method);
     const otpKey = getOtpStorageKey(channel, normalizedIdentifier);
@@ -665,6 +700,9 @@ export async function verifyOtp(
     const intent = normalizeCustomerAuthIntent(challenge.intent ?? input.intent);
     const verifiedEmail = challenge.method === "email" ? challenge.identifier : challenge.contactEmail;
     const verifiedPhone = challenge.method === "phone" ? challenge.identifier : challenge.phone;
+    if (verifiedPhone) {
+        normalizePhoneOrThrow(verifiedPhone, phoneCountryPolicy);
+    }
 
     // Look up customer in DB (if exists)
     let customerId: string | undefined;
@@ -675,15 +713,14 @@ export async function verifyOtp(
 
     try {
         if (intent === "sign_up") {
-            const { policy } = await getCustomerAuthRuntimePolicy(db);
-            assertPolicyRequiredFields(policy, {
+            assertPolicyRequiredFields(runtimePolicy.policy, {
                 intent,
                 channel,
                 method,
                 normalizedIdentifier,
                 email: verifiedEmail,
                 phone: verifiedPhone,
-            });
+            }, phoneCountryPolicy);
         }
 
         const existing = method === "email"
@@ -954,6 +991,14 @@ export async function updateCustomerProfile(
     const existing = await getActiveCustomerById(db, session.customerId);
     if (!existing) {
         throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
+    }
+
+    const allowedCountriesConfig = await getAllowedCountries(db);
+    if (existing.phone) {
+        normalizePhoneOrThrow(existing.phone, {
+            countries: allowedCountriesConfig.allowedCountries,
+            mode: allowedCountriesConfig.allowedCountriesMode,
+        });
     }
 
     const nextName = updates.name !== undefined

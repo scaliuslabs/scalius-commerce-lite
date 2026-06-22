@@ -77,7 +77,7 @@ The public checkout config still exposes only the normalized policy; provider re
 
 Assembles the full checkout configuration for the storefront. Returns a `CheckoutConfig` object.
 
-Uses `Promise.all()` to fetch site settings, currency rows, and allowed countries in parallel. Resolves enabled payment gateways dynamically from the gateway registry after intersecting the raw merchant allowlist with provider readiness.
+Uses `Promise.all()` to fetch site settings, currency rows, the shared `getAllowedCountries()` policy, and customer-auth policy in parallel. Resolves enabled payment gateways dynamically from the gateway registry after intersecting the raw merchant allowlist with provider readiness. The returned allowed-country values are storefront hints only; checkout and customer-auth services re-read and enforce the same include/exclude policy server-side.
 
 ```typescript
 interface CheckoutConfig {

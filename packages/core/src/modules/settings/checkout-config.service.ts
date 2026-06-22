@@ -20,6 +20,7 @@ import {
     getCheckoutReadiness,
     type CheckoutReadiness,
 } from "./checkout-readiness";
+import { getAllowedCountries } from "./site-settings.service";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
@@ -51,7 +52,7 @@ export async function getCheckoutConfig(
     kv?: KVNamespace,
     encryptionKey?: string,
 ): Promise<CheckoutConfig> {
-    const [siteSettingsRow, currencyRows, allowedCountriesRow, customerAuthPolicyRow] = await Promise.all([
+    const [siteSettingsRow, currencyRows, allowedCountriesConfig, customerAuthPolicyRow] = await Promise.all([
         db.select({
             guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
             authVerificationMethod: siteSettings.authVerificationMethod,
@@ -63,33 +64,13 @@ export async function getCheckoutConfig(
             .from(settings)
             .where(eq(settings.category, "currency"))
             .all(),
-        db.select({ value: settings.value })
-            .from(settings)
-            .where(and(eq(settings.category, "phone"), eq(settings.key, "allowed_countries")))
-            .get(),
+        getAllowedCountries(db),
         db.select({ value: settings.value })
             .from(settings)
             .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
             .get()
             .catch(() => null),
     ]);
-
-    let allowedCountries: string[] = [];
-    let allowedCountriesMode: "include" | "exclude" = "include";
-    try {
-        if (allowedCountriesRow?.value) {
-            const parsed = JSON.parse(allowedCountriesRow.value);
-            if (Array.isArray(parsed)) {
-                // Backward compat: old format was just an array
-                allowedCountries = parsed;
-            } else if (parsed && typeof parsed === "object") {
-                allowedCountries = Array.isArray(parsed.countries) ? parsed.countries : [];
-                allowedCountriesMode = parsed.mode === "exclude" ? "exclude" : "include";
-            }
-        }
-    } catch {
-        // Invalid JSON — default to empty array
-    }
 
     const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
     const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
@@ -116,8 +97,8 @@ export async function getCheckoutConfig(
             checkoutMode,
             partialPaymentEnabled,
             partialPaymentAmount,
-            allowedCountries,
-            allowedCountriesMode,
+            allowedCountries: allowedCountriesConfig.allowedCountries,
+            allowedCountriesMode: allowedCountriesConfig.allowedCountriesMode,
             currency: {
                 code: localCurrencyCode,
                 symbol: currencyMap.currency_symbol ?? "\u09F3",
@@ -183,8 +164,8 @@ export async function getCheckoutConfig(
         checkoutMode,
         partialPaymentEnabled,
         partialPaymentAmount,
-        allowedCountries,
-        allowedCountriesMode,
+        allowedCountries: allowedCountriesConfig.allowedCountries,
+        allowedCountriesMode: allowedCountriesConfig.allowedCountriesMode,
         currency: {
             code: localCurrencyCode,
             symbol: currencyMap.currency_symbol ?? "\u09F3",
