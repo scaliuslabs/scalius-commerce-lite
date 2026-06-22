@@ -20,7 +20,11 @@ import { eq, and, isNull, inArray } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ValidationError } from "@scalius/core/errors";
 import type { CreateStorefrontOrderIdentity, CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
-import { validateStorefrontCartItems, type StorefrontCartValidationResult } from "./cart-validation";
+import {
+    isTrustedStorefrontCartValidationResult,
+    validateStorefrontCartItems,
+    type StorefrontCartValidationResult,
+} from "./cart-validation";
 
 interface LocationRow {
     id: string;
@@ -49,6 +53,24 @@ export interface StorefrontDeliveryPreflightResult {
     cityName: string;
     zoneName: string;
     areaName: string | null;
+}
+
+const STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF = Symbol("scalius.storefrontDeliveryPreflightResult");
+
+function markTrustedStorefrontDeliveryPreflightResult(
+    result: StorefrontDeliveryPreflightResult,
+): StorefrontDeliveryPreflightResult {
+    Object.defineProperty(result, STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF, {
+        value: true,
+        enumerable: false,
+    });
+    return result;
+}
+
+export function isTrustedStorefrontDeliveryPreflightResult(
+    result: StorefrontDeliveryPreflightResult | undefined,
+): result is StorefrontDeliveryPreflightResult {
+    return Boolean(result && Reflect.get(result, STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF) === true);
 }
 
 export async function validateStorefrontDeliveryPreflight(
@@ -147,12 +169,12 @@ export async function validateStorefrontDeliveryPreflight(
         shippingCharge = roundPrice(methodFee);
     }
 
-    return {
+    return markTrustedStorefrontDeliveryPreflightResult({
         shippingCharge,
         cityName: city.name,
         zoneName: zone.name,
         areaName: area?.name ?? null,
-    };
+    });
 }
 
 /**
@@ -176,6 +198,10 @@ export async function createStorefrontOrder(
     prevalidatedCart?: StorefrontCartValidationResult,
     prevalidatedDelivery?: StorefrontDeliveryPreflightResult,
 ): Promise<CreateStorefrontOrderResult> {
+    if (prevalidatedCart && !isTrustedStorefrontCartValidationResult(prevalidatedCart)) {
+        throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
+    }
+
     const cartValidation = prevalidatedCart ?? await validateStorefrontCartItems(
         storefrontDb,
         data.items.map((item) => ({
@@ -200,6 +226,10 @@ export async function createStorefrontOrder(
     // 1. Batched Reads
     // ------------------------------------------------------------------
     const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
+    if (prevalidatedDelivery && !isTrustedStorefrontDeliveryPreflightResult(prevalidatedDelivery)) {
+        throw new ValidationError("Checkout delivery validation could not be trusted. Please retry checkout.");
+    }
+
     const deliveryPreflight = prevalidatedDelivery ?? await validateStorefrontDeliveryPreflight(
         storefrontDb,
         {

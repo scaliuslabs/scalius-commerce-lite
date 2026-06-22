@@ -65,6 +65,24 @@ export interface StorefrontCartValidationResult {
     hasFreeDeliveryProduct: boolean;
 }
 
+const STOREFRONT_CART_VALIDATION_RESULT_PROOF = Symbol("scalius.storefrontCartValidationResult");
+
+function markTrustedStorefrontCartValidationResult(
+    result: StorefrontCartValidationResult,
+): StorefrontCartValidationResult {
+    Object.defineProperty(result, STOREFRONT_CART_VALIDATION_RESULT_PROOF, {
+        value: true,
+        enumerable: false,
+    });
+    return result;
+}
+
+export function isTrustedStorefrontCartValidationResult(
+    result: StorefrontCartValidationResult | undefined,
+): result is StorefrontCartValidationResult {
+    return Boolean(result && Reflect.get(result, STOREFRONT_CART_VALIDATION_RESULT_PROOF) === true);
+}
+
 type InventoryPool = "regular" | "preorder" | "backorder";
 
 interface ProductRow {
@@ -176,13 +194,13 @@ export async function validateStorefrontCartItems(
     options: { inventoryPool?: string | null } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0) {
-        return {
+        return markTrustedStorefrontCartValidationResult({
             valid: true,
             issues: [],
             items: [],
             subtotal: 0,
             hasFreeDeliveryProduct: false,
-        };
+        });
     }
 
     const productIds = [...new Set(items.map((item) => item.productId))];
@@ -395,11 +413,11 @@ export async function validateStorefrontCartItems(
         });
     });
 
-    return {
+    return markTrustedStorefrontCartValidationResult({
         valid: issues.length === 0,
         issues,
         items: validatedItems,
         subtotal: roundPrice(subtotal),
         hasFreeDeliveryProduct,
-    };
+    });
 }
