@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { InventoryPool, PaymentMethod } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
-import { createStorefrontOrder } from "./orders.storefront";
+import { createStorefrontOrder, validateStorefrontDeliveryPreflight } from "./orders.storefront";
+import { validateStorefrontCartItems } from "./cart-validation";
 import type { CreateStorefrontOrderInput } from "./orders.types";
 
 interface ProductRow {
@@ -680,5 +681,119 @@ describe("createStorefrontOrder delivery-location verification", () => {
         ],
       }),
     ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+  });
+});
+
+describe("createStorefrontOrder prevalidated input trust", () => {
+  it("rejects forged prevalidated cart results before reading delivery or building an order", async () => {
+    const db = createDbMock([], [], []);
+
+    await expect(
+      createStorefrontOrder(
+        db,
+        createOrderInput(),
+        "http://localhost:8787/api/v1/orders",
+        vi.fn(async () => null),
+        vi.fn(() => 0),
+        undefined,
+        {
+          valid: true,
+          issues: [],
+          items: [
+            {
+              index: 0,
+              cartKey: null,
+              productId: "prod_standard",
+              variantId: "var_standard",
+              quantity: 1,
+              unitPrice: 1,
+              productName: "Forged Product",
+              variantLabel: null,
+              freeDelivery: true,
+              inventoryTracked: false,
+              availableQuantity: null,
+            },
+          ],
+          subtotal: 1,
+          hasFreeDeliveryProduct: true,
+        },
+      ),
+    ).rejects.toThrow("Checkout cart validation could not be trusted. Please retry checkout.");
+
+    expect(db.select).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("rejects forged prevalidated delivery results after real cart validation and before order reads", async () => {
+    const db = createDbMock([], [createProduct()], [createVariant()]);
+
+    await expect(
+      createStorefrontOrder(
+        db,
+        createOrderInput(),
+        "http://localhost:8787/api/v1/orders",
+        vi.fn(async () => null),
+        vi.fn(() => 0),
+        undefined,
+        undefined,
+        {
+          shippingCharge: 0,
+          cityName: "Forged City",
+          zoneName: "Forged Zone",
+          areaName: "Forged Area",
+        },
+      ),
+    ).rejects.toThrow("Checkout delivery validation could not be trusted. Please retry checkout.");
+
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("accepts prevalidated cart and delivery results only when produced by the validators", async () => {
+    const input = createOrderInput({ area: "area_1" });
+    const cartDb = createDbMock([], [createProduct()], [createVariant()]);
+    const cartValidation = await validateStorefrontCartItems(cartDb, input.items, {
+      inventoryPool: input.inventoryPool,
+    });
+    const deliveryDb = createDbMock(
+      [
+        [
+          [
+            createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
+            createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
+            createLocation({ id: "area_1", name: "Section 10", type: "area", parentId: "zone_1" }),
+          ],
+          [createShippingMethod({ fee: 70 })],
+        ],
+      ],
+      [],
+      [],
+    );
+    const deliveryPreflight = await validateStorefrontDeliveryPreflight(
+      deliveryDb,
+      {
+        city: input.city,
+        zone: input.zone,
+        area: input.area,
+        shippingMethodId: input.shippingMethodId,
+      },
+      cartValidation,
+    );
+    const orderDb = createDbMock([[[], [], []]], [], []);
+
+    const result = await createStorefrontOrder(
+      orderDb,
+      input,
+      "http://localhost:8787/api/v1/orders",
+      vi.fn(async () => null),
+      vi.fn(() => 0),
+      undefined,
+      cartValidation,
+      deliveryPreflight,
+    );
+
+    expect(result.queuePayload.orderData.cityName).toBe("Dhaka");
+    expect(result.queuePayload.orderData.zoneName).toBe("Mirpur");
+    expect(result.queuePayload.orderData.areaName).toBe("Section 10");
+    expect(result.queuePayload.orderData.shippingCharge).toBe(70);
   });
 });
