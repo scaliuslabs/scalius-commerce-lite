@@ -100,6 +100,8 @@ describe("customer auth UI policy", () => {
   it("maps post-OTP intent errors to safe alternate actions", () => {
     expect(getCustomerAuthAlternateIntent("An account already exists for this phone number. Sign in instead.")).toBe("sign_in");
     expect(getCustomerAuthAlternateIntent("No account was found for this email. Create an account instead.")).toBe("sign_up");
+    expect(getCustomerAuthAlternateIntent("Multiple accounts use this email. Please use phone verification or contact store support.")).toBeNull();
+    expect(getCustomerAuthAlternateIntent("This phone number belongs to a deleted customer account. Contact store support to restore access.")).toBeNull();
     expect(getCustomerAuthAlternateIntent("Incorrect code. Please try again.")).toBeNull();
     expect(getCustomerAuthAlternateIntentLabel("sign_in")).toBe("Sign in with this contact");
     expect(getCustomerAuthAlternateIntentLabel("sign_up")).toBe("Create an account with this contact");

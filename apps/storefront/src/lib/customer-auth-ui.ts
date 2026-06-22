@@ -130,6 +130,13 @@ export function getCustomerAuthInputError(input: CustomerAuthInputState): string
 
 export function getCustomerAuthAlternateIntent(error: string | null | undefined): "sign_in" | "sign_up" | null {
   const message = error?.toLowerCase() ?? "";
+  if (
+    message.includes("multiple accounts use this email") ||
+    message.includes("deleted customer account") ||
+    message.includes("contact store support")
+  ) {
+    return null;
+  }
   if (message.includes("sign in instead")) return "sign_in";
   if (message.includes("create an account instead")) return "sign_up";
   return null;

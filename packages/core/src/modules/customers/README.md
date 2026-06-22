@@ -55,7 +55,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after challenge creation, it deletes the exact D1 challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
-5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, rechecks the current country policy against the submitted and pinned phone contacts, atomically consumes the matching channel-scoped D1 challenge, atomically increments wrong-code attempts, rechecks sign-up collection policy, uses the phone/email fields pinned when the OTP was issued, and on success signs in an existing customer or creates a new customer only for explicit `sign_up` intent before creating a 30-day D1 session keyed by an HMAC token hash. New sign-ups set `profileCompletionRequiredAt` until the required delivery profile is complete. Unknown sign-in and duplicate sign-up guidance happens here, after OTP proof, not at send time.
+5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, rechecks the current country policy against the submitted and pinned phone contacts, atomically consumes the matching channel-scoped D1 challenge, atomically increments wrong-code attempts, rechecks sign-up collection policy, uses the phone/email fields pinned when the OTP was issued, and on success signs in an existing active customer or creates a new customer only for explicit `sign_up` intent before creating a 30-day D1 session keyed by an HMAC token hash. Email sign-in requires exactly one active customer row for that email; ambiguous active matches fail closed and deleted matches direct the buyer to store support. New sign-ups set `profileCompletionRequiredAt` until the required delivery profile is complete. Unknown sign-in and duplicate sign-up guidance happens here, after OTP proof, not at send time.
 
 **Delivery idempotency:**
 - Email sends pass `deliveryKey` as `idempotencyKey`; Resend forwards it as `Idempotency-Key`, while Cloudflare Email stores the returned `messageId`
@@ -81,7 +81,8 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 
 **Auto-registration:**
 - Only explicit `sign_up` OTPs can create customers; explicit `sign_in` OTPs require an existing account and return a customer-facing "Create an account instead" error when none exists.
-- New customer creation always requires a phone number and rejects duplicate phone/email before account creation.
+- Phone is globally unique, so new customer creation always requires a phone number, rejects duplicate active phone rows, and blocks soft-deleted phone reuse with support-restore guidance.
+- Email is a non-unique contact field. New customer creation rejects duplicate active email rows; email sign-in only succeeds when exactly one active row matches and never authenticates a soft-deleted customer.
 - New customers get a bare-bones record (no address/location) with `profileCompletionRequiredAt` set; storefront profile setup must keep resuming until name, address, city, and zone are saved or the customer signs out.
 
 ## API Endpoints
