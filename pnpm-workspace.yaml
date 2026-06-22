@@ -59,3 +59,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@ai-sdk/gateway@3.0.131'
   - ai@6.0.205
+  - '@astrojs/markdown-satteri@0.3.1'
+  - '@astrojs/react@6.0.0'
+  - astro@7.0.0
+  - '@astrojs/cloudflare@14.0.0'

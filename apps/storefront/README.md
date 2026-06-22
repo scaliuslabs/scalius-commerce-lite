@@ -1,14 +1,14 @@
 # Storefront (`apps/storefront/`)
 
-Astro 6 SSR customer-facing storefront deployed as a Cloudflare Worker. Communicates with the API worker via Cloudflare Service Binding (`env.BACKEND_API`). Imports `@scalius/shared` and `@scalius/api-client` -- does NOT import `@scalius/core` or `@scalius/database` directly.
+Astro 7 SSR customer-facing storefront deployed as a Cloudflare Worker. Communicates with the API worker via Cloudflare Service Binding (`env.BACKEND_API`). Imports `@scalius/shared` and `@scalius/api-client` -- does NOT import `@scalius/core` or `@scalius/database` directly.
 
 ## Entry Point
 
-`src/worker.ts` exports a simple Cloudflare Worker that delegates to the Astro Cloudflare adapter handler.
+Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-ready Wrangler config at `dist/server/wrangler.json`. The source `wrangler.jsonc` is the adapter input for bindings, vars, compatibility settings, and routes; production deploys must run after `astro build` and use the generated config.
 
 ## Tech Stack
 
-- **Astro 6** -- SSR with `@astrojs/cloudflare` adapter
+- **Astro 7** -- SSR with `@astrojs/cloudflare` adapter
 - **React 19** -- Interactive components (islands architecture)
 - **Tailwind CSS 4** -- Styling
 - **Nano Stores** -- Client-side state management (cart, toast)
@@ -291,7 +291,8 @@ Runtime vars that affect cache identity:
 
 | File | Purpose |
 |------|---------|
-| `src/worker.ts` | Cloudflare Worker entry point |
+| `wrangler.jsonc` | Source Cloudflare binding/vars/routes config consumed by the Astro adapter |
+| `dist/server/wrangler.json` | Generated deploy config produced by `astro build`; deploy this file, not the source config |
 | `src/middleware.ts` | Cache + API context middleware |
 | `src/lib/edge-cache.ts` | L1+L2 caching with ALS, deduplication, KV versioning |
 | `src/lib/cache-namespace.ts` | Canonical KV namespace resolution for cache version/generation keys |

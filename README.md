@@ -49,7 +49,7 @@ Scalius Commerce Lite is a **Turborepo monorepo** containing three Cloudflare Wo
 apps/
   admin-v2/       # @scalius/admin-v2 — TanStack Start admin dashboard (Cloudflare Worker)
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
-  storefront/     # @scalius/storefront — Astro 6 SSR customer store (Cloudflare Worker)
+  storefront/     # @scalius/storefront — Astro 7 SSR customer store (Cloudflare Worker)
 packages/
   api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
   core/           # @scalius/core — domain modules, auth, integrations, FTS5 search
@@ -65,7 +65,7 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 |-------|-----------|
 | Monorepo | Turborepo + pnpm workspaces |
 | Admin Dashboard | TanStack Start + TanStack Router + TanStack Query + React 19 |
-| Storefront | Astro 6 SSR + React 19 |
+| Storefront | Astro 7 SSR + React 19 |
 | API | Hono + @hono/zod-openapi (auto-generated OpenAPI/Swagger) |
 | Database | Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search |
 | UI | Tailwind CSS v4 + shadcn/ui + Radix primitives |
@@ -93,7 +93,7 @@ flowchart TB
         ServerFns["Typed Server Functions<br/>(domain slices)"]
     end
 
-    subgraph Storefront ["Storefront (Astro 6 SSR)"]
+    subgraph Storefront ["Storefront (Astro 7 SSR)"]
         direction TB
         AstroPages["SSR Pages<br/>(product, cart, checkout, search)"]
         EdgeCache["L1 In-Memory + L2 Cache API<br/>(KV-versioned invalidation)"]
@@ -257,7 +257,7 @@ TanStack Start, TanStack Router, TanStack Query, TanStack Table, React 19, shadc
 
 ## Storefront (`apps/storefront/`)
 
-The storefront is an **Astro 6 SSR** application with React 19 islands for interactivity.
+The storefront is an **Astro 7 SSR** application with React 19 islands for interactivity.
 
 ### Pages
 
