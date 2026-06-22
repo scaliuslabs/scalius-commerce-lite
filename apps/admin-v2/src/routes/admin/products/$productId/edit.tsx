@@ -1,13 +1,20 @@
+import { lazy, Suspense } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
-import { VariantManager } from "~/components/admin/product-form/variants";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
 import type { ProductDetail, ProductImageDetail, ProductVariant } from "~/types/api-responses";
 import type { Category } from "~/components/admin/product-form/types";
 import type { ProductVariant as LocalProductVariant } from "~/components/admin/product-form/variants/types";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
+
+const VariantManager = lazy(() =>
+  import("~/components/admin/product-form/variants/VariantManager").then((module) => ({
+    default: module.VariantManager,
+  })),
+);
 
 export const Route = createFileRoute("/admin/products/$productId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -95,12 +102,14 @@ function EditProductPage() {
       />
 
       <div className="mt-6" id="variant-section">
-        <VariantManager
-          productId={product.id}
-          productSlug={product.slug}
-          productName={product.name}
-          variants={formattedVariants}
-        />
+        <Suspense fallback={<LoadingFallback height="h-48" />}>
+          <VariantManager
+            productId={product.id}
+            productSlug={product.slug}
+            productName={product.name}
+            variants={formattedVariants}
+          />
+        </Suspense>
       </div>
     </div>
   );

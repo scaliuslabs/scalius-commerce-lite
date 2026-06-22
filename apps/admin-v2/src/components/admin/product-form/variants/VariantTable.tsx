@@ -2,7 +2,8 @@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -11,10 +12,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { VariantDisplayRow } from "./VariantDisplayRow";
 import { VariantFormRow } from "./VariantFormRow";
 import { VariantBulkEditRow } from "./VariantBulkEditRow";
 import type { ProductVariant, VariantBulkEditField, VariantBulkEditValue, VariantFormValues } from "./types";
+import { useCurrency } from "@/hooks/use-currency";
+import { cn } from "@scalius/shared/utils";
+import {
+  getDiscountDisplay,
+  getStockStatus,
+  isInventoryTracked,
+} from "./utils/variantHelpers";
 
 interface VariantTableProps {
   variants: ProductVariant[];
@@ -59,14 +74,52 @@ export function VariantTable({
   productName,
   addVariantDefaults,
 }: VariantTableProps) {
+  const { symbol } = useCurrency();
   const selectableVariants = variants.filter((variant) => !variant.isDefault);
   const selectedSelectableCount = selectableVariants.filter((variant) => selectedVariants.has(variant.id)).length;
   const allSelected = selectableVariants.length > 0 && selectedSelectableCount === selectableVariants.length;
   const someSelected = selectedSelectableCount > 0 && selectedSelectableCount < selectableVariants.length;
+  const showMobileCards = !isBulkEditing && !editingVariantId && !isAdding;
 
   return (
     <div className="space-y-0">
-      <div className="rounded-lg border shadow-sm overflow-hidden">
+      {showMobileCards && (
+        <div className="space-y-2 md:hidden">
+          {variants.length === 0 ? (
+            <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground">
+              <p className="text-sm">No options yet</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddVariant}
+                className="mt-3"
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                Add Option
+              </Button>
+            </div>
+          ) : (
+            variants.map((variant) => (
+              <VariantMobileCard
+                key={variant.id}
+                variant={variant}
+                isSelected={selectedVariants.has(variant.id)}
+                isDisabled={isAnyRowEditing}
+                onToggleSelection={onToggleSelection}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onDuplicate={onDuplicate}
+                symbol={symbol}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      <div className={cn(
+        "rounded-lg border shadow-sm overflow-hidden",
+        showMobileCards && "hidden md:block",
+      )}>
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
@@ -93,7 +146,7 @@ export function VariantTable({
               {!isBulkEditing && <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>}
               <TableHead className="min-w-[100px] py-2 text-xs font-medium">Discount</TableHead>
               <TableHead className="min-w-[110px] py-2 text-xs font-medium">Updated</TableHead>
-              <TableHead className="w-[80px] py-2 text-xs font-medium text-right pr-3">Actions</TableHead>
+              <TableHead className="w-[96px] py-2 text-xs font-medium text-right pr-3">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -178,6 +231,181 @@ export function VariantTable({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+function VariantMobileCard({
+  variant,
+  isSelected,
+  isDisabled,
+  onToggleSelection,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  symbol,
+}: {
+  variant: ProductVariant;
+  isSelected: boolean;
+  isDisabled: boolean;
+  onToggleSelection: (id: string) => void;
+  onEdit: (id: string) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  symbol: string;
+}) {
+  const inventoryTracked = isInventoryTracked(variant);
+  const isProtectedDefaultSku = variant.isDefault === true;
+  const availableStock = inventoryTracked
+    ? Math.max(0, variant.stock - variant.reservedStock)
+    : null;
+  const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
+  const optionLabels = [
+    variant.size && `Size ${variant.size}`,
+    variant.color && `Color ${variant.color}`,
+    variant.weight && `${variant.weight}g`,
+  ].filter(Boolean);
+  const editLabel = isProtectedDefaultSku ? "Edit product SKU" : "Edit option";
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border bg-card p-3 shadow-sm",
+        isSelected && "border-primary/40 bg-primary/5",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => {
+            if (!isProtectedDefaultSku) onToggleSelection(variant.id);
+          }}
+          aria-label={`Select option ${variant.sku}`}
+          disabled={isDisabled || isProtectedDefaultSku}
+          className="mt-1 h-4 w-4"
+        />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="break-all font-mono text-sm font-semibold text-foreground">
+                {variant.sku}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {isProtectedDefaultSku && (
+                  <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
+                    Product SKU
+                  </Badge>
+                )}
+                {optionLabels.length > 0 ? (
+                  optionLabels.map((label) => (
+                    <Badge key={label} variant="secondary" className="h-5 px-1.5 text-[10px]">
+                      {label}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                    No options
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                aria-label={editLabel}
+                disabled={isDisabled}
+                onClick={() => onEdit(variant.id)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={isDisabled}
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                    <span className="sr-only">Option actions</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[160px]">
+                  <DropdownMenuItem onClick={() => onEdit(variant.id)}>
+                    <Pencil className="mr-2 h-3.5 w-3.5" />
+                    {editLabel}
+                  </DropdownMenuItem>
+                  {!isProtectedDefaultSku && (
+                    <DropdownMenuItem onClick={() => onDuplicate(variant.id)}>
+                      <Copy className="mr-2 h-3.5 w-3.5" />
+                      Duplicate
+                    </DropdownMenuItem>
+                  )}
+                  {!isProtectedDefaultSku && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => onDelete(variant.id)}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      >
+                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                        Delete option
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md bg-muted/40 p-2">
+              <div className="text-muted-foreground">Price</div>
+              <div className="mt-1 font-semibold text-foreground" suppressHydrationWarning>
+                {symbol}
+                {variant.price.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/40 p-2">
+              <div className="text-muted-foreground">Available</div>
+              {availableStock === null ? (
+                <div className="mt-1 font-semibold text-emerald-700">No stock limit</div>
+              ) : (
+                <div className={cn(
+                  "mt-1 font-semibold",
+                  availableStock <= 0
+                    ? "text-red-600"
+                    : availableStock <= 5
+                      ? "text-amber-600"
+                      : "text-emerald-700",
+                )}>
+                  {availableStock}
+                  {stockStatus === "low" ? " low" : ""}
+                  {stockStatus === "out-of-stock" ? " out" : ""}
+                </div>
+              )}
+            </div>
+            <div className="rounded-md bg-muted/40 p-2">
+              <div className="text-muted-foreground">On hand</div>
+              <div className="mt-1 font-semibold text-foreground">
+                {inventoryTracked ? variant.stock : "No stock limit"}
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/40 p-2">
+              <div className="text-muted-foreground">Discount</div>
+              <div className="mt-1 font-semibold text-foreground">
+                {getDiscountDisplay(variant, symbol)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

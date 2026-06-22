@@ -863,6 +863,29 @@ describe("admin route graph boundaries", () => {
     expect(loaderSource).not.toContain("for (let");
   });
 
+  it("keeps product edit first paint from eagerly importing variant management", () => {
+    const source = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "products",
+        "$productId",
+        "edit.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(source).toContain("const VariantManager = lazy(");
+    expect(source).toContain(
+      'import("~/components/admin/product-form/variants/VariantManager")',
+    );
+    expect(source).toContain('<LoadingFallback height="h-48" />');
+    expect(source).not.toMatch(
+      /import\s+\{\s*VariantManager\s*\}\s+from\s+["']~\/components\/admin\/product-form\/variants["']/,
+    );
+  });
+
   it("keeps edit forms from blocking on secondary label hydration", () => {
     const discountSource = readFileSync(
       join(

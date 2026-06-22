@@ -12,6 +12,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { ProductVariant } from "./types";
 import {
   formatDate,
@@ -93,6 +98,9 @@ export function VariantDisplayRow({
     : null;
   const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
   const hasVariantDiscount = hasDiscount(variant);
+  const editLabel = isSimpleDefaultSku ? "Edit product SKU" : "Edit option";
+  const sizeLabel = variant.size || (isSimpleDefaultSku ? "No size" : "—");
+  const colorLabel = variant.color || (isSimpleDefaultSku ? "No color" : "—");
 
   return (
     <TableRow
@@ -120,12 +128,12 @@ export function VariantDisplayRow({
           {variant.sku}
           {isSimpleDefaultSku && (
             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-900/30 dark:text-sky-300">
-              SIMPLE SKU
+              Product SKU
             </Badge>
           )}
           {!inventoryTracked && (
             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300">
-              NO LIMIT
+              No stock limit
             </Badge>
           )}
           {hasVariantDiscount && (
@@ -157,9 +165,9 @@ export function VariantDisplayRow({
         )}
       </TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{variant.size || (isSimpleDefaultSku ? "Default" : "—")}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{sizeLabel}</TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{variant.color || (isSimpleDefaultSku ? "Default" : "—")}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{colorLabel}</TableCell>
 
       <TableCell className="py-2 text-xs text-muted-foreground">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
 
@@ -213,50 +221,68 @@ export function VariantDisplayRow({
         <span suppressHydrationWarning>{formatDate(variant.updatedAt)}</span>
       </TableCell>
 
-      <TableCell className="text-right pr-3 py-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity"
-              disabled={isAnyRowEditing}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-              <span className="sr-only">Option actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[160px]">
-            <DropdownMenuItem onClick={() => onEdit(variant.id)}>
-              <Pencil className="mr-2 h-3.5 w-3.5" />
-              Edit Option
-            </DropdownMenuItem>
-            {!isProtectedDefaultSku && (
-              <DropdownMenuItem onClick={() => onDuplicate(variant.id)}>
-                <Copy className="mr-2 h-3.5 w-3.5" />
-                Duplicate
+      <TableCell className="pr-3 py-2">
+        <div className="flex items-center justify-end gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={editLabel}
+                disabled={isAnyRowEditing}
+                onClick={() => onEdit(variant.id)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{editLabel}</TooltipContent>
+          </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity"
+                disabled={isAnyRowEditing}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+                <span className="sr-only">Option actions</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[160px]">
+              <DropdownMenuItem onClick={() => onEdit(variant.id)}>
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                {editLabel}
               </DropdownMenuItem>
-            )}
-            {variant.barcode && (
-              <DropdownMenuItem onClick={() => printBarcodeLabel(variant, productName)}>
-                <Printer className="mr-2 h-3.5 w-3.5" />
-                Print Label
-              </DropdownMenuItem>
-            )}
-            {!isProtectedDefaultSku && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => onDelete(variant.id)}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Delete Option
+              {!isProtectedDefaultSku && (
+                <DropdownMenuItem onClick={() => onDuplicate(variant.id)}>
+                  <Copy className="mr-2 h-3.5 w-3.5" />
+                  Duplicate
                 </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              )}
+              {variant.barcode && (
+                <DropdownMenuItem onClick={() => printBarcodeLabel(variant, productName)}>
+                  <Printer className="mr-2 h-3.5 w-3.5" />
+                  Print Label
+                </DropdownMenuItem>
+              )}
+              {!isProtectedDefaultSku && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onDelete(variant.id)}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    Delete option
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </TableCell>
     </TableRow>
   );

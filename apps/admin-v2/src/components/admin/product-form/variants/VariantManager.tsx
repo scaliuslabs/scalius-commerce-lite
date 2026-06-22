@@ -53,7 +53,7 @@ function SimpleSkuTransitionSummary({
           <PackageCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-              <span>Current simple SKU</span>
+              <span>Product SKU</span>
               <Badge variant="outline" className="h-5 border-sky-300 bg-white/70 px-1.5 text-[10px] text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">
                 Protected
               </Badge>
@@ -460,7 +460,7 @@ export function VariantManager({
 
   const isFirstOptionSetup = variantMode.mode === "simple" && isAdding;
   const description = isFirstOptionSetup
-    ? "Create the first size or color choice. The simple SKU stays protected while option SKUs take over selling."
+    ? "Create the first size or color choice. The product SKU stays protected while option SKUs take over selling."
     : "Manage customer choices, option-specific pricing, and stock.";
 
   return (
