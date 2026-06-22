@@ -235,6 +235,77 @@ describe("admin setup guard cache", () => {
     expect(db.sessionBind).toHaveBeenCalledWith("token");
   });
 
+  it("redirects password-onboarding sessions to reset before RBAC", async () => {
+    const db = createAdminGuardDb({
+      sessionId: "session_1",
+      userId: "user_1",
+      name: "Invited Admin",
+      email: "invite@example.com",
+      role: "admin",
+      image: null,
+      twoFactorEnabled: 0,
+      mustChangePassword: 1,
+      mustEnrollTwoFactor: 1,
+      twoFactorVerified: 0,
+      isSuperAdmin: 0,
+    });
+    mocks.cfEnv.DB = db.db;
+    mocks.getRequestHeader.mockReturnValue(`better-auth.session_token=${await signCookieValue("token")}`);
+    const { adminRouteGuard } = await import("./auth.fns");
+
+    await expect(adminRouteGuard()).rejects.toEqual({
+      redirect: { to: "/auth/forgot-password" },
+    });
+
+    expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
+  });
+
+  it("redirects 2FA-onboarding sessions to setup before RBAC", async () => {
+    const db = createAdminGuardDb({
+      sessionId: "session_1",
+      userId: "user_1",
+      name: "Invited Admin",
+      email: "invite@example.com",
+      role: "admin",
+      image: null,
+      twoFactorEnabled: 0,
+      mustChangePassword: 0,
+      mustEnrollTwoFactor: 1,
+      twoFactorVerified: 0,
+      isSuperAdmin: 0,
+    });
+    mocks.cfEnv.DB = db.db;
+    mocks.getRequestHeader.mockReturnValue(`better-auth.session_token=${await signCookieValue("token")}`);
+    const { adminRouteGuard } = await import("./auth.fns");
+
+    await expect(adminRouteGuard()).rejects.toEqual({
+      redirect: { to: "/auth/setup-2fa" },
+    });
+
+    expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
+  });
+
+  it("lets password-onboarding sessions request a reset link", async () => {
+    const db = createAdminGuardDb({
+      sessionId: "session_1",
+      userId: "user_1",
+      name: "Invited Admin",
+      email: "invite@example.com",
+      role: "admin",
+      image: null,
+      twoFactorEnabled: 0,
+      mustChangePassword: 1,
+      mustEnrollTwoFactor: 1,
+      twoFactorVerified: 0,
+      isSuperAdmin: 0,
+    });
+    mocks.cfEnv.DB = db.db;
+    mocks.getRequestHeader.mockReturnValue(`better-auth.session_token=${await signCookieValue("token")}`);
+    const { redirectIfAuthenticated } = await import("./auth.fns");
+
+    await expect(redirectIfAuthenticated()).resolves.toBeNull();
+  });
+
   it("returns no session without querying session state when no cookie is present", async () => {
     const { getSessionInfo } = await import("./auth.fns");
 

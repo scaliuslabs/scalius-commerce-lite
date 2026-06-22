@@ -30,6 +30,8 @@ interface BetterAuthUser {
   banReason?: string | null;
   banExpires?: Date | null;
   twoFactorEnabled?: boolean | null;
+  mustChangePassword?: boolean | null;
+  mustEnrollTwoFactor?: boolean | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -2,6 +2,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, admin } from "better-auth/plugins";
+import { eq } from "drizzle-orm";
 import { getDb } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -89,23 +90,46 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
         }, emailRuntimeContext);
       },
       // Password reset callback
-      sendResetPassword: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
+      sendResetPassword: async ({ user, url }: { user: { id: string; email: string; name: string }; url: string }) => {
         const { sendEmail } = await import("../integrations/email");
+        let isAdminInviteSetup = false;
+        try {
+          const inviteState = await db
+            .select({
+              role: schema.user.role,
+              mustChangePassword: schema.user.mustChangePassword,
+            })
+            .from(schema.user)
+            .where(eq(schema.user.id, user.id))
+            .get();
+          isAdminInviteSetup = inviteState?.role === "admin" && inviteState.mustChangePassword === true;
+        } catch (error) {
+          console.warn("[Auth] Could not resolve reset-email onboarding state:", error instanceof Error ? error.message : "Unknown error");
+        }
+        const subject = isAdminInviteSetup
+          ? `Set up your ${appName} admin account`
+          : `Reset your password for ${appName}`;
+        const heading = isAdminInviteSetup ? "Set up your admin account" : "Reset your password";
+        const intro = isAdminInviteSetup
+          ? "You have been invited to Scalius Commerce admin. Click the button below to choose your password."
+          : "We received a request to reset your password. Click the button below to create a new password.";
+        const buttonLabel = isAdminInviteSetup ? "Set Password" : "Reset Password";
         await sendEmail({
           to: user.email,
-          subject: `Reset your password for ${appName}`,
+          subject,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>Reset your password</h2>
+              <h2>${heading}</h2>
               <p>Hi ${escapeHtml(user.name)},</p>
-              <p>We received a request to reset your password. Click the button below to create a new password:</p>
+              <p>${intro}</p>
               <p style="margin: 30px 0;">
                 <a href="${url}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                  Reset Password
+                  ${buttonLabel}
                 </a>
               </p>
               <p>Or copy and paste this link in your browser:</p>
               <p style="color: #666; word-break: break-all;">${url}</p>
+              ${isAdminInviteSetup ? "<p>After choosing a password, you will need to enable two-factor authentication before admin access is allowed.</p>" : ""}
               <p>This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.</p>
               <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
               <p style="color: #999; font-size: 12px;">
@@ -114,6 +138,12 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
             </div>
           `,
         }, emailRuntimeContext);
+      },
+      onPasswordReset: async ({ user }: { user: { id: string } }) => {
+        await db
+          .update(schema.user)
+          .set({ mustChangePassword: false, updatedAt: new Date() })
+          .where(eq(schema.user.id, user.id));
       },
     },
     session: {

@@ -15,13 +15,11 @@ import {
     markAdminSetupClaimFailed,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
-import { sendAdminInviteEmail } from "@scalius/core/integrations/email";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
-import { getEncryptionKey } from "../../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type BetterAuthHeaders = Headers & { getSetCookie?: () => string[] };
@@ -66,8 +64,7 @@ function getSessionTokenFromSetCookie(headers: Headers | undefined, auth: unknow
     return undefined;
 }
 
-// Generate a secure random password
-function generateTempPassword(length = 16): string {
+function generateBootstrapPassword(length = 32): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
     let password = "";
     const randomValues = new Uint8Array(length);
@@ -89,6 +86,8 @@ const adminUserSchema = z.object({
     emailVerified: z.boolean(),
     image: z.string().nullable(),
     twoFactorEnabled: z.boolean(),
+    mustChangePassword: z.boolean(),
+    mustEnrollTwoFactor: z.boolean(),
     isSuperAdmin: z.boolean(),
     createdAt: z.union([z.string(), z.number()]),
     roles: z.array(z.object({ id: z.string(), name: z.string(), displayName: z.string() })),
@@ -118,6 +117,8 @@ app.openapi(listUsersRoute, async (c) => {
                 emailVerified: user.emailVerified,
                 image: user.image,
                 twoFactorEnabled: user.twoFactorEnabled,
+                mustChangePassword: user.mustChangePassword,
+                mustEnrollTwoFactor: user.mustEnrollTwoFactor,
                 isSuperAdmin: user.isSuperAdmin,
                 createdAt: user.createdAt
             })
@@ -178,7 +179,19 @@ const createUserRoute = createRoute({
         body: { content: { "application/json": { schema: createAdminSchema } } }
     },
     responses: {
-        201: { description: "Admin user created", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), user: z.object({ id: z.string(), name: z.string(), email: z.string() }) })) } } },
+        201: {
+            description: "Admin user created",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        message: z.string(),
+                        user: z.object({ id: z.string(), name: z.string(), email: z.string() }),
+                        emailFailed: z.boolean().optional(),
+                        onboardingRequired: z.boolean(),
+                    }))
+                }
+            }
+        },
         ...errorResponses,
     }
 });
@@ -200,10 +213,10 @@ app.openapi(createUserRoute, async (c) => {
         const existingUser = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).get();
         if (existingUser) throw new ConflictError("A user with this email already exists");
 
-        const tempPassword = generateTempPassword();
+        const bootstrapPassword = generateBootstrapPassword();
 
         const signUpResult = await auth.api.signUpEmail({
-            body: { name, email, password: tempPassword }
+            body: { name, email, password: bootstrapPassword }
         });
 
         if (!signUpResult || !signUpResult.user) {
@@ -212,42 +225,49 @@ app.openapi(createUserRoute, async (c) => {
 
         await db
             .update(user)
-            .set({ role: "admin", emailVerified: true })
+            .set({
+                role: "admin",
+                emailVerified: true,
+                mustChangePassword: true,
+                mustEnrollTwoFactor: true,
+            })
             .where(eq(user.id, signUpResult.user.id));
 
         if (roleId) {
             await assignRoleToUser(db, signUpResult.user.id, roleId, sessionUser.id, env.CACHE as KVNamespace | undefined);
         }
 
-        const baseUrl = env.BETTER_AUTH_URL || env.PUBLIC_API_BASE_URL;
-        if (!baseUrl) throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
-        const loginUrl = `${baseUrl}/auth/login`;
+        if (!env.BETTER_AUTH_URL && !env.PUBLIC_API_BASE_URL) {
+            throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
+        }
 
         let emailFailed = false;
         try {
-            await sendAdminInviteEmail(email, sessionUser.name, tempPassword, loginUrl, {
-                db,
-                env: env as unknown as Record<string, unknown>,
-                encryptionKey: getEncryptionKey(env as unknown as Record<string, unknown>),
+            await auth.api.requestPasswordReset({
+                headers: c.req.raw.headers,
+                body: {
+                    email,
+                    redirectTo: "/auth/reset-password",
+                },
             });
         } catch (emailError: unknown) {
-            console.error("Failed to send invitation email:", emailError);
+            console.error("Failed to send admin setup email:", emailError);
             emailFailed = true;
         }
 
         if (emailFailed) {
-            // SECURITY: Never return credentials in API responses.
-            // The admin who created the user must use the "reset password" flow instead.
             return created(c, {
-                message: "Admin user created but invitation email failed to send. Please use the password reset flow to set their credentials, or check your email provider configuration.",
+                message: "Admin user created but the setup email failed to send. The account is blocked until the password reset flow is completed and 2FA is enabled.",
                 user: { id: signUpResult.user.id, name, email },
-                emailFailed: true
+                emailFailed: true,
+                onboardingRequired: true,
             });
         }
 
         return created(c, {
-            message: "Admin user created successfully. An invitation email has been sent.",
-            user: { id: signUpResult.user.id, name, email }
+            message: "Admin user created successfully. A secure setup link has been sent.",
+            user: { id: signUpResult.user.id, name, email },
+            onboardingRequired: true,
         });
     } catch (error: unknown) {
         console.error("Create admin user error:", error);
@@ -321,6 +341,7 @@ const changePasswordRoute = createRoute({
 app.openapi(changePasswordRoute, async (c) => {
     try {
         const session = c.get("session");
+        const sessionUser = c.get("user");
         const env = c.env;
         const auth = createAuth(env);
         const { currentPassword, newPassword } = c.req.valid("json");
@@ -338,6 +359,12 @@ app.openapi(changePasswordRoute, async (c) => {
         appendBetterAuthSetCookies(c, result.headers);
 
         if (!result.response) throw new ValidationError("Unable to change password. Please check your current password.");
+
+        const db = c.get("db");
+        await db
+            .update(user)
+            .set({ mustChangePassword: false, updatedAt: new Date() })
+            .where(eq(user.id, sessionUser.id));
 
         return ok(c, { message: "Password changed successfully" });
     } catch (error: unknown) {
@@ -590,7 +617,11 @@ app.openapi(update2faMethodRoute, async (c) => {
     }
 
     await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, verifiedSessionId));
-    await db.update(user).set({ twoFactorMethod: method }).where(eq(user.id, sessionUser.id));
+    await db.update(user).set({
+        twoFactorMethod: method,
+        mustEnrollTwoFactor: false,
+        updatedAt: new Date(),
+    }).where(eq(user.id, sessionUser.id));
 
     return ok(c, {});
 });

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   enforceAdminSetupRateLimit: vi.fn(async () => undefined),
   markAdminSetupClaimCompleted: vi.fn(async () => undefined),
   markAdminSetupClaimFailed: vi.fn(async () => undefined),
+  assignRoleToUser: vi.fn(async () => undefined),
 }));
 
 vi.mock("@scalius/core/auth", () => ({
@@ -28,6 +29,10 @@ vi.mock("@scalius/core/auth", () => ({
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
   autoSeedRbacIfNeeded: mocks.autoSeedRbacIfNeeded,
+}));
+
+vi.mock("@scalius/core/auth/rbac/helpers", () => ({
+  assignRoleToUser: mocks.assignRoleToUser,
 }));
 
 import { errorResponseFromError } from "../../utils/api-response";
@@ -109,6 +114,8 @@ function createAdminUserListDbMock() {
       emailVerified: true,
       image: null,
       twoFactorEnabled: true,
+      mustChangePassword: false,
+      mustEnrollTwoFactor: false,
       isSuperAdmin: false,
       createdAt: 1,
     },
@@ -144,6 +151,29 @@ function createAdminUserListDbMock() {
         return { where: vi.fn(async () => []) };
       }),
     })),
+  };
+}
+
+function createAdminInviteDbMock() {
+  const getQueue = [
+    vi.fn(async () => ({ id: "role_1" })),
+    vi.fn(async () => null),
+  ];
+  const updateWhere = vi.fn(async () => undefined);
+  const updateSet = vi.fn(() => ({ where: updateWhere }));
+
+  return {
+    __getQueue: getQueue,
+    __updateSet: updateSet,
+    __updateWhere: updateWhere,
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          get: (getQueue.shift() ?? vi.fn(async () => null)),
+        })),
+      })),
+    })),
+    update: vi.fn(() => ({ set: updateSet })),
   };
 }
 
@@ -256,6 +286,87 @@ describe("admin auth management user permissions", () => {
   });
 });
 
+describe("admin auth management team invites", () => {
+  it("creates blocked invited admins and sends a one-use password setup link", async () => {
+    const db = createAdminInviteDbMock();
+    const signUpEmail = vi.fn().mockResolvedValue({
+      user: { id: "new_admin" },
+    });
+    const requestPasswordReset = vi.fn().mockResolvedValue({
+      status: true,
+      message: "If this email exists in our system, check your email for the reset link",
+    });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail,
+        requestPasswordReset,
+      },
+    });
+    const app = createTestApp(db, {
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Ops Admin",
+        email: "ops@example.com",
+        roleId: "role_1",
+      }),
+    }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(signUpEmail).toHaveBeenCalledWith({
+      body: {
+        name: "Ops Admin",
+        email: "ops@example.com",
+        password: expect.any(String),
+      },
+    });
+    const generatedPassword = signUpEmail.mock.calls[0]?.[0]?.body?.password;
+    expect(generatedPassword).toHaveLength(32);
+    expect(db.__updateSet).toHaveBeenCalledWith({
+      role: "admin",
+      emailVerified: true,
+      mustChangePassword: true,
+      mustEnrollTwoFactor: true,
+    });
+    expect(mocks.assignRoleToUser).toHaveBeenCalledWith(
+      db,
+      "new_admin",
+      "role_1",
+      "user_1",
+      undefined,
+    );
+    expect(requestPasswordReset).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      body: {
+        email: "ops@example.com",
+        redirectTo: "/auth/reset-password",
+      },
+    });
+
+    const bodyText = await response.clone().text();
+    expect(bodyText).toContain("secure setup link");
+    expect(bodyText).toContain("onboardingRequired");
+    expect(bodyText).not.toContain(String(generatedPassword));
+  });
+
+  it("keeps team invites off raw credential emails", () => {
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("requestPasswordReset");
+    expect(source).toContain("mustChangePassword: true");
+    expect(source).toContain("mustEnrollTwoFactor: true");
+    expect(source).not.toContain("sendAdminInviteEmail");
+    expect(source).not.toContain("Temporary Password");
+  });
+});
+
 describe("admin auth management 2FA completion", () => {
   it("marks the current session verified when the Better Auth session-token proof matches", async () => {
     const db = createDbMock();
@@ -325,7 +436,10 @@ describe("admin auth management 2FA method changes", () => {
     expect(response.status).toBe(200);
     expect(mocks.createAuth).not.toHaveBeenCalled();
     expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
-    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorMethod: "email" });
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      twoFactorMethod: "email",
+      mustEnrollTwoFactor: false,
+    }));
   });
 
   it("rejects a preferred method update when the same-origin proof does not match the current session", async () => {
@@ -379,7 +493,10 @@ describe("admin auth management 2FA method changes", () => {
       returnHeaders: true,
     });
     expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
-    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorMethod: "email" });
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      twoFactorMethod: "email",
+      mustEnrollTwoFactor: false,
+    }));
   });
 
   it("uses the rotated session cookie when first-time TOTP verification returns a stale token", async () => {
@@ -410,7 +527,10 @@ describe("admin auth management 2FA method changes", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=new_session_token.signature");
     expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
-    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorMethod: "totp" });
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      twoFactorMethod: "totp",
+      mustEnrollTwoFactor: false,
+    }));
   });
 
   it("rejects a preferred method update when the target method code is invalid", async () => {
@@ -434,7 +554,7 @@ describe("admin auth management 2FA method changes", () => {
 
     expect(response.status).toBe(400);
     expect(body.error?.code).toBe("VALIDATION_ERROR");
-    expect(db.__updateSet).not.toHaveBeenCalledWith({ twoFactorMethod: "totp" });
+    expect(db.__updateSet).not.toHaveBeenCalledWith(expect.objectContaining({ twoFactorMethod: "totp" }));
   });
 });
 

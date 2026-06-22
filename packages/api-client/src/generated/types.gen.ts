@@ -27291,6 +27291,8 @@ export type GetApiV1AdminAuthUsersResponses = {
                 emailVerified: boolean;
                 image: string | null;
                 twoFactorEnabled: boolean;
+                mustChangePassword: boolean;
+                mustEnrollTwoFactor: boolean;
                 isSuperAdmin: boolean;
                 createdAt: string | number;
                 roles: Array<{
@@ -27405,6 +27407,8 @@ export type PostApiV1AdminAuthUsersResponses = {
                 name: string;
                 email: string;
             };
+            emailFailed?: boolean;
+            onboardingRequired: boolean;
         };
     };
 };

@@ -28,9 +28,9 @@ Current evidence indicates 2FA setup remains optional, but enabled 2FA is enforc
 
 Current related issue: none currently tracked; re-check `apps/api/src/middleware/admin-auth.ts` and `apps/admin-v2/src/lib/auth.fns.ts` before reopening.
 
-### "Admin invite email failure exposes or logs the temporary password"
+### "Admin invite email failure exposes or logs a temporary password"
 
-Current evidence indicates invite-email failure now returns `emailFailed: true` and instructs admins to use password reset or fix email settings. The API does not return the temporary password on failure.
+Current evidence indicates team invites no longer email a raw credential. The API creates a blocked invited-admin account, sets `must_change_password` and `must_enroll_two_factor`, and asks Better Auth to send a one-use password setup link. If setup email delivery fails, the response returns `emailFailed: true` while the account remains blocked until password reset and 2FA enrollment complete.
 
 Current related issue: none currently tracked; re-check `apps/api/src/routes/admin/auth-management.ts` before reopening.
 

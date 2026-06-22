@@ -14,6 +14,8 @@ declare module "hono" {
       role?: string;
       isSuperAdmin?: boolean;
       twoFactorEnabled?: boolean;
+      mustChangePassword?: boolean;
+      mustEnrollTwoFactor?: boolean;
     };
     session: {
       id: string;

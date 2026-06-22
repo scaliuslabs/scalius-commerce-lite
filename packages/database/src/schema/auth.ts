@@ -22,6 +22,8 @@ export const user = sqliteTable("user", {
     banExpires: integer("ban_expires", { mode: "timestamp" }),
     twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).notNull().default(false),
     twoFactorMethod: text("two_factor_method"),
+    mustChangePassword: integer("must_change_password", { mode: "boolean" }).notNull().default(false),
+    mustEnrollTwoFactor: integer("must_enroll_two_factor", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -31,6 +33,7 @@ export const user = sqliteTable("user", {
 }, (table) => [
     index("user_role_idx").on(table.role),
     index("user_super_admin_idx").on(table.isSuperAdmin),
+    index("user_admin_onboarding_idx").on(table.role, table.mustChangePassword, table.mustEnrollTwoFactor),
 ]);
 
 export const session = sqliteTable("session", {

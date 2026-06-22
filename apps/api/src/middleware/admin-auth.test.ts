@@ -21,12 +21,22 @@ vi.mock("@scalius/core/auth/rbac/helpers", () => ({
 
 import { adminAuthMiddleware } from "./admin-auth";
 
+let currentAuthUser: Record<string, unknown> = {};
+
 function mockBetterAuthSession(
   overrides: {
     user?: Record<string, unknown>;
     session?: Record<string, unknown>;
   } = {},
 ) {
+  currentAuthUser = {
+    id: "admin_1",
+    email: "admin@example.com",
+    name: "Admin",
+    role: "admin",
+    twoFactorEnabled: false,
+    ...overrides.user,
+  };
   mocks.getAuth.mockReturnValue({
     api: {
       getSession: vi.fn().mockResolvedValue({
@@ -35,28 +45,46 @@ function mockBetterAuthSession(
           twoFactorVerified: true,
           ...overrides.session,
         },
-        user: {
-          id: "admin_1",
-          email: "admin@example.com",
-          name: "Admin",
-          role: "admin",
-          twoFactorEnabled: false,
-          ...overrides.user,
-        },
+        user: currentAuthUser,
       }),
     },
   });
 }
 
+function createDbMock(liveUser: Record<string, unknown> = {}) {
+  const row = {
+    id: currentAuthUser.id ?? "admin_1",
+    email: currentAuthUser.email ?? "admin@example.com",
+    name: currentAuthUser.name ?? "Admin",
+    role: currentAuthUser.role ?? "admin",
+    isSuperAdmin: currentAuthUser.isSuperAdmin ?? false,
+    twoFactorEnabled: currentAuthUser.twoFactorEnabled ?? false,
+    mustChangePassword: currentAuthUser.mustChangePassword ?? false,
+    mustEnrollTwoFactor: currentAuthUser.mustEnrollTwoFactor ?? false,
+    ...liveUser,
+  };
+  return {
+    id: "db",
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          get: vi.fn(async () => row),
+        })),
+      })),
+    })),
+  };
+}
+
 function createContext(
   pathname: string,
   method = "GET",
-  options: { headers?: HeadersInit; env?: Record<string, unknown> } = {},
+  options: { headers?: HeadersInit; env?: Record<string, unknown>; db?: unknown; liveUser?: Record<string, unknown> } = {},
 ) {
   const request = new Request(`https://api.scalius.test${pathname}`, {
     method,
     headers: options.headers,
   });
+  const db = options.db ?? createDbMock(options.liveUser);
 
   return {
     env: options.env ?? {},
@@ -68,7 +96,7 @@ function createContext(
       header: (name: string) => request.headers.get(name) ?? undefined,
     },
     set: vi.fn(),
-    get: vi.fn((key: string) => (key === "db" ? { id: "db" } : undefined)),
+    get: vi.fn((key: string) => (key === "db" ? db : undefined)),
     header: vi.fn(),
   };
 }
@@ -112,7 +140,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     );
 
     expect(mocks.getUserPermissions).toHaveBeenCalledWith(
-      { id: "db" },
+      expect.objectContaining({ id: "db" }),
       "admin_1",
       cache,
     );
@@ -193,6 +221,76 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
     expect(context.header).not.toHaveBeenCalledWith("X-New-Token", expect.any(String));
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects password-onboarding admins before RBAC", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/products", "GET", {
+          liveUser: { mustChangePassword: true },
+        }) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Password setup required before admin access",
+    });
+
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("allows only the password-change endpoint while password onboarding is pending", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/auth/change-password", "POST", {
+        liveUser: { mustChangePassword: true },
+      }) as never,
+      next,
+    );
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects 2FA-onboarding admins before RBAC except setup endpoints", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    const blockedNext = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/products", "GET", {
+          liveUser: { mustEnrollTwoFactor: true, twoFactorEnabled: false },
+        }) as never,
+        blockedNext,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Two-factor setup required before admin access",
+    });
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(blockedNext).not.toHaveBeenCalled();
+
+    for (const [pathname, method] of [
+      ["/api/v1/admin/auth/2fa/info", "GET"],
+      ["/api/v1/admin/auth/2fa/method", "POST"],
+    ] as const) {
+      mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+      const next = vi.fn().mockResolvedValue(undefined);
+      await adminAuthMiddleware(
+        createContext(pathname, method, {
+          liveUser: { mustEnrollTwoFactor: true, twoFactorEnabled: false },
+        }) as never,
+        next,
+      );
+      expect(next).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("rejects an admin API request when the session has not completed 2FA", async () => {

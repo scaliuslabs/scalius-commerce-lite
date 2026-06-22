@@ -103,6 +103,8 @@ export const getSessionInfo = createServerFn().handler(async () => {
       email: authResult.user.email,
       role: authResult.user.role,
       twoFactorEnabled: authResult.user.twoFactorEnabled,
+      mustChangePassword: authResult.user.mustChangePassword,
+      mustEnrollTwoFactor: authResult.user.mustEnrollTwoFactor,
     },
     session: {
       id: authResult.session.id,
@@ -158,7 +160,13 @@ export const loginPageGuard = createServerFn().handler(async () => {
   );
   if (authResult?.session && authResult?.user) {
     const twoFactorVerified = authResult.session.twoFactorVerified === true;
+    if (authResult.user.mustChangePassword) {
+      throw redirect({ to: "/auth/forgot-password" });
+    }
     if (!authResult.user.twoFactorEnabled || twoFactorVerified) {
+      if (authResult.user.mustEnrollTwoFactor && !authResult.user.twoFactorEnabled) {
+        throw redirect({ to: "/auth/setup-2fa" });
+      }
       throw redirect({ to: "/admin" });
     }
     throw redirect({ to: "/auth/two-factor" });
@@ -200,6 +208,17 @@ export const adminRouteGuard = createServerFn().handler(async () => {
     throw redirect({ to: "/auth/login" });
   }
 
+  if (authResult.user.mustChangePassword) {
+    throw redirect({ to: "/auth/forgot-password" });
+  }
+
+  if (
+    authResult.user.mustEnrollTwoFactor &&
+    !authResult.user.twoFactorEnabled
+  ) {
+    throw redirect({ to: "/auth/setup-2fa" });
+  }
+
   // Check 2FA
   if (
     authResult.user.twoFactorEnabled &&
@@ -224,6 +243,8 @@ export const adminRouteGuard = createServerFn().handler(async () => {
       image: authResult.user.image ?? null,
       role: authResult.user.role ?? null,
       twoFactorEnabled: authResult.user.twoFactorEnabled ?? false,
+      mustChangePassword: authResult.user.mustChangePassword ?? false,
+      mustEnrollTwoFactor: authResult.user.mustEnrollTwoFactor ?? false,
       isSuperAdmin: rbac.isSuperAdmin,
     },
     permissions: Array.from(rbac.permissions),
@@ -246,6 +267,9 @@ export const redirectIfAuthenticated = createServerFn().handler(async () => {
     env.BETTER_AUTH_SECRET,
   );
   if (authResult?.session) {
+    if (authResult.user.mustChangePassword) {
+      return null;
+    }
     throw redirect({ to: "/admin" });
   }
   return null;

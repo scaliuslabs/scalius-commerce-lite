@@ -92,6 +92,36 @@ describe("createAuth", () => {
     expect(options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
   });
 
+  it("clears invited-admin password setup after a reset token is consumed", async () => {
+    const where = vi.fn(async () => undefined);
+    const set = vi.fn(() => ({ where }));
+    const update = vi.fn(() => ({ set }));
+    mocks.getDb.mockReturnValueOnce({
+      id: "db",
+      update,
+    } as never);
+
+    createAuth({
+      BETTER_AUTH_SECRET: "test-secret",
+      PUBLIC_API_BASE_URL: "http://localhost:8787",
+    } as never);
+
+    const options = mocks.betterAuth.mock.calls[0]?.[0] as {
+      emailAndPassword?: {
+        onPasswordReset?: (input: { user: { id: string } }) => Promise<void>;
+      };
+    };
+
+    await options.emailAndPassword?.onPasswordReset?.({ user: { id: "user_1" } });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({
+      mustChangePassword: false,
+      updatedAt: expect.any(Date),
+    }));
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+
   it("does not reuse the cached auth instance when auth URLs or trusted origins change", () => {
     const first = getAuth({
       BETTER_AUTH_SECRET: "test-secret",

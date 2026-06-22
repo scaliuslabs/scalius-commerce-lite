@@ -28,6 +28,8 @@ function makeContext(id: string): AdminRouteContext {
       image: null,
       role: "admin",
       twoFactorEnabled: false,
+      mustChangePassword: false,
+      mustEnrollTwoFactor: false,
       isSuperAdmin: true,
     },
     permissions: ["dashboard.view"],

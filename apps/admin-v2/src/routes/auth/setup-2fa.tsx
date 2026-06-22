@@ -11,6 +11,10 @@ export const Route = createFileRoute("/auth/setup-2fa")({
       throw redirect({ to: "/auth/login" });
     }
 
+    if (session.user.mustChangePassword) {
+      throw redirect({ to: "/auth/forgot-password" });
+    }
+
     // 2FA already enabled
     if (session.user.twoFactorEnabled) {
       if (session.session.twoFactorVerified) {
