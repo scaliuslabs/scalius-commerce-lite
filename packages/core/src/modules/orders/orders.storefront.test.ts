@@ -4,7 +4,7 @@ import { InventoryPool, PaymentMethod } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
 import { createStorefrontOrder, validateStorefrontDeliveryPreflight } from "./orders.storefront";
 import { validateStorefrontCartItems } from "./cart-validation";
-import type { CreateStorefrontOrderInput } from "./orders.types";
+import type { CreateStorefrontOrderCustomerIdentity, CreateStorefrontOrderInput } from "./orders.types";
 
 interface ProductRow {
   id: string;
@@ -159,6 +159,7 @@ function createDbMock(readResultBatches: unknown[][], validationProducts: Produc
 
 async function placeOrder({
   inputOverrides,
+  customerIdentity,
   products = [createProduct()],
   variants = [createVariant()],
   locations = [
@@ -168,6 +169,7 @@ async function placeOrder({
   shippingMethods = [createShippingMethod()],
 }: {
   inputOverrides?: Partial<CreateStorefrontOrderInput>;
+  customerIdentity?: CreateStorefrontOrderCustomerIdentity;
   products?: ProductRow[];
   variants?: VariantRow[];
   locations?: LocationRow[];
@@ -189,10 +191,31 @@ async function placeOrder({
     "http://localhost:8787/api/v1/orders",
     vi.fn(async () => null),
     vi.fn(() => 0),
+    undefined,
+    undefined,
+    undefined,
+    customerIdentity,
   );
 }
 
 describe("createStorefrontOrder product availability verification", () => {
+  it("keeps true guest checkout orders detached from customer accounts", async () => {
+    const result = await placeOrder();
+
+    expect(result.queuePayload.existingCustomer).toBeNull();
+  });
+
+  it("binds storefront order payloads only to explicit authenticated customer identity", async () => {
+    const result = await placeOrder({
+      customerIdentity: {
+        customerId: "customer_session_owner",
+        source: "authenticated",
+      },
+    });
+
+    expect(result.queuePayload.existingCustomer).toEqual({ id: "customer_session_owner" });
+  });
+
   it("rejects inactive products from stale carts or direct API payloads", async () => {
     await expect(
       placeOrder({

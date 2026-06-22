@@ -409,6 +409,7 @@ describe("create order commit/KV ordering", () => {
         cityName: "Dhaka",
         zoneName: "Mirpur",
       }),
+      undefined,
     );
     expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
       expect.anything(),
@@ -1006,6 +1007,134 @@ describe("create order commit/KV ordering", () => {
     expect(response.status, responseText).toBe(201);
     expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "session_1", undefined);
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
+  });
+
+  it("rejects signed-in checkout with a mismatched phone even when guest checkout is enabled", async () => {
+    mocks.getCustomerBySession.mockResolvedValue({
+      token: "session_guest_enabled_mismatch",
+      email: "buyer@example.com",
+      name: "Signed In Buyer",
+      phone: "+8801812345678",
+      customerId: "customer_signed_in",
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 86_400_000,
+    });
+    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: true });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Customer-Session": "session_guest_enabled_mismatch",
+        },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Checkout phone must match the signed-in customer phone.",
+      },
+    });
+    expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "session_guest_enabled_mismatch", undefined);
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale customer sessions with a recoverable code when guest checkout is enabled", async () => {
+    mocks.getCustomerBySession.mockResolvedValue(null);
+    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: true });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Customer-Session": "expired_session",
+        },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: "CUSTOMER_SESSION_STALE",
+        message: "Your session expired. Please sign in again or continue as a guest.",
+      },
+    });
+    expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "expired_session", undefined);
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("binds signed-in checkout to the session customer when guest checkout is enabled", async () => {
+    mocks.getCustomerBySession.mockResolvedValue({
+      token: "session_guest_enabled_match",
+      email: "buyer@example.com",
+      name: "Signed In Buyer",
+      phone: "+8801712345678",
+      customerId: "customer_signed_in",
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 86_400_000,
+    });
+    mocks.createStorefrontOrder.mockResolvedValue({
+      checkoutToken: "chk_order_session_owner",
+      orderId: "order_session_owner",
+      paymentMethod: "cod",
+      totalAmount: 100,
+      queuePayload: { type: "order.ingest", orderData: { id: "order_session_owner" } },
+    });
+    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: true });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Customer-Session": "session_guest_enabled_match",
+        },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    const responseText = await response.clone().text();
+    expect(response.status, responseText).toBe(201);
+    expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "session_guest_enabled_match", undefined);
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerPhone: "+8801712345678" }),
+      expect.any(String),
+      expect.any(Function),
+      expect.any(Function),
+      expect.objectContaining({
+        orderId: "order_1",
+        checkoutToken: "chk_order_1",
+      }),
+      expect.objectContaining({ valid: true }),
+      expect.objectContaining({ cityName: "Dhaka", zoneName: "Mirpur" }),
+      {
+        customerId: "customer_signed_in",
+        source: "authenticated",
+      },
+    );
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
   it("rejects authenticated checkout if the forwarded session phone differs from order phone", async () => {

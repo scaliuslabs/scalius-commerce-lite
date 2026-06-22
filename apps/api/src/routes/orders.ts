@@ -33,7 +33,7 @@ import {
   type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
 import { invalidateProductAvailabilityCaches } from "../utils/cache-invalidation";
-import { NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
+import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
 import { getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
@@ -52,6 +52,10 @@ const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
   sslcommerz: "SSLCommerz",
   polar: "Polar",
 };
+type CheckoutCustomerIdentity = {
+  customerId: string;
+  source: "authenticated";
+} | null;
 
 function getOptionalExecutionContext(c: { executionCtx?: ExecutionContext }): ExecutionContext | undefined {
   try {
@@ -96,7 +100,7 @@ async function assertCheckoutOrderPolicy(
   },
   customerPhone: string,
   paymentMethod: CheckoutPaymentMethodId,
-): Promise<void> {
+): Promise<CheckoutCustomerIdentity> {
   const db = c.get("db");
   const [checkoutSettings, allowedCountriesConfig] = await Promise.all([
     db
@@ -147,12 +151,12 @@ async function assertCheckoutOrderPolicy(
     throw new ValidationError(`${PAYMENT_METHOD_LABELS[paymentMethod]} is not available for the current checkout settings.`);
   }
 
-  if (checkoutSettings?.guestCheckoutEnabled ?? true) {
-    return;
-  }
-
   const sessionToken = getCustomerSessionTokenFromRequest(c);
   if (!sessionToken) {
+    if (checkoutSettings?.guestCheckoutEnabled ?? true) {
+      return null;
+    }
+
     throw new UnauthorizedError("Please sign in before checkout.");
   }
 
@@ -162,12 +166,21 @@ async function assertCheckoutOrderPolicy(
     getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
   );
   if (!session?.customerId) {
+    if (checkoutSettings?.guestCheckoutEnabled ?? true) {
+      throw new AppError(401, "CUSTOMER_SESSION_STALE", "Your session expired. Please sign in again or continue as a guest.");
+    }
+
     throw new UnauthorizedError("Please sign in before checkout.");
   }
 
   if (!session.phone || session.phone !== customerPhone) {
     throw new ValidationError("Checkout phone must match the signed-in customer phone.");
   }
+
+  return {
+    customerId: session.customerId,
+    source: "authenticated",
+  };
 }
 
 const unixToDate = (timestamp: number | null): Date | null => {
@@ -729,7 +742,11 @@ app.openapi(createOrderRoute, async (c) => {
       cartValidation,
     );
 
-    await assertCheckoutOrderPolicy(c, data.customerPhone, data.paymentMethod as CheckoutPaymentMethodId);
+    const checkoutCustomerIdentity = await assertCheckoutOrderPolicy(
+      c,
+      data.customerPhone,
+      data.paymentMethod as CheckoutPaymentMethodId,
+    );
 
     // Rate limit new or reclaimable order attempts without punishing legitimate shared-IP buyers.
     const kv = c.env.CACHE as KVNamespace | undefined;
@@ -790,6 +807,7 @@ app.openapi(createOrderRoute, async (c) => {
       },
       cartValidation,
       deliveryPreflight,
+      checkoutCustomerIdentity ?? undefined,
     );
 
     const kvKey = `checkout_status:${result.checkoutToken}`;

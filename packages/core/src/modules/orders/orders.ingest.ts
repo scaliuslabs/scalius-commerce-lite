@@ -4,14 +4,13 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
     customers,
-    customerHistory,
     discounts,
     discountUsage,
     orderItems,
     orderNotificationOutbox,
     orders,
 } from "@scalius/database/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
@@ -99,65 +98,27 @@ async function loadExistingCommittedOrder(db: Database, orderId: string) {
         .get();
 }
 
-async function loadCustomerByPhone(db: Database, phone: string): Promise<{ id: string } | undefined> {
+async function loadActiveCustomerById(db: Database, id: string): Promise<{ id: string } | undefined> {
     return db
         .select({ id: customers.id })
         .from(customers)
-        .where(eq(customers.phone, phone))
+        .where(and(eq(customers.id, id), isNull(customers.deletedAt)))
         .get();
 }
 
 async function resolveCustomerForOrder(
     db: Database,
     payload: OrderIngestQueuePayload,
-): Promise<{ id: string; created: boolean }> {
-    const od = payload.orderData;
-    const existing = await loadCustomerByPhone(db, od.customerPhone);
-    if (existing) return { id: existing.id, created: false };
-
-    const customerId = "cust_" + nanoid();
-    try {
-        await safeBatch(db, [
-            db.insert(customers).values({
-                id: customerId,
-                name: od.customerName,
-                phone: od.customerPhone,
-                email: od.customerEmail,
-                address: od.shippingAddress,
-                city: od.city,
-                zone: od.zone,
-                area: od.area,
-                cityName: od.cityName,
-                zoneName: od.zoneName,
-                areaName: od.areaName,
-                totalOrders: 0,
-                totalSpent: 0,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }),
-            db.insert(customerHistory).values({
-                id: "hist_" + nanoid(),
-                customerId,
-                name: od.customerName,
-                email: od.customerEmail,
-                phone: od.customerPhone,
-                address: od.shippingAddress,
-                city: od.city,
-                zone: od.zone,
-                area: od.area,
-                cityName: od.cityName,
-                zoneName: od.zoneName,
-                areaName: od.areaName,
-                changeType: "created",
-                createdAt: sql`unixepoch()`,
-            }),
-        ]);
-        return { id: customerId, created: true };
-    } catch (error) {
-        const raced = await loadCustomerByPhone(db, od.customerPhone);
-        if (raced) return { id: raced.id, created: false };
-        throw error;
+): Promise<{ id: string } | null> {
+    if (payload.existingCustomer?.id) {
+        const authenticatedCustomer = await loadActiveCustomerById(db, payload.existingCustomer.id);
+        if (!authenticatedCustomer) {
+            throw new ValidationError("Customer account is no longer active. Please sign in again.");
+        }
+        return { id: authenticatedCustomer.id };
     }
+
+    return null;
 }
 
 async function assertDiscountUsageStillAvailable(
@@ -298,11 +259,14 @@ async function releaseReservedEntries(db: Database, entries: ReservationEntry[])
 function buildOrderWriteBatch(
     db: Database,
     payload: OrderIngestQueuePayload,
-    customerId: string,
+    customerId: string | null,
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
-    const writes: SQLiteBatchItem[] = [
-        db
+    const writes: SQLiteBatchItem[] = [];
+
+    if (customerId) {
+        writes.push(
+            db
             .update(customers)
             .set({
                 totalOrders: sql`${customers.totalOrders} + 1`,
@@ -311,6 +275,10 @@ function buildOrderWriteBatch(
                 updatedAt: sql`unixepoch()`,
             })
             .where(eq(customers.id, customerId)),
+        );
+    }
+
+    writes.push(
         db.insert(orders).values({
             id: od.id,
             customerName: od.customerName,
@@ -339,7 +307,7 @@ function buildOrderWriteBatch(
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),
-    ];
+    );
 
     if (payload.items.length > 0) {
         writes.push(
@@ -410,7 +378,7 @@ export async function commitStorefrontOrderPayload(
     const reservedEntries = await reserveOrderInventory(db, payload);
 
     try {
-        const writes = buildOrderWriteBatch(db, payload, customer.id);
+        const writes = buildOrderWriteBatch(db, payload, customer?.id ?? null);
         await safeBatch(db, writes);
     } catch (error) {
         const discountConstraintError = getDiscountUsageConstraintError(error);
@@ -421,7 +389,7 @@ export async function commitStorefrontOrderPayload(
     await setStorefrontCheckoutStatus(env, payload.checkoutToken, "completed", payload.orderData.id);
     return {
         orderId: payload.orderData.id,
-        customerId: customer.id,
+        customerId: customer?.id ?? null,
         alreadyCommitted: false,
     };
 }

@@ -108,6 +108,11 @@ export interface CreateStorefrontOrderIdentity {
     checkoutToken: string;
 }
 
+export interface CreateStorefrontOrderCustomerIdentity {
+    customerId: string;
+    source: "authenticated";
+}
+
 export interface CreateStorefrontOrderResult {
     checkoutToken: string;
     orderId: string;

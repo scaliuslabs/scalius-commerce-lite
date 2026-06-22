@@ -67,13 +67,15 @@ function createPayload(overrides: Partial<OrderIngestQueuePayload> = {}): OrderI
   };
 }
 
-function createDbMock(): Database {
+function createDbMock(options: {
+  activeCustomer?: { id: string } | null;
+} = {}): Database {
   const createReadQuery = (projection: Record<string, unknown>) => ({
     where: vi.fn(() => ({
       get: vi.fn(async () => {
         if ("customerId" in projection) return undefined;
         if ("maxUses" in projection) return { maxUses: null, limitOnePerCustomer: false };
-        if ("id" in projection) return { id: "cust_existing" };
+        if ("id" in projection) return options.activeCustomer === undefined ? { id: "cust_existing" } : options.activeCustomer;
         return undefined;
       }),
       limit: vi.fn(() => ({
@@ -126,6 +128,42 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       [{ variantId: "variant_1", quantity: 2, pool: "regular", orderId: "order_discount" }],
       "order_discount",
     );
+  });
+
+  it("commits true guest checkout without attaching the order to a customer account", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockResolvedValue([]);
+
+    const result = await commitStorefrontOrderPayload(
+      db,
+      undefined,
+      createPayload({
+        existingCustomer: null,
+        discountUsage: null,
+        orderData: {
+          ...createPayload().orderData,
+          inventoryAction: "none",
+        },
+      }),
+    );
+
+    expect(result.customerId).toBeNull();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+  });
+
+  it("rejects authenticated checkout payloads when the customer account is no longer active", async () => {
+    const db = createDbMock({ activeCustomer: null });
+
+    await expect(commitStorefrontOrderPayload(db, undefined, createPayload()))
+      .rejects.toMatchObject({
+        name: "ValidationError",
+        message: "Customer account is no longer active. Please sign in again.",
+      });
+
+    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 
   it("maps one-per-customer trigger aborts even when D1 nests the cause", async () => {
