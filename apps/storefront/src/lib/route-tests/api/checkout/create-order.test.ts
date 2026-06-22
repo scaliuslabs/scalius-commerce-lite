@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   shouldRejectCrossOriginCookieRequest: vi.fn(),
 }));
 
-vi.mock("../../../lib/api/orders", () => ({
+vi.mock("../../../api/orders", () => ({
   createOrder: mocks.createOrder,
 }));
 
@@ -15,7 +15,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: mocks.shouldRejectCrossOriginCookieRequest,
 }));
 
-import { POST } from "./create-order";
+import { POST } from "../../../../pages/api/checkout/create-order";
 
 beforeEach(() => {
   mocks.createOrder.mockReset();
