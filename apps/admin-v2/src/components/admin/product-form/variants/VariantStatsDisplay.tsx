@@ -31,7 +31,7 @@ export function VariantStatsDisplay({ stats, symbol }: VariantStatsDisplayProps)
 
       {(stats.untrackedCount ?? 0) > 0 && (
         <span className="font-medium text-sky-700 bg-sky-50 dark:bg-sky-900/30 dark:text-sky-300 px-1 py-0 rounded border border-sky-200 dark:border-sky-900">
-          {stats.untrackedCount} Not tracked
+          {stats.untrackedCount} no stock limit
         </span>
       )}
 

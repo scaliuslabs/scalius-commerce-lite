@@ -439,6 +439,8 @@ export function getSelectionStatus(
  * Convert variant data from DOM attributes
  */
 export function parseVariantFromDOM(element: HTMLElement): Variant {
+  const rawTrackInventory = element.dataset.variantTrackInventory;
+
   return {
     id: element.dataset.variantId || "",
     size: element.dataset.variantSize || null,
@@ -454,6 +456,10 @@ export function parseVariantFromDOM(element: HTMLElement): Variant {
     discountAmount: parseInt(element.dataset.variantDiscountAmount || "0"),
     stock: parseInt(element.dataset.variantStock || "0"),
     reservedStock: parseInt(element.dataset.variantReservedStock || "0"),
+    trackInventory:
+      rawTrackInventory === undefined
+        ? undefined
+        : rawTrackInventory !== "false",
     colorSortOrder: parseInt(element.dataset.variantColorSortOrder || "0"),
     sizeSortOrder: parseInt(element.dataset.variantSizeSortOrder || "0"),
   };

@@ -17,6 +17,9 @@ const VARIANT_TABLE_SOURCE = fileURLToPath(
 const VARIANT_ROW_SOURCE = fileURLToPath(
   new URL("./VariantDisplayRow.tsx", import.meta.url),
 );
+const VARIANT_STATS_SOURCE = fileURLToPath(
+  new URL("./VariantStatsDisplay.tsx", import.meta.url),
+);
 
 describe("VariantManager product mode boundaries", () => {
   it("routes one protected no-option SKU to the simple inventory panel", () => {
@@ -51,9 +54,11 @@ describe("VariantManager product mode boundaries", () => {
     const toolbarSource = readFileSync(VARIANT_TOOLBAR_SOURCE, "utf8");
     const tableSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
     const rowSource = readFileSync(VARIANT_ROW_SOURCE, "utf8");
+    const statsSource = readFileSync(VARIANT_STATS_SOURCE, "utf8");
 
     expect(simpleSource).toContain("Simple Product SKU");
     expect(simpleSource).toContain("One SKU, no size or color choices.");
+    expect(simpleSource).toContain("No stock limit");
     expect(simpleSource).toContain("Set up options");
     expect(simpleSource).toContain("Price and discount stay in Pricing.");
     expect(simpleSource).not.toContain('name="price"');
@@ -64,6 +69,13 @@ describe("VariantManager product mode boundaries", () => {
     expect(rowSource).toContain("Option actions");
     expect(rowSource).toContain("Edit Option");
     expect(rowSource).toContain("Delete Option");
+    expect(rowSource).toContain("SIMPLE SKU");
+    expect(rowSource).toContain("NO LIMIT");
+    expect(rowSource).toContain("No stock limit");
+    expect(rowSource).not.toContain("NOT TRACKED");
+    expect(rowSource).not.toContain("ALWAYS");
+    expect(statsSource).toContain("no stock limit");
+    expect(statsSource).not.toContain("Not tracked");
   });
 
   it("saves dirty simple SKU changes before entering first option setup", () => {
