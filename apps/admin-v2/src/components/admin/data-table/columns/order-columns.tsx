@@ -2,7 +2,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
 import type { OrderListItem } from "@scalius/core/modules/orders";
 import { Badge } from "~/components/ui/badge";
-import { PaymentStatusBadge } from "~/components/admin/shared/StatusBadges";
+import {
+  FulfillmentStatusBadge,
+  PaymentStatusBadge,
+} from "~/components/admin/shared/StatusBadges";
 import {
   Tooltip,
   TooltipContent,
@@ -195,8 +198,9 @@ export function getOrderColumns(
                 </Badge>
               </div>
             )}
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <PaymentStatusBadge status={order.paymentStatus} />
+              <FulfillmentStatusBadge status={order.fulfillmentStatus} />
               <PaymentMethodLabel method={order.paymentMethod} />
             </div>
           </div>

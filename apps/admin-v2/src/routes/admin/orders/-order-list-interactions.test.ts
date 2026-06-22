@@ -23,6 +23,21 @@ const ORDER_MOBILE_CARD_SOURCE = fileURLToPath(
     import.meta.url,
   ),
 );
+const ORDER_COLUMNS_SOURCE = fileURLToPath(
+  new URL(
+    "../../../components/admin/data-table/columns/order-columns.tsx",
+    import.meta.url,
+  ),
+);
+const ORDER_SERVER_FUNCTIONS_SOURCE = fileURLToPath(
+  new URL("../../../lib/api-functions/orders.ts", import.meta.url),
+);
+const DATA_TABLE_TOOLBAR_SOURCE = fileURLToPath(
+  new URL(
+    "../../../components/admin/data-table/DataTableToolbar.tsx",
+    import.meta.url,
+  ),
+);
 
 describe("order list interactions", () => {
   it("guards bulk shipping against re-entry and partial-success reselection", () => {
@@ -93,6 +108,95 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("endDate: formatDateOnly(range?.to)");
     expect(routeSource).not.toContain("range.from.toISOString()");
     expect(routeSource).not.toContain("range.to.toISOString()");
+  });
+
+  it("keeps payment and fulfillment filters wired from URL to API params", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
+    const serverFunctionsSource = readFileSync(
+      ORDER_SERVER_FUNCTIONS_SOURCE,
+      "utf8",
+    );
+
+    expect(routeSource).toContain("const PAYMENT_STATUS_FILTERS");
+    expect(routeSource).toContain("const PAYMENT_METHOD_FILTERS");
+    expect(routeSource).toContain("const FULFILLMENT_STATUS_FILTERS");
+    expect(routeSource).toContain(
+      "paymentStatus: normalizeOptionalEnumSearchParam",
+    );
+    expect(routeSource).toContain(
+      "paymentMethod: normalizeOptionalEnumSearchParam",
+    );
+    expect(routeSource).toContain(
+      "fulfillmentStatus: normalizeOptionalEnumSearchParam",
+    );
+    expect(routeSource).toContain("paymentStatus: deps.paymentStatus");
+    expect(routeSource).toContain("paymentMethod: deps.paymentMethod");
+    expect(routeSource).toContain(
+      "fulfillmentStatus: deps.fulfillmentStatus",
+    );
+    expect(routeSource).toContain("paymentStatus: normalizeOptionalEnumSearchParam(");
+    expect(routeSource).toContain("paymentMethod: normalizeOptionalEnumSearchParam(");
+    expect(routeSource).toContain("fulfillmentStatus: normalizeOptionalEnumSearchParam(");
+    expect(routeSource).toContain("activePaymentStatus={activePaymentStatus}");
+    expect(routeSource).toContain("activePaymentMethod={activePaymentMethod}");
+    expect(routeSource).toContain(
+      "activeFulfillmentStatus={activeFulfillmentStatus}",
+    );
+
+    expect(toolbarSource).toContain("OrderFilterSelect");
+    expect(toolbarSource).toContain('placeholder="Any payment"');
+    expect(toolbarSource).toContain('placeholder="Any method"');
+    expect(toolbarSource).toContain('placeholder="Any fulfillment"');
+    expect(toolbarSource).toContain('ariaLabel="Filter by payment status"');
+    expect(toolbarSource).toContain('ariaLabel="Filter by payment method"');
+    expect(toolbarSource).toContain(
+      'ariaLabel="Filter by fulfillment status"',
+    );
+
+    expect(serverFunctionsSource).toContain(
+      "if (data.paymentStatus) params.paymentStatus = data.paymentStatus",
+    );
+    expect(serverFunctionsSource).toContain(
+      "if (data.paymentMethod) params.paymentMethod = data.paymentMethod",
+    );
+    expect(serverFunctionsSource).toContain(
+      "if (data.fulfillmentStatus) params.fulfillmentStatus = data.fulfillmentStatus",
+    );
+  });
+
+  it("shows fulfillment state in desktop and mobile order rows", () => {
+    const columnsSource = readFileSync(ORDER_COLUMNS_SOURCE, "utf8");
+    const mobileSource = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
+
+    expect(columnsSource).toContain("FulfillmentStatusBadge");
+    expect(columnsSource).toContain(
+      "FulfillmentStatusBadge status={order.fulfillmentStatus}",
+    );
+    expect(mobileSource).toContain("FulfillmentStatusBadge");
+    expect(mobileSource).toContain(
+      "FulfillmentStatusBadge status={order.fulfillmentStatus}",
+    );
+    expect(mobileSource).toContain("function PaymentMethodLabel");
+  });
+
+  it("allows the order toolbar filters and actions to wrap on narrow screens", () => {
+    const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
+    const dataTableToolbarSource = readFileSync(
+      DATA_TABLE_TOOLBAR_SOURCE,
+      "utf8",
+    );
+
+    expect(toolbarSource).toContain("flex flex-wrap items-center gap-2");
+    expect(dataTableToolbarSource).toContain(
+      "flex min-w-0 flex-1 flex-wrap items-center gap-2",
+    );
+    expect(dataTableToolbarSource).toContain(
+      "flex min-w-0 flex-wrap items-center gap-2",
+    );
+    expect(dataTableToolbarSource).toContain(
+      "relative min-w-[220px] max-w-sm flex-1",
+    );
   });
 
   it("uses explicit relevance only while starting an order search", () => {

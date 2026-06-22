@@ -407,6 +407,20 @@
       "when": 1782115200000,
       "tag": "0057_simple_sku_legacy_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1782118800000,
+      "tag": "0058_admin_order_filter_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1782118900000,
+      "tag": "0059_admin_order_single_filter_indexes",
+      "breakpoints": true
     }
   ]
 }

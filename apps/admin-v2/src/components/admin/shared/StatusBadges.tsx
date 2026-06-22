@@ -106,6 +106,26 @@ const PAYMENT_STATUS: Record<string, StatusConfig> = {
   },
 };
 
+// ──── Fulfillment Status ─────────────────────────────────────────
+
+const FULFILLMENT_STATUS: Record<string, StatusConfig> = {
+  pending: {
+    label: "Pending fulfillment",
+    className:
+      "bg-amber-50 text-amber-700 border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/60",
+  },
+  partial: {
+    label: "Partially fulfilled",
+    className:
+      "bg-blue-50 text-blue-700 border-blue-200/60 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/60",
+  },
+  complete: {
+    label: "Fulfilled",
+    className:
+      "bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800/60",
+  },
+};
+
 // ──── Shipment Status ─────────────────────────────────────────────
 
 const SHIPMENT_STATUS: Record<string, StatusConfig> = {
@@ -209,6 +229,20 @@ export function PaymentStatusBadge({ status }: { status: string }) {
     <Badge
       variant="secondary"
       className={cn("text-[10px] px-1.5 py-0", config.className)}
+    >
+      {config.label}
+    </Badge>
+  );
+}
+
+export function FulfillmentStatusBadge({ status }: { status: string }) {
+  const config = FULFILLMENT_STATUS[status];
+  if (!config) return null;
+
+  return (
+    <Badge
+      variant="outline"
+      className={cn("text-[10px] px-1.5 py-0 font-medium", config.className)}
     >
       {config.label}
     </Badge>

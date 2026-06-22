@@ -3,6 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
   Calendar as CalendarIcon,
   Plus,
   Trash2,
@@ -34,6 +41,29 @@ const statusFilters = [
   { value: "incomplete", label: "Incomplete" },
 ];
 
+const ALL_FILTER_VALUE = "all";
+
+const paymentStatusFilters = [
+  { value: "unpaid", label: "Unpaid" },
+  { value: "partial", label: "Partial" },
+  { value: "paid", label: "Paid" },
+  { value: "refunded", label: "Refunded" },
+  { value: "failed", label: "Failed" },
+];
+
+const paymentMethodFilters = [
+  { value: "cod", label: "COD" },
+  { value: "stripe", label: "Stripe" },
+  { value: "sslcommerz", label: "SSLCommerz" },
+  { value: "polar", label: "Polar" },
+];
+
+const fulfillmentStatusFilters = [
+  { value: "pending", label: "Pending fulfillment" },
+  { value: "partial", label: "Partially fulfilled" },
+  { value: "complete", label: "Fulfilled" },
+];
+
 interface OrderToolbarProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -42,6 +72,12 @@ interface OrderToolbarProps {
   // Status filter
   activeStatus: string | null;
   onStatusFilterChange: (status: string | null) => void;
+  activePaymentStatus: string | null;
+  onPaymentStatusFilterChange: (status: string | null) => void;
+  activePaymentMethod: string | null;
+  onPaymentMethodFilterChange: (method: string | null) => void;
+  activeFulfillmentStatus: string | null;
+  onFulfillmentStatusFilterChange: (status: string | null) => void;
   // Date range
   dateRange: DateRange | undefined;
   onDateRangeChange: (range: DateRange | undefined) => void;
@@ -132,6 +168,44 @@ function LazyDateRangeFilter({
   );
 }
 
+function OrderFilterSelect({
+  value,
+  placeholder,
+  options,
+  ariaLabel,
+  onChange,
+}: {
+  value: string | null;
+  placeholder: string;
+  options: Array<{ value: string; label: string }>;
+  ariaLabel: string;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <Select
+      value={value ?? ALL_FILTER_VALUE}
+      onValueChange={(nextValue) =>
+        onChange(nextValue === ALL_FILTER_VALUE ? null : nextValue)
+      }
+    >
+      <SelectTrigger
+        aria-label={ariaLabel}
+        className="h-9 w-[150px] shrink-0 text-xs sm:w-[170px]"
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent className="rounded-xl bg-background">
+        <SelectItem value={ALL_FILTER_VALUE}>{placeholder}</SelectItem>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function OrderToolbar({
   searchValue,
   onSearchChange,
@@ -139,6 +213,12 @@ export function OrderToolbar({
   showTrashed,
   activeStatus,
   onStatusFilterChange,
+  activePaymentStatus,
+  onPaymentStatusFilterChange,
+  activePaymentMethod,
+  onPaymentMethodFilterChange,
+  activeFulfillmentStatus,
+  onFulfillmentStatusFilterChange,
   dateRange,
   onDateRangeChange,
   onBulkDelete,
@@ -151,7 +231,7 @@ export function OrderToolbar({
 }: OrderToolbarProps) {
   const bulkActions: ReactNode =
     selectedCount > 0 ? (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="destructive"
           size="sm"
@@ -179,7 +259,7 @@ export function OrderToolbar({
     ) : null;
 
   const actions: ReactNode = (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Button
         variant="outline"
         size="sm"
@@ -222,10 +302,31 @@ export function OrderToolbar({
   );
 
   const filters: ReactNode = (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <LazyDateRangeFilter
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
+      />
+      <OrderFilterSelect
+        value={activePaymentStatus}
+        placeholder="Any payment"
+        options={paymentStatusFilters}
+        ariaLabel="Filter by payment status"
+        onChange={onPaymentStatusFilterChange}
+      />
+      <OrderFilterSelect
+        value={activePaymentMethod}
+        placeholder="Any method"
+        options={paymentMethodFilters}
+        ariaLabel="Filter by payment method"
+        onChange={onPaymentMethodFilterChange}
+      />
+      <OrderFilterSelect
+        value={activeFulfillmentStatus}
+        placeholder="Any fulfillment"
+        options={fulfillmentStatusFilters}
+        ariaLabel="Filter by fulfillment status"
+        onChange={onFulfillmentStatusFilterChange}
       />
       <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50">
         <Checkbox

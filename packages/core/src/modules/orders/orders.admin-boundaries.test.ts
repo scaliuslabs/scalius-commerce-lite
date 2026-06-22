@@ -39,4 +39,21 @@ describe("admin order list boundaries", () => {
     expect(source).toContain('case "relevance":');
     expect(source).not.toContain("if (rankExpression) return rankExpression");
   });
+
+  it("keeps admin payment and fulfillment filters as SQL predicates", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain("paymentStatus?: string");
+    expect(source).toContain("paymentMethod?: string");
+    expect(source).toContain("fulfillmentStatus?: string");
+    expect(source).toContain(
+      "whereConditions.push(sql`${orders.paymentStatus} = ${paymentStatus}`)",
+    );
+    expect(source).toContain(
+      "whereConditions.push(sql`${orders.paymentMethod} = ${paymentMethod}`)",
+    );
+    expect(source).toContain(
+      "whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`)",
+    );
+  });
 });
