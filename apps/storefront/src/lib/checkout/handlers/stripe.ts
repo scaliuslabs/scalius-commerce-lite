@@ -51,7 +51,13 @@ export const stripeHandler: GatewayHandler = {
   async onSelect(container: HTMLElement): Promise<void> {
     // Extract publishable key from the gateway config stored on the container
     const key = container.dataset.publishableKey;
-    if (key) publishableKey = key;
+    if (key && key !== publishableKey) {
+      publishableKey = key;
+      stripeInstance = null;
+      stripeCard = null;
+    } else if (key) {
+      publishableKey = key;
+    }
 
     if (stripeCard || !publishableKey) return;
 
@@ -101,24 +107,34 @@ export const stripeHandler: GatewayHandler = {
       const createdOrder = await createOrder(ctx.checkoutData, "stripe");
       const { orderId, receiptToken } = createdOrder;
 
-      const intentPayload: Record<string, unknown> = {
-        orderId,
-        receiptToken,
-      };
+      let clientSecret = createdOrder.initialPaymentSession?.gateway === "stripe"
+        ? createdOrder.initialPaymentSession.clientSecret
+        : undefined;
 
-      const intentRes = await fetch("/api/checkout/stripe-intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(intentPayload),
-      });
-
-      if (!intentRes.ok) {
-        const e = await intentRes.json().catch(() => ({} as Record<string, unknown>));
-        throw new Error((e.error as string) || "Payment initialization failed");
+      if (!clientSecret && createdOrder.initialPaymentSessionError) {
+        throw new Error(createdOrder.initialPaymentSessionError);
       }
 
-      const intentData = await intentRes.json();
-      const clientSecret = intentData.clientSecret as string;
+      if (!clientSecret) {
+        const intentPayload: Record<string, unknown> = {
+          orderId,
+          receiptToken,
+        };
+
+        const intentRes = await fetch("/api/checkout/stripe-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(intentPayload),
+        });
+
+        if (!intentRes.ok) {
+          const e = await intentRes.json().catch(() => ({} as Record<string, unknown>));
+          throw new Error((e.error as string) || "Payment initialization failed");
+        }
+
+        const intentData = await intentRes.json();
+        clientSecret = intentData.clientSecret as string;
+      }
       if (!clientSecret) throw new Error("No client secret received from payment gateway");
 
       const { error, paymentIntent } = await stripeInstance.confirmCardPayment(clientSecret, {

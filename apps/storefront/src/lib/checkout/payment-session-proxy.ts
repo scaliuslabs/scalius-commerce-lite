@@ -23,13 +23,17 @@ function isAbortLikeError(error: unknown): boolean {
   );
 }
 
+export function getPaymentSessionProxyExceptionMessage(error: unknown): string {
+  return isAbortLikeError(error)
+    ? "Payment gateway is taking longer than expected. Please try again shortly."
+    : "Payment gateway error";
+}
+
 export function paymentSessionProxyErrorResponse(error: unknown): Response {
   const isTimeout = isAbortLikeError(error);
   return new Response(
     JSON.stringify({
-      error: isTimeout
-        ? "Payment gateway is taking longer than expected. Please try again shortly."
-        : "Payment gateway error",
+      error: getPaymentSessionProxyExceptionMessage(error),
     }),
     {
       status: isTimeout ? 503 : 500,

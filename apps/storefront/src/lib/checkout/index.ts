@@ -526,16 +526,6 @@ async function processPayment(): Promise<void> {
   }
 
   try {
-    const freshness = await validateCheckoutCartFreshness(checkoutData);
-    if (!freshness.valid) {
-      if (loadingOverlay) {
-        loadingOverlay.style.display = "none";
-      }
-      isProcessing = false;
-      redirectToCartForRepair(freshness);
-      return;
-    }
-
     // Compute totals for context
     const { total: totalAmount } = getCheckoutTotals(checkoutData);
     const advanceAmount = checkoutConfig.partialPaymentEnabled

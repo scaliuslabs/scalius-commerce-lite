@@ -4,11 +4,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createOrder: vi.fn(),
+  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
+  fetchWithRetry: vi.fn(),
   shouldRejectCrossOriginCookieRequest: vi.fn(),
 }));
 
 vi.mock("../../../api/orders", () => ({
   createOrder: mocks.createOrder,
+}));
+
+vi.mock("../../../api/client", () => ({
+  createApiUrl: mocks.createApiUrl,
+  fetchWithRetry: mocks.fetchWithRetry,
+}));
+
+vi.mock("@/lib/api/client", () => ({
+  createApiUrl: mocks.createApiUrl,
+  fetchWithRetry: mocks.fetchWithRetry,
 }));
 
 vi.mock("@scalius/shared/request-origin-guard", () => ({
@@ -19,6 +31,8 @@ import { POST } from "../../../../pages/api/checkout/create-order";
 
 beforeEach(() => {
   mocks.createOrder.mockReset();
+  mocks.createApiUrl.mockClear();
+  mocks.fetchWithRetry.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReturnValue(false);
 });
@@ -101,5 +115,103 @@ describe("checkout create-order proxy Origin guard", () => {
     expect(json.errorCode).toBe("CUSTOMER_SESSION_STALE");
     expect(setCookie).toContain("cs_tok=; Max-Age=0");
     expect(setCookie).toContain("cs_auth=; Max-Age=0");
+  });
+
+  it("attaches an initial online payment session after order creation succeeds", async () => {
+    mocks.createOrder.mockResolvedValueOnce({
+      success: true,
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "sslcommerz",
+    });
+    mocks.fetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          gatewayUrl: "https://ssl.example.test/pay",
+          sessionKey: "ssl_session_1",
+        },
+      }),
+    });
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/checkout/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkoutRequestId: "checkout_req_123456",
+          paymentMethod: "sslcommerz",
+          initialPaymentSession: true,
+        }),
+      }),
+    } as never);
+    const json = await response.json() as {
+      data?: {
+        initialPaymentSession?: Record<string, unknown>;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(mocks.createOrder).toHaveBeenCalledWith(
+      expect.not.objectContaining({ initialPaymentSession: true }),
+      { customerSessionToken: null },
+    );
+    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
+      "https://api.example.test/api/v1/payment/sslcommerz/session",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "receipt_1" }),
+      }),
+      0,
+      15000,
+      true,
+    );
+    expect(json.data?.initialPaymentSession).toEqual({
+      gateway: "sslcommerz",
+      gatewayUrl: "https://ssl.example.test/pay",
+      sessionKey: "ssl_session_1",
+    });
+  });
+
+  it("keeps the committed order response when initial payment session creation fails", async () => {
+    mocks.createOrder.mockResolvedValueOnce({
+      success: true,
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "polar",
+    });
+    mocks.fetchWithRetry.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "Polar unavailable" }),
+    });
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/checkout/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkoutRequestId: "checkout_req_123456",
+          paymentMethod: "polar",
+          initialPaymentSession: true,
+        }),
+      }),
+    } as never);
+    const json = await response.json() as {
+      success?: boolean;
+      data?: {
+        id?: string;
+        initialPaymentSession?: unknown;
+        initialPaymentSessionError?: string;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.data?.id).toBe("order_1");
+    expect(json.data?.initialPaymentSession).toBeUndefined();
+    expect(json.data?.initialPaymentSessionError).toBe("Polar unavailable");
   });
 });

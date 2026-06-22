@@ -25,25 +25,34 @@ export const sslcommerzHandler: GatewayHandler = {
       const { orderId, receiptToken } = createdOrder;
       paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
-      const sessionPayload: Record<string, unknown> = {
-        orderId,
-        receiptToken,
-        currency: (window as unknown as Record<string, unknown>).__CURRENCY_CODE__ || "BDT",
-      };
+      let gatewayUrl = createdOrder.initialPaymentSession?.gateway === "sslcommerz"
+        ? createdOrder.initialPaymentSession.gatewayUrl
+        : undefined;
 
-      const sessionRes = await fetch("/api/checkout/sslcommerz-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sessionPayload),
-      });
-
-      if (!sessionRes.ok) {
-        const e = await sessionRes.json().catch(() => ({} as Record<string, unknown>));
-        throw new Error((e.error as string) || "Payment gateway initialization failed");
+      if (!gatewayUrl && createdOrder.initialPaymentSessionError) {
+        throw new Error(createdOrder.initialPaymentSessionError);
       }
 
-      const sessionData = await sessionRes.json();
-      const gatewayUrl = sessionData.gatewayUrl as string;
+      if (!gatewayUrl) {
+        const sessionPayload: Record<string, unknown> = {
+          orderId,
+          receiptToken,
+        };
+
+        const sessionRes = await fetch("/api/checkout/sslcommerz-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sessionPayload),
+        });
+
+        if (!sessionRes.ok) {
+          const e = await sessionRes.json().catch(() => ({} as Record<string, unknown>));
+          throw new Error((e.error as string) || "Payment gateway initialization failed");
+        }
+
+        const sessionData = await sessionRes.json();
+        gatewayUrl = sessionData.gatewayUrl as string;
+      }
       if (!gatewayUrl) throw new Error("No gateway URL received");
 
       return {
