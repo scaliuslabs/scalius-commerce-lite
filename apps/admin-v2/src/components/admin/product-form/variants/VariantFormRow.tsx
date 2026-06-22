@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -15,11 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { generateEAN13 } from "@scalius/shared/barcode-utils";
 import { cn } from "@scalius/shared/utils";
-import { Barcode, Check, Loader2, Save, Sparkles, X } from "lucide-react";
+import { Barcode, Loader2, Save, Sparkles, X } from "lucide-react";
 import { useCurrency } from "@/hooks/use-currency";
 import { variantOptionFormSchema, type ProductVariant, type VariantFormValues } from "./types";
 
@@ -95,8 +93,13 @@ function VariantOptionForm({
   const saveLabel = isEditMode ? "Save option" : "Create option";
   const barcodeValue = form.watch("barcode");
   const barcodeType = form.watch("barcodeType");
-  const compactInputClass = "h-8 rounded-md bg-background px-2 text-xs shadow-none";
-  const cellClass = "p-1.5 align-middle";
+  const compactInputClass = layout === "row"
+    ? "h-8 rounded-none border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+    : "h-8 rounded-md bg-background px-2 text-xs shadow-none";
+  const messageClass = layout === "row"
+    ? "absolute left-1 top-full z-20 mt-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground shadow"
+    : "px-1 pt-0.5 text-[10px]";
+  const cellClass = "border-r p-0 align-middle last:border-r-0";
   const controlProps = {
     form,
     symbol,
@@ -107,6 +110,7 @@ function VariantOptionForm({
     isSubmitting,
     saveLabel,
     compactInputClass,
+    messageClass,
     onCancel,
     onSubmit: form.handleSubmit(handleSubmit),
   };
@@ -146,7 +150,7 @@ function VariantOptionForm({
             <LabeledCell label="Stock" className="col-span-2">
               <div className="grid grid-cols-[1fr_auto] gap-2">
                 <StockField {...controlProps} />
-                <TrackInventorySwitch {...controlProps} />
+                <StockLimitField {...controlProps} />
               </div>
               <AvailabilityNote availableStock={availableStock} trackInventory={trackInventory} />
             </LabeledCell>
@@ -165,20 +169,14 @@ function VariantOptionForm({
   return (
     <Form {...form}>
       <TableRow className="border-y border-primary/20 bg-primary/[0.035] hover:bg-primary/[0.045]">
-        <TableCell className={cn(cellClass, "w-10 pl-3")}>
-          <span className="flex h-4 w-4 items-center justify-center rounded border border-primary/30 bg-background text-primary">
-            <Check className="h-3 w-3" />
-          </span>
+        <TableCell className={cn(cellClass, "w-10")}>
+          <span
+            className="mx-auto block h-2 w-2 rounded-full bg-primary"
+            title={isEditMode ? "Editing option" : "Adding option"}
+          />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[154px]")}>
-          <div className="flex items-center gap-1.5">
-            <SkuField {...controlProps} autoFocus={isEditMode} />
-            <BarcodePopover
-              barcodeValue={barcodeValue}
-              barcodeType={barcodeType}
-              controlProps={controlProps}
-            />
-          </div>
+        <TableCell className={cn(cellClass, "min-w-[150px]")}>
+          <SkuField {...controlProps} autoFocus={isEditMode} />
         </TableCell>
         <TableCell className={cn(cellClass, "min-w-[120px]")}>
           <OptionOneField {...controlProps} autoFocus={!isEditMode} />
@@ -192,21 +190,19 @@ function VariantOptionForm({
         <TableCell className={cn(cellClass, "min-w-[84px]")}>
           <PriceField {...controlProps} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[104px]")}>
-          <div className="flex items-center gap-1.5">
-            <StockField {...controlProps} />
-            <TrackInventorySwitch {...controlProps} />
-          </div>
+        <TableCell className={cn(cellClass, "min-w-[112px]")}>
+          <StockLimitField {...controlProps} />
+        </TableCell>
+        <TableCell className={cn(cellClass, "min-w-[80px]")}>
+          <StockField {...controlProps} />
         </TableCell>
         <TableCell className={cn(cellClass, "min-w-[80px]")}>
           {trackInventory ? (
-            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+            <span className="block px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
               {availableStock ?? "New"}
             </span>
           ) : (
-            <Badge variant="outline" className="h-6 whitespace-nowrap border-emerald-200 bg-emerald-50 px-1.5 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-              No limit
-            </Badge>
+            <span className="block px-2 text-xs text-muted-foreground">-</span>
           )}
         </TableCell>
         <TableCell className={cn(cellClass, "min-w-[118px]")}>
@@ -217,8 +213,15 @@ function VariantOptionForm({
             {isEditMode ? "Editing" : "New"}
           </span>
         </TableCell>
-        <TableCell className={cn(cellClass, "w-[86px] min-w-[86px] pr-2")}>
-          <ActionButtons {...controlProps} />
+        <TableCell className={cn(cellClass, "w-[116px] min-w-[116px]")}>
+          <div className="flex items-center justify-end gap-1 px-1">
+            <BarcodePopover
+              barcodeValue={barcodeValue}
+              barcodeType={barcodeType}
+              controlProps={controlProps}
+            />
+            <ActionButtons {...controlProps} />
+          </div>
         </TableCell>
       </TableRow>
     </Form>
@@ -235,6 +238,7 @@ type ControlProps = {
   isSubmitting: boolean;
   saveLabel: string;
   compactInputClass: string;
+  messageClass: string;
   onCancel: () => void;
   onSubmit: () => void;
 };
@@ -242,6 +246,7 @@ type ControlProps = {
 function SkuField({
   form,
   compactInputClass,
+  messageClass,
   autoFocus,
 }: ControlProps & { autoFocus?: boolean }) {
   return (
@@ -249,7 +254,7 @@ function SkuField({
       control={form.control}
       name="sku"
       render={({ field }) => (
-        <FormItem className="min-w-0 flex-1 space-y-0">
+        <FormItem className="relative min-w-0 flex-1 space-y-0">
           <FormControl>
             <Input
               placeholder="SKU-123"
@@ -258,7 +263,7 @@ function SkuField({
               autoFocus={autoFocus}
             />
           </FormControl>
-          <FormMessage className="px-1 pt-0.5 text-[10px]" />
+          <FormMessage className={messageClass} />
         </FormItem>
       )}
     />
@@ -268,6 +273,7 @@ function SkuField({
 function OptionOneField({
   form,
   compactInputClass,
+  messageClass,
   autoFocus,
 }: ControlProps & { autoFocus?: boolean }) {
   return (
@@ -275,7 +281,7 @@ function OptionOneField({
       control={form.control}
       name="size"
       render={({ field }) => (
-        <FormItem className="space-y-0">
+        <FormItem className="relative min-w-0 space-y-0">
           <FormControl>
             <Input
               placeholder="2KG, XL"
@@ -285,20 +291,20 @@ function OptionOneField({
               autoFocus={autoFocus}
             />
           </FormControl>
-          <FormMessage className="px-1 pt-0.5 text-[10px]" />
+          <FormMessage className={messageClass} />
         </FormItem>
       )}
     />
   );
 }
 
-function OptionTwoField({ form, compactInputClass }: ControlProps) {
+function OptionTwoField({ form, compactInputClass, messageClass }: ControlProps) {
   return (
     <FormField
       control={form.control}
       name="color"
       render={({ field }) => (
-        <FormItem className="space-y-0">
+        <FormItem className="relative min-w-0 space-y-0">
           <FormControl>
             <Input
               placeholder="Red, Pack A"
@@ -307,20 +313,20 @@ function OptionTwoField({ form, compactInputClass }: ControlProps) {
               className={compactInputClass}
             />
           </FormControl>
-          <FormMessage className="px-1 pt-0.5 text-[10px]" />
+          <FormMessage className={messageClass} />
         </FormItem>
       )}
     />
   );
 }
 
-function WeightField({ form, compactInputClass }: ControlProps) {
+function WeightField({ form, compactInputClass, messageClass }: ControlProps) {
   return (
     <FormField
       control={form.control}
       name="weight"
       render={({ field }) => (
-        <FormItem className="space-y-0">
+        <FormItem className="relative min-w-0 space-y-0">
           <FormControl>
             <Input
               type="number"
@@ -330,20 +336,20 @@ function WeightField({ form, compactInputClass }: ControlProps) {
               className={compactInputClass}
             />
           </FormControl>
-          <FormMessage className="px-1 pt-0.5 text-[10px]" />
+          <FormMessage className={messageClass} />
         </FormItem>
       )}
     />
   );
 }
 
-function PriceField({ form, compactInputClass }: ControlProps) {
+function PriceField({ form, compactInputClass, messageClass }: ControlProps) {
   return (
     <FormField
       control={form.control}
       name="price"
       render={({ field }) => (
-        <FormItem className="space-y-0">
+        <FormItem className="relative min-w-0 space-y-0">
           <FormControl>
             <Input
               type="number"
@@ -355,20 +361,20 @@ function PriceField({ form, compactInputClass }: ControlProps) {
               className={compactInputClass}
             />
           </FormControl>
-          <FormMessage className="px-1 pt-0.5 text-[10px]" />
+          <FormMessage className={messageClass} />
         </FormItem>
       )}
     />
   );
 }
 
-function StockField({ form, compactInputClass, trackInventory }: ControlProps) {
+function StockField({ form, compactInputClass, messageClass, trackInventory }: ControlProps) {
   return (
     <FormField
       control={form.control}
       name="stock"
       render={({ field }) => (
-        <FormItem className="min-w-0 flex-1 space-y-0">
+        <FormItem className="relative min-w-0 flex-1 space-y-0">
           {trackInventory ? (
             <FormControl>
               <Input
@@ -381,18 +387,18 @@ function StockField({ form, compactInputClass, trackInventory }: ControlProps) {
               />
             </FormControl>
           ) : (
-            <div className="flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-              No stock limit
+            <div className="flex h-8 items-center px-2 text-xs text-muted-foreground">
+              -
             </div>
           )}
-          <FormMessage className="px-1 pt-0.5 text-[10px]" />
+          <FormMessage className={messageClass} />
         </FormItem>
       )}
     />
   );
 }
 
-function TrackInventorySwitch({ form }: ControlProps) {
+function StockLimitField({ form, compactInputClass }: ControlProps) {
   return (
     <FormField
       control={form.control}
@@ -400,12 +406,21 @@ function TrackInventorySwitch({ form }: ControlProps) {
       render={({ field }) => (
         <FormItem className="space-y-0">
           <FormControl>
-            <Switch
-              checked={field.value !== false}
-              onCheckedChange={(checked) => field.onChange(checked)}
-              aria-label="Track stock for this option"
-              title="Track stock for this option"
-            />
+            <Select
+              value={field.value === false ? "unlimited" : "tracked"}
+              onValueChange={(value) => field.onChange(value === "tracked")}
+            >
+              <SelectTrigger
+                aria-label="Stock limit for this option"
+                className={cn(compactInputClass, "justify-between")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tracked">Track stock</SelectItem>
+                <SelectItem value="unlimited">No stock limit</SelectItem>
+              </SelectContent>
+            </Select>
           </FormControl>
         </FormItem>
       )}
@@ -413,7 +428,7 @@ function TrackInventorySwitch({ form }: ControlProps) {
   );
 }
 
-function DiscountField({ form, symbol, discountType }: ControlProps) {
+function DiscountField({ form, symbol, discountType, compactInputClass, messageClass }: ControlProps) {
   return (
     <div className="flex gap-1.5">
       <FormField
@@ -433,7 +448,7 @@ function DiscountField({ form, symbol, discountType }: ControlProps) {
                 }}
                 value={field.value}
               >
-                <SelectTrigger className="h-8 rounded-md bg-background px-2 text-xs shadow-none">
+                <SelectTrigger className={cn(compactInputClass, "justify-between")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -450,17 +465,17 @@ function DiscountField({ form, symbol, discountType }: ControlProps) {
           control={form.control}
           name="discountPercentage"
           render={({ field }) => (
-            <FormItem className="min-w-0 flex-1 space-y-0">
+            <FormItem className="relative min-w-0 flex-1 space-y-0">
               <FormControl>
                 <Input
                   type="number"
                   placeholder="0"
                   {...field}
                   value={field.value ?? ""}
-                  className="h-8 rounded-md bg-background px-2 text-xs shadow-none"
+                  className={compactInputClass}
                 />
               </FormControl>
-              <FormMessage className="px-1 pt-0.5 text-[10px]" />
+              <FormMessage className={messageClass} />
             </FormItem>
           )}
         />
@@ -469,17 +484,17 @@ function DiscountField({ form, symbol, discountType }: ControlProps) {
           control={form.control}
           name="discountAmount"
           render={({ field }) => (
-            <FormItem className="min-w-0 flex-1 space-y-0">
+            <FormItem className="relative min-w-0 flex-1 space-y-0">
               <FormControl>
                 <Input
                   type="number"
                   placeholder="0"
                   {...field}
                   value={field.value ?? ""}
-                  className="h-8 rounded-md bg-background px-2 text-xs shadow-none"
+                  className={compactInputClass}
                 />
               </FormControl>
-              <FormMessage className="px-1 pt-0.5 text-[10px]" />
+              <FormMessage className={messageClass} />
             </FormItem>
           )}
         />
@@ -488,14 +503,14 @@ function DiscountField({ form, symbol, discountType }: ControlProps) {
   );
 }
 
-function BarcodeFields({ form, compactInputClass }: ControlProps) {
+function BarcodeFields({ form, compactInputClass, messageClass }: ControlProps) {
   return (
     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_104px_32px]">
       <FormField
         control={form.control}
         name="barcode"
         render={({ field }) => (
-          <FormItem className="space-y-0">
+          <FormItem className="relative min-w-0 space-y-0">
             <FormControl>
               <Input
                 placeholder="Optional"
@@ -504,7 +519,7 @@ function BarcodeFields({ form, compactInputClass }: ControlProps) {
                 className={cn(compactInputClass, "font-mono")}
               />
             </FormControl>
-            <FormMessage className="px-1 pt-0.5 text-[10px]" />
+            <FormMessage className={messageClass} />
           </FormItem>
         )}
       />
@@ -515,7 +530,7 @@ function BarcodeFields({ form, compactInputClass }: ControlProps) {
           <FormItem className="space-y-0">
             <FormControl>
               <Select onValueChange={(v) => field.onChange(v || null)} value={field.value ?? ""}>
-                <SelectTrigger className="h-8 rounded-md bg-background px-2 text-xs shadow-none">
+                <SelectTrigger className={cn(compactInputClass, "justify-between")}>
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -565,7 +580,8 @@ function BarcodePopover({
           variant={hasBarcode ? "secondary" : "ghost"}
           size="icon"
           className="h-8 w-8 shrink-0"
-          title={hasBarcode ? `${barcodeValue}${barcodeType ? ` (${barcodeType})` : ""}` : "Barcode"}
+          aria-label={hasBarcode ? "Edit barcode details" : "Add barcode details"}
+          title={hasBarcode ? `${barcodeValue}${barcodeType ? ` (${barcodeType})` : ""}` : "Barcode details"}
         >
           <Barcode className="h-3.5 w-3.5" />
         </Button>

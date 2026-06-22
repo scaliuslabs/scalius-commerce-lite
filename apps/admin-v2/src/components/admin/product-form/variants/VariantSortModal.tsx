@@ -270,10 +270,10 @@ export function VariantSortModal({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isLoading || isSaving}>
+          <Button type="button" onClick={handleSave} disabled={isLoading || isSaving}>
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save Order
           </Button>

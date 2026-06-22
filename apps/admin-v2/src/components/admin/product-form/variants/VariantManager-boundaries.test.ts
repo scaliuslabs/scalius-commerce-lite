@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+const VARIANT_MODULE_DIR = fileURLToPath(new URL(".", import.meta.url));
 const VARIANT_MANAGER_SOURCE = fileURLToPath(
   new URL("./VariantManager.tsx", import.meta.url),
 );
@@ -44,6 +45,14 @@ const ORDER_ITEM_SELECTION_SOURCE = fileURLToPath(
 const PRODUCT_VIEW_SOURCE = fileURLToPath(
   new URL("../../ProductView.tsx", import.meta.url),
 );
+
+function collectTsxFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const child = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return collectTsxFiles(child);
+    return entry.isFile() && entry.name.endsWith(".tsx") ? [child] : [];
+  });
+}
 
 describe("VariantManager product mode boundaries", () => {
   it("routes one protected no-option SKU to the simple inventory panel", () => {
@@ -180,11 +189,14 @@ describe("VariantManager product mode boundaries", () => {
     const managerSource = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
 
     expect(formRowSource).toContain('name="trackInventory"');
-    expect(formRowSource).toContain("Track stock for this option");
+    expect(formRowSource).toContain("StockLimitField");
+    expect(formRowSource).toContain("Stock limit for this option");
+    expect(formRowSource).toContain("Track stock");
     expect(formRowSource).toContain("No stock limit");
     expect(formRowSource).toContain("Math.max(0");
     expect(bulkEditSource).toContain("'trackInventory'");
-    expect(bulkEditSource).toContain("Track stock for option");
+    expect(bulkEditSource).toContain("Stock limit for option");
+    expect(bulkEditSource).toContain("Track stock");
     expect(bulkEditSource).toContain("No stock limit");
     expect(generatorSource).toContain("const [trackInventory, setTrackInventory] = useState(true)");
     expect(generatorSource).toContain("trackInventory,");
@@ -207,8 +219,25 @@ describe("VariantManager product mode boundaries", () => {
     expect(formRowSource).toContain('layout="row"');
     expect(formRowSource).toContain('layout="card"');
     expect(formRowSource).toContain("BarcodePopover");
+    expect(tableSource).toContain("Stock limit");
+    expect(tableSource).toContain("min-w-[112px]");
     expect(formRowSource).toContain("h-8 rounded-md bg-background px-2 text-xs shadow-none");
+    expect(formRowSource).toContain("rounded-none border-0 bg-transparent");
     expect(formRowSource).toContain("Option 1/2 can be size, weight, color, style, or pack.");
     expect(formRowSource).not.toContain("colSpan={11}");
+  });
+
+  it("marks every variant-module button as non-submit or explicit submit", () => {
+    for (const file of collectTsxFiles(VARIANT_MODULE_DIR)) {
+      const source = readFileSync(file, "utf8");
+      const buttonTags = source.matchAll(/<Button\b[\s\S]*?>/g);
+
+      for (const match of buttonTags) {
+        const tag = match[0];
+        const line = source.slice(0, match.index).split("\n").length;
+
+        expect(tag, `${file}:${line}`).toContain("type=");
+      }
+    }
   });
 });

@@ -112,6 +112,7 @@ export function VariantActionsToolbar({
             />
             {searchTerm && (
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className="absolute right-1 top-1 h-6 w-6"
@@ -123,6 +124,7 @@ export function VariantActionsToolbar({
           </div>
 
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
@@ -141,6 +143,7 @@ export function VariantActionsToolbar({
                 {selectedCount} selected
               </Badge>
               <Button
+                type="button"
                 variant="destructive"
                 size="sm"
                 onClick={onBulkDelete}
@@ -156,17 +159,17 @@ export function VariantActionsToolbar({
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
             {isBulkEditing ? (
               <>
-                <Button variant="ghost" size="sm" onClick={onToggleBulkEdit} className="h-8 w-full text-xs sm:w-auto">
+                <Button type="button" variant="ghost" size="sm" onClick={onToggleBulkEdit} className="h-8 w-full text-xs sm:w-auto">
                   Cancel
                 </Button>
-                <Button size="sm" onClick={onSaveBulkEdit} className="h-8 w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:w-auto">
+                <Button type="button" size="sm" onClick={onSaveBulkEdit} className="h-8 w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:w-auto">
                   Save Changes
                 </Button>
               </>
             ) : (
               <>
                 {variants.length > 0 && (
-                  <Button variant="outline" size="sm" onClick={onToggleBulkEdit} disabled={disabled} className="h-8 w-full text-xs sm:w-auto">
+                  <Button type="button" variant="outline" size="sm" onClick={onToggleBulkEdit} disabled={disabled} className="h-8 w-full text-xs sm:w-auto">
                     Spreadsheet Edit
                   </Button>
                 )}
@@ -184,7 +187,7 @@ export function VariantActionsToolbar({
                   disabled={disabled}
                 />
 
-                <Button size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 w-full text-xs bg-primary text-primary-foreground sm:w-auto">
+                <Button type="button" size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 w-full text-xs bg-primary text-primary-foreground sm:w-auto">
                   <Plus className="mr-1.5 h-3.5 w-3.5" />
                   Add Option
                 </Button>
@@ -248,6 +251,7 @@ function LazyBulkVariantGenerator({
   if (!shouldLoad) {
     return (
       <Button
+        type="button"
         variant="outline"
         size="sm"
         disabled={disabled}
@@ -263,7 +267,7 @@ function LazyBulkVariantGenerator({
   return (
     <Suspense
       fallback={
-        <Button variant="outline" size="sm" disabled className="h-8 w-full justify-center text-xs sm:w-auto">
+        <Button type="button" variant="outline" size="sm" disabled className="h-8 w-full justify-center text-xs sm:w-auto">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           Bulk Generate
         </Button>

@@ -72,7 +72,7 @@ export function SkuTemplateConfig({
           SKU Template
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+              <Button type="button" variant="ghost" size="icon" className="h-4 w-4 p-0">
                 <Info className="h-3 w-3 text-muted-foreground" />
               </Button>
             </PopoverTrigger>

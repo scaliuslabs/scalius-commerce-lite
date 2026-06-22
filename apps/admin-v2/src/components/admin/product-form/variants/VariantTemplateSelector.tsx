@@ -90,6 +90,7 @@ export function VariantTemplateSelector({
       <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
         <DialogTrigger asChild>
           <Button
+            type="button"
             variant="outline"
             size="sm"
             disabled={disabled || templates.length === 0}
@@ -136,6 +137,7 @@ export function VariantTemplateSelector({
                         )}
                       </div>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive"
@@ -169,6 +171,7 @@ export function VariantTemplateSelector({
                       <Badge variant="secondary">Stock: {template.stock}</Badge>
                     </div>
                     <Button
+                      type="button"
                       size="sm"
                       className="w-full"
                       onClick={() => handleApplyTemplate(template.id)}
@@ -257,6 +260,7 @@ export function VariantTemplateSelector({
 
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
               onClick={() => {
                 setSaveDialogOpen(false);
@@ -268,6 +272,7 @@ export function VariantTemplateSelector({
               Cancel
             </Button>
             <Button
+              type="button"
               onClick={confirmSaveTemplate}
               disabled={!templateName.trim()}
             >

@@ -141,7 +141,7 @@ export function BulkVariantGenerator({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled}>
+        <Button type="button" variant="outline" size="sm" disabled={disabled}>
           <Sparkles className="mr-2 h-4 w-4" />
           Bulk Generate
         </Button>
@@ -218,6 +218,7 @@ export function BulkVariantGenerator({
 
         <DialogFooter className="gap-3">
           <Button
+            type="button"
             variant="outline"
             onClick={() => setOpen(false)}
             disabled={isGenerating}
@@ -226,6 +227,7 @@ export function BulkVariantGenerator({
             Cancel
           </Button>
           <Button
+            type="button"
             onClick={handleGenerate}
             disabled={!canGenerate || isGenerating}
             size="lg"

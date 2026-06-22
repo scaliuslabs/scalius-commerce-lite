@@ -1,7 +1,7 @@
 // src/components/admin/ProductForm/variants/VariantBulkEditRow.tsx
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { TableRow, TableCell } from "@/components/ui/table";
+import { cn } from "@scalius/shared/utils";
 import type { ProductVariant, VariantBulkEditField, VariantBulkEditValue } from "./types";
 
 interface VariantBulkEditRowProps {
@@ -25,6 +25,7 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange }: VariantBu
     };
     const trackInventory = draftUpdate?.trackInventory ?? (variant.trackInventory !== false);
     const nextStock = (draftUpdate?.stock !== undefined ? draftUpdate.stock : variant.stock) ?? 0;
+    const updatedAt = variant.updatedAt instanceof Date ? variant.updatedAt : new Date(variant.updatedAt);
 
     return (
         <TableRow className="hover:bg-muted/50 bg-muted/20">
@@ -70,15 +71,21 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange }: VariantBu
                     onChange={(e) => onChange(variant.id, 'price', e.target.value ? parseFloat(e.target.value) : 0)}
                 />
             </TableCell>
+            <TableCell className="p-1 min-w-[112px] align-middle">
+                <select
+                    value={trackInventory ? "tracked" : "unlimited"}
+                    onChange={(event) => onChange(variant.id, 'trackInventory', event.target.value === "tracked")}
+                    aria-label={`Stock limit for option ${variant.sku}`}
+                    className={cn(
+                        "h-7 w-full rounded border bg-background px-2 text-xs shadow-none outline-none focus:ring-1 focus:ring-primary",
+                        trackInventory ? "text-sky-700" : "text-emerald-700",
+                    )}
+                >
+                    <option value="tracked">Track stock</option>
+                    <option value="unlimited">No stock limit</option>
+                </select>
+            </TableCell>
             <TableCell className="p-1 min-w-[80px] align-middle">
-                <div className="mb-1 flex items-center justify-between gap-2 rounded border bg-background px-2 py-1">
-                    <span className="text-[10px] text-muted-foreground">Track</span>
-                    <Switch
-                        checked={trackInventory}
-                        onCheckedChange={(checked) => onChange(variant.id, 'trackInventory', checked)}
-                        aria-label={`Track stock for option ${variant.sku}`}
-                    />
-                </div>
                 {trackInventory ? (
                     <Input
                         type="number"
@@ -88,18 +95,30 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange }: VariantBu
                         onChange={(e) => onChange(variant.id, 'stock', e.target.value ? parseInt(e.target.value, 10) : 0)}
                     />
                 ) : (
-                    <div className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-                        No stock limit
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        -
                     </div>
                 )}
-                {trackInventory && variant.reservedStock > 0 && (
-                    <p className="text-[10px] text-muted-foreground px-1 mt-0.5">
-                        Available: {Math.max(0, nextStock - variant.reservedStock)}
-                    </p>
-                )}
             </TableCell>
-            <TableCell colSpan={3} className="px-3 py-2 text-[10px] text-muted-foreground align-middle italic text-right pr-3">
-                Editing...
+            <TableCell className="p-1 min-w-[80px] align-middle">
+                <span className="block px-2 text-xs font-medium text-muted-foreground">
+                    {trackInventory ? Math.max(0, nextStock - variant.reservedStock) : "-"}
+                </span>
+            </TableCell>
+            <TableCell className="px-3 py-2 text-xs text-muted-foreground align-middle">
+                -
+            </TableCell>
+            <TableCell className="px-3 py-2 text-xs text-muted-foreground align-middle whitespace-nowrap">
+                <span suppressHydrationWarning>
+                    {updatedAt.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                    })}
+                </span>
+            </TableCell>
+            <TableCell className="px-3 py-2 text-xs text-muted-foreground align-middle text-right">
+                -
             </TableCell>
         </TableRow>
     );
