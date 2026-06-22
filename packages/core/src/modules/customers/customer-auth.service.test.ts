@@ -68,6 +68,14 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?:
             queue.shift();
             return result.all ?? [];
           }),
+          limit: vi.fn(() => ({
+            all: vi.fn(async () => {
+              const result = queue[0];
+              if (!result || !("all" in result)) return [];
+              queue.shift();
+              return result.all ?? [];
+            }),
+          })),
         })),
       })),
     })),
@@ -93,6 +101,31 @@ const readyEmailSettings = [
 const readyEmailEnv = {
   EMAIL: { send: vi.fn() },
 };
+
+function createCustomerRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "cust_1",
+    name: "Buyer",
+    email: "buyer@example.com",
+    phone: "+8801712345678",
+    address: null,
+    city: null,
+    zone: null,
+    area: null,
+    cityName: null,
+    zoneName: null,
+    areaName: null,
+    profileCompletionRequiredAt: null,
+    profileCompletedAt: null,
+    totalOrders: 0,
+    totalSpent: 0,
+    lastOrderAt: null,
+    createdAt: 1_700_000_000,
+    updatedAt: 1_700_000_000,
+    deletedAt: null,
+    ...overrides,
+  };
+}
 
 function createKv(initialValues: Record<string, string> = {}) {
   const store = new Map(Object.entries(initialValues));
@@ -425,6 +458,234 @@ describe("customer auth service intent handling", () => {
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
     expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects ambiguous email sign-in after OTP proof without creating a session", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [
+        createCustomerRow({ id: "cust_1", phone: "+8801711111111" }),
+        createCustomerRow({ id: "cust_2", phone: "+8801722222222" }),
+      ] },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:email:buyer@example.com",
+      method: "email",
+      channel: "email",
+      intent: "sign_in",
+      identifier: "buyer@example.com",
+      contactEmail: "buyer@example.com",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("Multiple accounts use this email. Please use phone verification or contact store support.");
+
+    expect(db.insertValues).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects sign-in when no active email customer matches", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [] },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:email:deleted@example.com",
+      method: "email",
+      channel: "email",
+      intent: "sign_in",
+      identifier: "deleted@example.com",
+      contactEmail: "deleted@example.com",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "email",
+      channel: "email",
+      identifier: "deleted@example.com",
+      code: "123456",
+      name: "Deleted Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("No account was found for this email. Create an account instead.");
+
+    expect(db.insertValues).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("returns restore-support guidance for soft-deleted email sign-in after OTP proof", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [] },
+      { get: { id: "cust_deleted" } },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:email:deleted@example.com",
+      method: "email",
+      channel: "email",
+      intent: "sign_in",
+      identifier: "deleted@example.com",
+      contactEmail: "deleted@example.com",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "email",
+      channel: "email",
+      identifier: "deleted@example.com",
+      code: "123456",
+      name: "Deleted Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("This email belongs to a deleted customer account. Contact store support to restore access.");
+
+    expect(db.insertValues).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("signs in the single active email customer while ignoring deleted duplicates", async () => {
+    const activeCustomer = createCustomerRow({
+      id: "cust_active",
+      email: "buyer@example.com",
+      phone: "+8801712345678",
+      address: "House 1",
+      city: "city_dhaka",
+      zone: "zone_mirpur",
+    });
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [activeCustomer] },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:email:buyer@example.com",
+      method: "email",
+      channel: "email",
+      intent: "sign_in",
+      identifier: "buyer@example.com",
+      contactEmail: "buyer@example.com",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    const result = await verifyOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.session?.customerId).toBe("cust_active");
+    expect(result.customer?.customerId).toBe("cust_active");
+    const sessionInsert = db.insertCalls.find(({ values }) => {
+      const row = values as Record<string, unknown>;
+      return typeof row.tokenHash === "string" && row.customerId === "cust_active";
+    });
+    expect(sessionInsert?.values).toMatchObject({
+      customerId: "cust_active",
+      revokedAt: null,
+    });
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects phone sign-in when no active phone customer matches", async () => {
+    const db = createDb([
+      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { get: null },
+      { get: null },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:sms:+8801712345678",
+      method: "phone",
+      channel: "sms",
+      intent: "sign_in",
+      identifier: "+8801712345678",
+      phone: "+8801712345678",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "phone",
+      channel: "sms",
+      identifier: "+8801712345678",
+      code: "123456",
+      name: "Deleted Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("No account was found for this phone number. Create an account instead.");
+
+    expect(db.insertValues).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("returns restore-support guidance for soft-deleted phone sign-in after OTP proof", async () => {
+    const db = createDb([
+      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { get: null },
+      { get: null },
+      { get: null },
+      { get: { id: "cust_deleted" } },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:sms:+8801712345678",
+      method: "phone",
+      channel: "sms",
+      intent: "sign_in",
+      identifier: "+8801712345678",
+      phone: "+8801712345678",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "phone",
+      channel: "sms",
+      identifier: "+8801712345678",
+      code: "123456",
+      name: "Deleted Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("This phone number belongs to a deleted customer account. Contact store support to restore access.");
+
+    expect(db.insertValues).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 

@@ -448,6 +448,58 @@ async function getActiveCustomerById(db: Database, customerId: string): Promise<
     return row ?? null;
 }
 
+async function getActiveCustomerByPhone(db: Database, phone: string): Promise<CustomerAuthProfileRow | null> {
+    const row = await db
+        .select()
+        .from(customers)
+        .where(and(eq(customers.phone, phone), isNull(customers.deletedAt)))
+        .get();
+    return row ?? null;
+}
+
+async function getDeletedCustomerByPhone(db: Database, phone: string): Promise<Pick<CustomerAuthProfileRow, "id"> | null> {
+    const row = await db
+        .select({
+            id: customers.id,
+        })
+        .from(customers)
+        .where(and(eq(customers.phone, phone), isNotNull(customers.deletedAt)))
+        .get();
+    return row ?? null;
+}
+
+async function getDeletedCustomerByEmail(db: Database, email: string): Promise<Pick<CustomerAuthProfileRow, "id"> | null> {
+    const row = await db
+        .select({
+            id: customers.id,
+        })
+        .from(customers)
+        .where(and(eq(customers.email, email), isNotNull(customers.deletedAt)))
+        .get();
+    return row ?? null;
+}
+
+async function getActiveCustomersByEmail(
+    db: Database,
+    email: string,
+    limit = 2,
+): Promise<CustomerAuthProfileRow[]> {
+    return db
+        .select()
+        .from(customers)
+        .where(and(eq(customers.email, email), isNull(customers.deletedAt)))
+        .limit(limit)
+        .all();
+}
+
+async function getActiveCustomerByEmailForSignIn(db: Database, email: string): Promise<CustomerAuthProfileRow | null> {
+    const matches = await getActiveCustomersByEmail(db, email, 2);
+    if (matches.length > 1) {
+        throw new ValidationError("Multiple accounts use this email. Please use phone verification or contact store support.");
+    }
+    return matches[0] ?? null;
+}
+
 async function resolveActiveCustomerLocation(
     db: Database,
     input: { city: string | null; zone: string | null; area: string | null },
@@ -724,11 +776,17 @@ export async function verifyOtp(
         }
 
         const existing = method === "email"
-            ? await db.select().from(customers).where(eq(customers.email, normalizedIdentifier)).get()
-            : await db.select().from(customers).where(eq(customers.phone, normalizedIdentifier)).get();
+            ? await getActiveCustomerByEmailForSignIn(db, normalizedIdentifier)
+            : await getActiveCustomerByPhone(db, normalizedIdentifier);
 
         if (intent === "sign_in") {
             if (!existing) {
+                if (method === "email" && await getDeletedCustomerByEmail(db, normalizedIdentifier)) {
+                    throw new ValidationError("This email belongs to a deleted customer account. Contact store support to restore access.");
+                }
+                if (method === "phone" && await getDeletedCustomerByPhone(db, normalizedIdentifier)) {
+                    throw new ValidationError("This phone number belongs to a deleted customer account. Contact store support to restore access.");
+                }
                 throw new ValidationError(
                     method === "email"
                         ? "No account was found for this email. Create an account instead."
@@ -754,8 +812,11 @@ export async function verifyOtp(
             }
 
             if (resolvedEmail) {
-                const emailExists = await db.select().from(customers).where(eq(customers.email, resolvedEmail)).get();
-                if (emailExists) {
+                const activeEmailCustomers = await getActiveCustomersByEmail(db, resolvedEmail, 2);
+                if (activeEmailCustomers.length > 1) {
+                    throw new ValidationError("Multiple accounts use this email. Please use phone verification or contact store support.");
+                }
+                if (activeEmailCustomers.length === 1) {
                     throw new ValidationError("An account already exists for this email. Sign in instead.");
                 }
             }
@@ -765,9 +826,13 @@ export async function verifyOtp(
                 throw new ValidationError("Phone number is required to create an account.");
             }
 
-            const phoneExists = await db.select().from(customers).where(eq(customers.phone, phoneForNewCustomer)).get();
-            if (phoneExists) {
+            const activePhoneCustomer = await getActiveCustomerByPhone(db, phoneForNewCustomer);
+            if (activePhoneCustomer) {
                 throw new ValidationError("An account already exists for this phone number. Sign in instead.");
+            }
+            const deletedPhoneCustomer = await getDeletedCustomerByPhone(db, phoneForNewCustomer);
+            if (deletedPhoneCustomer) {
+                throw new ValidationError("This phone number belongs to a deleted customer account. Contact store support to restore access.");
             }
 
             // Create new customer record — use "cust_" prefix for consistency with customers.service.ts
