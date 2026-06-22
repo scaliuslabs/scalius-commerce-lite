@@ -487,6 +487,7 @@ export function VariantManager({
 
               {stats.total > 0 && !isFirstOptionSetup && (
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setIsSortModalOpen(true)}

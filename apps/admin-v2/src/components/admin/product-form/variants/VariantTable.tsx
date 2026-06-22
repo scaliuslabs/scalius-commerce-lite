@@ -93,6 +93,7 @@ export function VariantTable({
             <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground">
               <p className="text-sm">No options yet</p>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={onAddVariant}
@@ -137,7 +138,7 @@ export function VariantTable({
         showMobileCards && "hidden md:block",
         showMobileEditor && "hidden md:block",
       )}>
-        <Table>
+        <Table className="min-w-[1120px]">
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
               <TableHead className="w-10 pl-3 pr-1 py-1.5 align-middle">
@@ -165,20 +166,22 @@ export function VariantTable({
               </TableHead>
               <TableHead className="min-w-[80px] py-2 text-xs font-medium">Weight</TableHead>
               <TableHead className="min-w-[90px] py-2 text-xs font-medium">Price</TableHead>
+              <TableHead className="min-w-[112px] py-2 text-xs font-medium" title="Whether this SKU has a stock quantity limit">Stock limit</TableHead>
               <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items in your warehouse">On Hand</TableHead>
-              {!isBulkEditing && <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>}
+              <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>
               <TableHead className="min-w-[100px] py-2 text-xs font-medium">Discount</TableHead>
               <TableHead className="min-w-[110px] py-2 text-xs font-medium">Updated</TableHead>
-              <TableHead className="w-[86px] py-2 pr-2 text-right text-xs font-medium">Actions</TableHead>
+              <TableHead className="w-[116px] py-2 pr-2 text-right text-xs font-medium">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {variants.length === 0 && !isAdding && (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center">
+                <TableCell colSpan={12} className="h-24 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <p className="text-sm">No options yet</p>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={onAddVariant}
@@ -243,6 +246,7 @@ export function VariantTable({
       {!isAdding && variants.length > 0 && (
         <div className="flex justify-start pt-2">
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={onAddVariant}
@@ -351,6 +355,7 @@ function VariantMobileCard({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
@@ -417,6 +422,15 @@ function VariantMobileCard({
                   {stockStatus === "out-of-stock" ? " out" : ""}
                 </div>
               )}
+            </div>
+            <div className="rounded-md bg-muted/40 p-2">
+              <div className="text-muted-foreground">Stock limit</div>
+              <div className={cn(
+                "mt-1 font-semibold",
+                inventoryTracked ? "text-sky-700" : "text-emerald-700",
+              )}>
+                {inventoryTracked ? "Track stock" : "No stock limit"}
+              </div>
             </div>
             <div className="rounded-md bg-muted/40 p-2">
               <div className="text-muted-foreground">On hand</div>

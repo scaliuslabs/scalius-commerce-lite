@@ -104,6 +104,7 @@ export const VariantAttributeInput = React.memo(
           <div className="flex items-center gap-2">
             {items.length > 0 && (
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => onItemsChange([])}

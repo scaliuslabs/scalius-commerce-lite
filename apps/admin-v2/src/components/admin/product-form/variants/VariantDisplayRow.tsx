@@ -175,6 +175,20 @@ export function VariantDisplayRow({
         <span suppressHydrationWarning>{symbol}{variant.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
       </TableCell>
 
+      <TableCell className="py-2">
+        <Badge
+          variant="outline"
+          className={cn(
+            "h-5 whitespace-nowrap px-1.5 text-[10px] leading-none",
+            inventoryTracked
+              ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-900/30 dark:text-sky-300"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300",
+          )}
+        >
+          {inventoryTracked ? "Track stock" : "No stock limit"}
+        </Badge>
+      </TableCell>
+
       {/* On Hand */}
       <TableCell className="py-2">
         {inventoryTracked ? (
@@ -242,6 +256,7 @@ export function VariantDisplayRow({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity"

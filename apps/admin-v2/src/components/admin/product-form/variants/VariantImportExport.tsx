@@ -102,6 +102,7 @@ export function VariantImportExport({
     <div className="contents">
       {/* Export Button */}
       <Button
+        type="button"
         variant="outline"
         size="sm"
         onClick={handleExport}
@@ -115,7 +116,7 @@ export function VariantImportExport({
       {/* Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={disabled} className="h-8 w-full justify-center text-xs sm:w-auto">
+          <Button type="button" variant="outline" size="sm" disabled={disabled} className="h-8 w-full justify-center text-xs sm:w-auto">
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
@@ -132,6 +133,7 @@ export function VariantImportExport({
           <div className="space-y-4 py-4">
             <div className="grid gap-2 sm:grid-cols-2">
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleDownloadTemplate}
@@ -142,6 +144,7 @@ export function VariantImportExport({
               </Button>
 
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
@@ -207,6 +210,7 @@ export function VariantImportExport({
 
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
               onClick={() => {
                 setImportDialogOpen(false);
@@ -219,6 +223,7 @@ export function VariantImportExport({
               Cancel
             </Button>
             <Button
+              type="button"
               onClick={handleConfirmImport}
               disabled={!importResult || !importResult.success || isImporting}
             >
