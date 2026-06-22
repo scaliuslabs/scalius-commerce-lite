@@ -196,7 +196,13 @@ export function AmountOffProductsContainer({
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit} className="space-y-8" noValidate>
+      <form
+        method="post"
+        action="/admin/discounts"
+        onSubmit={handleSubmit}
+        className="space-y-8"
+        noValidate
+      >
         <DiscountDetailsSection form={form} symbol={symbol} />
 
         <AppliesToSection

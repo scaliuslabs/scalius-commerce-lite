@@ -162,7 +162,7 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
+        <form method="post" className="space-y-5" onSubmit={handleSubmit} noValidate>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <Label htmlFor="manual-fulfillment-all">Items</Label>

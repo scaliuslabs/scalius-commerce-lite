@@ -366,7 +366,7 @@ function StripeForm({ s, set, conf, saving, onSave }: {
     conf: { secret: boolean; webhook: boolean }; saving: boolean; onSave: () => void;
 }) {
     return (
-        <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2">
+        <form method="post" onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2" noValidate>
             <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
                 <div className="space-y-0.5">
                     <Label htmlFor="stripe-enabled" className="text-sm">Provider enabled</Label>
@@ -412,7 +412,7 @@ function SSLForm({ s, set, conf, saving, onSave }: {
     conf: { password: boolean }; saving: boolean; onSave: () => void;
 }) {
     return (
-        <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2">
+        <form method="post" onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2" noValidate>
             <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
                 <div className="space-y-0.5">
                     <Label htmlFor="ssl-enabled" className="text-sm">Provider enabled</Label>

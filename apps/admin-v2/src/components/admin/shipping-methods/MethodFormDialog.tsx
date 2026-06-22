@@ -79,7 +79,12 @@ export function MethodFormDialog({
             Fill in the details for the shipping method.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleFormSubmit} className="space-y-4">
+        <form
+          method="post"
+          onSubmit={handleFormSubmit}
+          className="space-y-4"
+          noValidate
+        >
           <div>
             <Label htmlFor="name" className="text-xs">
               Name

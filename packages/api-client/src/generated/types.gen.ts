@@ -1561,10 +1561,8 @@ export type GetApiV1PagesByIdResponses = {
 
 export type GetApiV1PagesByIdResponse = GetApiV1PagesByIdResponses[keyof GetApiV1PagesByIdResponses];
 
-export type GetApiV1DiscountsValidateData = {
-    body?: never;
-    path?: never;
-    query: {
+export type PostApiV1DiscountsValidateData = {
+    body: {
         /**
          * Discount code to validate
          */
@@ -1574,9 +1572,14 @@ export type GetApiV1DiscountsValidateData = {
          */
         total?: number | null;
         /**
-         * JSON-encoded cart items
+         * Cart items
          */
-        items?: string;
+        items?: Array<{
+            id: string;
+            price: number | null;
+            quantity: number | null;
+            variantId?: string;
+        }>;
         /**
          * Shipping cost
          */
@@ -1586,10 +1589,12 @@ export type GetApiV1DiscountsValidateData = {
          */
         customerPhone?: string;
     };
+    path?: never;
+    query?: never;
     url: '/api/v1/discounts/validate';
 };
 
-export type GetApiV1DiscountsValidateErrors = {
+export type PostApiV1DiscountsValidateErrors = {
     /**
      * Validation error
      */
@@ -1614,9 +1619,9 @@ export type GetApiV1DiscountsValidateErrors = {
     };
 };
 
-export type GetApiV1DiscountsValidateError = GetApiV1DiscountsValidateErrors[keyof GetApiV1DiscountsValidateErrors];
+export type PostApiV1DiscountsValidateError = PostApiV1DiscountsValidateErrors[keyof PostApiV1DiscountsValidateErrors];
 
-export type GetApiV1DiscountsValidateResponses = {
+export type PostApiV1DiscountsValidateResponses = {
     /**
      * Discount validation result
      */
@@ -1638,7 +1643,7 @@ export type GetApiV1DiscountsValidateResponses = {
     };
 };
 
-export type GetApiV1DiscountsValidateResponse = GetApiV1DiscountsValidateResponses[keyof GetApiV1DiscountsValidateResponses];
+export type PostApiV1DiscountsValidateResponse = PostApiV1DiscountsValidateResponses[keyof PostApiV1DiscountsValidateResponses];
 
 export type GetApiV1WidgetsByIdData = {
     body?: never;

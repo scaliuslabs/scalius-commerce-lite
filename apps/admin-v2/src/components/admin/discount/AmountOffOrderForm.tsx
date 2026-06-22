@@ -222,8 +222,11 @@ export function AmountOffOrderForm({
     <Form {...form}>
       {/* Use form element for submit */}
       <form
+        method="post"
+        action="/admin/discounts"
         onSubmit={form.handleSubmit(internalHandleSubmit)}
         className="space-y-8"
+        noValidate
       >
         {/* Main Card for the form */}
         <Card>

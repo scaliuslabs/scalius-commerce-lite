@@ -24,6 +24,61 @@ function hasBroadQueryBarrelImport(source: string) {
   );
 }
 
+function extractOpeningFormTags(source: string): string[] {
+  const text = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+  const tags: string[] = [];
+  let searchFrom = 0;
+
+  while (searchFrom < text.length) {
+    const start = text.indexOf("<form", searchFrom);
+    if (start < 0) break;
+
+    let braceDepth = 0;
+    let quote: '"' | "'" | "`" | null = null;
+    let escaped = false;
+
+    for (let i = start + "<form".length; i < text.length; i += 1) {
+      const char = text[i];
+
+      if (quote) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === quote) {
+          quote = null;
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'" || char === "`") {
+        quote = char;
+        continue;
+      }
+      if (char === "{") {
+        braceDepth += 1;
+        continue;
+      }
+      if (char === "}" && braceDepth > 0) {
+        braceDepth -= 1;
+        continue;
+      }
+      if (char === ">" && braceDepth === 0) {
+        tags.push(text.slice(start, i + 1));
+        searchFrom = i + 1;
+        break;
+      }
+      if (i === text.length - 1) {
+        searchFrom = text.length;
+      }
+    }
+  }
+
+  return tags;
+}
+
 describe("admin route graph boundaries", () => {
   it("keeps route error UI out of zod-backed list helpers", () => {
     const offenders = listSourceFiles(join(ADMIN_SRC_ROOT, "routes", "admin"))
@@ -371,7 +426,7 @@ describe("admin route graph boundaries", () => {
 
     for (const { path, action } of formSources) {
       const source = readFileSync(path, "utf8");
-      const formTags = Array.from(source.matchAll(/<form\b[^>]*>/g), (match) => match[0]);
+      const formTags = extractOpeningFormTags(source);
       const noValidateCount = source.match(/noValidate/g)?.length ?? 0;
 
       expect(formTags.length).toBeGreaterThan(0);
@@ -401,6 +456,79 @@ describe("admin route graph boundaries", () => {
     expect(adminUsersSource).toContain("must choose a password and enable 2FA");
     expect(adminUsersSource).not.toContain("temporary password");
     expect(adminUsersSource).not.toContain("Temporary Password");
+  });
+
+  it("keeps admin app forms from relying on implicit browser submit methods", () => {
+    const offenders = listSourceFiles(ADMIN_SRC_ROOT)
+      .filter((path) => !/\.test\./.test(path))
+      .flatMap((path) => {
+        const source = readFileSync(path, "utf8");
+        return extractOpeningFormTags(source)
+          .filter((formTag) => !/\bmethod\s*=/.test(formTag))
+          .map((formTag) => `${relative(ADMIN_SRC_ROOT, path)}: ${formTag.replace(/\s+/g, " ")}`);
+      });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps sensitive admin mutation forms out of native GET submissions", () => {
+    const mutationForms = [
+      join(ADMIN_SRC_ROOT, "components", "admin", "FraudCheckerSettings.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "OrderForm.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "ProductForm.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "ShipmentForm.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "checkout-languages", "LanguageFormDialog.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "collection-form", "CollectionFormContainer.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "delivery-locations", "LocationFormDialog.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "meta-conversions", "MetaConversionsSettingsForm.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "ManualFulfillmentDialog.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "scanner", "BarcodeScanner.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "settings", "PaymentGatewaysManager.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "settings", "PolarSettingsForm.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "shared", "FormContainer.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "shipping-methods", "MethodFormDialog.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "widgets", "WidgetForm.tsx"),
+    ];
+
+    for (const path of mutationForms) {
+      const source = readFileSync(path, "utf8");
+      const formTags = extractOpeningFormTags(source);
+
+      expect(formTags.length).toBeGreaterThan(0);
+      for (const formTag of formTags) {
+        expect(formTag).toContain('method="post"');
+        expect(formTag).toContain("noValidate");
+      }
+    }
+  });
+
+  it("keeps admin discount form values out of native GET submissions", () => {
+    const discountForms = [
+      join(ADMIN_SRC_ROOT, "components", "admin", "discount", "AmountOffOrderForm.tsx"),
+      join(ADMIN_SRC_ROOT, "components", "admin", "discount", "FreeShippingForm.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "discount",
+        "amount-off-products",
+        "AmountOffProductsContainer.tsx",
+      ),
+    ];
+
+    for (const path of discountForms) {
+      const source = readFileSync(path, "utf8");
+      const formTags = extractOpeningFormTags(source);
+      const noValidateCount = source.match(/noValidate/g)?.length ?? 0;
+
+      expect(source).toMatch(/name="(?:code|discountValue|isActive)"/);
+      expect(formTags.length).toBeGreaterThan(0);
+      expect(noValidateCount).toBe(formTags.length);
+      for (const formTag of formTags) {
+        expect(formTag).toContain('method="post"');
+        expect(formTag).toContain('action="/admin/discounts"');
+      }
+    }
   });
 
   it("keeps admin navigation from doing focus refetch stampedes", () => {

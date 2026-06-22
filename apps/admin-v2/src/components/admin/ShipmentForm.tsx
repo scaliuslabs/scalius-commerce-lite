@@ -102,7 +102,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
   return (
     <div className="border rounded p-4">
       <h3 className="font-medium mb-4">Create Shipment</h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form method="post" onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div>
           <label className="block text-sm font-medium mb-1">
             Delivery Provider

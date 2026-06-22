@@ -60,7 +60,7 @@ export function LocationFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit}>
+        <form method="post" onSubmit={onSubmit} noValidate>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="name">

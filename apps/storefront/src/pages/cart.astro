@@ -367,7 +367,7 @@ const submitLabel = codOnly
             {lang.languageData.checkoutSectionTitle}
           </h2>
 
-          <form method="POST" class="space-y-3" id="checkoutForm">
+          <form method="POST" action="/cart" class="space-y-3" id="checkoutForm">
             <input type="hidden" name="formIntent" value="checkout" />
             <input type="hidden" name="cartItems" id="cartItemsInput" />
             <input type="hidden" name="checkoutId" id="checkoutIdInput" />

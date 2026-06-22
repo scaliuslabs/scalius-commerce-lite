@@ -23,7 +23,7 @@ interface PolarFormProps {
 
 export function PolarForm({ s, set, conf, saving, onSave, onHelp }: PolarFormProps) {
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2">
+    <form method="post" onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2" noValidate>
       <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
         <div className="space-y-0.5">
           <Label htmlFor="polar-enabled" className="text-sm">Provider enabled</Label>

@@ -321,7 +321,12 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
           </CardHeader>
           <CardContent>
             {(selectedProvider || isCreating) && isEditing ? (
-              <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
+              <form
+                method="post"
+                onSubmit={form.handleSubmit(handleSave)}
+                className="space-y-4"
+                noValidate
+              >
                 <div className="space-y-1.5">
                   <Label htmlFor="providerType" className="text-xs">Provider</Label>
                   <Select value={providerType} onValueChange={handleProviderTypeChange}>

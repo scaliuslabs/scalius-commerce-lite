@@ -162,6 +162,7 @@ export function ShippingMethodsContainer() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div className="flex flex-1 items-center w-full sm:w-auto space-x-1.5">
               <form
+                method="get"
                 onSubmit={handleSearch}
                 className="flex-1 sm:flex-initial sm:max-w-xs w-full"
               >
