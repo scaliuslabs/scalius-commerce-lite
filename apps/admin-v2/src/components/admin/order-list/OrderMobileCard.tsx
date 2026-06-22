@@ -15,7 +15,10 @@ interface OrderShipment {
 import { Card, CardContent } from "../../ui/card";
 import { Checkbox } from "../../ui/checkbox";
 import { Badge } from "../../ui/badge";
-import { PaymentStatusBadge } from "../shared/StatusBadges";
+import {
+  FulfillmentStatusBadge,
+  PaymentStatusBadge,
+} from "../shared/StatusBadges";
 import { Button } from "../../ui/button";
 import {
   Phone,
@@ -52,6 +55,25 @@ interface OrderMobileCardProps {
 }
 
 const formatDate = formatRelativeDate;
+
+function PaymentMethodLabel({ method }: { method: string }) {
+  const label =
+    method === "cod"
+      ? "COD"
+      : method === "stripe"
+        ? "Stripe"
+        : method === "sslcommerz"
+          ? "SSL"
+          : method === "polar"
+            ? "Polar"
+            : method;
+
+  return (
+    <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
+      {label}
+    </span>
+  );
+}
 
 export const OrderMobileCard = React.memo(function OrderMobileCard({
   order,
@@ -130,11 +152,10 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                 -{symbol}{(order.discountAmount ?? 0).toLocaleString()}
               </Badge>
             )}
-            <div className="flex items-center justify-end gap-1 mt-1">
+            <div className="flex flex-wrap items-center justify-end gap-1 mt-1">
               <PaymentStatusBadge status={order.paymentStatus} />
-              <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
-                {order.paymentMethod === "cod" ? "COD" : order.paymentMethod === "stripe" ? "Stripe" : order.paymentMethod === "sslcommerz" ? "SSL" : order.paymentMethod === "polar" ? "Polar" : order.paymentMethod}
-              </span>
+              <FulfillmentStatusBadge status={order.fulfillmentStatus} />
+              <PaymentMethodLabel method={order.paymentMethod} />
             </div>
           </div>
         </div>

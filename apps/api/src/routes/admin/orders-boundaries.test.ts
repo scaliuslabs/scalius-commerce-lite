@@ -18,4 +18,18 @@ describe("admin orders route boundaries", () => {
         expect(source).toContain('?? (query.search?.trim() ? "relevance" : "updatedAt")');
         expect(source).toContain("sort: effectiveSort");
     });
+
+    it("passes payment and fulfillment list filters through the API route", () => {
+        const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+
+        expect(source).toContain("const paymentStatusQuerySchema = z.enum([");
+        expect(source).toContain("const paymentMethodQuerySchema = z.enum([");
+        expect(source).toContain("const fulfillmentStatusQuerySchema = z.enum([");
+        expect(source).toContain("paymentStatus: paymentStatusQuerySchema.optional()");
+        expect(source).toContain("paymentMethod: paymentMethodQuerySchema.optional()");
+        expect(source).toContain("fulfillmentStatus: fulfillmentStatusQuerySchema.optional()");
+        expect(source).toContain("paymentStatus: query.paymentStatus");
+        expect(source).toContain("paymentMethod: query.paymentMethod");
+        expect(source).toContain("fulfillmentStatus: query.fulfillmentStatus");
+    });
 });

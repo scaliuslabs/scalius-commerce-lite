@@ -79283,6 +79283,54 @@
             "schema": {
               "type": "string",
               "enum": [
+                "unpaid",
+                "partial",
+                "paid",
+                "refunded",
+                "failed"
+              ],
+              "description": "Filter by payment status"
+            },
+            "required": false,
+            "description": "Filter by payment status",
+            "name": "paymentStatus",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cod",
+                "stripe",
+                "sslcommerz",
+                "polar"
+              ],
+              "description": "Filter by payment method"
+            },
+            "required": false,
+            "description": "Filter by payment method",
+            "name": "paymentMethod",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "partial",
+                "complete"
+              ],
+              "description": "Filter by fulfillment status"
+            },
+            "required": false,
+            "description": "Filter by fulfillment status",
+            "name": "fulfillmentStatus",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "true",
                 "false"
               ],

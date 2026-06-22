@@ -98,6 +98,15 @@ export function normalizeEnumSearchParam<T extends string>(
     : fallback;
 }
 
+export function normalizeOptionalEnumSearchParam<T extends string>(
+  value: unknown,
+  options: readonly T[],
+): T | undefined {
+  return typeof value === "string" && options.includes(value as T)
+    ? (value as T)
+    : undefined;
+}
+
 export function normalizeDateSearchParam(value: unknown): string | undefined {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? value

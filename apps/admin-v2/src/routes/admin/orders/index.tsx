@@ -14,6 +14,7 @@ import {
   createListSearchValidator,
   getCanonicalPageForPagination,
   normalizeDateSearchParam,
+  normalizeOptionalEnumSearchParam,
   normalizeOptionalSearchString,
   type ListSearchParams,
   type SearchValidatorInput,
@@ -77,8 +78,32 @@ type OrderSort =
   | "createdAt"
   | "updatedAt";
 
+const PAYMENT_STATUS_FILTERS = [
+  "unpaid",
+  "partial",
+  "paid",
+  "refunded",
+  "failed",
+] as const;
+
+const PAYMENT_METHOD_FILTERS = [
+  "cod",
+  "stripe",
+  "sslcommerz",
+  "polar",
+] as const;
+
+const FULFILLMENT_STATUS_FILTERS = [
+  "pending",
+  "partial",
+  "complete",
+] as const;
+
 type SearchParams = ListSearchParams<OrderSort> & {
   status?: string;
+  paymentStatus?: (typeof PAYMENT_STATUS_FILTERS)[number];
+  paymentMethod?: (typeof PAYMENT_METHOD_FILTERS)[number];
+  fulfillmentStatus?: (typeof FULFILLMENT_STATUS_FILTERS)[number];
   startDate?: string;
   endDate?: string;
 };
@@ -87,6 +112,18 @@ function validateOrderSearch(search: SearchValidatorInput<SearchParams>): Search
   return {
     ...baseSearchValidator(search),
     status: normalizeOptionalSearchString(search.status),
+    paymentStatus: normalizeOptionalEnumSearchParam(
+      search.paymentStatus,
+      PAYMENT_STATUS_FILTERS,
+    ),
+    paymentMethod: normalizeOptionalEnumSearchParam(
+      search.paymentMethod,
+      PAYMENT_METHOD_FILTERS,
+    ),
+    fulfillmentStatus: normalizeOptionalEnumSearchParam(
+      search.fulfillmentStatus,
+      FULFILLMENT_STATUS_FILTERS,
+    ),
     startDate: normalizeDateSearchParam(search.startDate),
     endDate: normalizeDateSearchParam(search.endDate),
   };
@@ -100,6 +137,9 @@ function mapParams(deps: SearchParams) {
     limit: deps.limit,
     search: deps.search || undefined,
     status: deps.status,
+    paymentStatus: deps.paymentStatus,
+    paymentMethod: deps.paymentMethod,
+    fulfillmentStatus: deps.fulfillmentStatus,
     sort: deps.sort,
     order: deps.order,
     showTrashed: deps.trashed,
@@ -165,6 +205,18 @@ function OrdersPage() {
   const [isShipping, setIsShipping] = useState(false);
   // Derive filter values directly from URL search params (reactive to back/forward)
   const activeStatus = search.status ?? null;
+  const activePaymentStatus = search.paymentStatus ?? null;
+  const activePaymentMethod = search.paymentMethod ?? null;
+  const activeFulfillmentStatus = search.fulfillmentStatus ?? null;
+  const hasActiveFilters = Boolean(
+    search.search.trim()
+      || activeStatus
+      || activePaymentStatus
+      || activePaymentMethod
+      || activeFulfillmentStatus
+      || search.startDate
+      || search.endDate,
+  );
   const isDeleteDialogOpen = !!orderToDelete || isBulkDeleteOpen;
 
   // Date range — derive from URL params
@@ -255,6 +307,45 @@ function OrdersPage() {
   const onStatusFilterChange = useCallback(
     (status: string | null) => {
       handleNavigate({ status: status ?? undefined, page: 1 });
+    },
+    [handleNavigate],
+  );
+
+  const onPaymentStatusFilterChange = useCallback(
+    (paymentStatus: string | null) => {
+      handleNavigate({
+        paymentStatus: normalizeOptionalEnumSearchParam(
+          paymentStatus,
+          PAYMENT_STATUS_FILTERS,
+        ),
+        page: 1,
+      });
+    },
+    [handleNavigate],
+  );
+
+  const onPaymentMethodFilterChange = useCallback(
+    (paymentMethod: string | null) => {
+      handleNavigate({
+        paymentMethod: normalizeOptionalEnumSearchParam(
+          paymentMethod,
+          PAYMENT_METHOD_FILTERS,
+        ),
+        page: 1,
+      });
+    },
+    [handleNavigate],
+  );
+
+  const onFulfillmentStatusFilterChange = useCallback(
+    (fulfillmentStatus: string | null) => {
+      handleNavigate({
+        fulfillmentStatus: normalizeOptionalEnumSearchParam(
+          fulfillmentStatus,
+          FULFILLMENT_STATUS_FILTERS,
+        ),
+        page: 1,
+      });
     },
     [handleNavigate],
   );
@@ -508,6 +599,9 @@ function OrdersPage() {
       "Zone",
       "Area",
       "Status",
+      "Payment Status",
+      "Payment Method",
+      "Fulfillment Status",
       "Total Amount",
       "Discount",
       "Items",
@@ -522,6 +616,9 @@ function OrdersPage() {
       order.zoneName || order.zone,
       order.areaName || order.area || "",
       order.status,
+      order.paymentStatus,
+      order.paymentMethod,
+      order.fulfillmentStatus,
       order.totalAmount,
       order.discountAmount || 0,
       order.itemCount,
@@ -682,6 +779,12 @@ function OrdersPage() {
       showTrashed={showTrashed}
       activeStatus={activeStatus}
       onStatusFilterChange={onStatusFilterChange}
+      activePaymentStatus={activePaymentStatus}
+      onPaymentStatusFilterChange={onPaymentStatusFilterChange}
+      activePaymentMethod={activePaymentMethod}
+      onPaymentMethodFilterChange={onPaymentMethodFilterChange}
+      activeFulfillmentStatus={activeFulfillmentStatus}
+      onFulfillmentStatusFilterChange={onFulfillmentStatusFilterChange}
       dateRange={dateRange}
       onDateRangeChange={onDateRangeChange}
       onBulkDelete={handleBulkDeleteClick}
@@ -733,13 +836,13 @@ function OrdersPage() {
               icon: ShoppingBag,
               title: showTrashed
                 ? "No orders in trash"
-                : search.search
+                : hasActiveFilters
                   ? "No orders found"
                   : "No orders found",
               description: showTrashed
                 ? "Deleted orders will appear here"
-                : search.search
-                  ? "Try adjusting your search"
+                : hasActiveFilters
+                  ? "Try adjusting your search or filters"
                   : "New orders will appear here",
             }}
           />

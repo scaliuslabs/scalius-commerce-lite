@@ -6,7 +6,18 @@ import {
     bulkDeleteOrderSchema,
     bulkShipOrderSchema
 } from "@scalius/core/modules/orders/orders.validation";
-import { orderPayments, paymentPlans, orderItems, products, productVariants, productImages, orders } from "@scalius/database/schema";
+import {
+    FulfillmentStatus,
+    PaymentMethod,
+    PaymentStatus,
+    orderPayments,
+    paymentPlans,
+    orderItems,
+    products,
+    productVariants,
+    productImages,
+    orders,
+} from "@scalius/database/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
@@ -30,6 +41,27 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
+
+const paymentStatusQuerySchema = z.enum([
+    PaymentStatus.UNPAID,
+    PaymentStatus.PARTIAL,
+    PaymentStatus.PAID,
+    PaymentStatus.REFUNDED,
+    PaymentStatus.FAILED,
+]);
+
+const paymentMethodQuerySchema = z.enum([
+    PaymentMethod.COD,
+    PaymentMethod.STRIPE,
+    PaymentMethod.SSLCOMMERZ,
+    PaymentMethod.POLAR,
+]);
+
+const fulfillmentStatusQuerySchema = z.enum([
+    FulfillmentStatus.PENDING,
+    FulfillmentStatus.PARTIAL,
+    FulfillmentStatus.COMPLETE,
+]);
 
 function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
     return typeof result === "object"
@@ -153,6 +185,9 @@ const listOrdersRoute = createRoute({
             limit: z.coerce.number().optional().default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().openapi({ description: "Search query" }),
             status: z.string().optional().openapi({ description: "Filter by status" }),
+            paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
+            paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
+            fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed orders" }),
             sort: z.enum([
                 "relevance",
@@ -193,6 +228,9 @@ app.openapi(listOrdersRoute, async (c) => {
         limit: query.limit,
         search: query.search || "",
         status: query.status || undefined,
+        paymentStatus: query.paymentStatus,
+        paymentMethod: query.paymentMethod,
+        fulfillmentStatus: query.fulfillmentStatus,
         showTrashed: query.trashed === "true",
         sort: effectiveSort,
         order: query.order as "asc" | "desc",

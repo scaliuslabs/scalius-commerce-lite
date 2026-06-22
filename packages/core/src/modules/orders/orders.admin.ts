@@ -118,6 +118,9 @@ function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
 export async function listOrders(db: Database, options: {
     search?: string;
     status?: string;
+    paymentStatus?: string;
+    paymentMethod?: string;
+    fulfillmentStatus?: string;
     page?: number;
     limit?: number;
     showTrashed?: boolean;
@@ -129,6 +132,9 @@ export async function listOrders(db: Database, options: {
     const {
         search,
         status,
+        paymentStatus,
+        paymentMethod,
+        fulfillmentStatus,
         page: rawPage = 1,
         limit: rawLimit = 10,
         showTrashed = false,
@@ -179,6 +185,18 @@ export async function listOrders(db: Database, options: {
 
     if (status) {
         whereConditions.push(sql`${orders.status} = ${status}`);
+    }
+
+    if (paymentStatus) {
+        whereConditions.push(sql`${orders.paymentStatus} = ${paymentStatus}`);
+    }
+
+    if (paymentMethod) {
+        whereConditions.push(sql`${orders.paymentMethod} = ${paymentMethod}`);
+    }
+
+    if (fulfillmentStatus) {
+        whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`);
     }
 
     if (startDate) {

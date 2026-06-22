@@ -24333,6 +24333,18 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
+         * Filter by payment status
+         */
+        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
+        /**
+         * Filter by payment method
+         */
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        /**
+         * Filter by fulfillment status
+         */
+        fulfillmentStatus?: 'pending' | 'partial' | 'complete';
+        /**
          * Show trashed orders
          */
         trashed?: 'true' | 'false';

@@ -3,6 +3,7 @@ import {
   DEFAULT_LIST_MAX_LIMIT,
   createListSearchValidator,
   getCanonicalPageForPagination,
+  normalizeOptionalEnumSearchParam,
   normalizeListPositiveInteger,
   type SearchValidatorInput,
 } from "./list-helpers";
@@ -53,5 +54,13 @@ describe("list helpers", () => {
     expect(normalizeListPositiveInteger(12.8, 10)).toBe(12);
     expect(normalizeListPositiveInteger(Number.POSITIVE_INFINITY, 10)).toBe(10);
     expect(normalizeListPositiveInteger(150, 10, { max: 100 })).toBe(100);
+  });
+
+  it("normalizes optional enum URL filters without keeping unknown values", () => {
+    const options = ["paid", "partial", "unpaid"] as const;
+
+    expect(normalizeOptionalEnumSearchParam("paid", options)).toBe("paid");
+    expect(normalizeOptionalEnumSearchParam("unknown", options)).toBeUndefined();
+    expect(normalizeOptionalEnumSearchParam(undefined, options)).toBeUndefined();
   });
 });
