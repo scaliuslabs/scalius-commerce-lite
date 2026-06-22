@@ -5,7 +5,6 @@ export {
   sendEmail,
   sendVerificationEmail,
   sendPasswordResetEmail,
-  sendAdminInviteEmail,
 } from "./email/index";
 
 export type {

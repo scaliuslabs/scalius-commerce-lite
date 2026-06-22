@@ -12,6 +12,8 @@ export interface AdminSessionUser {
   image: string | null;
   role: string | null;
   twoFactorEnabled: boolean;
+  mustChangePassword: boolean;
+  mustEnrollTwoFactor: boolean;
   isSuperAdmin: boolean;
 }
 
@@ -31,6 +33,8 @@ interface AdminSessionRow {
   image: string | null;
   role: string | null;
   twoFactorEnabled: number | boolean | null;
+  mustChangePassword: number | boolean | null;
+  mustEnrollTwoFactor: number | boolean | null;
   twoFactorVerified: number | boolean | null;
   isSuperAdmin: number | boolean | null;
 }
@@ -145,6 +149,8 @@ export async function getAdminSessionFromCookieHeader(
           u.image as image,
           u.role as role,
           u.two_factor_enabled as twoFactorEnabled,
+          u.must_change_password as mustChangePassword,
+          u.must_enroll_two_factor as mustEnrollTwoFactor,
           u.is_super_admin as isSuperAdmin
         FROM session s
         INNER JOIN user u ON u.id = s.user_id
@@ -171,6 +177,8 @@ export async function getAdminSessionFromCookieHeader(
       image: row.image,
       role: row.role,
       twoFactorEnabled: truthy(row.twoFactorEnabled),
+      mustChangePassword: truthy(row.mustChangePassword),
+      mustEnrollTwoFactor: truthy(row.mustEnrollTwoFactor),
       isSuperAdmin: truthy(row.isSuperAdmin),
     },
     session: {

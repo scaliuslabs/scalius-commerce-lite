@@ -31,6 +31,7 @@ import {
   Loader2,
   Shield,
   ShieldCheck,
+  KeyRound,
   UserPlus,
   Trash2,
   AlertCircle,
@@ -172,7 +173,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              A temporary password will be sent to their email. They'll be required to set up 2FA on first login.
+              A secure setup link will be sent to their email. They must choose a password and enable 2FA before admin access is allowed.
             </p>
             <div className="flex gap-2">
               <Button
@@ -257,6 +258,18 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                     <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded-full">
                       <AlertCircle className="h-3 w-3" />
                       No 2FA
+                    </span>
+                  )}
+                  {adminUser.mustChangePassword && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-1 rounded-full">
+                      <KeyRound className="h-3 w-3" />
+                      Password setup
+                    </span>
+                  )}
+                  {adminUser.mustEnrollTwoFactor && !adminUser.twoFactorEnabled && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-1 rounded-full">
+                      <Shield className="h-3 w-3" />
+                      2FA setup
                     </span>
                   )}
                   {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (

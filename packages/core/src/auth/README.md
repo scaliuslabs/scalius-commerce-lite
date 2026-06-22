@@ -53,7 +53,7 @@ Customer Auth Flow (storefront):
 
 | File | Tables |
 |------|--------|
-| `packages/database/src/schema/auth.ts` | `user`, `session`, `account`, `verification`, `twoFactor` including Better Auth's `verified` column |
+| `packages/database/src/schema/auth.ts` | `user`, `session`, `account`, `verification`, `twoFactor` including Better Auth's `verified` column and invited-admin onboarding flags |
 | `packages/database/src/schema/rbac.ts` | `permissions`, `roles`, `rolePermissions`, `userRoles`, `userPermissions` |
 
 ## Better Auth Configuration
@@ -65,7 +65,7 @@ Customer Auth Flow (storefront):
 - **Rate limiting**: 5 sign-in attempts/min, 3 password resets/5min, 5 2FA attempts/min, session checks unlimited
 - **IP detection**: `cf-connecting-ip` then `x-forwarded-for`, IPv6 /64 subnet grouping
 - **Trusted origins**: `BETTER_AUTH_URL` + `STOREFRONT_URL`
-- **Password resets**: Better Auth revokes existing sessions after password reset.
+- **Password resets**: Better Auth revokes existing sessions after password reset and clears `user.mustChangePassword` only after the reset token is consumed.
 - **Email callbacks**: `sendVerificationEmail`, `sendResetPassword`, and 2FA `sendOTP` all dynamically import `sendEmail` from `../integrations/email` to avoid circular dependencies. All templates use `escapeHtml()` from `@scalius/shared/html-escape`.
 
 ### Plugins
@@ -134,8 +134,8 @@ The TanStack admin app now uses route/server-function guards rather than the old
 
 ### 2. Admin Detection Guards (`apps/admin-v2/src/lib/auth.fns.ts`)
 
-- `/auth/login`: Redirects to `/auth/setup` if no admin users exist. Redirects to `/admin` if already authenticated (with 2FA check).
-- `/admin/*`: Redirects to `/auth/setup` if no admin users exist. Redirects to `/auth/login` if unauthenticated. Redirects to `/auth/two-factor` if 2FA enabled but session not verified.
+- `/auth/login`: Redirects to `/auth/setup` if no admin users exist. Redirects already-authenticated users to password setup, 2FA setup, 2FA verification, or `/admin` depending on live D1 session/user state.
+- `/admin/*`: Redirects to `/auth/setup` if no admin users exist, `/auth/login` if unauthenticated, `/auth/forgot-password` if `mustChangePassword` is true, `/auth/setup-2fa` if invited-admin 2FA enrollment is still required, or `/auth/two-factor` if 2FA is enabled but the session is not verified.
 - Loads the current session through the direct D1 helper and returns serializable user/session context for TanStack route guards.
 
 ### 3. RBAC Loader (`apps/admin-v2/src/middleware/rbac.server.ts`)
@@ -155,6 +155,8 @@ Authentication strategy:
 2. **Scanner session cookie** -- created only after the admin worker atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
 
 Then validates:
+- Invited admins with `user.mustChangePassword = true` are blocked before RBAC except the own-account password-change endpoint. Normal invite onboarding uses Better Auth reset links, so the public `/api/auth/request-password-reset` + `/auth/reset-password` flow clears the flag.
+- Invited admins with `user.mustEnrollTwoFactor = true` and `twoFactorEnabled = false` are blocked before RBAC except exact 2FA setup endpoints (`GET /2fa/info`, `POST /2fa/method`).
 - 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`, `POST /2fa/method`).
 - User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.
 - Fine-grained route permission check via `getRoutePermission()`. Unmapped admin routes fail closed, including for super admins.
@@ -176,7 +178,7 @@ Simpler JWT-only middleware for non-admin service-token routes (`/auth/token`, `
 | `/auth/login` | Sign-in form. Redirects to setup if no admins exist, to admin if already logged in. |
 | `/auth/setup` | First admin user creation. Blocked if any admin already exists or setup has already completed. D1-backed rate limit and setup claim prevent concurrent bootstrap races. Seeds RBAC. |
 | `/auth/two-factor` | 2FA verification form. Shows if session exists but `twoFactorVerified` is false. |
-| `/auth/setup-2fa` | Optional 2FA setup page. Redirects if 2FA already enabled. |
+| `/auth/setup-2fa` | 2FA setup page. Optional for existing admins, required for invited admins until `mustEnrollTwoFactor` is cleared. Redirects if password setup is still required or 2FA is already enabled. |
 | `/auth/forgot-password` | Password reset request form. |
 | `/auth/reset-password` | Password reset confirmation with token. |
 | `/auth/index` | Redirects to `/auth/login`. |
@@ -214,7 +216,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/users` | List all admin users with roles and overrides |
-| POST | `/users` | Create admin user (generates temp password, sends invite email, assigns role; if invite email fails, the temp password is not returned and admins should use password reset) |
+| POST | `/users` | Create an invited admin user, assign the selected role, set `mustChangePassword` + `mustEnrollTwoFactor`, and send a one-use Better Auth password setup link. The generated bootstrap password is never returned or emailed. |
 | DELETE | `/users/{id}` | Delete admin user (prevents last admin deletion) |
 | POST | `/change-password` | Change current user password (12-char minimum) |
 | POST | `/update-profile` | Update name and avatar |
@@ -251,7 +253,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 ## Known Gaps
 
-1. **2FA is optional, but enabled 2FA is enforced per session**. Users without 2FA can access the admin dashboard. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification/method endpoints.
+1. **2FA is optional for existing/manual admins, mandatory for invited admins**. Invited admins are blocked by `mustEnrollTwoFactor` until a verified 2FA method update clears the flag. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification/method endpoints.
 
 2. **`clearAllPermissionCache()` is local only**: Cross-isolate RBAC invalidation depends on deleting affected `rbac:perms:{userId}` KV entries with `clearPermissionCache(userId, kv)`. Role/permission mutation routes should enumerate affected users and clear those keys; do not rely on local-only broad cache clearing.
 
@@ -261,7 +263,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 5. **Customer auth has no 2FA**. Storefront customers authenticate solely via single-factor OTP (email or phone).
 
-6. **Admin user creation depends on invite/password-reset email delivery**. If invite delivery fails, the API reports `emailFailed: true` without returning the temp password; the creating admin should fix email settings or use the password reset flow.
+6. **Admin user creation depends on password setup email delivery**. If setup email delivery fails, the API reports `emailFailed: true`; the account remains blocked by onboarding flags until the creating admin fixes email settings or the invitee uses the password reset flow.
 
 7. **No session revocation on role changes**. When a user's roles or permissions are modified, their existing sessions remain valid. Effective permission checks should refresh after affected KV permission-cache entries are deleted, but sessions themselves are not revoked.
 

@@ -1,8 +1,10 @@
 // src/server/middleware/admin-auth.ts
 import type { MiddlewareHandler } from "hono";
+import { eq } from "drizzle-orm";
 import { getAuth } from "@scalius/core/auth";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { user as userTable } from "@scalius/database/schema";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 import {
     SCANNER_COOKIE_NAME,
@@ -18,6 +20,8 @@ interface User {
     name: string;
     role: string;
     twoFactorEnabled?: boolean;
+    mustChangePassword?: boolean;
+    mustEnrollTwoFactor?: boolean;
     [key: string]: unknown;
 }
 
@@ -41,6 +45,17 @@ function isTwoFactorCompletionRequest(pathname: string, method: string): boolean
         (method === "GET" && pathname === "/api/v1/admin/auth/2fa/info") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/verify") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/complete-verification") ||
+        (method === "POST" && pathname === "/api/v1/admin/auth/2fa/method")
+    );
+}
+
+function isPasswordOnboardingRequest(pathname: string, method: string): boolean {
+    return method === "POST" && pathname === "/api/v1/admin/auth/change-password";
+}
+
+function isTwoFactorOnboardingRequest(pathname: string, method: string): boolean {
+    return (
+        (method === "GET" && pathname === "/api/v1/admin/auth/2fa/info") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/method")
     );
 }
@@ -103,15 +118,12 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         throw new UnauthorizedError("Admin access requires a valid dashboard session cookie.");
     }
 
-    // Inject user into Hono context
-    c.set("user", user);
-    if (session) {
-        c.set("session", session);
-    }
+    const pathname = normalizeAdminPath(c.req.url);
+    const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
     // Scanner session — restrict to the exact scanner workflow endpoints only.
     if ((user as Record<string, unknown>)._isScannerSession) {
-        const pathname = normalizeAdminPath(c.req.url);
+        c.set("user", user);
         if (!isAllowedScannerApiRequest(pathname, c.req.method)) {
             throw new ForbiddenError("Scanner sessions can only access scanner inventory endpoints");
         }
@@ -120,8 +132,56 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         return;
     }
 
-    const pathname = normalizeAdminPath(c.req.url);
-    const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    // D1 is the authority for admin onboarding gates. Better Auth session payloads
+    // can be stale, and RBAC must not run until invited admins finish setup.
+    const db = c.get("db");
+    const liveUser = await db
+        .select({
+            id: userTable.id,
+            email: userTable.email,
+            name: userTable.name,
+            role: userTable.role,
+            isSuperAdmin: userTable.isSuperAdmin,
+            twoFactorEnabled: userTable.twoFactorEnabled,
+            mustChangePassword: userTable.mustChangePassword,
+            mustEnrollTwoFactor: userTable.mustEnrollTwoFactor,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, user.id))
+        .get();
+
+    if (!liveUser) {
+        throw new UnauthorizedError("Admin session user no longer exists.");
+    }
+
+    user = {
+        ...user,
+        id: liveUser.id,
+        email: liveUser.email,
+        name: liveUser.name,
+        role: liveUser.role ?? user.role,
+        isSuperAdmin: liveUser.isSuperAdmin,
+        twoFactorEnabled: liveUser.twoFactorEnabled,
+        mustChangePassword: liveUser.mustChangePassword,
+        mustEnrollTwoFactor: liveUser.mustEnrollTwoFactor,
+    };
+
+    c.set("user", user);
+    if (session) {
+        c.set("session", session);
+    }
+
+    if (user.mustChangePassword === true && !isPasswordOnboardingRequest(pathname, method)) {
+        throw new ForbiddenError("Password setup required before admin access");
+    }
+
+    if (
+        user.mustEnrollTwoFactor === true &&
+        user.twoFactorEnabled !== true &&
+        !isTwoFactorOnboardingRequest(pathname, method)
+    ) {
+        throw new ForbiddenError("Two-factor setup required before admin access");
+    }
 
     if (
         user.twoFactorEnabled === true &&
@@ -132,7 +192,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     }
 
     // 4. Admin & RBAC Validation
-    const db = c.get("db");
     // getUserPermissions already checks isSuperAdmin internally and returns ALL
     // permissions for super admins — no need for a separate isSuperAdmin() query.
     const userPerms = await getUserPermissions(db, user.id, c.env.CACHE);

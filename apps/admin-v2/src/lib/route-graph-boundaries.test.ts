@@ -385,6 +385,24 @@ describe("admin route graph boundaries", () => {
     }
   });
 
+  it("keeps team invites off temporary-password UX", () => {
+    const adminUsersSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "account-settings",
+        "AdminUsersManager.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(adminUsersSource).toContain("secure setup link");
+    expect(adminUsersSource).toContain("must choose a password and enable 2FA");
+    expect(adminUsersSource).not.toContain("temporary password");
+    expect(adminUsersSource).not.toContain("Temporary Password");
+  });
+
   it("keeps admin navigation from doing focus refetch stampedes", () => {
     const routerSource = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
     const queryClientSource = readFileSync(

@@ -134,6 +134,8 @@ describe("admin session direct D1 lookup", () => {
       image: null,
       role: "admin",
       twoFactorEnabled: 1,
+      mustChangePassword: 1,
+      mustEnrollTwoFactor: 0,
       twoFactorVerified: 1,
       isSuperAdmin: 1,
     });
@@ -153,6 +155,8 @@ describe("admin session direct D1 lookup", () => {
         image: null,
         role: "admin",
         twoFactorEnabled: true,
+        mustChangePassword: true,
+        mustEnrollTwoFactor: false,
         isSuperAdmin: true,
       },
       session: {
@@ -165,5 +169,7 @@ describe("admin session direct D1 lookup", () => {
     const sql = String(db.prepare.mock.calls[0]?.[0] ?? "");
     expect(sql).toContain("s.expires_at > unixepoch()");
     expect(sql).toContain("u.banned = 0");
+    expect(sql).toContain("u.must_change_password");
+    expect(sql).toContain("u.must_enroll_two_factor");
   });
 });

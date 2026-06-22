@@ -10,6 +10,8 @@ export interface AdminUser {
   emailVerified: boolean;
   image: string | null;
   twoFactorEnabled: boolean;
+  mustChangePassword: boolean;
+  mustEnrollTwoFactor: boolean;
   isSuperAdmin: boolean;
   createdAt: string | number;
   roles: { id: string; name: string; displayName: string }[];
@@ -34,6 +36,7 @@ export interface CreateAdminUserResponse {
     email: string;
   };
   emailFailed?: boolean;
+  onboardingRequired?: boolean;
 }
 
 export interface DeleteAdminUserInput {

@@ -89196,6 +89196,12 @@
                               "twoFactorEnabled": {
                                 "type": "boolean"
                               },
+                              "mustChangePassword": {
+                                "type": "boolean"
+                              },
+                              "mustEnrollTwoFactor": {
+                                "type": "boolean"
+                              },
                               "isSuperAdmin": {
                                 "type": "boolean"
                               },
@@ -89260,6 +89266,8 @@
                               "emailVerified",
                               "image",
                               "twoFactorEnabled",
+                              "mustChangePassword",
+                              "mustEnrollTwoFactor",
                               "isSuperAdmin",
                               "createdAt",
                               "roles",
@@ -89595,11 +89603,18 @@
                             "name",
                             "email"
                           ]
+                        },
+                        "emailFailed": {
+                          "type": "boolean"
+                        },
+                        "onboardingRequired": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
                         "message",
-                        "user"
+                        "user",
+                        "onboardingRequired"
                       ]
                     }
                   },

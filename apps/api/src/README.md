@@ -158,7 +158,7 @@ Then, route-specific middleware:
 | Middleware | Applied To | Purpose |
 |---|---|---|
 | `cookieOriginGuardMiddleware` | `/admin/*`, `/cache/*`, `/customer-auth/*` | Rejects unsafe cookie-bearing browser requests when `Origin` is outside the credentialed API CORS allowlist; service-binding/server-to-server calls without a browser `Origin` continue to rely on route auth. |
-| `adminAuthMiddleware` | `/admin/*`, `/cache/*` | Active Better Auth dashboard session cookie, plus scanner session cookies only for exact scanner workflow endpoints. Then RBAC/2FA permission checks. |
+| `adminAuthMiddleware` | `/admin/*`, `/cache/*` | Active Better Auth dashboard session cookie, plus scanner session cookies only for exact scanner workflow endpoints. Then invited-admin onboarding, 2FA, and RBAC permission checks. |
 | `authMiddleware` | `/orders/*` | JWT Bearer token verification with auto-refresh. |
 | `cacheMiddleware` | Individual routes | KV-backed response caching with configurable TTL; cache-miss writes use `executionCtx.waitUntil()` when Workers provides it. |
 
@@ -169,7 +169,7 @@ Then, route-specific middleware:
 1. **Better Auth session cookie** -- from the admin dashboard SSR frontend
 2. **Scanner session cookie** -- created after the admin worker atomically consumes a D1 scanner QR-token claim; restricted to exact scanner workflow endpoints, role is `scanner` not `admin`
 
-After authentication, it rejects 2FA-enabled admin sessions that have not completed 2FA, except exact `GET /admin/auth/2fa/info`, `POST /admin/auth/2fa/verify`, `POST /admin/auth/2fa/complete-verification`, and `POST /admin/auth/2fa/method` requests. It then performs RBAC: resolves the user's effective permission set via `getUserPermissions()` (which handles super-admin internally), then checks route-specific permissions via `getRoutePermission()` supporting `permission`, `anyOf`, and `allOf` modes. Scanner sessions skip full RBAC but are limited to the scanner allowlist.
+After authentication, it reads the live user row from D1 and blocks invited admins before RBAC while `must_change_password` is true, or while `must_enroll_two_factor` is true and 2FA is not enabled. Password onboarding allows only own-account password change; 2FA onboarding allows only exact setup endpoints (`GET /admin/auth/2fa/info`, `POST /admin/auth/2fa/method`). It then rejects 2FA-enabled admin sessions that have not completed 2FA, except exact `GET /admin/auth/2fa/info`, `POST /admin/auth/2fa/verify`, `POST /admin/auth/2fa/complete-verification`, and `POST /admin/auth/2fa/method` requests. Finally it performs RBAC via `getUserPermissions()` and `getRoutePermission()`. Scanner sessions skip full RBAC but are limited to the scanner allowlist.
 
 Admin APIs intentionally do not accept JWT Bearer fallback. Non-admin service-token routes continue to use `authMiddleware`; admin reads/writes require live Better Auth session truth so revocation, ban/deleted status, and 2FA state cannot drift from database state.
 
@@ -387,7 +387,7 @@ If a public endpoint varies by query or request headers, use `varyByQuery`, `que
 | `src/worker.ts` | Worker entry point (fetch + queue + scheduled) |
 | `src/app.ts` | Hono app, route mounting, middleware, OpenAPI spec |
 | `src/queue-consumer.ts` | Queue message dispatcher |
-| `src/middleware/admin-auth.ts` | Admin auth (Better Auth session + scanner session cookie) + 2FA gate + RBAC |
+| `src/middleware/admin-auth.ts` | Admin auth (Better Auth session + scanner session cookie) + invited-admin onboarding gate + 2FA gate + RBAC |
 | `src/middleware/auth.ts` | JWT auth for protected public routes |
 | `src/middleware/webhook-auth.ts` | Delivery webhook signature verification (HMAC/token/IP) |
 | `src/middleware/cache.ts` | KV-backed response cache middleware |
