@@ -108,7 +108,11 @@ function deployTarget(target) {
       runWithRetry("pnpm exec wrangler deploy", "Deploy Admin V2 Worker", resolve(root, "apps", "admin-v2"));
       break;
     case "storefront":
-      runWithRetry("pnpm exec wrangler deploy", "Deploy Storefront Worker", resolve(root, "apps", "storefront"));
+      runWithRetry(
+        "pnpm exec wrangler deploy --config dist/server/wrangler.json",
+        "Deploy Storefront Worker",
+        resolve(root, "apps", "storefront"),
+      );
       break;
   }
 }

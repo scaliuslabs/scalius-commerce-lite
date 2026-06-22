@@ -64,6 +64,26 @@ let cartValidationSequence = 0;
 
 // --- Abandoned Checkout ---
 let abandonedCheckoutTimer: ReturnType<typeof setTimeout> | null = null;
+let cartRuntimeAbortController: AbortController | null = null;
+let cartStoreUnsubscribe: (() => void) | null = null;
+
+function resetCartRuntimeListeners(): AbortSignal {
+  cartStoreUnsubscribe?.();
+  cartStoreUnsubscribe = null;
+  cartRuntimeAbortController?.abort();
+  cartRuntimeAbortController = new AbortController();
+
+  if (abandonedCheckoutTimer !== null) {
+    clearTimeout(abandonedCheckoutTimer);
+    abandonedCheckoutTimer = null;
+  }
+  if (cartValidationTimer !== null) {
+    clearTimeout(cartValidationTimer);
+    cartValidationTimer = null;
+  }
+
+  return cartRuntimeAbortController.signal;
+}
 
 function getCheckoutId(): string {
   let checkoutId = sessionStorage.getItem("checkoutId");
@@ -782,6 +802,7 @@ function handleRemoveDiscount() {
 
 // --- Initialization ---
 export async function initCartFunctionality() {
+  const runtimeSignal = resetCartRuntimeListeners();
   hydrateCartFromStorage();
 
   // ── Read server-rendered shipping defaults ────────────────────────────────
@@ -877,9 +898,8 @@ export async function initCartFunctionality() {
   window.bulkReduceCartIssueItems = () => applyBulkCartRepair("reduce_quantity");
   window.bulkRefreshCartIssueItems = () => applyBulkCartRepair("refresh_item");
 
-  cartStore.subscribe(() => {
-    renderCartItems();
-    updateTotals();
+  cartStoreUnsubscribe = cartStore.subscribe(() => {
+    void renderCartItems();
     updateCheckoutButtonState();
     handleAbandonedCheckout();
     scheduleCartValidation();
@@ -897,25 +917,29 @@ export async function initCartFunctionality() {
     }
     updateTotals();
     handleAbandonedCheckout();
-  });
+  }, { signal: runtimeSignal });
 
   document.addEventListener("zone-selected", () => {
     attemptToTrackInitiateCheckout();
     handleAbandonedCheckout();
-  });
+  }, { signal: runtimeSignal });
 
   document.getElementById("discountForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     handleApplyDiscount();
-  });
+  }, { signal: runtimeSignal });
 
   document.getElementById("customerPhone")?.addEventListener("blur", () => {
     attemptToTrackInitiateCheckout();
-  });
+  }, { signal: runtimeSignal });
+
+  document.getElementById("checkoutForm")?.addEventListener("input", () => {
+    handleAbandonedCheckout();
+  }, { signal: runtimeSignal });
 
   document
     .getElementById("removeDiscountBtn")
-    ?.addEventListener("click", handleRemoveDiscount);
+    ?.addEventListener("click", handleRemoveDiscount, { signal: runtimeSignal });
 
   await getLanguageData();
   await renderCartItems();

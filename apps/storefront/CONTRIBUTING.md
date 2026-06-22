@@ -21,7 +21,7 @@ To ensure we can continue to offer both open-source and proprietary versions of 
 
 This is a **Storefront** application built with modern web technologies:
 
-1.  **Framework:** Astro 6 (SSR + Static)
+1.  **Framework:** Astro 7 (SSR + Static)
 2.  **UI Library:** React 19
 3.  **Styling:** Tailwind CSS v4
 4.  **State Management:** Nanostores

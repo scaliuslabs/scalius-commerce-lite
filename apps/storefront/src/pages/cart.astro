@@ -265,7 +265,7 @@ const submitLabel = codOnly
     <div class="flex flex-col lg:flex-row-reverse gap-4 lg:gap-8">
       <!-- Cart Items Section - Right on Desktop -->
       <div
-        class="lg:w-5/12 lg:sticky lg:self-start transition-all duration-200 order-2 lg:order-1"
+        class="lg:w-5/12 lg:sticky lg:self-start transition-all duration-200 order-1"
         style="top: calc(var(--header-height, 64px) + 1rem);"
       >
         <div
@@ -360,7 +360,6 @@ const submitLabel = codOnly
                   <button
                     type="button"
                     id="removeDiscountBtn"
-                    onclick="window.removeDiscountCode()"
                     class="px-3 py-1.5 bg-destructive/10 text-destructive border border-destructive/20 text-xs sm:text-sm font-semibold rounded-lg hover:bg-destructive/20 transition-colors"
                     style="display: none;"
                   >
@@ -387,7 +386,7 @@ const submitLabel = codOnly
       </div>
 
       <!-- Checkout Form Section - Left on Desktop -->
-      <div class="lg:w-7/12 order-1 lg:order-2">
+      <div class="lg:w-7/12 order-2">
 
         <!-- Optional customer login trigger -->
         <div class="mb-3">
@@ -593,7 +592,7 @@ const submitLabel = codOnly
 <script>
   import { initCartFunctionality } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
-  import { clearCheckoutSession } from "@/lib/checkout/session-state";
+  import { clearCheckoutTransferSession } from "@/lib/checkout/session-state";
 
   type CustomerAutofillProfile = {
     name?: string | null;
@@ -612,9 +611,34 @@ const submitLabel = codOnly
     freeDelivery?: boolean;
   };
 
-  // Initialize cart functionality
-  initCartFunctionality();
-  clearCheckoutSession();
+  window.__scaliusCartPageAbortController?.abort();
+  const cartPageAbortController = new AbortController();
+  window.__scaliusCartPageAbortController = cartPageAbortController;
+  const cartPageSignal = cartPageAbortController.signal;
+
+  const meta = document.getElementById("checkout-meta");
+  const codOnly = meta?.dataset.codOnly === "true";
+  const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
+  const checkoutUnavailableMessage =
+    meta?.dataset.checkoutUnavailableMessage || "Checkout is temporarily unavailable. Please try again shortly.";
+  const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
+
+  const runWhenDomReady = (callback: () => void | Promise<void>) => {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => void callback(), {
+        once: true,
+        signal: cartPageSignal,
+      });
+      return;
+    }
+
+    void callback();
+  };
+
+  // Clear stale payment-page transfer payloads while preserving the active
+  // checkoutId used by abandoned checkout and COD cleanup during this cart visit.
+  clearCheckoutTransferSession();
+  void initCartFunctionality();
 
   // ── Customer login pre-fill ───────────────────────────────────────────────
   
@@ -671,7 +695,7 @@ const submitLabel = codOnly
   };
 
   // 1. Initial page load hydration (standalone fetch)
-  document.addEventListener("DOMContentLoaded", async () => {
+  runWhenDomReady(async () => {
     const isUserLoggedIn = document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
     if (isUserLoggedIn || !guestCheckoutEnabled) {
       const session = await getCustomerSession();
@@ -688,21 +712,17 @@ const submitLabel = codOnly
 
   // 2. Active login intercept (AuthModal)
   window.addEventListener("customer-login", ((e: CustomEvent<CustomerAutofillProfile>) => {
+    if (cartPageSignal.aborted) return;
     const customer = e.detail;
     fillBasicCustomerFields(customer);
     // Modal normally resolves quickly, but schedule location fill slightly later to avoid DOM races
-    setTimeout(() => fillLocationDropdowns(customer), 300);
-  }) as EventListener);
+    const timeoutId = window.setTimeout(() => fillLocationDropdowns(customer), 300);
+    cartPageSignal.addEventListener("abort", () => window.clearTimeout(timeoutId), { once: true });
+  }) as EventListener, { signal: cartPageSignal });
 
   // ── Multi-gateway checkout redirect ──
-  const meta = document.getElementById("checkout-meta");
-  const codOnly = meta?.dataset.codOnly === "true";
-  const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
-  const checkoutUnavailableMessage =
-    meta?.dataset.checkoutUnavailableMessage || "Checkout is temporarily unavailable. Please try again shortly.";
-  const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
 
-  document.addEventListener("DOMContentLoaded", () => {
+  runWhenDomReady(() => {
     const form = document.getElementById("checkoutForm") as HTMLFormElement;
     const submitButton = document.getElementById("submitButton") as HTMLButtonElement;
     const loadingOverlay = document.getElementById("loadingOverlay") as HTMLElement;
@@ -741,7 +761,9 @@ const submitLabel = codOnly
     };
 
     updateCheckoutButtonState();
-    window.addEventListener("cart-updated", updateCheckoutButtonState);
+    document.addEventListener("cart-updated", updateCheckoutButtonState, {
+      signal: cartPageSignal,
+    });
 
     if (!form || !submitButton) return;
 
@@ -909,20 +931,9 @@ const submitLabel = codOnly
         setTimeout(() => { progressBar.style.width = "60%"; }, 1000);
         setTimeout(() => { progressBar.style.width = "80%"; }, 2000);
       }
-    });
+    }, { signal: cartPageSignal });
   });
 
-  // ── Abandoned checkout tracking ───────────────────────────────────────────
-  function setupFormListeners() {
-    const form = document.getElementById("checkoutForm") as HTMLFormElement;
-    if (!form) return;
-    form.addEventListener("input", () => {
-      window.handleAbandonedCheckout?.();
-    });
-  }
-
-  document.addEventListener("DOMContentLoaded", setupFormListeners);
-  document.addEventListener("astro:page-load", setupFormListeners);
 </script>
 
 <style>

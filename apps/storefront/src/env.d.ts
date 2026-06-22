@@ -160,6 +160,7 @@ interface Window {
   __BUILD_ID__?: string;
   __CHECKOUT_CONFIG__?: unknown;
   __scaliusAuthModalOpenPending?: boolean;
+  __scaliusCartPageAbortController?: AbortController;
   dataLayer?: Record<string, unknown>[];
   fbq?: ((...args: unknown[]) => void) & { q?: unknown[] };
   zaraz?: {
@@ -191,7 +192,6 @@ interface Window {
   bulkRemoveCartIssueItems?: () => void;
   bulkReduceCartIssueItems?: () => void;
   bulkRefreshCartIssueItems?: () => void;
-  removeDiscountCode?: () => void;
 
   // Note: Stripe type is declared in checkout/handlers/stripe.ts with its full interface
 
