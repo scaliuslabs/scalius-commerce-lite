@@ -137,6 +137,8 @@ function createTestApp(options: {
   checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
+  allowedCountries?: string[];
+  allowedCountriesMode?: "include" | "exclude";
 } = {}) {
   const calls: string[] = [];
   const kv = {
@@ -159,6 +161,17 @@ function createTestApp(options: {
           partialPaymentEnabled: options.partialPaymentEnabled ?? false,
           partialPaymentAmount: options.partialPaymentAmount ?? 0,
         }]),
+        where: vi.fn(() => ({
+          get: vi.fn(async () => {
+            if (!options.allowedCountries?.length) return null;
+            return {
+              value: JSON.stringify({
+                countries: options.allowedCountries,
+                mode: options.allowedCountriesMode ?? "include",
+              }),
+            };
+          }),
+        })),
       })),
     })),
   };
@@ -863,6 +876,76 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_discount_limit",
       error: "Discount code has reached its usage limit",
     });
+  });
+
+  it("rejects phones outside the configured include countries before payment settings, rate limits, or claims", async () => {
+    const { app, kv, queue } = createTestApp({
+      allowedCountries: ["BD"],
+      allowedCountriesMode: "include",
+    });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...validOrderBody,
+          customerPhone: "+14155552671",
+        }),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Phone numbers from US are not accepted",
+      },
+    });
+    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
+    expect(mocks.validateStorefrontCartItems).toHaveBeenCalledOnce();
+    expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledOnce();
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects phones listed in configured exclude countries before payment settings, rate limits, or claims", async () => {
+    const { app, kv, queue } = createTestApp({
+      allowedCountries: ["BD"],
+      allowedCountriesMode: "exclude",
+    });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Phone numbers from BD are not accepted",
+      },
+    });
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects guest checkout before rate limiting or order creation when merchant disables guests", async () => {

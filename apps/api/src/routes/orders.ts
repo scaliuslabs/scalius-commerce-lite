@@ -14,10 +14,11 @@ import {
 } from "@scalius/database/schema";
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 import { eq, sql } from "drizzle-orm";
-import { phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
+import { getAllowedCountries } from "@scalius/core/modules/settings/site-settings.service";
 import {
   buildCheckoutAttemptIdentity,
   claimCheckoutAttempt,
@@ -97,15 +98,28 @@ async function assertCheckoutOrderPolicy(
   paymentMethod: CheckoutPaymentMethodId,
 ): Promise<void> {
   const db = c.get("db");
-  const [checkoutSettings] = await db
-    .select({
-      guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
-      checkoutMode: siteSettings.checkoutMode,
-      partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-      partialPaymentAmount: siteSettings.partialPaymentAmount,
-    })
-    .from(siteSettings)
-    .limit(1);
+  const [checkoutSettings, allowedCountriesConfig] = await Promise.all([
+    db
+      .select({
+        guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
+        checkoutMode: siteSettings.checkoutMode,
+        partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+        partialPaymentAmount: siteSettings.partialPaymentAmount,
+      })
+      .from(siteSettings)
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    getAllowedCountries(db),
+  ]);
+
+  try {
+    assertPhoneCountryAllowed(customerPhone, {
+      countries: allowedCountriesConfig.allowedCountries,
+      mode: allowedCountriesConfig.allowedCountriesMode,
+    });
+  } catch (error) {
+    throw new ValidationError(error instanceof Error ? error.message : "Phone number is not accepted for checkout.");
+  }
 
   let activePaymentMethods: Awaited<ReturnType<typeof getActivePaymentMethods>>;
   try {
