@@ -15,6 +15,10 @@ import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import type { StorefrontProductFilterInput } from "./products.types";
 import type { Database } from "@scalius/database/client";
+import {
+    publicProductBaseConditions,
+    publicProductHasBuyerResolvableSku,
+} from "./products.public-eligibility";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -76,10 +80,7 @@ function buildStorefrontProductConditions(params: StorefrontProductFilterInput):
         ids,
     } = params;
 
-    const conditions: (SQL | undefined)[] = [
-        eq(products.isActive, true),
-        isNull(products.deletedAt),
-    ];
+    const conditions: (SQL | undefined)[] = publicProductBaseConditions();
 
     if (category) conditions.push(eq(products.categoryId, category));
     if (search) {
@@ -226,7 +227,11 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         .where(and(...conditions))
         .leftJoin(
             productVariants,
-            and(eq(products.id, productVariants.productId), isNull(productVariants.deletedAt)),
+            and(
+                eq(products.id, productVariants.productId),
+                isNull(productVariants.deletedAt),
+                sql`${productVariants.id} != 'default'`,
+            ),
         )
         .groupBy(
             products.id, products.name, products.price, products.slug,
@@ -405,7 +410,12 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
         })
         .from(products)
-        .where(and(eq(products.slug, slug), eq(products.isActive, true), isNull(products.deletedAt)))
+        .where(and(
+            eq(products.slug, slug),
+            eq(products.isActive, true),
+            isNull(products.deletedAt),
+            publicProductHasBuyerResolvableSku(),
+        ))
         .get();
 
     if (!product) return null;
@@ -492,6 +502,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                         eq(products.categoryId, product.categoryId!),
                         eq(products.isActive, true),
                         isNull(products.deletedAt),
+                        publicProductHasBuyerResolvableSku(),
                         sql`${products.id} != ${product.id}`,
                     )).limit(6).all();
 
@@ -590,12 +601,9 @@ export async function searchStorefrontProducts(
     const { search, page, limit } = params;
     const offset = (page - 1) * limit;
 
-    const conditions: Array<ReturnType<typeof eq>> = [
-        eq(products.isActive, true),
-        isNull(products.deletedAt) as ReturnType<typeof eq>,
-    ];
+    const conditions: SQL[] = publicProductBaseConditions();
     const searchCondition = search ? ftsMatch("products_fts", "products", search) : null;
-    if (searchCondition) conditions.push(searchCondition as ReturnType<typeof eq>);
+    if (searchCondition) conditions.push(searchCondition);
 
     const [results, countResults] = await Promise.all([
         db

@@ -8,6 +8,7 @@ import type { CreateCollectionInput, UpdateCollectionInput } from "./collections
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { publicCollectionProductConditions } from "../products/products.public-eligibility";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -354,13 +355,13 @@ export async function resolveCollectionProducts(
             specificProductIds.length > 0
                 ? db.select(buildCollectionProductSelect())
                     .from(products)
-                    .where(and(inArray(products.id, specificProductIds), eq(products.isActive, true), isNull(products.deletedAt)))
+                    .where(and(...publicCollectionProductConditions(inArray(products.id, specificProductIds))))
                     .limit(specificProductIds.length)
                 : noopQuery,
             hasFeaturedProduct
                 ? db.select(buildCollectionProductSelect())
                     .from(products)
-                    .where(and(eq(products.id, config.featuredProductId!), eq(products.isActive, true), isNull(products.deletedAt)))
+                    .where(and(...publicCollectionProductConditions(eq(products.id, config.featuredProductId!))))
                 : noopQuery,
         ]);
 
@@ -389,13 +390,13 @@ export async function resolveCollectionProducts(
                 .where(and(inArray(categories.id, specificCategoryIds), isNull(categories.deletedAt))),
             db.select(buildCollectionProductSelect())
                 .from(products)
-                .where(and(inArray(products.categoryId, specificCategoryIds), eq(products.isActive, true), isNull(products.deletedAt)))
+                .where(and(...publicCollectionProductConditions(inArray(products.categoryId, specificCategoryIds))))
                 .orderBy(desc(products.createdAt))
                 .limit(maxProducts),
             hasFeaturedProduct
                 ? db.select(buildCollectionProductSelect())
                     .from(products)
-                    .where(and(eq(products.id, config.featuredProductId!), eq(products.isActive, true), isNull(products.deletedAt)))
+                    .where(and(...publicCollectionProductConditions(eq(products.id, config.featuredProductId!))))
                 : noopQuery,
         ]);
 
@@ -417,7 +418,7 @@ export async function resolveCollectionProducts(
         // CASE 3: Only featured product
         const featuredData = await db.select(buildCollectionProductSelect())
             .from(products)
-            .where(and(eq(products.id, config.featuredProductId!), eq(products.isActive, true), isNull(products.deletedAt)))
+            .where(and(...publicCollectionProductConditions(eq(products.id, config.featuredProductId!))))
             .get() as RawProduct | undefined;
 
         return {
@@ -469,16 +470,16 @@ export async function resolveCollectionProductsBatch(
 
     const batchResults = await db.batch([
         productIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect()).from(products).where(and(inArray(products.id, productIdsArr), eq(products.isActive, true), isNull(products.deletedAt)))
+            ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.id, productIdsArr))))
             : noopQuery,
         categoryIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect()).from(products).where(and(inArray(products.categoryId, categoryIdsArr), eq(products.isActive, true), isNull(products.deletedAt)))
+            ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.categoryId, categoryIdsArr))))
             : noopQuery,
         categoryIdsArr.length > 0
             ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(inArray(categories.id, categoryIdsArr), isNull(categories.deletedAt)))
             : noopQuery,
         featuredIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect()).from(products).where(and(inArray(products.id, featuredIdsArr), eq(products.isActive, true), isNull(products.deletedAt)))
+            ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.id, featuredIdsArr))))
             : noopQuery,
     ]);
 

@@ -1,7 +1,13 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from "vitest";
-import { parseVariantFromDOM } from "./variant-state-machine";
+import {
+  createInitialState,
+  createVariantIndex,
+  getSelectionStatus,
+  parseVariantFromDOM,
+  validateSelection,
+} from "./variant-state-machine";
 
 describe("variant DOM fallback parsing", () => {
   it("preserves untracked inventory so simple SKUs do not become stock-zero", () => {
@@ -26,5 +32,23 @@ describe("variant DOM fallback parsing", () => {
     element.dataset.variantId = "var_legacy";
 
     expect(parseVariantFromDOM(element).trackInventory).toBeUndefined();
+  });
+});
+
+describe("variant selection validation", () => {
+  it("fails closed when a product has no buyer SKU rows", () => {
+    const index = createVariantIndex([]);
+    const state = createInitialState(index);
+
+    expect(validateSelection(state, index)).toEqual({
+      valid: false,
+      error: "This product is not available for checkout right now.",
+      variant: null,
+    });
+    expect(getSelectionStatus(state, [])).toMatchObject({
+      isComplete: false,
+      requiredFields: [],
+      missingFields: [],
+    });
   });
 });

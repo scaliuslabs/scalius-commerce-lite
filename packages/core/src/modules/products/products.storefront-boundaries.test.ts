@@ -5,6 +5,20 @@ import { fileURLToPath } from "node:url";
 const PRODUCTS_MODULE_DIR = fileURLToPath(new URL(".", import.meta.url));
 
 describe("storefront product query boundaries", () => {
+    it("requires buyer-resolvable SKUs before products enter public catalog reads", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+
+        expect(source).toContain("publicProductBaseConditions");
+        expect(source).toContain("publicProductHasBuyerResolvableSku");
+        expect(source).toContain("const conditions: (SQL | undefined)[] = publicProductBaseConditions();");
+        expect(source).toContain("const conditions: SQL[] = publicProductBaseConditions();");
+        expect(source).toContain("publicProductHasBuyerResolvableSku(),");
+        expect(source).toContain("sql`${productVariants.id} != 'default'`");
+    });
+
     it("keeps product list rows and count in one read wave", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,

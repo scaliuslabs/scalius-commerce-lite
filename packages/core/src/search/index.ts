@@ -1,7 +1,8 @@
 import type { Database } from "@scalius/database/client";
 import { products, productImages, categories, pages } from "@scalius/database/schema";
-import { eq, sql, and, inArray, gte, lte } from "drizzle-orm";
+import { eq, sql, and, inArray, gte, lte, type SQL } from "drizzle-orm";
 import { ftsMatch } from "./fts5";
+import { publicProductBaseConditions } from "../modules/products/products.public-eligibility";
 export { ftsMatch } from "./fts5";
 
 // Types for search results
@@ -61,10 +62,7 @@ export async function search(
 
   try {
     // Build Product Query
-    const productConditions = [];
-    productConditions.push(
-      sql`${products.deletedAt} IS NULL AND ${products.isActive} = 1`,
-    );
+    const productConditions: SQL[] = publicProductBaseConditions();
     if (hasValidQuery) {
       const cond = ftsMatch("products_fts", "products", query);
       if (cond) productConditions.push(cond);

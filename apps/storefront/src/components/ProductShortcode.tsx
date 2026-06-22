@@ -16,6 +16,7 @@ import {
   hasProductImage,
   PRODUCT_IMAGE_FALLBACK,
 } from "@/lib/product-media";
+import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
 
 interface ProductShortcodeProps {
   productData: ProductPageData;
@@ -25,6 +26,11 @@ export default function ProductShortcode({
   productData,
 }: ProductShortcodeProps) {
   const { product, images, variants } = productData;
+  const buyerVariants = useMemo(
+    () => resolveBuyerVariants(variants).variants,
+    [variants],
+  );
+  const isUnavailable = buyerVariants.length === 0;
 
   const [selectedSize, setSelectedSize] = useState<string | undefined>();
   const [selectedColor, setSelectedColor] = useState<string | undefined>();
@@ -45,15 +51,15 @@ export default function ProductShortcode({
   );
 
   const sizeOptions = useMemo(
-    () => [...new Set(variants.map((v) => v.size).filter(Boolean))],
-    [variants],
+    () => [...new Set(buyerVariants.map((v) => v.size).filter(Boolean))],
+    [buyerVariants],
   );
   const colorOptions = useMemo(
-    () => [...new Set(variants.map((v) => v.color).filter(Boolean))],
-    [variants],
+    () => [...new Set(buyerVariants.map((v) => v.color).filter(Boolean))],
+    [buyerVariants],
   );
 
-  const matchingVariant = variants.find(
+  const matchingVariant = buyerVariants.find(
     (v) =>
       (!sizeOptions.length || v.size === selectedSize) &&
       (!colorOptions.length || v.color === selectedColor),
@@ -97,6 +103,10 @@ export default function ProductShortcode({
   };
 
   const handleAddToCart = (redirectToCart: boolean) => {
+    if (isUnavailable) {
+      showToast("This product is not available right now.", "error");
+      return;
+    }
     if (
       (sizeOptions.length > 0 && !selectedSize) ||
       (colorOptions.length > 0 && !selectedColor)
@@ -104,7 +114,7 @@ export default function ProductShortcode({
       showToast("Please select all required options.", "error");
       return;
     }
-    if (variants.length > 0 && !matchingVariant) {
+    if (!matchingVariant) {
       showToast("Selected combination is not available.", "error");
       return;
     }
@@ -273,11 +283,12 @@ export default function ProductShortcode({
             <Button
               variant="outline"
               size="lg"
+              disabled={isUnavailable}
               onClick={() => handleAddToCart(false)}
             >
               <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
             </Button>
-            <Button size="lg" onClick={() => handleAddToCart(true)}>
+            <Button size="lg" disabled={isUnavailable} onClick={() => handleAddToCart(true)}>
               <Check className="mr-2 h-4 w-4" /> Buy Now
             </Button>
           </div>

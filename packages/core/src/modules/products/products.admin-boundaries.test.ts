@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
-import { updateProduct } from "./products.admin";
+import { restoreProduct, updateProduct } from "./products.admin";
 
 const productUpdate = {
     id: "prod_1",
@@ -83,5 +83,64 @@ describe("admin product SKU invariant boundaries", () => {
             updateProduct(db as never, "prod_1", productUpdate),
         ).rejects.toBeInstanceOf(ValidationError);
         expect(batchCalled).toBe(false);
+    });
+
+    it("repairs active SKU-less product restores with a protected simple SKU", async () => {
+        let selectCount = 0;
+        const batchStatements: unknown[] = [];
+        let defaultSkuInserted = false;
+
+        const db = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                return {
+                                    get: async () => {
+                                        if (selectCount === 1) {
+                                            return { id: "prod_1", price: 250, isActive: true };
+                                        }
+                                        if (selectCount === 2) {
+                                            return { count: 0 };
+                                        }
+                                        return null;
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                return {
+                    set() {
+                        return {
+                            where() {
+                                return { statement: "update" };
+                            },
+                        };
+                    },
+                };
+            },
+            insert() {
+                return {
+                    values(values: unknown) {
+                        defaultSkuInserted = JSON.stringify(values).includes("var_default_prod_1");
+                        return { statement: "insert" };
+                    },
+                };
+            },
+            batch: async (statements: unknown[]) => {
+                batchStatements.push(...statements);
+                return [];
+            },
+        };
+
+        await restoreProduct(db as never, "prod_1");
+
+        expect(defaultSkuInserted).toBe(true);
+        expect(batchStatements).toHaveLength(2);
     });
 });

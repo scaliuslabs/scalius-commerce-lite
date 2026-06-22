@@ -17,45 +17,15 @@ import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "./products.types";
 import { safeBatch, type Database } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
+import { defaultProductSkuValues } from "./products.public-eligibility";
 
-function createDefaultSku(productId: string): string {
-    return `SIMPLE-${productId}`;
-}
-
-function createDefaultVariantId(productId: string): string {
-    return `var_default_${productId}`;
-}
+type SQLiteBatchItem = BatchItem<"sqlite">;
 
 function defaultVariantValues(productId: string, price: number) {
-    return {
-        id: createDefaultVariantId(productId),
-        productId,
-        size: null,
-        color: null,
-        weight: null,
-        sku: createDefaultSku(productId),
-        price,
-        stock: 0,
-        reservedStock: 0,
-        preorderStock: 0,
-        isDefault: true,
-        trackInventory: false,
-        version: 1,
-        stockVersion: 1,
-        allowPreorder: false,
-        allowBackorder: false,
-        backorderLimit: 0,
-        discountPercentage: 0,
-        discountType: "percentage" as const,
-        discountAmount: 0,
-        colorSortOrder: 0,
-        sizeSortOrder: 0,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-        deletedAt: null,
-    };
+    return defaultProductSkuValues(productId, price);
 }
 
 function isSimpleDefaultSkuSet(variants: Array<{ isDefault: boolean; size: string | null; color: string | null }>): boolean {
@@ -747,13 +717,62 @@ export async function deleteProduct(db: Database, id: string): Promise<void> {
  * Restores a soft-deleted product by setting deletedAt to null.
  */
 export async function restoreProduct(db: Database, id: string): Promise<void> {
-    await db
-        .update(products)
-        .set({
-            deletedAt: null,
-            updatedAt: sql`unixepoch()`,
+    const product = await db
+        .select({
+            id: products.id,
+            price: products.price,
+            isActive: products.isActive,
         })
-        .where(eq(products.id, id));
+        .from(products)
+        .where(eq(products.id, id))
+        .get();
+
+    if (!product) {
+        throw new NotFoundError("Product not found");
+    }
+
+    const activeVariantCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)))
+        .get();
+    const defaultVariantId = `var_default_${id}`;
+    const existingDefaultVariant = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(eq(productVariants.id, defaultVariantId))
+        .get();
+
+    const statements: SQLiteBatchItem[] = [
+        db
+            .update(products)
+            .set({
+                deletedAt: null,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(eq(products.id, id)),
+    ];
+
+    if (product.isActive && (activeVariantCount?.count ?? 0) === 0) {
+        const { createdAt: _createdAt, ...defaultSkuRepairValues } = defaultVariantValues(id, product.price);
+        void _createdAt;
+        if (existingDefaultVariant) {
+            statements.push(
+                db
+                    .update(productVariants)
+                    .set({
+                        ...defaultSkuRepairValues,
+                        updatedAt: sql`unixepoch()`,
+                        deletedAt: null,
+                    })
+                    .where(eq(productVariants.id, defaultVariantId)),
+            );
+        } else {
+            statements.push(db.insert(productVariants).values(defaultVariantValues(id, product.price)));
+        }
+    }
+
+    await safeBatch(db, statements);
 }
 
 /**
