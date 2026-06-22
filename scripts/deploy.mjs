@@ -59,6 +59,21 @@ function run(cmd, label, cwd = root) {
   execSync(cmd, { cwd, stdio: "inherit" });
 }
 
+function readJsonFile(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function runJson(cmd, label, cwd = root) {
+  console.log(`\n▶ ${label}`);
+  console.log(`  $ ${cmd}\n`);
+  const output = execSync(cmd, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  return JSON.parse(output);
+}
+
 // ── Run a shell command with retries for transient Cloudflare API errors
 function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -114,6 +129,68 @@ function deployTarget(target) {
         resolve(root, "apps", "storefront"),
       );
       break;
+  }
+}
+
+function getLatestDeployment(deployments) {
+  if (!Array.isArray(deployments) || deployments.length === 0) return null;
+  return deployments.reduce((latest, deployment) => {
+    if (!latest) return deployment;
+    return new Date(deployment.created_on).getTime() > new Date(latest.created_on).getTime()
+      ? deployment
+      : latest;
+  }, null);
+}
+
+async function verifyHttpOk(url, label) {
+  console.log(`\n▶ ${label}`);
+  console.log(`  GET ${url}\n`);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache" },
+      signal: controller.signal,
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(`${label} returned ${response.status}: ${body.slice(0, 200)}`);
+    }
+    console.log(`✓ ${label} returned ${response.status}.`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function verifyStorefrontDeploy() {
+  const storefrontDir = resolve(root, "apps", "storefront");
+  const generatedConfigPath = resolve(storefrontDir, "dist", "server", "wrangler.json");
+  const generatedConfig = readJsonFile(generatedConfigPath);
+
+  const deployments = runJson(
+    "pnpm exec wrangler deployments list --config dist/server/wrangler.json --json",
+    "Verify latest Storefront Worker deployment",
+    storefrontDir,
+  );
+  const latest = getLatestDeployment(deployments);
+  const deployedVersion = latest?.versions?.find((version) => version.percentage === 100);
+  if (!latest || !deployedVersion?.version_id) {
+    throw new Error("Could not prove the latest Storefront Worker deployment is serving one version at 100%.");
+  }
+  console.log(`✓ Latest Storefront deployment serves ${deployedVersion.version_id} at 100%.`);
+
+  const storefrontUrl = generatedConfig.vars?.STOREFRONT_URL;
+  if (!storefrontUrl) {
+    throw new Error("Could not verify live storefront: STOREFRONT_URL is missing from generated Wrangler config.");
+  }
+  await verifyHttpOk(new URL("/health", storefrontUrl).toString(), "Verify live Storefront /health");
+}
+
+async function verifyPostDeployTarget(target) {
+  if (target === "storefront") {
+    await verifyStorefrontDeploy();
   }
 }
 
@@ -197,6 +274,7 @@ function checkDistEnvFiles(targets = deployTargets) {
       }
 
       deployTarget(requestedTarget);
+      await verifyPostDeployTarget(requestedTarget);
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
     }
@@ -222,6 +300,7 @@ function checkDistEnvFiles(targets = deployTargets) {
     deployTarget("api");
     deployTarget("admin");
     deployTarget("storefront");
+    await verifyPostDeployTarget("storefront");
 
     console.log("\n✓ Deploy complete (API + Admin V2 + Storefront).");
   } catch {

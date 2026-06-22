@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { VariantDisplayRow } from "./VariantDisplayRow";
-import { VariantFormRow } from "./VariantFormRow";
+import { VariantFormEditor, VariantFormRow } from "./VariantFormRow";
 import { VariantBulkEditRow } from "./VariantBulkEditRow";
 import type { ProductVariant, VariantBulkEditField, VariantBulkEditValue, VariantFormValues } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
@@ -80,6 +80,10 @@ export function VariantTable({
   const allSelected = selectableVariants.length > 0 && selectedSelectableCount === selectableVariants.length;
   const someSelected = selectedSelectableCount > 0 && selectedSelectableCount < selectableVariants.length;
   const showMobileCards = !isBulkEditing && !editingVariantId && !isAdding;
+  const editingVariant = editingVariantId
+    ? variants.find((variant) => variant.id === editingVariantId)
+    : undefined;
+  const showMobileEditor = !isBulkEditing && (isAdding || Boolean(editingVariant));
 
   return (
     <div className="space-y-0">
@@ -116,9 +120,22 @@ export function VariantTable({
         </div>
       )}
 
+      {showMobileEditor && (
+        <div className="md:hidden overflow-hidden rounded-lg border shadow-sm">
+          <VariantFormEditor
+            initialData={editingVariant}
+            defaultValues={isAdding ? addVariantDefaults : undefined}
+            onSave={onSaveVariant}
+            onCancel={onCancelEdit}
+            isSubmitting={isSubmitting}
+          />
+        </div>
+      )}
+
       <div className={cn(
         "rounded-lg border shadow-sm overflow-hidden",
         showMobileCards && "hidden md:block",
+        showMobileEditor && "hidden md:block",
       )}>
         <Table>
           <TableHeader className="bg-muted/50">
@@ -152,7 +169,7 @@ export function VariantTable({
               {!isBulkEditing && <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>}
               <TableHead className="min-w-[100px] py-2 text-xs font-medium">Discount</TableHead>
               <TableHead className="min-w-[110px] py-2 text-xs font-medium">Updated</TableHead>
-              <TableHead className="w-[96px] py-2 text-xs font-medium text-right pr-3">Actions</TableHead>
+              <TableHead className="w-[86px] py-2 pr-2 text-right text-xs font-medium">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

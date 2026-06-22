@@ -196,4 +196,19 @@ describe("VariantManager product mode boundaries", () => {
     expect(csvSource).toContain("parseTrackInventory");
     expect(managerSource).toContain("delete withoutIgnoredStock.stock");
   });
+
+  it("renders option add/edit as compact spreadsheet-style editing", () => {
+    const tableSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
+    const formRowSource = readFileSync(VARIANT_FORM_ROW_SOURCE, "utf8");
+
+    expect(tableSource).toContain("VariantFormEditor");
+    expect(tableSource).toContain("showMobileEditor");
+    expect(formRowSource).toContain("VariantOptionForm");
+    expect(formRowSource).toContain('layout="row"');
+    expect(formRowSource).toContain('layout="card"');
+    expect(formRowSource).toContain("BarcodePopover");
+    expect(formRowSource).toContain("h-8 rounded-md bg-background px-2 text-xs shadow-none");
+    expect(formRowSource).toContain("Option 1/2 can be size, weight, color, style, or pack.");
+    expect(formRowSource).not.toContain("colSpan={11}");
+  });
 });
