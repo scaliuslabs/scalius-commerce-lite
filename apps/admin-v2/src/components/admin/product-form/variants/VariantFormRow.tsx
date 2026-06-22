@@ -4,6 +4,7 @@ import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -71,6 +72,7 @@ export function VariantFormRow({
   };
 
   const discountType = form.watch("discountType");
+  const trackInventory = form.watch("trackInventory") !== false;
 
   return (
     <TableRow className="bg-primary/5 border-l-4 border-l-primary hover:bg-primary/5 shadow-sm">
@@ -244,25 +246,49 @@ export function VariantFormRow({
         <TableCell className="p-2 align-top">
           <FormField
             control={form.control}
+            name="trackInventory"
+            render={({ field }) => (
+              <FormItem className="mb-2 space-y-0">
+                <div className="flex items-center justify-between gap-2 rounded-md border bg-background px-2 py-1.5">
+                  <span className="text-[11px] font-medium text-muted-foreground">Track stock</span>
+                  <FormControl>
+                    <Switch
+                      checked={field.value !== false}
+                      onCheckedChange={(checked) => field.onChange(checked)}
+                      aria-label="Track stock for this option"
+                    />
+                  </FormControl>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="stock"
             render={({ field }) => (
               <FormItem>
-                <FormControl>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    {...field}
-                    value={field.value === 0 ? "" : field.value ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value ? parseInt(e.target.value, 10) : 0;
-                      field.onChange(value);
-                    }}
-                    className="h-9"
-                  />
-                </FormControl>
-                {isEditMode && initialData && (
+                {trackInventory ? (
+                  <FormControl>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      {...field}
+                      value={field.value === 0 ? "" : field.value ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value ? parseInt(e.target.value, 10) : 0;
+                        field.onChange(value);
+                      }}
+                      className="h-9"
+                    />
+                  </FormControl>
+                ) : (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-2 text-[11px] font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                    No stock limit
+                  </div>
+                )}
+                {trackInventory && isEditMode && initialData && (
                   <p className="text-[10px] text-muted-foreground px-1 mt-0.5">
-                    Avail: {(field.value ?? 0) - (initialData.reservedStock ?? 0)}
+                    Available: {Math.max(0, (field.value ?? 0) - (initialData.reservedStock ?? 0))}
                   </p>
                 )}
                 <FormMessage className="text-xs px-1" />

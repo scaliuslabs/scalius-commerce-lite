@@ -26,6 +26,8 @@ import {
 import { getVariantManagementMode } from "./utils/variantMode";
 import type {
   ProductVariant,
+  VariantBulkEditField,
+  VariantBulkEditValue,
   VariantFormValues,
   BulkGeneratedVariant,
   VariantFilters,
@@ -95,7 +97,7 @@ function firstOptionDefaultsFromSimpleSku(variant: ProductVariant): Partial<Vari
     barcodeType: null,
     price: variant.price,
     stock: variant.stock,
-    trackInventory: variant.trackInventory ?? true,
+    trackInventory: true,
     discountType: variant.discountType,
     discountPercentage: variant.discountType === "percentage" ? variant.discountPercentage : null,
     discountAmount: variant.discountType === "flat" ? variant.discountAmount : null,
@@ -115,6 +117,19 @@ interface VariantManagerProps {
   variants: ProductVariant[];
   onVariantChange?: () => void;
 }
+
+type BulkVariantDraftUpdate = {
+  id: string;
+  size?: string | null;
+  color?: string | null;
+  weight?: number | null;
+  sku?: string;
+  price?: number;
+  stock?: number;
+  trackInventory?: boolean;
+};
+
+type BulkVariantDraftChanges = Omit<Partial<BulkVariantDraftUpdate>, "id">;
 
 export function VariantManager({
   productId,
@@ -136,7 +151,7 @@ export function VariantManager({
   );
 
   const [isBulkEditing, setIsBulkEditing] = useState(false);
-  const [draftBulkUpdates, setDraftBulkUpdates] = useState<Record<string, Record<string, unknown>>>({});
+  const [draftBulkUpdates, setDraftBulkUpdates] = useState<Record<string, BulkVariantDraftChanges>>({});
 
   // Filter and Sort State
   const [searchTerm, setSearchTerm] = useState("");
@@ -284,7 +299,7 @@ export function VariantManager({
     }
   };
 
-  const handleBulkEditChange = (variantId: string, field: string, value: unknown) => {
+  const handleBulkEditChange = (variantId: string, field: VariantBulkEditField, value: VariantBulkEditValue) => {
     setDraftBulkUpdates((prev) => ({
       ...prev,
       [variantId]: {
@@ -295,10 +310,15 @@ export function VariantManager({
   };
 
   const handleSaveBulkEdit = async () => {
-    const updates = Object.entries(draftBulkUpdates).map(([id, changes]) => ({
+    const updates: BulkVariantDraftUpdate[] = Object.entries(draftBulkUpdates).map(([id, changes]) => ({
       id,
       ...changes,
-    }));
+    })).map((update) => {
+      if (update.trackInventory !== false) return update;
+      const withoutIgnoredStock = { ...update };
+      delete withoutIgnoredStock.stock;
+      return withoutIgnoredStock;
+    });
 
     if (updates.length === 0) {
       handleToggleBulkEdit();
@@ -307,9 +327,10 @@ export function VariantManager({
 
     const success = await bulkUpdateVariants(productId, updates);
     if (success) {
+      const updateById = new Map(updates.map(({ id, ...changes }) => [id, changes]));
       setLocalVariants((prev) =>
         prev.map((v) => {
-          const update = draftBulkUpdates[v.id];
+          const update = updateById.get(v.id);
           return update ? { ...v, ...update } : v;
         }),
       );

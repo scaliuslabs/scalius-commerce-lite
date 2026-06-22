@@ -60,7 +60,15 @@ const VariantPreviewRow = React.memo(function VariantPreviewRow({
         {symbol}
         {variant.price.toLocaleString()}
       </TableCell>
-      <TableCell className="text-right text-sm">{variant.stock}</TableCell>
+      <TableCell className="text-right text-sm">
+        {variant.trackInventory === false ? (
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+            No stock limit
+          </Badge>
+        ) : (
+          variant.stock
+        )}
+      </TableCell>
     </TableRow>
   );
 });

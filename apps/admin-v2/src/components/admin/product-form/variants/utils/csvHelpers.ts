@@ -17,6 +17,7 @@ const CSV_HEADERS = [
   "Barcode Type",
   "Price",
   "Stock",
+  "Track Stock",
   "Discount Type",
   "Discount Value",
 ] as const;
@@ -42,6 +43,7 @@ export function variantsToCsv(variants: ProductVariant[]): string {
     v.barcodeType || "",
     v.price.toString(),
     v.stock.toString(),
+    v.trackInventory === false ? "no" : "yes",
     v.discountType,
     v.discountType === "percentage"
       ? v.discountPercentage?.toString() || ""
@@ -175,6 +177,7 @@ function parseVariantRow(
   if (stock < 0) {
     throw new Error("Invalid stock");
   }
+  const trackInventory = parseTrackInventory(readColumn(values, column.trackInventory));
 
   const weightText = readColumn(values, column.weight);
   const weight = weightText.trim()
@@ -218,6 +221,7 @@ function parseVariantRow(
     barcodeType,
     price,
     stock,
+    trackInventory,
     discountType,
     discountPercentage: discountType === "percentage" ? discountValue : null,
     discountAmount: discountType === "flat" ? discountValue : null,
@@ -267,6 +271,7 @@ export function generateCsvTemplate(): string {
     "ean13",
     "299.99",
     "50",
+    "yes",
     "percentage",
     "10",
   ];
@@ -289,6 +294,7 @@ function createColumnLookup(headers: string[]) {
     barcodeType: indexOf("barcodetype"),
     price: indexOf("price"),
     stock: indexOf("stock"),
+    trackInventory: indexOf("trackstock", "trackinventory", "inventorytracking"),
     discountType: indexOf("discounttype"),
     discountValue: indexOf("discountvalue"),
   };
@@ -340,6 +346,18 @@ function parseBarcodeType(value: string): BarcodeType | null {
     throw new Error(`Invalid barcode type: ${normalized}`);
   }
   return normalized as BarcodeType;
+}
+
+function parseTrackInventory(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return true;
+  if (["yes", "y", "true", "1", "track", "tracked"].includes(normalized)) {
+    return true;
+  }
+  if (["no", "n", "false", "0", "no limit", "nolimit", "unlimited", "off"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`Invalid track stock value: ${normalized}`);
 }
 
 function formatCsvCell(value: string | number): string {

@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Barcode } from "lucide-react";
 import { SkuTemplateConfig } from "../SkuTemplateConfig";
 
@@ -17,6 +18,8 @@ interface VariantConfigSectionProps {
   onBasePriceChange: (value: number) => void;
   baseStock: number;
   onBaseStockChange: (value: number) => void;
+  trackInventory: boolean;
+  onTrackInventoryChange: (value: boolean) => void;
   baseWeight: number | null;
   onBaseWeightChange: (value: number | null) => void;
   discountType: "percentage" | "flat";
@@ -37,6 +40,8 @@ export const VariantConfigSection = React.memo(
     onBasePriceChange,
     baseStock,
     onBaseStockChange,
+    trackInventory,
+    onTrackInventoryChange,
     baseWeight,
     onBaseWeightChange,
     discountType,
@@ -74,22 +79,38 @@ export const VariantConfigSection = React.memo(
           </div>
 
           <div className="space-y-2.5">
-            <Label htmlFor="stock" className="text-sm font-semibold">
-              Base Stock
-            </Label>
-            <Input
-              id="stock"
-              type="number"
-              value={baseStock === 0 ? "" : baseStock}
-              onChange={(e) =>
-                onBaseStockChange(
-                  e.target.value ? parseInt(e.target.value, 10) : 0,
-                )
-              }
-              min="0"
-              className="h-10"
-              placeholder="0"
-            />
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="stock" className="text-sm font-semibold">
+                Base Stock
+              </Label>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Track</span>
+                <Switch
+                  checked={trackInventory}
+                  onCheckedChange={onTrackInventoryChange}
+                  aria-label="Track stock for generated options"
+                />
+              </div>
+            </div>
+            {trackInventory ? (
+              <Input
+                id="stock"
+                type="number"
+                value={baseStock === 0 ? "" : baseStock}
+                onChange={(e) =>
+                  onBaseStockChange(
+                    e.target.value ? parseInt(e.target.value, 10) : 0,
+                  )
+                }
+                min="0"
+                className="h-10"
+                placeholder="0"
+              />
+            ) : (
+              <div className="flex h-10 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                No stock limit
+              </div>
+            )}
           </div>
         </div>
 

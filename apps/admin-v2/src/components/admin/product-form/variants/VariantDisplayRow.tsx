@@ -88,7 +88,9 @@ export function VariantDisplayRow({
   const inventoryTracked = isInventoryTracked(variant);
   const isSimpleDefaultSku = variant.isDefault && !variant.size && !variant.color;
   const isProtectedDefaultSku = variant.isDefault === true;
-  const availableStock = inventoryTracked ? variant.stock - variant.reservedStock : null;
+  const availableStock = inventoryTracked
+    ? Math.max(0, variant.stock - variant.reservedStock)
+    : null;
   const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
   const hasVariantDiscount = hasDiscount(variant);
 

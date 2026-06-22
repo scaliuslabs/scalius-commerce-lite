@@ -92,6 +92,7 @@ export interface BulkVariantOptions {
   colors: string[];
   basePrice: number;
   baseStock: number;
+  trackInventory: boolean;
   baseWeight: number | null;
   skuTemplate: string;
   discountType: "percentage" | "flat";
@@ -142,6 +143,7 @@ export interface CsvVariantRow {
   barcodeType?: "ean13" | "upc" | "isbn" | "gtin" | "custom";
   price: number;
   stock: number;
+  trackInventory?: boolean;
   discountType?: "percentage" | "flat";
   discountValue?: number;
 }
@@ -198,3 +200,14 @@ export interface VariantSort {
   field: SortField;
   order: SortOrder;
 }
+
+export type VariantBulkEditField =
+  | "sku"
+  | "size"
+  | "color"
+  | "weight"
+  | "price"
+  | "stock"
+  | "trackInventory";
+
+export type VariantBulkEditValue = string | number | boolean | null;

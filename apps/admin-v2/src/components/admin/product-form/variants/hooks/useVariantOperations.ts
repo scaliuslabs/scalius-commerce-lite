@@ -47,6 +47,7 @@ export interface UseVariantOperationsReturn {
       sku?: string;
       price?: number;
       stock?: number;
+      trackInventory?: boolean;
     }>
   ) => Promise<boolean>;
   duplicateVariant: (productId: string, variantId: string) => Promise<ProductVariant | null>;
@@ -135,6 +136,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
       sku?: string;
       price?: number;
       stock?: number;
+      trackInventory?: boolean;
     }>
   ): Promise<boolean> => {
     try {

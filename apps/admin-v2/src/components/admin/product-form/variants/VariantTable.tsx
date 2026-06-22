@@ -14,7 +14,7 @@ import {
 import { VariantDisplayRow } from "./VariantDisplayRow";
 import { VariantFormRow } from "./VariantFormRow";
 import { VariantBulkEditRow } from "./VariantBulkEditRow";
-import type { ProductVariant, VariantFormValues } from "./types";
+import type { ProductVariant, VariantBulkEditField, VariantBulkEditValue, VariantFormValues } from "./types";
 
 interface VariantTableProps {
   variants: ProductVariant[];
@@ -33,7 +33,7 @@ interface VariantTableProps {
   onAddVariant: () => void;
   isBulkEditing?: boolean;
   draftUpdates?: Record<string, Record<string, unknown>>;
-  onBulkEditChange?: (variantId: string, field: string, value: string | number | null) => void;
+  onBulkEditChange?: (variantId: string, field: VariantBulkEditField, value: VariantBulkEditValue) => void;
   productName?: string;
   addVariantDefaults?: Partial<VariantFormValues>;
 }
