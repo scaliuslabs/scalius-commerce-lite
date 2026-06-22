@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -17,7 +16,7 @@ import {
 import { TableCell, TableRow } from "@/components/ui/table";
 import { generateEAN13 } from "@scalius/shared/barcode-utils";
 import { cn } from "@scalius/shared/utils";
-import { Barcode, Loader2, Save, Sparkles, X } from "lucide-react";
+import { Check, Loader2, Sparkles, X } from "lucide-react";
 import { useCurrency } from "@/hooks/use-currency";
 import { variantOptionFormSchema, type ProductVariant, type VariantFormValues } from "./types";
 
@@ -91,15 +90,13 @@ function VariantOptionForm({
     ? Math.max(0, Number(stockValue ?? 0) - (initialData?.reservedStock ?? 0))
     : null;
   const saveLabel = isEditMode ? "Save option" : "Create option";
-  const barcodeValue = form.watch("barcode");
-  const barcodeType = form.watch("barcodeType");
   const compactInputClass = layout === "row"
-    ? "h-8 rounded-none border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-    : "h-8 rounded-md bg-background px-2 text-xs shadow-none";
+    ? "h-8 rounded-[4px] border border-transparent bg-transparent px-2 text-xs shadow-none transition-colors hover:border-border hover:bg-background focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-0"
+    : "h-8 rounded-[4px] bg-background px-2 text-xs shadow-none focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-0";
   const messageClass = layout === "row"
     ? "absolute left-1 top-full z-20 mt-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground shadow"
     : "px-1 pt-0.5 text-[10px]";
-  const cellClass = "border-r p-0 align-middle last:border-r-0";
+  const cellClass = "h-10 border-r p-0 align-middle last:border-r-0";
   const controlProps = {
     form,
     symbol,
@@ -168,35 +165,35 @@ function VariantOptionForm({
 
   return (
     <Form {...form}>
-      <TableRow className="border-y border-primary/20 bg-primary/[0.035] hover:bg-primary/[0.045]">
+      <TableRow className="border-y border-primary/25 bg-primary/[0.025] hover:bg-primary/[0.035]">
         <TableCell className={cn(cellClass, "w-10")}>
           <span
-            className="mx-auto block h-2 w-2 rounded-full bg-primary"
+            className="mx-auto block h-3.5 w-3.5 rounded-[4px] border border-primary/45 bg-primary/10"
             title={isEditMode ? "Editing option" : "Adding option"}
           />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[150px]")}>
+        <TableCell className={cn(cellClass, "min-w-[140px] px-1")}>
           <SkuField {...controlProps} autoFocus={isEditMode} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[120px]")}>
+        <TableCell className={cn(cellClass, "min-w-[105px] px-1")}>
           <OptionOneField {...controlProps} autoFocus={!isEditMode} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[120px]")}>
+        <TableCell className={cn(cellClass, "min-w-[105px] px-1")}>
           <OptionTwoField {...controlProps} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[70px]")}>
+        <TableCell className={cn(cellClass, "min-w-[56px] px-1")}>
           <WeightField {...controlProps} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[84px]")}>
+        <TableCell className={cn(cellClass, "min-w-[80px] px-1")}>
           <PriceField {...controlProps} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[112px]")}>
+        <TableCell className={cn(cellClass, "min-w-[116px] px-1")}>
           <StockLimitField {...controlProps} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[80px]")}>
+        <TableCell className={cn(cellClass, "min-w-[68px] px-1")}>
           <StockField {...controlProps} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[80px]")}>
+        <TableCell className={cn(cellClass, "min-w-[68px]")}>
           {trackInventory ? (
             <span className="block px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
               {availableStock ?? "New"}
@@ -205,21 +202,21 @@ function VariantOptionForm({
             <span className="block px-2 text-xs text-muted-foreground">-</span>
           )}
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[118px]")}>
+        <TableCell className={cn(cellClass, "min-w-[82px] px-1")}>
           <DiscountField {...controlProps} />
         </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[76px]")}>
+        <TableCell className={cn(cellClass, "min-w-[86px]")}>
           <span className="text-[11px] text-muted-foreground">
             {isEditMode ? "Editing" : "New"}
           </span>
         </TableCell>
-        <TableCell className={cn(cellClass, "w-[116px] min-w-[116px]")}>
+        <TableCell
+          className={cn(
+            cellClass,
+            "sticky right-0 z-20 w-[72px] min-w-[72px] bg-primary/[0.025] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]",
+          )}
+        >
           <div className="flex items-center justify-end gap-1 px-1">
-            <BarcodePopover
-              barcodeValue={barcodeValue}
-              barcodeType={barcodeType}
-              controlProps={controlProps}
-            />
             <ActionButtons {...controlProps} />
           </div>
         </TableCell>
@@ -398,7 +395,7 @@ function StockField({ form, compactInputClass, messageClass, trackInventory }: C
   );
 }
 
-function StockLimitField({ form, compactInputClass }: ControlProps) {
+function StockLimitField({ form }: ControlProps) {
   return (
     <FormField
       control={form.control}
@@ -406,21 +403,38 @@ function StockLimitField({ form, compactInputClass }: ControlProps) {
       render={({ field }) => (
         <FormItem className="space-y-0">
           <FormControl>
-            <Select
-              value={field.value === false ? "unlimited" : "tracked"}
-              onValueChange={(value) => field.onChange(value === "tracked")}
+            <div
+              className="grid h-8 grid-cols-2 overflow-hidden rounded-[4px] border border-border bg-background p-0.5 text-[11px] shadow-none"
+              role="group"
+              aria-label="Stock limit for this option"
             >
-              <SelectTrigger
-                aria-label="Stock limit for this option"
-                className={cn(compactInputClass, "justify-between")}
+              <button
+                type="button"
+                aria-label="Track stock"
+                aria-pressed={field.value !== false}
+                title="Track stock"
+                className={cn(
+                  "whitespace-nowrap rounded-[3px] px-1.5 font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+                  field.value !== false && "bg-emerald-50 text-emerald-700 shadow-sm dark:bg-emerald-950/30 dark:text-emerald-300",
+                )}
+                onClick={() => field.onChange(true)}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tracked">Track stock</SelectItem>
-                <SelectItem value="unlimited">No stock limit</SelectItem>
-              </SelectContent>
-            </Select>
+                Track
+              </button>
+              <button
+                type="button"
+                aria-label="No stock limit"
+                aria-pressed={field.value === false}
+                title="No stock limit"
+                className={cn(
+                  "whitespace-nowrap rounded-[3px] px-1.5 font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+                  field.value === false && "bg-slate-100 text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200",
+                )}
+                onClick={() => field.onChange(false)}
+              >
+                No limit
+              </button>
+            </div>
           </FormControl>
         </FormItem>
       )}
@@ -430,12 +444,12 @@ function StockLimitField({ form, compactInputClass }: ControlProps) {
 
 function DiscountField({ form, symbol, discountType, compactInputClass, messageClass }: ControlProps) {
   return (
-    <div className="flex gap-1.5">
+    <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-1">
       <FormField
         control={form.control}
         name="discountType"
         render={({ field }) => (
-          <FormItem className="w-[58px] space-y-0">
+          <FormItem className="space-y-0">
             <FormControl>
               <Select
                 onValueChange={(value) => {
@@ -448,7 +462,7 @@ function DiscountField({ form, symbol, discountType, compactInputClass, messageC
                 }}
                 value={field.value}
               >
-                <SelectTrigger className={cn(compactInputClass, "justify-between")}>
+                <SelectTrigger className={cn(compactInputClass, "justify-between px-1.5")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -549,7 +563,7 @@ function BarcodeFields({ form, compactInputClass, messageClass }: ControlProps) 
         type="button"
         variant="outline"
         size="icon"
-        className="h-8 w-8"
+        className="h-8 w-8 shadow-none after:shadow-none"
         title="Generate EAN-13 barcode"
         onClick={() => {
           form.setValue("barcode", generateEAN13());
@@ -559,43 +573,6 @@ function BarcodeFields({ form, compactInputClass, messageClass }: ControlProps) 
         <Sparkles className="h-3.5 w-3.5" />
       </Button>
     </div>
-  );
-}
-
-function BarcodePopover({
-  barcodeValue,
-  barcodeType,
-  controlProps,
-}: {
-  barcodeValue: string | null | undefined;
-  barcodeType: string | null | undefined;
-  controlProps: ControlProps;
-}) {
-  const hasBarcode = Boolean(barcodeValue);
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant={hasBarcode ? "secondary" : "ghost"}
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          aria-label={hasBarcode ? "Edit barcode details" : "Add barcode details"}
-          title={hasBarcode ? `${barcodeValue}${barcodeType ? ` (${barcodeType})` : ""}` : "Barcode details"}
-        >
-          <Barcode className="h-3.5 w-3.5" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[340px] p-3">
-        <div className="mb-2">
-          <p className="text-xs font-semibold text-foreground">Barcode</p>
-          <p className="text-[11px] text-muted-foreground">
-            Optional scan code for labels and inventory tools.
-          </p>
-        </div>
-        <BarcodeFields {...controlProps} />
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -615,7 +592,7 @@ function ActionButtons({
           variant="outline"
           size="icon"
           onClick={onCancel}
-          className="h-8 w-8"
+          className="h-8 w-8 shadow-none after:shadow-none"
           disabled={isSubmitting}
           aria-label={isEditMode ? "Cancel option edit" : "Cancel option creation"}
           title={isEditMode ? "Cancel option edit" : "Cancel option creation"}
@@ -624,9 +601,10 @@ function ActionButtons({
         </Button>
         <Button
           type="button"
+          variant="outline"
           size="icon"
           onClick={onSubmit}
-          className="h-8 w-8"
+          className="h-8 w-8 border-emerald-200 bg-emerald-50 text-emerald-700 shadow-none hover:bg-emerald-100 hover:text-emerald-800 after:shadow-none dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
           disabled={isSubmitting}
           aria-label={saveLabel}
           title={saveLabel}
@@ -634,7 +612,7 @@ function ActionButtons({
           {isSubmitting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <Save className="h-3.5 w-3.5" />
+            <Check className="h-3.5 w-3.5" />
           )}
         </Button>
       </div>
@@ -648,7 +626,7 @@ function ActionButtons({
         variant="ghost"
         size="icon"
         onClick={onCancel}
-        className="h-8 w-8"
+        className="h-7 w-7 shadow-none after:shadow-none"
         disabled={isSubmitting}
         aria-label={isEditMode ? "Cancel option edit" : "Cancel option creation"}
         title={isEditMode ? "Cancel option edit" : "Cancel option creation"}
@@ -657,9 +635,10 @@ function ActionButtons({
       </Button>
       <Button
         type="button"
+        variant="outline"
         size="icon"
         onClick={onSubmit}
-        className="h-8 w-8"
+        className="h-7 w-7 border-emerald-200 bg-emerald-50 text-emerald-700 shadow-none hover:bg-emerald-100 hover:text-emerald-800 after:shadow-none dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
         disabled={isSubmitting}
         aria-label={saveLabel}
         title={saveLabel}
@@ -667,7 +646,7 @@ function ActionButtons({
         {isSubmitting ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : (
-          <Save className="h-3.5 w-3.5" />
+          <Check className="h-3.5 w-3.5" />
         )}
       </Button>
     </div>

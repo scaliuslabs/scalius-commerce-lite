@@ -134,14 +134,14 @@ export function VariantTable({
       )}
 
       <div className={cn(
-        "rounded-lg border shadow-sm overflow-hidden",
+        "overflow-hidden rounded-md border shadow-sm",
         showMobileCards && "hidden md:block",
         showMobileEditor && "hidden md:block",
       )}>
-        <Table className="min-w-[1120px]">
+        <Table className="min-w-[1024px]">
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
-              <TableHead className="w-10 pl-3 pr-1 py-1.5 align-middle">
+              <TableHead className="w-10 border-r py-1.5 pl-3 pr-1 align-middle">
                 <Checkbox
                   checked={allSelected}
                   ref={(el) => {
@@ -155,23 +155,23 @@ export function VariantTable({
                   className="h-3.5 w-3.5"
                 />
               </TableHead>
-              <TableHead className="min-w-[120px] py-2 text-xs font-medium">SKU</TableHead>
-              <TableHead className="min-w-[120px] py-2 text-xs font-medium">
+              <TableHead className="min-w-[140px] border-r py-2 text-xs font-medium">SKU</TableHead>
+              <TableHead className="min-w-[105px] border-r py-2 text-xs font-medium">
                 <span className="block">Option 1</span>
                 <span className="block text-[10px] font-normal text-muted-foreground">size/weight</span>
               </TableHead>
-              <TableHead className="min-w-[120px] py-2 text-xs font-medium">
+              <TableHead className="min-w-[105px] border-r py-2 text-xs font-medium">
                 <span className="block">Option 2</span>
                 <span className="block text-[10px] font-normal text-muted-foreground">color/style</span>
               </TableHead>
-              <TableHead className="min-w-[80px] py-2 text-xs font-medium">Weight</TableHead>
-              <TableHead className="min-w-[90px] py-2 text-xs font-medium">Price</TableHead>
-              <TableHead className="min-w-[112px] py-2 text-xs font-medium" title="Whether this SKU has a stock quantity limit">Stock limit</TableHead>
-              <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items in your warehouse">On Hand</TableHead>
-              <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>
-              <TableHead className="min-w-[100px] py-2 text-xs font-medium">Discount</TableHead>
-              <TableHead className="min-w-[110px] py-2 text-xs font-medium">Updated</TableHead>
-              <TableHead className="w-[116px] py-2 pr-2 text-right text-xs font-medium">Actions</TableHead>
+              <TableHead className="min-w-[56px] border-r py-2 text-xs font-medium">Weight</TableHead>
+              <TableHead className="min-w-[80px] border-r py-2 text-xs font-medium">Price</TableHead>
+              <TableHead className="min-w-[116px] border-r py-2 text-xs font-medium" title="Whether this SKU has a stock quantity limit">Stock limit</TableHead>
+              <TableHead className="min-w-[68px] border-r py-2 text-xs font-medium" title="Physical items in your warehouse">On Hand</TableHead>
+              <TableHead className="min-w-[68px] border-r py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>
+              <TableHead className="min-w-[82px] border-r py-2 text-xs font-medium">Discount</TableHead>
+              <TableHead className="min-w-[86px] border-r py-2 text-xs font-medium">Updated</TableHead>
+              <TableHead className="sticky right-0 z-20 w-[72px] bg-muted/50 py-2 pr-2 text-right text-xs font-medium shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

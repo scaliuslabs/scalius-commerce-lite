@@ -218,11 +218,14 @@ describe("VariantManager product mode boundaries", () => {
     expect(formRowSource).toContain("VariantOptionForm");
     expect(formRowSource).toContain('layout="row"');
     expect(formRowSource).toContain('layout="card"');
-    expect(formRowSource).toContain("BarcodePopover");
+    expect(formRowSource).toContain("BarcodeFields");
     expect(tableSource).toContain("Stock limit");
-    expect(tableSource).toContain("min-w-[112px]");
-    expect(formRowSource).toContain("h-8 rounded-md bg-background px-2 text-xs shadow-none");
-    expect(formRowSource).toContain("rounded-none border-0 bg-transparent");
+    expect(tableSource).toContain("min-w-[116px]");
+    expect(tableSource).toContain("min-w-[1024px]");
+    expect(formRowSource).toContain("grid h-8 grid-cols-2");
+    expect(formRowSource).toContain('aria-label="Track stock"');
+    expect(formRowSource).toContain("rounded-[4px] bg-background px-2 text-xs shadow-none");
+    expect(formRowSource).toContain("border border-transparent bg-transparent");
     expect(formRowSource).toContain("Option 1/2 can be size, weight, color, style, or pack.");
     expect(formRowSource).not.toContain("colSpan={11}");
   });
