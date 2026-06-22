@@ -4,6 +4,12 @@ import { fileURLToPath } from "node:url";
 
 const STOREFRONT_SRC_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
+function indexAfter(source: string, needle: string, after: number): number {
+  const index = source.indexOf(needle, after);
+  expect(index).toBeGreaterThan(-1);
+  return index;
+}
+
 describe("storefront page data boundaries", () => {
   it("keeps product detail scoped widget reads in the first dependent fetch wave", () => {
     const source = readFileSync(
@@ -51,17 +57,35 @@ describe("storefront page data boundaries", () => {
       "const attributesPromise = getFilterableAttributes({ categorySlug: slug })",
     );
     const dynamicBranchIndex = source.indexOf("if (hasDynamicFilters)");
-    const dynamicProductsIndex = source.indexOf(
-      "productsResponse = await getProductsByCategory(slug, productListOptions)",
+    const dynamicAttributesAwaitIndex = indexAfter(
+      source,
+      "attributes = (await attributesPromise) || []",
+      dynamicBranchIndex,
     );
-    const fastProductsPromiseIndex = source.indexOf(
+    const dynamicProductsPromiseIndex = indexAfter(
+      source,
       "const productsPromise = getProductsByCategory(slug, productListOptions)",
+      dynamicAttributesAwaitIndex,
+    );
+    const dynamicPromiseAllIndex = indexAfter(
+      source,
+      "] = await Promise.all([",
+      dynamicProductsPromiseIndex,
+    );
+    const fastBranchIndex = indexAfter(source, "} else {", dynamicPromiseAllIndex);
+    const fastProductsPromiseIndex = indexAfter(
+      source,
+      "const productsPromise = getProductsByCategory(slug, productListOptions)",
+      fastBranchIndex,
     );
     const categoryFetchIndex = source.indexOf("getCategoryBySlug");
-    const widgetsPromiseIndex = source.indexOf(
+    const widgetsPromiseIndex = indexAfter(
+      source,
       "const widgetsPromise = productsPromise.then",
+      fastProductsPromiseIndex,
     );
-    const promiseAllIndex = source.indexOf(
+    const promiseAllIndex = indexAfter(
+      source,
       "] = await Promise.all([",
       widgetsPromiseIndex,
     );
@@ -71,8 +95,9 @@ describe("storefront page data boundaries", () => {
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
     expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
     expect(dynamicBranchIndex).toBeGreaterThan(attributesPromiseIndex);
-    expect(dynamicProductsIndex).toBeGreaterThan(dynamicBranchIndex);
-    expect(fastProductsPromiseIndex).toBeGreaterThan(dynamicProductsIndex);
+    expect(dynamicAttributesAwaitIndex).toBeGreaterThan(dynamicBranchIndex);
+    expect(dynamicProductsPromiseIndex).toBeGreaterThan(dynamicAttributesAwaitIndex);
+    expect(dynamicProductsPromiseIndex).toBeLessThan(dynamicPromiseAllIndex);
     expect(categoryFetchIndex).toBe(-1);
     expect(widgetsPromiseIndex).toBeGreaterThan(fastProductsPromiseIndex);
     expect(promiseAllIndex).toBeGreaterThan(widgetsPromiseIndex);
@@ -98,24 +123,45 @@ describe("storefront page data boundaries", () => {
       "const attributesPromise = getFilterableAttributes({ searchQuery: query })",
     );
     const dynamicBranchIndex = source.indexOf("if (hasDynamicFilters)");
-    const dynamicProductsIndex = source.indexOf(
-      "productsResponse = await getAllProducts(productListOptions)",
+    const dynamicAttributesAwaitIndex = indexAfter(
+      source,
+      "attributes = (await attributesPromise) || []",
+      dynamicBranchIndex,
     );
-    const fastProductsPromiseIndex = source.indexOf(
+    const dynamicProductsPromiseIndex = indexAfter(
+      source,
       "const productsPromise = getAllProducts(productListOptions)",
+      dynamicAttributesAwaitIndex,
     );
-    const promiseAllIndex = source.indexOf("] = await Promise.all([");
+    const dynamicPromiseAllIndex = indexAfter(
+      source,
+      "] = await Promise.all([",
+      dynamicProductsPromiseIndex,
+    );
+    const fastBranchIndex = indexAfter(source, "} else {", dynamicPromiseAllIndex);
+    const fastProductsPromiseIndex = indexAfter(
+      source,
+      "const productsPromise = getAllProducts(productListOptions)",
+      fastBranchIndex,
+    );
+    const fastPromiseAllIndex = indexAfter(
+      source,
+      "] = await Promise.all([",
+      fastProductsPromiseIndex,
+    );
 
     expect(dynamicCheckIndex).toBeGreaterThan(-1);
     expect(optionsIndex).toBeGreaterThan(-1);
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
     expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
     expect(dynamicBranchIndex).toBeGreaterThan(attributesPromiseIndex);
-    expect(dynamicProductsIndex).toBeGreaterThan(dynamicBranchIndex);
-    expect(fastProductsPromiseIndex).toBeGreaterThan(dynamicProductsIndex);
-    expect(promiseAllIndex).toBeGreaterThan(attributesPromiseIndex);
-    expect(source.slice(promiseAllIndex)).toContain("productsPromise");
-    expect(source.slice(promiseAllIndex)).toContain("attributesPromise");
+    expect(dynamicAttributesAwaitIndex).toBeGreaterThan(dynamicBranchIndex);
+    expect(dynamicProductsPromiseIndex).toBeGreaterThan(dynamicAttributesAwaitIndex);
+    expect(dynamicProductsPromiseIndex).toBeLessThan(dynamicPromiseAllIndex);
+    expect(fastProductsPromiseIndex).toBeGreaterThan(dynamicPromiseAllIndex);
+    expect(fastPromiseAllIndex).toBeGreaterThan(fastProductsPromiseIndex);
+    expect(source.slice(fastPromiseAllIndex)).toContain("productsPromise");
+    expect(source.slice(fastPromiseAllIndex)).toContain("attributesPromise");
   });
 
   it("trusts CMS page render data without refetching page widgets", () => {
