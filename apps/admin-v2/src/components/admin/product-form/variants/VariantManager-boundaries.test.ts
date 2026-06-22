@@ -83,7 +83,7 @@ describe("VariantManager product mode boundaries", () => {
     const productViewSource = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
     expect(simpleSource).toContain("Product SKU");
-    expect(simpleSource).toContain("One SKU, no size or color choices.");
+    expect(simpleSource).toContain("One SKU, no option choices.");
     expect(simpleSource).toContain("No stock limit");
     expect(simpleSource).toContain("Set up options");
     expect(simpleSource).toContain("No customer options");
@@ -92,7 +92,11 @@ describe("VariantManager product mode boundaries", () => {
     expect(simpleSource).not.toContain("Discount type");
     expect(toolbarSource).toContain("Search options...");
     expect(toolbarSource).toContain("Add Option");
+    expect(toolbarSource).toContain("Option 1");
+    expect(toolbarSource).toContain("Option 2");
     expect(tableSource).toContain("No options yet");
+    expect(tableSource).toContain("Option 1");
+    expect(tableSource).toContain("Option 2");
     expect(tableSource).toContain("VariantMobileCard");
     expect(tableSource).toContain("const showMobileCards");
     expect(tableSource).toContain("md:hidden");
@@ -107,8 +111,7 @@ describe("VariantManager product mode boundaries", () => {
     expect(rowSource).toContain("Edit product SKU");
     expect(rowSource).toContain("Delete option");
     expect(rowSource).toContain("Product SKU");
-    expect(rowSource).toContain("No size");
-    expect(rowSource).toContain("No color");
+    expect(rowSource).toContain("No option");
     expect(rowSource).toContain("No stock limit");
     expect(rowSource).not.toContain("SIMPLE SKU");
     expect(rowSource).not.toContain("NO LIMIT");
@@ -173,6 +176,8 @@ describe("VariantManager product mode boundaries", () => {
     expect(bulkEditSource).toContain("No stock limit");
     expect(generatorSource).toContain("const [trackInventory, setTrackInventory] = useState(true)");
     expect(generatorSource).toContain("trackInventory,");
+    expect(generatorSource).toContain("validateSkuTemplate");
+    expect(generatorSource).toContain("skuTemplateValidation.valid");
     expect(configSource).toContain("Track stock for generated options");
     expect(previewSource).toContain("variant.trackInventory === false");
     expect(csvSource).toContain('"Track Stock"');

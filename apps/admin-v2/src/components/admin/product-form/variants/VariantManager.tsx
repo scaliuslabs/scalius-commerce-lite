@@ -460,7 +460,7 @@ export function VariantManager({
 
   const isFirstOptionSetup = variantMode.mode === "simple" && isAdding;
   const description = isFirstOptionSetup
-    ? "Create the first size or color choice. The product SKU stays protected while option SKUs take over selling."
+    ? "Create the first option choice. The product SKU stays protected while option SKUs take over selling."
     : "Manage customer choices, option-specific pricing, and stock.";
 
   return (

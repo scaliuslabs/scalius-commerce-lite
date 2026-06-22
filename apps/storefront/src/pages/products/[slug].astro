@@ -43,12 +43,14 @@ const buyerVariantResolution = resolveBuyerVariants(variants);
 const buyerVariants = buyerVariantResolution.variants;
 const buyerStockSummary = getBuyerStockSummary(buyerVariants);
 
-const isVariantSpecificImagesEnabled = !!product.metaDescription?.includes(
-  "<!--variant_images:enabled-->",
-);
+const variantImageMarker = product.metaDescription?.match(
+  /<!--variant_images:(enabled|option1|option2)-->/,
+)?.[1];
+const isVariantSpecificImagesEnabled = Boolean(variantImageMarker);
+const variantImageAxis = variantImageMarker === "option1" ? "option1" : "option2";
 const cleanMetaDescription =
   product.metaDescription
-    ?.replace(/<!--variant_images:enabled-->/g, "")
+    ?.replace(/<!--variant_images:(?:enabled|option1|option2)-->/g, "")
     .trim() || "";
 
 const discountedPrice = product.discountedPrice;
@@ -288,6 +290,7 @@ const productCategoryAnalytics = productCategory
           sizeOptions={sizeOptions}
           colorOptions={colorOptions}
           isVariantSpecificImagesEnabled={isVariantSpecificImagesEnabled}
+          variantImageAxis={variantImageAxis}
           currencySymbol={currencySymbol}
           quickBuyNotice={quickBuyNotice}
         />

@@ -178,8 +178,8 @@ export function VariantSortModal({
         <DialogHeader>
           <DialogTitle>Reorder Variant Values</DialogTitle>
           <DialogDescription>
-            Drag and drop to reorder colors and sizes. This affects the display
-            order in the storefront.
+            Drag and drop to reorder Option 1 and Option 2 values. This affects
+            the display order in the storefront.
           </DialogDescription>
         </DialogHeader>
 
@@ -194,10 +194,10 @@ export function VariantSortModal({
           >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="colors">
-                Colors {colors.length > 0 && `(${colors.length})`}
+                Option 2 {colors.length > 0 && `(${colors.length})`}
               </TabsTrigger>
               <TabsTrigger value="sizes">
-                Sizes {sizes.length > 0 && `(${sizes.length})`}
+                Option 1 {sizes.length > 0 && `(${sizes.length})`}
               </TabsTrigger>
             </TabsList>
 
@@ -207,7 +207,7 @@ export function VariantSortModal({
             >
               {colors.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No color variants found
+                  No Option 2 values found
                 </div>
               ) : (
                 <DndContext
@@ -240,7 +240,7 @@ export function VariantSortModal({
             >
               {sizes.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No size variants found
+                  No Option 1 values found
                 </div>
               ) : (
                 <DndContext

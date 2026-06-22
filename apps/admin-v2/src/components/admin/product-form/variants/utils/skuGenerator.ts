@@ -12,13 +12,23 @@ function generateRandomString(length: number = 4): string {
   return result;
 }
 
+function normalizeSkuSegment(value?: string | null): string {
+  return (value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 /**
  * Generate SKU from template and variant data
  *
  * Supported placeholders:
  * - {SLUG}: Product slug (uppercase)
- * - {SIZE}: Variant size (uppercase)
- * - {COLOR}: Variant color (uppercase)
+ * - {OPTION1}: First option value (uppercase), such as size or weight
+ * - {OPTION2}: Second option value (uppercase), such as color or style
+ * - {SIZE}: Legacy alias for {OPTION1}
+ * - {COLOR}: Legacy alias for {OPTION2}
  * - {RANDOM}: Random 4-char string
  * - {INDEX}: Sequential number (001, 002, etc.)
  */
@@ -34,9 +44,9 @@ export function generateSku(
   let sku = template;
 
   // Replace placeholders
-  sku = sku.replace(/{SLUG}/g, (data.slug || "PRODUCT").toUpperCase());
-  sku = sku.replace(/{SIZE}/g, (data.size || "").toUpperCase());
-  sku = sku.replace(/{COLOR}/g, (data.color || "").toUpperCase());
+  sku = sku.replace(/{SLUG}/g, normalizeSkuSegment(data.slug || "PRODUCT"));
+  sku = sku.replace(/{OPTION1}|{SIZE}/g, normalizeSkuSegment(data.size));
+  sku = sku.replace(/{OPTION2}|{COLOR}/g, normalizeSkuSegment(data.color));
   sku = sku.replace(/{RANDOM}/g, generateRandomString());
 
   if (data.index !== undefined) {
@@ -44,7 +54,7 @@ export function generateSku(
   }
 
   // Clean up any double dashes or trailing/leading dashes
-  sku = sku.replace(/--+/g, "-").replace(/^-|-$/g, "");
+  sku = sku.replace(/--+/g, "-").replace(/^-+|-+$/g, "");
 
   return sku;
 }
@@ -88,6 +98,25 @@ export function validateSkuTemplate(template: string): {
     return {
       valid: false,
       error: "Template contains invalid characters. Use only letters, numbers, -, _, and {}",
+    };
+  }
+
+  const allowedVariables = new Set([
+    "SLUG",
+    "OPTION1",
+    "OPTION2",
+    "SIZE",
+    "COLOR",
+    "RANDOM",
+    "INDEX",
+  ]);
+  const unknownVariables = parseSkuTemplate(template).filter(
+    (variable) => !allowedVariables.has(variable.toUpperCase()),
+  );
+  if (unknownVariables.length > 0) {
+    return {
+      valid: false,
+      error: `Unknown SKU variable: ${unknownVariables[0]}`,
     };
   }
 

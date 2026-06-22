@@ -20,7 +20,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
-import { defaultProductSkuValues } from "./products.public-eligibility";
+import { defaultProductSkuValues, normalizeDefaultSkuOptions } from "./products.public-eligibility";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -33,10 +33,8 @@ function isSimpleDefaultSkuSet(variants: Array<{ isDefault: boolean; size: strin
 }
 
 function hasInvalidSkuTopology(variants: Array<{ isDefault: boolean; size: string | null; color: string | null }>): boolean {
-    return variants.some((variant) =>
-        (variant.isDefault && hasVariantOption(variant)) ||
-        (!variant.isDefault && !hasVariantOption(variant))
-    );
+    const defaultSkuCount = variants.filter((variant) => variant.isDefault).length;
+    return defaultSkuCount > 1 || variants.some((variant) => !variant.isDefault && !hasVariantOption(variant));
 }
 
 function normalizeVariantOption(value: string | null | undefined): string | null {
@@ -46,6 +44,12 @@ function normalizeVariantOption(value: string | null | undefined): string | null
 
 function hasVariantOption(value: { size?: string | null; color?: string | null }): boolean {
     return Boolean(normalizeVariantOption(value.size) || normalizeVariantOption(value.color));
+}
+
+function defaultSkuOptionRepairIds<T extends { id: string; isDefault: boolean; size: string | null; color: string | null }>(
+    variants: T[],
+): string[] {
+    return variants.filter((variant) => variant.isDefault && hasVariantOption(variant)).map((variant) => variant.id);
 }
 
 // ─────────────────────────────────────────
@@ -396,7 +400,7 @@ export async function getProductDetails(
         deletedAt: result.deletedAt
             ? new Date(Number(result.deletedAt) * 1000)
             : null,
-        variants,
+        variants: variants.map(normalizeDefaultSkuOptions),
         images: images.map((img) => ({
             ...img,
             createdAt: img.createdAt instanceof Date ? img.createdAt : new Date(Number(img.createdAt) * 1000),
@@ -679,22 +683,38 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
         batchOps.push(db.insert(productRichContent).values(contentToInsert));
     }
 
+    const normalizedActiveVariants = activeVariants.map(normalizeDefaultSkuOptions);
+    const defaultOptionRepairIds = defaultSkuOptionRepairIds(activeVariants);
+
     if (data.isActive && activeVariants.length === 0) {
         batchOps.push(db.insert(productVariants).values(defaultVariantValues(id, data.price)));
-    } else if (hasInvalidSkuTopology(activeVariants)) {
-        throw new ValidationError("Product SKU data is invalid: default SKUs must be optionless, and non-default SKUs must include at least one customer option.");
-    } else if (isSimpleDefaultSkuSet(activeVariants)) {
+    } else if (hasInvalidSkuTopology(normalizedActiveVariants)) {
+        throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
+    } else if (isSimpleDefaultSkuSet(normalizedActiveVariants)) {
         batchOps.push(
             db
                 .update(productVariants)
                 .set({
+                    size: null,
+                    color: null,
                     price: data.price,
                     discountType: "percentage",
                     discountPercentage: 0,
                     discountAmount: 0,
                     updatedAt: sql`unixepoch()`,
                 })
-                .where(eq(productVariants.id, activeVariants[0]!.id)),
+                .where(eq(productVariants.id, normalizedActiveVariants[0]!.id)),
+        );
+    } else if (defaultOptionRepairIds.length > 0) {
+        batchOps.push(
+            db
+                .update(productVariants)
+                .set({
+                    size: null,
+                    color: null,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(inArray(productVariants.id, defaultOptionRepairIds)),
         );
     }
 

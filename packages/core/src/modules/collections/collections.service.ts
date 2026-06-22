@@ -8,7 +8,10 @@ import type { CreateCollectionInput, UpdateCollectionInput } from "./collections
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
-import { publicCollectionProductConditions } from "../products/products.public-eligibility";
+import {
+    publicCollectionProductConditions,
+    publicProductHasCustomerOptions,
+} from "../products/products.public-eligibility";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -279,12 +282,7 @@ const buildCollectionProductSelect = () => ({
         ORDER BY "product_images"."sort_order" ASC
         LIMIT 1
     )`.as("imageAlt"),
-    hasVariants: sql<boolean>`EXISTS(
-        SELECT 1
-        FROM "product_variants"
-        WHERE "product_variants"."product_id" = "products"."id"
-          AND "product_variants"."deleted_at" IS NULL
-    )`.as("hasVariants"),
+    hasVariants: publicProductHasCustomerOptions(sql`${products.id}`).as("hasVariants"),
 });
 
 type RawProduct = {

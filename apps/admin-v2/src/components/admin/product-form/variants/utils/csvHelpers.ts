@@ -10,8 +10,8 @@ type BarcodeType = NonNullable<ProductVariant["barcodeType"]>;
 
 const CSV_HEADERS = [
   "SKU",
-  "Size",
-  "Color",
+  "Option 1",
+  "Option 2",
   "Weight (g)",
   "Barcode",
   "Barcode Type",
@@ -209,7 +209,7 @@ function parseVariantRow(
   const size = readColumn(values, column.size).trim() || null;
   const color = readColumn(values, column.color).trim() || null;
   if (!size && !color) {
-    throw new Error("Size or Color is required for product options");
+    throw new Error("Option 1 or Option 2 is required for product options");
   }
 
   return {
@@ -287,8 +287,8 @@ function createColumnLookup(headers: string[]) {
 
   return {
     sku: indexOf("sku"),
-    size: indexOf("size"),
-    color: indexOf("color"),
+    size: indexOf("option1", "optionone", "size"),
+    color: indexOf("option2", "optiontwo", "color"),
     weight: indexOf("weightg", "weight"),
     barcode: indexOf("barcode"),
     barcodeType: indexOf("barcodetype"),

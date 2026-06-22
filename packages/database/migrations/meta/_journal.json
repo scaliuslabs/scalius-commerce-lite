@@ -435,6 +435,13 @@
       "when": 1782128400000,
       "tag": "0061_customer_profile_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1782132000000,
+      "tag": "0062_default_sku_option_cleanup",
+      "breakpoints": true
     }
   ]
 }

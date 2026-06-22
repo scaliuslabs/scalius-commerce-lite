@@ -91,7 +91,7 @@ export function VariantDisplayRow({
 }: VariantDisplayRowProps) {
   const { symbol } = useCurrency();
   const inventoryTracked = isInventoryTracked(variant);
-  const isSimpleDefaultSku = variant.isDefault && !variant.size && !variant.color;
+  const isSimpleDefaultSku = variant.isDefault === true;
   const isProtectedDefaultSku = variant.isDefault === true;
   const availableStock = inventoryTracked
     ? Math.max(0, variant.stock - variant.reservedStock)
@@ -99,8 +99,8 @@ export function VariantDisplayRow({
   const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
   const hasVariantDiscount = hasDiscount(variant);
   const editLabel = isSimpleDefaultSku ? "Edit product SKU" : "Edit option";
-  const sizeLabel = variant.size || (isSimpleDefaultSku ? "No size" : "—");
-  const colorLabel = variant.color || (isSimpleDefaultSku ? "No color" : "—");
+  const optionOneLabel = variant.size || (isSimpleDefaultSku ? "No option" : "—");
+  const optionTwoLabel = variant.color || (isSimpleDefaultSku ? "No option" : "—");
 
   return (
     <TableRow
@@ -165,9 +165,9 @@ export function VariantDisplayRow({
         )}
       </TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{sizeLabel}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{optionOneLabel}</TableCell>
 
-      <TableCell className="py-2 text-xs text-muted-foreground">{colorLabel}</TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">{optionTwoLabel}</TableCell>
 
       <TableCell className="py-2 text-xs text-muted-foreground">{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
 

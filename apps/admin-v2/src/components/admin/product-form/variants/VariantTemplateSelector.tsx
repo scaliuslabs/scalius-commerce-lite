@@ -151,11 +151,11 @@ export function VariantTemplateSelector({
                   <CardContent className="pb-3">
                     <div className="flex flex-wrap gap-2 mb-3">
                       {template.size && (
-                        <Badge variant="secondary">Size: {template.size}</Badge>
+                        <Badge variant="secondary">Option 1: {template.size}</Badge>
                       )}
                       {template.color && (
                         <Badge variant="secondary">
-                          Color: {template.color}
+                          Option 2: {template.color}
                         </Badge>
                       )}
                       {template.weight && (
@@ -225,11 +225,11 @@ export function VariantTemplateSelector({
                 <CardContent className="pb-3">
                   <div className="flex flex-wrap gap-2 text-sm">
                     {tempVariant.size && (
-                      <Badge variant="outline">Size: {tempVariant.size}</Badge>
+                      <Badge variant="outline">Option 1: {tempVariant.size}</Badge>
                     )}
                     {tempVariant.color && (
                       <Badge variant="outline">
-                        Color: {tempVariant.color}
+                        Option 2: {tempVariant.color}
                       </Badge>
                     )}
                     {tempVariant.weight && (

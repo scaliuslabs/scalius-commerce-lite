@@ -14,7 +14,7 @@ const baseOptions: BulkVariantOptions = {
   baseStock: 5,
   trackInventory: true,
   baseWeight: null,
-  skuTemplate: "{SLUG}-{SIZE}-{COLOR}-{INDEX}",
+  skuTemplate: "{SLUG}-{OPTION1}-{OPTION2}-{INDEX}",
   discountType: "percentage",
   discountValue: null,
   generateBarcodes: false,

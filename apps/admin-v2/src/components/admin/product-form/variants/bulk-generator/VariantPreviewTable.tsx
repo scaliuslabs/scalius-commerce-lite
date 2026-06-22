@@ -102,8 +102,8 @@ export const VariantPreviewTable = React.memo(function VariantPreviewTable({
               {generateBarcodes && (
                 <TableHead className="font-semibold">Barcode</TableHead>
               )}
-              <TableHead className="font-semibold">Size</TableHead>
-              <TableHead className="font-semibold">Color</TableHead>
+              <TableHead className="font-semibold">Option 1</TableHead>
+              <TableHead className="font-semibold">Option 2</TableHead>
               <TableHead className="text-right font-semibold">Price</TableHead>
               <TableHead className="text-right font-semibold">Stock</TableHead>
             </TableRow>
@@ -117,7 +117,7 @@ export const VariantPreviewTable = React.memo(function VariantPreviewTable({
                 >
                   <div className="text-muted-foreground">
                     <p className="text-sm">
-                      Add sizes and/or colors to preview options
+                      Add Option 1 and/or Option 2 values to preview options
                     </p>
                     <p className="text-xs mt-1">
                       All combinations will be shown here

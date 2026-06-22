@@ -4,7 +4,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
-import { formatFormValuesForSubmission } from "../utils";
+import { formatFormValuesForSubmission, type VariantImageAxis } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
 import { createProduct, updateProduct } from "~/lib/api-functions/products";
 import { getServerFnError } from "@/lib/api-helpers";
@@ -13,6 +13,7 @@ interface UseProductSubmitOptions {
   isEdit: boolean;
   productId?: string;
   enableVariantImages: boolean;
+  variantImageAxis: VariantImageAxis;
   form: UseFormReturn<ProductFormValues>;
   onSuccess?: () => void;
 }
@@ -29,6 +30,7 @@ export function useProductSubmit({
   isEdit,
   productId,
   enableVariantImages,
+  variantImageAxis,
   form,
   onSuccess,
 }: UseProductSubmitOptions): UseProductSubmitReturn {
@@ -42,6 +44,7 @@ export function useProductSubmit({
       const formattedValues = formatFormValuesForSubmission(
         values,
         enableVariantImages,
+        variantImageAxis,
       );
       if (isEdit) {
         const entityId = productId || values.id;

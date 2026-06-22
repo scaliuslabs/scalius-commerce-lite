@@ -22,14 +22,14 @@ describe("variant form schemas", () => {
     expect(variantFormSchema.safeParse(baseValues).success).toBe(true);
   });
 
-  it("requires option rows to provide a size, color, or both", () => {
+  it("requires option rows to provide Option 1, Option 2, or both", () => {
     const result = variantOptionFormSchema.safeParse(baseValues);
 
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.flatten().fieldErrors).toMatchObject({
-        size: ["Add a size, color, or both."],
-        color: ["Add a size, color, or both."],
+        size: ["Add Option 1, Option 2, or both."],
+        color: ["Add Option 1, Option 2, or both."],
       });
     }
   });

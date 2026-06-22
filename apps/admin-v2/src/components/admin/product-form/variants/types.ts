@@ -31,8 +31,8 @@ export interface ProductVariant {
 
 export const variantFormSchema = z.object({
   id: z.string().optional(),
-  size: z.string().max(50, "Size must be 50 characters or less.").nullable(),
-  color: z.string().max(50, "Color must be 50 characters or less.").nullable(),
+  size: z.string().max(50, "Option 1 must be 50 characters or less.").nullable(),
+  color: z.string().max(50, "Option 2 must be 50 characters or less.").nullable(),
   weight: z.coerce
     .number({ message: "Must be a number" })
     .min(0, "Weight cannot be negative.")
@@ -70,7 +70,7 @@ export const variantFormSchema = z.object({
 export const variantOptionFormSchema = variantFormSchema.superRefine((data, ctx) => {
   if (data.size?.trim() || data.color?.trim()) return;
 
-  const message = "Add a size, color, or both.";
+  const message = "Add Option 1, Option 2, or both.";
   ctx.addIssue({
     code: "custom",
     message,
@@ -163,7 +163,7 @@ export interface CsvImportResult {
 // --- SKU Template Types ---
 
 export interface SkuTemplate {
-  template: string; // e.g., "{SLUG}-{SIZE}-{COLOR}"
+  template: string; // e.g., "{SLUG}-{OPTION1}-{OPTION2}"
   variables: SkuVariable[];
 }
 
@@ -175,8 +175,8 @@ export interface SkuVariable {
 
 export const SKU_VARIABLES: SkuVariable[] = [
   { name: "SLUG", placeholder: "{SLUG}", example: "product-name" },
-  { name: "SIZE", placeholder: "{SIZE}", example: "XL" },
-  { name: "COLOR", placeholder: "{COLOR}", example: "RED" },
+  { name: "OPTION1", placeholder: "{OPTION1}", example: "XL" },
+  { name: "OPTION2", placeholder: "{OPTION2}", example: "RED" },
   { name: "RANDOM", placeholder: "{RANDOM}", example: "A7F9" },
   { name: "INDEX", placeholder: "{INDEX}", example: "001" },
 ];

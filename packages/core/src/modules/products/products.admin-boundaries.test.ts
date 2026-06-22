@@ -85,6 +85,80 @@ describe("admin product SKU invariant boundaries", () => {
         expect(batchCalled).toBe(false);
     });
 
+    it("repairs legacy default SKU option labels during product updates", async () => {
+        let selectCount = 0;
+        let batchCalled = false;
+        const updateSets: Array<Record<string, unknown>> = [];
+        const db = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                if (selectCount === 3) {
+                                    return Promise.resolve([
+                                        {
+                                            id: "var_default_prod_1",
+                                            isDefault: true,
+                                            size: "Default",
+                                            color: "Default",
+                                        },
+                                        {
+                                            id: "var_red",
+                                            isDefault: false,
+                                            size: null,
+                                            color: "Red",
+                                        },
+                                    ]);
+                                }
+
+                                return {
+                                    get: async () => {
+                                        if (selectCount === 1) return { id: "prod_1" };
+                                        if (selectCount === 2) return null;
+                                        return undefined;
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                return {
+                    set(values: Record<string, unknown>) {
+                        updateSets.push(values);
+                        return {
+                            where() {
+                                return {};
+                            },
+                        };
+                    },
+                };
+            },
+            delete() {
+                return {
+                    where() {
+                        return {};
+                    },
+                };
+            },
+            batch: async () => {
+                batchCalled = true;
+                return [];
+            },
+        };
+
+        await updateProduct(db as never, "prod_1", productUpdate);
+
+        expect(batchCalled).toBe(true);
+        expect(updateSets).toContainEqual(expect.objectContaining({
+            size: null,
+            color: null,
+        }));
+    });
+
     it("repairs active SKU-less product restores with a protected simple SKU", async () => {
         let selectCount = 0;
         const batchStatements: unknown[] = [];

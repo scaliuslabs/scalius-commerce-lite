@@ -106,14 +106,14 @@ export function SkuTemplateConfig({
             <SelectValue placeholder="Presets" />
           </SelectTrigger>
           <SelectContent align="end">
-            <SelectItem value="{SLUG}-{SIZE}-{COLOR}">
-              Slug-Size-Color
+            <SelectItem value="{SLUG}-{OPTION1}-{OPTION2}">
+              Slug-Option1-Option2
             </SelectItem>
-            <SelectItem value="{SLUG}-{COLOR}-{SIZE}">
-              Slug-Color-Size
+            <SelectItem value="{SLUG}-{OPTION2}-{OPTION1}">
+              Slug-Option2-Option1
             </SelectItem>
-            <SelectItem value="{RANDOM}-{SIZE}-{COLOR}">
-              Random-Size-Color
+            <SelectItem value="{RANDOM}-{OPTION1}-{OPTION2}">
+              Random-Option1-Option2
             </SelectItem>
             <SelectItem value="SKU-{RANDOM}">Simple Random</SelectItem>
           </SelectContent>
@@ -126,7 +126,7 @@ export function SkuTemplateConfig({
             id="sku-template"
             value={template}
             onChange={(e) => handleTemplateChange(e.target.value)}
-            placeholder="{SLUG}-{SIZE}-{COLOR}"
+            placeholder="{SLUG}-{OPTION1}-{OPTION2}"
             className="font-mono text-sm"
           />
         </div>

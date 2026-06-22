@@ -17,7 +17,9 @@ import type { StorefrontProductFilterInput } from "./products.types";
 import type { Database } from "@scalius/database/client";
 import {
     publicProductBaseConditions,
+    publicProductHasCustomerOptions,
     publicProductHasBuyerResolvableSku,
+    normalizeDefaultSkuOptions,
 } from "./products.public-eligibility";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
@@ -38,7 +40,7 @@ type StorefrontProductListRow = {
 };
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
-    variantCount: number;
+    hasCustomerOptions: boolean;
 };
 
 export interface StorefrontCategoryProductCategory {
@@ -221,23 +223,10 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
             categoryId: products.categoryId,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
-            variantCount: sql<number>`count(${productVariants.id})`.as("variantCount"),
+            hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as("hasCustomerOptions"),
         })
         .from(products)
-        .where(and(...conditions))
-        .leftJoin(
-            productVariants,
-            and(
-                eq(products.id, productVariants.productId),
-                isNull(productVariants.deletedAt),
-                sql`${productVariants.id} != 'default'`,
-            ),
-        )
-        .groupBy(
-            products.id, products.name, products.price, products.slug,
-            products.discountType, products.discountPercentage, products.discountAmount,
-            products.freeDelivery, products.categoryId, products.createdAt, products.updatedAt,
-        );
+        .where(and(...conditions));
 
     const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "filtered_products");
     if (attributeSubquery) {
@@ -275,11 +264,11 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
     ]);
     categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
 
-    const productsWithImages = productsList.map(({ variantCount, ...product }: StorefrontProductListRowWithVariants) => {
+    const productsWithImages = productsList.map(({ hasCustomerOptions, ...product }: StorefrontProductListRowWithVariants) => {
         const imgData = imageMap.get(product.id);
         return {
             ...product,
-            hasVariants: variantCount > 0,
+            hasVariants: Boolean(hasCustomerOptions),
             imageUrl: imgData?.url || null,
             imageAlt: imgData?.alt || null,
             category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
@@ -542,19 +531,23 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
 
-    const hasVariants = variants.length > 0;
-
     interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
     interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; }
     const typedVariants = variants as VariantResult[];
     const typedImages = images as ImageResult[];
+    const hasVariants = typedVariants.some((variant) =>
+        variant.isDefault !== true && Boolean(variant.size?.trim() || variant.color?.trim()),
+    );
 
-    const formattedVariants = typedVariants.map((v) => ({
+    const formattedVariants = typedVariants.map((variant) => {
+        const v = normalizeDefaultSkuOptions(variant);
+        return {
             ...v,
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(v.updatedAt)?.toISOString() || null,
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
-        }));
+        };
+    });
 
     return {
         product: {
@@ -678,9 +671,14 @@ export async function searchStorefrontProducts(
                 ...product,
                 imageUrl: imgData?.url || null,
                 imageAlt: imgData?.alt || null,
-                variants: (variants as Array<{ productId: string } & Record<string, unknown>>).filter(
-                    (v) => v.productId === product.id,
-                ),
+                variants: (variants as Array<{
+                    productId: string;
+                    isDefault: boolean;
+                    size: string | null;
+                    color: string | null;
+                } & Record<string, unknown>>)
+                    .filter((v) => v.productId === product.id)
+                    .map((v) => normalizeDefaultSkuOptions(v)),
             };
         }),
         pagination: {

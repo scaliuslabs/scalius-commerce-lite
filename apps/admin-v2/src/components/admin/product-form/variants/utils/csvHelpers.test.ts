@@ -70,7 +70,7 @@ describe("variant CSV helpers", () => {
 
   it("rejects duplicate imported SKUs and conflicts with existing variants", () => {
     const duplicateRows = [
-      "SKU,Size,Color,Weight (g),Barcode,Barcode Type,Price,Stock,Discount Type,Discount Value",
+      "SKU,Option 1,Option 2,Weight (g),Barcode,Barcode Type,Price,Stock,Discount Type,Discount Value",
       "SKU-001,XL,Red,500,,custom,10,1,percentage,",
       "SKU-001,L,Blue,500,,custom,10,1,percentage,",
     ].join("\n");
@@ -92,7 +92,7 @@ describe("variant CSV helpers", () => {
 
   it("rejects malformed numeric fields and unknown discount types", () => {
     const invalidRows = [
-      "SKU,Size,Price,Stock,Track Stock,Discount Type,Discount Value",
+      "SKU,Option 1,Price,Stock,Track Stock,Discount Type,Discount Value",
       "BAD-PRICE,M,12abc,1,yes,percentage,",
       "BAD-STOCK,M,12,1.5,yes,percentage,",
       "BAD-DISCOUNT,M,12,1,yes,seasonal,",
@@ -111,9 +111,9 @@ describe("variant CSV helpers", () => {
     ]);
   });
 
-  it("rejects imported option rows without size or color", () => {
+  it("rejects imported option rows without Option 1 or Option 2", () => {
     const rows = [
-      "SKU,Size,Color,Price,Stock",
+      "SKU,Option 1,Option 2,Price,Stock",
       "NO-OPTION,,,12,1",
     ].join("\n");
     const result = parseCsvToVariants(rows);
@@ -122,7 +122,7 @@ describe("variant CSV helpers", () => {
     expect(result.imported).toBe(0);
     expect(result.failed).toBe(1);
     expect(result.errors).toEqual([
-      { row: 2, error: "Size or Color is required for product options" },
+      { row: 2, error: "Option 1 or Option 2 is required for product options" },
     ]);
   });
 
@@ -133,7 +133,7 @@ describe("variant CSV helpers", () => {
     expect(csv.split("\n")[1]).toContain('"no"');
 
     const result = parseCsvToVariants([
-      "SKU,Size,Color,Price,Stock,Track Stock",
+      "SKU,Option 1,Option 2,Price,Stock,Track Stock",
       "SKU-002,M,,199,0,no",
       "SKU-003,L,,199,0,unlimited",
     ].join("\n"));
@@ -142,6 +142,18 @@ describe("variant CSV helpers", () => {
     expect(result.variants).toEqual([
       expect.objectContaining({ sku: "SKU-002", trackInventory: false }),
       expect.objectContaining({ sku: "SKU-003", trackInventory: false }),
+    ]);
+  });
+
+  it("accepts older size and color headers during import", () => {
+    const result = parseCsvToVariants([
+      "SKU,Size,Color,Price,Stock",
+      "SKU-004,2KG,Blue,199,4",
+    ].join("\n"));
+
+    expect(result.success).toBe(true);
+    expect(result.variants).toEqual([
+      expect.objectContaining({ sku: "SKU-004", size: "2KG", color: "Blue" }),
     ]);
   });
 });

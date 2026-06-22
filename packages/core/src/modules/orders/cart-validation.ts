@@ -121,6 +121,14 @@ function variantLabel(variant: Pick<VariantRow, "size" | "color"> | undefined): 
     return parts.length > 0 ? parts.join(" / ") : null;
 }
 
+function hasCustomerOption(variant: Pick<VariantRow, "size" | "color">): boolean {
+    return Boolean(variant.size?.trim() || variant.color?.trim());
+}
+
+function isSimpleDefaultSku(variant: Pick<VariantRow, "isDefault" | "size" | "color">): boolean {
+    return variant.isDefault === true && !hasCustomerOption(variant);
+}
+
 function displayProductName(item: StorefrontCartValidationItem, product?: ProductRow): string | null {
     return product?.name ?? item.productName ?? null;
 }
@@ -283,7 +291,7 @@ export async function validateStorefrontCartItems(
 
         const productVariantsForProduct = variantsByProduct.get(product.id) ?? [];
         const hasCustomerOptions = productVariantsForProduct.some((variant) =>
-            !variant.isDefault && (Boolean(variant.size) || Boolean(variant.color))
+            !variant.isDefault && hasCustomerOption(variant)
         );
         let requestedVariant = item.variantId ? variantMap.get(item.variantId) : null;
         const requestedVariantLabel = displayVariantLabel(item, requestedVariant ?? undefined);
@@ -310,25 +318,22 @@ export async function validateStorefrontCartItems(
                 });
                 return;
             }
-            if (hasCustomerOptions && (requestedVariant.isDefault || (!requestedVariant.size && !requestedVariant.color))) {
+            if (
+                (hasCustomerOptions && (requestedVariant.isDefault || !hasCustomerOption(requestedVariant))) ||
+                (!hasCustomerOptions && !isSimpleDefaultSku(requestedVariant))
+            ) {
                 addIssue(issues, item, index, {
-                    code: "VARIANT_REQUIRED",
-                    action: "select_variant",
-                    message: `${product.name} needs an option selection before checkout.`,
+                    code: hasCustomerOptions ? "VARIANT_REQUIRED" : "PRODUCT_UNAVAILABLE",
+                    action: hasCustomerOptions ? "select_variant" : "remove",
+                    message: hasCustomerOptions
+                        ? `${product.name} needs an option selection before checkout.`
+                        : `${product.name} is not available for checkout right now.`,
                     productName: product.name,
                     variantLabel: null,
                 });
                 return;
             }
         } else if (productVariantsForProduct.length > 0) {
-            const defaultVariants = productVariantsForProduct.filter((variant) => variant.isDefault);
-            const soleNoOptionVariant =
-                productVariantsForProduct.length === 1 &&
-                !productVariantsForProduct[0]!.size &&
-                !productVariantsForProduct[0]!.color
-                    ? productVariantsForProduct[0]!
-                    : null;
-
             if (hasCustomerOptions) {
                 addIssue(issues, item, index, {
                     code: "VARIANT_REQUIRED",
@@ -340,10 +345,8 @@ export async function validateStorefrontCartItems(
                 return;
             }
 
-            if (defaultVariants.length === 1 && productVariantsForProduct.length === 1) {
-                requestedVariant = defaultVariants[0]!;
-            } else if (soleNoOptionVariant) {
-                requestedVariant = soleNoOptionVariant;
+            if (productVariantsForProduct.length === 1 && isSimpleDefaultSku(productVariantsForProduct[0]!)) {
+                requestedVariant = productVariantsForProduct[0]!;
             } else {
                 addIssue(issues, item, index, {
                     code: "PRODUCT_UNAVAILABLE",
