@@ -105,6 +105,45 @@ describe("hosted online payment handlers", () => {
   });
 
   it.each([
+    {
+      label: "SSLCommerz",
+      handler: sslcommerzHandler,
+      gateway: "sslcommerz",
+      gatewayUrl: "https://ssl.example.test/pay",
+    },
+    {
+      label: "Polar",
+      handler: polarHandler,
+      gateway: "polar",
+      gatewayUrl: "https://polar.example.test/pay",
+    },
+  ])("uses the fused $label session returned by order creation", async ({
+    handler,
+    gateway,
+    gatewayUrl,
+  }) => {
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: gateway,
+      initialPaymentSession: {
+        gateway,
+        gatewayUrl,
+      },
+    });
+
+    const result = await handler.processPayment(makeContext());
+
+    expect(result).toEqual({
+      success: true,
+      redirectUrl: gatewayUrl,
+      clearCheckoutSessionOnRedirect: true,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
     { handler: polarHandler, gateway: "polar" },
   ])("returns a receipt recovery URL after $gateway order creation when session setup fails", async ({
@@ -120,6 +159,30 @@ describe("hosted online payment handlers", () => {
 
     expect(result.success).toBe(true);
     expect(result.clearCheckoutSessionOnRedirect).toBe(true);
+    expect(result.redirectUrl).toBe(
+      `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
+    );
+  });
+
+  it.each([
+    { handler: sslcommerzHandler, gateway: "sslcommerz" },
+    { handler: polarHandler, gateway: "polar" },
+  ])("does not retry $gateway session creation when fused initialization already failed", async ({
+    handler,
+    gateway,
+  }) => {
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: gateway,
+      initialPaymentSessionError: "Gateway timeout",
+    });
+
+    const result = await handler.processPayment(makeContext());
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
     expect(result.redirectUrl).toBe(
       `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
     );
@@ -144,7 +207,7 @@ describe("Stripe checkout handler", () => {
     };
     vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
     const container = document.createElement("div");
-    container.dataset.publishableKey = "pk_test";
+    container.dataset.publishableKey = "pk_failure";
     await stripeHandler.onSelect?.(container);
 
     mocks.createOrder.mockResolvedValueOnce({
@@ -166,5 +229,88 @@ describe("Stripe checkout handler", () => {
     });
     expect(result.redirectUrl).toBeUndefined();
     expect(result.clearCheckoutSessionOnRedirect).toBeUndefined();
+  });
+
+  it("uses the fused Stripe PaymentIntent returned by order creation", async () => {
+    document.body.innerHTML = `
+      <div id="stripeCardElement"></div>
+      <div id="stripeError"></div>
+    `;
+    const stripeCard = {
+      mount: vi.fn(),
+      on: vi.fn(),
+    };
+    const stripeInstance = {
+      elements: vi.fn(() => ({
+        create: vi.fn(() => stripeCard),
+      })),
+      confirmCardPayment: vi.fn(async () => ({
+        paymentIntent: { status: "succeeded" },
+      })),
+    };
+    vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
+    const container = document.createElement("div");
+    container.dataset.publishableKey = "pk_fused";
+    await stripeHandler.onSelect?.(container);
+
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "stripe",
+      initialPaymentSession: {
+        gateway: "stripe",
+        clientSecret: "pi_secret_1",
+      },
+    });
+
+    const result = await stripeHandler.processPayment(makeContext());
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(stripeInstance.confirmCardPayment).toHaveBeenCalledWith("pi_secret_1", {
+      payment_method: { card: stripeCard },
+    });
+    expect(result).toEqual({
+      success: true,
+      redirectUrl: "/order-success?orderId=order_1&token=receipt_1&payment=stripe",
+    });
+  });
+
+  it("does not retry Stripe intent creation when fused initialization already failed", async () => {
+    document.body.innerHTML = `
+      <div id="stripeCardElement"></div>
+      <div id="stripeError"></div>
+    `;
+    const stripeCard = {
+      mount: vi.fn(),
+      on: vi.fn(),
+    };
+    const stripeInstance = {
+      elements: vi.fn(() => ({
+        create: vi.fn(() => stripeCard),
+      })),
+      confirmCardPayment: vi.fn(),
+    };
+    vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
+    const container = document.createElement("div");
+    container.dataset.publishableKey = "pk_timeout";
+    await stripeHandler.onSelect?.(container);
+
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "stripe",
+      initialPaymentSessionError: "Stripe timeout",
+    });
+
+    const result = await stripeHandler.processPayment(makeContext());
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(stripeInstance.confirmCardPayment).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "Stripe timeout",
+    });
   });
 });

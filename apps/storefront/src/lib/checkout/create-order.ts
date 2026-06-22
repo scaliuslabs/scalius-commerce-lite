@@ -8,6 +8,22 @@ import type { CartValidationIssue } from "../api/orders";
 
 type PaymentMethod = NonNullable<CreateOrderPayload["paymentMethod"]>;
 
+export type InitialPaymentSession =
+  | {
+      gateway: "stripe";
+      clientSecret?: string;
+      paymentIntentId?: string;
+      publishableKey?: string;
+      amount?: number;
+      currency?: string;
+    }
+  | {
+      gateway: "sslcommerz" | "polar";
+      gatewayUrl?: string;
+      sessionKey?: string;
+      checkoutId?: string;
+    };
+
 type CheckoutCartLine = {
   id: string;
   variantId?: string;
@@ -114,7 +130,14 @@ export function parseDiscountInput(checkoutData: Record<string, unknown>): {
 export async function createOrder(
   checkoutData: Record<string, unknown>,
   paymentMethod: PaymentMethod,
-): Promise<{ orderId: string; receiptToken: string; totalAmount?: number; paymentMethod?: string }> {
+): Promise<{
+  orderId: string;
+  receiptToken: string;
+  totalAmount?: number;
+  paymentMethod?: string;
+  initialPaymentSession?: InitialPaymentSession;
+  initialPaymentSessionError?: string;
+}> {
   let cartItems: Record<string, CheckoutCartLine> = {};
   try {
     cartItems = JSON.parse((checkoutData.cartItems as string) || "{}");
@@ -164,7 +187,10 @@ export async function createOrder(
   const res = await fetch("/api/checkout/create-order", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      initialPaymentSession: paymentMethod !== "cod",
+    }),
   });
 
   if (!res.ok) {
@@ -179,7 +205,27 @@ export async function createOrder(
     );
   }
 
-  const data = await res.json();
+  const data = await res.json() as {
+    data?: {
+      id?: string;
+      orderId?: string;
+      checkoutToken?: string;
+      receiptToken?: string;
+      totalAmount?: number;
+      paymentMethod?: string;
+      initialPaymentSession?: unknown;
+      initialPaymentSessionError?: unknown;
+    };
+    orderId?: string;
+    id?: string;
+    order?: { id?: string };
+    receiptToken?: string;
+    checkoutToken?: string;
+    totalAmount?: number;
+    paymentMethod?: string;
+    initialPaymentSession?: unknown;
+    initialPaymentSessionError?: unknown;
+  };
   const orderId = data.data?.id || data.orderId || data.id || data.order?.id;
   const receiptToken = data.data?.receiptToken || data.receiptToken || data.checkoutToken;
   const totalAmount = typeof data.data?.totalAmount === "number"
@@ -192,6 +238,16 @@ export async function createOrder(
     : typeof data.paymentMethod === "string"
       ? data.paymentMethod
       : undefined;
+  const initialPaymentSession = isRecord(data.data?.initialPaymentSession)
+    ? data.data.initialPaymentSession as InitialPaymentSession
+    : isRecord(data.initialPaymentSession)
+      ? data.initialPaymentSession as InitialPaymentSession
+      : undefined;
+  const initialPaymentSessionError = typeof data.data?.initialPaymentSessionError === "string"
+    ? data.data.initialPaymentSessionError
+    : typeof data.initialPaymentSessionError === "string"
+      ? data.initialPaymentSessionError
+      : undefined;
   if (!orderId) throw new Error("Order creation failed");
   if (!receiptToken) throw new Error("Order receipt token missing");
   return {
@@ -199,5 +255,7 @@ export async function createOrder(
     receiptToken: receiptToken as string,
     totalAmount,
     paymentMethod: resolvedPaymentMethod,
+    initialPaymentSession,
+    initialPaymentSessionError,
   };
 }

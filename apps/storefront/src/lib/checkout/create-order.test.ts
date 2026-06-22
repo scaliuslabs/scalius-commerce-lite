@@ -47,8 +47,10 @@ describe("createOrder", () => {
 
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(String(init?.body)) as {
+      initialPaymentSession?: boolean;
       items: Array<Record<string, unknown>>;
     };
+    expect(body.initialPaymentSession).toBe(false);
     expect(body.items).toEqual([
       expect.objectContaining({
         cartKey: "prod_1:default",
@@ -60,6 +62,31 @@ describe("createOrder", () => {
         variantLabel: "M / Blue",
       }),
     ]);
+  });
+
+  it("requests an initial payment session for online methods and returns it when present", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      success: true,
+      data: {
+        id: "ord_1",
+        receiptToken: "receipt_1",
+        initialPaymentSession: {
+          gateway: "sslcommerz",
+          gatewayUrl: "https://ssl.example.test/pay",
+        },
+      },
+    }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createOrder(checkoutData, "sslcommerz");
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(init?.body)) as { initialPaymentSession?: boolean };
+    expect(body.initialPaymentSession).toBe(true);
+    expect(result.initialPaymentSession).toEqual({
+      gateway: "sslcommerz",
+      gatewayUrl: "https://ssl.example.test/pay",
+    });
   });
 
   it("preserves structured cart issues on late order creation failure", async () => {
