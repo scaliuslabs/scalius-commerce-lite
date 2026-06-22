@@ -41,7 +41,7 @@ import {
   ReceiptText,
 } from "lucide-react";
 import type { Order } from "./types";
-import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
@@ -146,8 +146,15 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const grandTotal = order.totalAmount;
   const isCOD = order.paymentMethod === "cod";
 
-  // Use TanStack Query for payment data
-  const { data: paymentsData } = useSuspenseQuery({
+  // Payment history is optional secondary data. Keep it local so failures do
+  // not replace the rest of the order workspace with the page error boundary.
+  const {
+    data: paymentsData,
+    isLoading: paymentsLoading,
+    isError: paymentsError,
+    isFetching: paymentsFetching,
+    refetch: refetchPayments,
+  } = useQuery({
     ...orderPaymentsQueryOptions(order.id),
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
@@ -322,6 +329,41 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 <span className={plan.balancePaidAt ? "text-green-600" : "text-amber-600"}>
                   {symbol}{plan.balanceDue.toLocaleString()} {plan.balancePaidAt ? "✓" : plan.balanceDueDate ? `due ${plan.balanceDueDate}` : "(pending)"}
                 </span>
+              </div>
+            </div>
+          )}
+
+          {paymentsLoading && (
+            <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+              Loading payment history...
+            </div>
+          )}
+
+          {paymentsError && (
+            <div
+              role="status"
+              className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">Payment history unavailable</p>
+                  <p className="mt-1 text-amber-800 dark:text-amber-300">
+                    The order summary is still usable. Retry before reviewing
+                    transaction records or provider references.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  onClick={() => void refetchPayments()}
+                  disabled={paymentsFetching}
+                >
+                  {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  Retry
+                </Button>
               </div>
             </div>
           )}

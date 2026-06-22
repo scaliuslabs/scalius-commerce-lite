@@ -808,4 +808,18 @@ describe("admin route graph boundaries", () => {
     expect(source).not.toContain("editLabel");
     expect(source).not.toContain("setIsEditing");
   });
+
+  it("keeps order payment history failures local to the payment card", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "PaymentCard.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("orderPaymentsQueryOptions(order.id)");
+    expect(source).toContain("useQuery({");
+    expect(source).not.toContain("useSuspenseQuery");
+    expect(source).toContain("Payment history unavailable");
+    expect(source).toContain("refetchPayments");
+    expect(source).toContain("Retry before reviewing");
+  });
 });
