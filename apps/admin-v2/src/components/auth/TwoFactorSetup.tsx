@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, Mail, AlertCircle, Check, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 type SetupStep = "password" | "verify" | "backup";
 
@@ -33,6 +34,7 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const isHydrated = useHydrated();
 
   const handleEnable2FA = async () => {
     setError(null);
@@ -138,7 +140,13 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
           </div>
         </CardHeader>
         <CardContent className="px-0 pb-0">
-          <form onSubmit={(e) => { e.preventDefault(); handleEnable2FA(); }} className="space-y-6">
+          <form
+            method="post"
+            action="/auth/setup-2fa"
+            onSubmit={(e) => { e.preventDefault(); handleEnable2FA(); }}
+            className="space-y-6"
+            noValidate
+          >
             {error && (
               <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -155,12 +163,16 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 className="h-11"
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 autoFocus
               />
             </div>
 
-            <Button type="submit" disabled={isLoading || !password} className="w-full h-11">
+            <Button
+              type="submit"
+              disabled={!isHydrated || isLoading || !password}
+              className="w-full h-11"
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -194,7 +206,13 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
           </div>
         </CardHeader>
         <CardContent className="px-0 pb-0">
-          <form onSubmit={(e) => { e.preventDefault(); handleVerify(); }} className="space-y-6">
+          <form
+            method="post"
+            action="/auth/setup-2fa"
+            onSubmit={(e) => { e.preventDefault(); handleVerify(); }}
+            className="space-y-6"
+            noValidate
+          >
             {error && (
               <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -213,12 +231,16 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
                 placeholder="000000"
                 className="text-center text-2xl tracking-[0.5em] font-mono h-14"
                 maxLength={6}
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 autoFocus
               />
             </div>
 
-            <Button type="submit" disabled={isLoading || verificationCode.length !== 6} className="w-full h-11">
+            <Button
+              type="submit"
+              disabled={!isHydrated || isLoading || verificationCode.length !== 6}
+              className="w-full h-11"
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -232,7 +254,7 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
             <button
               type="button"
               onClick={handleResendOtp}
-              disabled={isLoading}
+              disabled={!isHydrated || isLoading}
               className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Didn't receive the code? <span className="underline">Resend</span>

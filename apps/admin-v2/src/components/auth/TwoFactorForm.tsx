@@ -27,6 +27,7 @@ import {
   readPendingTwoFactorMethods,
   type VerifyTwoFactorMethod,
 } from "@/lib/two-factor-pending";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 interface TwoFactorFormProps {
   defaultMethod?: "totp" | "email";
@@ -49,6 +50,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
     !defaultMethod && initialPendingMethods.length === 0,
   );
   const [userEmail, setUserEmail] = useState<string>("");
+  const isHydrated = useHydrated();
   const autoEmailOtpSentRef = useRef(false);
 
   const sendEmailOtp = useCallback(async () => {
@@ -216,7 +218,13 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
       </CardHeader>
 
       <CardContent className="px-0 pb-0">
-        <form onSubmit={handleVerify} className="space-y-6">
+        <form
+          method="post"
+          action="/auth/two-factor"
+          onSubmit={handleVerify}
+          className="space-y-6"
+          noValidate
+        >
           {error && (
             <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -229,7 +237,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
               type="button"
               onClick={sendEmailOtp}
               className="w-full h-11"
-              disabled={isLoading}
+              disabled={!isHydrated || isLoading}
             >
               {isLoading ? (
                 <>
@@ -267,7 +275,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
                   }
                   maxLength={method === "backup" ? 12 : 6}
                   required
-                  disabled={isLoading}
+                  disabled={!isHydrated || isLoading}
                   autoFocus
                   autoComplete={method === "backup" ? "off" : "one-time-code"}
                 />
@@ -276,7 +284,11 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
               <Button
                 type="submit"
                 className="w-full h-11"
-                disabled={isLoading || (method !== "backup" && code.length !== 6)}
+                disabled={
+                  !isHydrated ||
+                  isLoading ||
+                  (method !== "backup" && code.length !== 6)
+                }
               >
                 {isLoading ? (
                   <>
@@ -292,7 +304,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
                 <button
                   type="button"
                   onClick={sendEmailOtp}
-                  disabled={isLoading}
+                  disabled={!isHydrated || isLoading}
                   className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Didn't receive the code? <span className="underline">Resend</span>
@@ -311,7 +323,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
                   type="button"
                   variant="outline"
                   onClick={() => switchMethod("totp")}
-                  disabled={isLoading}
+                  disabled={!isHydrated || isLoading}
                   className="flex-1 h-10"
                   size="sm"
                 >
@@ -324,7 +336,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
                   type="button"
                   variant="outline"
                   onClick={() => switchMethod("email")}
-                  disabled={isLoading}
+                  disabled={!isHydrated || isLoading}
                   className="flex-1 h-10"
                   size="sm"
                 >
@@ -337,7 +349,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
                   type="button"
                   variant="outline"
                   onClick={() => switchMethod("backup")}
-                  disabled={isLoading}
+                  disabled={!isHydrated || isLoading}
                   className="flex-1 h-10"
                   size="sm"
                 >
@@ -352,7 +364,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
             <button
               type="button"
               onClick={handleSignOut}
-              disabled={isLoading}
+              disabled={!isHydrated || isLoading}
               className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />

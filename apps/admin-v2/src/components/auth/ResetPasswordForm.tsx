@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 function getResetError(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
@@ -34,6 +35,7 @@ export function ResetPasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const isHydrated = useHydrated();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -141,7 +143,13 @@ export function ResetPasswordForm() {
             </Button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            method="post"
+            action="/auth/reset-password"
+            onSubmit={handleSubmit}
+            className="space-y-4"
+            noValidate
+          >
             {error && (
               <div
                 role="alert"
@@ -158,14 +166,13 @@ export function ResetPasswordForm() {
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="password"
-                  name="password"
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Enter a strong password"
                   autoComplete="new-password"
                   required
-                  disabled={isLoading}
+                  disabled={!isHydrated || isLoading}
                   className="h-11 pl-10"
                 />
               </div>
@@ -177,20 +184,23 @@ export function ResetPasswordForm() {
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="confirm-password"
-                  name="confirm-password"
                   type="password"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   placeholder="Confirm your password"
                   autoComplete="new-password"
                   required
-                  disabled={isLoading}
+                  disabled={!isHydrated || isLoading}
                   className="h-11 pl-10"
                 />
               </div>
             </div>
 
-            <Button type="submit" className="h-11 w-full" disabled={isLoading}>
+            <Button
+              type="submit"
+              className="h-11 w-full"
+              disabled={!isHydrated || isLoading}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />

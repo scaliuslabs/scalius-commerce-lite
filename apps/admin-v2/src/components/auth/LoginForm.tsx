@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, Loader2, Lock, Mail } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 interface SignInResponse {
   error?: { message?: string } | null;
@@ -40,11 +41,7 @@ export function LoginForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
+  const isHydrated = useHydrated();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,7 +88,13 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent className="px-0 pb-0">
-        <form method="post" action="/auth/login" onSubmit={handleSubmit} className="space-y-4">
+        <form
+          method="post"
+          action="/auth/login"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+          noValidate
+        >
           {error && (
             <div
               role="alert"

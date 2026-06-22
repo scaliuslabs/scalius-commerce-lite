@@ -40,6 +40,7 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { UserPermissionEditor } from "../UserPermissionEditor";
 import { useAdminUsers, type AdminUser } from "./hooks/useAdminUsers";
+import { useHydrated } from "~/hooks/use-hydrated";
 
 function getInitials(name: string): string {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -61,6 +62,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const { hasPermission } = usePermissions();
   const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
+  const isHydrated = useHydrated();
 
   const handleAddUser = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -103,7 +105,13 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
       </CardHeader>
       <CardContent>
         {canManageTeam && showAddForm && (
-          <form onSubmit={handleAddUser} className="mb-6 p-5 bg-muted/30 rounded-xl border space-y-4">
+          <form
+            method="post"
+            action="/admin/account"
+            onSubmit={handleAddUser}
+            className="mb-6 p-5 bg-muted/30 rounded-xl border space-y-4"
+            noValidate
+          >
             <h4 className="font-medium">Invite New Team Member</h4>
             {error && (
               <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -120,7 +128,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   onChange={(e) => setNewUserName(e.target.value)}
                   placeholder="John Doe"
                   required
-                  disabled={isAdding}
+                  disabled={!isHydrated || isAdding}
                 />
               </div>
               <div className="space-y-2">
@@ -132,7 +140,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   placeholder="john@example.com"
                   required
-                  disabled={isAdding}
+                  disabled={!isHydrated || isAdding}
                 />
               </div>
             </div>
@@ -141,7 +149,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               <Select
                 value={selectedRoleId}
                 onValueChange={setSelectedRoleId}
-                disabled={isAdding}
+                disabled={!isHydrated || isAdding}
               >
                 <SelectTrigger id="roleSelect">
                   <SelectValue placeholder="Select a role for this user" />
@@ -167,7 +175,10 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               A temporary password will be sent to their email. They'll be required to set up 2FA on first login.
             </p>
             <div className="flex gap-2">
-              <Button type="submit" disabled={isAdding || !selectedRoleId}>
+              <Button
+                type="submit"
+                disabled={!isHydrated || isAdding || !selectedRoleId}
+              >
                 {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Send Invite
               </Button>
