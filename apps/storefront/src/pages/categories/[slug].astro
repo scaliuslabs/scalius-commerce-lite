@@ -65,28 +65,44 @@ try {
   const attributesPromise = getFilterableAttributes({ categorySlug: slug });
 
   if (hasDynamicFilters) {
-    const [fetchedLayoutData, fetchedAttributes] = await Promise.all([
-      layoutPromise,
-      attributesPromise,
-    ]);
-    layoutData = fetchedLayoutData;
-    setRuntimeImageCdnPolicy(layoutData?.media);
-    attributes = fetchedAttributes || [];
+    attributes = (await attributesPromise) || [];
     queryState = resolveProductListQueryState({
       url: Astro.url,
       attributes,
     });
     if (queryState.redirectPath) {
+      void layoutPromise.catch((layoutError) => {
+        console.error(
+          "Layout fetch failed before category filter redirect:",
+          layoutError,
+        );
+      });
       return Astro.redirect(queryState.redirectPath);
     }
     sortBy = queryState.sortBy;
     query = queryState.query;
     currentFilters = queryState.currentFilters;
     productListOptions = queryState.options;
-    productsResponse = await getProductsByCategory(slug, productListOptions);
-    categoryWidgets = productsResponse?.category
-      ? await getActiveWidgetsForScope("category", productsResponse.category.id) || []
-      : [];
+    const productsPromise = getProductsByCategory(slug, productListOptions);
+    const widgetsPromise = productsPromise.then((fetchedProducts) =>
+      fetchedProducts?.category
+        ? getActiveWidgetsForScope("category", fetchedProducts.category.id)
+        : null,
+    );
+
+    const [
+      fetchedLayoutData,
+      fetchedProducts,
+      fetchedWidgets,
+    ] = await Promise.all([
+      layoutPromise,
+      productsPromise,
+      widgetsPromise,
+    ]);
+    layoutData = fetchedLayoutData;
+    setRuntimeImageCdnPolicy(layoutData?.media);
+    productsResponse = fetchedProducts;
+    categoryWidgets = fetchedWidgets || [];
   } else {
     const productsPromise = getProductsByCategory(slug, productListOptions);
     const widgetsPromise = productsPromise.then((fetchedProducts) =>

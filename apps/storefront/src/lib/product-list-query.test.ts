@@ -95,6 +95,36 @@ describe("product list query canonicalization", () => {
     );
   });
 
+  it("does not treat built-in navigation, price, boolean, or tracking params as dynamic attributes", () => {
+    const url = new URL(
+      "https://storefront.example.com/search?q=fish&page=2&sortBy=price-asc&minPrice=1000&maxPrice=50000&freeDelivery=true&hasDiscount=true&utm_source=ad&fbclid=abc",
+    );
+
+    expect(hasDynamicProductListFilterParams(url.searchParams)).toBe(false);
+  });
+
+  it("treats attribute-like and unknown render params as dynamic until metadata proves them", () => {
+    const validAttributeUrl = new URL("https://storefront.example.com/search?color=Blue");
+    const unknownParamUrl = new URL("https://storefront.example.com/search?campaign=summer");
+
+    expect(hasDynamicProductListFilterParams(validAttributeUrl.searchParams)).toBe(true);
+    expect(hasDynamicProductListFilterParams(unknownParamUrl.searchParams)).toBe(true);
+
+    const attributeState = resolveProductListQueryState({
+      url: validAttributeUrl,
+      attributes,
+    });
+    const unknownState = resolveProductListQueryState({
+      url: unknownParamUrl,
+      attributes,
+    });
+
+    expect(attributeState.options).toMatchObject({ color: "Blue" });
+    expect(attributeState.redirectPath).toBe(null);
+    expect(unknownState.options).not.toHaveProperty("campaign");
+    expect(unknownState.redirectPath).toBe("/search");
+  });
+
   it("redirects invalid navigation values to a canonical product-list URL", () => {
     const url = new URL("https://storefront.example.com/search?page=0&sortBy=popular&q=  ");
 
