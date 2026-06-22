@@ -32,7 +32,7 @@ function hasCustomerOption(value: { size?: string | null; color?: string | null 
 
 function assertNormalVariantHasCustomerOption(value: { size?: string | null; color?: string | null }) {
     if (!hasCustomerOption(value)) {
-        throw new ValidationError("Add at least one customer option, such as size or color. Products without options use the built-in simple SKU.");
+        throw new ValidationError("Add at least one customer option. Products without options use the built-in simple SKU.");
     }
 }
 
@@ -62,6 +62,7 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
             variantReservedStock: productVariants.reservedStock,
             variantBarcode: productVariants.barcode,
             variantBarcodeType: productVariants.barcodeType,
+            variantIsDefault: productVariants.isDefault,
             productId: products.id,
             productName: products.name,
             productSlug: products.slug,
@@ -81,12 +82,20 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
 
     if (!variant) return null;
 
+    const normalizedVariant = normalizeDefaultSkuOptions({
+        id: variant.variantId,
+        sku: variant.variantSku,
+        size: variant.variantSize,
+        color: variant.variantColor,
+        isDefault: variant.variantIsDefault,
+    });
+
     return {
         variant: {
             id: variant.variantId,
             sku: variant.variantSku,
-            size: variant.variantSize,
-            color: variant.variantColor,
+            size: normalizedVariant.size,
+            color: normalizedVariant.color,
             weight: variant.variantWeight,
             price: variant.variantPrice,
             stock: variant.variantStock,
@@ -347,7 +356,7 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
         ))
         .get();
     if (product?.isActive && (remainingCustomerOptionCount?.count ?? 0) === 0) {
-        throw new ValidationError("Add another size or color option, or deactivate this product, before removing its final customer option.");
+        throw new ValidationError("Add another customer option, or deactivate this product, before removing its final customer option.");
     }
 
     await db.delete(productVariants).where(eq(productVariants.id, variantId));
@@ -365,7 +374,7 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
     }
 
     if (existingVariant.isDefault || !hasCustomerOption(existingVariant)) {
-        throw new ValidationError("The simple product SKU cannot be duplicated as a normal variant. Add a size or color variant instead.");
+        throw new ValidationError("The simple product SKU cannot be duplicated as a normal option. Add a customer option instead.");
     }
 
     let newSku = `${existingVariant.sku}-COPY`;
@@ -511,7 +520,7 @@ export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, p
         ))
         .get();
     if (product?.isActive && (remainingCustomerOptionCount?.count ?? 0) === 0) {
-        throw new ValidationError("Add another size or color option, or deactivate this product, before removing the final customer option.");
+        throw new ValidationError("Add another customer option, or deactivate this product, before removing the final customer option.");
     }
 
     await db
@@ -526,6 +535,7 @@ export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, 
             size: productVariants.size,
             colorSortOrder: productVariants.colorSortOrder,
             sizeSortOrder: productVariants.sizeSortOrder,
+            isDefault: productVariants.isDefault,
         })
         .from(productVariants)
         .where(
@@ -538,7 +548,8 @@ export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, 
     const colorMap = new Map<string, number>();
     const sizeMap = new Map<string, number>();
 
-    variants.forEach((variant: { color: string | null; size: string | null; colorSortOrder: number | null; sizeSortOrder: number | null }) => {
+    variants.forEach((variant: { color: string | null; size: string | null; colorSortOrder: number | null; sizeSortOrder: number | null; isDefault: boolean }) => {
+        if (variant.isDefault) return;
         if (variant.color && !colorMap.has(variant.color)) {
             colorMap.set(variant.color, variant.colorSortOrder || 0);
         }

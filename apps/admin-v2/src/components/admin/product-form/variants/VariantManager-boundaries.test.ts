@@ -81,6 +81,14 @@ describe("VariantManager product mode boundaries", () => {
     const statsSource = readFileSync(VARIANT_STATS_SOURCE, "utf8");
     const orderItemSelectionSource = readFileSync(ORDER_ITEM_SELECTION_SOURCE, "utf8");
     const productViewSource = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
+    const productFormSource = readFileSync(
+      new URL("../../ProductForm.tsx", import.meta.url),
+      "utf8",
+    );
+    const productImagesSource = readFileSync(
+      new URL("../ProductImagesSection.tsx", import.meta.url),
+      "utf8",
+    );
 
     expect(simpleSource).toContain("Product SKU");
     expect(simpleSource).toContain("One SKU, no option choices.");
@@ -126,6 +134,10 @@ describe("VariantManager product mode boundaries", () => {
     expect(productViewSource).toContain("Product SKU");
     expect(productViewSource).toContain("No stock limit");
     expect(productViewSource).not.toContain("Simple product SKU");
+    expect(productFormSource).toContain("manage its product SKU or add customer options");
+    expect(productFormSource).not.toContain("size/color options");
+    expect(productImagesSource).toContain('Product Options → "Reorder"');
+    expect(productImagesSource).not.toContain('"Sort Options"');
   });
 
   it("saves dirty simple SKU changes before entering first option setup", () => {

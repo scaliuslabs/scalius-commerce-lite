@@ -248,7 +248,7 @@ const productCategoryAnalytics = productCategory
     data-product-discount-percentage={String(product.discountPercentage || 0)}
     data-product-discount-amount={String(product.discountAmount || 0)}
     data-product-free-delivery={product.freeDelivery.toString()}
-    data-product-has-variants={(buyerVariants.length > 0).toString()}
+    data-product-has-variants={product.hasVariants.toString()}
     data-fb-product-details={JSON.stringify({
       id: product.id,
       slug: product.slug,

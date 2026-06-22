@@ -192,7 +192,7 @@ function generateCartItemKey(
     return `${item.id}-${item.variantId}`;
   }
 
-  // For products with size/color but no variantId, create a key based on those
+  // Legacy option rows without variantId still need a stable option-value key.
   if (item.size || item.color) {
     const sizeKey = item.size || "no-size";
     const colorKey = item.color || "no-color";

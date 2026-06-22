@@ -223,7 +223,7 @@ Checkout proxy endpoints unwrap `.data` before returning to the browser -- the c
 Client-side cart state using Nano Stores (`nanostores/map`):
 
 - Persisted to `localStorage` under key `cart`
-- Cart item keys use `{productId}-{variantId}` for variant products, `{productId}-{size}-{color}` for size/color combos, or just `{productId}` for simple products
+- Cart item keys use `{productId}-{variantId}` for option SKUs, `{productId}-{option1}-{option2}` for legacy option rows without a variant ID, or just `{productId}` for simple products.
 - Discount support with auto-clear when cart contents change
 - Cross-component communication via `CustomEvent` dispatches (`cart-updated`, `discount-applied`, `discount-removed`)
 - Checkout repair handoff uses a one-shot `sessionStorage` key (`scalius_cart_repair_state`) written by `/checkout`; `src/lib/cart/client.ts` consumes it, renders line-level issues immediately, then runs the normal backend cart validation as authority.

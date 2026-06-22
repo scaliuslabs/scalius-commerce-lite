@@ -167,7 +167,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                           ))}
                         </div>
                         <p className="text-[10px] opacity-70">
-                          Adjust order in Variants → "Sort Options"
+                          Adjust order in Product Options → "Reorder"
                         </p>
                       </div>
                     </TooltipContent>
