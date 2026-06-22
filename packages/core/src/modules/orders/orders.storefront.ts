@@ -4,7 +4,6 @@
 import type { Database } from "@scalius/database/client";
 import { subtractPrice, addPrices, roundPrice } from "@scalius/shared/price-utils";
 import {
-    customers,
     deliveryLocations,
     discounts,
     siteSettings,
@@ -19,7 +18,12 @@ import { nanoid } from "nanoid";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ValidationError } from "@scalius/core/errors";
-import type { CreateStorefrontOrderIdentity, CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "./orders.types";
+import type {
+    CreateStorefrontOrderCustomerIdentity,
+    CreateStorefrontOrderIdentity,
+    CreateStorefrontOrderInput,
+    CreateStorefrontOrderResult,
+} from "./orders.types";
 import {
     isTrustedStorefrontCartValidationResult,
     validateStorefrontCartItems,
@@ -197,6 +201,7 @@ export async function createStorefrontOrder(
     identity?: CreateStorefrontOrderIdentity,
     prevalidatedCart?: StorefrontCartValidationResult,
     prevalidatedDelivery?: StorefrontDeliveryPreflightResult,
+    customerIdentity?: CreateStorefrontOrderCustomerIdentity,
 ): Promise<CreateStorefrontOrderResult> {
     if (prevalidatedCart && !isTrustedStorefrontCartValidationResult(prevalidatedCart)) {
         throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
@@ -244,17 +249,6 @@ export async function createStorefrontOrder(
     // Drizzle D1 batch() requires specific tuple types
     const readBatch: unknown[] = [];
 
-    readBatch.push(
-        storefrontDb
-            .select({
-                id: customers.id,
-                totalOrders: customers.totalOrders,
-                totalSpent: customers.totalSpent,
-            })
-            .from(customers)
-            .where(eq(customers.phone, data.customerPhone)),
-    );
-
     if (normalizedDiscountCode) {
         readBatch.push(
             storefrontDb
@@ -272,13 +266,12 @@ export async function createStorefrontOrder(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     const readResults = await storefrontDb.batch(readBatch as any);
 
-    const customerList = readResults[0] as { id: string; totalOrders: number; totalSpent: number }[];
-    const existingCustomer = customerList.length > 0 ? customerList[0] : undefined;
+    const existingCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
-    const discountList = data.discountCode ? (readResults[1] as { id: string }[]) : [];
+    const discountList = data.discountCode ? (readResults[0] as { id: string }[]) : [];
     const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
 
-    const settingsList = readResults[2] as Record<string, unknown>[];
+    const settingsList = readResults[1] as Record<string, unknown>[];
     const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
 
     const serverItemTotal = cartValidation.subtotal;
@@ -335,7 +328,7 @@ export async function createStorefrontOrder(
     const queuePayload = {
         type: "order.ingest" as const,
         checkoutToken,
-        existingCustomer: existingCustomer ? { id: existingCustomer.id } : null,
+        existingCustomer,
         orderData: {
             id: orderId,
             customerName: data.customerName,

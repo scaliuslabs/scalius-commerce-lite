@@ -8,6 +8,11 @@ import { createOrder } from "../../../lib/api/orders";
 import { getCheckoutErrorMessage } from "../../../lib/checkout/error-messages";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 
+const CUSTOMER_COOKIE_CLEAR_HEADERS = [
+  "cs_tok=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure",
+  "cs_auth=; Max-Age=0; Path=/; SameSite=Lax; Secure",
+];
+
 export const POST: APIRoute = async ({ request }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
     return new Response(JSON.stringify({ success: false, error: "Cross-origin cookie request denied" }), {
@@ -23,13 +28,21 @@ export const POST: APIRoute = async ({ request }) => {
     const result = await createOrder(payload, { customerSessionToken });
 
     if (!result.success) {
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (result.errorCode === "CUSTOMER_SESSION_STALE") {
+        for (const cookie of CUSTOMER_COOKIE_CLEAR_HEADERS) {
+          headers.append("Set-Cookie", cookie);
+        }
+      }
+
       return new Response(JSON.stringify({
         success: false,
         error: getCheckoutErrorMessage(result.error),
+        errorCode: result.errorCode,
         details: result.details,
       }), {
         status: result.status && result.status >= 400 ? result.status : 400,
-        headers: { "Content-Type": "application/json" },
+        headers,
       });
     }
 

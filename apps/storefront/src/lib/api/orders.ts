@@ -12,6 +12,7 @@ type CreateOrderResult = {
   totalAmount?: number;
   paymentMethod?: string;
   status?: number;
+  errorCode?: string;
   error?: string;
   details?: unknown;
 };
@@ -106,6 +107,11 @@ function getApiErrorDetails(data: unknown): unknown {
   return data.details;
 }
 
+function getApiErrorCode(data: unknown): string | undefined {
+  if (!isRecord(data) || !isRecord(data.error)) return undefined;
+  return typeof data.error.code === "string" ? data.error.code : undefined;
+}
+
 /**
  * Submits a new order to the backend.
  * This is an authenticated request.
@@ -157,9 +163,10 @@ export async function createOrder(
     if (!response.ok || !data.success) {
       const errorMsg = getCheckoutErrorMessage(data);
       const details = getApiErrorDetails(data);
+      const errorCode = getApiErrorCode(data);
 
       console.error("Failed to create order:", errorMsg);
-      return { success: false, error: errorMsg, status: response.status, details };
+      return { success: false, error: errorMsg, errorCode, status: response.status, details };
     }
 
     // Capture the 202 Async Accepted queue payload and poll for completion!

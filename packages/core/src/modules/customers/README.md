@@ -195,6 +195,10 @@ Customer account payment recovery -> API customer-auth route -> shared payment-s
 - Indexed columns: `name`, `phone`, `email`
 - Auto-maintained via SQLite triggers (insert/update/delete)
 
+## Order Ownership
+
+Customer account order history is scoped by `orders.customerId`, not by mutable phone/email contact fields. Storefront checkout attaches `orders.customerId` only when the API has resolved an active `customer_sessions` row and the session phone matches the checkout phone. True guest checkout orders keep `orders.customerId = null`; the submitted phone remains delivery/fraud/contact data, not account ownership proof.
+
 ## Known Gaps
 
 1. **History route not in service**: The `GET /{id}/history` endpoint contains significant business logic inline in the route handler (batch query for customer + history + orders, location enrichment) rather than delegating to the service layer.

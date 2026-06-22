@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -72,5 +74,32 @@ describe("checkout create-order proxy Origin guard", () => {
 
     expect(response.status).toBe(400);
     expect(json.details).toEqual({ itemIssues: [issue] });
+  });
+
+  it("clears stale customer cookies when backend rejects an expired customer session", async () => {
+    mocks.createOrder.mockResolvedValueOnce({
+      success: false,
+      error: "Your session expired. Please sign in again or continue as a guest.",
+      errorCode: "CUSTOMER_SESSION_STALE",
+      status: 401,
+    });
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/checkout/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: "cs_tok=expired; cs_auth=1",
+        },
+        body: JSON.stringify({ items: [] }),
+      }),
+    } as never);
+    const json = await response.json() as { errorCode?: string };
+    const setCookie = response.headers.get("set-cookie") ?? "";
+
+    expect(response.status).toBe(401);
+    expect(json.errorCode).toBe("CUSTOMER_SESSION_STALE");
+    expect(setCookie).toContain("cs_tok=; Max-Age=0");
+    expect(setCookie).toContain("cs_auth=; Max-Age=0");
   });
 });
