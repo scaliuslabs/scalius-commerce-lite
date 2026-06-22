@@ -151,7 +151,7 @@ export const SUMMARY_CONFIG = {
     },
   },
 
-  // Variant option buttons (size/color)
+  // Customer option buttons
   variantOptions: {
     container: "flex flex-wrap gap-1.5",
     label: "text-sm font-medium text-gray-900 mb-1",

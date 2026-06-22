@@ -5,6 +5,8 @@ import {
     bulkDeleteVariants,
     createVariant,
     deleteVariant,
+    getVariantSortOrder,
+    lookupByBarcode,
     updateVariant,
 } from "./products.variants";
 
@@ -270,6 +272,95 @@ describe("product variant SKU rules", () => {
             discountPercentage: 0,
             discountAmount: 0,
             trackInventory: false,
+        });
+    });
+
+    it("normalizes default SKU option labels in barcode lookup without hiding real option labels", async () => {
+        const makeDb = (variantRow: Record<string, unknown>) => ({
+            select() {
+                return {
+                    from() {
+                        return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return {
+                                            get: async () => variantRow,
+                                        };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+        });
+        const baseBarcodeRow = {
+            variantId: "var_default_prod_1",
+            variantSku: "SIMPLE-prod_1",
+            variantWeight: null,
+            variantPrice: 100,
+            variantStock: 0,
+            variantReservedStock: 0,
+            variantBarcode: "123",
+            variantBarcodeType: "code128",
+            productId: "prod_1",
+            productName: "Demo",
+            productSlug: "demo",
+            productPrice: 100,
+            productIsActive: true,
+        };
+
+        const defaultResult = await lookupByBarcode(makeDb({
+            ...baseBarcodeRow,
+            variantSize: "Default",
+            variantColor: "Default",
+            variantIsDefault: true,
+        }) as never, "123");
+        const optionResult = await lookupByBarcode(makeDb({
+            ...baseBarcodeRow,
+            variantId: "var_option_1",
+            variantSku: "OPT-1",
+            variantSize: "2KG",
+            variantColor: "Red",
+            variantIsDefault: false,
+        }) as never, "123");
+
+        expect(defaultResult?.variant).toMatchObject({ size: null, color: null });
+        expect(optionResult?.variant).toMatchObject({ size: "2KG", color: "Red" });
+    });
+
+    it("excludes protected default SKU drift from option sort order", async () => {
+        const dbWithSortRows = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            where: async () => [
+                                {
+                                    size: "Default",
+                                    color: "Default",
+                                    sizeSortOrder: 99,
+                                    colorSortOrder: 99,
+                                    isDefault: true,
+                                },
+                                {
+                                    size: "2KG",
+                                    color: "Red",
+                                    sizeSortOrder: 2,
+                                    colorSortOrder: 1,
+                                    isDefault: false,
+                                },
+                            ],
+                        };
+                    },
+                };
+            },
+        };
+
+        await expect(getVariantSortOrder(dbWithSortRows as never, "prod_1")).resolves.toEqual({
+            sizes: [{ value: "2KG", sortOrder: 2 }],
+            colors: [{ value: "Red", sortOrder: 1 }],
         });
     });
 });

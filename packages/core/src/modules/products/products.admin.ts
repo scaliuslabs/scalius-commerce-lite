@@ -931,7 +931,7 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
             throw new ValidationError("The simple product SKU cannot be bulk edited from the generic option editor.");
         }
         if (!hasVariantOption({ size: nextSize, color: nextColor })) {
-            throw new ValidationError("Normal variants must include at least one customer option, such as size or color.");
+            throw new ValidationError("Normal variants must include at least one customer option.");
         }
 
         const normalizedFieldsToUpdate = {
