@@ -87,21 +87,23 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 ### Admin Order Creation (synchronous, reserve then deduct)
 
 1. **Admin POST /admin/orders** -- `createOrder()` calculates totals, resolves locations, finds/creates customer
-2. **Reserve stock**: Calls `reserveMultiple()` for all variant items. If any variant has insufficient stock, throws `ValidationError` immediately -- order is never created.
-3. **Atomic DB write**: Inserts customer (new or update), order, and items in a single `db.batch()` call with `inventoryAction: "reserved"`.
-4. **On batch failure**: Calls `releaseMultiple()` to release all reservations made in step 2.
-5. **Convert to deduction**: Calls `deductMultiple()` to permanently deduct stock (decrements `stock`, clears `reservedStock`). On success, updates `inventoryAction` to `"deducted"`.
-6. **On deduction failure**: Stock remains reserved (no overselling risk). Error is logged but the order itself succeeds.
+2. **SKU authority**: `resolveAdminOrderItemInventory()` requires every manual order item to use a concrete SKU, joins the SKU to its parent product, and rejects missing/deleted SKUs, product/SKU mismatches, inactive products, and soft-deleted products before any inventory or order write starts. The returned `inventoryTracked` flag is trusted only after this validation.
+3. **Reserve stock**: Calls `reserveStockBatch()` only for validated tracked SKUs. If any SKU has insufficient stock, throws `ValidationError` immediately -- order is never created.
+4. **Atomic DB write**: Inserts customer (new or update), order, and items in a single `db.batch()` call with `inventoryAction: "reserved"` when tracked reservations exist, otherwise `"none"`.
+5. **On batch failure**: Calls `releaseMultiple()` to release all reservations made in step 3.
+6. **Convert to deduction**: Calls `deductMultiple()` to permanently deduct stock (decrements `stock`, clears `reservedStock`). On success, updates `inventoryAction` to `"deducted"`.
+7. **On deduction failure**: Stock remains reserved (no overselling risk). Error is logged but the order itself succeeds.
 
 ### Admin Order Update
 
 1. `updateOrder()` validates status transition via state machine
-2. If `inventoryAction === "reserved"`: reserves positive deltas and releases removed/reduced quantities before replacing item rows
-3. If `inventoryAction === "deducted"`: deducts positive deltas and restores removed/reduced quantities before replacing item rows
-4. Calls `applyInventoryForStatusChange()` after item writes unless an explicit item-delta/status branch already handled inventory; this also repairs same-status retries whose status was persisted before inventory completed
-5. Optimistic locking via `version` column -- throws `ConflictError` if version mismatch
-6. Deletes all existing items and re-inserts (full replacement)
-7. Updates customer stats for both old and new customer (if customer changed)
+2. `resolveAdminOrderItemInventory()` revalidates the complete replacement item set before inventory deltas are calculated, so stale admin tabs cannot swap in deleted, inactive, mismatched, or variantless lines
+3. If `inventoryAction === "reserved"`: reserves positive deltas and releases removed/reduced quantities before replacing item rows
+4. If `inventoryAction === "deducted"`: deducts positive deltas and restores removed/reduced quantities before replacing item rows
+5. Calls `applyInventoryForStatusChange()` after item writes unless an explicit item-delta/status branch already handled inventory; this also repairs same-status retries whose status was persisted before inventory completed
+6. Optimistic locking via `version` column -- throws `ConflictError` if version mismatch
+7. Deletes all existing items and re-inserts (full replacement)
+8. Updates customer stats for both old and new customer (if customer changed)
 
 ### Status Update Flow
 

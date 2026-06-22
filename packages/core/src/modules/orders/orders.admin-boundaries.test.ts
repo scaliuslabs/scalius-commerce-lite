@@ -56,4 +56,20 @@ describe("admin order list boundaries", () => {
       "whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`)",
     );
   });
+
+  it("validates manual order SKUs before create/update inventory work", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain("export async function resolveAdminOrderItemInventory");
+    expect(source).toContain("innerJoin(products, eq(products.id, productVariants.productId))");
+    expect(source).toContain("variantDeletedAt: productVariants.deletedAt");
+    expect(source).toContain("productActive: products.isActive");
+    expect(source).toContain("productDeletedAt: products.deletedAt");
+    expect(source).toContain('"VARIANT_MISMATCH"');
+    expect(source).toContain('"PRODUCT_UNAVAILABLE"');
+    expect(source).toContain("const trackedItems = await resolveAdminOrderItemInventory(db, data.items);");
+    expect(source).toContain("const trackedNewItems = await resolveAdminOrderItemInventory(db, data.items);");
+    expect(source).not.toContain("loadVariantTrackingMap");
+    expect(source).not.toContain("trackingByVariantId.get(item.variantId) ?? true");
+  });
 });

@@ -62,12 +62,146 @@ const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ORDER_LIST_LIMIT = 100;
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
+type AdminOrderSkuItem = { productId: string; variantId: string | null };
+type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
+    variantId: string;
+    inventoryTracked: boolean;
+};
+type AdminOrderSkuIssueCode =
+    | "SKU_REQUIRED"
+    | "VARIANT_UNAVAILABLE"
+    | "VARIANT_MISMATCH"
+    | "PRODUCT_UNAVAILABLE";
 
-function assertAdminOrderItemsUseSkus(items: Array<{ productId: string; variantId: string | null }>) {
-    const missingSku = items.find((item) => !item.variantId);
-    if (missingSku) {
-        throw new ValidationError(`Every manual order item must use a product SKU. Select a SKU for product ${missingSku.productId}.`);
+interface AdminOrderSkuIssue {
+    index: number;
+    productId: string;
+    variantId: string | null;
+    code: AdminOrderSkuIssueCode;
+    message: string;
+}
+
+function throwAdminOrderSkuIssues(issues: AdminOrderSkuIssue[]): never {
+    throw new ValidationError("Some manual order items need attention.", { itemIssues: issues });
+}
+
+function addAdminOrderSkuIssue(
+    issues: AdminOrderSkuIssue[],
+    item: AdminOrderSkuItem,
+    index: number,
+    code: AdminOrderSkuIssueCode,
+    message: string,
+) {
+    issues.push({
+        index,
+        productId: item.productId,
+        variantId: item.variantId ?? null,
+        code,
+        message,
+    });
+}
+
+function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
+    const issues: AdminOrderSkuIssue[] = [];
+    items.forEach((item, index) => {
+        if (!item.variantId) {
+            addAdminOrderSkuIssue(
+                issues,
+                item,
+                index,
+                "SKU_REQUIRED",
+                "Select a product SKU before saving the order.",
+            );
+        }
+    });
+
+    if (issues.length > 0) {
+        throwAdminOrderSkuIssues(issues);
     }
+}
+
+export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem>(
+    db: Database,
+    items: T[],
+): Promise<Array<AdminOrderItemWithInventory<T>>> {
+    assertAdminOrderItemsUseSkus(items);
+
+    const variantIds = [...new Set(items.map((item) => item.variantId).filter((id): id is string => Boolean(id)))];
+    if (variantIds.length === 0) return [];
+
+    const rows = await db
+        .select({
+            id: productVariants.id,
+            productId: productVariants.productId,
+            trackInventory: productVariants.trackInventory,
+            variantDeletedAt: productVariants.deletedAt,
+            productActive: products.isActive,
+            productDeletedAt: products.deletedAt,
+        })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(inArray(productVariants.id, variantIds));
+
+    const skuByVariantId = new Map(rows.map((row) => [row.id, row]));
+    const issues: AdminOrderSkuIssue[] = [];
+    const resolvedItems: Array<AdminOrderItemWithInventory<T>> = [];
+
+    items.forEach((item, index) => {
+        const variantId = item.variantId!;
+        const sku = skuByVariantId.get(variantId);
+        if (!sku) {
+            addAdminOrderSkuIssue(
+                issues,
+                item,
+                index,
+                "VARIANT_UNAVAILABLE",
+                "Selected SKU is no longer available.",
+            );
+            return;
+        }
+        if (sku.productId !== item.productId) {
+            addAdminOrderSkuIssue(
+                issues,
+                item,
+                index,
+                "VARIANT_MISMATCH",
+                "Selected SKU does not belong to this product.",
+            );
+            return;
+        }
+        if (sku.variantDeletedAt) {
+            addAdminOrderSkuIssue(
+                issues,
+                item,
+                index,
+                "VARIANT_UNAVAILABLE",
+                "Selected SKU has been deleted.",
+            );
+            return;
+        }
+        if (!sku.productActive || sku.productDeletedAt) {
+            addAdminOrderSkuIssue(
+                issues,
+                item,
+                index,
+                "PRODUCT_UNAVAILABLE",
+                "Selected product is not active.",
+            );
+            return;
+        }
+
+        resolvedItems.push({
+            ...item,
+            variantId,
+            inventoryTracked: sku.trackInventory,
+        });
+    });
+
+    if (issues.length > 0) {
+        throwAdminOrderSkuIssues(issues);
+    }
+
+    return resolvedItems;
 }
 
 function normalizeListPositiveInteger(value: number | undefined, fallback: number, max?: number): number {
@@ -502,7 +636,6 @@ export async function getOrderDetails(
  *   4. If batch fails, release all reservations (no orphaned holds)
  */
 export async function createOrder(db: Database, data: CreateOrderInput): Promise<{ id: string }> {
-    assertAdminOrderItemsUseSkus(data.items);
     // Calculate total amount
     const totalAmount = subtractPrice(
         addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
@@ -556,10 +689,9 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     // and holds stock atomically. If any variant has insufficient stock,
     // the order creation fails immediately with a clear error.
     const orderId = generateOrderId();
-    const trackingByVariantId = await loadVariantTrackingMap(db, data.items);
-    const trackedItems = withInventoryTracking(data.items, trackingByVariantId);
+    const trackedItems = await resolveAdminOrderItemInventory(db, data.items);
     const reservationEntries: ReservationEntry[] = trackedItems
-        .filter((item): item is typeof item & { variantId: string } => item.variantId !== null && item.inventoryTracked)
+        .filter((item) => item.inventoryTracked)
         .map((item) => ({
             variantId: item.variantId,
             quantity: item.quantity,
@@ -759,34 +891,6 @@ function buildInventoryEntries(
     return Array.from(merged.entries()).map(([variantId, quantity]) => ({ variantId, quantity, pool }));
 }
 
-async function loadVariantTrackingMap(
-    db: Database,
-    items: { variantId: string | null }[],
-): Promise<Map<string, boolean>> {
-    const variantIds = [...new Set(items.map((item) => item.variantId).filter((id): id is string => Boolean(id)))];
-    if (variantIds.length === 0) return new Map();
-
-    const rows = await db
-        .select({
-            id: productVariants.id,
-            trackInventory: productVariants.trackInventory,
-        })
-        .from(productVariants)
-        .where(inArray(productVariants.id, variantIds));
-
-    return new Map(rows.map((row) => [row.id, row.trackInventory]));
-}
-
-function withInventoryTracking<T extends { variantId: string | null }>(
-    items: T[],
-    trackingByVariantId: Map<string, boolean>,
-): Array<T & { inventoryTracked: boolean }> {
-    return items.map((item) => ({
-        ...item,
-        inventoryTracked: item.variantId ? trackingByVariantId.get(item.variantId) ?? true : false,
-    }));
-}
-
 function computeInventoryDeltas(
     oldEntries: ReservationEntry[],
     newEntries: ReservationEntry[],
@@ -970,7 +1074,6 @@ async function compensatePreWriteInventory(
 }
 
 export async function updateOrder(db: Database, id: string, data: UpdateOrderData): Promise<{ id: string }> {
-    assertAdminOrderItemsUseSkus(data.items);
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     const locationMap = new Map<string, string>();
     if (locationIds.length > 0) {
@@ -1013,8 +1116,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     }
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-    const trackingByVariantId = await loadVariantTrackingMap(db, data.items);
-    const trackedNewItems = withInventoryTracking(data.items, trackingByVariantId);
+    const trackedNewItems = await resolveAdminOrderItemInventory(db, data.items);
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
     const existingInventoryAction = existingOrder.inventoryAction as string;
     const targetRestoresStock = isStockRestoreStatus(data.status);

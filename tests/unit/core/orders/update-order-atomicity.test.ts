@@ -33,6 +33,7 @@ type RestoreOrder = typeof import("../../../../packages/core/src/modules/orders/
 
 type MockChain = {
   from: ReturnType<typeof vi.fn>;
+  innerJoin: ReturnType<typeof vi.fn>;
   where: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   values: ReturnType<typeof vi.fn>;
@@ -122,6 +123,7 @@ beforeEach(async () => {
 function createChain(result: unknown): MockChain {
   const chain = {} as MockChain;
   chain.from = vi.fn(() => chain);
+  chain.innerJoin = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);
   chain.set = vi.fn(() => chain);
   chain.values = vi.fn(() => chain);
@@ -141,10 +143,29 @@ function createUpdateOrderDb(options: {
   itemReplacementError?: Error;
 }) {
   let selectIndex = 0;
+  const liveSkuRows = [
+    {
+      id: EXISTING_VARIANT_ID,
+      productId: `prod_${EXISTING_VARIANT_ID}`,
+      trackInventory: true,
+      variantDeletedAt: null,
+      productActive: true,
+      productDeletedAt: null,
+    },
+    {
+      id: NEW_VARIANT_ID,
+      productId: `prod_${NEW_VARIANT_ID}`,
+      trackInventory: true,
+      variantDeletedAt: null,
+      productActive: true,
+      productDeletedAt: null,
+    },
+  ];
   const selectResults = [
     [],
     options.existingOrder,
     options.existingItems,
+    liveSkuRows,
   ];
 
   return {
