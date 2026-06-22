@@ -24,6 +24,7 @@ import {
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
   PRODUCT_LIST_NAVIGATION_PARAMS,
+  buildProductListPaginationHref,
   hasDynamicProductListFilterParams,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
@@ -106,13 +107,15 @@ const pageTitle = query ? `Search results for "${query}"` : "Shop All Products";
 const pageDescription = query
   ? `Found ${pagination.total} products for "${query}".`
   : "Explore our full collection of products.";
+const productListPathname = Astro.url.pathname;
+const canonicalFilterState = JSON.stringify(currentFilters);
 
 function getPaginationUrl(pageNum: number) {
-  const url = new URL(Astro.url);
-  if (query) url.searchParams.set("q", query);
-  else url.searchParams.delete("q");
-  url.searchParams.set("page", pageNum.toString());
-  return url.toString();
+  return buildProductListPaginationHref({
+    pathname: productListPathname,
+    currentFilters,
+    page: pageNum,
+  });
 }
 
 function generatePaginationLinks(
@@ -272,6 +275,8 @@ const analyticsProductData = products.map((p) => ({
               <select
                 id="sortBy"
                 name="sortBy"
+                data-list-pathname={productListPathname}
+                data-current-filters={canonicalFilterState}
                 class="rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-primary focus:border-primary min-w-[140px]"
               >
                 <option value="newest" selected={sortBy === "newest"}>
@@ -404,7 +409,22 @@ const analyticsProductData = products.map((p) => ({
 </Layout>
 
 <script>
+  import { buildProductListHref } from "@/lib/product-list-query";
   import { normalizeSearchQuery } from "@/lib/search-query";
+
+  function readCanonicalFilters(select: HTMLSelectElement): Record<string, string> {
+    try {
+      const parsed = JSON.parse(select.dataset.currentFilters || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      return Object.fromEntries(
+        Object.entries(parsed).filter(
+          ([, value]) => typeof value === "string",
+        ),
+      ) as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
 
   function setupFilterInteractivity() {
     const toggleBtn = document.getElementById("mobile-filter-toggle");
@@ -445,13 +465,19 @@ const analyticsProductData = products.map((p) => ({
     if (!(sortSelect instanceof HTMLSelectElement)) return;
 
     sortSelect.addEventListener("change", () => {
-      const url = new URL(window.location.href);
-      const query = normalizeSearchQuery(url.searchParams.get("q"));
-      if (query) url.searchParams.set("q", query);
-      else url.searchParams.delete("q");
-      url.searchParams.set("sortBy", sortSelect.value);
-      url.searchParams.set("page", "1"); // Reset to first page when sorting
-      window.location.href = url.toString();
+      const currentFilters = readCanonicalFilters(sortSelect);
+      const query = normalizeSearchQuery(currentFilters.q);
+      if (query) currentFilters.q = query;
+      else delete currentFilters.q;
+
+      window.location.href = buildProductListHref({
+        pathname: sortSelect.dataset.listPathname || window.location.pathname,
+        currentFilters,
+        overrides: {
+          sortBy: sortSelect.value,
+          page: 1,
+        },
+      });
     });
   }
 
