@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FilterableAttribute } from "@/lib/api";
 import {
+  buildProductListHref,
+  buildProductListPaginationHref,
   hasDynamicProductListFilterParams,
   resolveProductListQueryState,
 } from "./product-list-query";
@@ -173,5 +175,71 @@ describe("product list query canonicalization", () => {
     });
     expect(state.options).not.toHaveProperty("color");
     expect(state.redirectPath).toBe("/categories/shoes?size=L");
+  });
+
+  it("builds pagination links from canonical filters instead of raw URL noise", () => {
+    const url = new URL(
+      "https://storefront.example.com/search?q= fish  curry &page=1&sortBy=newest&utm_source=ad&fbclid=x&brand=Apple",
+    );
+    const state = resolveProductListQueryState({
+      url,
+      attributes: [
+        {
+          id: "attr_brand",
+          name: "Brand",
+          slug: "brand",
+          values: ["Apple"],
+        },
+      ],
+    });
+
+    expect(state.currentFilters).toEqual({
+      brand: "Apple",
+      q: "fish curry",
+    });
+    expect(
+      buildProductListPaginationHref({
+        pathname: "/search",
+        currentFilters: state.currentFilters,
+        page: 2,
+      }),
+    ).toBe("/search?brand=Apple&page=2&q=fish+curry");
+  });
+
+  it("preserves validated listing filters while changing page or sort", () => {
+    const currentFilters = {
+      color: "Red",
+      freeDelivery: "true",
+      hasDiscount: "true",
+      maxPrice: "5000",
+      minPrice: "1000",
+      page: "3",
+      q: "cotton panjabi",
+      size: "M",
+      sortBy: "price-asc",
+    };
+
+    expect(
+      buildProductListPaginationHref({
+        pathname: "/categories/shoes",
+        currentFilters,
+        page: 4,
+      }),
+    ).toBe(
+      "/categories/shoes?color=Red&freeDelivery=true&hasDiscount=true&maxPrice=5000&minPrice=1000&page=4&q=cotton+panjabi&size=M&sortBy=price-asc",
+    );
+
+    expect(
+      buildProductListHref({
+        pathname: "/categories/shoes",
+        currentFilters,
+        overrides: {
+          page: 1,
+          sortBy: "newest",
+        },
+      }),
+    ).toBe(
+      "/categories/shoes?color=Red&freeDelivery=true&hasDiscount=true&maxPrice=5000&minPrice=1000&q=cotton+panjabi&size=M",
+    );
   });
 });

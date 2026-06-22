@@ -40,6 +40,53 @@ export interface ProductListQueryState {
   redirectPath: string | null;
 }
 
+export function buildProductListHref({
+  pathname,
+  currentFilters,
+  overrides = {},
+}: {
+  pathname: string;
+  currentFilters: Record<string, string>;
+  overrides?: Record<string, string | number | null | undefined>;
+}): string {
+  const nextFilters: Record<string, string | number> = { ...currentFilters };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === null || value === undefined || value === "") {
+      delete nextFilters[key];
+    } else {
+      nextFilters[key] = value;
+    }
+  }
+
+  if (Number(nextFilters.page ?? 1) <= 1) {
+    delete nextFilters.page;
+  }
+
+  const queryString = buildCanonicalQueryString(nextFilters, {
+    defaultParams: {
+      page: 1,
+      sortBy: "newest",
+    },
+  });
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
+
+export function buildProductListPaginationHref({
+  pathname,
+  currentFilters,
+  page,
+}: {
+  pathname: string;
+  currentFilters: Record<string, string>;
+  page: number;
+}): string {
+  return buildProductListHref({
+    pathname,
+    currentFilters,
+    overrides: { page },
+  });
+}
+
 export function hasDynamicProductListFilterParams(
   params: URLSearchParams,
 ): boolean {

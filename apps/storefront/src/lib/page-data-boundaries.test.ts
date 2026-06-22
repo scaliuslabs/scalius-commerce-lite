@@ -49,6 +49,15 @@ describe("storefront page data boundaries", () => {
     const dynamicCheckIndex = source.indexOf(
       "const hasDynamicFilters = hasDynamicProductListFilterParams(params)",
     );
+    const paginationHelperIndex = source.indexOf(
+      "buildProductListPaginationHref",
+    );
+    const getPaginationUrlIndex = source.indexOf("function getPaginationUrl");
+    const paginationLinksIndex = source.indexOf("function generatePaginationLinks");
+    const paginationUrlSource = source.slice(
+      getPaginationUrlIndex,
+      paginationLinksIndex,
+    );
     const optionsIndex = source.indexOf(
       "let productListOptions: ProductListOptions = queryState.options",
     );
@@ -91,6 +100,12 @@ describe("storefront page data boundaries", () => {
     );
 
     expect(dynamicCheckIndex).toBeGreaterThan(-1);
+    expect(paginationHelperIndex).toBeGreaterThan(-1);
+    expect(getPaginationUrlIndex).toBeGreaterThan(-1);
+    expect(paginationUrlSource).toContain("currentFilters");
+    expect(paginationUrlSource).toContain("productListPathname");
+    expect(paginationUrlSource).not.toContain("new URL(");
+    expect(source).toContain("buildProductListHref({");
     expect(optionsIndex).toBeGreaterThan(-1);
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
     expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
@@ -114,6 +129,15 @@ describe("storefront page data boundaries", () => {
 
     const dynamicCheckIndex = source.indexOf(
       "const hasDynamicFilters = hasDynamicProductListFilterParams(params)",
+    );
+    const paginationHelperIndex = source.indexOf(
+      "buildProductListPaginationHref",
+    );
+    const getPaginationUrlIndex = source.indexOf("function getPaginationUrl");
+    const paginationLinksIndex = source.indexOf("function generatePaginationLinks");
+    const paginationUrlSource = source.slice(
+      getPaginationUrlIndex,
+      paginationLinksIndex,
     );
     const optionsIndex = source.indexOf(
       "let productListOptions: ProductListOptions = queryState.options",
@@ -151,6 +175,12 @@ describe("storefront page data boundaries", () => {
     );
 
     expect(dynamicCheckIndex).toBeGreaterThan(-1);
+    expect(paginationHelperIndex).toBeGreaterThan(-1);
+    expect(getPaginationUrlIndex).toBeGreaterThan(-1);
+    expect(paginationUrlSource).toContain("currentFilters");
+    expect(paginationUrlSource).toContain("productListPathname");
+    expect(paginationUrlSource).not.toContain("new URL(");
+    expect(source).toContain("buildProductListHref({");
     expect(optionsIndex).toBeGreaterThan(-1);
     expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
     expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
