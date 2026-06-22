@@ -4,19 +4,9 @@ import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.servi
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 
 import { ok } from "../utils/api-response";
-import { ValidationError } from "../utils/api-error";
 import { roundPrice } from "@scalius/shared/price-utils";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Schema for validating discount code
-const validateDiscountSchema = z.object({
-  code: z.string().min(1).openapi({ description: "Discount code to validate" }),
-  total: z.coerce.number().optional().openapi({ description: "Cart total" }),
-  items: z.string().optional().openapi({ description: "JSON-encoded cart items" }),
-  shippingCost: z.coerce.number().optional().default(0).openapi({ description: "Shipping cost" }),
-  customerPhone: z.string().optional().openapi({ description: "Customer phone for per-customer limits" })
-});
 
 // Schema for cart item - coerce numbers to handle string values from localStorage
 const cartItemSchema = z.object({
@@ -26,14 +16,30 @@ const cartItemSchema = z.object({
   variantId: z.string().optional()
 });
 
-// GET /discounts/validate — validate a discount code
+// Schema for validating discount code
+const validateDiscountSchema = z.object({
+  code: z.string().min(1).openapi({ description: "Discount code to validate" }),
+  total: z.coerce.number().optional().openapi({ description: "Cart total" }),
+  items: z.array(cartItemSchema).optional().openapi({ description: "Cart items" }),
+  shippingCost: z.coerce.number().optional().default(0).openapi({ description: "Shipping cost" }),
+  customerPhone: z.string().optional().openapi({ description: "Customer phone for per-customer limits" })
+});
+
+// POST /discounts/validate — validate a discount code without leaking buyer/cart data into URLs.
 const validateDiscountRoute = createRoute({
-  method: "get",
+  method: "post",
   path: "/validate",
   tags: ["Discounts"],
   summary: "Validate a discount code",
   request: {
-    query: validateDiscountSchema
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: validateDiscountSchema,
+        },
+      },
+    },
   },
   responses: {
     200: {
@@ -52,26 +58,9 @@ const validateDiscountRoute = createRoute({
 
 app.openapi(validateDiscountRoute, async (c) => {
   const db = c.get("db");
-  const params = c.req.valid("query");
+  const params = c.req.valid("json");
   const { code, total, items, shippingCost, customerPhone } = params;
-
-  // Parse cart items if provided
-  let cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }> = [];
-  if (items) {
-    try {
-      const parsed = JSON.parse(items);
-      const itemsArray = Array.isArray(parsed) ? parsed : Object.values(parsed);
-      cartItems = itemsArray.map((item: unknown) => {
-        return cartItemSchema.parse(item);
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof z.ZodError
-          ? `Invalid cart items: ${error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
-          : "Invalid cart items format";
-      throw new ValidationError(message);
-    }
-  }
+  const cartItems = items ?? [];
 
   // Fetch currency config for dynamic symbol
   const currencyConfig = await getCurrencyConfig(db);

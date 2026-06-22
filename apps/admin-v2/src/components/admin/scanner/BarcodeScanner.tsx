@@ -297,8 +297,10 @@ export function BarcodeScanner({
       {/* Manual input form */}
       {showManual && (
         <form
+          method="post"
           onSubmit={handleManualSubmit}
           className="flex items-center gap-2 bg-zinc-900 px-3 py-3"
+          noValidate
         >
           <input
             type="text"

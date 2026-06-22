@@ -50,12 +50,24 @@ describe("customer auth resilience source boundaries", () => {
     expect(cartSource).toMatch(
       /<form\b[^>]*id="discountForm"[^>]*method="post"[^>]*action="\/cart"[^>]*novalidate/s,
     );
+    expect(cartSource).toMatch(/<input\b[^>]*id="discountCodeInput"[^>]*>/);
+    expect(cartSource).not.toMatch(/<input\b[^>]*id="discountCodeInput"[^>]*\bname=/);
     expect(cartSource).toMatch(
-      /<form\b[^>]*method="POST"[^>]*id="checkoutForm"[\s\S]*name="formIntent"[\s\S]*value="checkout"/,
+      /<form\b[^>]*method="POST"[^>]*action="\/cart"[^>]*id="checkoutForm"[\s\S]*name="formIntent"[\s\S]*value="checkout"/,
     );
     expect(cartSource).toContain('if (formData.get("formIntent") === "checkout") {');
     expect(authModalSource).not.toMatch(/<form\b/);
     expect(authModalSource).not.toMatch(/name="(?:phone|email|otp|code|password|token)"/);
+  });
+
+  it("keeps post-sale payment recovery controls out of native forms", () => {
+    const orderSuccessSource = readStorefrontSource("src/pages/order-success.astro");
+    const accountOrderSource = readStorefrontSource("src/pages/account/orders/[id].astro");
+
+    for (const source of [orderSuccessSource, accountOrderSource]) {
+      expect(source).not.toMatch(/<form\b/);
+      expect(source).not.toMatch(/name="(?:phone|email|otp|code|password|token|receiptToken|orderId)"/);
+    }
   });
 
   it("buffers auth modal opens before the idle React island hydrates", () => {

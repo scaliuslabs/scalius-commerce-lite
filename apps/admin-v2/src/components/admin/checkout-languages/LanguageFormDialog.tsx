@@ -98,7 +98,12 @@ export function LanguageFormDialog({
             Configure language settings, field labels, and visibility options.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleFormSubmit} className="space-y-4">
+        <form
+          method="post"
+          onSubmit={handleFormSubmit}
+          className="space-y-4"
+          noValidate
+        >
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="name" className="text-xs">

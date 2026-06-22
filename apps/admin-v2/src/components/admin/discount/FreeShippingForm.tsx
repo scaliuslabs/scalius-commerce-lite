@@ -133,7 +133,13 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form
+        method="post"
+        action="/admin/discounts"
+        onSubmit={handleSubmit}
+        className="space-y-8"
+        noValidate
+      >
         <Card>
           <CardHeader>
             <CardTitle>Free Shipping</CardTitle>

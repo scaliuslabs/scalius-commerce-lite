@@ -31,7 +31,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/navigation` | `routes/navigation.ts` | Navigation menus |
 | `/footer` | `routes/footer.ts` | Footer config |
 | `/pages` | `routes/pages.ts` | CMS pages |
-| `/discounts` | `routes/discounts.ts` | Discount validation |
+| `/discounts` | `routes/discounts.ts` | POST-only discount validation; buyer/cart/customer data must stay in the JSON body, never URL query strings |
 | `/widgets` | `routes/widgets.ts` | Active homepage widgets |
 | `/analytics` | `routes/analytics.ts` | Analytics script configs |
 | `/meta` | `routes/meta-conversions.ts` | Meta Pixel CAPI |

@@ -56,11 +56,13 @@ export function FormContainer<T extends FieldValues>({
           isSubmitting={isSubmitting}
         />
         <form
+          method="post"
           onSubmit={(e) => {
             e.preventDefault();
             onSubmit();
           }}
           className={formClassName}
+          noValidate
         >
           {children}
         </form>

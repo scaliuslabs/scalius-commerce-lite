@@ -4864,67 +4864,74 @@
       }
     },
     "/api/v1/discounts/validate": {
-      "get": {
+      "post": {
         "tags": [
           "Discounts"
         ],
         "summary": "Validate a discount code",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Discount code to validate"
-            },
-            "required": true,
-            "description": "Discount code to validate",
-            "name": "code",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "number",
-              "nullable": true,
-              "description": "Cart total"
-            },
-            "required": false,
-            "description": "Cart total",
-            "name": "total",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "JSON-encoded cart items"
-            },
-            "required": false,
-            "description": "JSON-encoded cart items",
-            "name": "items",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "number",
-              "nullable": true,
-              "default": 0,
-              "description": "Shipping cost"
-            },
-            "required": false,
-            "description": "Shipping cost",
-            "name": "shippingCost",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Customer phone for per-customer limits"
-            },
-            "required": false,
-            "description": "Customer phone for per-customer limits",
-            "name": "customerPhone",
-            "in": "query"
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Discount code to validate"
+                  },
+                  "total": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Cart total"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "quantity": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "variantId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "price",
+                        "quantity"
+                      ]
+                    },
+                    "description": "Cart items"
+                  },
+                  "shippingCost": {
+                    "type": "number",
+                    "nullable": true,
+                    "default": 0,
+                    "description": "Shipping cost"
+                  },
+                  "customerPhone": {
+                    "type": "string",
+                    "description": "Customer phone for per-customer limits"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
           }
-        ],
+        },
         "responses": {
           "200": {
             "description": "Discount validation result",

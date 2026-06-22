@@ -925,7 +925,12 @@ export const WidgetForm: React.FC<WidgetFormProps> = ({ widget, isCreateMode, su
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form
+        method="post"
+        onSubmit={handleSubmit(onSubmit)}
+        className="space-y-6"
+        noValidate
+      >
         <AiAssistant
           widget={widget}
           aiContext={aiContext}

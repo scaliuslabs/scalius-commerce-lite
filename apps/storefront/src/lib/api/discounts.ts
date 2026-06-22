@@ -4,8 +4,8 @@ import { getConfiguredSdkClient } from "./client";
 import type { CartItem } from "@/store/cart";
 import type { DiscountValidationResponse } from "./types";
 import { unwrapData } from "./unwrap";
-import { getApiV1DiscountsValidate } from "@scalius/api-client/sdk";
-import type { GetApiV1DiscountsValidateData } from "@scalius/api-client/types";
+import { postApiV1DiscountsValidate } from "@scalius/api-client/sdk";
+import type { PostApiV1DiscountsValidateData } from "@scalius/api-client/types";
 
 /**
  * Validates a discount code against the current cart state.
@@ -29,29 +29,32 @@ export async function validateDiscount(
     return null;
   }
   try {
-    const queryParams: GetApiV1DiscountsValidateData["query"] = { code };
-    if (total !== undefined) queryParams.total = total;
-    if (shippingCost !== undefined) queryParams.shippingCost = shippingCost;
-    if (customerPhone) queryParams.customerPhone = customerPhone;
+    const body: PostApiV1DiscountsValidateData["body"] = { code };
+    if (total !== undefined) body.total = total;
+    if (shippingCost !== undefined) body.shippingCost = shippingCost;
+    if (customerPhone) body.customerPhone = customerPhone;
     if (items && items.length > 0) {
-      const apiItems = items.map((item) => {
+      const apiItems: NonNullable<PostApiV1DiscountsValidateData["body"]["items"]> = items.flatMap((item) => {
         const legacyProductId =
           "productId" in item && typeof item.productId === "string"
             ? item.productId
             : undefined;
+        const id = item.id || legacyProductId;
+        if (!id) return [];
+
         return {
-        id: item.id || legacyProductId,
-        price: Number(item.price),
-        quantity: Number(item.quantity),
-        ...(item.variantId ? { variantId: item.variantId } : {}),
+          id,
+          price: Number(item.price),
+          quantity: Number(item.quantity),
+          ...(item.variantId ? { variantId: item.variantId } : {}),
         };
       });
-      queryParams.items = JSON.stringify(apiItems);
+      if (apiItems.length > 0) body.items = apiItems;
     }
 
-    const { data, error } = await getApiV1DiscountsValidate({
+    const { data, error } = await postApiV1DiscountsValidate({
       client: getConfiguredSdkClient(),
-      query: queryParams,
+      body,
     });
 
     if (error) {
