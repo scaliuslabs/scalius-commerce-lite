@@ -250,7 +250,7 @@ const collectionJsonLd = category
       )
     }
   </Fragment>
-  <main
+  <div
     class="min-h-screen bg-gray-50"
     data-category-name={category?.name}
     data-products-for-analytics={JSON.stringify(analyticsProductData)}
@@ -531,7 +531,7 @@ const collectionJsonLd = category
       placementSlot="bottom"
       itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
     />
-  </main>
+  </div>
 </Layout>
 
 <script>
@@ -606,17 +606,17 @@ const collectionJsonLd = category
   };
 
   function trackCategoryView() {
-    const mainElement = document.querySelector<HTMLElement>(
-      "main[data-products-for-analytics]",
+    const productListElement = document.querySelector<HTMLElement>(
+      "[data-products-for-analytics]",
     );
-    if (!mainElement || mainElement.dataset.viewContentTracked === "true")
+    if (!productListElement || productListElement.dataset.viewContentTracked === "true")
       return;
 
     try {
       const productsData: ProductAnalyticsData[] = JSON.parse(
-        mainElement.dataset.productsForAnalytics || "[]",
+        productListElement.dataset.productsForAnalytics || "[]",
       );
-      const categoryName = mainElement.dataset.categoryName || "Category";
+      const categoryName = productListElement.dataset.categoryName || "Category";
 
       if (productsData.length === 0) return;
 
@@ -639,7 +639,7 @@ const collectionJsonLd = category
         value,
       });
 
-      mainElement.dataset.viewContentTracked = "true";
+      productListElement.dataset.viewContentTracked = "true";
     } catch (error: unknown) {
       console.error("Failed to track category view content:", error);
     }

@@ -152,7 +152,7 @@ const analyticsProductData = products.map((p) => ({
 
 <Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
   {query && <meta slot="head" name="robots" content="noindex,nofollow" />}
-  <main
+  <div
     class="min-h-screen bg-gray-50"
     data-search-query={query}
     data-products-for-analytics={JSON.stringify(analyticsProductData)}
@@ -392,7 +392,7 @@ const analyticsProductData = products.map((p) => ({
         </div>
       </div>
     </div>
-  </main>
+  </div>
 </Layout>
 
 <script>
@@ -468,17 +468,17 @@ const analyticsProductData = products.map((p) => ({
   };
 
   function trackSearchView() {
-    const mainElement = document.querySelector<HTMLElement>(
-      "main[data-products-for-analytics]"
+    const productListElement = document.querySelector<HTMLElement>(
+      "[data-products-for-analytics]"
     );
-    if (!mainElement || mainElement.dataset.viewContentTracked === "true")
+    if (!productListElement || productListElement.dataset.viewContentTracked === "true")
       return;
 
     try {
       const productsData: ProductAnalyticsData[] = JSON.parse(
-        mainElement.dataset.productsForAnalytics || "[]"
+        productListElement.dataset.productsForAnalytics || "[]"
       );
-      const searchQuery = mainElement.dataset.searchQuery || "";
+      const searchQuery = productListElement.dataset.searchQuery || "";
 
       if (productsData.length === 0) return;
 
@@ -500,7 +500,7 @@ const analyticsProductData = products.map((p) => ({
         value,
       });
 
-      mainElement.dataset.viewContentTracked = "true";
+      productListElement.dataset.viewContentTracked = "true";
     } catch (error: unknown) {
       console.error("Failed to track search view content:", error);
     }
