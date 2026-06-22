@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BUILD_ID } from "../../config/build-id";
+import { BUILD_ID } from "../../../config/build-id";
 
 const mocks = vi.hoisted(() => ({
   cfEnv: {
@@ -104,7 +104,7 @@ describe("storefront cache purge route", () => {
   });
 
   it("rejects purge credentials in GET query strings without touching caches", async () => {
-    const { GET } = await import("./purge-cache");
+    const { GET } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache?token=secret");
 
     const response = await GET({
@@ -124,7 +124,7 @@ describe("storefront cache purge route", () => {
   });
 
   it("keeps authenticated GET non-mutating and directs callers to POST", async () => {
-    const { GET } = await import("./purge-cache");
+    const { GET } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       headers: {
         Authorization: "Bearer secret",
@@ -150,7 +150,7 @@ describe("storefront cache purge route", () => {
   });
 
   it("keeps POST as the full purge path with version bump and warming", async () => {
-    const { POST } = await import("./purge-cache");
+    const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       method: "POST",
       headers: {
@@ -194,7 +194,7 @@ describe("storefront cache purge route", () => {
 
   it("warms canonical exact listing paths after a bumped catalog purge", async () => {
     mocks.cacheDelete.mockResolvedValue(true);
-    const { POST } = await import("./purge-cache");
+    const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       method: "POST",
       headers: {
@@ -262,7 +262,7 @@ describe("storefront cache purge route", () => {
   });
 
   it("preserves the local port when warming critical caches", async () => {
-    const { POST } = await import("./purge-cache");
+    const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("http://localhost:4322/api/purge-cache", {
       method: "POST",
       headers: {
@@ -296,7 +296,7 @@ describe("storefront cache purge route", () => {
   it("uses the canonical storefront URL as the production cache namespace", async () => {
     (mocks.cfEnv as { STOREFRONT_URL?: string }).STOREFRONT_URL =
       "https://storefront.example.com";
-    const { POST } = await import("./purge-cache");
+    const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://www.example.com/api/purge-cache", {
       method: "POST",
       headers: {
@@ -329,7 +329,7 @@ describe("storefront cache purge route", () => {
   });
 
   it("keeps checkout prefix purges data-scoped without bumping the HTML version", async () => {
-    const { POST } = await import("./purge-cache");
+    const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       method: "POST",
       headers: {
@@ -385,7 +385,7 @@ describe("storefront cache purge route", () => {
 
   it("keeps scoped widget purges exact instead of bumping the global cache version", async () => {
     mocks.cacheDelete.mockResolvedValue(true);
-    const { POST } = await import("./purge-cache");
+    const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       method: "POST",
       headers: {
@@ -480,7 +480,7 @@ describe("storefront cache purge route", () => {
 
   it("clears exact L1 and L2 keys without bumping the cache version", async () => {
     mocks.cacheDelete.mockResolvedValue(true);
-    const { POST } = await import("./purge-cache");
+    const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
       method: "POST",
       headers: {
@@ -576,7 +576,7 @@ describe("storefront cache purge route", () => {
 
 	  it("canonicalizes exact HTML paths before deleting and warming", async () => {
 	    mocks.cacheDelete.mockResolvedValue(true);
-	    const { POST } = await import("./purge-cache");
+	    const { POST } = await import("../../../pages/api/purge-cache");
 	    const request = new Request("https://storefront.example.com/api/purge-cache", {
 	      method: "POST",
 	      headers: {
@@ -643,7 +643,7 @@ describe("storefront cache purge route", () => {
 
 	  it("caps exact HTML paths and rejects absolute warm URLs", async () => {
     mocks.cacheDelete.mockResolvedValue(true);
-    const { MAX_EXACT_HTML_WARM_PATHS, POST } = await import("./purge-cache");
+    const { MAX_EXACT_HTML_WARM_PATHS, POST } = await import("../../../pages/api/purge-cache");
     const noisyPaths = [
       "/products/p0",
       "/products/p0",

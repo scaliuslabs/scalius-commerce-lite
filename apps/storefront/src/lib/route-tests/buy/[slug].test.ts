@@ -31,10 +31,10 @@ vi.mock("@/lib/safe-json", () => ({
 }));
 
 vi.mock("@/lib/product-sellable-variants", async () => (
-  await import("../../lib/product-sellable-variants")
+  await import("../../product-sellable-variants")
 ));
 
-import { GET } from "./[slug]";
+import { GET } from "../../../pages/buy/[slug]";
 
 function validCartValidation(overrides: Record<string, unknown> = {}) {
   return {

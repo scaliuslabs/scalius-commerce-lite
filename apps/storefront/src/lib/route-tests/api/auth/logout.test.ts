@@ -5,7 +5,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: () => true,
 }));
 
-import { POST } from "./logout";
+import { POST } from "../../../../pages/api/auth/logout";
 
 describe("logout proxy Origin guard", () => {
   it("rejects cross-origin cookie logout requests before clearing cookies", async () => {

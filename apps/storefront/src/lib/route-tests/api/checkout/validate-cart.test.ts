@@ -13,7 +13,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: mocks.shouldRejectCrossOriginCookieRequest,
 }));
 
-import { POST } from "./validate-cart";
+import { POST } from "../../../../pages/api/checkout/validate-cart";
 
 beforeEach(() => {
   mocks.validateCartItems.mockReset();
