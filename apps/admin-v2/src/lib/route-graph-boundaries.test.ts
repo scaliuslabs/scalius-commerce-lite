@@ -300,17 +300,89 @@ describe("admin route graph boundaries", () => {
     expect(authClientSource).not.toContain("window.location.href");
   });
 
-  it("keeps admin login credentials out of the URL before hydration", () => {
+  it("keeps admin auth credentials out of the URL before hydration", () => {
+    const hydratedHookSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "hooks", "use-hydrated.ts"),
+      "utf8",
+    );
     const loginFormSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "auth", "LoginForm.tsx"),
       "utf8",
     );
+    const resetPasswordFormSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "ResetPasswordForm.tsx"),
+      "utf8",
+    );
+    const formSources = [
+      {
+        path: join(ADMIN_SRC_ROOT, "components", "auth", "LoginForm.tsx"),
+        action: 'action="/auth/login"',
+      },
+      {
+        path: join(ADMIN_SRC_ROOT, "routes", "auth", "forgot-password.tsx"),
+        action: 'action="/auth/forgot-password"',
+      },
+      {
+        path: join(ADMIN_SRC_ROOT, "components", "auth", "ResetPasswordForm.tsx"),
+        action: 'action="/auth/reset-password"',
+      },
+      {
+        path: join(ADMIN_SRC_ROOT, "components", "auth", "TwoFactorForm.tsx"),
+        action: 'action="/auth/two-factor"',
+      },
+      {
+        path: join(ADMIN_SRC_ROOT, "components", "auth", "SetupForm.tsx"),
+        action: 'action="/auth/setup"',
+      },
+      {
+        path: join(ADMIN_SRC_ROOT, "components", "auth", "TwoFactorSetup.tsx"),
+        action: 'action="/auth/setup-2fa"',
+      },
+      {
+        path: join(
+          ADMIN_SRC_ROOT,
+          "components",
+          "admin",
+          "account-settings",
+          "ChangePasswordForm.tsx",
+        ),
+        action: 'action="/admin/account"',
+      },
+      {
+        path: join(
+          ADMIN_SRC_ROOT,
+          "components",
+          "admin",
+          "account-settings",
+          "AdminUsersManager.tsx",
+        ),
+        action: 'action="/admin/account"',
+      },
+    ];
 
+    expect(hydratedHookSource).toContain("const [isHydrated, setIsHydrated] = useState(false)");
+    expect(hydratedHookSource).toContain("setIsHydrated(true)");
     expect(loginFormSource).toContain('method="post"');
     expect(loginFormSource).toContain('action="/auth/login"');
-    expect(loginFormSource).toContain("const [isHydrated, setIsHydrated] = useState(false)");
-    expect(loginFormSource).toContain("setIsHydrated(true)");
+    expect(loginFormSource).toContain("useHydrated()");
     expect(loginFormSource).toContain("disabled={!isHydrated || isLoading}");
+    expect(resetPasswordFormSource).not.toContain('name="password"');
+    expect(resetPasswordFormSource).not.toContain('name="confirm-password"');
+
+    for (const { path, action } of formSources) {
+      const source = readFileSync(path, "utf8");
+      const formTags = Array.from(source.matchAll(/<form\b[^>]*>/g), (match) => match[0]);
+      const noValidateCount = source.match(/noValidate/g)?.length ?? 0;
+
+      expect(formTags.length).toBeGreaterThan(0);
+      expect(noValidateCount).toBe(formTags.length);
+      for (const formTag of formTags) {
+        expect(formTag).toContain('method="post"');
+        expect(formTag).toContain(action);
+      }
+      expect(source).toContain("useHydrated()");
+      expect(source).toContain("!isHydrated ||");
+    }
   });
 
   it("keeps admin navigation from doing focus refetch stampedes", () => {

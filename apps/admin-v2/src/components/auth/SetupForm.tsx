@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2, Mail, Lock, User, AlertCircle } from "lucide-react";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export function SetupForm() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export function SetupForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const isHydrated = useHydrated();
 
   const handleCreateAccount = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -80,7 +82,13 @@ export function SetupForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleCreateAccount} className="space-y-4">
+        <form
+          method="post"
+          action="/auth/setup"
+          onSubmit={handleCreateAccount}
+          className="space-y-4"
+          noValidate
+        >
           {error && (
             <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -100,7 +108,7 @@ export function SetupForm() {
                 onChange={(e) => setName(e.target.value)}
                 className="pl-10"
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
               />
             </div>
           </div>
@@ -117,7 +125,7 @@ export function SetupForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10"
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
               />
             </div>
           </div>
@@ -134,7 +142,7 @@ export function SetupForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10"
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 minLength={12}
               />
             </div>
@@ -152,13 +160,17 @@ export function SetupForm() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="pl-10"
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 minLength={12}
               />
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!isHydrated || isLoading}
+          >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

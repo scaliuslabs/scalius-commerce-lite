@@ -43,6 +43,21 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain("window.dispatchEvent(new CustomEvent(\"open-auth-modal\"));");
   });
 
+  it("keeps storefront customer forms out of native GET query strings", () => {
+    const cartSource = readStorefrontSource("src/pages/cart.astro");
+    const authModalSource = readStorefrontSource("src/components/AuthModal.tsx");
+
+    expect(cartSource).toMatch(
+      /<form\b[^>]*id="discountForm"[^>]*method="post"[^>]*action="\/cart"[^>]*novalidate/s,
+    );
+    expect(cartSource).toMatch(
+      /<form\b[^>]*method="POST"[^>]*id="checkoutForm"[\s\S]*name="formIntent"[\s\S]*value="checkout"/,
+    );
+    expect(cartSource).toContain('if (formData.get("formIntent") === "checkout") {');
+    expect(authModalSource).not.toMatch(/<form\b/);
+    expect(authModalSource).not.toMatch(/name="(?:phone|email|otp|code|password|token)"/);
+  });
+
   it("buffers auth modal opens before the idle React island hydrates", () => {
     const source = readStorefrontSource("src/layouts/Layout.astro");
 

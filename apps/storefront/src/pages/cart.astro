@@ -98,45 +98,49 @@ let errorMessage = "";
 let successOrderId = "";
 let isProcessing = false;
 
-// Handle form submission — only for COD-only flow.
-// When multiple gateways are active, the form is intercepted client-side
+// Handle form submission — only for COD-only checkout submits.
+// Other forms on the page may use POST to avoid URL/query leakage.
+// When multiple gateways are active, the checkout form is intercepted client-side
 // and the user is redirected to /checkout for payment selection.
 if (Astro.request.method === "POST" && codOnly) {
   try {
-    isProcessing = true;
     const formData = await Astro.request.formData();
 
-    // Check if cart is empty
-    const cartItems = formData.get("cartItems") as string;
-    if (!cartItems || cartItems === "{}" || cartItems === "[]") {
-      throw new Error(
-        "Your cart is empty. Please add items to your cart before placing an order."
-      );
-    }
+    if (formData.get("formIntent") === "checkout") {
+      isProcessing = true;
 
-    const result = await processOrder(formData, {
-      customerSessionToken: getCustomerSessionTokenFromCookie(
-        Astro.request.headers.get("cookie"),
-      ),
-    });
+      // Check if cart is empty
+      const cartItems = formData.get("cartItems") as string;
+      if (!cartItems || cartItems === "{}" || cartItems === "[]") {
+        throw new Error(
+          "Your cart is empty. Please add items to your cart before placing an order."
+        );
+      }
 
-    if (
-      result.success &&
-      "orderId" in result &&
-      "receiptToken" in result &&
-      result.orderId &&
-      result.receiptToken
-    ) {
-      successOrderId = result.orderId;
-      return Astro.redirect(
-        `/order-success?orderId=${encodeURIComponent(result.orderId)}&token=${encodeURIComponent(result.receiptToken)}`,
-      );
-    } else {
-      console.error("Order processing failed:", result.error);
-      const resultError = result.error;
-      errorMessage =
-        (typeof resultError === "string" ? resultError : resultError?.message) ||
-        "Failed to process order. Please try again.";
+      const result = await processOrder(formData, {
+        customerSessionToken: getCustomerSessionTokenFromCookie(
+          Astro.request.headers.get("cookie"),
+        ),
+      });
+
+      if (
+        result.success &&
+        "orderId" in result &&
+        "receiptToken" in result &&
+        result.orderId &&
+        result.receiptToken
+      ) {
+        successOrderId = result.orderId;
+        return Astro.redirect(
+          `/order-success?orderId=${encodeURIComponent(result.orderId)}&token=${encodeURIComponent(result.receiptToken)}`,
+        );
+      } else {
+        console.error("Order processing failed:", result.error);
+        const resultError = result.error;
+        errorMessage =
+          (typeof resultError === "string" ? resultError : resultError?.message) ||
+          "Failed to process order. Please try again.";
+      }
     }
   } catch (error: unknown) {
     console.error("Order creation failed:", error);
@@ -284,7 +288,13 @@ const submitLabel = codOnly
 
             <!-- Discount Code Form -->
             <div class="pt-3 mt-1">
-              <form id="discountForm" class="relative">
+              <form
+                id="discountForm"
+                method="post"
+                action="/cart"
+                class="relative"
+                novalidate
+              >
                 <div class="flex gap-2">
                   <input
                     type="text"
@@ -358,6 +368,7 @@ const submitLabel = codOnly
           </h2>
 
           <form method="POST" class="space-y-3" id="checkoutForm">
+            <input type="hidden" name="formIntent" value="checkout" />
             <input type="hidden" name="cartItems" id="cartItemsInput" />
             <input type="hidden" name="checkoutId" id="checkoutIdInput" />
             <input

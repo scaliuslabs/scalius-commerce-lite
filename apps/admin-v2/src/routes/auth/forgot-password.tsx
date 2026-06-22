@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { redirectIfAuthenticated } from "~/lib/auth.fns";
 import { useState } from "react";
 import { Mail } from "lucide-react";
+import { useHydrated } from "~/hooks/use-hydrated";
 
 export const Route = createFileRoute("/auth/forgot-password")({
   beforeLoad: () => redirectIfAuthenticated(),
@@ -16,6 +17,7 @@ function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const isHydrated = useHydrated();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -87,7 +89,13 @@ function ForgotPasswordPage() {
           Enter your email address and we'll send you a reset link.
         </p>
       </div>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form
+        method="post"
+        action="/auth/forgot-password"
+        onSubmit={handleSubmit}
+        className="space-y-4"
+        noValidate
+      >
         <div className="space-y-2">
           <label htmlFor="email" className="text-sm font-medium">
             Email
@@ -101,6 +109,7 @@ function ForgotPasswordPage() {
             required
             autoComplete="email"
             autoFocus
+            disabled={!isHydrated || isLoading}
             className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
@@ -111,7 +120,7 @@ function ForgotPasswordPage() {
         )}
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={!isHydrated || isLoading}
           className="inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
         >
           {isLoading ? "Sending..." : "Send reset link"}

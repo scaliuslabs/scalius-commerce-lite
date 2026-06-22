@@ -14,6 +14,7 @@ import { Loader2, KeyRound, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import { changePassword } from "~/lib/api-functions/auth-management";
+import { useHydrated } from "~/hooks/use-hydrated";
 
 function getPasswordStrength(password: string) {
   if (!password) return { strength: 0, label: "", color: "" };
@@ -38,6 +39,7 @@ export function ChangePasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const isHydrated = useHydrated();
 
   const passwordStrength = getPasswordStrength(newPassword);
 
@@ -82,7 +84,13 @@ export function ChangePasswordForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          method="post"
+          action="/admin/account"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+          noValidate
+        >
           {error && (
             <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -99,7 +107,7 @@ export function ChangePasswordForm() {
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 className="pr-10"
               />
               <Button
@@ -129,7 +137,7 @@ export function ChangePasswordForm() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={!isHydrated || isLoading}
                 minLength={12}
                 className="pr-10"
               />
@@ -175,7 +183,7 @@ export function ChangePasswordForm() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              disabled={isLoading}
+              disabled={!isHydrated || isLoading}
               minLength={12}
             />
             {confirmPassword && newPassword !== confirmPassword && (
@@ -185,7 +193,13 @@ export function ChangePasswordForm() {
 
           <Button
             type="submit"
-            disabled={isLoading || !currentPassword || !newPassword || newPassword !== confirmPassword}
+            disabled={
+              !isHydrated ||
+              isLoading ||
+              !currentPassword ||
+              !newPassword ||
+              newPassword !== confirmPassword
+            }
             className="w-full sm:w-auto"
           >
             {isLoading ? (
