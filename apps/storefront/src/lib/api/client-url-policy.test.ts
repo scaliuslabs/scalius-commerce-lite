@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { storefrontRootPath } from "../test-source-paths";
 
-const storefrontRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const storefrontRoot = storefrontRootPath();
 
 describe("storefront browser API URL policy", () => {
   it("does not silently fall back to a nonexistent same-origin /api/v1 proxy", async () => {

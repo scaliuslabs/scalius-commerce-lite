@@ -79,7 +79,12 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     label: "Products",
     description:
       "Product listings, search results, and homepage product sections",
-    kvPrefixes: ["api:products:", "api:search:", "api:storefront:homepage:"],
+    kvPrefixes: [
+      "api:products:",
+      "api:categories:",
+      "api:search:",
+      "api:storefront:homepage:",
+    ],
     bumpsHtml: true,
     storefrontPrefixes: [
       "product_slug_",

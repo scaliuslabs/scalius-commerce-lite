@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { storefrontSourcePath } from "../lib/test-source-paths";
 
-const COMPONENT_DIR = fileURLToPath(new URL(".", import.meta.url));
+const COMPONENT_DIR = storefrontSourcePath("components");
 
 describe("product shortcode purchase boundaries", () => {
   it("uses buyer-visible variants and disables purchase actions for unavailable products", () => {

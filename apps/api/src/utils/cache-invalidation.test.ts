@@ -58,6 +58,7 @@ describe("catalog cache groups", () => {
       expect.arrayContaining([
         "product_slug_",
         "all_products_",
+        "category_products_",
         "collection_by_id_",
         "filterable_attrs_",
         "global_all_collections",
@@ -666,6 +667,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:category" });
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:category-slug" });
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:search-filters" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:categories:" });
 
     expect(waitUntil).toHaveBeenCalledTimes(1);
     const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
@@ -690,6 +692,23 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "widgets_scope_",
       ]),
     );
+  });
+
+  it("invalidates category-products API cache when discounts change product cards", async () => {
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+
+    await invalidateCatalogCaches("discounts", {
+      env: {
+        CACHE: kv,
+      } as unknown as Env,
+    });
+
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:categories:" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:products:" });
+    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:search:" });
   });
 
   it("schedules category catalog purges with canonical listing HTML warm paths", async () => {
