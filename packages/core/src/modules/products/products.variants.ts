@@ -19,6 +19,7 @@ import {
     updateSortOrderSchema,
     bulkVariantSchema,
 } from "./products.types";
+import { normalizeDefaultSkuOptions } from "./products.public-eligibility";
 
 function normalizeOptionValue(value: string | null | undefined): string | null {
     const normalized = value?.trim();
@@ -137,7 +138,7 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
         .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
 
     return variants.map((variant: { id: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: string; updatedAt: string }) => ({
-        ...variant,
+        ...normalizeDefaultSkuOptions(variant),
         createdAt: new Date(variant.createdAt),
         updatedAt: new Date(variant.updatedAt),
     }));

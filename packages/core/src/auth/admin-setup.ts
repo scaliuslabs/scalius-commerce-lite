@@ -129,6 +129,29 @@ export async function claimAdminSetup(
 
   const existing = await selectAdminSetupClaim(db);
   if (existing?.status === "completed") {
+    const reclaimedCompletedWithoutAdmin = await db
+      .update(adminSetupClaims)
+      .set({
+        status: "processing",
+        claimId,
+        claimExpiresAt,
+        completedUserId: null,
+        lastError: null,
+        updatedAt: nowSeconds,
+      })
+      .where(
+        and(
+          eq(adminSetupClaims.singletonKey, ADMIN_SETUP_SINGLETON_KEY),
+          eq(adminSetupClaims.status, "completed"),
+          sql`not exists (select 1 from "user" where "user"."role" = 'admin')`,
+        ),
+      )
+      .returning({ singletonKey: adminSetupClaims.singletonKey });
+
+    if (reclaimedCompletedWithoutAdmin[0]?.singletonKey) {
+      return { singletonKey: ADMIN_SETUP_SINGLETON_KEY, claimId };
+    }
+
     throw new ForbiddenError("Initial admin setup has already been completed.");
   }
 

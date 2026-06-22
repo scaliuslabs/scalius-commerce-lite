@@ -62,14 +62,36 @@ describe("admin setup coordination", () => {
     expect(fake.claim?.status).toBe("processing");
   });
 
-  it("blocks setup forever once bootstrap is completed", async () => {
+  it("blocks setup once bootstrap is completed and an admin still exists", async () => {
     const fake = createFakeAdminSetupDb(1_000);
     const claim = await claimAdminSetup(fake.db, { nowSeconds: 1_000 });
+    fake.users.set("admin_1", {
+      id: "admin_1",
+      name: "First Admin",
+      role: "admin",
+      isSuperAdmin: true,
+      emailVerified: true,
+    });
 
     await markAdminSetupClaimCompleted(fake.db, claim, "admin_1", { nowSeconds: 1_005 });
 
     await expect(claimAdminSetup(fake.db, { nowSeconds: 1_200 })).rejects.toBeInstanceOf(ForbiddenError);
     expect(fake.claim?.completedUserId).toBe("admin_1");
+  });
+
+  it("reclaims a completed setup claim when no admin user exists anymore", async () => {
+    const fake = createFakeAdminSetupDb(1_000);
+    const claim = await claimAdminSetup(fake.db, { nowSeconds: 1_000 });
+
+    await markAdminSetupClaimCompleted(fake.db, claim, "admin_1", { nowSeconds: 1_005 });
+
+    const nextClaim = await claimAdminSetup(fake.db, { nowSeconds: 1_200 });
+
+    expect(nextClaim.claimId).not.toBe(claim.claimId);
+    expect(fake.claim).toMatchObject({
+      status: "processing",
+      completedUserId: null,
+    });
   });
 
   it("enforces setup attempts through the D1 rate-limit row", async () => {
@@ -255,7 +277,7 @@ function createFakeAdminSetupDb(nowSeconds: number): {
 }
 
 function updateClaim(
-  state: { claim: ClaimRow | null; nowSeconds: number },
+  state: { claim: ClaimRow | null; users: Map<string, UserRow>; nowSeconds: number },
   values: Record<string, unknown>,
 ): boolean {
   if (!state.claim) return false;
@@ -295,8 +317,10 @@ function updateClaim(
   }
 
   if (values.status === "processing") {
+    const hasAdmin = [...state.users.values()].some((row) => row.role === "admin");
     const stale =
       state.claim.status === "failed" ||
+      (state.claim.status === "completed" && !hasAdmin) ||
       (state.claim.status === "processing" &&
         (state.claim.claimExpiresAt === null || state.claim.claimExpiresAt <= Number(values.updatedAt)));
     if (!stale) return false;
@@ -305,6 +329,7 @@ function updateClaim(
       status: "processing",
       claimId: String(values.claimId),
       claimExpiresAt: Number(values.claimExpiresAt),
+      completedUserId: (values.completedUserId as string | null | undefined) ?? null,
       lastError: null,
       updatedAt: Number(values.updatedAt),
     };

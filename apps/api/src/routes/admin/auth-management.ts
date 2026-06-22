@@ -205,6 +205,10 @@ app.openapi(createUserRoute, async (c) => {
 
         const { name, email, roleId } = c.req.valid("json");
 
+        if (!env.BETTER_AUTH_URL && !env.PUBLIC_API_BASE_URL) {
+            throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
+        }
+
         if (roleId) {
             const roleExists = await db.select({ id: roles.id }).from(roles).where(eq(roles.id, roleId)).get();
             if (!roleExists) throw new ValidationError("Selected role does not exist");
@@ -235,10 +239,6 @@ app.openapi(createUserRoute, async (c) => {
 
         if (roleId) {
             await assignRoleToUser(db, signUpResult.user.id, roleId, sessionUser.id, env.CACHE as KVNamespace | undefined);
-        }
-
-        if (!env.BETTER_AUTH_URL && !env.PUBLIC_API_BASE_URL) {
-            throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
         }
 
         let emailFailed = false;
@@ -752,7 +752,7 @@ async function firstAdminExists(db: Database): Promise<boolean> {
         .limit(1)
         .get();
 
-    return row !== null;
+    return row != null;
 }
 
 // ── Admin Exists Check (for setup page) ──
@@ -802,9 +802,8 @@ async function verifyExistingSetupAccountPassword(
     try {
         const result = await auth.api.signInEmail({ body: { email, password } });
         const token = (result as { token?: string } | undefined)?.token;
-        if (token) {
-            await db.delete(sessionTable).where(eq(sessionTable.token, token));
-        }
+        if (!token) return false;
+        await db.delete(sessionTable).where(eq(sessionTable.token, token));
         return true;
     } catch {
         return false;

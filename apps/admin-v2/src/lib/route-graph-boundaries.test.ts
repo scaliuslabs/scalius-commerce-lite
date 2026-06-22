@@ -353,6 +353,8 @@ describe("admin route graph boundaries", () => {
       expect(source).not.toContain('window.location.href = "/admin"');
     }
     expect(authClientSource).not.toContain("window.location.href");
+    expect(setupFormSource).toContain("storePendingTwoFactorMethods");
+    expect(setupFormSource).toContain('navigate({ to: "/auth/two-factor" })');
   });
 
   it("keeps admin auth credentials out of the URL before hydration", () => {

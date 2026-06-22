@@ -132,7 +132,7 @@ export function SimpleProductSkuPanel({
               </Badge>
             </CardTitle>
             <CardDescription className="mt-1 text-xs text-muted-foreground">
-              One SKU, no size or color choices.
+              One SKU, no option choices.
             </CardDescription>
           </div>
 
@@ -353,7 +353,7 @@ export function SimpleProductSkuPanel({
                   <Boxes className="h-3.5 w-3.5" />
                   No customer options
                 </div>
-                Size and color stay empty here. Price and discount stay in Pricing.
+                Option values stay empty here. Price and discount stay in Pricing.
               </div>
             </div>
           </div>

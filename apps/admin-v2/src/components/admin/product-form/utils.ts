@@ -2,23 +2,40 @@
 import type { ProductFormValues } from "./types";
 import type { CreateProductInput } from "@/lib/api-functions/products";
 
+export type VariantImageAxis = "option1" | "option2";
+
+const VARIANT_IMAGES_MARKER_REGEX =
+  /<!--variant_images:(?:enabled|option1|option2)-->/g;
+
 /**
- * Extract unique color options from variants, sorted by colorSortOrder
+ * Extract unique option values from variants, sorted by the matching sort order.
  */
-export const extractUniqueColors = (
-  variants: Array<{ color?: string | null; colorSortOrder?: number | null }>,
+export const extractUniqueVariantOptionValues = (
+  variants: Array<{
+    size?: string | null;
+    color?: string | null;
+    sizeSortOrder?: number | null;
+    colorSortOrder?: number | null;
+    isDefault?: boolean | null;
+  }>,
+  axis: VariantImageAxis,
 ): string[] => {
-  // Create a map of color to its sort order
-  const colorMap = new Map<string, number>();
+  const optionMap = new Map<string, number>();
 
   variants.forEach((variant) => {
-    if (variant.color && !colorMap.has(variant.color)) {
-      colorMap.set(variant.color, variant.colorSortOrder || 0);
+    if (variant.isDefault === true) return;
+    const value = (axis === "option1" ? variant.size : variant.color)?.trim();
+    if (value && !optionMap.has(value)) {
+      optionMap.set(
+        value,
+        axis === "option1"
+          ? variant.sizeSortOrder || 0
+          : variant.colorSortOrder || 0,
+      );
     }
   });
 
-  // Sort by sortOrder, then return just the color names
-  return Array.from(colorMap.entries())
+  return Array.from(optionMap.entries())
     .sort((a, b) => a[1] - b[1])
     .map((entry) => entry[0]);
 };
@@ -31,7 +48,7 @@ export const cleanMetaDescription = (
 ): string | null => {
   if (!metaDescription) return null;
 
-  const cleaned = metaDescription.replace(/<!--variant_images:enabled-->/g, "");
+  const cleaned = metaDescription.replace(VARIANT_IMAGES_MARKER_REGEX, "");
   return cleaned.trim() || null;
 };
 
@@ -41,7 +58,43 @@ export const cleanMetaDescription = (
 export const hasVariantImagesEnabled = (
   metaDescription: string | null | undefined,
 ): boolean => {
-  return metaDescription?.includes("<!--variant_images:enabled-->") || false;
+  return Boolean((metaDescription ?? "").match(VARIANT_IMAGES_MARKER_REGEX));
+};
+
+/**
+ * Resolve which option axis drives variant-specific images.
+ */
+export const getVariantImagesAxis = (
+  metaDescription: string | null | undefined,
+): VariantImageAxis => {
+  if (metaDescription?.includes("<!--variant_images:option1-->")) {
+    return "option1";
+  }
+  return "option2";
+};
+
+export const resolveVariantImageAxis = (
+  preferredAxis: VariantImageAxis,
+  optionOneValues: readonly string[],
+  optionTwoValues: readonly string[],
+): VariantImageAxis => {
+  if (
+    preferredAxis === "option2" &&
+    optionTwoValues.length === 0 &&
+    optionOneValues.length > 0
+  ) {
+    return "option1";
+  }
+
+  if (
+    preferredAxis === "option1" &&
+    optionOneValues.length === 0 &&
+    optionTwoValues.length > 0
+  ) {
+    return "option2";
+  }
+
+  return preferredAxis;
 };
 
 /**
@@ -50,11 +103,12 @@ export const hasVariantImagesEnabled = (
 export const addVariantImagesMarker = (
   metaDescription: string | null | undefined,
   enableVariantImages: boolean,
+  variantImageAxis: VariantImageAxis,
 ): string | null => {
   const cleaned = cleanMetaDescription(metaDescription);
 
   if (enableVariantImages) {
-    return `${cleaned || ""}<!--variant_images:enabled-->`;
+    return `${cleaned || ""}<!--variant_images:${variantImageAxis}-->`;
   }
 
   return cleaned;
@@ -66,10 +120,12 @@ export const addVariantImagesMarker = (
 export const formatFormValuesForSubmission = (
   values: ProductFormValues,
   enableVariantImages: boolean,
+  variantImageAxis: VariantImageAxis,
 ): CreateProductInput => {
   const metaDescription = addVariantImagesMarker(
     values.metaDescription,
     enableVariantImages,
+    variantImageAxis,
   );
 
   // Ensure only ONE discount type is active by clearing the unused field

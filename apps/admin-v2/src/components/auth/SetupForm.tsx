@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { runSetup } from "@/lib/api-functions/auth-management";
+import { storePendingTwoFactorMethods } from "@/lib/two-factor-pending";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,12 @@ import {
 } from "@/components/ui/card";
 import { Loader2, Mail, Lock, User, AlertCircle } from "lucide-react";
 import { useHydrated } from "@/hooks/use-hydrated";
+
+interface SignInResponse {
+  error?: { message?: string } | null;
+  twoFactorRedirect?: boolean;
+  twoFactorMethods?: readonly unknown[];
+}
 
 export function SetupForm() {
   const navigate = useNavigate();
@@ -50,15 +57,21 @@ export function SetupForm() {
         return;
       }
 
-      const signInResult = await authClient.signIn.email({
+      const signInResult = (await authClient.signIn.email({
         email,
         password,
-      });
+      })) as SignInResponse;
 
       if (signInResult.error) {
         // If sign-in fails, redirect to login page
         console.error("Sign in after setup failed:", signInResult.error);
         await navigate({ to: "/auth/login" });
+        return;
+      }
+
+      if (signInResult.twoFactorRedirect) {
+        storePendingTwoFactorMethods(signInResult.twoFactorMethods);
+        await navigate({ to: "/auth/two-factor" });
         return;
       }
 

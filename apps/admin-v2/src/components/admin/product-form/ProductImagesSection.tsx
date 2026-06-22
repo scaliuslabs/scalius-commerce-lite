@@ -6,6 +6,12 @@ import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -16,6 +22,7 @@ import { MediaManager } from "../media-manager";
 import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
 import { toast } from "sonner";
+import type { VariantImageAxis } from "./utils";
 
 const DraggableImageGallery = lazy(() =>
   import("../DraggableImageGallery").then((module) => ({
@@ -27,16 +34,52 @@ interface ProductImagesSectionProps {
   form: UseFormReturn<ProductFormValues>;
   enableVariantImages: boolean;
   setEnableVariantImages: (enabled: boolean) => void;
-  uniqueColorOptions: string[];
+  variantImageAxis: VariantImageAxis;
+  setVariantImageAxis: (axis: VariantImageAxis) => void;
+  uniqueOptionOneValues: string[];
+  uniqueOptionTwoValues: string[];
 }
 
 export const ProductImagesSection = memo(function ProductImagesSection({
   form,
   enableVariantImages,
   setEnableVariantImages,
-  uniqueColorOptions,
+  variantImageAxis,
+  setVariantImageAxis,
+  uniqueOptionOneValues,
+  uniqueOptionTwoValues,
 }: ProductImagesSectionProps) {
   const [isOpen, setIsOpen] = React.useState(true);
+  const variantImageOptions =
+    variantImageAxis === "option1" ? uniqueOptionOneValues : uniqueOptionTwoValues;
+  const hasVariantImageOptions =
+    uniqueOptionOneValues.length > 0 || uniqueOptionTwoValues.length > 0;
+  const axisLabel =
+    variantImageAxis === "option1"
+      ? "Option 1 values (size, weight, pack)"
+      : "Option 2 values (color, style)";
+
+  React.useEffect(() => {
+    if (
+      variantImageAxis === "option2" &&
+      uniqueOptionTwoValues.length === 0 &&
+      uniqueOptionOneValues.length > 0
+    ) {
+      setVariantImageAxis("option1");
+    }
+    if (
+      variantImageAxis === "option1" &&
+      uniqueOptionOneValues.length === 0 &&
+      uniqueOptionTwoValues.length > 0
+    ) {
+      setVariantImageAxis("option2");
+    }
+  }, [
+    setVariantImageAxis,
+    uniqueOptionOneValues.length,
+    uniqueOptionTwoValues.length,
+    variantImageAxis,
+  ]);
 
   // Check if image already exists in the current images array
   const isImageDuplicate = (imageUrl: string, currentImages: ProductFormValues["images"]) => {
@@ -92,7 +135,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
           </button>
 
           <div className="flex items-center gap-2">
-            {uniqueColorOptions.length > 0 && (
+            {hasVariantImageOptions && (
               <div className="flex items-center gap-2">
                 <TooltipProvider>
                   <Tooltip delayDuration={0}>
@@ -109,15 +152,17 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       className="max-w-xs bg-popover text-popover-foreground border shadow-md"
                     >
                       <div className="space-y-2 text-xs">
-                        <p className="font-semibold">Color-Image Mapping</p>
-                        <p>When enabled, images map to colors in order:</p>
+                        <p className="font-semibold">Option image mapping</p>
+                        <p>
+                          When enabled, images map to {axisLabel} in order:
+                        </p>
                         <div className="flex flex-wrap gap-1">
-                          {uniqueColorOptions.map((color, idx) => (
+                          {variantImageOptions.map((optionValue, idx) => (
                             <span
-                              key={color}
+                              key={optionValue}
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-accent rounded text-[10px]"
                             >
-                              #{idx + 1} → {color}
+                              #{idx + 1} → {optionValue}
                             </span>
                           ))}
                         </div>
@@ -139,9 +184,31 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     htmlFor="variant-images-toggle"
                     className="text-[11px] cursor-pointer"
                   >
-                    Map to Colors
+                    Map images
                   </Label>
                 </div>
+                <Select
+                  value={variantImageAxis}
+                  onValueChange={(value) => setVariantImageAxis(value as VariantImageAxis)}
+                >
+                  <SelectTrigger className="h-8 w-[150px] text-xs">
+                    <span>{variantImageAxis === "option1" ? "Option 1" : "Option 2"}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="option1"
+                      disabled={uniqueOptionOneValues.length === 0}
+                    >
+                      Option 1
+                    </SelectItem>
+                    <SelectItem
+                      value="option2"
+                      disabled={uniqueOptionTwoValues.length === 0}
+                    >
+                      Option 2
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
@@ -161,7 +228,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     >
                       <DraggableImageGallery
                         images={field.value}
-                        colorOptions={uniqueColorOptions}
+                        variantImageOptions={variantImageOptions}
                         enableVariantImages={enableVariantImages}
                         onImagesReorder={(newImages) => field.onChange(newImages)}
                         onImageRemove={(index) => {

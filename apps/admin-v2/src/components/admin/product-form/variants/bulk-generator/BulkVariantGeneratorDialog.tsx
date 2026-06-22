@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Sparkles } from "lucide-react";
 import { generateVariantCombinations } from "../utils/variantHelpers";
+import { validateSkuTemplate } from "../utils/skuGenerator";
 import type {
   BulkVariantOptions,
   BulkGeneratedVariant,
@@ -22,16 +23,16 @@ import { VariantConfigSection } from "./VariantConfigSection";
 import { VariantPreviewTable } from "./VariantPreviewTable";
 
 const SIZE_QUICK_ADD = [
-  { label: "Standard (S-XXL)", value: "S,M,L,XL,XXL" },
-  { label: "Extended (XS-XL)", value: "XS,S,M,L,XL" },
-  { label: "Shoes (38-44)", value: "38,39,40,41,42,43,44" },
-  { label: "Kids (2Y-12Y)", value: "2Y,4Y,6Y,8Y,10Y,12Y" },
+  { label: "Apparel sizes", value: "S,M,L,XL,XXL" },
+  { label: "Weights", value: "1KG,2KG,3KG,5KG" },
+  { label: "Shoe sizes", value: "38,39,40,41,42,43,44" },
+  { label: "Pack sizes", value: "Single,Pack of 2,Pack of 4" },
 ] as const;
 
 const COLOR_QUICK_ADD = [
-  { label: "Basics", value: "Black,White,Grey,Navy" },
-  { label: "Primary", value: "Red,Blue,Green,Yellow" },
-  { label: "Pastels", value: "Pastel Pink,Pastel Blue,Mint,Cream" },
+  { label: "Basic colors", value: "Black,White,Grey,Navy" },
+  { label: "Primary colors", value: "Red,Blue,Green,Yellow" },
+  { label: "Styles", value: "Classic,Premium,Gift Box" },
 ] as const;
 
 interface BulkVariantGeneratorProps {
@@ -62,7 +63,7 @@ export function BulkVariantGenerator({
   const [baseStock, setBaseStock] = useState<number>(0);
   const [trackInventory, setTrackInventory] = useState(true);
   const [baseWeight, setBaseWeight] = useState<number | null>(null);
-  const [skuTemplate, setSkuTemplate] = useState("{RANDOM}-{SIZE}-{COLOR}");
+  const [skuTemplate, setSkuTemplate] = useState("{RANDOM}-{OPTION1}-{OPTION2}");
   const [discountType, setDiscountType] = useState<"percentage" | "flat">(
     "percentage",
   );
@@ -106,9 +107,13 @@ export function BulkVariantGenerator({
     () => previewVariants.filter((v) => existingSkus.has(v.sku)),
     [previewVariants, existingSkus],
   );
+  const skuTemplateValidation = useMemo(
+    () => validateSkuTemplate(skuTemplate),
+    [skuTemplate],
+  );
 
   const handleGenerate = async () => {
-    if (skuConflicts.length > 0) return;
+    if (skuConflicts.length > 0 || !skuTemplateValidation.valid) return;
 
     setIsGenerating(true);
     try {
@@ -128,7 +133,10 @@ export function BulkVariantGenerator({
     }
   };
 
-  const canGenerate = previewVariants.length > 0 && skuConflicts.length === 0;
+  const canGenerate =
+    previewVariants.length > 0 &&
+    skuConflicts.length === 0 &&
+    skuTemplateValidation.valid;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -144,8 +152,8 @@ export function BulkVariantGenerator({
             Bulk Option Generator
           </DialogTitle>
           <DialogDescription className="text-base mt-2">
-            Generate multiple options at once by combining sizes and colors.
-            All combinations will be created automatically.
+            Generate multiple options at once by combining values such as
+            sizes, weights, colors, styles, or pack names.
           </DialogDescription>
         </DialogHeader>
 
@@ -154,25 +162,25 @@ export function BulkVariantGenerator({
           <div className="space-y-5">
             <VariantAttributeInput
               id="sizes"
-              label="Sizes"
+              label="Option 1 values (size, weight, pack)"
               items={sizes}
               onItemsChange={setSizes}
               inputValue={sizeInput}
               onInputValueChange={setSizeInput}
-              placeholder="Type size and press Enter. Paste comma-separated lists supported."
-              emptyMessage="No sizes added yet. Paste a list (e.g. S,M,L) or use Quick Add."
+              placeholder="Type a value and press Enter. Paste comma-separated lists supported."
+              emptyMessage="No Option 1 values added yet. Try S,M,L or 1KG,2KG,3KG."
               quickAddOptions={[...SIZE_QUICK_ADD]}
             />
 
             <VariantAttributeInput
               id="colors"
-              label="Colors"
+              label="Option 2 values (color, style)"
               items={colors}
               onItemsChange={setColors}
               inputValue={colorInput}
               onInputValueChange={setColorInput}
-              placeholder="Type color and press Enter. Paste supported."
-              emptyMessage="No colors added yet."
+              placeholder="Type a value and press Enter. Paste supported."
+              emptyMessage="No Option 2 values added yet. Try Red,Blue or Classic,Premium."
               quickAddOptions={[...COLOR_QUICK_ADD]}
             />
 

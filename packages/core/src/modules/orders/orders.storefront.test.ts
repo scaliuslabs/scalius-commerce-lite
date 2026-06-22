@@ -78,7 +78,7 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
     allowPreorder: false,
     allowBackorder: false,
     backorderLimit: 0,
-    isDefault: false,
+    isDefault: true,
     trackInventory: true,
     price: 125,
     discountPercentage: null,
@@ -298,7 +298,7 @@ describe("createStorefrontOrder product availability verification", () => {
             },
           ],
         },
-        variants: [createVariant({ size: "M" })],
+        variants: [createVariant({ size: "M", isDefault: false })],
       }),
     ).rejects.toMatchObject({
       message: "Some items in your cart need attention.",
@@ -375,12 +375,45 @@ describe("createStorefrontOrder product availability verification", () => {
     );
   });
 
+  it("rejects a sole no-option SKU when it is not the protected default SKU", async () => {
+    await expect(
+      placeOrder({
+        variants: [createVariant({ id: "var_bad_no_option", isDefault: false, trackInventory: false })],
+        inputOverrides: {
+          items: [
+            {
+              cartKey: "line_bad_no_option",
+              productId: "prod_standard",
+              variantId: null,
+              quantity: 1,
+              price: 125,
+              productName: "Standard Product",
+              variantLabel: null,
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            cartKey: "line_bad_no_option",
+            code: "PRODUCT_UNAVAILABLE",
+            action: "remove",
+            message: "Standard Product is not available for checkout right now.",
+          }),
+        ],
+      },
+    });
+  });
+
   it("rejects stale hidden default SKU carts after a product gains customer options", async () => {
     await expect(
       placeOrder({
         variants: [
           createVariant({ id: "var_default", isDefault: true, trackInventory: false }),
-          createVariant({ id: "var_option_m", size: "M", price: 125 }),
+          createVariant({ id: "var_option_m", size: "M", isDefault: false, price: 125 }),
         ],
         inputOverrides: {
           items: [
@@ -416,7 +449,7 @@ describe("createStorefrontOrder product availability verification", () => {
       placeOrder({
         variants: [
           createVariant({ id: "var_default", isDefault: true, trackInventory: false }),
-          createVariant({ id: "var_extra_no_option", price: 125 }),
+          createVariant({ id: "var_extra_no_option", isDefault: false, price: 125 }),
         ],
         inputOverrides: {
           items: [

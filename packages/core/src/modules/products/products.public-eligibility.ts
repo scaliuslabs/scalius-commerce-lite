@@ -46,10 +46,18 @@ export function publicProductHasBuyerResolvableSku(productId: SQL = sql`${produc
                 FROM "product_variants" AS buyer_simple_sku
                 WHERE ${activePersistedSkuPredicate("buyer_simple_sku", productId)}
                   AND ${sql.raw("buyer_simple_sku.is_default")} = 1
-                  AND trim(coalesce(${sql.raw("buyer_simple_sku.size")}, '')) = ''
-                  AND trim(coalesce(${sql.raw("buyer_simple_sku.color")}, '')) = ''
             )
         )
+    )`;
+}
+
+export function publicProductHasCustomerOptions(productId: SQL = sql`${products.id}`): SQL<boolean> {
+    return sql`EXISTS (
+        SELECT 1
+        FROM "product_variants" AS buyer_option_sku
+        WHERE ${activePersistedSkuPredicate("buyer_option_sku", productId)}
+          AND ${sql.raw("buyer_option_sku.is_default")} = 0
+          AND ${hasCustomerOptionPredicate("buyer_option_sku")}
     )`;
 }
 
@@ -97,5 +105,19 @@ export function defaultProductSkuValues(productId: string, price: number) {
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
         deletedAt: null,
+    };
+}
+
+export function normalizeDefaultSkuOptions<T extends { isDefault: boolean; size: string | null; color: string | null }>(
+    variant: T,
+): T {
+    if (!variant.isDefault || (!variant.size?.trim() && !variant.color?.trim())) {
+        return variant;
+    }
+
+    return {
+        ...variant,
+        size: null,
+        color: null,
     };
 }

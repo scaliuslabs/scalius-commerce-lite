@@ -82,8 +82,8 @@ export function VariantActionsToolbar({
     { label: "SKU", field: "sku" },
     { label: "Price", field: "price" },
     { label: "Stock", field: "stock" },
-    { label: "Size", field: "size" },
-    { label: "Color", field: "color" },
+    { label: "Option 1 (size/weight)", field: "size" },
+    { label: "Option 2 (color/style)", field: "color" },
     { label: "Created Date", field: "createdAt" },
     { label: "Updated Date", field: "updatedAt" },
   ];

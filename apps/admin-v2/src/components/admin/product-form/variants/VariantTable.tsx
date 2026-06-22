@@ -138,8 +138,14 @@ export function VariantTable({
                 />
               </TableHead>
               <TableHead className="min-w-[120px] py-2 text-xs font-medium">SKU</TableHead>
-              <TableHead className="min-w-[70px] py-2 text-xs font-medium">Size</TableHead>
-              <TableHead className="min-w-[70px] py-2 text-xs font-medium">Color</TableHead>
+              <TableHead className="min-w-[120px] py-2 text-xs font-medium">
+                <span className="block">Option 1</span>
+                <span className="block text-[10px] font-normal text-muted-foreground">size/weight</span>
+              </TableHead>
+              <TableHead className="min-w-[120px] py-2 text-xs font-medium">
+                <span className="block">Option 2</span>
+                <span className="block text-[10px] font-normal text-muted-foreground">color/style</span>
+              </TableHead>
               <TableHead className="min-w-[80px] py-2 text-xs font-medium">Weight</TableHead>
               <TableHead className="min-w-[90px] py-2 text-xs font-medium">Price</TableHead>
               <TableHead className="min-w-[80px] py-2 text-xs font-medium" title="Physical items in your warehouse">On Hand</TableHead>
@@ -260,11 +266,15 @@ function VariantMobileCard({
     ? Math.max(0, variant.stock - variant.reservedStock)
     : null;
   const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
-  const optionLabels = [
-    variant.size && `Size ${variant.size}`,
-    variant.color && `Color ${variant.color}`,
-    variant.weight && `${variant.weight}g`,
-  ].filter(Boolean);
+  const optionLabels = (
+    isProtectedDefaultSku
+      ? [variant.weight && `${variant.weight}g`]
+      : [
+          variant.size && `Opt 1: ${variant.size}`,
+          variant.color && `Opt 2: ${variant.color}`,
+          variant.weight && `${variant.weight}g`,
+        ]
+  ).filter(Boolean);
   const editLabel = isProtectedDefaultSku ? "Edit product SKU" : "Edit option";
 
   return (

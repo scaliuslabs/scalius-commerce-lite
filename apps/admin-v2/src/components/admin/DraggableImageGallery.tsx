@@ -37,7 +37,7 @@ import { getSortableStyle } from "./shared/sortable-style";
 
 interface DraggableImageGalleryProps {
   images: MediaFile[];
-  colorOptions?: string[];
+  variantImageOptions?: string[];
   enableVariantImages: boolean;
   onImagesReorder: (images: MediaFile[]) => void;
   onImageRemove: (index: number) => void;
@@ -49,14 +49,14 @@ interface DraggableImageGalleryProps {
 interface SortableImageProps {
   image: MediaFile;
   index: number;
-  colorMapping?: string;
+  optionMapping?: string;
   onRemove: (index: number) => void;
 }
 
 function SortableImage({
   image,
   index,
-  colorMapping,
+  optionMapping,
   onRemove,
 }: SortableImageProps) {
   const {
@@ -133,13 +133,13 @@ function SortableImage({
 
       {/* Minimal Info Area */}
       <div className="flex flex-col gap-1 px-1 min-h-[5px]">
-        {/* Color Mapping (Just the value) */}
-        {colorMapping && (
+        {/* Option mapping (just the value) */}
+        {optionMapping && (
           <span
             className="self-start inline-flex items-center px-1.5 py-0.5 rounded-md bg-secondary/50 border border-secondary text-[11px] font-medium text-secondary-foreground max-w-full truncate"
-            title={colorMapping}
+            title={optionMapping}
           >
-            {colorMapping}
+            {optionMapping}
           </span>
         )}
       </div>
@@ -151,11 +151,11 @@ function SortableImage({
 function ItemOverlay({
   image,
   index,
-  colorMapping,
+  optionMapping,
 }: {
   image: MediaFile;
   index: number;
-  colorMapping?: string;
+  optionMapping?: string;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-background shadow-xl ring-1 ring-border/50 scale-105 cursor-grabbing z-50 w-full max-w-[200px]">
@@ -185,9 +185,9 @@ function ItemOverlay({
       </div>
 
       <div className="flex flex-col gap-1 px-1 pb-2">
-        {colorMapping && (
+        {optionMapping && (
           <span className="self-start inline-flex items-center px-1.5 py-0.5 rounded-md bg-secondary/50 border border-secondary text-[11px] font-medium text-secondary-foreground truncate">
-            {colorMapping}
+            {optionMapping}
           </span>
         )}
       </div>
@@ -197,7 +197,7 @@ function ItemOverlay({
 
 export function DraggableImageGallery({
   images,
-  colorOptions = [],
+  variantImageOptions = [],
   enableVariantImages,
   onImagesReorder,
   onImageRemove,
@@ -279,15 +279,15 @@ export function DraggableImageGallery({
     ? items.findIndex((img) => img.id === activeId)
     : -1;
 
-  const activeColorMapping =
+  const activeOptionMapping =
     activeItem &&
     enableVariantImages &&
-    colorOptions.length > 0 &&
-    activeIndex < colorOptions.length
-      ? colorOptions[activeIndex]
+    variantImageOptions.length > 0 &&
+    activeIndex < variantImageOptions.length
+      ? variantImageOptions[activeIndex]
       : undefined;
 
-  // If map to colors is active, we might want to auto-expand or just let user deciding
+  // If option-image mapping is active, standard grid behavior usually works.
   // but standard grid behavior usually works.
 
   return (
@@ -305,11 +305,11 @@ export function DraggableImageGallery({
         >
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-4 gap-y-6">
             {visibleImages.map((image, index) => {
-              const colorMapping =
+              const optionMapping =
                 enableVariantImages &&
-                colorOptions.length > 0 &&
-                index < colorOptions.length
-                  ? colorOptions[index]
+                variantImageOptions.length > 0 &&
+                index < variantImageOptions.length
+                  ? variantImageOptions[index]
                   : undefined;
 
               return (
@@ -317,7 +317,7 @@ export function DraggableImageGallery({
                   key={image.id}
                   image={image}
                   index={index}
-                  colorMapping={colorMapping}
+                  optionMapping={optionMapping}
                   onRemove={onImageRemove}
                 />
               );
@@ -332,7 +332,7 @@ export function DraggableImageGallery({
                 <ItemOverlay
                   image={activeItem}
                   index={activeIndex}
-                  colorMapping={activeColorMapping}
+                  optionMapping={activeOptionMapping}
                 />
               ) : null}
             </DragOverlay>,

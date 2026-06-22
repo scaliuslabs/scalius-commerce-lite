@@ -36,6 +36,7 @@ const state = {
   selection: null as VariantSelectionState | null,
   productPricing: null as ProductPricing | null,
   isVariantImagesEnabled: false,
+  variantImageAxis: "option2" as "option1" | "option2",
   currentDisplayedImage: "",
 };
 
@@ -144,6 +145,12 @@ function initVariantSystem() {
   state.isVariantImagesEnabled = !!document.querySelector(
     'meta[name="variant-images-enabled"]',
   );
+  state.variantImageAxis =
+    document
+      .querySelector('meta[name="variant-images-axis"]')
+      ?.getAttribute("content") === "option1"
+      ? "option1"
+      : "option2";
   state.currentDisplayedImage = cache.container?.dataset.productImage || "";
 
   state.productPricing = {
@@ -213,7 +220,11 @@ function refreshUI() {
     updateVariantButtons();
     updatePriceDisplay();
 
-    if (state.isVariantImagesEnabled && state.selection?.selectedColor) {
+    const selectedImageOption =
+      state.variantImageAxis === "option1"
+        ? state.selection?.selectedSize
+        : state.selection?.selectedColor;
+    if (state.isVariantImagesEnabled && selectedImageOption) {
       updateVariantImage();
     }
   });
@@ -287,14 +298,25 @@ function updateVariantButtons() {
 }
 
 function updateVariantImage() {
-  if (!state.selection?.selectedColor) return;
+  if (!state.selection) return;
 
-  const colorIndex = cache.colorButtons.findIndex(
-    (btn) => btn.dataset.color === state.selection!.selectedColor,
+  const buttons =
+    state.variantImageAxis === "option1" ? cache.sizeButtons : cache.colorButtons;
+  const selectedValue =
+    state.variantImageAxis === "option1"
+      ? state.selection.selectedSize
+      : state.selection.selectedColor;
+  if (!selectedValue) return;
+
+  const optionIndex = buttons.findIndex(
+    (btn) =>
+      (state.variantImageAxis === "option1"
+        ? btn.dataset.size
+        : btn.dataset.color) === selectedValue,
   );
 
-  if (colorIndex !== -1 && cache.thumbnails[colorIndex]) {
-    const url = cache.thumbnails[colorIndex].dataset.imageUrl;
+  if (optionIndex !== -1 && cache.thumbnails[optionIndex]) {
+    const url = cache.thumbnails[optionIndex].dataset.imageUrl;
     if (url) switchImage(url);
   }
 }

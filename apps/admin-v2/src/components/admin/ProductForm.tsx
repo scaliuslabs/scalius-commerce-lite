@@ -29,6 +29,8 @@ import {
   productFormSchema,
   cleanMetaDescription,
   hasVariantImagesEnabled,
+  getVariantImagesAxis,
+  resolveVariantImageAxis,
   generateSlug,
   type ProductFormValues,
   type Category,
@@ -63,12 +65,29 @@ export function ProductForm({
   const [enableVariantImages, setEnableVariantImages] = React.useState(
     hasVariantImagesEnabled(defaultValues?.metaDescription) || false,
   );
+  const [variantImageAxis, setVariantImageAxis] = React.useState(
+    getVariantImagesAxis(defaultValues?.metaDescription),
+  );
 
-  // Fetch variants and extract unique colors (React Query auto-refetches on invalidation)
-  const { uniqueColorOptions } = useProductVariants({
+  const { uniqueOptionOneValues, uniqueOptionTwoValues } = useProductVariants({
     productId: defaultValues?.id,
     isEdit,
   });
+  const effectiveVariantImageAxis = React.useMemo(
+    () =>
+      resolveVariantImageAxis(
+        variantImageAxis,
+        uniqueOptionOneValues,
+        uniqueOptionTwoValues,
+      ),
+    [uniqueOptionOneValues, uniqueOptionTwoValues, variantImageAxis],
+  );
+
+  React.useEffect(() => {
+    if (effectiveVariantImageAxis !== variantImageAxis) {
+      setVariantImageAxis(effectiveVariantImageAxis);
+    }
+  }, [effectiveVariantImageAxis, variantImageAxis]);
 
   // Initialize form
   const form = useForm<ProductFormValues>({
@@ -100,6 +119,7 @@ export function ProductForm({
       isEdit,
       productId: defaultValues?.id,
       enableVariantImages,
+      variantImageAxis: effectiveVariantImageAxis,
       form,
     });
 
@@ -144,7 +164,10 @@ export function ProductForm({
                 form={form}
                 enableVariantImages={enableVariantImages}
                 setEnableVariantImages={setEnableVariantImages}
-                uniqueColorOptions={uniqueColorOptions}
+                variantImageAxis={effectiveVariantImageAxis}
+                setVariantImageAxis={setVariantImageAxis}
+                uniqueOptionOneValues={uniqueOptionOneValues}
+                uniqueOptionTwoValues={uniqueOptionTwoValues}
               />
             </div>
 

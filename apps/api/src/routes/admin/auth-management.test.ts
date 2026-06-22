@@ -177,8 +177,12 @@ function createAdminInviteDbMock() {
   };
 }
 
-function createSetupDbMock() {
-  const adminExistsGet = vi.fn(async () => null);
+function createSetupDbMock(options: { adminExistsResult?: unknown } = {}) {
+  const adminExistsGet = vi.fn(async () =>
+    Object.prototype.hasOwnProperty.call(options, "adminExistsResult")
+      ? options.adminExistsResult
+      : null
+  );
   const adminExistsLimit = vi.fn(() => ({ get: adminExistsGet }));
   const adminExistsWhere = vi.fn(() => ({ limit: adminExistsLimit }));
   const existingUserGet = vi.fn(async () => ({ id: "existing_user" }));
@@ -287,6 +291,39 @@ describe("admin auth management user permissions", () => {
 });
 
 describe("admin auth management team invites", () => {
+  it("validates setup URL configuration before creating a blocked invited admin", async () => {
+    const db = createAdminInviteDbMock();
+    const signUpEmail = vi.fn();
+    const requestPasswordReset = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail,
+        requestPasswordReset,
+      },
+    });
+    const app = createTestApp(db, {
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Ops Admin",
+        email: "ops@example.com",
+        roleId: "role_1",
+      }),
+    }, {} as never);
+    const body = await response.json() as { error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(requestPasswordReset).not.toHaveBeenCalled();
+    expect(db.__updateSet).not.toHaveBeenCalled();
+    expect(mocks.assignRoleToUser).not.toHaveBeenCalled();
+  });
+
   it("creates blocked invited admins and sends a one-use password setup link", async () => {
     const db = createAdminInviteDbMock();
     const signUpEmail = vi.fn().mockResolvedValue({
@@ -744,6 +781,29 @@ describe("admin auth management legacy 2FA verification", () => {
 });
 
 describe("first-admin setup recovery", () => {
+  it("treats D1 no-row undefined as no existing admin", async () => {
+    const db = createSetupDbMock({ adminExistsResult: undefined });
+    const signUpEmail = vi.fn().mockResolvedValue({
+      user: { id: "new_admin" },
+    });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail,
+      },
+    });
+    const app = createSetupTestApp(db);
+
+    const response = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: setupRequestBody(),
+    }, {});
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(signUpEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.claimAdminSetup).toHaveBeenCalledWith(db);
+  });
+
   it("claims D1 setup coordination before creating the first admin even when KV is unavailable", async () => {
     const db = createSetupDbMock();
     const signUpEmail = vi.fn().mockResolvedValue({
@@ -861,6 +921,35 @@ describe("first-admin setup recovery", () => {
     expect(body.error?.message).toContain("existing password");
     expect(mocks.completeAdminSetupClaimWithUserPromotion).not.toHaveBeenCalled();
     expect(db.__updateSet).not.toHaveBeenCalled();
+    expect(mocks.autoSeedRbacIfNeeded).not.toHaveBeenCalled();
+  });
+
+  it("does not promote an existing account when password authentication requires 2FA", async () => {
+    const db = createSetupDbMock();
+    const signInEmail = vi.fn().mockResolvedValue({
+      twoFactorRedirect: true,
+      twoFactorMethods: ["totp"],
+    });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signInEmail,
+        signUpEmail: vi.fn().mockRejectedValue(duplicateUserError()),
+      },
+    });
+    const app = createSetupTestApp(db);
+
+    const response = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: setupRequestBody(),
+    }, {});
+    const body = await response.json() as { error?: { code?: string; message?: string } };
+
+    expect(response.status, JSON.stringify(body)).toBe(409);
+    expect(body.error?.code).toBe("CONFLICT");
+    expect(body.error?.message).toContain("existing password");
+    expect(db.__deleteWhere).not.toHaveBeenCalled();
+    expect(mocks.completeAdminSetupClaimWithUserPromotion).not.toHaveBeenCalled();
     expect(mocks.autoSeedRbacIfNeeded).not.toHaveBeenCalled();
   });
 

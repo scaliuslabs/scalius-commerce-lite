@@ -35,6 +35,19 @@ describe("admin variant management mode", () => {
     expect(isSimpleDefaultVariant(baseVariant)).toBe(true);
   });
 
+  it("classifies a legacy default SKU with option labels as a simple product", () => {
+    const legacyDefaultSku = {
+      ...baseVariant,
+      size: "Default",
+      color: "Default",
+    };
+
+    const mode = getVariantManagementMode([legacyDefaultSku]);
+
+    expect(mode).toMatchObject({ mode: "simple", variant: legacyDefaultSku });
+    expect(isSimpleDefaultVariant(legacyDefaultSku)).toBe(true);
+  });
+
   it("keeps one non-default no-option SKU ambiguous instead of normalizing bad data", () => {
     const invalidSimpleSku = {
       ...baseVariant,

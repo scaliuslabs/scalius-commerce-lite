@@ -46,9 +46,11 @@ export default function ProductShortcode({
     type: "success" | "error";
   } | null>(null);
 
-  const isVariantImagesEnabled = product.metaDescription?.includes(
-    "<!--variant_images:enabled-->",
-  );
+  const variantImageMarker = product.metaDescription?.match(
+    /<!--variant_images:(enabled|option1|option2)-->/,
+  )?.[1];
+  const isVariantImagesEnabled = Boolean(variantImageMarker);
+  const variantImageAxis = variantImageMarker === "option1" ? "option1" : "option2";
 
   const sizeOptions = useMemo(
     () => [...new Set(buyerVariants.map((v) => v.size).filter(Boolean))],
@@ -88,14 +90,26 @@ export default function ProductShortcode({
   });
 
   useEffect(() => {
-    if (isVariantImagesEnabled && selectedColor) {
-      const colorIndex = colorOptions.indexOf(selectedColor);
-      const variantImage = colorIndex !== -1 ? images[colorIndex] : undefined;
+    const selectedImageOption =
+      variantImageAxis === "option1" ? selectedSize : selectedColor;
+    const imageOptions =
+      variantImageAxis === "option1" ? sizeOptions : colorOptions;
+    if (isVariantImagesEnabled && selectedImageOption) {
+      const optionIndex = imageOptions.indexOf(selectedImageOption);
+      const variantImage = optionIndex !== -1 ? images[optionIndex] : undefined;
       if (variantImage?.url && hasProductImage(variantImage.url)) {
         setCurrentImage(variantImage.url);
       }
     }
-  }, [selectedColor, isVariantImagesEnabled, colorOptions, images]);
+  }, [
+    colorOptions,
+    images,
+    isVariantImagesEnabled,
+    selectedColor,
+    selectedSize,
+    sizeOptions,
+    variantImageAxis,
+  ]);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToastMessage({ msg, type });
@@ -222,7 +236,9 @@ export default function ProductShortcode({
           </div>
           {sizeOptions.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-2">Size</h4>
+              <h4 className="text-sm font-medium text-gray-900 mb-2">
+                Option 1 <span className="text-xs font-normal text-gray-500">(size/weight)</span>
+              </h4>
               <div className="flex flex-wrap gap-2">
                 {sizeOptions.map((size) => (
                   <Button
@@ -238,7 +254,9 @@ export default function ProductShortcode({
           )}
           {colorOptions.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-2">Color</h4>
+              <h4 className="text-sm font-medium text-gray-900 mb-2">
+                Option 2 <span className="text-xs font-normal text-gray-500">(color/style)</span>
+              </h4>
               <div className="flex flex-wrap gap-2">
                 {colorOptions.map((color) => (
                   <Button

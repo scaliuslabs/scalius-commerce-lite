@@ -17,6 +17,7 @@ interface Props {
   sizeOptions: string[];
   colorOptions: string[];
   isVariantSpecificImagesEnabled: boolean;
+  variantImageAxis: "option1" | "option2";
   currencySymbol?: string;
   quickBuyNotice?: string | null;
 }
@@ -27,6 +28,7 @@ const {
   sizeOptions,
   colorOptions,
   isVariantSpecificImagesEnabled,
+  variantImageAxis,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   quickBuyNotice = null,
 } = Astro.props;
@@ -92,7 +94,10 @@ const productVariantsJson = serializeJsonForInlineScript(
 
 {
   isVariantSpecificImagesEnabled && (
-    <meta name="variant-images-enabled" content="true" />
+    <>
+      <meta name="variant-images-enabled" content="true" />
+      <meta name="variant-images-axis" content={variantImageAxis} />
+    </>
   )
 }
 
@@ -197,11 +202,12 @@ const productVariantsJson = serializeJsonForInlineScript(
         sizeOptions.length > 0 && (
           <div class="size-selector">
             <h2 class="text-sm font-medium text-foreground mb-1">
-              <span class="text-destructive">*</span> Option/Size
+              <span class="text-destructive">*</span> Option 1
+              <span class="ml-1 text-xs font-normal text-muted-foreground">(size/weight)</span>
             </h2>
             <div class="flex flex-wrap gap-1.5">
               {sizeOptions.map((size) => (
-                <label class="group relative" aria-label={`Size: ${size}`}>
+                <label class="group relative" aria-label={`Option 1: ${size}`}>
                   <input
                     type="radio"
                     name="size"
@@ -225,11 +231,12 @@ const productVariantsJson = serializeJsonForInlineScript(
         colorOptions.length > 0 && (
           <div class="color-selector">
             <h2 class="text-sm font-medium text-foreground mb-1">
-              <span class="text-destructive">*</span> Option/Color
+              <span class="text-destructive">*</span> Option 2
+              <span class="ml-1 text-xs font-normal text-muted-foreground">(color/style)</span>
             </h2>
             <div class="flex flex-wrap gap-1.5">
               {colorOptions.map((color) => (
-                <label class="group relative" aria-label={`Color: ${color}`}>
+                <label class="group relative" aria-label={`Option 2: ${color}`}>
                   <input
                     type="radio"
                     name="color"

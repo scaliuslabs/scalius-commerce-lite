@@ -59,7 +59,7 @@ export function VariantFormRow({
   const handleSubmit: SubmitHandler<VariantFormValues> = async (values) => {
     const hasCustomerOption = Boolean(values.size?.trim() || values.color?.trim());
     if (!hasCustomerOption) {
-      const message = "Add a size, color, or both.";
+      const message = "Add at least one option value.";
       form.setError("size", { type: "manual", message });
       form.setError("color", { type: "manual", message });
       return;
@@ -162,9 +162,12 @@ export function VariantFormRow({
             name="size"
             render={({ field }) => (
               <FormItem>
+                <div className="px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Option 1 (size/weight)
+                </div>
                 <FormControl>
                   <Input
-                    placeholder="XL"
+                    placeholder="2KG, XL, 100ml"
                     {...field}
                     value={field.value ?? ""}
                     className="h-9"
@@ -182,9 +185,12 @@ export function VariantFormRow({
             name="color"
             render={({ field }) => (
               <FormItem>
+                <div className="px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Option 2 (color/style)
+                </div>
                 <FormControl>
                   <Input
-                    placeholder="Red"
+                    placeholder="Red, Blue, Pack A"
                     {...field}
                     value={field.value ?? ""}
                     className="h-9"

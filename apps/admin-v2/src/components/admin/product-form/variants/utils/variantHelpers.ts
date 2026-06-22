@@ -20,7 +20,7 @@ export function filterVariants(
   filters: VariantFilters
 ): ProductVariant[] {
   return variants.filter((variant) => {
-    // Search term filter (searches in SKU, size, color)
+    // Search term filter (searches in SKU and both option axes)
     if (filters.searchTerm) {
       const searchLower = filters.searchTerm.toLowerCase();
       const matchesSearch =
@@ -47,14 +47,14 @@ export function filterVariants(
       return false;
     }
 
-    // Size filter
+    // Option 1 filter
     if (filters.sizes.length > 0) {
       if (!variant.size || !filters.sizes.includes(variant.size)) {
         return false;
       }
     }
 
-    // Color filter
+    // Option 2 filter
     if (filters.colors.length > 0) {
       if (!variant.color || !filters.colors.includes(variant.color)) {
         return false;
@@ -94,7 +94,7 @@ export function sortVariants(variants: ProductVariant[], sort: VariantSort): Pro
 }
 
 /**
- * Get unique sizes from variants
+ * Get unique Option 1 values from variants
  */
 export function getUniqueSizes(variants: ProductVariant[]): string[] {
   const sizes = variants.map((v) => v.size).filter((s): s is string => s !== null);
@@ -102,7 +102,7 @@ export function getUniqueSizes(variants: ProductVariant[]): string[] {
 }
 
 /**
- * Get unique colors from variants
+ * Get unique Option 2 values from variants
  */
 export function getUniqueColors(variants: ProductVariant[]): string[] {
   const colors = variants.map((v) => v.color).filter((c): c is string => c !== null);
@@ -110,7 +110,7 @@ export function getUniqueColors(variants: ProductVariant[]): string[] {
 }
 
 /**
- * Generate variant combinations from sizes and colors
+ * Generate variant combinations from both option axes
  */
 export function generateVariantCombinations(
   options: BulkVariantOptions,
@@ -122,7 +122,7 @@ export function generateVariantCombinations(
     return combinations;
   }
 
-  // If only sizes
+  // If only Option 1 values
   if (options.sizes.length > 0 && options.colors.length === 0) {
     options.sizes.forEach((size, index) => {
       combinations.push(
@@ -132,7 +132,7 @@ export function generateVariantCombinations(
     return combinations;
   }
 
-  // If only colors
+  // If only Option 2 values
   if (options.colors.length > 0 && options.sizes.length === 0) {
     options.colors.forEach((color, index) => {
       combinations.push(
@@ -142,7 +142,7 @@ export function generateVariantCombinations(
     return combinations;
   }
 
-  // Both sizes and colors - create all combinations
+  // Both option axes - create all combinations
   let index = 1;
   for (const size of options.sizes) {
     for (const color of options.colors) {
