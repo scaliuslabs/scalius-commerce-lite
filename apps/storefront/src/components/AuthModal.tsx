@@ -126,7 +126,13 @@ export default function AuthModal() {
         if (!isMounted) return;
         if (state.authenticated && state.customer) {
           setCustomer(state.customer);
-          setStep("authenticated");
+          if (state.customer.needsProfileCompletion) {
+            hydrateProfileFields(state.customer);
+            setStep("profile_setup");
+            setIsOpen(true);
+          } else {
+            setStep("authenticated");
+          }
         }
       });
     };
@@ -192,15 +198,27 @@ export default function AuthModal() {
     setError("");
   };
 
+  const hydrateProfileFields = (customerData: CustomerInfo) => {
+    setProfileName(customerData.name && customerData.name !== "Customer" ? customerData.name : "");
+    setProfileAddress(customerData.address ?? "");
+    setProfileCity(customerData.city ?? "");
+    setProfileZone(customerData.zone ?? "");
+    setProfileCityName(customerData.cityName ?? "");
+    setProfileZoneName(customerData.zoneName ?? "");
+  };
+
   const dispatchLoginEvent = (customerData: CustomerInfo) => {
     window.dispatchEvent(new CustomEvent("customer-login", {
-      detail: {
-        email: customerData.email,
-        name: customerData.name,
-        phone: customerData.phone,
-        customerId: customerData.customerId,
-      }
+      detail: customerData,
     }));
+  };
+
+  const handleClose = () => {
+    if (step === "profile_setup" && customer?.needsProfileCompletion) {
+      setError("Save your delivery profile or sign out to continue.");
+      return;
+    }
+    setIsOpen(false);
   };
 
   const startCountdown = (seconds: number) => {
@@ -273,8 +291,8 @@ export default function AuthModal() {
     if (res.success && res.customer) {
       setCustomer(res.customer);
 
-      if (res.isNewUser) {
-        // If it's a new user, force them through the profile setup flow
+      if (res.isNewUser || res.customer.needsProfileCompletion) {
+        hydrateProfileFields(res.customer);
         setStep("profile_setup");
       } else {
         setStep("authenticated");
@@ -291,8 +309,8 @@ export default function AuthModal() {
   };
 
   const handleProfileSubmit = async () => {
-    if (!profileName.trim() || !profileCity.trim() || !profileZone.trim()) {
-      setError("Please fill in your Name, City, and Zone");
+    if (!profileName.trim() || !profileAddress.trim() || !profileCity.trim() || !profileZone.trim()) {
+      setError("Please fill in your name, address, city, and zone.");
       return;
     }
     setLoading(true);
@@ -309,8 +327,7 @@ export default function AuthModal() {
     setLoading(false);
 
     if (res.success) {
-      // Update local state with the new info so events are correct
-      const updatedCustomer = {
+      const updatedCustomer = res.customer ?? {
         ...customer!,
         name: profileName.trim(),
         address: profileAddress.trim(),
@@ -318,6 +335,8 @@ export default function AuthModal() {
         zone: profileZone,
         cityName: profileCityName,
         zoneName: profileZoneName,
+        profileComplete: true,
+        needsProfileCompletion: false,
       };
       setCustomer(updatedCustomer);
       setStep("authenticated");
@@ -367,7 +386,7 @@ export default function AuthModal() {
             {step === "authenticated" ? "Welcome back" : authIntent === "sign_up" ? "Create Account" : "Sign In"}
           </h2>
           <button
-            onClick={() => setIsOpen(false)}
+            onClick={handleClose}
             className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors"
           >
             <X className="h-5 w-5" />
@@ -636,11 +655,21 @@ export default function AuthModal() {
 
             <button
               onClick={handleProfileSubmit}
-              disabled={loading || !profileName.trim() || !profileCity.trim() || !profileZone.trim()}
+              disabled={loading || !profileName.trim() || !profileAddress.trim() || !profileCity.trim() || !profileZone.trim()}
               className="w-full h-11 rounded-lg bg-foreground text-background text-sm font-medium disabled:opacity-50 hover:bg-foreground/90 transition-colors mt-2"
             >
               {loading ? "Saving..." : "Save Delivery Details"}
             </button>
+            {customer?.needsProfileCompletion && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loading}
+                className="w-full text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Sign out
+              </button>
+            )}
           </div>
         )}
       </div>

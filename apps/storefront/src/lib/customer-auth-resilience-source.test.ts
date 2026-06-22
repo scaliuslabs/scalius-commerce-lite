@@ -79,4 +79,14 @@ describe("customer auth resilience source boundaries", () => {
     expect(pendingIndex).toBeGreaterThan(listenerIndex);
     expect(source).toContain("handleOpen();");
   });
+
+  it("resumes incomplete customer profiles instead of silently authenticating them", () => {
+    const source = readStorefrontSource("src/components/AuthModal.tsx");
+
+    expect(source).toContain("state.customer.needsProfileCompletion");
+    expect(source).toContain("hydrateProfileFields(state.customer)");
+    expect(source).toContain("setStep(\"profile_setup\")");
+    expect(source).toContain("Save your delivery profile or sign out to continue.");
+    expect(source).toContain("detail: customerData");
+  });
 });

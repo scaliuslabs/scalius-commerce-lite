@@ -428,6 +428,13 @@
       "when": 1782124800000,
       "tag": "0060_admin_onboarding_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1782128400000,
+      "tag": "0061_customer_profile_completion",
+      "breakpoints": true
     }
   ]
 }

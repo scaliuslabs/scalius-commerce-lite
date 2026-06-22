@@ -56,7 +56,7 @@ export default function PhoneField({
   useEffect(() => {
     const handler = (e: Event) => {
       const phone = (e as CustomEvent<string>).detail;
-      if (phone) setValue(phone);
+      if (phone) setValue((current) => current || phone);
     };
     window.addEventListener("phone-prefill", handler);
     return () => window.removeEventListener("phone-prefill", handler);

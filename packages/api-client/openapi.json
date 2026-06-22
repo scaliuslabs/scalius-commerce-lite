@@ -7961,10 +7961,65 @@
                       "properties": {
                         "customer": {
                           "type": "object",
-                          "properties": {},
-                          "additionalProperties": {
-                            "nullable": true
-                          }
+                          "properties": {
+                            "identifier": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "phone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "customerId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "address": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "city": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "cityName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zoneName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "profileComplete": {
+                              "type": "boolean"
+                            },
+                            "needsProfileCompletion": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "email",
+                            "name",
+                            "profileComplete",
+                            "needsProfileCompletion"
+                          ]
                         },
                         "isNewUser": {
                           "type": "boolean"
@@ -8252,6 +8307,9 @@
                         "customer": {
                           "type": "object",
                           "properties": {
+                            "identifier": {
+                              "type": "string"
+                            },
                             "email": {
                               "type": "string"
                             },
@@ -8265,13 +8323,47 @@
                             "customerId": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "address": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "city": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "cityName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zoneName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "profileComplete": {
+                              "type": "boolean"
+                            },
+                            "needsProfileCompletion": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "email",
                             "name",
-                            "phone",
-                            "customerId"
+                            "profileComplete",
+                            "needsProfileCompletion"
                           ]
                         }
                       },
@@ -8838,10 +8930,16 @@
                   "zone": {
                     "type": "string"
                   },
+                  "area": {
+                    "type": "string"
+                  },
                   "cityName": {
                     "type": "string"
                   },
                   "zoneName": {
+                    "type": "string"
+                  },
+                  "areaName": {
                     "type": "string"
                   }
                 }
@@ -8869,6 +8967,9 @@
                         "customer": {
                           "type": "object",
                           "properties": {
+                            "identifier": {
+                              "type": "string"
+                            },
                             "email": {
                               "type": "string"
                             },
@@ -8876,21 +8977,53 @@
                               "type": "string"
                             },
                             "phone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "customerId": {
+                              "type": "string",
+                              "nullable": true
                             },
                             "address": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "city": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "profileComplete": {
+                              "type": "boolean"
+                            },
+                            "needsProfileCompletion": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "email",
-                            "name"
+                            "name",
+                            "profileComplete",
+                            "needsProfileCompletion"
                           ]
                         }
                       },
@@ -9323,6 +9456,14 @@
                               "nullable": true
                             },
                             "zone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
                               "type": "string",
                               "nullable": true
                             }

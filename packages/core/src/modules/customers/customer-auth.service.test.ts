@@ -28,6 +28,7 @@ import {
   deleteCustomerSession,
   getCustomerBySession,
   sendOtp,
+  updateCustomerProfile,
   verifyOtp,
 } from "./customer-auth.service";
 
@@ -399,6 +400,8 @@ describe("customer auth service intent handling", () => {
     expect(db.insertValues).toHaveBeenCalledWith(expect.objectContaining({
       email: "original@example.com",
       phone: "+8801712345678",
+      profileCompletionRequiredAt: expect.any(Date),
+      profileCompletedAt: null,
     }));
     const sessionInsert = db.insertCalls.find(({ values }) => {
       const row = values as Record<string, unknown>;
@@ -538,6 +541,15 @@ describe("customer auth D1 sessions", () => {
       customerName: "Buyer",
       customerEmail: "buyer@example.com",
       customerPhone: "+8801712345678",
+      customerAddress: "House 1",
+      customerCity: "city_dhaka",
+      customerZone: "zone_mirpur",
+      customerArea: "area_1",
+      customerCityName: "Dhaka",
+      customerZoneName: "Mirpur",
+      customerAreaName: "Section 10",
+      customerProfileCompletionRequiredAt: 3_100,
+      customerProfileCompletedAt: 3_200,
     });
 
     const session = await getCustomerBySession(db as never, "raw-session-token", "session-key");
@@ -548,8 +560,128 @@ describe("customer auth D1 sessions", () => {
       name: "Buyer",
       phone: "+8801712345678",
       customerId: "cust_1",
+      address: "House 1",
+      city: "city_dhaka",
+      zone: "zone_mirpur",
+      area: "area_1",
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: "Section 10",
+      profileComplete: true,
+      needsProfileCompletion: false,
       createdAt: 3_000_000,
       expiresAt: 4_200_000,
+    });
+  });
+
+  it("updates customer profile from active delivery location IDs and returns canonical profile", async () => {
+    const existingCustomer = {
+      id: "cust_1",
+      name: "Old Name",
+      email: "buyer@example.com",
+      phone: "+8801712345678",
+      address: null,
+      city: null,
+      zone: null,
+      area: null,
+      cityName: null,
+      zoneName: null,
+      areaName: null,
+      profileCompletionRequiredAt: 3_000,
+      profileCompletedAt: null,
+      totalOrders: 0,
+      totalSpent: 0,
+      lastOrderAt: null,
+      createdAt: 2_000,
+      updatedAt: 2_000,
+      deletedAt: null,
+    };
+    const updatedCustomer = {
+      ...existingCustomer,
+      name: "Buyer",
+      address: "House 1",
+      city: "city_dhaka",
+      zone: "zone_mirpur",
+      area: "area_1",
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: "Section 10",
+      profileCompletedAt: 3_200,
+    };
+    const customerReads = [existingCustomer, updatedCustomer];
+    const updateSet = vi.fn((_payload: Record<string, unknown>) => ({ where: vi.fn(async () => undefined) }));
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => {
+          if (db.select.mock.calls.length === 2) {
+            return {
+              where: vi.fn(async () => [
+                { id: "city_dhaka", name: "Dhaka", type: "city", parentId: null, isActive: true, deletedAt: null },
+                { id: "zone_mirpur", name: "Mirpur", type: "zone", parentId: "city_dhaka", isActive: true, deletedAt: null },
+                { id: "area_1", name: "Section 10", type: "area", parentId: "zone_mirpur", isActive: true, deletedAt: null },
+              ]),
+            };
+          }
+          return {
+            where: vi.fn(() => ({
+              get: vi.fn(async () => customerReads.shift() ?? null),
+            })),
+          };
+        }),
+      })),
+      update: vi.fn(() => ({ set: updateSet })),
+    };
+
+    const result = await updateCustomerProfile(
+      db as never,
+      {
+        token: "raw-session-token",
+        email: "buyer@example.com",
+        name: "Old Name",
+        phone: "+8801712345678",
+        customerId: "cust_1",
+        profileComplete: false,
+        needsProfileCompletion: true,
+        createdAt: 2_000_000,
+        expiresAt: 4_200_000,
+      },
+      {
+        name: "Buyer",
+        address: "House 1",
+        city: "city_dhaka",
+        zone: "zone_mirpur",
+        area: "area_1",
+        cityName: "Forged City",
+        zoneName: "Forged Zone",
+      },
+    );
+
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Buyer",
+      address: "House 1",
+      city: "city_dhaka",
+      zone: "zone_mirpur",
+      area: "area_1",
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: "Section 10",
+    }));
+    const updatePayload = updateSet.mock.calls[0]?.[0] ?? {};
+    expect(updatePayload).not.toMatchObject({
+      cityName: "Forged City",
+      zoneName: "Forged Zone",
+    });
+    expect(result.customer).toMatchObject({
+      customerId: "cust_1",
+      address: "House 1",
+      city: "city_dhaka",
+      zone: "zone_mirpur",
+      area: "area_1",
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: "Section 10",
+      profileComplete: true,
+      needsProfileCompletion: false,
     });
   });
 

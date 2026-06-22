@@ -156,6 +156,10 @@ export interface CustomerInfo {
   cityName?: string | null;
   zone?: string | null;
   zoneName?: string | null;
+  area?: string | null;
+  areaName?: string | null;
+  profileComplete?: boolean;
+  needsProfileCompletion?: boolean;
 }
 
 export interface AuthState {
@@ -434,8 +438,10 @@ export interface ProfileUpdateData {
   address?: string;
   city?: string;
   zone?: string;
+  area?: string;
   cityName?: string;
   zoneName?: string;
+  areaName?: string;
 }
 
 /**

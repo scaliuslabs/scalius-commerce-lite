@@ -52,6 +52,22 @@ import {
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const customerAuthIntentSchema = z.enum(["sign_in", "sign_up"]);
 const customerAuthChannelSchema = z.enum(CUSTOMER_AUTH_OTP_CHANNELS);
+const customerAuthProfileSchema = z.object({
+  identifier: z.string().optional(),
+  email: z.string(),
+  name: z.string(),
+  phone: z.string().nullable().optional(),
+  customerId: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  zone: z.string().nullable().optional(),
+  area: z.string().nullable().optional(),
+  cityName: z.string().nullable().optional(),
+  zoneName: z.string().nullable().optional(),
+  areaName: z.string().nullable().optional(),
+  profileComplete: z.boolean(),
+  needsProfileCompletion: z.boolean(),
+});
 
 function setPrivateNoStoreHeaders(c: Context) {
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
@@ -326,7 +342,7 @@ const verifyOtpRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            customer: z.object({}).passthrough().optional(),
+            customer: customerAuthProfileSchema.optional(),
             isNewUser: z.boolean().optional(),
           })),
         },
@@ -397,12 +413,7 @@ const getMeRoute = createRoute({
         "application/json": {
           schema: successEnvelope(z.object({
             authenticated: z.boolean(),
-            customer: z.object({
-              email: z.string(),
-              name: z.string(),
-              phone: z.string().nullable(),
-              customerId: z.string().nullable(),
-            }).optional(),
+            customer: customerAuthProfileSchema.optional(),
           })),
         },
       },
@@ -437,7 +448,16 @@ app.openapi(getMeRoute, async (c) => {
       email: session.email,
       name: session.name,
       phone: session.phone,
-      customerId: session.customerId
+      customerId: session.customerId,
+      address: session.address,
+      city: session.city,
+      zone: session.zone,
+      area: session.area,
+      cityName: session.cityName,
+      zoneName: session.zoneName,
+      areaName: session.areaName,
+      profileComplete: session.profileComplete,
+      needsProfileCompletion: session.needsProfileCompletion,
     }
   });
 });
@@ -505,8 +525,10 @@ const updateProfileRoute = createRoute({
             address: z.string().optional(),
             city: z.string().optional(),
             zone: z.string().optional(),
+            area: z.string().optional(),
             cityName: z.string().optional(),
-            zoneName: z.string().optional()
+            zoneName: z.string().optional(),
+            areaName: z.string().optional()
           })
         }
       }
@@ -518,14 +540,7 @@ const updateProfileRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            customer: z.object({
-              email: z.string(),
-              name: z.string(),
-              phone: z.string().optional(),
-              address: z.string().optional(),
-              cityName: z.string().optional(),
-              zoneName: z.string().optional(),
-            }),
+            customer: customerAuthProfileSchema,
           })),
         },
       },
@@ -558,23 +573,16 @@ app.openapi(updateProfileRoute, async (c) => {
   const updates: Record<string, string | undefined> = {};
   if (body.name?.trim()) updates.name = body.name.trim();
   if (body.address?.trim()) updates.address = body.address.trim();
-  if (body.city?.trim()) updates.city = body.city.trim();
-  if (body.zone?.trim()) updates.zone = body.zone.trim();
-  if (body.cityName?.trim()) updates.cityName = body.cityName.trim();
-  if (body.zoneName?.trim()) updates.zoneName = body.zoneName.trim();
+  if (body.address !== undefined && !body.address.trim()) updates.address = "";
+  if (body.city !== undefined) updates.city = body.city.trim();
+  if (body.zone !== undefined) updates.zone = body.zone.trim();
+  if (body.area !== undefined) updates.area = body.area.trim();
 
   const db = c.get("db");
   const result = await updateCustomerProfile(db, session, updates);
 
   return ok(c, {
-    customer: {
-      email: result.session.email,
-      name: result.session.name,
-      phone: result.session.phone,
-      address: updates.address,
-      cityName: updates.cityName,
-      zoneName: updates.zoneName
-    }
+    customer: result.customer,
   });
 });
 
@@ -620,6 +628,8 @@ const getCustomerOrdersRoute = createRoute({
               zoneName: z.string().nullable().optional(),
               city: z.string().nullable().optional(),
               zone: z.string().nullable().optional(),
+              area: z.string().nullable().optional(),
+              areaName: z.string().nullable().optional(),
             }),
           })),
         },
