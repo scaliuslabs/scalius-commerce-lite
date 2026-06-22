@@ -4,7 +4,7 @@ export const CHECKOUT_CART_REPAIR_STORAGE_KEY = "scalius_cart_repair_state";
 const REPAIR_STATE_MAX_AGE_MS = 5 * 60 * 1000;
 
 export interface CartRepairState {
-  source: "checkout";
+  source: "checkout" | "cart";
   message: string;
   issues: CartValidationIssue[];
   createdAt: number;
@@ -34,6 +34,30 @@ export function writeCartRepairState(state: Omit<CartRepairState, "createdAt">):
   }
 }
 
+function parseCartRepairState(raw: string | null, now: number): CartRepairState | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) return null;
+    if (parsed.source !== "checkout" && parsed.source !== "cart") return null;
+    if (typeof parsed.message !== "string") return null;
+    if (typeof parsed.createdAt !== "number" || now - parsed.createdAt > REPAIR_STATE_MAX_AGE_MS) return null;
+    const issues = Array.isArray(parsed.issues)
+      ? parsed.issues.filter(isCartValidationIssue)
+      : [];
+
+    return {
+      source: parsed.source,
+      message: parsed.message,
+      issues,
+      createdAt: parsed.createdAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function readAndClearCartRepairState(now = Date.now()): CartRepairState | null {
   let raw: string | null;
   try {
@@ -43,25 +67,19 @@ export function readAndClearCartRepairState(now = Date.now()): CartRepairState |
     return null;
   }
 
-  if (!raw) return null;
+  return parseCartRepairState(raw, now);
+}
 
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) return null;
-    if (parsed.source !== "checkout") return null;
-    if (typeof parsed.message !== "string") return null;
-    if (typeof parsed.createdAt !== "number" || now - parsed.createdAt > REPAIR_STATE_MAX_AGE_MS) return null;
-    const issues = Array.isArray(parsed.issues)
-      ? parsed.issues.filter(isCartValidationIssue)
-      : [];
+export function readAndClearInlineCartRepairState(
+  elementId = "codCartRepairState",
+  now = Date.now(),
+): CartRepairState | null {
+  const element = typeof document !== "undefined"
+    ? document.getElementById(elementId)
+    : null;
+  if (!element) return null;
 
-    return {
-      source: "checkout",
-      message: parsed.message,
-      issues,
-      createdAt: parsed.createdAt,
-    };
-  } catch {
-    return null;
-  }
+  const raw = element.textContent;
+  element.remove();
+  return parseCartRepairState(raw, now);
 }

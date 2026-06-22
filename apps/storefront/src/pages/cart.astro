@@ -19,6 +19,8 @@ import {
   isCodOnly,
 } from "@/lib/api";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import type { CartValidationIssue } from "@/lib/api/orders";
 
 // Parallel fetch: layout + cities + shipping methods + checkout language + checkout config
 const [
@@ -97,6 +99,30 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
 let errorMessage = "";
 let successOrderId = "";
 let isProcessing = false;
+let codCartRepairState: {
+  source: "cart";
+  message: string;
+  issues: CartValidationIssue[];
+  createdAt: number;
+} | null = null;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCartValidationIssue(value: unknown): value is CartValidationIssue {
+  return (
+    isRecord(value) &&
+    typeof value.index === "number" &&
+    typeof value.productId === "string" &&
+    typeof value.message === "string"
+  );
+}
+
+function extractItemIssues(details: unknown): CartValidationIssue[] {
+  if (!isRecord(details) || !Array.isArray(details.itemIssues)) return [];
+  return details.itemIssues.filter(isCartValidationIssue);
+}
 
 // Handle form submission — only for COD-only checkout submits.
 // Other forms on the page may use POST to avoid URL/query leakage.
@@ -140,6 +166,17 @@ if (Astro.request.method === "POST" && codOnly) {
         errorMessage =
           (typeof resultError === "string" ? resultError : resultError?.message) ||
           "Failed to process order. Please try again.";
+        const itemIssues = extractItemIssues("details" in result ? result.details : undefined);
+        if (itemIssues.length > 0) {
+          codCartRepairState = {
+            source: "cart",
+            message: itemIssues.length === 1
+              ? errorMessage
+              : `${itemIssues.length} cart items need attention before checkout.`,
+            issues: itemIssues,
+            createdAt: Date.now(),
+          };
+        }
       }
     }
   } catch (error: unknown) {
@@ -161,6 +198,17 @@ const submitLabel = codOnly
 
 <Layout title={lang.languageData.pageTitle} layoutData={layoutData} noindex>
   <!-- Hidden checkout meta for client-side JS -->
+  {
+    codCartRepairState && (
+      <script
+        is:inline
+        id="codCartRepairState"
+        type="application/json"
+        set:html={serializeJsonForInlineScript(codCartRepairState)}
+      />
+    )
+  }
+
   <div
     id="checkout-meta"
     data-cod-only={codOnly ? "true" : "false"}

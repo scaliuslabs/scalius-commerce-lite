@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CHECKOUT_CART_REPAIR_STORAGE_KEY,
   readAndClearCartRepairState,
+  readAndClearInlineCartRepairState,
   writeCartRepairState,
 } from "./repair-state";
 
@@ -24,6 +25,7 @@ const issue = {
 
 afterEach(() => {
   sessionStorage.clear();
+  document.body.innerHTML = "";
 });
 
 describe("cart repair state", () => {
@@ -52,5 +54,26 @@ describe("cart repair state", () => {
 
     expect(readAndClearCartRepairState(1_000 + 5 * 60 * 1000 + 1)).toBeNull();
     expect(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY)).toBeNull();
+  });
+
+  it("consumes server-rendered cart repair state once", () => {
+    document.body.innerHTML = `
+      <script id="codCartRepairState" type="application/json">
+        ${JSON.stringify({
+          source: "cart",
+          message: "Two cart items need attention.",
+          issues: [issue],
+          createdAt: 5_000,
+        })}
+      </script>
+    `;
+
+    expect(readAndClearInlineCartRepairState("codCartRepairState", 5_100)).toMatchObject({
+      source: "cart",
+      message: "Two cart items need attention.",
+      issues: [issue],
+    });
+    expect(document.getElementById("codCartRepairState")).toBeNull();
+    expect(readAndClearInlineCartRepairState("codCartRepairState", 5_100)).toBeNull();
   });
 });

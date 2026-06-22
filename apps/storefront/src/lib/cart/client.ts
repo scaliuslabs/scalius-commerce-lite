@@ -25,8 +25,16 @@ import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
-import { readAndClearCartRepairState } from "./repair-state";
+import {
+  readAndClearCartRepairState,
+  readAndClearInlineCartRepairState,
+} from "./repair-state";
 import { reconcileValidatedCartSnapshot } from "./validation-reconciliation";
+import {
+  renderBulkCartRepairActions,
+  selectCartKeysForBulkRepair,
+  type BulkCartRepairAction,
+} from "./bulk-repair-actions";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -49,6 +57,8 @@ let globalLangData: CheckoutLanguageData | null = null;
 let hasTrackedInitiateCheckout = false;
 let cartValidationIssues: Record<string, CartValidationIssue[]> = {};
 let cartValidationGlobalError = "";
+let cartValidationSummaryMessage = "";
+let preserveCartValidationSummaryOnce = false;
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 
@@ -339,8 +349,10 @@ function issueKeyForCart(
 function setCartValidationIssues(
   issues: CartValidationIssue[],
   items: Record<string, CartItem>,
+  summaryMessage = "",
 ) {
   cartValidationGlobalError = "";
+  cartValidationSummaryMessage = summaryMessage;
   const grouped: Record<string, CartValidationIssue[]> = {};
   for (const issue of issues) {
     const key = issueKeyForCart(issue, items);
@@ -349,6 +361,11 @@ function setCartValidationIssues(
   }
   cartValidationIssues = grouped;
   updateCartValidationMessage();
+}
+
+function clearCartValidationSummary() {
+  cartValidationSummaryMessage = "";
+  preserveCartValidationSummaryOnce = false;
 }
 
 function cartIssueCount(): number {
@@ -366,6 +383,7 @@ function cartBlockedMessage(): string {
   if (cartValidationGlobalError) return cartValidationGlobalError;
   const count = Object.keys(cartValidationIssues).length;
   if (count <= 0) return "";
+  if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
   return count === 1
     ? "One cart item needs attention before checkout."
     : `${count} cart items need attention before checkout.`;
@@ -377,6 +395,12 @@ function updateCartValidationMessage() {
 
   if (hasBlockingCartIssues()) {
     message.textContent = cartBlockedMessage();
+    if (!cartValidationGlobalError) {
+      message.insertAdjacentHTML(
+        "beforeend",
+        renderBulkCartRepairActions(cartValidationIssues),
+      );
+    }
     message.classList.remove("hidden");
   } else {
     message.textContent = "";
@@ -385,13 +409,15 @@ function updateCartValidationMessage() {
 }
 
 function applyPendingCartRepairState(): boolean {
-  const state = readAndClearCartRepairState();
+  const state = readAndClearCartRepairState() ?? readAndClearInlineCartRepairState();
   if (!state) return false;
 
   if (state.issues.length > 0) {
-    setCartValidationIssues(state.issues, cartStore.get().items);
+    setCartValidationIssues(state.issues, cartStore.get().items, state.message);
+    preserveCartValidationSummaryOnce = true;
   } else {
     cartValidationIssues = {};
+    clearCartValidationSummary();
     cartValidationGlobalError = state.message;
     updateCartValidationMessage();
   }
@@ -407,6 +433,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
   if (payloadItems.length === 0) {
     cartValidationIssues = {};
     cartValidationGlobalError = "";
+    clearCartValidationSummary();
     updateCartValidationMessage();
     updateCheckoutButtonState();
     return true;
@@ -432,19 +459,29 @@ export async function validateCartSnapshot(): Promise<boolean> {
       return !hasBlockingCartIssues();
     }
 
-    const issues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
+    const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
+    const issues = Array.isArray(rawIssues) ? rawIssues : [];
+    const summaryMessage = issues.length > 0 && preserveCartValidationSummaryOnce
+      ? cartValidationSummaryMessage
+      : "";
+    preserveCartValidationSummaryOnce = false;
     if (response.ok && json?.success && json.data) {
       reconcileValidatedCartSnapshot(json.data, (message) => {
         showDiscountMessage(message, "info");
       });
     }
-    setCartValidationIssues(Array.isArray(issues) ? issues : [], cartStore.get().items);
+    setCartValidationIssues(
+      issues,
+      cartStore.get().items,
+      summaryMessage,
+    );
     if (!response.ok || !json?.success) {
       cartValidationGlobalError = issues.length > 0
         ? ""
         : json?.error
           || json?.details?.message
           || "Could not verify cart availability. Please refresh and try again.";
+      if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
     await renderCartItems();
@@ -458,6 +495,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
   } catch (error) {
     console.warn("Could not refresh cart availability before checkout.", error);
     cartValidationIssues = {};
+    clearCartValidationSummary();
     cartValidationGlobalError = "Could not verify cart availability. Please refresh and try again.";
     updateCartValidationMessage();
     updateCheckoutButtonState();
@@ -782,11 +820,16 @@ export async function initCartFunctionality() {
   window.hasCartValidationIssues = () => hasBlockingCartIssues();
   window.getCartBlockedMessage = () => cartBlockedMessage();
 
-  window.updateCartQuantity = (id, variantId, qty) =>
+  window.updateCartQuantity = (id, variantId, qty) => {
+    clearCartValidationSummary();
     updateQuantity(id, variantId || undefined, qty);
-  window.removeFromCart = (id, variantId) =>
+  };
+  window.removeFromCart = (id, variantId) => {
+    clearCartValidationSummary();
     removeFromCart(id, variantId || undefined);
+  };
   window.removeCartIssueItem = (cartKey) => {
+    clearCartValidationSummary();
     delete cartValidationIssues[cartKey];
     removeCartItemByKey(cartKey);
   };
@@ -794,10 +837,13 @@ export async function initCartFunctionality() {
     const issue = (cartValidationIssues[cartKey] ?? []).find(
       (item) => item.action === "reduce_quantity",
     );
+    clearCartValidationSummary();
     if (typeof issue?.availableQuantity !== "number" || issue.availableQuantity < 1) {
+      delete cartValidationIssues[cartKey];
       removeCartItemByKey(cartKey);
       return;
     }
+    delete cartValidationIssues[cartKey];
     updateCartItemByKey(cartKey, { quantity: issue.availableQuantity });
   };
   window.refreshCartIssueItem = (cartKey) => {
@@ -805,11 +851,31 @@ export async function initCartFunctionality() {
       (item) => item.action === "refresh_item",
     );
     if (typeof issue?.currentPrice !== "number") return;
+    clearCartValidationSummary();
+    delete cartValidationIssues[cartKey];
     updateCartItemByKey(cartKey, {
       price: issue.currentPrice,
       name: issue.productName || undefined,
     });
   };
+  const applyBulkCartRepair = (action: BulkCartRepairAction) => {
+    const keys = selectCartKeysForBulkRepair(cartValidationIssues, action);
+    keys.forEach((cartKey) => {
+      if (action === "remove") {
+        window.removeCartIssueItem?.(cartKey);
+      } else if (action === "reduce_quantity") {
+        window.reduceCartIssueItem?.(cartKey);
+      } else {
+        window.refreshCartIssueItem?.(cartKey);
+      }
+    });
+    if (keys.length > 0) {
+      void validateCartSnapshot();
+    }
+  };
+  window.bulkRemoveCartIssueItems = () => applyBulkCartRepair("remove");
+  window.bulkReduceCartIssueItems = () => applyBulkCartRepair("reduce_quantity");
+  window.bulkRefreshCartIssueItems = () => applyBulkCartRepair("refresh_item");
 
   cartStore.subscribe(() => {
     renderCartItems();
