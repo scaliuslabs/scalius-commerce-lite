@@ -10,7 +10,9 @@ import { createOrder } from "../../../lib/api/orders";
 import { getCheckoutErrorMessage } from "../../../lib/checkout/error-messages";
 import {
   getPaymentSessionApiErrorMessage,
+  getPaymentSessionProcessingMessage,
   getPaymentSessionProxyExceptionMessage,
+  isPaymentSessionProcessingPayload,
   PAYMENT_SESSION_PROXY_TIMEOUT_MS,
 } from "../../../lib/checkout/payment-session-proxy";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
@@ -65,10 +67,17 @@ async function createInitialPaymentSession(
       };
     }
 
+    const unwrapped = json.data || json;
+    if (res.status === 202 || isPaymentSessionProcessingPayload(unwrapped)) {
+      return {
+        error: getPaymentSessionProcessingMessage(unwrapped),
+      };
+    }
+
     return {
       session: {
         gateway: paymentMethod,
-        ...(json.data || json),
+        ...unwrapped,
       },
     };
   } catch (error: unknown) {

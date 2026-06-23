@@ -63,7 +63,6 @@ import {
   paymentPlans as paymentPlansTable,
   siteSettings as siteSettingsTable,
 } from "@scalius/database/schema";
-import { ConflictError } from "../../utils/api-error";
 
 const orderRow = {
   id: "order_1",
@@ -1201,9 +1200,15 @@ describe("payment session receipt-token proof", () => {
     path,
     gateway,
   }) => {
-    mocks.claimPaymentSessionAttempt.mockRejectedValueOnce(
-      new ConflictError("A payment session is already being created for this order. Please try again shortly."),
-    );
+    mocks.claimPaymentSessionAttempt.mockResolvedValueOnce({
+      status: "processing",
+      retryable: true,
+      retryAfterSeconds: 2,
+      orderId: "order_1",
+      gateway: paymentMethod,
+      paymentType: "full",
+      message: "Payment session creation is already processing. Please try again shortly.",
+    });
     const { app, kv } = createTestApp("valid", paymentMethod);
 
     const response = await app.request(
@@ -1215,10 +1220,26 @@ describe("payment session receipt-token proof", () => {
       },
       envFor(kv),
     );
+    const json = await response.json();
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(202);
+    expect(response.headers.get("retry-after")).toBe("2");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(json).toEqual({
+      success: true,
+      data: {
+        status: "processing",
+        retryable: true,
+        retryAfterSeconds: 2,
+        orderId: "order_1",
+        gateway: paymentMethod,
+        paymentType: "full",
+        message: "Payment session creation is already processing. Please try again shortly.",
+      },
+    });
     expect(gateway).not.toHaveBeenCalled();
     expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
+    expect(mocks.markPaymentSessionAttemptFailed).not.toHaveBeenCalled();
   });
 
   it("marks failed Stripe attempts before surfacing provider creation errors", async () => {

@@ -8,6 +8,7 @@ import {
   getPaymentSessionApiErrorMessage,
   PAYMENT_SESSION_PROXY_TIMEOUT_MS,
   paymentSessionProxyErrorResponse,
+  paymentSessionProxySuccessResponse,
 } from "@/lib/checkout/payment-session-proxy";
 
 export const POST: APIRoute = async ({ request }) => {
@@ -46,11 +47,8 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const unwrapped = json.data || json;
-    console.log("[checkout/sslcommerz-session] Session created, gatewayUrl present:", !!(unwrapped as Record<string, unknown>).gatewayUrl);
-    return new Response(JSON.stringify(unwrapped), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    console.log("[checkout/sslcommerz-session] Session response received, gatewayUrl present:", !!(unwrapped as Record<string, unknown>).gatewayUrl);
+    return paymentSessionProxySuccessResponse(res, json);
   } catch (err: unknown) {
     console.error("[checkout/sslcommerz-session] Proxy error:", err);
     return paymentSessionProxyErrorResponse(err);

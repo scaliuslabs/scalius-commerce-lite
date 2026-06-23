@@ -42,6 +42,8 @@ vi.mock("./payment/payment-session-create", () => ({
   createStripePaymentSession: mocks.createStripePaymentSession,
   createSSLCommerzPaymentSession: mocks.createSSLCommerzPaymentSession,
   createPolarPaymentSession: mocks.createPolarPaymentSession,
+  isPaymentSessionProcessingResult: (value: unknown) =>
+    typeof value === "object" && value !== null && (value as { status?: unknown }).status === "processing",
   resolveCustomerPaymentSessionRecovery: mocks.resolveCustomerPaymentSessionRecovery,
 }));
 
@@ -746,6 +748,46 @@ describe("customer auth private cache policy", () => {
     expect(text).toContain("https://ssl.example.test/pay");
     expect(text).not.toContain("receiptToken");
     expect(text).not.toContain("chk_");
+  });
+
+  it("returns accepted processing state for customer-owned payment sessions already in flight", async () => {
+    const app = createTestApp();
+    mocks.createSSLCommerzPaymentSession.mockResolvedValueOnce({
+      status: "processing",
+      retryable: true,
+      retryAfterSeconds: 2,
+      orderId: "order_1",
+      gateway: "sslcommerz",
+      paymentType: "balance",
+      message: "Payment session creation is already processing. Please try again shortly.",
+    });
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/payment-session",
+      {
+        method: "POST",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+      { CACHE: {} } as never,
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("Retry-After")).toBe("2");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(json).toEqual({
+      success: true,
+      data: {
+        status: "processing",
+        retryable: true,
+        retryAfterSeconds: 2,
+        orderId: "order_1",
+        gateway: "sslcommerz",
+        paymentType: "balance",
+        message: "Payment session creation is already processing. Please try again shortly.",
+      },
+    });
   });
 
   it("rejects account payment session requests without customer ownership", async () => {

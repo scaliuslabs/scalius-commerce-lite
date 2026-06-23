@@ -1,5 +1,9 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
+import {
+  getPaymentSessionProcessingMessage,
+  isPaymentSessionProcessingPayload,
+} from "../payment-session-proxy";
 
 declare global {
   interface Window {
@@ -133,6 +137,9 @@ export const stripeHandler: GatewayHandler = {
         }
 
         const intentData = await intentRes.json();
+        if (intentRes.status === 202 || isPaymentSessionProcessingPayload(intentData)) {
+          throw new Error(getPaymentSessionProcessingMessage(intentData));
+        }
         clientSecret = intentData.clientSecret as string;
       }
       if (!clientSecret) throw new Error("No client secret received from payment gateway");

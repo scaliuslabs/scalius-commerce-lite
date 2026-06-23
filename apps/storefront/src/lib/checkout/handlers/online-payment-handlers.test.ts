@@ -182,6 +182,33 @@ describe("hosted online payment handlers", () => {
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
     { handler: polarHandler, gateway: "polar" },
+  ])("returns a receipt recovery URL after $gateway order creation when session setup is still processing", async ({
+    handler,
+    gateway,
+  }) => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({
+        status: "processing",
+        retryable: true,
+        message: "Payment session creation is already processing. Please try again shortly.",
+      }),
+    } as Response);
+
+    const result = await handler.processPayment(makeContext());
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+    expect(result.clearCheckoutSessionOnRedirect).toBe(true);
+    expect(result.redirectUrl).toBe(
+      `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
+    );
+  });
+
+  it.each([
+    { handler: sslcommerzHandler, gateway: "sslcommerz" },
+    { handler: polarHandler, gateway: "polar" },
   ])("does not retry $gateway session creation when fused initialization already failed", async ({
     handler,
     gateway,
@@ -323,6 +350,51 @@ describe("Stripe checkout handler", () => {
     expect(result).toEqual({
       success: true,
       redirectUrl: "/order-success?orderId=order_1&token=receipt_1&payment=stripe",
+    });
+  });
+
+  it("does not confirm Stripe payment while intent creation is still processing", async () => {
+    document.body.innerHTML = `
+      <div id="stripeCardElement"></div>
+      <div id="stripeError"></div>
+    `;
+    const stripeCard = {
+      mount: vi.fn(),
+      on: vi.fn(),
+    };
+    const stripeInstance = {
+      elements: vi.fn(() => ({
+        create: vi.fn(() => stripeCard),
+      })),
+      confirmCardPayment: vi.fn(),
+    };
+    vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
+    const container = document.createElement("div");
+    container.dataset.publishableKey = "pk_processing";
+    await stripeHandler.onSelect?.(container);
+
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "stripe",
+    });
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({
+        status: "processing",
+        retryable: true,
+        message: "Payment session creation is already processing. Please try again shortly.",
+      }),
+    } as Response);
+
+    const result = await stripeHandler.processPayment(makeContext());
+
+    expect(stripeInstance.confirmCardPayment).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "Payment session creation is already processing. Please try again shortly.",
     });
   });
 

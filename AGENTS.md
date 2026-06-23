@@ -67,7 +67,7 @@ packages/
 
 ### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 259 paths / 357 operations after the checkout/payment-readiness additions; regenerate with `pnpm generate:sdk` after API contract changes instead of trusting prose counts. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. The generator removes the development-only `/api/v1/media/{key}` passthrough so the generated contract matches production OpenAPI. Do not hand-edit files in `packages/api-client/src/generated/**`.
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 261 paths / 359 operations after the payment-session processing-response additions; regenerate with `pnpm generate:sdk` after API contract changes instead of trusting prose counts. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. The generator removes the development-only `/api/v1/media/{key}` passthrough so the generated contract matches production OpenAPI. Do not hand-edit files in `packages/api-client/src/generated/**`.
 - **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files and 10 table-defining files; use fresh `rg`/Drizzle scans for volatile table/migration counts instead of trusting prose.
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.

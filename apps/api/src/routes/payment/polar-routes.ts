@@ -8,7 +8,8 @@ import { eq } from "drizzle-orm";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
-import { createPolarPaymentSession } from "./payment-session-create";
+import { createPolarPaymentSession, isPaymentSessionProcessingResult } from "./payment-session-create";
+import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
 
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -51,6 +52,7 @@ const createPolarSessionRoute = createRoute({
                 },
             },
         },
+        202: paymentSessionProcessingResponse,
         ...errorResponses,
         503: serviceUnavailableResponse,
     }
@@ -71,6 +73,10 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         proof: { kind: "receipt", receiptToken: body.receiptToken },
         returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
     });
+
+    if (isPaymentSessionProcessingResult(result)) {
+        return acceptedPaymentSessionProcessing(c, result);
+    }
 
     return ok(c, result.hosted);
 });

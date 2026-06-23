@@ -8,6 +8,7 @@ import {
   getPaymentSessionApiErrorMessage,
   PAYMENT_SESSION_PROXY_TIMEOUT_MS,
   paymentSessionProxyErrorResponse,
+  paymentSessionProxySuccessResponse,
 } from "@/lib/checkout/payment-session-proxy";
 
 export const POST: APIRoute = async ({ request }) => {
@@ -43,11 +44,7 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    // Unwrap { success, data } envelope — checkout page reads fields directly
-    return new Response(JSON.stringify(json.data || json), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return paymentSessionProxySuccessResponse(res, json);
   } catch (err: unknown) {
     console.error("[checkout/stripe-intent] Error:", err);
     return paymentSessionProxyErrorResponse(err);

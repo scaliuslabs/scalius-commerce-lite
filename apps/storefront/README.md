@@ -239,10 +239,11 @@ Gateway-based payment architecture:
 - `handlers/polar.ts` -- Polar redirect
 - `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, and redirects stale cart snapshots back to `/cart?checkoutIssues=1`
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
+- Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available.
 
 ## Account Order Payments (`src/pages/account/orders/[id].astro`)
 
-The private order-detail page can recover failed or remaining online payments for orders owned by the signed-in customer. It reads the API-provided `paymentRecovery` preview from `GET /api/v1/customer-auth/orders/{id}`, creates sessions through `POST /api/v1/customer-auth/orders/{id}/payment-session`, and sends only an empty JSON body because the API derives gateway, payment type, amount, currency, and proof from the customer session and order state. Stripe mounts a local card form and refreshes the order after confirmation; SSLCommerz and Polar redirect to hosted checkout and return to `/account/orders/{id}` with neutral status query params. This account flow must not use receipt tokens, `/order-success`, cart clearing, or checkout purchase-finalization side effects.
+The private order-detail page can recover failed or remaining online payments for orders owned by the signed-in customer. It reads the API-provided `paymentRecovery` preview from `GET /api/v1/customer-auth/orders/{id}`, creates sessions through `POST /api/v1/customer-auth/orders/{id}/payment-session`, and sends only an empty JSON body because the API derives gateway, payment type, amount, currency, and proof from the customer session and order state. Stripe mounts a local card form and refreshes the order after confirmation; SSLCommerz and Polar redirect to hosted checkout and return to `/account/orders/{id}` with neutral status query params. If a durable payment-session attempt is still processing, the helper surfaces retryable copy instead of treating the response as a usable session. This account flow must not use receipt tokens, `/order-success`, cart clearing, or checkout purchase-finalization side effects.
 
 ## Customer Auth Read Resilience
 
