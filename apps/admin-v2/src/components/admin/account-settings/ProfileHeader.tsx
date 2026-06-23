@@ -1,8 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card, CardContent } from "~/components/ui/card";
-import { Loader2, Shield, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  Pencil,
+  Shield,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { MediaManager, type MediaFile } from "../media-manager";
 import type { User } from "./AccountSettingsContainer";
@@ -26,10 +35,19 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ user }: ProfileHeaderProps) {
   const router = useRouter();
+  const [savedName, setSavedName] = useState(user.name);
+  const [savedImage, setSavedImage] = useState(user.image || "");
   const [name, setName] = useState(user.name);
   const [image, setImage] = useState(user.image || "");
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    setSavedName(user.name);
+    setSavedImage(user.image || "");
+    setName(user.name);
+    setImage(user.image || "");
+  }, [user.id, user.name, user.image]);
 
   const handleImageSelect = (file: MediaFile) => {
     setImage(file.url);
@@ -52,6 +70,9 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
     try {
       await updateProfile({ data: { name: name.trim(), image: image || null } });
       toast.success("Profile updated successfully");
+      setSavedName(name.trim());
+      setSavedImage(image || "");
+      setName(name.trim());
       setIsEditing(false);
       // Refresh to update header with updated user info
       void refreshAdminRouteContext(router);
@@ -63,21 +84,21 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
   };
 
   const handleCancel = () => {
-    setName(user.name);
-    setImage(user.image || "");
+    setName(savedName);
+    setImage(savedImage);
     setIsEditing(false);
   };
 
-  const hasChanges = name !== user.name || image !== (user.image || "");
+  const hasChanges = name.trim() !== savedName || image !== savedImage;
 
   return (
-    <Card className="overflow-hidden">
-      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent h-24" />
-      <CardContent className="relative pt-0 pb-6">
-        <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-end -mt-12">
+    <Card className="overflow-hidden rounded-lg shadow-sm">
+      <div className="h-16 border-b bg-[linear-gradient(135deg,hsl(var(--primary)/0.12),hsl(var(--muted)/0.28)_52%,transparent)]" />
+      <CardContent className="relative px-4 pb-5 pt-0 sm:px-5">
+        <div className="grid gap-4 sm:grid-cols-[104px_minmax(0,1fr)]">
           {/* Avatar */}
-          <div className="relative group">
-            <div className="h-24 w-24 rounded-full border-4 border-background bg-muted shadow-lg overflow-hidden">
+          <div className="relative -mt-10 h-24 w-24">
+            <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-background bg-muted shadow-lg">
               {image ? (
                 <img
                   src={image}
@@ -94,14 +115,15 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 </div>
               )}
             </div>
-            {image && (
+            {image && isEditing && (
               <Button
                 type="button"
                 variant="destructive"
                 size="icon"
-                className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full shadow-md"
                 onClick={removeImage}
                 title="Remove photo"
+                aria-label="Remove profile photo"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -109,23 +131,25 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
           </div>
 
           {/* User Info */}
-          <div className="flex-1 space-y-4 pt-2 sm:pt-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1 space-y-1">
+          <div className="-mt-1 min-w-0 space-y-4 sm:mt-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1 space-y-1.5">
                 {isEditing ? (
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="text-lg font-semibold h-auto py-1 px-2 -ml-2"
+                    className="h-10 max-w-xl text-lg font-semibold"
                     placeholder="Your name"
+                    aria-label="Display name"
+                    autoFocus
                   />
                 ) : (
-                  <h2 className="text-xl font-semibold">{name}</h2>
+                  <h2 className="truncate text-xl font-semibold">{name}</h2>
                 )}
-                <p className="text-sm text-muted-foreground">{user.email}</p>
+                <p className="truncate text-sm text-muted-foreground">{user.email}</p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 {user.role === "admin" && (
                   <span className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
                     <Shield className="h-3 w-3" />
@@ -142,38 +166,81 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
-              <MediaManager
-                onSelect={handleImageSelect}
-                triggerLabel={image ? "Change Photo" : "Add Photo"}
-              />
-              {!isEditing && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditing(true)}
-                >
-                  Edit Profile
-                </Button>
-              )}
-              {isEditing && hasChanges && (
-                <>
-                  <Button size="sm" onClick={handleSave} disabled={isLoading}>
-                    {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : null}
-                    Save
-                  </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <MediaManager
+                  onSelect={handleImageSelect}
+                  triggerLabel={image ? "Change Photo" : "Add Photo"}
+                  trigger={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 shrink-0 shadow-none after:shadow-none"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      {image ? "Change photo" : "Add photo"}
+                    </Button>
+                  }
+                />
+                {image && isEditing && (
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={handleCancel}
+                    className="h-8 text-destructive hover:text-destructive"
+                    onClick={removeImage}
                     disabled={isLoading}
                   >
-                    Cancel
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remove
                   </Button>
-                </>
-              )}
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                {!isEditing && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit profile
+                  </Button>
+                )}
+                {isEditing && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8"
+                      onClick={handleCancel}
+                      disabled={isLoading}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8"
+                      onClick={handleSave}
+                      disabled={isLoading || !hasChanges}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      Save changes
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
