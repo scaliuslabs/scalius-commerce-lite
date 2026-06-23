@@ -22,37 +22,30 @@ export async function prefetchOrderDetailQueries(
   });
 
   const optionalWarmQueries = [
-    queryClient
-      .prefetchQuery({ ...orderShipmentsQueryOptions(orderId), staleTime: Infinity })
-      .catch((error) => {
-        console.warn("Order shipment prefetch skipped", error);
-      }),
-    queryClient
-      .prefetchQuery({ ...orderPaymentsQueryOptions(orderId), staleTime: Infinity })
-      .catch((error) => {
-        console.warn("Order payment prefetch skipped", error);
-      }),
-    queryClient
-      .prefetchQuery(currencySettingsQueryOptions())
-      .catch((error) => {
-        console.warn("Order currency prefetch skipped", error);
-      }),
-    queryClient
-      .prefetchQuery(deliveryProvidersQueryOptions())
-      .catch((error) => {
-        console.warn("Order delivery provider prefetch skipped", error);
-      }),
+    queryClient.prefetchQuery({
+      ...orderShipmentsQueryOptions(orderId),
+      staleTime: Infinity,
+    }),
+    queryClient.prefetchQuery({
+      ...orderPaymentsQueryOptions(orderId),
+      staleTime: Infinity,
+    }),
+    queryClient.prefetchQuery(currencySettingsQueryOptions()),
+    queryClient.prefetchQuery(deliveryProvidersQueryOptions()),
   ];
 
   if (order.paymentMethod === "cod") {
     optionalWarmQueries.push(
-      queryClient
-        .prefetchQuery({ ...orderCodQueryOptions(orderId), staleTime: Infinity })
-        .catch((error) => {
-          console.warn("Order COD prefetch skipped", error);
-        }),
+      queryClient.prefetchQuery({
+        ...orderCodQueryOptions(orderId),
+        staleTime: Infinity,
+      }),
     );
   }
 
-  await Promise.all(optionalWarmQueries);
+  for (const query of optionalWarmQueries) {
+    void query.catch((error) => {
+      console.warn("Order detail warm query skipped", error);
+    });
+  }
 }
