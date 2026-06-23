@@ -55,6 +55,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `polar.ts` | `PolarProvider` class, `createPolarCheckout()`, `createPolarRefund()`, `verifyPolarWebhook()` | Polar SDK wrapper; uses `@polar-sh/sdk` + `standardwebhooks` for signature verification |
 | `cod.ts` | `CODProvider` class, `initCODTracking()`, `recordCODCollection()`, `recordCODFailure()`, `markCODReturned()` | Cash on Delivery tracking; DB-only operations, no external gateway |
 | `process-payment.ts` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()`, `recordWebhookEvent()` | Shared post-payment business logic called by queue consumer |
+| `payment-state.ts` | `computeOrderPaymentState()`, `computePaymentStateAfterPayment()`, `computePaymentStateAfterRefund()` | Canonical order payment-state arithmetic for `paidAmount`, `balanceDue`, and `paymentStatus` |
 | `refund-service.ts` | `processRefund()`, `processReturn()` | Gateway-agnostic refund orchestrator; detects gateway from payment records, validates cumulative refund amounts |
 | `payment-session-attempts.ts` | `buildPaymentSessionAttemptIdentity()`, `claimPaymentSessionAttempt()`, created/failed markers | Durable D1 idempotency for Stripe/SSLCommerz/Polar session creation across receipt-token checkout recovery and customer-account post-sale recovery |
 | `index.ts` | Barrel re-exports | All public exports from the module |
@@ -235,6 +236,14 @@ Payment types: `full`, `deposit`, `balance`.
 - **Balance flow**: API route computes `balanceDue` from order, creates intent/session for remaining amount. `processPaymentConfirmed()` sets payment plan status to `completed` when balance reaches zero.
 - **Storefront**: When `partialPaymentEnabled` is true in checkout config, COD is hidden and button labels change to "Pay Advance via {gateway}". Advance amount is `min(partialPaymentAmount, totalAmount)`.
 
+### Payment State Arithmetic
+
+`payment-state.ts` is the single authority for order-level `paidAmount`, `balanceDue`, and `paymentStatus` arithmetic. Payment confirmations, COD collection, admin manual order create/edit, admin refunds, and Polar refund webhooks should call it instead of recomputing totals inline.
+
+Admin-created manual orders are unpaid by definition, so they must insert `paidAmount = 0`, `balanceDue = totalAmount`, and `paymentStatus = unpaid`. Admin order edits recalculate balance from the new total and existing paid amount, preserving terminal `failed`/`refunded` payment statuses while still refreshing `balanceDue`.
+
+COD collection validates against computed outstanding balance when a stored `balanceDue` is stale, so old/manual orders with an incorrect zero balance do not block legitimate courier collection.
+
 ### Refund Flow
 
 `processRefund()` in `refund-service.ts`:
@@ -243,7 +252,7 @@ Payment types: `full`, `deposit`, `balance`.
 2. Validates amount: positive, does not exceed `paidAmount`, cumulative refunds (existing refunded `orderPayments` + new) do not exceed `paidAmount`
 3. Finds latest successful payment record to determine gateway
 4. Dispatches to gateway-specific refund API after fresh-reading gateway settings with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS` (Stripe: by charge ID with `Math.round(refundAmount * 100)`; SSLCommerz: by bank_tran_id; Polar: by checkout ID with `Math.round(refundAmount * 100)`; COD: marker ID only). If fresh settings are missing/unavailable after the local refund claim, the claim is released and the prior order payment state is restored before the error surfaces.
-5. Updates `orders.paidAmount` (subtracts refund) and `orders.paymentStatus` (REFUNDED for full, PARTIAL for partial)
+5. Updates `orders.paidAmount`, `orders.balanceDue`, and `orders.paymentStatus` through `payment-state.ts`; provider/settings rollback restores the prior balance due as well as the prior paid/status fields.
 6. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
 7. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
 

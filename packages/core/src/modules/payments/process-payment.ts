@@ -26,6 +26,7 @@ import {
   PAYMENT_BLOCKED_ORDER_STATUSES,
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
+import { computePaymentStateAfterPayment } from "./payment-state";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -392,10 +393,15 @@ export async function processPaymentConfirmed(
         }
       }
 
-      const newPaidAmount = roundPrice((order.paidAmount ?? 0) + params.amount);
-      const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
+      const nextPaymentState = computePaymentStateAfterPayment({
+        totalAmount: order.totalAmount,
+        currentPaidAmount: order.paidAmount,
+        paymentAmount: params.amount,
+      });
+      const newPaidAmount = nextPaymentState.paidAmount;
+      const newBalanceDue = nextPaymentState.balanceDue;
       const isFullyPaid = pricesEqual(newBalanceDue, 0);
-      const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
+      const newPaymentStatus = nextPaymentState.paymentStatus;
       const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
       const paymentPlanReadyPredicate = params.paymentType === "deposit"
         ? sql`EXISTS (

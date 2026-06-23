@@ -21,6 +21,7 @@ import type {
 import { getCurrencyConfig } from "../settings/settings.service";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
+import { computePaymentStateAfterPayment } from "./payment-state";
 
 interface CodCollectionOrderSnapshot {
   totalAmount: number;
@@ -54,9 +55,14 @@ export function validateCODCollectionDetails(
   }
 
   const currentPaidAmount = roundPrice(order.paidAmount ?? 0);
-  const storedBalanceDue = Number.isFinite(order.balanceDue) ? Number(order.balanceDue) : null;
   const computedBalanceDue = roundPrice(Math.max(0, order.totalAmount - currentPaidAmount));
-  const expectedAmount = roundPrice(Math.max(0, storedBalanceDue ?? computedBalanceDue));
+  const storedBalanceDue = Number.isFinite(order.balanceDue) ? roundPrice(Number(order.balanceDue)) : null;
+  const expectedAmount = roundPrice(Math.max(
+    0,
+    storedBalanceDue !== null && pricesEqual(storedBalanceDue, computedBalanceDue)
+      ? storedBalanceDue
+      : computedBalanceDue,
+  ));
   const collectedAmount = roundPrice(params.collectedAmount);
 
   if (expectedAmount <= 0) {
@@ -71,7 +77,11 @@ export function validateCODCollectionDetails(
   }
 
   const newPaidAmount = roundPrice(currentPaidAmount + collectedAmount);
-  const newBalanceDue = roundPrice(Math.max(0, order.totalAmount - newPaidAmount));
+  const newBalanceDue = computePaymentStateAfterPayment({
+    totalAmount: order.totalAmount,
+    currentPaidAmount,
+    paymentAmount: collectedAmount,
+  }).balanceDue;
 
   return {
     collectedBy,

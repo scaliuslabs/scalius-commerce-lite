@@ -23,6 +23,7 @@ import { canTransitionTo } from "../orders/order-state-machine";
 import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
+import { computePaymentStateAfterRefund } from "./payment-state";
 
 // ---------------------------------------------------------------------------
 // Client factory (one instance per set of credentials)
@@ -296,6 +297,7 @@ export async function processPolarWebhookRefund(
             .select({
                 id: orders.id,
                 paidAmount: orders.paidAmount,
+                balanceDue: orders.balanceDue,
                 paymentStatus: orders.paymentStatus,
                 totalAmount: orders.totalAmount,
                 status: orders.status,
@@ -344,27 +346,29 @@ export async function processPolarWebhookRefund(
         // store currency (BDT). Use the ratio of refunded/total to calculate the
         // local-currency refund amount. This works universally regardless of whether
         // currency conversion happened (ratio is the same in any currency).
-        let newPaidAmount: number;
+        let localRefundAmount: number;
         if (isFullRefund) {
-            newPaidAmount = 0;
+            localRefundAmount = order.paidAmount ?? 0;
         } else if (params.totalAmount > 0) {
             const refundRatio = params.amountRefunded / params.totalAmount;
-            const localRefundAmount = roundPrice((order.paidAmount ?? 0) * refundRatio);
-            newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - localRefundAmount));
+            localRefundAmount = roundPrice((order.paidAmount ?? 0) * refundRatio);
         } else {
             // Fallback: direct conversion (only correct when currencies match)
             const decimals = getDecimalPlaces(params.currency);
-            const refundedMajor = roundPrice(params.amountRefunded / Math.pow(10, decimals));
-            newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundedMajor));
+            localRefundAmount = roundPrice(params.amountRefunded / Math.pow(10, decimals));
         }
 
-        const newPaymentStatus = isFullRefund
-            ? PaymentStatus.REFUNDED
-            : PaymentStatus.PARTIAL;
+        const newPaymentState = computePaymentStateAfterRefund({
+            totalAmount: order.totalAmount,
+            currentPaidAmount: order.paidAmount,
+            refundAmount: localRefundAmount,
+            isFullRefund,
+        });
 
         const updateValues = {
-            paidAmount: isFullRefund ? 0 : newPaidAmount,
-            paymentStatus: newPaymentStatus,
+            paidAmount: newPaymentState.paidAmount,
+            balanceDue: newPaymentState.balanceDue,
+            paymentStatus: newPaymentState.paymentStatus,
             ...(shouldChangeOrderStatus ? { status: nextOrderStatus } : {}),
             version: sql`${orders.version} + 1`,
             updatedAt: sql`unixepoch()`,

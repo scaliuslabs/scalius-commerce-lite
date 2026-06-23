@@ -72,4 +72,19 @@ describe("admin order list boundaries", () => {
     expect(source).not.toContain("loadVariantTrackingMap");
     expect(source).not.toContain("trackingByVariantId.get(item.variantId) ?? true");
   });
+
+  it("recomputes admin order payment state when totals are created or edited", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain('import { computeOrderPaymentState } from "../payments/payment-state";');
+    expect(source).toContain("const initialPaymentState = computeOrderPaymentState({");
+    expect(source).toContain("paidAmount: initialPaymentState.paidAmount");
+    expect(source).toContain("balanceDue: initialPaymentState.balanceDue");
+    expect(source).toContain("paymentStatus: initialPaymentState.paymentStatus");
+    expect(source).toContain("const nextPaymentState = computeOrderPaymentState({");
+    expect(source).toContain("paidAmount: existingOrder.paidAmount");
+    expect(source).toContain("paidAmount: nextPaymentState.paidAmount");
+    expect(source).toContain("balanceDue: nextPaymentState.balanceDue");
+    expect(source).toContain("paymentStatus: nextPaymentState.paymentStatus");
+  });
 });
