@@ -7,6 +7,7 @@ import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import {
     orders,
     orderPayments,
+    refundAttempts,
     PaymentStatus,
     OrderStatus,
     PaymentRecordStatus,
@@ -55,11 +56,19 @@ export interface RefundResult {
 
 const REFUND_IN_PROGRESS_MESSAGE = "A refund is already in progress for this order. Please wait and retry.";
 const REFUND_PROVIDER_DEADLINE_MS = 25_000;
+const REFUND_ATTEMPT_LEASE_SECONDS = 5 * 60;
+const MAX_REFUND_ATTEMPT_ERROR_LENGTH = 500;
 const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
     OrderStatus.PENDING,
     OrderStatus.PROCESSING,
     OrderStatus.CONFIRMED,
 ]);
+const ACTIVE_REFUND_ATTEMPT_STATUSES = [
+    "pending",
+    "processing",
+    "provider_unknown",
+    "reconcile_required",
+] as const;
 
 type CapturedPayment = OrderPayment & { paymentMethod: PaymentGateway };
 
@@ -92,6 +101,14 @@ function getRefundClaimBaseId(orderId: string, orderVersion: number): string {
 
 function getRefundClaimId(orderId: string, orderVersion: number, allocationIndex: number): string {
     return `${getRefundClaimBaseId(orderId, orderVersion)}_${allocationIndex + 1}`;
+}
+
+function getRefundAttemptId(allocation: Pick<RefundAllocation, "id">): string {
+    return `rfa_${allocation.id}`;
+}
+
+function getRefundAttemptKey(allocation: Pick<RefundAllocation, "idempotencyKey">): string {
+    return `refund_attempt:${allocation.idempotencyKey}`;
 }
 
 function normalizePaymentGateway(value: string): PaymentGateway {
@@ -225,6 +242,58 @@ function isProviderRefundOutcomeUnknownError(error: unknown): error is ProviderR
     return error instanceof ProviderRefundOutcomeUnknownError;
 }
 
+function serializeRefundAttemptError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.slice(0, MAX_REFUND_ATTEMPT_ERROR_LENGTH);
+}
+
+async function buildRefundRequestHash(params: {
+    request: RefundRequest;
+    refundAmount: number;
+    currency: string;
+    allocations: RefundAllocation[];
+}): Promise<string> {
+    return sha256Hex(stableStringify({
+        orderId: params.request.orderId,
+        amount: params.refundAmount,
+        reason: params.request.reason,
+        gateway: params.request.gateway ?? null,
+        currency: params.currency,
+        allocations: params.allocations.map((allocation) => ({
+            sourcePaymentId: allocation.sourcePayment.id,
+            amount: allocation.amount,
+            gateway: allocation.sourcePayment.paymentMethod,
+            providerIdempotencyKey: allocation.idempotencyKey,
+            refundReference: allocation.refundReference,
+            allocationIndex: allocation.index,
+        })),
+    }));
+}
+
+function stableStringify(value: unknown): string {
+    if (value === null || typeof value !== "object") {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+        return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+    }
+
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record)
+        .filter((key) => record[key] !== undefined)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
+    return `{${entries.join(",")}}`;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+    const bytes = new TextEncoder().encode(value);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return [...new Uint8Array(digest)]
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+}
+
 function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean): string | undefined {
     if (!isFullRefund) {
         return canTransitionTo("order", currentStatus, OrderStatus.PARTIALLY_REFUNDED)
@@ -274,7 +343,22 @@ async function updateOrderStatusIfVersionMatches(
     return result.length > 0;
 }
 
-async function assertNoPendingRefund(db: Database, orderId: string): Promise<void> {
+async function assertNoActiveRefundAttempt(db: Database, orderId: string): Promise<void> {
+    const activeAttempt = await db
+        .select({ id: refundAttempts.id, status: refundAttempts.status })
+        .from(refundAttempts)
+        .where(
+            and(
+                eq(refundAttempts.orderId, orderId),
+                inArray(refundAttempts.status, [...ACTIVE_REFUND_ATTEMPT_STATUSES]),
+            ),
+        )
+        .get();
+
+    if (activeAttempt) {
+        throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
+    }
+
     const pendingRefund = await db
         .select({ id: orderPayments.id })
         .from(orderPayments)
@@ -342,6 +426,137 @@ function buildRefundMetadata(params: {
     });
 }
 
+function buildRefundAttemptMetadata(params: {
+    request: RefundRequest;
+    allocation: RefundAllocation;
+    groupId: string;
+    claimVersion: number;
+    allocationCount: number;
+}): string {
+    return JSON.stringify({
+        reason: params.request.reason,
+        gateway: params.allocation.sourcePayment.paymentMethod,
+        refundGroupId: params.groupId,
+        claimVersion: params.claimVersion,
+        sourcePaymentId: params.allocation.sourcePayment.id,
+        sourcePaymentType: params.allocation.sourcePayment.paymentType,
+        allocationIndex: params.allocation.index,
+        allocationCount: params.allocationCount,
+    });
+}
+
+function buildRefundAttemptInsert(params: {
+    request: RefundRequest;
+    allocation: RefundAllocation;
+    groupId: string;
+    claimVersion: number;
+    allocationCount: number;
+    requestHash: string;
+    currency: string;
+}) {
+    return {
+        id: getRefundAttemptId(params.allocation),
+        attemptKey: getRefundAttemptKey(params.allocation),
+        refundGroupId: params.groupId,
+        orderId: params.request.orderId,
+        sourcePaymentId: params.allocation.sourcePayment.id,
+        refundPaymentId: params.allocation.id,
+        gateway: params.allocation.sourcePayment.paymentMethod,
+        amount: params.allocation.amount,
+        currency: params.currency,
+        reason: params.request.reason,
+        requestHash: params.requestHash,
+        providerIdempotencyKey: params.allocation.idempotencyKey,
+        refundReference: params.allocation.refundReference,
+        allocationIndex: params.allocation.index,
+        allocationCount: params.allocationCount,
+        sourceTransactionId: getRefundAttemptSourceTransactionId(params.allocation),
+        status: "pending",
+        claimId: params.groupId,
+        claimExpiresAt: sql`unixepoch() + ${REFUND_ATTEMPT_LEASE_SECONDS}`,
+        metadata: buildRefundAttemptMetadata(params),
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+    };
+}
+
+function getRefundAttemptSourceTransactionId(allocation: RefundAllocation): string | null {
+    if (allocation.sourcePayment.paymentMethod === "cod") {
+        return null;
+    }
+    return getTransactionId(allocation.sourcePayment.paymentMethod, allocation.sourcePayment);
+}
+
+async function markRefundAttemptProcessing(
+    db: Database,
+    allocation: RefundAllocation,
+    refundGroupId: string,
+): Promise<void> {
+    await db.update(refundAttempts).set({
+        status: "processing",
+        attempts: sql`${refundAttempts.attempts} + 1`,
+        claimId: refundGroupId,
+        claimExpiresAt: sql`unixepoch() + ${REFUND_ATTEMPT_LEASE_SECONDS}`,
+        lastError: null,
+        updatedAt: sql`unixepoch()`,
+    }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)));
+}
+
+async function markRefundAttemptProviderAccepted(
+    db: Database,
+    allocation: CompletedRefundAllocation,
+): Promise<void> {
+    await db.update(refundAttempts).set({
+        status: "processing",
+        providerRefundId: allocation.refundId ?? null,
+        providerStatus: "accepted",
+        responsePayload: JSON.stringify({ refundId: allocation.refundId ?? null }),
+        updatedAt: sql`unixepoch()`,
+    }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)));
+}
+
+async function markRefundAttemptsRefunded(
+    db: Database,
+    allocations: CompletedRefundAllocation[],
+): Promise<void> {
+    if (allocations.length === 0) return;
+
+    await db.batch(allocations.map((allocation) =>
+        db.update(refundAttempts).set({
+            status: "refunded",
+            providerStatus: "accepted",
+            providerRefundId: allocation.refundId ?? null,
+            claimId: null,
+            claimExpiresAt: null,
+            refundedAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ) as any);
+}
+
+async function markRefundAttemptsReconcileRequired(
+    db: Database,
+    allocations: CompletedRefundAllocation[],
+    error: unknown,
+): Promise<void> {
+    if (allocations.length === 0) return;
+
+    await db.batch(allocations.map((allocation) =>
+        db.update(refundAttempts).set({
+            status: "reconcile_required",
+            providerStatus: "accepted",
+            providerRefundId: allocation.refundId ?? null,
+            claimId: null,
+            claimExpiresAt: null,
+            nextProbeAt: sql`unixepoch()`,
+            lastError: serializeRefundAttemptError(error),
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ) as any);
+}
+
 async function markRefundAllocationsFailed(
     db: Database,
     params: {
@@ -355,7 +570,8 @@ async function markRefundAllocationsFailed(
 ): Promise<void> {
     if (params.allocations.length === 0) return;
 
-    await db.batch(params.allocations.map((allocation) =>
+    await db.batch(
+        params.allocations.flatMap((allocation) => [
         db.update(orderPayments).set({
             status: PaymentRecordStatus.FAILED,
             metadata: buildRefundMetadata({
@@ -368,9 +584,19 @@ async function markRefundAllocationsFailed(
                 error: params.error,
             }),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(orderPayments.id, allocation.id))
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    ) as any);
+        }).where(eq(orderPayments.id, allocation.id)),
+        db.update(refundAttempts).set({
+            status: "failed",
+            providerStatus: "rejected",
+            claimId: null,
+            claimExpiresAt: null,
+            lastError: serializeRefundAttemptError(params.error),
+            failedAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation))),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+        ]) as any,
+    );
 }
 
 async function markRefundAllocationsProviderUnknown(
@@ -386,7 +612,12 @@ async function markRefundAllocationsProviderUnknown(
 ): Promise<void> {
     if (params.allocations.length === 0) return;
 
-    await db.batch(params.allocations.map((allocation) =>
+    const originalError = isProviderRefundOutcomeUnknownError(params.error)
+        ? params.error.originalError
+        : params.error;
+
+    await db.batch(
+        params.allocations.flatMap((allocation) => [
         db.update(orderPayments).set({
             status: PaymentRecordStatus.PENDING,
             metadata: buildRefundMetadata({
@@ -397,14 +628,22 @@ async function markRefundAllocationsProviderUnknown(
                 allocationCount: params.allocationCount,
                 status: "pending",
                 providerOutcome: "unknown",
-                error: isProviderRefundOutcomeUnknownError(params.error)
-                    ? params.error.originalError
-                    : params.error,
+                error: originalError,
             }),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(orderPayments.id, allocation.id))
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    ) as any);
+        }).where(eq(orderPayments.id, allocation.id)),
+        db.update(refundAttempts).set({
+            status: "provider_unknown",
+            providerStatus: "unknown",
+            claimId: null,
+            claimExpiresAt: null,
+            nextProbeAt: sql`unixepoch()`,
+            lastError: serializeRefundAttemptError(originalError),
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation))),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+        ]) as any,
+    );
 }
 
 async function applyRefundedPaymentState(
@@ -684,7 +923,7 @@ export async function processRefund(
         throw new ConflictError("Order is already fully refunded");
     }
 
-    await assertNoPendingRefund(db, params.orderId);
+    await assertNoActiveRefundAttempt(db, params.orderId);
 
     // Determine and validate refund amount before any gateway calls
     const paidAmount = order.paidAmount ?? 0;
@@ -750,6 +989,12 @@ export async function processRefund(
         capturedPayments,
         refundRows: priorRefundRows,
     });
+    const refundRequestHash = await buildRefundRequestHash({
+        request: params,
+        refundAmount,
+        currency: currencyConfig.code,
+        allocations,
+    });
     const resultGateway = getResultGateway(allocations);
 
     // 3. Claim refund capacity locally before calling the gateway. The deterministic
@@ -758,25 +1003,36 @@ export async function processRefund(
     let claimResults: [...unknown[], Array<{ id: string; version: number }>];
     try {
         claimResults = await db.batch([
-            ...allocations.map((allocation) => db.insert(orderPayments).values({
-                id: allocation.id,
-                orderId: params.orderId,
-                amount: allocation.amount,
-                currency: currencyConfig.code,
-                paymentMethod: allocation.sourcePayment.paymentMethod,
-                paymentType: "refund",
-                status: PaymentRecordStatus.PENDING,
-                metadata: buildRefundMetadata({
+            ...allocations.flatMap((allocation) => [
+                db.insert(orderPayments).values({
+                    id: allocation.id,
+                    orderId: params.orderId,
+                    amount: allocation.amount,
+                    currency: currencyConfig.code,
+                    paymentMethod: allocation.sourcePayment.paymentMethod,
+                    paymentType: "refund",
+                    status: PaymentRecordStatus.PENDING,
+                    metadata: buildRefundMetadata({
+                        request: params,
+                        allocation,
+                        groupId: refundGroupId,
+                        claimVersion,
+                        allocationCount: allocations.length,
+                        status: "pending",
+                    }),
+                    createdAt: sql`unixepoch()`,
+                    updatedAt: sql`unixepoch()`,
+                }),
+                db.insert(refundAttempts).values(buildRefundAttemptInsert({
                     request: params,
                     allocation,
                     groupId: refundGroupId,
                     claimVersion,
                     allocationCount: allocations.length,
-                    status: "pending",
-                }),
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            })),
+                    requestHash: refundRequestHash,
+                    currency: currencyConfig.code,
+                })),
+            ]),
             db.update(orders).set({
                 version: claimVersion,
                 updatedAt: sql`unixepoch()`,
@@ -797,6 +1053,7 @@ export async function processRefund(
     const claimedOrderResult = claimResults[claimResults.length - 1] as Array<{ id: string; version: number }> | undefined;
     const claimedOrder = claimedOrderResult?.[0];
     if (!claimedOrder) {
+        await db.delete(refundAttempts).where(inArray(refundAttempts.refundPaymentId, allocations.map((allocation) => allocation.id)));
         await db.delete(orderPayments).where(inArray(orderPayments.id, allocations.map((allocation) => allocation.id)));
         throw new ConflictError(
             "Refund failed due to a concurrent modification. Please retry."
@@ -811,6 +1068,7 @@ export async function processRefund(
     const completedAllocations: CompletedRefundAllocation[] = [];
     try {
         for (const allocation of allocations) {
+            await markRefundAttemptProcessing(db, allocation, refundGroupId);
             const refundId = await dispatchRefund(
                 db,
                 kv,
@@ -828,7 +1086,8 @@ export async function processRefund(
                 encryptionKey,
             );
 
-            completedAllocations.push({ ...allocation, refundId });
+            const completedAllocation = { ...allocation, refundId };
+            completedAllocations.push(completedAllocation);
 
             await db.update(orderPayments).set({
                 status: PaymentRecordStatus.REFUNDED,
@@ -846,6 +1105,7 @@ export async function processRefund(
                 }),
                 updatedAt: sql`unixepoch()`,
             }).where(eq(orderPayments.id, allocation.id));
+            await markRefundAttemptProviderAccepted(db, completedAllocation);
         }
     } catch (error: unknown) {
         const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
@@ -873,14 +1133,22 @@ export async function processRefund(
 
         const completedAmount = roundPrice(completedAllocations.reduce((sum, allocation) => sum + allocation.amount, 0));
         if (completedAmount > 0) {
-            await applyRefundedPaymentState(db, {
-                orderId: params.orderId,
-                totalAmount: order.totalAmount,
-                currentPaidAmount: order.paidAmount ?? 0,
-                refundAmount: completedAmount,
-                isFullRefund: false,
-                expectedVersion: claimedOrder.version,
-            });
+            try {
+                await applyRefundedPaymentState(db, {
+                    orderId: params.orderId,
+                    totalAmount: order.totalAmount,
+                    currentPaidAmount: order.paidAmount ?? 0,
+                    refundAmount: completedAmount,
+                    isFullRefund: false,
+                    expectedVersion: claimedOrder.version,
+                });
+                await markRefundAttemptsRefunded(db, completedAllocations);
+            } catch (finalizeError: unknown) {
+                await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
+                throw new ServiceUnavailableError(
+                    `Refund partially processed: ${completedAmount} was accepted by the provider, but local order reconciliation failed. Please review before retrying.`,
+                );
+            }
             const remainingAmount = roundPrice(refundAmount - completedAmount);
             if (isProviderRefundOutcomeUnknownError(error)) {
                 throw new ServiceUnavailableError(
@@ -897,42 +1165,46 @@ export async function processRefund(
         throw error;
     }
 
-    const appliedPaymentState = await applyRefundedPaymentState(db, {
-        orderId: params.orderId,
-        totalAmount: order.totalAmount,
-        currentPaidAmount: order.paidAmount ?? 0,
-        refundAmount,
-        isFullRefund,
-        expectedVersion: claimedOrder.version,
-    });
-
-    // Determine new order status based on refund type and state machine constraints.
-    // Pre-fulfillment full refunds cancel the order and release reservations.
-    // Fulfilled/returned full refunds mark payment/order as refunded without
-    // restocking physical inventory; returns own that inventory transition.
-    const nextOrderStatus = getOrderStatusAfterRefund(order.status, isFullRefund);
-    let orderStatusChanged = false;
-
-    if (nextOrderStatus) {
-        orderStatusChanged = await updateOrderStatusIfVersionMatches(db, {
+    try {
+        const appliedPaymentState = await applyRefundedPaymentState(db, {
             orderId: params.orderId,
-            nextStatus: nextOrderStatus,
-            expectedVersion: appliedPaymentState.version,
+            totalAmount: order.totalAmount,
+            currentPaidAmount: order.paidAmount ?? 0,
+            refundAmount,
+            isFullRefund,
+            expectedVersion: claimedOrder.version,
         });
 
-        if (!orderStatusChanged) {
-            console.warn(
-                `Skipping inventory transition for refunded order ${params.orderId}: order status changed concurrently.`,
-            );
-        }
-    }
+        // Determine new order status based on refund type and state machine constraints.
+        // Pre-fulfillment full refunds cancel the order and release reservations.
+        // Fulfilled/returned full refunds mark payment/order as refunded without
+        // restocking physical inventory; returns own that inventory transition.
+        const nextOrderStatus = getOrderStatusAfterRefund(order.status, isFullRefund);
+        let orderStatusChanged = false;
 
-    // 5. Handle inventory on full refund:
-    //    - Pre-fulfillment cancellation releases reserved stock.
-    //    - Shipped/delivered/completed refunds do NOT auto-restore stock.
-    //      Use the explicit return flow when merchandise comes back.
-    if (isFullRefund && orderStatusChanged && shouldReleaseInventoryForFullRefund(order.status, nextOrderStatus)) {
-        await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
+        if (nextOrderStatus) {
+            orderStatusChanged = await updateOrderStatusIfVersionMatches(db, {
+                orderId: params.orderId,
+                nextStatus: nextOrderStatus,
+                expectedVersion: appliedPaymentState.version,
+            });
+
+            if (!orderStatusChanged) {
+                throw new ConflictError("Refund payment was accepted, but order status reconciliation lost a concurrent update.");
+            }
+        }
+
+        // 5. Handle inventory on full refund:
+        //    - Pre-fulfillment cancellation releases reserved stock.
+        //    - Shipped/delivered/completed refunds do NOT auto-restore stock.
+        //      Use the explicit return flow when merchandise comes back.
+        if (isFullRefund && orderStatusChanged && shouldReleaseInventoryForFullRefund(order.status, nextOrderStatus)) {
+            await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
+        }
+        await markRefundAttemptsRefunded(db, completedAllocations);
+    } catch (finalizeError: unknown) {
+        await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
+        throw finalizeError;
     }
 
     return {
@@ -977,6 +1249,7 @@ export async function processReturn(
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
     assertNoActiveShipmentClaim(order);
+    await assertNoActiveRefundAttempt(db, params.orderId);
 
     const returnableStatuses: string[] = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
     if (order.status !== OrderStatus.RETURNED && !returnableStatuses.includes(order.status)) {
