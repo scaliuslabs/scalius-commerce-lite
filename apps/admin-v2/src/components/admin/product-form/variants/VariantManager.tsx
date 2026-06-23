@@ -152,6 +152,7 @@ export function VariantManager({
 
   const [isBulkEditing, setIsBulkEditing] = useState(false);
   const [draftBulkUpdates, setDraftBulkUpdates] = useState<Record<string, BulkVariantDraftChanges>>({});
+  const [draftNewIds, setDraftNewIds] = useState<string[]>([]);
 
   // Filter and Sort State
   const [searchTerm, setSearchTerm] = useState("");
@@ -291,9 +292,11 @@ export function VariantManager({
     if (isBulkEditing) {
       setIsBulkEditing(false);
       setDraftBulkUpdates({});
+      setDraftNewIds([]);
     } else {
       setIsBulkEditing(true);
       setDraftBulkUpdates({});
+      setDraftNewIds([]);
       setIsAdding(false);
       setEditingVariantId(null);
     }
@@ -309,33 +312,103 @@ export function VariantManager({
     }));
   };
 
-  const handleSaveBulkEdit = async () => {
-    const updates: BulkVariantDraftUpdate[] = Object.entries(draftBulkUpdates).map(([id, changes]) => ({
-      id,
-      ...changes,
-    })).map((update) => {
-      if (update.trackInventory !== false) return update;
-      const withoutIgnoredStock = { ...update };
-      delete withoutIgnoredStock.stock;
-      return withoutIgnoredStock;
-    });
+  const handleAddBulkRow = () => {
+    const newId = `new-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    setDraftNewIds((prev) => [...prev, newId]);
 
-    if (updates.length === 0) {
+    // Provide some default values for the new row
+    setDraftBulkUpdates((prev) => ({
+      ...prev,
+      [newId]: {
+        sku: '',
+        price: 0,
+        stock: 0,
+        trackInventory: true,
+      },
+    }));
+  };
+
+  const handleRemoveBulkRow = (id: string) => {
+    setDraftNewIds((prev) => prev.filter((newId) => newId !== id));
+    setDraftBulkUpdates((prev) => {
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
+  };
+
+  const handleSaveBulkEdit = async () => {
+    const allDrafts = Object.entries(draftBulkUpdates);
+
+    const newDrafts = allDrafts
+      .filter(([id]) => draftNewIds.includes(id))
+      .map(([, changes]) => ({
+        ...changes,
+        sku: changes.sku || '',
+        price: changes.price || 0,
+        stock: changes.trackInventory === false ? 0 : (changes.stock || 0),
+        trackInventory: changes.trackInventory ?? true,
+        size: changes.size || null,
+        color: changes.color || null,
+        weight: changes.weight || null,
+        discountType: "percentage" as const,
+        discountAmount: null,
+        discountPercentage: null,
+        barcode: null,
+        barcodeType: null,
+      }));
+
+    const updateDrafts = allDrafts
+      .filter(([id]) => !draftNewIds.includes(id))
+      .map(([id, changes]) => ({
+        id,
+        ...changes,
+      })).map((update) => {
+        if (update.trackInventory !== false) return update;
+        const withoutIgnoredStock = { ...update };
+        delete withoutIgnoredStock.stock;
+        return withoutIgnoredStock;
+      });
+
+    if (newDrafts.length === 0 && updateDrafts.length === 0) {
       handleToggleBulkEdit();
       return;
     }
 
-    const success = await bulkUpdateVariants(productId, updates);
-    if (success) {
-      const updateById = new Map(updates.map(({ id, ...changes }) => [id, changes]));
-      setLocalVariants((prev) =>
-        prev.map((v) => {
-          const update = updateById.get(v.id);
-          return update ? { ...v, ...update } : v;
-        }),
-      );
-      onVariantChange?.();
-      handleToggleBulkEdit();
+    setIsSubmitting(true);
+    let success = true;
+
+    try {
+      if (newDrafts.length > 0) {
+        const created = await bulkCreateVariants(productId, newDrafts);
+        if (created.length > 0) {
+          setLocalVariants((prev) => [...prev, ...created]);
+        } else {
+          success = false;
+        }
+      }
+
+      if (updateDrafts.length > 0) {
+        const updateSuccess = await bulkUpdateVariants(productId, updateDrafts);
+        if (updateSuccess) {
+          const updateById = new Map(updateDrafts.map(({ id, ...changes }) => [id, changes]));
+          setLocalVariants((prev) =>
+            prev.map((v) => {
+              const update = updateById.get(v.id);
+              return update ? { ...v, ...update } : v;
+            }),
+          );
+        } else {
+          success = false;
+        }
+      }
+
+      if (success) {
+        onVariantChange?.();
+        handleToggleBulkEdit();
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -550,13 +623,13 @@ export function VariantManager({
             onSaveVariant={handleSaveVariant}
             onCancelEdit={handleCancelEdit}
             isAnyRowEditing={isAnyRowEditing}
-            onAddVariant={() => {
-              setIsAdding(true);
-              setEditingVariantId(null);
-            }}
+            onAddVariant={() => setIsAdding(true)}
             isBulkEditing={isBulkEditing}
             draftUpdates={draftBulkUpdates}
+            draftNewIds={draftNewIds}
             onBulkEditChange={handleBulkEditChange}
+            onAddBulkRow={handleAddBulkRow}
+            onRemoveBulkRow={handleRemoveBulkRow}
             productName={productName}
             addVariantDefaults={isFirstOptionSetup ? addVariantDefaults : undefined}
           />

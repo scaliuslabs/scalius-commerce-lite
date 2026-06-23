@@ -108,7 +108,8 @@ describe("VariantManager product mode boundaries", () => {
     expect(simpleSource).not.toContain('name="price"');
     expect(simpleSource).not.toContain("Discount type");
     expect(toolbarSource).toContain("Search options...");
-    expect(toolbarSource).toContain("Add Option");
+    expect(toolbarSource).toContain("onClick={onAddVariant}");
+    expect(toolbarSource).toContain("Spreadsheet");
     expect(toolbarSource).toContain("Option 1");
     expect(toolbarSource).toContain("Option 2");
     expect(tableSource).toContain("No options yet");
@@ -212,6 +213,7 @@ describe("VariantManager product mode boundaries", () => {
   it("renders option add/edit as compact spreadsheet-style editing", () => {
     const tableSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
     const formRowSource = readFileSync(VARIANT_FORM_ROW_SOURCE, "utf8");
+    const bulkEditSource = readFileSync(VARIANT_BULK_EDIT_ROW_SOURCE, "utf8");
 
     expect(tableSource).toContain("VariantFormEditor");
     expect(tableSource).toContain("showMobileEditor");
@@ -220,13 +222,17 @@ describe("VariantManager product mode boundaries", () => {
     expect(formRowSource).toContain('layout="card"');
     expect(formRowSource).toContain("BarcodeFields");
     expect(tableSource).toContain("Stock limit");
-    expect(tableSource).toContain("min-w-[116px]");
-    expect(tableSource).toContain("min-w-[1024px]");
-    expect(formRowSource).toContain("grid h-8 grid-cols-2");
+    expect(tableSource).toContain("min-w-[90px]");
+    expect(tableSource).toContain("min-w-[80px]");
+    expect(bulkEditSource).toContain("grid h-8 grid-cols-2");
+    expect(formRowSource).toContain("grid h-7 grid-cols-2");
     expect(formRowSource).toContain('aria-label="Track stock"');
-    expect(formRowSource).toContain("rounded-[4px] bg-background px-2 text-xs shadow-none");
-    expect(formRowSource).toContain("border border-transparent bg-transparent");
-    expect(formRowSource).toContain("Option 1/2 can be size, weight, color, style, or pack.");
+    expect(formRowSource).toContain("rounded-[4px] bg-background px-2 text-[11px] shadow-none");
+    expect(formRowSource).toContain("border border-border/60");
+    expect(formRowSource).toContain('label="Option 1"');
+    expect(formRowSource).toContain('hint="size"');
+    expect(formRowSource).toContain('label="Option 2"');
+    expect(formRowSource).toContain('hint="color"');
     expect(formRowSource).not.toContain("colSpan={11}");
   });
 

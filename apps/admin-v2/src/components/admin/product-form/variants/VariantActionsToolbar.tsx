@@ -97,49 +97,48 @@ export function VariantActionsToolbar({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Top Row - Main Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Left Side - Search and Filter */}
-        <div className="flex w-full items-center gap-2 sm:min-w-[250px] sm:flex-1">
-          <div className="relative min-w-0 flex-1 sm:max-w-[280px]">
-            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="flex w-full items-center gap-1.5 sm:min-w-[220px] sm:flex-1">
+          <div className="relative min-w-0 flex-1 sm:max-w-[240px]">
+            <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-muted-foreground/50" />
             <Input
               placeholder="Search options..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-8 h-8 text-xs"
+              className="pl-7 h-7 text-[11px] border-border/50"
             />
-            {searchTerm && (
-              <Button
+            {searchTerm && <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="absolute right-1 top-1 h-6 w-6"
+                className="absolute right-0.5 top-0.5 h-6 w-6"
                 onClick={() => onSearchChange("")}
               >
                 <X className="h-3 w-3" />
               </Button>
-            )}
+            }
           </div>
 
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className="h-8 text-xs px-2.5 gap-1.5"
+            className="h-7 text-[11px] px-2 gap-1 text-muted-foreground/70"
           >
-            <ArrowUpDown className="h-3.5 w-3.5" />
-            {showFilters ? "Hide Sort" : "Sort"}
+            <ArrowUpDown className="h-3 w-3" />
+            Sort
           </Button>
         </div>
 
         {/* Right Side - Actions */}
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:flex-row sm:items-center">
           {selectedCount > 0 && (
-            <div className="flex w-full items-center gap-2 sm:mr-1 sm:w-auto">
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal">
+            <div className="flex w-full items-center gap-1.5 sm:mr-1 sm:w-auto">
+              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-[18px] font-medium">
                 {selectedCount} selected
               </Badge>
               <Button
@@ -148,29 +147,29 @@ export function VariantActionsToolbar({
                 size="sm"
                 onClick={onBulkDelete}
                 disabled={disabled}
-                className="h-8 text-xs px-2.5"
+                className="h-7 text-[11px] px-2"
               >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                <Trash2 className="mr-1 h-3 w-3" />
                 Delete
               </Button>
             </div>
           )}
 
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
+          <div className="grid w-full grid-cols-2 gap-1.5 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
             {isBulkEditing ? (
               <>
-                <Button type="button" variant="ghost" size="sm" onClick={onToggleBulkEdit} className="h-8 w-full text-xs sm:w-auto">
+                <Button type="button" variant="ghost" size="sm" onClick={onToggleBulkEdit} className="h-7 w-full text-[11px] sm:w-auto">
                   Cancel
                 </Button>
-                <Button type="button" size="sm" onClick={onSaveBulkEdit} className="h-8 w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:w-auto">
+                <Button type="button" size="sm" onClick={onSaveBulkEdit} className="h-7 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white sm:w-auto">
                   Save Changes
                 </Button>
               </>
             ) : (
               <>
                 {variants.length > 0 && (
-                  <Button type="button" variant="outline" size="sm" onClick={onToggleBulkEdit} disabled={disabled} className="h-8 w-full text-xs sm:w-auto">
-                    Spreadsheet Edit
+                  <Button type="button" variant="outline" size="sm" onClick={onToggleBulkEdit} disabled={disabled} className="h-7 w-full text-[11px] sm:w-auto">
+                    Spreadsheet
                   </Button>
                 )}
                 <VariantImportExport
@@ -187,9 +186,9 @@ export function VariantActionsToolbar({
                   disabled={disabled}
                 />
 
-                <Button type="button" size="sm" onClick={onAddVariant} disabled={disabled} className="h-8 w-full text-xs bg-primary text-primary-foreground sm:w-auto">
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Add Option
+                <Button type="button" size="sm" onClick={onAddVariant} disabled={disabled} className="h-7 w-full text-[11px] bg-primary text-primary-foreground sm:w-auto">
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add
                 </Button>
               </>
             )}
@@ -199,16 +198,14 @@ export function VariantActionsToolbar({
 
       {/* Second Row - Sort controls (Collapsible) */}
       {showFilters && (
-        <div className="flex flex-wrap items-center gap-2.5 p-2 bg-muted/40 rounded-md border text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground whitespace-nowrap font-medium">
-              Sort by
-            </span>
+        <div className="flex flex-wrap items-center gap-2 py-1.5 px-2 bg-muted/30 rounded-md text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground/60 whitespace-nowrap font-medium">Sort</span>
             <Select value={sortField} onValueChange={handleSortFieldChange}>
-              <SelectTrigger className="w-[130px] h-7 text-xs bg-background">
+              <SelectTrigger className="w-[120px] h-6 text-[11px] bg-background border-border/50">
                 <SelectValue placeholder="Sort by..." />
               </SelectTrigger>
-              <SelectContent className="text-xs">
+              <SelectContent className="text-[11px]">
                 {sortOptions.map((option) => (
                   <SelectItem key={option.field} value={option.field}>
                     {option.label}
@@ -218,10 +215,10 @@ export function VariantActionsToolbar({
             </Select>
 
             <Select value={sortOrder} onValueChange={handleSortOrderChange}>
-              <SelectTrigger className="w-[110px] h-7 text-xs bg-background">
+              <SelectTrigger className="w-[90px] h-6 text-[11px] bg-background border-border/50">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="text-xs">
+              <SelectContent className="text-[11px]">
                 <SelectItem value="asc">Ascending</SelectItem>
                 <SelectItem value="desc">Descending</SelectItem>
               </SelectContent>

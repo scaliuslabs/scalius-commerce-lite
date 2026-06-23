@@ -21,7 +21,6 @@ import type { ProductVariant } from "./types";
 import {
   formatDate,
   getDiscountDisplay,
-  getStockStatus,
   hasDiscount,
   isInventoryTracked,
 } from "./utils/variantHelpers";
@@ -96,23 +95,20 @@ export function VariantDisplayRow({
   const availableStock = inventoryTracked
     ? Math.max(0, variant.stock - variant.reservedStock)
     : null;
-  const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
   const hasVariantDiscount = hasDiscount(variant);
   const editLabel = isSimpleDefaultSku ? "Edit product SKU" : "Edit option";
-  const optionOneLabel = variant.size || (isSimpleDefaultSku ? "No option" : "—");
-  const optionTwoLabel = variant.color || (isSimpleDefaultSku ? "No option" : "—");
-  const cellClass = "h-10 border-r px-2 py-1.5 align-middle last:border-r-0";
+  const cellClass = "py-1.5 px-2 align-middle";
 
   return (
     <TableRow
       key={variant.id}
       data-state={isSelected ? "selected" : undefined}
       className={cn(
-        "group h-10 transition-colors hover:bg-muted/40",
-        isSelected && "bg-muted"
+        "group transition-colors hover:bg-muted/30",
+        isSelected && "bg-primary/[0.04]"
       )}
     >
-      <TableCell className={cn(cellClass, "w-10 pl-3 pr-1")}>
+      <TableCell className={cn(cellClass, "w-9 pl-3 pr-1")}>
         <Checkbox
           checked={isSelected}
           onCheckedChange={() => {
@@ -124,107 +120,111 @@ export function VariantDisplayRow({
         />
       </TableCell>
 
-      <TableCell className={cn(cellClass, "min-w-[140px]")}>
-        <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-medium text-foreground">
-          <span className="truncate">{variant.sku}</span>
+      <TableCell className={cn(cellClass, "min-w-[110px]")}>
+        <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-foreground">
+          <span className="truncate font-medium">{variant.sku}</span>
           {isSimpleDefaultSku && (
-            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-900/30 dark:text-sky-300">
+            <Badge variant="outline" className="text-[9px] px-1 py-0 h-[16px] leading-none border-sky-200/80 bg-sky-50/80 text-sky-600 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-400 shrink-0">
               Product SKU
             </Badge>
           )}
           {hasVariantDiscount && (
-            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 leading-none bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800">
-              SALE
+            <Badge variant="secondary" className="text-[9px] px-1 py-0 h-[16px] leading-none bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 border-emerald-200/80 dark:border-emerald-800 shrink-0">
+              Sale
             </Badge>
           )}
         </div>
       </TableCell>
 
-      <TableCell className={cn(cellClass, "text-xs text-muted-foreground")}>{optionOneLabel}</TableCell>
-
-      <TableCell className={cn(cellClass, "text-xs text-muted-foreground")}>{optionTwoLabel}</TableCell>
-
-      <TableCell className={cn(cellClass, "text-xs text-muted-foreground")}>{variant.weight ? `${variant.weight}g` : "—"}</TableCell>
-
-      <TableCell className={cn(cellClass, "text-xs font-medium text-foreground")}>
-        <span suppressHydrationWarning>{symbol}{variant.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-      </TableCell>
-
-      <TableCell className={cellClass}>
-        <Badge
-          variant="outline"
-          className={cn(
-            "h-5 whitespace-nowrap px-1.5 text-[10px] leading-none",
-            inventoryTracked
-              ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-900/30 dark:text-sky-300"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300",
-          )}
-        >
-          {inventoryTracked ? "Track stock" : "No stock limit"}
-        </Badge>
-      </TableCell>
-
-      {/* On Hand */}
-      <TableCell className={cellClass}>
-        {inventoryTracked ? (
-          <span className="text-xs font-medium text-foreground">{variant.stock}</span>
-        ) : (
-          <span className="text-xs font-medium text-muted-foreground">-</span>
-        )}
-        {inventoryTracked && variant.reservedStock > 0 && (
-          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium ml-1" title={`${variant.reservedStock} reserved by orders`}>
-            ({variant.reservedStock} rsv)
-          </span>
-        )}
-      </TableCell>
-
-      {/* Available */}
-      <TableCell className={cellClass}>
-        <div className="flex items-center gap-1">
-          {availableStock === null ? (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900">
-              No stock limit
-            </Badge>
+      {/* Options */}
+      <TableCell className={cn(cellClass, "min-w-[140px]")}>
+        <div className="flex flex-wrap gap-1">
+          {!isSimpleDefaultSku ? (
+            <>
+              {variant.size && <Badge variant="secondary" className="h-[20px] px-1.5 text-[10px] font-medium bg-secondary/50 rounded-[4px]">{variant.size}</Badge>}
+              {variant.color && <Badge variant="secondary" className="h-[20px] px-1.5 text-[10px] font-medium bg-secondary/50 rounded-[4px]">{variant.color}</Badge>}
+              {variant.weight && <Badge variant="outline" className="h-[20px] px-1.5 text-[10px] font-medium text-muted-foreground/80 rounded-[4px]">{variant.weight}g</Badge>}
+              {!variant.size && !variant.color && !variant.weight && <span className="text-[11px] text-muted-foreground/60">—</span>}
+            </>
           ) : (
-            <span className={cn(
-              "text-xs font-semibold",
-              availableStock <= 0 ? "text-red-600 dark:text-red-400" : availableStock <= 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-500"
-            )}>{availableStock}</span>
-          )}
-          {stockStatus === "out-of-stock" && (
-            <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800">
-              OUT
-            </Badge>
-          )}
-          {stockStatus === "low" && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none whitespace-nowrap bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800">
-              LOW
-            </Badge>
+            <span className="text-[11px] text-muted-foreground/50 italic">No option</span>
           )}
         </div>
       </TableCell>
 
-      <TableCell className={cn(cellClass, "whitespace-nowrap text-xs text-muted-foreground")}>{getDiscountDisplay(variant, symbol)}</TableCell>
+      {/* Price */}
+      <TableCell className={cn(cellClass, "min-w-[100px]")}>
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold tabular-nums text-foreground" suppressHydrationWarning>
+            {symbol}{variant.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+          {hasVariantDiscount && (
+            <span className="text-[10px] font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+              {getDiscountDisplay(variant, symbol)}
+            </span>
+          )}
+        </div>
+      </TableCell>
 
-      <TableCell className={cn(cellClass, "whitespace-nowrap text-xs text-muted-foreground")}>
+      {/* Inventory */}
+      <TableCell className={cn(cellClass, "min-w-[130px]")}>
+        <div className="flex flex-col gap-0.5">
+          {inventoryTracked ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className={cn(
+                  "h-1.5 w-1.5 rounded-full shrink-0",
+                  availableStock! <= 0 ? "bg-destructive" :
+                  availableStock! <= 5 ? "bg-amber-500" :
+                  "bg-emerald-500"
+                )} />
+                <span className={cn(
+                  "text-xs font-semibold tabular-nums",
+                  availableStock! <= 0 ? "text-destructive" :
+                  availableStock! <= 5 ? "text-amber-600 dark:text-amber-400" :
+                  "text-foreground"
+                )}>
+                  {availableStock}
+                </span>
+                <span className="text-[10px] text-muted-foreground/60">avail</span>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60 ml-3">
+                <span className="tabular-nums">{variant.stock} on hand</span>
+                {variant.reservedStock > 0 && (
+                  <span className="tabular-nums text-amber-600/60 dark:text-amber-400/60">
+                    · {variant.reservedStock} rsv
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/20 shrink-0" />
+              <span className="text-xs text-muted-foreground/60">No stock limit</span>
+            </div>
+          )}
+        </div>
+      </TableCell>
+
+      <TableCell className={cn(cellClass, "whitespace-nowrap text-[11px] text-muted-foreground/60")}>
         <span suppressHydrationWarning>{formatDate(variant.updatedAt)}</span>
       </TableCell>
 
       <TableCell
         className={cn(
           cellClass,
-          "sticky right-0 z-10 w-[72px] bg-card pr-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)] group-hover:bg-muted/40",
-          isSelected && "bg-muted",
+          "sticky right-0 z-10 w-[64px] bg-card pr-3 group-hover:bg-muted/30 transition-colors",
+          isSelected && "bg-primary/[0.04]",
         )}
       >
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-7 w-7 text-muted-foreground/60 hover:text-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                 aria-label={editLabel}
                 disabled={isAnyRowEditing}
                 onClick={() => onEdit(variant.id)}
@@ -232,7 +232,7 @@ export function VariantDisplayRow({
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{editLabel}</TooltipContent>
+            <TooltipContent side="left" className="text-xs">{editLabel}</TooltipContent>
           </Tooltip>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -240,7 +240,7 @@ export function VariantDisplayRow({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity"
+                className="h-7 w-7 text-muted-foreground/60 hover:text-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity"
                 disabled={isAnyRowEditing}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
