@@ -36,6 +36,7 @@ import {
     getOptionalExecutionContext,
     resolveCmsShortcodePageTargets,
     triggerStorefrontPurgeForPrefixes,
+    type WaitUntilExecutionContext,
 } from "../../utils/cache-invalidation";
 import type { Database } from "@scalius/database/client";
 
@@ -167,7 +168,7 @@ function collectWidgetCacheInvalidation(subjects: WidgetCacheSubject[]) {
 
 async function invalidateWidgetCaches(
     db: Database,
-    c: { env: Env; executionCtx?: ExecutionContext },
+    c: { env: Env; executionCtx?: WaitUntilExecutionContext },
     subjects: WidgetCacheSubject[],
 ): Promise<void> {
     const widgetIds = [

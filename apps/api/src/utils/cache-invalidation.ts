@@ -20,6 +20,10 @@ export const MAX_STOREFRONT_EXACT_HTML_PATHS = 20;
 // Types
 // ---------------------------------------------------------------------------
 
+export type WaitUntilExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 export interface InvalidationGroupDef {
   label: string;
   description: string;
@@ -493,7 +497,7 @@ export async function purgeStorefrontForPrefixes(
 export function triggerStorefrontPurgeForGroups(
   groups: string[],
   env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
-  executionCtx?: ExecutionContext,
+  executionCtx?: WaitUntilExecutionContext,
 ): void {
   const validGroups = groups.filter((g) => g in INVALIDATION_GROUPS);
   if (validGroups.length === 0) return;
@@ -527,7 +531,7 @@ export function triggerStorefrontPurgeForPrefixes(
     exactKeys?: readonly string[];
     htmlPaths?: readonly string[];
   } = {},
-  executionCtx?: ExecutionContext,
+  executionCtx?: WaitUntilExecutionContext,
 ): void {
   const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
   const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
@@ -561,8 +565,8 @@ export function triggerStorefrontPurgeForPrefixes(
 }
 
 export function getOptionalExecutionContext(c: {
-  executionCtx?: ExecutionContext;
-}): ExecutionContext | undefined {
+  executionCtx?: WaitUntilExecutionContext;
+}): WaitUntilExecutionContext | undefined {
   try {
     return c.executionCtx;
   } catch {
@@ -578,7 +582,7 @@ export function getOptionalExecutionContext(c: {
  */
 export async function invalidateApiAndScheduleStorefrontGroups(
   groups: readonly string[],
-  c: { env?: Env; executionCtx?: ExecutionContext },
+  c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
   options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
   const normalizedGroups = [...groups];
@@ -904,7 +908,7 @@ export function collectProductAvailabilityCacheInvalidation(
 
 export async function invalidateProductAvailabilityCacheSubjects(
   subjects: readonly ProductAvailabilityCacheSubject[],
-  c: { env?: Env; executionCtx?: ExecutionContext },
+  c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
   db?: Database,
 ): Promise<void> {
   const normalizedSubjects = uniqueAvailabilitySubjects(subjects);
@@ -972,7 +976,7 @@ export async function invalidateProductAvailabilityCacheSubjects(
 export async function invalidateProductAvailabilityCaches(
   db: Database,
   input: ProductAvailabilityCacheInput,
-  c: { env?: Env; executionCtx?: ExecutionContext },
+  c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
 ): Promise<void> {
   const subjects = await tryResolveProductAvailabilityCacheSubjects(db, input);
   await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
@@ -985,7 +989,7 @@ export async function invalidateProductAvailabilityCaches(
  */
 export async function invalidateCatalogCaches(
   domain: CatalogCacheDomain,
-  c: { env?: Env; executionCtx?: ExecutionContext },
+  c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
   options: CatalogCacheInvalidationOptions = {},
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];

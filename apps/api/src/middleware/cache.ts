@@ -7,6 +7,7 @@ import {
   isApiCacheFenceSnapshotCurrent,
   withApiCacheFenceToken,
 } from "../utils/api-cache-fence";
+import type { WaitUntilExecutionContext } from "../utils/cache-invalidation";
 
 // Default TTL in seconds (1 hour)
 const DEFAULT_CACHE_TTL = 3600;
@@ -193,7 +194,7 @@ export const cacheMiddleware = (
       }
     })();
 
-    let executionCtx: ExecutionContext | undefined;
+    let executionCtx: WaitUntilExecutionContext | undefined;
     try {
       executionCtx = c.executionCtx;
     } catch {

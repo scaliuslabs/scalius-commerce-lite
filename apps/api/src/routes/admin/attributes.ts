@@ -34,14 +34,17 @@ import {
     noContentResponse,
 } from "../../schemas/responses";
 import { attributeSchema } from "../../schemas/entities";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../utils/cache-invalidation";
+import {
+    invalidateApiAndScheduleStorefrontGroups,
+    type WaitUntilExecutionContext,
+} from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ATTRIBUTE_CACHE_GROUPS = ["attributes", "products"] as const;
 const ATTRIBUTE_STOREFRONT_HTML_PATHS = ["/search"] as const;
 
 async function invalidateAttributeCaches(c: {
     env?: Env;
-    executionCtx?: ExecutionContext;
+    executionCtx?: WaitUntilExecutionContext;
 }) {
     await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c, {
         htmlPaths: ATTRIBUTE_STOREFRONT_HTML_PATHS,

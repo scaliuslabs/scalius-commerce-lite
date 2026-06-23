@@ -37,6 +37,13 @@ vi.mock("@scalius/core/modules/orders", () => ({
 }));
 
 vi.mock("../utils/cache-invalidation", () => ({
+  getOptionalExecutionContext: (c: { executionCtx?: unknown }) => {
+    try {
+      return c.executionCtx;
+    } catch {
+      return undefined;
+    }
+  },
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
 }));
 

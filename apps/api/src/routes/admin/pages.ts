@@ -32,6 +32,7 @@ import { pageSchema } from "../../schemas/entities";
 import {
     invalidateApiAndScheduleStorefrontGroups,
     MAX_STOREFRONT_EXACT_HTML_PATHS,
+    type WaitUntilExecutionContext,
 } from "../../utils/cache-invalidation";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -60,7 +61,7 @@ async function publicPageHtmlPathsByIds(
 }
 
 async function invalidatePageCaches(
-    c: { env: Env; executionCtx?: ExecutionContext },
+    c: { env: Env; executionCtx?: WaitUntilExecutionContext },
     options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
     await invalidateApiAndScheduleStorefrontGroups([...PAGE_CACHE_GROUPS], c, options);

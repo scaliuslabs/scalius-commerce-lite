@@ -8,6 +8,7 @@ import { ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import {
     invalidateApiAndScheduleStorefrontGroups,
+    type WaitUntilExecutionContext,
 } from "../../../utils/cache-invalidation";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 import {
@@ -44,7 +45,7 @@ const GATEWAY_LABELS: Record<OnlineGatewayId, string> = {
 };
 const CHECKOUT_CACHE_GROUPS = ["checkout"];
 
-async function invalidateCheckoutCaches(c: { env: Env; executionCtx?: ExecutionContext }): Promise<void> {
+async function invalidateCheckoutCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
     await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
 }
 

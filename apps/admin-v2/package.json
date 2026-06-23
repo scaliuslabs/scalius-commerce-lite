@@ -16,7 +16,7 @@
     "@better-auth/api-key": "^1.6.18",
     "@better-auth/passkey": "^1.6.18",
     "@better-fetch/fetch": "1.3.0",
-    "@cloudflare/vite-plugin": "^1.40.2",
+    "@cloudflare/vite-plugin": "^1.42.1",
     "@daveyplate/better-auth-ui": "^3.4.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -90,14 +90,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260613.1",
+    "@cloudflare/workers-types": "^4.20260623.1",
     "@scalius/tsconfig": "workspace:*",
     "@tailwindcss/vite": "^4.3.1",
     "@types/node": "^25.9.3",
     "@types/qrcode": "^1.5.6",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^6.0.3",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "wrangler": "^4.100.0"
+    "vite": "^8.1.0",
+    "wrangler": "4.103.0"
   }
 }
