@@ -129,4 +129,49 @@ describe("local dev script helpers", () => {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it("prefers the pnpm executable beside a Corepack pnpm.mjs npm_execpath", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "scalius-pnpm-execpath-"));
+    try {
+      const pnpmMjs = join(tempRoot, "bin", "pnpm.mjs");
+      const pnpmExecutable = join(tempRoot, "bin", "pnpm");
+      mkdirSync(dirname(pnpmMjs), { recursive: true });
+      writeFileSync(pnpmMjs, "");
+      writeFileSync(pnpmExecutable, "#!/bin/sh\n");
+      chmodSync(pnpmExecutable, 0o755);
+
+      expect(resolvePnpmExecutable({
+        env: {
+          PATH: "/missing",
+          HOME: join(tempRoot, "home"),
+          npm_execpath: pnpmMjs,
+        },
+        nodeExecPath: join(tempRoot, "node"),
+      })).toBe(pnpmExecutable);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes explicit SCALIUS_PNPM_BIN when it points at Corepack pnpm.mjs", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "scalius-pnpm-explicit-"));
+    try {
+      const pnpmMjs = join(tempRoot, "bin", "pnpm.mjs");
+      const pnpmExecutable = join(tempRoot, "bin", "pnpm");
+      mkdirSync(dirname(pnpmMjs), { recursive: true });
+      writeFileSync(pnpmMjs, "");
+      writeFileSync(pnpmExecutable, "#!/bin/sh\n");
+      chmodSync(pnpmExecutable, 0o755);
+
+      expect(resolvePnpmExecutable({
+        env: {
+          PATH: "/missing",
+          SCALIUS_PNPM_BIN: pnpmMjs,
+        },
+        nodeExecPath: join(tempRoot, "node"),
+      })).toBe(pnpmExecutable);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
