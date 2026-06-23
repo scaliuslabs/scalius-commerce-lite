@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { products, productVariants } from "@scalius/database/schema";
 import { roundPrice } from "@scalius/shared/price-utils";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"
@@ -66,6 +66,7 @@ export interface StorefrontCartValidationResult {
 }
 
 const STOREFRONT_CART_VALIDATION_RESULT_PROOF = Symbol("scalius.storefrontCartValidationResult");
+const LEGACY_DEFAULT_VARIANT_ID = "default";
 
 function markTrustedStorefrontCartValidationResult(
     result: StorefrontCartValidationResult,
@@ -256,13 +257,19 @@ export async function validateStorefrontCartItems(
                 discountAmount: productVariants.discountAmount,
             })
             .from(productVariants)
-            .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt))),
+            .where(and(
+                inArray(productVariants.productId, productIds),
+                isNull(productVariants.deletedAt),
+                ne(productVariants.id, LEGACY_DEFAULT_VARIANT_ID),
+            )),
     ]);
 
     const productMap = new Map((productRows as ProductRow[]).map((product) => [product.id, product]));
     const variantsByProduct = new Map<string, VariantRow[]>();
     const variantMap = new Map<string, VariantRow>();
-    for (const variant of variantRows as VariantRow[]) {
+    const persistedVariantRows = (variantRows as VariantRow[])
+        .filter((variant) => variant.id !== LEGACY_DEFAULT_VARIANT_ID);
+    for (const variant of persistedVariantRows) {
         variantMap.set(variant.id, variant);
         const productVariantsForProduct = variantsByProduct.get(variant.productId) ?? [];
         productVariantsForProduct.push(variant);

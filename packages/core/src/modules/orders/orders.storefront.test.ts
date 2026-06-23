@@ -348,6 +348,39 @@ describe("createStorefrontOrder product availability verification", () => {
     });
   });
 
+  it("rejects the literal legacy default variant id as a sellable simple SKU", async () => {
+    await expect(
+      placeOrder({
+        variants: [createVariant({ id: "default", isDefault: true, trackInventory: false })],
+        inputOverrides: {
+          items: [
+            {
+              cartKey: "line_legacy_default",
+              productId: "prod_standard",
+              variantId: null,
+              quantity: 1,
+              price: 125,
+              productName: "Standard Product",
+              variantLabel: null,
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            cartKey: "line_legacy_default",
+            code: "PRODUCT_UNAVAILABLE",
+            action: "remove",
+            message: "Standard Product is not available for checkout right now.",
+          }),
+        ],
+      },
+    });
+  });
+
   it("accepts variantless simple products by resolving their hidden default SKU", async () => {
     const result = await placeOrder({
       variants: [createVariant({ isDefault: true, trackInventory: false })],
