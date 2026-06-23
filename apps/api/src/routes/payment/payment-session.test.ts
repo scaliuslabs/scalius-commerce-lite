@@ -1521,11 +1521,10 @@ describe("payment session receipt-token proof", () => {
         ipnUrl: "https://api.example.test/api/v1/webhooks/sslcommerz",
       }),
     );
-    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({
-        requestContext: expect.objectContaining({ retryKey: "retry_1" }),
-      }),
-    );
+    const identityInput = mocks.buildPaymentSessionAttemptIdentity.mock.calls.at(-1)?.[0] as {
+      requestContext?: Record<string, unknown>;
+    };
+    expect(identityInput.requestContext).not.toHaveProperty("retryKey");
   });
 
   it("uses trusted API config for Polar redirect URLs instead of caller URLs", async () => {
@@ -1555,10 +1554,9 @@ describe("payment session receipt-token proof", () => {
         cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
       }),
     );
-    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({
-        requestContext: expect.objectContaining({ retryKey: "retry_2" }),
-      }),
-    );
+    const identityInput = mocks.buildPaymentSessionAttemptIdentity.mock.calls.at(-1)?.[0] as {
+      requestContext?: Record<string, unknown>;
+    };
+    expect(identityInput.requestContext).not.toHaveProperty("retryKey");
   });
 });

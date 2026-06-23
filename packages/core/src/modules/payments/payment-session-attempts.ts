@@ -163,6 +163,19 @@ export async function claimPaymentSessionAttempt<TResponse>(
   const replay = replayPaymentSessionAttempt<TResponse>(existing);
   if (replay) return replay;
 
+  if (existing) {
+    const competingLive = await selectLivePaymentSessionAttemptForOrder(db, input);
+    if (competingLive?.attemptKey && competingLive.attemptKey !== input.attemptKey) {
+      if (isFreshProcessingAttempt(competingLive)) return processingResultFromAttempt(competingLive);
+
+      const cleared = await clearStaleCompetingLivePaymentSessionAttempt(db, competingLive);
+      if (!cleared) {
+        const latestLive = await selectLivePaymentSessionAttemptForOrder(db, input);
+        if (latestLive?.status === "processing") return processingResultFromAttempt(latestLive);
+      }
+    }
+  }
+
   const reclaimed = await db
     .update(paymentSessionAttempts)
     .set({
@@ -211,20 +224,12 @@ export async function claimPaymentSessionAttempt<TResponse>(
   const latestReplay = replayPaymentSessionAttempt<TResponse>(latest);
   if (latestReplay) return latestReplay;
 
-  if (!latest) {
-    throw new ServiceUnavailableError("Payment session attempt state is unavailable. Please try again.");
-  }
+  if (latest?.status === "processing") return processingResultFromAttempt(latest);
 
-  if (latest.status === "processing") {
-    return {
-      status: "processing",
-      retryable: true,
-      retryAfterSeconds: PAYMENT_SESSION_PROCESSING_RETRY_AFTER_SECONDS,
-      orderId: latest.orderId,
-      gateway: latest.gateway as PaymentSessionGateway,
-      paymentType: latest.paymentType as PaymentType,
-      message: "Payment session creation is already processing. Please try again shortly.",
-    };
+  if (!latest) {
+    const racedLiveClaim = await resolveLivePaymentSessionClaim<TResponse>(db, input, claimId);
+    if (racedLiveClaim) return racedLiveClaim;
+    throw new ServiceUnavailableError("Payment session attempt state is unavailable. Please try again.");
   }
 
   throw new ServiceUnavailableError("Payment session attempt state is unavailable. Please try again.");
@@ -297,6 +302,114 @@ async function selectPaymentSessionAttemptByKey(
     .get();
 }
 
+async function resolveLivePaymentSessionClaim<TResponse>(
+  db: Database,
+  input: ClaimPaymentSessionAttemptInput,
+  claimId: string,
+): Promise<PaymentSessionAttemptClaimResult<TResponse> | null> {
+  const live = await selectLivePaymentSessionAttemptForOrder(db, input);
+  if (live?.status !== "processing") return null;
+  if (isFreshProcessingAttempt(live)) return processingResultFromAttempt(live);
+
+  const reclaimed = await db
+    .update(paymentSessionAttempts)
+    .set({
+      attemptKey: input.attemptKey,
+      orderId: input.orderId,
+      gateway: input.gateway,
+      paymentType: input.paymentType,
+      amount: input.amount,
+      currency: input.currency,
+      requestHash: input.requestHash,
+      status: "processing",
+      providerCorrelationId: input.providerCorrelationId ?? null,
+      attempts: sql`${paymentSessionAttempts.attempts} + 1`,
+      claimId,
+      claimExpiresAt: sql`unixepoch() + ${PAYMENT_SESSION_ATTEMPT_LEASE_SECONDS}`,
+      lastError: null,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(
+      and(
+        eq(paymentSessionAttempts.orderId, input.orderId),
+        eq(paymentSessionAttempts.gateway, input.gateway),
+        eq(paymentSessionAttempts.paymentType, input.paymentType),
+        eq(paymentSessionAttempts.status, "processing"),
+        or(
+          isNull(paymentSessionAttempts.claimExpiresAt),
+          lte(paymentSessionAttempts.claimExpiresAt, sql`unixepoch()`),
+        ),
+      ),
+    )
+    .returning({
+      id: paymentSessionAttempts.id,
+      attemptKey: paymentSessionAttempts.attemptKey,
+      providerCorrelationId: paymentSessionAttempts.providerCorrelationId,
+    });
+
+  if (reclaimed[0]?.id) {
+    return {
+      status: "claimed",
+      attempt: {
+        id: reclaimed[0].id,
+        attemptKey: reclaimed[0].attemptKey,
+        claimId,
+        providerCorrelationId: reclaimed[0].providerCorrelationId,
+      },
+    };
+  }
+
+  const latest = await selectLivePaymentSessionAttemptForOrder(db, input);
+  if (latest?.status === "processing") return processingResultFromAttempt(latest);
+  return null;
+}
+
+async function selectLivePaymentSessionAttemptForOrder(
+  db: Database,
+  input: Pick<ClaimPaymentSessionAttemptInput, "orderId" | "gateway" | "paymentType">,
+): Promise<AttemptRow | undefined> {
+  return await db
+    .select()
+    .from(paymentSessionAttempts)
+    .where(
+      and(
+        eq(paymentSessionAttempts.orderId, input.orderId),
+        eq(paymentSessionAttempts.gateway, input.gateway),
+        eq(paymentSessionAttempts.paymentType, input.paymentType),
+        eq(paymentSessionAttempts.status, "processing"),
+      ),
+    )
+    .get();
+}
+
+async function clearStaleCompetingLivePaymentSessionAttempt(
+  db: Database,
+  live: Pick<AttemptRow, "id">,
+): Promise<boolean> {
+  const cleared = await db
+    .update(paymentSessionAttempts)
+    .set({
+      status: "failed",
+      claimId: null,
+      claimExpiresAt: null,
+      lastError: "Superseded by a newer payment session single-flight claim.",
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(
+      and(
+        eq(paymentSessionAttempts.id, live.id),
+        eq(paymentSessionAttempts.status, "processing"),
+        or(
+          isNull(paymentSessionAttempts.claimExpiresAt),
+          lte(paymentSessionAttempts.claimExpiresAt, sql`unixepoch()`),
+        ),
+      ),
+    )
+    .returning({ id: paymentSessionAttempts.id });
+
+  return Boolean(cleared[0]?.id);
+}
+
 function replayPaymentSessionAttempt<TResponse>(
   row: AttemptRow | undefined,
 ): PaymentSessionAttemptClaimResult<TResponse> | null {
@@ -313,6 +426,24 @@ function replayPaymentSessionAttempt<TResponse>(
   } catch {
     throw new ServiceUnavailableError("Payment session replay payload is unreadable. Please try again.");
   }
+}
+
+function isFreshProcessingAttempt(row: AttemptRow): boolean {
+  return row.status === "processing" &&
+    row.claimExpiresAt !== null &&
+    Number(row.claimExpiresAt) > Math.floor(Date.now() / 1000);
+}
+
+function processingResultFromAttempt(row: AttemptRow): PaymentSessionAttemptProcessingResult {
+  return {
+    status: "processing",
+    retryable: true,
+    retryAfterSeconds: PAYMENT_SESSION_PROCESSING_RETRY_AFTER_SECONDS,
+    orderId: row.orderId,
+    gateway: row.gateway as PaymentSessionGateway,
+    paymentType: row.paymentType as PaymentType,
+    message: "Payment session creation is already processing. Please try again shortly.",
+  };
 }
 
 function createPaymentSessionAttemptId(): string {

@@ -106255,11 +106255,6 @@
                   },
                   "currency": {
                     "type": "string"
-                  },
-                  "retryKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128
                   }
                 },
                 "required": [
@@ -106714,11 +106709,6 @@
                   "receiptToken": {
                     "type": "string",
                     "minLength": 1
-                  },
-                  "retryKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128
                   }
                 },
                 "required": [

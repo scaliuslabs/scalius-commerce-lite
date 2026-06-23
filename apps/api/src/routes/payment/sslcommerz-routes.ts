@@ -24,7 +24,6 @@ const sessionSchema = z.object({
   paymentType: z.enum(["full", "deposit", "balance"]).optional(),
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
-  retryKey: z.string().trim().min(1).max(128).optional()
 });
 
 const createSessionRoute = createRoute({
@@ -66,7 +65,6 @@ app.openapi(createSessionRoute, async (c) => {
     orderId: body.orderId,
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
-    retryKey: body.retryKey,
     proof: { kind: "receipt", receiptToken: body.receiptToken },
     returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
   });

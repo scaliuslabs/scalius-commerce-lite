@@ -64,7 +64,6 @@ export interface CreatePaymentSessionInput {
   orderId: string;
   paymentType?: PaymentSessionType;
   depositAmount?: number;
-  retryKey?: string;
   proof: PaymentSessionProof;
   returnTarget: PaymentReturnTarget;
   expectedCustomerId?: string;
@@ -374,7 +373,6 @@ export async function createSSLCommerzPaymentSession(
       failUrl,
       cancelUrl,
       ipnUrl,
-      retryKey: input.retryKey ?? null,
     },
   });
   const transactionId = buildSSLCommerzTranId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
@@ -544,7 +542,6 @@ export async function createPolarPaymentSession(
       cancelUrl,
       customerName: order.customerName,
       customerEmail: order.customerEmail ?? null,
-      retryKey: input.retryKey ?? null,
     },
   });
   const attemptClaim = await claimPaymentSessionAttempt<PolarSessionResponse>(db, attemptIdentity);
