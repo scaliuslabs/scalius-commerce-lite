@@ -1,4 +1,17 @@
 const DEFAULT_CHECKOUT_ERROR = "Order creation failed";
+const GENERIC_CHECKOUT_ERRORS = new Set([
+  "",
+  DEFAULT_CHECKOUT_ERROR,
+  "Payment failed",
+  "Order creation failed (400)",
+  "Order creation failed (401)",
+  "Order creation failed (409)",
+  "Order creation failed (429)",
+  "Order creation failed (500)",
+  "Order creation failed (502)",
+  "Order creation failed (503)",
+  "Order creation failed (504)",
+]);
 
 type ErrorRecord = Record<string, unknown>;
 
@@ -65,4 +78,33 @@ export function getCheckoutErrorMessage(
   }
 
   return fallback;
+}
+
+export function getCheckoutStatusErrorMessage(
+  status: number | undefined,
+  fallback = DEFAULT_CHECKOUT_ERROR,
+): string {
+  const message = fallback.trim();
+  const shouldUseStatusCopy =
+    GENERIC_CHECKOUT_ERRORS.has(message) ||
+    /^Order creation failed \(\d{3}\)$/.test(message);
+
+  if (!shouldUseStatusCopy) {
+    return message || DEFAULT_CHECKOUT_ERROR;
+  }
+
+  switch (status) {
+    case 401:
+      return "Your sign-in session expired. Please sign in again or continue as a guest.";
+    case 409:
+      return "This checkout was already submitted or changed in another tab. Please review your cart and try again.";
+    case 429:
+      return "Too many checkout attempts. Please wait a moment and try again.";
+    case 502:
+    case 503:
+    case 504:
+      return "Checkout is temporarily unavailable. Please try again shortly.";
+    default:
+      return message || DEFAULT_CHECKOUT_ERROR;
+  }
 }

@@ -23,6 +23,8 @@ export interface PaymentResult {
   success: boolean;
   redirectUrl?: string;
   error?: string;
+  errorCode?: string;
+  status?: number;
   cartIssues?: CartValidationIssue[];
   clearCartOnRedirect?: boolean;
   clearCheckoutSessionOnRedirect?: boolean;

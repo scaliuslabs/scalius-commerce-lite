@@ -10,6 +10,7 @@ import { clearCheckoutSession } from "./session-state";
 import { isDepositPaymentRequired } from "./payment-mode";
 import type { CartValidationIssue, CartValidationRequestItem } from "../api/orders";
 import { writeCartRepairState } from "../cart/repair-state";
+import { getCheckoutStatusErrorMessage } from "./error-messages";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -39,6 +40,10 @@ function showError(msg: string): void {
 function hideError(): void {
   const el = document.getElementById("errorMsg");
   el?.classList.add("hidden");
+}
+
+function getPaymentResultErrorMessage(result: PaymentResult): string {
+  return getCheckoutStatusErrorMessage(result.status, result.error || "Payment failed");
 }
 
 function setPayButton(text: string, disabled = false): void {
@@ -565,7 +570,7 @@ async function processPayment(): Promise<void> {
         });
         return;
       }
-      throw new Error(result.error || "Payment failed");
+      throw new Error(getPaymentResultErrorMessage(result));
     }
   } catch (err: unknown) {
     if (loadingOverlay) {

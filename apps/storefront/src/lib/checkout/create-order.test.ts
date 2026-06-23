@@ -121,4 +121,25 @@ describe("createOrder", () => {
       expect((error as CheckoutOrderError).cartIssues).toEqual([issue]);
     }
   });
+
+  it("keeps backend status and error code on checkout failures", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: "Too many checkout attempts.",
+      errorCode: "CHECKOUT_RATE_LIMITED",
+      details: { retryAfterSeconds: 60 },
+    }), { status: 429 })));
+
+    try {
+      await createOrder(checkoutData, "cod");
+      throw new Error("Expected createOrder to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(CheckoutOrderError);
+      expect(error).toMatchObject({
+        status: 429,
+        errorCode: "CHECKOUT_RATE_LIMITED",
+        details: { retryAfterSeconds: 60 },
+      });
+    }
+  });
 });

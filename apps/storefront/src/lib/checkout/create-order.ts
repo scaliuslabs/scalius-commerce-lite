@@ -36,22 +36,26 @@ type CheckoutCartLine = {
 
 type ErrorPayload = {
   error?: unknown;
+  errorCode?: unknown;
   details?: unknown;
 };
 
 export class CheckoutOrderError extends Error {
   readonly status: number;
+  readonly errorCode?: string;
   readonly details: unknown;
   readonly cartIssues: CartValidationIssue[];
 
   constructor(message: string, options: {
     status: number;
+    errorCode?: string;
     details: unknown;
     cartIssues: CartValidationIssue[];
   }) {
     super(message);
     this.name = "CheckoutOrderError";
     this.status = options.status;
+    this.errorCode = options.errorCode;
     this.details = options.details;
     this.cartIssues = options.cartIssues;
   }
@@ -199,6 +203,7 @@ export async function createOrder(
       getCheckoutErrorMessage(err, `Order creation failed (${res.status})`),
       {
         status: res.status,
+        errorCode: typeof err.errorCode === "string" ? err.errorCode : undefined,
         details: err.details,
         cartIssues: extractCartIssues(err),
       },
