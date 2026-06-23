@@ -11,7 +11,9 @@ import {
   Check,
   Webhook,
   Info,
+  AlertTriangle,
 } from "lucide-react";
+import { getDeliveryProviderActivationBlockers } from "@scalius/core/modules/delivery/provider-readiness";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -112,6 +114,14 @@ export function ProviderDetailPanel({
   onCopySecret,
   onGenerateSecret,
 }: ProviderDetailPanelProps) {
+  const activationBlockers = getDeliveryProviderActivationBlockers({
+    type: formData.type,
+    credentials: creds,
+    config: conf,
+  });
+  const hasActivationBlockers = activationBlockers.length > 0;
+  const activeSaveBlocked = formData.isActive && hasActivationBlockers;
+
   if (!selectedProvider && !isCreating) {
     return (
       <Card className="md:col-span-2">
@@ -247,7 +257,9 @@ export function ProviderDetailPanel({
               <div className="space-y-0.5">
                 <Label>Status</Label>
                 <p className="text-xs text-muted-foreground">
-                  Enable to make this provider available for orders
+                  {hasActivationBlockers
+                    ? "Complete the required setup before turning this on."
+                    : "Available for shipment creation and webhook updates."}
                 </p>
               </div>
               <Switch
@@ -255,9 +267,26 @@ export function ProviderDetailPanel({
                 onCheckedChange={(checked) =>
                   onChangeField("isActive", checked)
                 }
-                disabled={!isEditing}
+                disabled={!isEditing || (!formData.isActive && hasActivationBlockers)}
               />
             </div>
+            {isEditing && hasActivationBlockers && (
+              <div className="rounded-md border border-amber-200 bg-amber-50/80 p-3 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100 sm:col-span-2">
+                <div className="flex gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <div className="space-y-2 text-sm">
+                    <p className="font-medium">Required before activation</p>
+                    <div className="grid gap-1 sm:grid-cols-2">
+                      {activationBlockers.map((blocker) => (
+                        <span key={`${blocker.source}:${blocker.key}`} className="text-xs">
+                          {blocker.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -566,7 +595,7 @@ export function ProviderDetailPanel({
           <div className="flex items-center gap-2 pt-4 border-t border-border">
             <Button
               onClick={onSave}
-              disabled={isSaving}
+              disabled={isSaving || activeSaveBlocked}
               className="min-w-[100px]"
             >
               {isSaving ? (

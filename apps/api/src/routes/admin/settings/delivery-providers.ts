@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from "@scalius/core/modules/delivery/delivery.service";
+import { assertDeliveryProviderReadyForActivation } from "@scalius/core/modules/delivery/provider-readiness";
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
@@ -168,7 +169,7 @@ const createDeliveryProviderSchema = z.object({
     type: z.string().min(1),
     credentials: z.union([z.string(), z.record(z.string(), z.unknown())]),
     config: z.union([z.string(), z.record(z.string(), z.unknown())]),
-    isActive: z.boolean().optional().default(true),
+    isActive: z.boolean().optional().default(false),
 });
 
 const createProviderRoute = createRoute({
@@ -192,6 +193,14 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
     const encryptionKey = requireEncryptionKey(env);
     const credentials = stringifyJsonInput(validated.credentials) ?? "{}";
     const config = stringifyJsonInput(validated.config) ?? "{}";
+
+    if (validated.isActive) {
+        assertDeliveryProviderReadyForActivation({
+            type: validated.type,
+            credentials,
+            config,
+        });
+    }
 
     const provider = {
         id: "",
@@ -250,13 +259,24 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
 
     const existingProvider = await getDeliveryProvider(db, validated.id);
     if (!existingProvider) {
+        const isActive = validated.isActive ?? false;
+        const providerCredentials = credentials || "{}";
+        const providerConfig = config || "{}";
+        if (isActive) {
+            assertDeliveryProviderReadyForActivation({
+                type: validated.type,
+                credentials: providerCredentials,
+                config: providerConfig,
+            });
+        }
+
         const savedProvider = await saveDeliveryProvider(db, {
             id: validated.id,
             name: validated.name,
             type: validated.type,
-            isActive: validated.isActive ?? true,
-            credentials: credentials || "{}",
-            config: config || "{}",
+            isActive,
+            credentials: providerCredentials,
+            config: providerConfig,
         }, encryptionKey);
         const newCredentials = typeof savedProvider.credentials === 'string'
             ? savedProvider.credentials
@@ -274,14 +294,24 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
         ? existingProvider.credentials
         : JSON.stringify(existingProvider.credentials);
     const unmaskedCreds = await credentialsForSave(providerCredentials, existingCredentials, env);
+    const nextConfig = config || (typeof existingProvider.config === 'string' ? existingProvider.config : JSON.stringify(existingProvider.config));
+    const nextIsActive = validated.isActive !== undefined ? validated.isActive : existingProvider.isActive;
+
+    if (nextIsActive) {
+        assertDeliveryProviderReadyForActivation({
+            type: validated.type,
+            credentials: unmaskedCreds,
+            config: nextConfig,
+        });
+    }
 
     const savedProvider = await saveDeliveryProvider(db, {
         id: validated.id,
         name: validated.name,
         type: validated.type,
-        isActive: validated.isActive !== undefined ? validated.isActive : existingProvider.isActive,
+        isActive: nextIsActive,
         credentials: unmaskedCreds,
-        config: config || (typeof existingProvider.config === 'string' ? existingProvider.config : JSON.stringify(existingProvider.config)),
+        config: nextConfig,
     }, encryptionKey);
 
     const updatedCredentials = typeof savedProvider.credentials === 'string'
