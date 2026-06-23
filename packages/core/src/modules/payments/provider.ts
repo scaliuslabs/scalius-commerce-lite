@@ -56,7 +56,7 @@ export interface CreatePaymentResult {
 export interface RefundParams {
   /** Original transaction/payment ID from the gateway */
   transactionId: string;
-  /** Amount to refund in smallest currency unit. Omit for full refund. */
+  /** Amount to refund in the gateway's expected unit. Omit only when the gateway truly supports an unambiguous full refund. */
   amount?: number;
   reason?: string;
   /** Additional gateway-specific data */

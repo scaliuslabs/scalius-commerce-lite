@@ -159,7 +159,8 @@ export async function createRefund(
   secretKey: string,
   chargeId: string,
   amount?: number,
-  reason?: Stripe.RefundCreateParams["reason"]
+  reason?: Stripe.RefundCreateParams["reason"],
+  idempotencyKey?: string,
 ): Promise<{ success: boolean; refundId?: string; error?: string }> {
   try {
     const stripe = getStripe(secretKey);
@@ -167,7 +168,7 @@ export async function createRefund(
       charge: chargeId,
       ...(amount !== undefined ? { amount: Math.round(amount) } : {}),
       ...(reason ? { reason } : {}),
-    });
+    }, idempotencyKey ? { idempotencyKey } : undefined);
     return { success: true, refundId: refund.id };
   } catch (err: unknown) {
     const message = err instanceof Stripe.errors.StripeError
@@ -251,6 +252,7 @@ export class StripeProvider implements PaymentProvider {
       params.transactionId,
       params.amount,
       reason,
+      params.metadata?.idempotencyKey,
     );
 
     if (!result.success) {

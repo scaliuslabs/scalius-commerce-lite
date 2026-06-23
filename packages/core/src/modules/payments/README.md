@@ -148,7 +148,7 @@ Dispatches `PaymentQueueMessage` types:
 - **Webhook verification**: `verifyStripeWebhook()` uses `constructEventAsync` (Web Crypto compatible)
 - **Webhook events handled**: `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `charge.refunded`
 - **Replay protection**: Durable `webhook_events` claim `stripe:{event.type}:{event.id}` before queueing
-- **Refund**: `createRefund()` refunds by charge ID; supports partial amount and reason codes (`duplicate`, `fraudulent`, `requested_by_customer`)
+- **Refund**: `createRefund()` refunds by charge ID; supports explicit partial/full allocation amounts, reason codes (`duplicate`, `fraudulent`, `requested_by_customer`), and Stripe request idempotency keys from refund allocation metadata.
 - **Settings**: `secret_key`, `publishable_key`, `webhook_secret`, `enabled` (stored in `settings` table, category `stripe`)
 - **Currency**: Amount in smallest currency unit. API route converts via `getDecimalPlaces(currency)`: `amount * Math.pow(10, decimals)` (e.g. USD/BDT: x100, JPY: x1, BHD: x1000). Queue consumer reverses: `amount / Math.pow(10, decimals)`.
 
@@ -163,7 +163,7 @@ Dispatches `PaymentQueueMessage` types:
 - **IPN validation**: SSLCommerz does NOT sign webhooks. `validateSSLCommerzIPN()` makes a server-to-server API call to `/validator/api/validationserverAPI.php` using `val_id`. Only `VALID`/`VALIDATED` statuses are accepted.
 - **Transaction validation**: `validateSSLCommerzPayment()` validates by `tran_id` via `/validator/api/merchantTransIDvalidationAPI.php`
 - **Replay protection**: Durable `webhook_events` claim `sslcommerz:ipn:{tran_id}:{val_id}` before queueing. Confirmed payment idempotency uses canonical `val_id`; `tran_id` remains a merchant attempt/correlation field.
-- **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Refund amount formatted with `toFixed(2)` (SSLCommerz only supports BDT for refunds). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled).
+- **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Refund amount formatted with `toFixed(2)` (SSLCommerz only supports BDT for refunds). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled). Admin refunds pass a deterministic per-allocation `refund_trans_id` through provider metadata instead of generating a new timestamp id on retry.
 - **Settings**: `store_id`, `store_password`, `sandbox`, `enabled` (stored in `settings` table, category `sslcommerz`)
 
 ### Polar
@@ -249,12 +249,13 @@ COD collection validates against computed outstanding balance when a stored `bal
 `processRefund()` in `refund-service.ts`:
 
 1. Validates: order exists, has payments, not already fully refunded
-2. Validates amount: positive, does not exceed `paidAmount`, cumulative refunds (existing refunded `orderPayments` + new) do not exceed `paidAmount`
-3. Finds latest successful payment record to determine gateway
-4. Dispatches to gateway-specific refund API after fresh-reading gateway settings with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS` (Stripe: by charge ID with `Math.round(refundAmount * 100)`; SSLCommerz: by bank_tran_id; Polar: by checkout ID with `Math.round(refundAmount * 100)`; COD: marker ID only). If fresh settings are missing/unavailable after the local refund claim, the claim is released and the prior order payment state is restored before the error surfaces.
-5. Updates `orders.paidAmount`, `orders.balanceDue`, and `orders.paymentStatus` through `payment-state.ts`; provider/settings rollback restores the prior balance due as well as the prior paid/status fields.
-6. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
-7. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
+2. Validates amount: positive, does not exceed current `paidAmount`
+3. Loads all successful source payments newest-first, subtracts previous refunded rows by `metadata.sourcePaymentId` (with old unattributed rows applied newest-first), and allocates the requested refund across the remaining capacity. `params.gateway` filters eligible source payments and fails closed if that gateway cannot cover the request.
+4. Claims one pending `orderPayments` refund row per allocation. Each row stores `sourcePaymentId`, `sourcePaymentType`, `refundGroupId`, `allocationIndex`, provider idempotency/reference metadata, and source transaction details in `metadata`.
+5. Dispatches each allocation to its source gateway after fresh-reading gateway settings with `FRESH_GATEWAY_SETTINGS_READ_OPTIONS`. Stripe always receives an explicit smallest-unit amount for each source charge; SSLCommerz receives a deterministic `refund_trans_id`; Polar receives a per-source amount using that source payment metadata for currency conversion; COD returns an operational marker only.
+6. Marks each successful allocation row `refunded`, marks failed/unattempted allocation rows `failed`, and updates `orders.paidAmount`, `orders.balanceDue`, and `orders.paymentStatus` through `payment-state.ts` only for provider-successful refund amounts behind the refund-claim order version. If a later allocation fails after an earlier provider accepted, the order reflects the successful partial refund and the API surfaces a partial-processing error for operator review.
+7. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
+8. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
 
 `processReturn()`: Sets order status to `RETURNED`, restores inventory via `applyInventoryForStatusChange()`, optionally triggers auto-refund. Orders in `delivered`, `completed`, or `shipped` status can be returned; an already-`returned` retry is accepted only to resume inventory reconciliation and optional auto-refund.
 
