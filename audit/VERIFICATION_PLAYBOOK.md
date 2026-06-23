@@ -24,7 +24,7 @@ Current expected result:
 - Worker Env declaration guard passes.
 - Dependency audit reports no known moderate-or-higher vulnerabilities.
 - Root tests currently pass with `pnpm test`.
-- `pnpm outdated -r` is informational, not a pass/fail gate. Use a fresh run before dependency sweeps; storefront Vite remains intentionally held on Vite 7 until the current Astro/Cloudflare adapter metadata supports Vite 8 and storefront smoke passes.
+- `pnpm outdated -r` is informational, not a pass/fail gate. Use a fresh run before dependency sweeps; storefront is on Astro 7 / `@astrojs/cloudflare` 14 / Vite 8, so dependency sweeps must include storefront typecheck/build, generated Wrangler dry-run, local dev smoke, and generated Worker smoke.
 
 ## Focused Typecheck Commands
 
@@ -459,6 +459,8 @@ Known local-dev risks:
 - `dev:setup` reuses existing shared secrets when only some local `.dev.vars` files exist, and fails if existing API/admin/storefront shared secrets disagree. Use `pnpm dev:setup --env-only` for env-file repair without migrations/admin creation, and `pnpm dev:setup --force --env-only` when intentionally regenerating all local env files.
 - API local dev uses `apps/api/wrangler.local.jsonc`, which omits the remote Workers AI binding so setup/admin/storefront can boot without a Cloudflare remote proxy session.
 - Dev startup applies pending local D1 migrations before API starts unless `SCALIUS_SKIP_DEV_MIGRATIONS=1`. `pnpm dev:api`, `pnpm dev:admin`, `pnpm dev:storefront`, and `pnpm dev` run through the wrapper; combined modes wait for API `/api/v1/setup` before starting dependent apps.
+- Astro 7 storefront dev may run as a background server in non-interactive agent sessions. `scripts/dev.sh` should stream `astro dev logs --follow` after background startup and stop it with `astro dev stop` during cleanup. For Astro-only debugging, use `astro dev --background`, `astro dev status`, `astro dev logs`, and `astro dev stop`; for functional storefront pages, keep the API worker running too.
+- Dev helpers resolve pnpm through the current Corepack/pnpm shim instead of requiring `pnpm` on PATH. Regress this with a PATH that includes Node but not pnpm, then run `node scripts/deploy.mjs --migrate-only --local`.
 - `pnpm dev:doctor` is non-mutating. Plain mode reports missing env/state, non-local or wrong-port local URL values, and warns when servers are not running. Use the matching profile shortcut after startup: `pnpm dev:doctor:api`, `pnpm dev:doctor:admin`, `pnpm dev:doctor:storefront`, or `pnpm dev:doctor:all`.
 - Use `SCALIUS_WRANGLER_STATE=/tmp/scalius-commerce-state` or `--state /tmp/scalius-commerce-state` to test setup/reset/dev against disposable local state without touching the default `.wrangler/state`. Script `--state` values are normalized from the repo root; prefer absolute paths in audit notes.
 - Admin production uses `env.API`; local dev should hit HTTP fallback whenever `PUBLIC_API_BASE_URL` points at localhost. `pnpm dev:doctor` fails local env URL values that point at production domains or the wrong ports. Verify both server functions and `/api/v1/admin/*` browser proxy routes after transport changes.

@@ -20,6 +20,7 @@ import {
   collectLocalSecretSyncIssues,
   parseOptions,
   readEnvVarsIfExists,
+  resolvePnpmExecutable,
   resolveLocalStatePath,
   trimTrailingSlash,
 } from "./dev-local-utils.mjs";
@@ -157,11 +158,12 @@ function checkTooling(checks) {
     pass(checks, "Node version", `Running Node ${currentNode}.`);
   }
 
-  const pnpmVersion = getCommandVersion("pnpm", ["--version"]);
+  const pnpmExecutable = resolvePnpmExecutable();
+  const pnpmVersion = getCommandVersion(pnpmExecutable, ["--version"]);
   if (pnpmVersion) {
-    pass(checks, "pnpm", `pnpm ${pnpmVersion} is available.`);
+    pass(checks, "pnpm", `pnpm ${pnpmVersion} is available (${pnpmExecutable}).`);
   } else {
-    fail(checks, "pnpm", "pnpm is not available on PATH.", "Install pnpm, then run pnpm dev:setup.");
+    fail(checks, "pnpm", "pnpm could not be resolved.", "Install pnpm or enable Corepack, then run pnpm dev:setup.");
   }
 
   if (existsSync(resolve(root, "node_modules"))) {

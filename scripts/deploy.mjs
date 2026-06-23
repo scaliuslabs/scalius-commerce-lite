@@ -23,6 +23,7 @@ import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { pnpmShellCommand } from "./dev-local-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -40,6 +41,7 @@ const appDirsByTarget = {
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
 };
+const pnpm = pnpmShellCommand();
 
 // Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
 process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
@@ -103,13 +105,13 @@ function validateOnlyTarget() {
 function buildTarget(target) {
   switch (target) {
     case "api":
-      run("pnpm --filter @scalius/api build", "Build API workspace");
+      run(`${pnpm} --filter @scalius/api build`, "Build API workspace");
       break;
     case "admin":
-      run("pnpm --filter @scalius/admin-v2 build", "Build Admin V2 workspace");
+      run(`${pnpm} --filter @scalius/admin-v2 build`, "Build Admin V2 workspace");
       break;
     case "storefront":
-      run("pnpm --filter @scalius/storefront build", "Build Storefront workspace");
+      run(`${pnpm} --filter @scalius/storefront build`, "Build Storefront workspace");
       break;
   }
 }
@@ -117,14 +119,14 @@ function buildTarget(target) {
 function deployTarget(target) {
   switch (target) {
     case "api":
-      runWithRetry("pnpm exec wrangler deploy", "Deploy API Worker", apiDir);
+      runWithRetry(`${pnpm} exec wrangler deploy`, "Deploy API Worker", apiDir);
       break;
     case "admin":
-      runWithRetry("pnpm exec wrangler deploy", "Deploy Admin V2 Worker", resolve(root, "apps", "admin-v2"));
+      runWithRetry(`${pnpm} exec wrangler deploy`, "Deploy Admin V2 Worker", resolve(root, "apps", "admin-v2"));
       break;
     case "storefront":
       runWithRetry(
-        "pnpm exec wrangler deploy --config dist/server/wrangler.json",
+        `${pnpm} exec wrangler deploy --config dist/server/wrangler.json`,
         "Deploy Storefront Worker",
         resolve(root, "apps", "storefront"),
       );
@@ -170,7 +172,7 @@ async function verifyStorefrontDeploy() {
   const generatedConfig = readJsonFile(generatedConfigPath);
 
   const deployments = runJson(
-    "pnpm exec wrangler deployments list --config dist/server/wrangler.json --json",
+    `${pnpm} exec wrangler deployments list --config dist/server/wrangler.json --json`,
     "Verify latest Storefront Worker deployment",
     storefrontDir,
   );
@@ -236,7 +238,7 @@ function checkDistEnvFiles(targets = deployTargets) {
 
     try {
       runWithRetry(
-        `pnpm exec wrangler d1 migrations apply ${dbName} --${target}${persistFlag}`,
+        `${pnpm} exec wrangler d1 migrations apply ${dbName} --${target}${persistFlag}`,
         `Apply migrations → ${dbName} (${target})`,
         apiDir
       );
@@ -253,7 +255,7 @@ function checkDistEnvFiles(targets = deployTargets) {
 
   try {
     // 1. Typecheck first — catches type mismatches esbuild ignores
-    run("pnpm typecheck", "Typecheck all workspaces");
+    run(`${pnpm} typecheck`, "Typecheck all workspaces");
 
     if (requestedTarget) {
       buildTarget(requestedTarget);
@@ -267,7 +269,7 @@ function checkDistEnvFiles(targets = deployTargets) {
 
       if (requestedTarget === "api") {
         runWithRetry(
-          `pnpm exec wrangler d1 migrations apply ${dbName} --remote`,
+          `${pnpm} exec wrangler d1 migrations apply ${dbName} --remote`,
           `Apply D1 migrations → ${dbName}`,
           apiDir
         );
@@ -280,7 +282,7 @@ function checkDistEnvFiles(targets = deployTargets) {
     }
 
     // 2. Build: all workspaces via Turbo
-    run("pnpm build", "Build all workspaces");
+    run(`${pnpm} build`, "Build all workspaces");
     checkDistEnvFiles();
 
     if (dryRun) {
@@ -291,7 +293,7 @@ function checkDistEnvFiles(targets = deployTargets) {
 
     // 3. Apply all pending D1 migrations (no-op if schema is up to date)
     runWithRetry(
-      `pnpm exec wrangler d1 migrations apply ${dbName} --remote`,
+      `${pnpm} exec wrangler d1 migrations apply ${dbName} --remote`,
       `Apply D1 migrations → ${dbName}`,
       apiDir
     );

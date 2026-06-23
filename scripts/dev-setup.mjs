@@ -20,6 +20,7 @@ import {
   assertPassword,
   getArgValue,
   readEnvVarsIfExists,
+  pnpmShellCommand,
   resolveLocalStatePath,
   resolveSharedLocalSecrets,
   shellQuote,
@@ -27,6 +28,7 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
+const pnpm = pnpmShellCommand();
 const adminDir = resolve(root, "apps", "admin-v2");
 const apiDir = resolve(root, "apps", "api");
 const storefrontDir = resolve(root, "apps", "storefront");
@@ -176,7 +178,7 @@ console.log("=".repeat(55));
 if (skipInstall || envOnly) {
   console.log("\n⚡ Skipping dependency install");
 } else {
-  run("pnpm install", "Installing dependencies");
+  run(`${pnpm} install`, "Installing dependencies");
 }
 
 // 2. Create .dev.vars for all apps. Existing shared secrets are reused so
