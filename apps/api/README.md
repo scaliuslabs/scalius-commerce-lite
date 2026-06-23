@@ -137,6 +137,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/docs` | Swagger UI |
 | `/openapi.json` | Auto-generated OpenAPI 3.0 spec |
 | `/health` | Health check with cache stats |
+| `/readyz` | Deep readiness check for D1, KV, R2, Queue/DO bindings, and required public runtime vars |
 | `/` | Welcome message with version and environment |
 
 ## Middleware Pipeline
@@ -258,6 +259,20 @@ Thrown errors are caught by `app.onError()` and returned as `{ success: false, e
 | `NONE` | 0 | Analytics config |
 
 Catalog invalidation lives in `src/utils/cache-invalidation.ts`. Product writes must keep the `attributes` group in `CATALOG_CACHE_GROUPS.products` because public filter metadata is derived from product category and attribute-value assignments; otherwise storefront category/search sidebars can stay stale after product edits.
+
+## Readiness
+
+`GET /api/v1/readyz` is the operator-facing deep readiness endpoint. It is intentionally public but non-cacheable and does not reveal secrets or mutate resources.
+
+It returns `200` with `status: "ready"` only when required platform dependencies respond:
+
+- D1: bounded `SELECT 1` probe.
+- API KV and shared auth KV: bounded read-only probe.
+- R2: bounded `list({ limit: 1 })` probe.
+- Durable Object and Queue bindings: binding-shape checks only; no messages are sent.
+- Runtime config: required public URLs are present.
+
+It returns `503` with `status: "degraded"` when a required dependency is missing, errors, or times out. Deployment and smoke scripts should keep `/health` as a shallow liveness check and use `/readyz` for platform readiness.
 
 ## Queue Consumer
 
