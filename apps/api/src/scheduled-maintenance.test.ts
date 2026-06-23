@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     cleanupExpiredCustomerAuthOtpRateLimits: vi.fn(),
     cleanupExpiredCustomerSessions: vi.fn(),
     cleanupExpiredScannerTokenClaims: vi.fn(),
+    reconcileDueRefundAttempts: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
   };
 });
@@ -47,6 +48,10 @@ vi.mock("@scalius/core/auth", () => ({
   cleanupExpiredScannerTokenClaims: mocks.cleanupExpiredScannerTokenClaims,
 }));
 
+vi.mock("@scalius/core/modules/payments", () => ({
+  reconcileDueRefundAttempts: mocks.reconcileDueRefundAttempts,
+}));
+
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
 }));
@@ -60,6 +65,7 @@ import {
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
+  REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
@@ -141,6 +147,17 @@ describe("runScheduledMaintenance", () => {
       limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.reconcileDueRefundAttempts.mockResolvedValue({
+      scanned: 0,
+      claimed: 0,
+      finalized: 0,
+      failed: 0,
+      deferred: 0,
+      errors: [],
+      finalizedOrderIds: [],
+      limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+      hasMore: false,
+    });
   });
 
   afterEach(() => {
@@ -184,6 +201,17 @@ describe("runScheduledMaintenance", () => {
       enqueued: 1,
       failed: 0,
       skipped: 0,
+    });
+    mocks.reconcileDueRefundAttempts.mockResolvedValue({
+      scanned: 1,
+      claimed: 1,
+      finalized: 1,
+      failed: 0,
+      deferred: 0,
+      errors: [],
+      finalizedOrderIds: ["order_refunded"],
+      limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+      hasMore: false,
     });
     mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
       scanned: 2,
@@ -242,10 +270,20 @@ describe("runScheduledMaintenance", () => {
       { orderIds: ["order_1"] },
       { env, executionCtx },
     );
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenNthCalledWith(
+      3,
+      mocks.db,
+      { orderIds: ["order_refunded"] },
+      { env, executionCtx },
+    );
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalledWith({
       db: mocks.db,
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
+    });
+    expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, undefined, {
+      encryptionKey: undefined,
+      limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     });
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalledWith(
       mocks.db,
@@ -279,6 +317,7 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpRateLimits).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();

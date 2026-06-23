@@ -157,6 +157,7 @@ export interface PolarRefundParams {
   amount: number; // In smallest currency unit. Must be explicitly provided.
   reason?: "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee" | "dispute_prevention";
   comment?: string;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface PolarRefundResult {

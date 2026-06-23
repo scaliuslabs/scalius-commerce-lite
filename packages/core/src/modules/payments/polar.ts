@@ -164,6 +164,7 @@ export async function createPolarRefund(
             amount: params.amount,
             reason: params.reason as "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee" | "dispute_prevention",
             comment: params.comment,
+            metadata: params.metadata,
         });
 
         return {
@@ -172,6 +173,54 @@ export async function createPolarRefund(
         };
     } catch (error: unknown) {
         console.error("[Polar] Error creating refund:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown Polar API error",
+        };
+    }
+}
+
+export interface PolarRefundSnapshot {
+    id: string;
+    status: string;
+    amount: number;
+    currency: string;
+    orderId: string;
+    metadata: Record<string, string | number | boolean>;
+}
+
+export async function listPolarRefunds(
+    settings: PolarSettings,
+    filters: { id?: string; orderId?: string; limit?: number },
+): Promise<{ success: boolean; refunds?: PolarRefundSnapshot[]; error?: string }> {
+    try {
+        const client = getPolarClient(settings);
+        const limit = Math.max(1, Math.min(100, Math.floor(filters.limit ?? 10)));
+        const refunds: PolarRefundSnapshot[] = [];
+        const pageIterator = await client.refunds.list({
+            ...(filters.id ? { id: filters.id } : {}),
+            ...(filters.orderId ? { orderId: filters.orderId } : {}),
+            limit,
+        });
+
+        for await (const page of pageIterator) {
+            for (const refund of page.result.items) {
+                refunds.push({
+                    id: refund.id,
+                    status: refund.status,
+                    amount: refund.amount,
+                    currency: refund.currency,
+                    orderId: refund.orderId,
+                    metadata: refund.metadata,
+                });
+                if (refunds.length >= limit) break;
+            }
+            if (refunds.length >= limit) break;
+        }
+
+        return { success: true, refunds };
+    } catch (error: unknown) {
+        console.error("[Polar] Error listing refunds:", error);
         return {
             success: false,
             error: error instanceof Error ? error.message : "Unknown Polar API error",
@@ -462,6 +511,7 @@ export class PolarProvider implements PaymentProvider {
             amount: params.amount,
             reason,
             comment: params.metadata?.comment,
+            metadata: params.metadata,
         });
 
         if (!result.success) {

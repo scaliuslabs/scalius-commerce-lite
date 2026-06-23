@@ -65,9 +65,23 @@ function createDbMock(gateway: Gateway) {
     polarCheckoutId: "polar_order_1",
     metadata: null,
   };
+  const refundAttempt = {
+    id: "rfa_refund_order_1_3_1",
+    orderId: "order_1",
+    refundPaymentId: "refund_order_1_3_1",
+    providerRefundId: "refund_1",
+  };
+  const refundPayment = {
+    paymentType: "refund",
+    status: PaymentRecordStatus.REFUNDED,
+    get amount() {
+      return Number(insertValues[0]?.amount ?? 10);
+    },
+  };
 
   let selectCall = 0;
   const updateSets: Array<Record<string, unknown>> = [];
+  const insertValues: Array<Record<string, unknown>> = [];
   const batch = vi.fn(async () => [undefined, [{ id: "order_1", version: 4 }]]);
   const update = vi.fn(() => ({
     set: vi.fn((values: Record<string, unknown>) => {
@@ -93,7 +107,13 @@ function createDbMock(gateway: Gateway) {
             ? null
             : selectCall === 4
               ? [payment]
-              : [];
+              : selectCall === 5
+                ? []
+                : selectCall === 6
+                  ? [refundAttempt]
+                  : selectCall === 7
+                    ? order
+                    : [payment, refundPayment];
       const chain = {
         from: vi.fn(() => chain),
         where: vi.fn(() => chain),
@@ -105,7 +125,12 @@ function createDbMock(gateway: Gateway) {
       return chain;
     }),
     insert: vi.fn(() => ({
-      values: vi.fn(() => ({ kind: "insert-refund-claim" })),
+      values: vi.fn((values: Record<string, unknown>) => {
+        if (!("attemptKey" in values)) {
+          insertValues.push(values);
+        }
+        return { kind: "insert-refund-claim", values };
+      }),
     })),
     delete: vi.fn(() => ({
       where: vi.fn(async () => undefined),
