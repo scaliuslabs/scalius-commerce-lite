@@ -340,14 +340,14 @@ function createRefundDbWithLostStatusCas() {
     orderId: order.id,
     amount: 100,
     paymentMethod: "cod",
-    paymentType: "payment",
+    paymentType: "full",
     status: "succeeded",
     metadata: null,
     stripeChargeId: null,
     sslcommerzBankTranId: null,
     polarCheckoutId: null,
   };
-  const selectResults = [order, null, payment];
+  const selectResults = [order, null, [payment], []];
   let selectIndex = 0;
   let updateIndex = 0;
 
@@ -356,7 +356,7 @@ function createRefundDbWithLostStatusCas() {
     insert: vi.fn(() => createChain([{ id: "refund_ord_refund_cas_7" }])),
     update: vi.fn(() => {
       updateIndex += 1;
-      return createChain(updateIndex === 3 ? [] : [{ id: order.id }]);
+      return createChain(updateIndex === 4 ? [] : [{ id: order.id, version: 9 }]);
     }),
     delete: vi.fn(() => createChain(undefined)),
     batch: vi.fn(async () => [

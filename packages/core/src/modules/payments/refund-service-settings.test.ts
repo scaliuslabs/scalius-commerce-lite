@@ -56,7 +56,9 @@ function createDbMock(gateway: Gateway) {
   const payment = {
     id: "payment_1",
     orderId: "order_1",
+    amount: 100,
     paymentMethod: gateway,
+    paymentType: "full",
     status: "succeeded",
     stripeChargeId: "ch_1",
     sslcommerzBankTranId: "bank_1",
@@ -64,7 +66,7 @@ function createDbMock(gateway: Gateway) {
     metadata: null,
   };
 
-  const selectValues = [order, null, payment];
+  let selectCall = 0;
   const updateSets: Array<Record<string, unknown>> = [];
   const batch = vi.fn(async () => [undefined, [{ id: "order_1", version: 4 }]]);
   const update = vi.fn(() => ({
@@ -81,16 +83,25 @@ function createDbMock(gateway: Gateway) {
   return {
     batch,
     update,
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn(() => ({
-            get: vi.fn(async () => selectValues.shift() ?? null),
-          })),
-          get: vi.fn(async () => selectValues.shift() ?? null),
-        })),
-      })),
-    })),
+    select: vi.fn(() => {
+      selectCall += 1;
+      const result = selectCall === 1
+        ? order
+        : selectCall === 2
+          ? null
+          : selectCall === 3
+            ? [payment]
+            : [];
+      const chain = {
+        from: vi.fn(() => chain),
+        where: vi.fn(() => chain),
+        orderBy: vi.fn(() => chain),
+        get: vi.fn(async () => result ?? null),
+        then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
+          Promise.resolve(Array.isArray(result) ? result : result ? [result] : []).then(resolve, reject),
+      };
+      return chain;
+    }),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({ kind: "insert-refund-claim" })),
     })),

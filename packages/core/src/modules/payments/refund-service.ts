@@ -3,8 +3,15 @@
 // Determines the correct payment gateway from the order's payment records
 // and dispatches the refund via the unified PaymentProvider interface.
 
-import { eq, sql, desc, and } from "drizzle-orm";
-import { orders, orderPayments, PaymentStatus, OrderStatus } from "@scalius/database/schema";
+import { eq, sql, desc, and, inArray } from "drizzle-orm";
+import {
+    orders,
+    orderPayments,
+    PaymentStatus,
+    OrderStatus,
+    PaymentRecordStatus,
+    type OrderPayment,
+} from "@scalius/database/schema";
 import { createPaymentProvider } from "./factory";
 import {
     FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
@@ -48,8 +55,149 @@ const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
     OrderStatus.CONFIRMED,
 ]);
 
-function getRefundClaimId(orderId: string, orderVersion: number): string {
+type CapturedPayment = OrderPayment & { paymentMethod: PaymentGateway };
+
+interface RefundAllocation {
+    id: string;
+    sourcePayment: CapturedPayment;
+    amount: number;
+    idempotencyKey: string;
+    refundReference: string;
+    index: number;
+}
+
+interface CompletedRefundAllocation extends RefundAllocation {
+    refundId?: string;
+}
+
+function getRefundClaimBaseId(orderId: string, orderVersion: number): string {
     return `refund_${orderId}_${orderVersion}`;
+}
+
+function getRefundClaimId(orderId: string, orderVersion: number, allocationIndex: number): string {
+    return `${getRefundClaimBaseId(orderId, orderVersion)}_${allocationIndex + 1}`;
+}
+
+function normalizePaymentGateway(value: string): PaymentGateway {
+    if (value === "stripe" || value === "sslcommerz" || value === "polar" || value === "cod") {
+        return value;
+    }
+    throw new ValidationError(`Unsupported payment gateway: ${value}`);
+}
+
+function parseRefundMetadata(metadata: string | null): Record<string, unknown> {
+    if (!metadata) return {};
+    try {
+        const parsed = JSON.parse(metadata) as unknown;
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? parsed as Record<string, unknown>
+            : {};
+    } catch {
+        return {};
+    }
+}
+
+function getRefundSourcePaymentId(refund: Pick<OrderPayment, "metadata">): string | undefined {
+    const metadata = parseRefundMetadata(refund.metadata);
+    const sourcePaymentId = metadata.sourcePaymentId;
+    return typeof sourcePaymentId === "string" && sourcePaymentId ? sourcePaymentId : undefined;
+}
+
+function buildRefundIdempotencyKey(orderId: string, sourcePaymentId: string, claimVersion: number): string {
+    return `refund:${orderId}:${sourcePaymentId}:${claimVersion}`;
+}
+
+function buildRefundReference(orderId: string, sourcePaymentId: string, claimVersion: number, index: number): string {
+    const suffix = `${orderId}${sourcePaymentId}${claimVersion}${index + 1}`
+        .replace(/[^A-Za-z0-9]/g, "")
+        .slice(-24)
+        .toUpperCase();
+    return `REF${suffix}`.slice(0, 30);
+}
+
+function computeRefundedBySourcePayment(
+    capturedPayments: CapturedPayment[],
+    refundRows: Array<Pick<OrderPayment, "amount" | "metadata">>,
+): Map<string, number> {
+    const refundedBySource = new Map<string, number>();
+    let unattributedRefundAmount = 0;
+
+    for (const refund of refundRows) {
+        const amount = roundPrice(Math.max(0, refund.amount));
+        if (amount <= 0) continue;
+
+        const sourcePaymentId = getRefundSourcePaymentId(refund);
+        if (sourcePaymentId) {
+            refundedBySource.set(sourcePaymentId, roundPrice((refundedBySource.get(sourcePaymentId) ?? 0) + amount));
+        } else {
+            unattributedRefundAmount = roundPrice(unattributedRefundAmount + amount);
+        }
+    }
+
+    // Older refund rows did not store sourcePaymentId. Attribute those refunds
+    // against newest captures first, matching the old "latest payment" behavior,
+    // so future allocations cannot over-refund an order that has old history.
+    for (const payment of capturedPayments) {
+        if (unattributedRefundAmount <= 0) break;
+        const alreadyRefunded = refundedBySource.get(payment.id) ?? 0;
+        const remainingPaymentAmount = roundPrice(Math.max(0, payment.amount - alreadyRefunded));
+        const applied = roundPrice(Math.min(remainingPaymentAmount, unattributedRefundAmount));
+        if (applied > 0) {
+            refundedBySource.set(payment.id, roundPrice(alreadyRefunded + applied));
+            unattributedRefundAmount = roundPrice(unattributedRefundAmount - applied);
+        }
+    }
+
+    return refundedBySource;
+}
+
+function buildRefundAllocations(params: {
+    orderId: string;
+    claimVersion: number;
+    refundAmount: number;
+    capturedPayments: CapturedPayment[];
+    refundRows: Array<Pick<OrderPayment, "amount" | "metadata">>;
+}): RefundAllocation[] {
+    const refundedBySource = computeRefundedBySourcePayment(params.capturedPayments, params.refundRows);
+    let remainingRefundAmount = params.refundAmount;
+    const allocations: RefundAllocation[] = [];
+
+    for (const sourcePayment of params.capturedPayments) {
+        if (remainingRefundAmount <= 0) break;
+        const alreadyRefunded = refundedBySource.get(sourcePayment.id) ?? 0;
+        const refundableAmount = roundPrice(Math.max(0, sourcePayment.amount - alreadyRefunded));
+        if (refundableAmount <= 0) continue;
+
+        const amount = roundPrice(Math.min(refundableAmount, remainingRefundAmount));
+        const index = allocations.length;
+        allocations.push({
+            id: getRefundClaimId(params.orderId, params.claimVersion - 1, index),
+            sourcePayment,
+            amount,
+            idempotencyKey: buildRefundIdempotencyKey(params.orderId, sourcePayment.id, params.claimVersion),
+            refundReference: buildRefundReference(params.orderId, sourcePayment.id, params.claimVersion, index),
+            index,
+        });
+        remainingRefundAmount = roundPrice(remainingRefundAmount - amount);
+    }
+
+    if (remainingRefundAmount > 0) {
+        throw new ValidationError("Refund amount exceeds refundable captured payment balance", {
+            requestedAmount: params.refundAmount,
+            remainingUnallocatedAmount: remainingRefundAmount,
+        });
+    }
+
+    if (allocations.length === 0) {
+        throw new NotFoundError("No refundable payment record found for this order");
+    }
+
+    return allocations;
+}
+
+function getResultGateway(allocations: RefundAllocation[]): string {
+    const gateways = [...new Set(allocations.map((allocation) => allocation.sourcePayment.paymentMethod))];
+    return gateways.length === 1 ? gateways[0]! : "mixed";
 }
 
 function isConstraintError(error: unknown): boolean {
@@ -124,41 +272,111 @@ async function assertNoPendingRefund(db: Database, orderId: string): Promise<voi
     }
 }
 
-async function releaseRefundClaim(
+function buildRefundMetadata(params: {
+    request: RefundRequest;
+    allocation: RefundAllocation;
+    groupId: string;
+    claimVersion: number;
+    allocationCount: number;
+    status: "pending" | "refunded" | "failed";
+    refundId?: string;
+    error?: unknown;
+}): string {
+    const failedMessage = params.error instanceof Error
+        ? params.error.message
+        : params.error == null
+            ? undefined
+            : String(params.error);
+
+    return JSON.stringify({
+        reason: params.request.reason,
+        gateway: params.allocation.sourcePayment.paymentMethod,
+        sourcePaymentId: params.allocation.sourcePayment.id,
+        sourcePaymentType: params.allocation.sourcePayment.paymentType,
+        sourceTransactionId: getTransactionId(
+            params.allocation.sourcePayment.paymentMethod,
+            params.allocation.sourcePayment,
+        ),
+        refundGroupId: params.groupId,
+        allocationIndex: params.allocation.index,
+        allocationCount: params.allocationCount,
+        providerIdempotencyKey: params.allocation.idempotencyKey,
+        refundReference: params.allocation.refundReference,
+        claimVersion: params.claimVersion,
+        ...(params.refundId ? { refundId: params.refundId, providerRefundId: params.refundId } : {}),
+        ...(params.status === "pending" ? { claimedAt: new Date().toISOString() } : {}),
+        ...(params.status === "refunded" ? { refundedAt: new Date().toISOString() } : {}),
+        ...(params.status === "failed" ? { error: failedMessage, failedAt: new Date().toISOString() } : {}),
+    });
+}
+
+async function markRefundAllocationsFailed(
     db: Database,
     params: {
-        orderId: string;
-        refundPaymentId: string;
-        refundAmount: number;
-        originalPaymentStatus: string;
-        originalBalanceDue: number;
-        reason: string;
-        gateway: PaymentGateway;
+        request: RefundRequest;
+        allocations: RefundAllocation[];
+        groupId: string;
+        claimVersion: number;
+        allocationCount: number;
         error: unknown;
     },
 ): Promise<void> {
-    const message = params.error instanceof Error ? params.error.message : String(params.error);
+    if (params.allocations.length === 0) return;
 
-    await db.batch([
+    await db.batch(params.allocations.map((allocation) =>
         db.update(orderPayments).set({
-            status: "failed",
-            metadata: JSON.stringify({
-                reason: params.reason,
-                gateway: params.gateway,
-                error: message,
-                failedAt: new Date().toISOString(),
+            status: PaymentRecordStatus.FAILED,
+            metadata: buildRefundMetadata({
+                request: params.request,
+                allocation,
+                groupId: params.groupId,
+                claimVersion: params.claimVersion,
+                allocationCount: params.allocationCount,
+                status: "failed",
+                error: params.error,
             }),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(orderPayments.id, params.refundPaymentId)),
-        db.update(orders).set({
-            paidAmount: sql`${orders.paidAmount} + ${params.refundAmount}`,
-            balanceDue: params.originalBalanceDue,
-            paymentStatus: params.originalPaymentStatus,
-            version: sql`${orders.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-        }).where(eq(orders.id, params.orderId)),
+        }).where(eq(orderPayments.id, allocation.id))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    ] as any);
+    ) as any);
+}
+
+async function applyRefundedPaymentState(
+    db: Database,
+    params: {
+        orderId: string;
+        totalAmount: number;
+        currentPaidAmount: number;
+        refundAmount: number;
+        isFullRefund: boolean;
+        expectedVersion: number;
+    },
+): Promise<{ version: number }> {
+    const newPaymentState = computePaymentStateAfterRefund({
+        totalAmount: params.totalAmount,
+        currentPaidAmount: params.currentPaidAmount,
+        refundAmount: params.refundAmount,
+        isFullRefund: params.isFullRefund,
+    });
+
+    const rows = await db.update(orders).set({
+        paidAmount: newPaymentState.paidAmount,
+        balanceDue: newPaymentState.balanceDue,
+        paymentStatus: newPaymentState.paymentStatus,
+        version: sql`${orders.version} + 1`,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(orders.id, params.orderId),
+        eq(orders.version, params.expectedVersion),
+        sql`${orders.paidAmount} >= ${params.refundAmount}`,
+    )).returning({ version: orders.version });
+
+    const updated = rows[0];
+    if (!updated) {
+        throw new ConflictError("Refund payment state could not be updated after provider refund succeeded. Please review before retrying.");
+    }
+
+    return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,24 +475,21 @@ async function dispatchRefund(
     gateway: PaymentGateway,
     payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null; polarCheckoutId?: string | null; metadata?: string | null },
     refundAmount: number,
-    isFullRefund: boolean,
     currencyDecimals: number,
     params: RefundRequest,
+    providerMetadata: Record<string, string>,
     encryptionKey?: string,
 ): Promise<string | undefined> {
     const transactionId = getTransactionId(gateway, payment);
     const provider = await resolveProvider(db, kv, gateway, encryptionKey);
 
     // Determine the correct amount for each gateway's convention:
-    // Stripe: smallest currency unit, undefined = full refund
+    // Stripe: smallest currency unit, always explicit for allocation safety
     // Polar: smallest currency unit, always requires explicit positive amount
     // SSLCommerz/COD: major units, always required
     let providerAmount: number | undefined;
     if (gateway === "stripe") {
-        // Stripe accepts undefined for full refund
-        if (!isFullRefund) {
-            providerAmount = Math.round(refundAmount * Math.pow(10, currencyDecimals));
-        }
+        providerAmount = Math.round(refundAmount * Math.pow(10, currencyDecimals));
     } else if (gateway === "polar") {
         // Polar ALWAYS requires an explicit positive amount (no "refund all" shorthand).
         // If the payment used currency conversion (e.g. BDT→USD), convert the
@@ -306,6 +521,7 @@ async function dispatchRefund(
         transactionId,
         amount: providerAmount,
         reason: params.reason,
+        metadata: providerMetadata,
     });
 
     return result.refundId;
@@ -390,65 +606,82 @@ export async function processRefund(
 
     const isFullRefund = refundAmount >= paidAmount;
 
-    // 2. Find the latest successful payment (filter out failed/refunded)
-    const payment = await db
+    // 2. Load all successful captures newest-first, then allocate the refund
+    // across the remaining refundable amount on each source payment.
+    const capturedPaymentRows = await db
         .select()
         .from(orderPayments)
         .where(
             and(
                 eq(orderPayments.orderId, params.orderId),
-                eq(orderPayments.status, "succeeded"),
+                eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED),
             ),
         )
-        .orderBy(desc(orderPayments.createdAt))
-        .get();
+        .orderBy(desc(orderPayments.createdAt));
 
-    if (!payment) {
+    const capturedPayments = capturedPaymentRows
+        .map((payment) => ({
+            ...payment,
+            paymentMethod: normalizePaymentGateway(payment.paymentMethod),
+        }))
+        .filter((payment) => !params.gateway || payment.paymentMethod === params.gateway);
+
+    if (capturedPayments.length === 0) {
         throw new NotFoundError("No payment record found for this order");
     }
 
-    const gateway = params.gateway ?? payment.paymentMethod;
+    const priorRefundRows = await db
+        .select()
+        .from(orderPayments)
+        .where(
+            and(
+                eq(orderPayments.orderId, params.orderId),
+                eq(orderPayments.paymentType, "refund"),
+                eq(orderPayments.status, PaymentRecordStatus.REFUNDED),
+            ),
+        );
 
     // Get currency decimals for smallest-unit conversion (Stripe/Polar)
     const currencyConfig = await getCurrencyConfig(db, kv);
     const currencyDecimals = getDecimalPlaces(currencyConfig.code);
 
-    const newPaymentState = computePaymentStateAfterRefund({
-        totalAmount: order.totalAmount,
-        currentPaidAmount: order.paidAmount,
-        refundAmount,
-        isFullRefund,
-    });
-    const refundPaymentId = getRefundClaimId(params.orderId, order.version);
     const claimVersion = order.version + 1;
+    const refundGroupId = getRefundClaimBaseId(params.orderId, order.version);
+    const allocations = buildRefundAllocations({
+        orderId: params.orderId,
+        claimVersion,
+        refundAmount,
+        capturedPayments,
+        refundRows: priorRefundRows,
+    });
+    const resultGateway = getResultGateway(allocations);
 
     // 3. Claim refund capacity locally before calling the gateway. The deterministic
-    // refund ID and order-version CAS ensure that concurrent callers cannot both
-    // pass this point and hit the external provider.
-    let claimResults: [unknown, Array<{ id: string; version: number }>];
+    // refund allocation IDs and order-version CAS ensure that concurrent callers
+    // cannot both pass this point and hit external providers.
+    let claimResults: [...unknown[], Array<{ id: string; version: number }>];
     try {
         claimResults = await db.batch([
-            db.insert(orderPayments).values({
-                id: refundPaymentId,
+            ...allocations.map((allocation) => db.insert(orderPayments).values({
+                id: allocation.id,
                 orderId: params.orderId,
-                amount: refundAmount,
+                amount: allocation.amount,
                 currency: currencyConfig.code,
-                paymentMethod: gateway,
+                paymentMethod: allocation.sourcePayment.paymentMethod,
                 paymentType: "refund",
-                status: "pending",
-                metadata: JSON.stringify({
-                    reason: params.reason,
-                    gateway,
+                status: PaymentRecordStatus.PENDING,
+                metadata: buildRefundMetadata({
+                    request: params,
+                    allocation,
+                    groupId: refundGroupId,
                     claimVersion,
-                    claimedAt: new Date().toISOString(),
+                    allocationCount: allocations.length,
+                    status: "pending",
                 }),
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
-            }),
+            })),
             db.update(orders).set({
-                paidAmount: newPaymentState.paidAmount,
-                balanceDue: newPaymentState.balanceDue,
-                paymentStatus: newPaymentState.paymentStatus,
                 version: claimVersion,
                 updatedAt: sql`unixepoch()`,
             }).where(and(
@@ -465,9 +698,10 @@ export async function processRefund(
         throw error;
     }
 
-    const claimedOrder = claimResults[1]?.[0];
+    const claimedOrderResult = claimResults[claimResults.length - 1] as Array<{ id: string; version: number }> | undefined;
+    const claimedOrder = claimedOrderResult?.[0];
     if (!claimedOrder) {
-        await db.delete(orderPayments).where(eq(orderPayments.id, refundPaymentId));
+        await db.delete(orderPayments).where(inArray(orderPayments.id, allocations.map((allocation) => allocation.id)));
         throw new ConflictError(
             "Refund failed due to a concurrent modification. Please retry."
         );
@@ -476,39 +710,82 @@ export async function processRefund(
     // 4. Dispatch to gateway via unified PaymentProvider interface after the
     // local claim succeeds. If the provider rejects the refund, release the
     // reserved paid amount and mark the claim failed.
-    let refundId: string | undefined;
+    const completedAllocations: CompletedRefundAllocation[] = [];
     try {
-        refundId = await dispatchRefund(
-            db, kv, gateway as PaymentGateway, payment, refundAmount, isFullRefund, currencyDecimals, params, encryptionKey
-        );
+        for (const allocation of allocations) {
+            const refundId = await dispatchRefund(
+                db,
+                kv,
+                allocation.sourcePayment.paymentMethod,
+                allocation.sourcePayment,
+                allocation.amount,
+                currencyDecimals,
+                params,
+                {
+                    idempotencyKey: allocation.idempotencyKey,
+                    refundReference: allocation.refundReference,
+                    sourcePaymentId: allocation.sourcePayment.id,
+                    refundGroupId,
+                },
+                encryptionKey,
+            );
+
+            completedAllocations.push({ ...allocation, refundId });
+
+            await db.update(orderPayments).set({
+                status: PaymentRecordStatus.REFUNDED,
+                // Refund records must NOT copy the original payment's unique gateway IDs —
+                // partial unique indexes (e.g., UNIQUE(orderId, stripePaymentIntentId))
+                // would reject the insert. Refund is identified by metadata.refundId instead.
+                metadata: buildRefundMetadata({
+                    request: params,
+                    allocation,
+                    groupId: refundGroupId,
+                    claimVersion,
+                    allocationCount: allocations.length,
+                    status: "refunded",
+                    refundId,
+                }),
+                updatedAt: sql`unixepoch()`,
+            }).where(eq(orderPayments.id, allocation.id));
+        }
     } catch (error: unknown) {
-        await releaseRefundClaim(db, {
-            orderId: params.orderId,
-            refundPaymentId,
-            refundAmount,
-            originalPaymentStatus: order.paymentStatus,
-            originalBalanceDue: order.balanceDue,
-            reason: params.reason,
-            gateway: gateway as PaymentGateway,
+        const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
+        const failedAllocations = allocations.filter((allocation) => !completedIds.has(allocation.id));
+        await markRefundAllocationsFailed(db, {
+            request: params,
+            allocations: failedAllocations,
+            groupId: refundGroupId,
+            claimVersion,
+            allocationCount: allocations.length,
             error,
         });
+
+        const completedAmount = roundPrice(completedAllocations.reduce((sum, allocation) => sum + allocation.amount, 0));
+        if (completedAmount > 0) {
+            await applyRefundedPaymentState(db, {
+                orderId: params.orderId,
+                totalAmount: order.totalAmount,
+                currentPaidAmount: order.paidAmount ?? 0,
+                refundAmount: completedAmount,
+                isFullRefund: false,
+                expectedVersion: claimedOrder.version,
+            });
+            throw new ServiceUnavailableError(
+                `Refund partially processed: ${completedAmount} was accepted by the provider, but ${roundPrice(refundAmount - completedAmount)} could not be completed. Please review before retrying.`,
+            );
+        }
         throw error;
     }
 
-    await db.update(orderPayments).set({
-        status: "refunded",
-        // Refund records must NOT copy the original payment's unique gateway IDs —
-        // partial unique indexes (e.g., UNIQUE(orderId, stripePaymentIntentId))
-        // would reject the insert. Refund is identified by metadata.refundId instead.
-        metadata: JSON.stringify({
-            refundId,
-            reason: params.reason,
-            gateway,
-            claimVersion,
-            refundedAt: new Date().toISOString(),
-        }),
-        updatedAt: sql`unixepoch()`,
-    }).where(eq(orderPayments.id, refundPaymentId));
+    const appliedPaymentState = await applyRefundedPaymentState(db, {
+        orderId: params.orderId,
+        totalAmount: order.totalAmount,
+        currentPaidAmount: order.paidAmount ?? 0,
+        refundAmount,
+        isFullRefund,
+        expectedVersion: claimedOrder.version,
+    });
 
     // Determine new order status based on refund type and state machine constraints.
     // Pre-fulfillment full refunds cancel the order and release reservations.
@@ -521,7 +798,7 @@ export async function processRefund(
         orderStatusChanged = await updateOrderStatusIfVersionMatches(db, {
             orderId: params.orderId,
             nextStatus: nextOrderStatus,
-            expectedVersion: claimedOrder.version,
+            expectedVersion: appliedPaymentState.version,
         });
 
         if (!orderStatusChanged) {
@@ -541,8 +818,8 @@ export async function processRefund(
 
     return {
         success: true,
-        gateway,
-        refundId,
+        gateway: resultGateway,
+        refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
         amount: refundAmount,
         isFullRefund,
     };
