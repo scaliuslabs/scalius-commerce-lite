@@ -47131,36 +47131,119 @@
                         "statusCheck": {
                           "type": "object",
                           "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "orderId": {
+                              "type": "string"
+                            },
+                            "providerId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "providerType": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string"
+                            },
+                            "rawStatus": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "externalId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "trackingId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "trackingUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "courierName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "note": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "metadata": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "lastChecked": {
+                              "type": "string"
+                            },
+                            "shipmentItems": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shipmentAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "isFinalShipment": {
+                              "type": "boolean",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "providerName": {
+                              "type": "string",
+                              "nullable": true
                             },
                             "statusChanged": {
                               "type": "boolean"
                             },
                             "orderStatusUpdate": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "status": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "status"
-                              ],
-                              "additionalProperties": {
-                                "nullable": true
-                              }
-                            },
-                            "lastChecked": {
-                              "type": "string"
+                              "type": "boolean"
                             }
                           },
                           "required": [
+                            "id",
+                            "orderId",
+                            "providerId",
+                            "providerType",
                             "status",
+                            "rawStatus",
+                            "externalId",
+                            "trackingId",
+                            "trackingUrl",
+                            "courierName",
+                            "note",
+                            "metadata",
+                            "lastChecked",
+                            "shipmentItems",
+                            "shipmentAmount",
+                            "isFinalShipment",
+                            "createdAt",
+                            "updatedAt",
+                            "providerName",
                             "statusChanged",
-                            "orderStatusUpdate",
-                            "lastChecked"
+                            "orderStatusUpdate"
                           ],
                           "additionalProperties": {
                             "nullable": true
@@ -68530,7 +68613,7 @@
                   },
                   "isActive": {
                     "type": "boolean",
-                    "default": true
+                    "default": false
                   }
                 },
                 "required": [
@@ -78281,7 +78364,7 @@
         "tags": [
           "Admin - Orders"
         ],
-        "summary": "Check shipment status from provider",
+        "summary": "Check shipment status from provider and sync order",
         "parameters": [
           {
             "schema": {
@@ -78363,15 +78446,7 @@
                           "nullable": true
                         },
                         "lastChecked": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
+                          "type": "string"
                         },
                         "shipmentItems": {
                           "type": "string",
@@ -78404,6 +78479,16 @@
                               "type": "number"
                             }
                           ]
+                        },
+                        "providerName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "statusChanged": {
+                          "type": "boolean"
+                        },
+                        "orderStatusUpdate": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -78424,8 +78509,14 @@
                         "shipmentAmount",
                         "isFinalShipment",
                         "createdAt",
-                        "updatedAt"
-                      ]
+                        "updatedAt",
+                        "providerName",
+                        "statusChanged",
+                        "orderStatusUpdate"
+                      ],
+                      "additionalProperties": {
+                        "nullable": true
+                      }
                     }
                   },
                   "required": [

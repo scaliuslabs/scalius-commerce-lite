@@ -1,8 +1,7 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications";
-import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, checkShipmentStatus, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
-import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
+import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { validateTransition } from "@scalius/core/modules/orders/order-state-machine";
@@ -17,8 +16,8 @@ import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidat
 import {
     enqueueOrderNotificationMessage,
     enqueueOrderNotificationsForStatus,
-    enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
+import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -502,14 +501,14 @@ const checkShipmentStatusRoute = createRoute({
     method: "post",
     path: "/{id}/shipments/{shipmentId}/status",
     tags: ["Admin - Orders"],
-    summary: "Check shipment status from provider",
+    summary: "Check shipment status from provider and sync order",
     request: {
         params: z.object({ id: z.string(), shipmentId: z.string() }),
     },
     responses: {
         200: {
             description: "Status checked",
-            content: { "application/json": { schema: successEnvelope(deliveryShipmentSchema) } },
+            content: { "application/json": { schema: successEnvelope(refreshedShipmentSchema) } },
         },
         404: errorResponses[404],
     }
@@ -524,8 +523,14 @@ app.openapi(checkShipmentStatusRoute, (async (c: AdminRouteContext<typeof checkS
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-    const updatedShipment = await checkShipmentStatus(db, shipmentId, encryptionKey);
-    return ok(c, updatedShipment);
+    const result = await checkAndSyncShipmentStatus({
+        db,
+        shipment,
+        encryptionKey,
+        c,
+        source: "orders-shipment-status",
+    });
+    return ok(c, result.payload);
 }) as unknown as AdminRouteHandler<typeof checkShipmentStatusRoute>);
 
 // ─── POST /:id/shipments/{shipmentId}/refresh ─────────────────────────────────
@@ -556,47 +561,16 @@ app.openapi(refreshShipmentRoute, async (c) => {
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ValidationError("Shipment does not belong to this order");
 
-    const previousStatus = shipment.status;
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-    try {
-        await checkShipmentStatus(db, shipmentId, encryptionKey);
-    } catch (e: unknown) {
-        throw new ValidationError(e instanceof Error ? e.message : String(e));
-    }
-
-    const now = new Date();
-    await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, shipmentId));
-
-    const updatedShipment = await getShipment(db, shipmentId);
-    if (!updatedShipment) throw new NotFoundError("Failed to retrieve updated shipment");
-
-    const provider = updatedShipment.providerId ? await getDeliveryProvider(db, updatedShipment.providerId) : null;
-    const statusChanged = previousStatus !== updatedShipment.status;
-    let orderStatusUpdate = false;
-
-    try {
-        const orderUpdate = await updateOrderStatusFromShipment(db, shipmentId, updatedShipment.status);
-        await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-        await enqueueOrderStatusChangeNotification({
-            db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
-            statusChange: orderUpdate,
-            trackingId: updatedShipment.trackingId,
-            source: "orders-shipment-refresh",
-        });
-        orderStatusUpdate = !!orderUpdate && !!orderUpdate.orderId;
-    } catch (e: unknown) {
-        console.error("Error updating order status:", e);
-    }
-
-    return ok(c, {
-        ...updatedShipment,
-        providerName: provider?.name || updatedShipment.providerType,
-        providerType: updatedShipment.providerType,
-        lastChecked: now.toISOString(),
-        statusChanged,
-        orderStatusUpdate
+    const result = await checkAndSyncShipmentStatus({
+        db,
+        shipment,
+        encryptionKey,
+        c,
+        source: "orders-shipment-refresh",
     });
+
+    return ok(c, result.payload);
 });
 
 export { app as adminOrdersStatusRoutes };

@@ -1,17 +1,13 @@
 // src/server/routes/admin/shipments.ts
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { getShipment, deleteShipmentRecord, checkShipmentStatus } from "@scalius/core/modules/delivery/delivery.service";
-import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
-import { deliveryShipments } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { getShipment, deleteShipmentRecord } from "@scalius/core/modules/delivery/delivery.service";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
-import { enqueueOrderStatusChangeNotification } from "../../utils/order-notification-queue";
+import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -20,11 +16,12 @@ type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>
 
 // ─── Inline schemas ──
 
-const statusCheckSchema = z.object({
-    status: z.string(),
-    statusChanged: z.boolean(),
-    orderStatusUpdate: z.object({ status: z.string() }).passthrough().nullable(),
+const statusCheckSchema = deliveryShipmentSchema.extend({
+    providerName: z.string().nullable(),
+    providerType: z.string().nullable(),
     lastChecked: z.string(),
+    statusChanged: z.boolean(),
+    orderStatusUpdate: z.boolean(),
 }).passthrough();
 
 const checkStatusResponseSchema = successEnvelope(z.object({
@@ -117,59 +114,31 @@ app.openapi(checkStatusRoute, (async (c: AdminRouteContext<typeof checkStatusRou
     const db = c.get("db");
     const shipmentId = c.req.valid("param").id;
 
-    const [currentShipment] = await db
-        .select()
-        .from(deliveryShipments)
-        .where(eq(deliveryShipments.id, shipmentId));
+    const currentShipment = await getShipment(db, shipmentId);
 
     if (!currentShipment) {
         throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
     }
 
-    const previousStatus = currentShipment.status;
     const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-    const result = await checkShipmentStatus(db, shipmentId, encryptionKey);
-    const now = new Date();
-
-    await db
-        .update(deliveryShipments)
-        .set({ lastChecked: now })
-        .where(eq(deliveryShipments.id, shipmentId));
-
-    const orderStatusUpdate = await updateOrderStatusFromShipment(
+    const result = await checkAndSyncShipmentStatus({
         db,
-        shipmentId,
-        result.status,
-    );
-    await invalidateProductAvailabilityCaches(db, { orderIds: [currentShipment.orderId] }, c);
-
-    await enqueueOrderStatusChangeNotification({
-        db,
-        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
-        statusChange: orderStatusUpdate,
-        trackingId: result.trackingId ?? currentShipment.trackingId,
+        shipment: currentShipment,
+        encryptionKey,
+        c,
         source: "shipments",
     });
 
-    if (result.status !== previousStatus) {
+    if (result.payload.statusChanged) {
         return ok(c, {
-            message: `Shipment status updated from ${previousStatus} to ${result.status}`,
-            statusCheck: {
-                ...result,
-                statusChanged: true,
-                orderStatusUpdate: orderStatusUpdate || "No change needed",
-                lastChecked: now.toISOString()
-            }
+            message: `Shipment status updated from ${result.previousStatus} to ${result.payload.status}`,
+            statusCheck: result.payload,
         });
     }
 
     return ok(c, {
         message: "Shipment status checked successfully",
-        statusCheck: {
-            ...result,
-            statusChanged: false,
-            lastChecked: now.toISOString()
-        }
+        statusCheck: result.payload,
     });
 }) as unknown as AdminRouteHandler<typeof checkStatusRoute>);
 
