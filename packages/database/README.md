@@ -307,6 +307,7 @@ Notable migrations:
 - `0054` -- D1-backed `customer_sessions` keyed by HMAC token hash for revocable storefront customer sessions
 - `0055` -- SKU-first inventory model: hidden/default simple-product SKUs, `track_inventory`, and untracked historical variantless order items
 - `0057` -- Legacy/demo simple-SKU repair for active products with zero active SKUs or one zero-stock no-option SKU
+- `0063` -- Partial unique live payment-session single-flight index on `(order_id, gateway, payment_type)` for `processing` attempts
 
 Validate migration metadata after schema or migration edits:
 

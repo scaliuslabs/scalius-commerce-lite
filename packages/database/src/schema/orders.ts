@@ -212,6 +212,8 @@ export const paymentSessionAttempts = sqliteTable("payment_session_attempts", {
     index("payment_session_attempts_order_id_idx").on(table.orderId),
     index("payment_session_attempts_status_claim_idx").on(table.status, table.claimExpiresAt),
     index("payment_session_attempts_provider_session_idx").on(table.gateway, table.providerSessionId),
+    // Manual migration 0063 also creates this partial unique index (not expressible in Drizzle):
+    // payment_session_attempts_live_order_singleflight ON (order_id, gateway, payment_type) WHERE status = 'processing'
 ]);
 
 export const paymentPlans = sqliteTable("payment_plans", {
