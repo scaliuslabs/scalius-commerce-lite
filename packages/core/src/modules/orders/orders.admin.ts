@@ -46,6 +46,11 @@ import type { OrderShipmentSummary, OrderDetails } from "./orders.types";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
 import { computeOrderPaymentState } from "../payments/payment-state";
+import {
+    assertNoActiveRefundAttempt,
+    assertNoActiveRefundAttemptsForOrders,
+    noActiveRefundAttemptForOrderIdCondition,
+} from "../payments/refund-attempt-guard";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -1120,6 +1125,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
 
     if (!existingOrder) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(existingOrder);
+    await assertNoActiveRefundAttempt(db, id);
 
     // Validate status transition if status is changing
     if (data.status !== existingOrder.status) {
@@ -1288,7 +1294,11 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             customerId,
             version: existingOrder.version + 1,
             updatedAt: sql`unixepoch()`,
-        }).where(and(eq(orders.id, id), eq(orders.version, existingOrder.version))).returning({ id: orders.id });
+        }).where(and(
+            eq(orders.id, id),
+            eq(orders.version, existingOrder.version),
+            noActiveRefundAttemptForOrderIdCondition(id),
+        )).returning({ id: orders.id });
 
         if (updateResult.length === 0) {
             throw new ConflictError("Order was modified by another request. Please reload and try again.");
@@ -1368,6 +1378,7 @@ export async function deleteOrder(db: Database, id: string) {
     }).from(orders).where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`).get();
     if (!orderToDelete) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(orderToDelete);
+    await assertNoActiveRefundAttempt(db, id);
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
     }
@@ -1394,6 +1405,7 @@ export async function restoreOrder(db: Database, id: string) {
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
     if (!order.deletedAt) throw new ValidationError("Order is not deleted");
+    await assertNoActiveRefundAttempt(db, id);
 
     let nextInventoryAction = order.inventoryAction as "none" | "reserved" | "deducted" | "restored";
     let reservedEntries: ReservationEntry[] = [];
@@ -1441,7 +1453,12 @@ export async function restoreOrder(db: Database, id: string) {
 
     const restoreResult = await db.update(orders)
         .set({ deletedAt: null, inventoryAction: nextInventoryAction, version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
-        .where(and(eq(orders.id, id), eq(orders.version, order.version), isNotNull(orders.deletedAt)))
+        .where(and(
+            eq(orders.id, id),
+            eq(orders.version, order.version),
+            isNotNull(orders.deletedAt),
+            noActiveRefundAttemptForOrderIdCondition(id),
+        ))
         .returning({ id: orders.id });
 
     if (restoreResult.length === 0) {
@@ -1464,6 +1481,7 @@ export async function permanentlyDeleteOrder(db: Database, id: string) {
     }).from(orders).where(eq(orders.id, id)).get();
     if (!orderToDelete) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(orderToDelete);
+    await assertNoActiveRefundAttempt(db, id);
     if (!orderToDelete.deletedAt) throw new ValidationError("Order must be soft-deleted before permanent deletion");
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
@@ -1490,6 +1508,7 @@ export async function bulkDeleteOrders(db: Database, orderIds: string[], permane
     if (claimedOrders.length > 0) {
         throw new ConflictError(`Orders have active shipment creation in progress: ${claimedOrders.map((order) => order.id).join(", ")}`);
     }
+    await assertNoActiveRefundAttemptsForOrders(db, affectedOrders.map((order) => order.id));
 
     // Apply inventory transitions for orders that need it
     // (applyInventoryForStatusChange reads order items internally and uses CAS operations)

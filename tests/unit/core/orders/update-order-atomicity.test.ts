@@ -139,6 +139,8 @@ function createChain(result: unknown): MockChain {
 function createUpdateOrderDb(options: {
   existingOrder: ReturnType<typeof seedOrder>;
   existingItems: ReturnType<typeof seedOrderItem>[];
+  activeRefundAttempt?: Record<string, unknown> | null;
+  legacyPendingRefund?: Record<string, unknown> | null;
   orderUpdateResult?: unknown[];
   itemReplacementError?: Error;
 }) {
@@ -164,6 +166,8 @@ function createUpdateOrderDb(options: {
   const selectResults = [
     [],
     options.existingOrder,
+    options.activeRefundAttempt ?? null,
+    options.legacyPendingRefund ?? null,
     options.existingItems,
     liveSkuRows,
   ];
@@ -194,10 +198,14 @@ function createRestoreOrderDb(options: {
   };
   items?: ReturnType<typeof seedOrderItem>[];
   orderUpdateResult?: unknown[];
+  activeRefundAttempt?: Record<string, unknown> | null;
+  legacyPendingRefund?: Record<string, unknown> | null;
 }) {
   let selectIndex = 0;
   const selectResults = [
     options.order,
+    options.activeRefundAttempt ?? null,
+    options.legacyPendingRefund ?? null,
     options.items ?? [item(1)],
   ];
   const updateSets: unknown[] = [];
@@ -288,6 +296,28 @@ describe("updateOrder inventory atomicity", () => {
       name: "ConflictError",
       code: "CONFLICT",
       message: "Order has an active shipment creation in progress. Please retry shortly.",
+    });
+
+    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it("rejects active refund attempts before inventory pre-writes", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ inventoryAction: "reserved" }),
+      existingItems: [item(1)],
+      activeRefundAttempt: { id: "rfa_active", orderId: ORDER_ID, status: "provider_unknown" },
+    });
+
+    await expect(updateOrder(db as never, ORDER_ID, updateData())).rejects.toMatchObject({
+      name: "ConflictError",
+      code: "CONFLICT",
+      message: "Order has an active refund operation. Complete or reconcile the refund before changing this order.",
     });
 
     expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
@@ -659,7 +689,7 @@ describe("restoreOrder trash inventory safety", () => {
     await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
 
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(db.select).toHaveBeenCalledTimes(3);
     expect(updateSets.at(-1)).toMatchObject({
       deletedAt: null,
       inventoryAction: "restored",
@@ -675,7 +705,7 @@ describe("restoreOrder trash inventory safety", () => {
     await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
 
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(db.select).toHaveBeenCalledTimes(2);
+    expect(db.select).toHaveBeenCalledTimes(4);
     expect(updateSets.at(-1)).toMatchObject({
       deletedAt: null,
       inventoryAction: "none",
@@ -734,7 +764,7 @@ describe("restoreOrder trash inventory safety", () => {
       });
 
       expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-      expect(db.select).toHaveBeenCalledTimes(1);
+      expect(db.select).toHaveBeenCalledTimes(3);
       expect(db.update).not.toHaveBeenCalled();
     },
   );
@@ -752,6 +782,23 @@ describe("restoreOrder trash inventory safety", () => {
       message: expect.stringContaining(validationFailure.error),
     });
 
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects active refund attempts before restore re-reserves inventory", async () => {
+    const { db } = createRestoreOrderDb({
+      order: deletedRestoredOrder("confirmed"),
+      items: [item(2)],
+      activeRefundAttempt: { id: "rfa_active", orderId: ORDER_ID, status: "reconcile_required" },
+    });
+
+    await expect(restoreOrder(db as never, ORDER_ID)).rejects.toMatchObject({
+      name: "ConflictError",
+      code: "CONFLICT",
+      message: "Order has an active refund operation. Complete or reconcile the refund before changing this order.",
+    });
+
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
     expect(db.update).not.toHaveBeenCalled();
   });
 

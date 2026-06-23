@@ -3,6 +3,7 @@ import {
   codTracking,
   deliveryShipments,
   orderPayments,
+  refundAttempts,
   CodStatus,
   OrderStatus,
   PaymentMethod,
@@ -42,21 +43,26 @@ function createDbMock({
   selectedOrder,
   selectedRows,
   selectedPayment,
+  selectedLegacyPendingRefund,
   selectedCodTracking,
   selectedShipment,
+  selectedRefundAttempt,
   updateResults,
   batchError,
 }: {
   selectedOrder: Record<string, unknown> | null;
   selectedRows?: Array<Record<string, unknown>>;
   selectedPayment?: Record<string, unknown> | null;
+  selectedLegacyPendingRefund?: Record<string, unknown> | null;
   selectedCodTracking?: Record<string, unknown> | null;
   selectedShipment?: Record<string, unknown> | null;
+  selectedRefundAttempt?: Record<string, unknown> | null;
   updateResults: Array<Array<{ id: string }>>;
   batchError?: Error;
 }) {
   const updates: Array<Record<string, unknown>> = [];
   const batches: unknown[][] = [];
+  let orderPaymentSelectCount = 0;
 
   const db = {
     select() {
@@ -66,9 +72,15 @@ function createDbMock({
             where() {
               return {
                 get: async () => {
-                  if (table === orderPayments) return selectedPayment ?? null;
+                  if (table === orderPayments) {
+                    orderPaymentSelectCount += 1;
+                    return orderPaymentSelectCount === 1
+                      ? selectedLegacyPendingRefund ?? null
+                      : selectedPayment ?? null;
+                  }
                   if (table === codTracking) return selectedCodTracking ?? null;
                   if (table === deliveryShipments) return selectedShipment ?? null;
+                  if (table === refundAttempts) return selectedRefundAttempt ?? null;
                   return selectedOrder;
                 },
                 all: async () => selectedRows ?? [],
@@ -160,6 +172,26 @@ describe("orders fulfillment side-effect ordering", () => {
         orderId: "order_1",
         success: false,
         error: "Order has an active shipment creation in progress. Please retry shortly.",
+      },
+    ]);
+    expect(mocks.createShipment).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("does not call the delivery provider when a refund attempt is active", async () => {
+    const { db } = createDbMock({
+      selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },
+      selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "provider_unknown" },
+      updateResults: [],
+    });
+
+    const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
+
+    expect(result).toEqual([
+      {
+        orderId: "order_1",
+        success: false,
+        error: "Order has an active refund operation. Complete or reconcile the refund before shipping this order.",
       },
     ]);
     expect(mocks.createShipment).not.toHaveBeenCalled();
@@ -280,6 +312,53 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).not.toHaveBeenCalled();
   });
 
+  it("does not record COD collection while a refund attempt is active", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.SHIPPED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+      },
+      selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "processing" },
+      updateResults: [],
+    });
+
+    await expect(
+      processCodAction(db as never, "order_1", {
+        action: "collected",
+        collectedBy: "Courier A",
+        collectedAmount: 100,
+      }),
+    ).rejects.toThrow("active refund operation");
+
+    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("allows COD failure notes while a refund attempt is active", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.SHIPPED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+      },
+      selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "processing" },
+      updateResults: [],
+    });
+
+    await processCodAction(db as never, "order_1", {
+      action: "failed",
+      reason: "not_home",
+    });
+
+    expect(mocks.recordCODFailure).toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
   it("reconciles delivered inventory before recording COD collection", async () => {
     const { db, updates } = createDbMock({
       selectedOrder: {
@@ -368,6 +447,32 @@ describe("orders fulfillment side-effect ordering", () => {
         isFinalShipment: true,
       }),
     ).rejects.toThrow("Order was modified by another request");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    expect(batches).toHaveLength(0);
+  });
+
+  it("does not create manual fulfillment while a refund attempt is active", async () => {
+    const { db, batches } = createDbMock({
+      selectedOrder: {
+        id: "order_1",
+        status: OrderStatus.CONFIRMED,
+        fulfillmentStatus: "pending",
+        version: 5,
+      },
+      selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "reconcile_required" },
+      selectedRows: [
+        { id: "item_1", fulfillmentStatus: "pending" },
+      ],
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await expect(
+      createFulfillmentShipment(db as never, "order_1", {
+        itemIds: ["item_1"],
+        isFinalShipment: true,
+      }),
+    ).rejects.toThrow("active refund operation");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
     expect(batches).toHaveLength(0);
@@ -709,6 +814,27 @@ describe("orders fulfillment side-effect ordering", () => {
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
       .rejects.toThrow("active shipment creation");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("rejects admin status updates while a refund attempt is active", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: "cod",
+        paymentStatus: "unpaid",
+      },
+      selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "provider_unknown" },
+      updateResults: [],
+    });
+
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+      .rejects.toThrow("active refund operation");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });

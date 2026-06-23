@@ -20,6 +20,10 @@ import {
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure, validateCODCollectionDetails } from "../payments/cod";
 import { createShipment, markShipmentReconciliationRequired } from "../delivery/delivery.service";
+import {
+    assertNoActiveRefundAttempt,
+    noActiveRefundAttemptForOrderIdCondition,
+} from "../payments/refund-attempt-guard";
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
@@ -162,6 +166,9 @@ export async function bulkShipOrders(
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
+            await assertNoActiveRefundAttempt(db, orderId, {
+                message: "Order has an active refund operation. Complete or reconcile the refund before shipping this order.",
+            });
             if (order.status === OrderStatus.SHIPPED) {
                 if (order.shipmentClaimId) {
                     await clearShipmentClaim(db, orderId, order.shipmentClaimId);
@@ -194,6 +201,7 @@ export async function bulkShipOrders(
                 eq(orders.version, order.version),
                 eq(orders.status, order.status),
                 noActiveShipmentClaimCondition(),
+                noActiveRefundAttemptForOrderIdCondition(orderId),
             )).returning({ id: orders.id });
 
             if (claimResult.length === 0) {
@@ -274,6 +282,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
 
     switch (body.action) {
         case "collected": {
+            await assertNoActiveRefundAttempt(db, orderId);
             const collection = validateCODCollectionDetails(order, {
                 collectedBy: body.collectedBy as string,
                 collectedAmount: body.collectedAmount as number,
@@ -285,14 +294,22 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             let currentStatus = order.status;
             if (order.status === OrderStatus.CONFIRMED) {
                 validateTransition("order", order.status, OrderStatus.SHIPPED);
-                const shipResult = await db.update(orders).set({ status: OrderStatus.SHIPPED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
+                const shipResult = await db.update(orders).set({ status: OrderStatus.SHIPPED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(
+                    eq(orders.id, orderId),
+                    eq(orders.version, currentVersion),
+                    noActiveRefundAttemptForOrderIdCondition(orderId),
+                )).returning({ id: orders.id });
                 if (shipResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
                 currentVersion += 1;
                 currentStatus = OrderStatus.SHIPPED;
             }
             if (currentStatus !== OrderStatus.DELIVERED) {
                 validateTransition("order", currentStatus, OrderStatus.DELIVERED);
-                const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, currentVersion))).returning({ id: orders.id });
+                const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(
+                    eq(orders.id, orderId),
+                    eq(orders.version, currentVersion),
+                    noActiveRefundAttemptForOrderIdCondition(orderId),
+                )).returning({ id: orders.id });
                 if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
             }
             await reconcileInventoryForStatus(db, orderId, OrderStatus.DELIVERED);
@@ -306,9 +323,14 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return { message: "COD failure recorded" };
         }
         case "returned": {
+            await assertNoActiveRefundAttempt(db, orderId);
             if (order.status !== OrderStatus.RETURNED) {
                 validateTransition("order", order.status, OrderStatus.RETURNED);
-                const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))).returning({ id: orders.id });
+                const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(
+                    eq(orders.id, orderId),
+                    eq(orders.version, order.version),
+                    noActiveRefundAttemptForOrderIdCondition(orderId),
+                )).returning({ id: orders.id });
                 if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
             }
             const retResult = await markCODReturned(db, orderId);
@@ -336,6 +358,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
+    await assertNoActiveRefundAttempt(db, orderId);
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
         throw new ValidationError("Cannot fulfill a cancelled/returned order");
     }
@@ -387,6 +410,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         eq(orders.status, order.status),
         eq(orders.fulfillmentStatus, order.fulfillmentStatus),
         noActiveShipmentClaimCondition(),
+        noActiveRefundAttemptForOrderIdCondition(orderId),
     )).returning({ id: orders.id });
 
     if (claimResult.length === 0) {
@@ -483,6 +507,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(existingOrder);
+    await assertNoActiveRefundAttempt(db, orderId);
     if (existingOrder.status === status) {
         await reconcileInventoryForStatus(db, orderId, status);
         return { message: "Status unchanged; inventory reconciled" };
@@ -516,6 +541,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     }).where(and(
         eq(orders.id, orderId),
         eq(orders.version, existingOrder.version),
+        noActiveRefundAttemptForOrderIdCondition(orderId),
     )).returning({ id: orders.id });
 
     if (result.length === 0) {
