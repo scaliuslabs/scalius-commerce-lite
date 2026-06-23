@@ -342,10 +342,10 @@ describe("refund allocation", () => {
     expect(db.batch).not.toHaveBeenCalled();
   });
 
-  it("records only successful provider allocations when a later allocation fails", async () => {
+  it("keeps unresolved provider allocations pending when a later provider outcome is unknown", async () => {
     mocks.providerCreateRefund
       .mockResolvedValueOnce({ refundId: "refund_balance" })
-      .mockRejectedValueOnce(new Error("provider unavailable"));
+      .mockRejectedValueOnce(new Error("provider timeout"));
 
     const db = createDbMock({
       payments: [
@@ -358,19 +358,47 @@ describe("refund allocation", () => {
       orderId: "order_1",
       reason: "customer_request",
       gateway: "stripe",
-    })).rejects.toThrow("Refund partially processed: 70 was accepted by the provider, but 30 could not be completed.");
+    })).rejects.toThrow("Refund partially processed: 70 was accepted by the provider, but 30 has an unknown provider outcome.");
 
     expect(mocks.providerCreateRefund).toHaveBeenCalledTimes(2);
     expect(db.updateValues).toContainEqual(expect.objectContaining({
       status: PaymentRecordStatus.REFUNDED,
     }));
     expect(db.updateValues).toContainEqual(expect.objectContaining({
-      status: PaymentRecordStatus.FAILED,
+      status: PaymentRecordStatus.PENDING,
+      metadata: expect.stringContaining('"providerOutcome":"unknown"'),
     }));
     expect(db.updateValues).toContainEqual(expect.objectContaining({
       paidAmount: 30,
       balanceDue: 70,
       paymentStatus: PaymentStatus.PARTIAL,
+    }));
+  });
+
+  it("leaves the whole refund pending when the first provider outcome is unknown", async () => {
+    mocks.providerCreateRefund.mockRejectedValueOnce(new Error("network timeout"));
+
+    const db = createDbMock({
+      payments: [
+        stripePayment({ id: "pay_1", amount: 100, stripeChargeId: "ch_1" }),
+      ],
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      amount: 40,
+      reason: "customer_request",
+      gateway: "stripe",
+    })).rejects.toThrow("Refund provider outcome is unknown");
+
+    expect(mocks.providerCreateRefund).toHaveBeenCalledTimes(1);
+    expect(db.updateValues).toContainEqual(expect.objectContaining({
+      status: PaymentRecordStatus.PENDING,
+      metadata: expect.stringContaining('"providerOutcome":"unknown"'),
+    }));
+    expect(db.updateValues).not.toContainEqual(expect.objectContaining({
+      paidAmount: expect.any(Number),
+      balanceDue: expect.any(Number),
     }));
   });
 });
