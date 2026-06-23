@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 
 const mocks = vi.hoisted(() => ({
   verifyDeliveryWebhook: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("../../utils/order-notification-queue", () => ({
 import { buildSteadfastWebhookDedupKey, steadfastWebhookRoutes } from "./steadfast";
 
 function createDbMock(shipment: Record<string, unknown> | null) {
+  const whereCalls: unknown[] = [];
   const updateSet = vi.fn((values: Record<string, unknown>) => ({
     where: vi.fn(() => Promise.resolve(values)),
   }));
@@ -48,7 +50,8 @@ function createDbMock(shipment: Record<string, unknown> | null) {
       return {
         from() {
           return {
-            where() {
+            where(condition: unknown) {
+              whereCalls.push(condition);
               return {
                 get: async () => shipment,
               };
@@ -61,7 +64,7 @@ function createDbMock(shipment: Record<string, unknown> | null) {
       set: updateSet,
     })),
   };
-  return { db, updateSet };
+  return { db, updateSet, whereCalls };
 }
 
 function createApp(db: unknown) {
@@ -90,7 +93,11 @@ describe("Steadfast webhook idempotency keys", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.verifyDeliveryWebhook.mockResolvedValue({ verified: true, credentials: {} });
+    mocks.verifyDeliveryWebhook.mockResolvedValue({
+      verified: true,
+      providerId: "provider_steadfast",
+      credentials: {},
+    });
     mocks.claimWebhookEvent.mockResolvedValue({ claimed: true });
     mocks.markWebhookEventProcessed.mockResolvedValue(undefined);
     mocks.markWebhookEventFailed.mockResolvedValue(undefined);
@@ -186,6 +193,35 @@ describe("Steadfast webhook idempotency keys", () => {
       trackingId: "INV-1",
       source: "steadfast-webhook",
     });
+  });
+
+  it("scopes delivery-status shipment lookup to the verified active provider", async () => {
+    const { whereCalls, db } = createDbMock({
+      id: "shipment_1",
+      orderId: "order_1",
+      providerId: "provider_steadfast",
+      providerType: "steadfast",
+      externalId: "123",
+      trackingId: "INV-1",
+      status: "pending",
+      metadata: "{}",
+    });
+    const app = createApp(db);
+
+    const response = await postWebhook(app, {
+      notification_type: "delivery_status",
+      consignment_id: 123,
+      invoice: "INV-1",
+      status: "delivered",
+    });
+
+    expect(response.status).toBe(200);
+    const dialect = new SQLiteSyncDialect();
+    const lookupQuery = dialect.sqlToQuery(whereCalls[0] as never);
+    expect(lookupQuery.sql).toContain('"delivery_shipments"."external_id" = ?');
+    expect(lookupQuery.sql).toContain('"delivery_shipments"."provider_type" = ?');
+    expect(lookupQuery.sql).toContain('"delivery_shipments"."provider_id" = ?');
+    expect(lookupQuery.params).toEqual(["123", "steadfast", "provider_steadfast"]);
   });
 
   it("enqueues a customer notification after a real order status change", async () => {

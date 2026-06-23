@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { ShipmentStatus } from "@scalius/database/schema";
-import { deleteShipmentRecord, saveDeliveryProvider } from "./delivery.service";
+import {
+  checkShipmentStatus,
+  createShipment,
+  deleteShipmentRecord,
+  saveDeliveryProvider,
+} from "./delivery.service";
 
 function createDeleteShipmentDb({
   shipment,
@@ -82,6 +87,40 @@ function createSaveProviderDb(existingProvider: Record<string, unknown> | null =
   };
 
   return { db, writes };
+}
+
+function thenableRows(rows: unknown[]) {
+  return Object.assign(Promise.resolve(rows), {
+    get: vi.fn(async () => rows[0] ?? null),
+  });
+}
+
+function createSequentialSelectDb(results: unknown[][]) {
+  const selectResults = [...results];
+  const inserts: Array<Record<string, unknown>> = [];
+  const updates: Array<Record<string, unknown>> = [];
+  const db = {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => thenableRows(selectResults.shift() ?? [])),
+      })),
+    })),
+    insert: vi.fn(() => ({
+      values: vi.fn(async (values: Record<string, unknown>) => {
+        inserts.push(values);
+      }),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => {
+        updates.push(values);
+        return {
+          where: vi.fn(async () => undefined),
+        };
+      }),
+    })),
+  };
+
+  return { db, inserts, updates };
 }
 
 describe("deleteShipmentRecord claim safety", () => {
@@ -229,5 +268,57 @@ describe("saveDeliveryProvider credential storage", () => {
     expect(writes[0]?.credentials).toEqual(expect.any(String));
     expect(writes[0]?.credentials).not.toBe(JSON.stringify({ clientSecret: "secret", password: "pass" }));
     expect(writes[0]?.credentials).toContain(":");
+  });
+});
+
+describe("delivery provider active-state authority", () => {
+  it("does not create a shipment through an inactive provider", async () => {
+    const { db, inserts } = createSequentialSelectDb([
+      [{ id: "order_1", totalAmount: 100, paidAmount: 0 }],
+      [{
+        id: "provider_pathao",
+        type: "pathao",
+        isActive: false,
+        credentials: "{}",
+        config: "{}",
+      }],
+    ]);
+
+    await expect(createShipment(
+      db as never,
+      "order_1",
+      "provider_pathao",
+    )).resolves.toMatchObject({
+      success: false,
+      message: "Provider with ID provider_pathao is not active",
+    });
+
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("does not poll shipment status through an inactive provider", async () => {
+    const { db, updates } = createSequentialSelectDb([
+      [{
+        id: "shipment_1",
+        orderId: "order_1",
+        providerId: "provider_steadfast",
+        externalId: "consignment_1",
+      }],
+      [{ shipmentClaimId: null, shipmentClaimExpiresAt: null }],
+      [{
+        id: "provider_steadfast",
+        type: "steadfast",
+        isActive: false,
+        credentials: "{}",
+        config: "{}",
+      }],
+    ]);
+
+    await expect(checkShipmentStatus(
+      db as never,
+      "shipment_1",
+    )).rejects.toThrow("Provider with ID provider_steadfast is not active");
+
+    expect(updates).toHaveLength(0);
   });
 });

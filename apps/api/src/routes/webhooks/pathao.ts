@@ -2,7 +2,7 @@
 // Webhook endpoint for receiving Pathao delivery status push notifications.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { deliveryShipments } from "@scalius/database/schema";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
@@ -35,6 +35,10 @@ app.post("/", async (c) => {
 
     if (!verification.verified) {
         console.warn(`[pathao-webhook] Rejected: ${verification.reason}`);
+        return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+    if (!verification.providerId) {
+        console.warn("[pathao-webhook] Rejected: verified provider id missing");
         return c.json({ success: false, error: "Unauthorized" }, 401);
     }
 
@@ -93,7 +97,11 @@ app.post("/", async (c) => {
         const shipment = await db
             .select()
             .from(deliveryShipments)
-            .where(eq(deliveryShipments.externalId, consignmentId))
+            .where(and(
+                eq(deliveryShipments.externalId, consignmentId),
+                eq(deliveryShipments.providerType, "pathao"),
+                eq(deliveryShipments.providerId, verification.providerId),
+            ))
             .get();
 
         if (!shipment) {
