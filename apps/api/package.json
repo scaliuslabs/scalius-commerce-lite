@@ -47,7 +47,7 @@
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8",
-    "wrangler": "4.103.0"
+    "vitest": "^4.1.9",
+    "wrangler": "4.104.0"
   }
 }

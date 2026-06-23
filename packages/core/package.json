@@ -74,7 +74,7 @@
     "@cloudflare/workers-types": "^4.20260623.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "license": "UNLICENSED"
 }
