@@ -9,6 +9,7 @@ import { ok } from "../utils/api-response";
 import { errorResponses, successEnvelope } from "../schemas/responses";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { getEncryptionKey } from "../utils/encryption-key";
+import { getOptionalExecutionContext } from "../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const eventPayloadSchema = z.object({
@@ -89,14 +90,6 @@ function isTrustedEventSource(eventSourceUrl: string, storefrontUrl?: string): b
     return new URL(eventSourceUrl).origin === new URL(storefrontUrl).origin;
   } catch {
     return false;
-  }
-}
-
-function getOptionalExecutionContext(c: { executionCtx?: ExecutionContext }): ExecutionContext | undefined {
-  try {
-    return c.executionCtx;
-  } catch {
-    return undefined;
   }
 }
 

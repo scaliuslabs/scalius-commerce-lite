@@ -31,6 +31,7 @@ import {
 import {
     invalidateCatalogCaches,
     MAX_STOREFRONT_EXACT_HTML_PATHS,
+    type WaitUntilExecutionContext,
 } from "../../utils/cache-invalidation";
 import { eq, inArray } from "drizzle-orm";
 
@@ -98,7 +99,7 @@ async function productStorefrontHtmlPathsByIds(
 
 async function invalidateProductCatalogCaches(
     db: Database,
-    c: { env?: Env; executionCtx?: ExecutionContext },
+    c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
     productIds: readonly string[],
     htmlPaths: readonly string[] = [],
 ) {

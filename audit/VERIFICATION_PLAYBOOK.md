@@ -24,7 +24,8 @@ Current expected result:
 - Worker Env declaration guard passes.
 - Dependency audit reports no known moderate-or-higher vulnerabilities.
 - Root tests currently pass with `pnpm test`.
-- `pnpm outdated -r` is informational, not a pass/fail gate. Use a fresh run before dependency sweeps; storefront is on Astro 7 / `@astrojs/cloudflare` 14 / Vite 8, so dependency sweeps must include storefront typecheck/build, generated Wrangler dry-run, local dev smoke, and generated Worker smoke.
+- `pnpm outdated -r` is informational, not a pass/fail gate. Use a fresh run before dependency sweeps; storefront is on Astro 7 / `@astrojs/cloudflare` 14 / Vite 8.1 with Wrangler 4.103.0, so dependency sweeps must include `pnpm peers check`, storefront typecheck/build, generated Wrangler dry-run, local dev smoke, and generated Worker smoke.
+- Keep ESLint and Prettier for now. Oxfmt can be evaluated as an additive formatter experiment, but do not replace `prettier-plugin-astro` until Oxfmt supports Astro/Prettier plugins and a focused dual-run diff proves formatting parity.
 
 ## Operational Readiness
 

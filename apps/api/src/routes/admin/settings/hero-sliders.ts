@@ -12,12 +12,13 @@ import {
     getOptionalExecutionContext,
     invalidateGroups,
     triggerStorefrontPurgeForGroups,
+    type WaitUntilExecutionContext,
 } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 
-async function invalidateHomepageCaches(c: { env: Env; executionCtx?: ExecutionContext }): Promise<void> {
+async function invalidateHomepageCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
     await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE);
     triggerStorefrontPurgeForGroups([...HOMEPAGE_CACHE_GROUPS], c.env, getOptionalExecutionContext(c));
 }

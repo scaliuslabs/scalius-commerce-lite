@@ -32,7 +32,11 @@ import {
   validateStorefrontCartItems,
   type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
-import { invalidateProductAvailabilityCaches } from "../utils/cache-invalidation";
+import {
+  getOptionalExecutionContext,
+  invalidateProductAvailabilityCaches,
+  type WaitUntilExecutionContext,
+} from "../utils/cache-invalidation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
 import { getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
@@ -57,19 +61,11 @@ type CheckoutCustomerIdentity = {
   source: "authenticated";
 } | null;
 
-function getOptionalExecutionContext(c: { executionCtx?: ExecutionContext }): ExecutionContext | undefined {
-  try {
-    return c.executionCtx;
-  } catch {
-    return undefined;
-  }
-}
-
 async function invalidateStorefrontOrderAvailabilityCaches(
   db: Database,
   env: Env,
   orderId: string,
-  executionCtx: ExecutionContext | undefined,
+  executionCtx: WaitUntilExecutionContext | undefined,
 ): Promise<void> {
   try {
     await invalidateProductAvailabilityCaches(
