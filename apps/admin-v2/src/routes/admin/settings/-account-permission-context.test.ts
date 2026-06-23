@@ -50,4 +50,17 @@ describe("account settings permission context", () => {
       4,
     );
   });
+
+  it("keeps profile edit actions visible beside the compact media picker", () => {
+    const profileHeaderSource = readSource(
+      "components/admin/account-settings/ProfileHeader.tsx",
+    );
+
+    expect(profileHeaderSource).toContain("trigger={");
+    expect(profileHeaderSource).toContain("h-8 shrink-0");
+    expect(profileHeaderSource).toContain("Save changes");
+    expect(profileHeaderSource).toContain("Cancel");
+    expect(profileHeaderSource).toContain("disabled={isLoading || !hasChanges}");
+    expect(profileHeaderSource).not.toContain('className="w-full"');
+  });
 });
