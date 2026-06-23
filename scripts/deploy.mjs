@@ -41,7 +41,10 @@ const appDirsByTarget = {
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
 };
-const storefrontPostDeployWarmPaths = ["/", "/search"];
+const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
+const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
+const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
+const STOREFRONT_WARM_CONCURRENCY = 4;
 const pnpmExecutable = resolvePnpmExecutable();
 process.env.SCALIUS_PNPM_BIN = pnpmExecutable;
 process.env.PATH = `${dirname(pnpmExecutable)}${delimiter}${process.env.PATH || ""}`;
@@ -206,15 +209,138 @@ async function warmStorefrontPath(url, path) {
   }
 }
 
-async function warmStorefrontAfterDeploy(storefrontUrl) {
-  console.log("\n▶ Warm Storefront critical HTML caches");
-  console.log(`  ${storefrontPostDeployWarmPaths.join(", ")}\n`);
+function buildApiUrl(apiBaseUrl, path) {
+  const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
+  return new URL(path.replace(/^\//, ""), baseUrl).toString();
+}
 
-  await Promise.all(
-    storefrontPostDeployWarmPaths.map((path) =>
-      warmStorefrontPath(storefrontUrl, path),
+function getPayloadCollection(payload, keys) {
+  const unwrapped = payload?.data ?? payload;
+  if (Array.isArray(unwrapped)) {
+    return unwrapped;
+  }
+
+  for (const key of keys) {
+    const value = unwrapped?.[key];
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return [];
+}
+
+function appendSlugPaths(paths, items, prefix, limit) {
+  for (const item of items) {
+    if (paths.size >= limit) {
+      return;
+    }
+
+    const slug = typeof item?.slug === "string" ? item.slug.trim() : "";
+    if (!slug) {
+      continue;
+    }
+
+    paths.add(`${prefix}/${encodeURIComponent(slug)}`);
+  }
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function collectDynamicWarmPaths(apiBaseUrl) {
+  const paths = new Set();
+
+  if (!apiBaseUrl) {
+    return paths;
+  }
+
+  const [productsResult, categoriesResult] = await Promise.allSettled([
+    fetchJsonWithTimeout(
+      buildApiUrl(apiBaseUrl, `/products?limit=${STOREFRONT_DYNAMIC_WARM_LIMIT}`),
+      STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS,
     ),
-  );
+    fetchJsonWithTimeout(
+      buildApiUrl(apiBaseUrl, "/categories"),
+      STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS,
+    ),
+  ]);
+
+  if (productsResult.status === "fulfilled") {
+    appendSlugPaths(
+      paths,
+      getPayloadCollection(productsResult.value, ["products", "items"]),
+      "/products",
+      STOREFRONT_DYNAMIC_WARM_LIMIT,
+    );
+  } else {
+    console.warn(`⚠ Could not discover product warm paths: ${errorMessage(productsResult.reason)}`);
+  }
+
+  const categoryPathLimit = STOREFRONT_DYNAMIC_WARM_LIMIT * 2;
+  if (categoriesResult.status === "fulfilled") {
+    appendSlugPaths(
+      paths,
+      getPayloadCollection(categoriesResult.value, ["categories", "items"]),
+      "/categories",
+      categoryPathLimit,
+    );
+  } else {
+    console.warn(`⚠ Could not discover category warm paths: ${errorMessage(categoriesResult.reason)}`);
+  }
+
+  return paths;
+}
+
+async function collectStorefrontWarmPaths(generatedConfig) {
+  const paths = new Set(storefrontStaticPostDeployWarmPaths);
+  const apiBaseUrl = generatedConfig.vars?.PUBLIC_API_URL;
+  const dynamicPaths = await collectDynamicWarmPaths(apiBaseUrl);
+  for (const path of dynamicPaths) {
+    paths.add(path);
+  }
+  return [...paths];
+}
+
+async function warmStorefrontAfterDeploy(storefrontUrl, generatedConfig) {
+  const warmPaths = await collectStorefrontWarmPaths(generatedConfig);
+
+  console.log("\n▶ Warm Storefront critical HTML caches");
+  console.log(`  ${warmPaths.join(", ")}\n`);
+
+  for (let index = 0; index < warmPaths.length; index += STOREFRONT_WARM_CONCURRENCY) {
+    const chunk = warmPaths.slice(index, index + STOREFRONT_WARM_CONCURRENCY);
+    await Promise.all(
+      chunk.map((path) =>
+        warmStorefrontPath(storefrontUrl, path),
+      ),
+    );
+  }
 }
 
 async function verifyStorefrontDeploy() {
@@ -239,7 +365,7 @@ async function verifyStorefrontDeploy() {
     throw new Error("Could not verify live storefront: STOREFRONT_URL is missing from generated Wrangler config.");
   }
   await verifyHttpOk(new URL("/health", storefrontUrl).toString(), "Verify live Storefront /health");
-  await warmStorefrontAfterDeploy(storefrontUrl);
+  await warmStorefrontAfterDeploy(storefrontUrl, generatedConfig);
 }
 
 async function verifyPostDeployTarget(target) {
