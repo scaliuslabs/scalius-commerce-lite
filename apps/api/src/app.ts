@@ -44,6 +44,7 @@ import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
+import { readinessRoutes } from "./routes/readiness";
 import { errorResponseFromError } from "./utils/api-response";
 import { serveMediaRoute } from "./routes/media-server";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
@@ -251,6 +252,7 @@ app.get("/health", async (c) => {
     });
   }
 });
+app.route("/", readinessRoutes);
 
 // Adding Partytown proxy route (publicly accessible, no authMiddleware)
 app.route("/__ptproxy", partytownProxyRoutes);
