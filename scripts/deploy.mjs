@@ -41,6 +41,7 @@ const appDirsByTarget = {
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
 };
+const storefrontPostDeployWarmPaths = ["/", "/search"];
 const pnpmExecutable = resolvePnpmExecutable();
 process.env.SCALIUS_PNPM_BIN = pnpmExecutable;
 process.env.PATH = `${dirname(pnpmExecutable)}${delimiter}${process.env.PATH || ""}`;
@@ -169,6 +170,53 @@ async function verifyHttpOk(url, label) {
   }
 }
 
+async function warmStorefrontPath(url, path) {
+  const warmUrl = new URL(path, url).toString();
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+
+  try {
+    const response = await fetch(warmUrl, {
+      method: "GET",
+      headers: {
+        "Cache-Control": "no-cache",
+        "X-Cache-Warm": "deploy",
+      },
+      signal: controller.signal,
+    });
+    await response.arrayBuffer();
+    const durationMs = Date.now() - startedAt;
+    const cacheStatus = response.headers.get("X-Cache-Status") ?? "unknown";
+
+    if (!response.ok) {
+      console.warn(
+        `⚠ Warm ${path} returned ${response.status} in ${durationMs}ms (${cacheStatus}).`,
+      );
+      return;
+    }
+
+    console.log(`✓ Warmed ${path} in ${durationMs}ms (${cacheStatus}).`);
+  } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠ Warm ${path} failed after ${durationMs}ms: ${message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function warmStorefrontAfterDeploy(storefrontUrl) {
+  console.log("\n▶ Warm Storefront critical HTML caches");
+  console.log(`  ${storefrontPostDeployWarmPaths.join(", ")}\n`);
+
+  await Promise.all(
+    storefrontPostDeployWarmPaths.map((path) =>
+      warmStorefrontPath(storefrontUrl, path),
+    ),
+  );
+}
+
 async function verifyStorefrontDeploy() {
   const storefrontDir = resolve(root, "apps", "storefront");
   const generatedConfigPath = resolve(storefrontDir, "dist", "server", "wrangler.json");
@@ -191,6 +239,7 @@ async function verifyStorefrontDeploy() {
     throw new Error("Could not verify live storefront: STOREFRONT_URL is missing from generated Wrangler config.");
   }
   await verifyHttpOk(new URL("/health", storefrontUrl).toString(), "Verify live Storefront /health");
+  await warmStorefrontAfterDeploy(storefrontUrl);
 }
 
 async function verifyPostDeployTarget(target) {
