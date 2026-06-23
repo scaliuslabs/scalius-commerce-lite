@@ -44,6 +44,26 @@ describe("validateCODCollectionDetails", () => {
     });
   });
 
+  it("uses computed balance when stored balance due is stale", () => {
+    expect(
+      validateCODCollectionDetails(
+        {
+          totalAmount: 2500,
+          paidAmount: 0,
+          balanceDue: 0,
+        },
+        {
+          collectedBy: "Courier A",
+          collectedAmount: 2500,
+        },
+      ),
+    ).toMatchObject({
+      expectedAmount: 2500,
+      newPaidAmount: 2500,
+      newBalanceDue: 0,
+    });
+  });
+
   it("rejects missing collectors before any order mutation", () => {
     expect(() =>
       validateCODCollectionDetails(order, {

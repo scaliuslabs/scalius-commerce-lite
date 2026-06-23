@@ -21,6 +21,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { canTransitionTo } from "../orders/order-state-machine";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
+import { computePaymentStateAfterRefund } from "./payment-state";
 
 export interface RefundRequest {
     orderId: string;
@@ -130,6 +131,7 @@ async function releaseRefundClaim(
         refundPaymentId: string;
         refundAmount: number;
         originalPaymentStatus: string;
+        originalBalanceDue: number;
         reason: string;
         gateway: PaymentGateway;
         error: unknown;
@@ -150,6 +152,7 @@ async function releaseRefundClaim(
         }).where(eq(orderPayments.id, params.refundPaymentId)),
         db.update(orders).set({
             paidAmount: sql`${orders.paidAmount} + ${params.refundAmount}`,
+            balanceDue: params.originalBalanceDue,
             paymentStatus: params.originalPaymentStatus,
             version: sql`${orders.version} + 1`,
             updatedAt: sql`unixepoch()`,
@@ -329,6 +332,7 @@ export async function processRefund(
             id: orders.id,
             totalAmount: orders.totalAmount,
             paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             status: orders.status,
@@ -409,8 +413,12 @@ export async function processRefund(
     const currencyConfig = await getCurrencyConfig(db, kv);
     const currencyDecimals = getDecimalPlaces(currencyConfig.code);
 
-    const newPaidAmount = roundPrice(Math.max(0, (order.paidAmount ?? 0) - refundAmount));
-    const newPaymentStatus = isFullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL;
+    const newPaymentState = computePaymentStateAfterRefund({
+        totalAmount: order.totalAmount,
+        currentPaidAmount: order.paidAmount,
+        refundAmount,
+        isFullRefund,
+    });
     const refundPaymentId = getRefundClaimId(params.orderId, order.version);
     const claimVersion = order.version + 1;
 
@@ -438,8 +446,9 @@ export async function processRefund(
                 updatedAt: sql`unixepoch()`,
             }),
             db.update(orders).set({
-                paidAmount: newPaidAmount,
-                paymentStatus: newPaymentStatus,
+                paidAmount: newPaymentState.paidAmount,
+                balanceDue: newPaymentState.balanceDue,
+                paymentStatus: newPaymentState.paymentStatus,
                 version: claimVersion,
                 updatedAt: sql`unixepoch()`,
             }).where(and(
@@ -478,6 +487,7 @@ export async function processRefund(
             refundPaymentId,
             refundAmount,
             originalPaymentStatus: order.paymentStatus,
+            originalBalanceDue: order.balanceDue,
             reason: params.reason,
             gateway: gateway as PaymentGateway,
             error,

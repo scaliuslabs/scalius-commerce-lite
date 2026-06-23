@@ -44,6 +44,7 @@ function createDbMock(gateway: Gateway) {
     id: "order_1",
     totalAmount: 100,
     paidAmount: 100,
+    balanceDue: 0,
     paymentStatus: PaymentStatus.PAID,
     paymentMethod: gateway,
     status: OrderStatus.PROCESSING,
@@ -64,13 +65,17 @@ function createDbMock(gateway: Gateway) {
   };
 
   const selectValues = [order, null, payment];
+  const updateSets: Array<Record<string, unknown>> = [];
   const batch = vi.fn(async () => [undefined, [{ id: "order_1", version: 4 }]]);
   const update = vi.fn(() => ({
-    set: vi.fn(() => ({
+    set: vi.fn((values: Record<string, unknown>) => {
+      updateSets.push(values);
+      return {
       where: vi.fn(() => ({
         returning: vi.fn(async () => [{ id: "order_1", version: 4 }]),
       })),
-    })),
+    };
+    }),
   }));
 
   return {
@@ -92,6 +97,7 @@ function createDbMock(gateway: Gateway) {
     delete: vi.fn(() => ({
       where: vi.fn(async () => undefined),
     })),
+    updateSets,
   };
 }
 
@@ -174,5 +180,22 @@ describe("refund gateway settings freshness", () => {
     );
     expect(db.batch).toHaveBeenCalledTimes(2);
     expect(mocks.createPaymentProvider).not.toHaveBeenCalled();
+  });
+
+  it("recomputes balance due when claiming a partial refund", async () => {
+    const db = createDbMock("stripe");
+
+    await processRefund(
+      db as never,
+      undefined,
+      { orderId: "order_1", amount: 25, reason: "customer_request", gateway: "stripe" },
+      "enc-key",
+    );
+
+    expect(db.updateSets).toContainEqual(expect.objectContaining({
+      paidAmount: 75,
+      balanceDue: 25,
+      paymentStatus: PaymentStatus.PARTIAL,
+    }));
   });
 });

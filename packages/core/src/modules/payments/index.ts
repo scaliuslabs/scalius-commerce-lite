@@ -78,6 +78,16 @@ export { initCODTracking, recordCODCollection, recordCODFailure, markCODReturned
 
 // --- Payment processing ---
 export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory, recordWebhookEvent } from "./process-payment";
+export {
+  computeOrderPaymentState,
+  computePaymentStateAfterPayment,
+  computePaymentStateAfterRefund,
+  paymentStatesEqual,
+} from "./payment-state";
+export type {
+  ComputedOrderPaymentState,
+  ComputePaymentStateInput,
+} from "./payment-state";
 
 // --- Refund service ---
 export { processRefund, processReturn } from "./refund-service";

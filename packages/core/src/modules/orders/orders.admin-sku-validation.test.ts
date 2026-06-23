@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
+import { PaymentStatus } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
 import type { CreateOrderInput } from "./orders.validation";
 
@@ -61,9 +62,23 @@ function queryResult<T>(rows: T[], getValue: unknown = rows[0] ?? null) {
 
 function createOrderDbWithSkuRows(rows: SkuRow[]) {
     let selectCall = 0;
-    const batch = vi.fn();
-    const insert = vi.fn();
-    const update = vi.fn();
+    const insertValues: Array<Record<string, unknown> | Array<Record<string, unknown>>> = [];
+    const updateValues: Array<Record<string, unknown>> = [];
+    const batch = vi.fn(async () => []);
+    const insert = vi.fn(() => ({
+        values: vi.fn((values: Record<string, unknown> | Array<Record<string, unknown>>) => {
+            insertValues.push(values);
+            return { kind: "insert", values };
+        }),
+    }));
+    const update = vi.fn(() => ({
+        set: vi.fn((values: Record<string, unknown>) => {
+            updateValues.push(values);
+            return {
+                where: vi.fn(() => ({ kind: "update", values })),
+            };
+        }),
+    }));
     const skuWhere = vi.fn(async () => rows);
     const select = vi.fn(() => {
         selectCall += 1;
@@ -88,6 +103,8 @@ function createOrderDbWithSkuRows(rows: SkuRow[]) {
         batch,
         insert,
         update,
+        insertValues,
+        updateValues,
     };
 }
 
@@ -262,5 +279,43 @@ describe("resolveAdminOrderItemInventory", () => {
         expect(batch).not.toHaveBeenCalled();
         expect(insert).not.toHaveBeenCalled();
         expect(update).not.toHaveBeenCalled();
+    });
+
+    it("creates unpaid manual orders with balance due equal to the order total", async () => {
+        const { db, batch, insertValues } = createOrderDbWithSkuRows([
+            {
+                id: "var_untracked",
+                productId: "prod_active",
+                trackInventory: false,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+            },
+        ]);
+
+        await createOrder(db, createOrderInput({
+            items: [
+                {
+                    productId: "prod_active",
+                    variantId: "var_untracked",
+                    quantity: 2,
+                    price: 100,
+                },
+            ],
+            shippingCharge: 60,
+            discountAmount: null,
+        }));
+
+        const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
+            !Array.isArray(values) && "shippingCharge" in values && "balanceDue" in values,
+        );
+
+        expect(batch).toHaveBeenCalledTimes(1);
+        expect(orderInsert).toMatchObject({
+            totalAmount: 260,
+            paidAmount: 0,
+            balanceDue: 260,
+            paymentStatus: PaymentStatus.UNPAID,
+        });
     });
 });

@@ -97,6 +97,7 @@ describe("Polar webhook refund processing", () => {
     expect(updates).toHaveLength(1);
     expect(updates[0]).toMatchObject({
       paidAmount: 0,
+      balanceDue: 100,
       paymentStatus: PaymentStatus.REFUNDED,
       status: OrderStatus.CANCELLED,
     });
@@ -130,6 +131,7 @@ describe("Polar webhook refund processing", () => {
     expect(result).toEqual({ success: true });
     expect(updates[0]).toMatchObject({
       paidAmount: 0,
+      balanceDue: 100,
       paymentStatus: PaymentStatus.REFUNDED,
       status: OrderStatus.REFUNDED,
     });
@@ -164,6 +166,36 @@ describe("Polar webhook refund processing", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
+  it("recomputes balance due for partial Polar refunds", async () => {
+    const { db, updates } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 100,
+        balanceDue: 0,
+        paymentStatus: PaymentStatus.PAID,
+        totalAmount: 100,
+        status: OrderStatus.DELIVERED,
+        version: 3,
+      },
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      amountRefunded: 2_500,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "partially_refunded",
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(updates[0]).toMatchObject({
+      paidAmount: 75,
+      balanceDue: 25,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
   it("repairs old fully-refunded payment rows whose order status was never transitioned", async () => {
     const { db, updates } = createDbMock({
       order: {
@@ -187,6 +219,7 @@ describe("Polar webhook refund processing", () => {
     expect(result).toEqual({ success: true });
     expect(updates[0]).toMatchObject({
       paymentStatus: PaymentStatus.REFUNDED,
+      balanceDue: 100,
       status: OrderStatus.CANCELLED,
     });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(

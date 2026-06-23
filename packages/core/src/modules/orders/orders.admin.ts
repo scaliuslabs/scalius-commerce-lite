@@ -15,6 +15,7 @@ import {
     deliveryProviders,
     deliveryLocations,
     OrderStatus,
+    PaymentStatus,
 } from "@scalius/database/schema";
 import {
     applyInventoryForStatusChange,
@@ -44,6 +45,7 @@ import { validateTransition } from "./order-state-machine";
 import type { OrderShipmentSummary, OrderDetails } from "./orders.types";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
+import { computeOrderPaymentState } from "../payments/payment-state";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -641,6 +643,10 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
         addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
         data.discountAmount || 0,
     );
+    const initialPaymentState = computeOrderPaymentState({
+        totalAmount,
+        paidAmount: 0,
+    });
 
     // Resolve location names (read-only, safe outside transaction)
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
@@ -795,6 +801,9 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
             totalAmount,
             shippingCharge: data.shippingCharge,
             discountAmount: data.discountAmount,
+            paidAmount: initialPaymentState.paidAmount,
+            balanceDue: initialPaymentState.balanceDue,
+            paymentStatus: initialPaymentState.paymentStatus,
             status: "pending",
             customerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
@@ -1099,6 +1108,8 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             status: orders.status,
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
+            paidAmount: orders.paidAmount,
+            paymentStatus: orders.paymentStatus,
             version: orders.version,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -1129,6 +1140,15 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
         data.discountAmount || 0,
     );
+    const nextPaymentState = computeOrderPaymentState({
+        totalAmount,
+        paidAmount: existingOrder.paidAmount,
+        paymentStatus: existingOrder.paymentStatus === PaymentStatus.REFUNDED
+            ? PaymentStatus.REFUNDED
+            : existingOrder.paymentStatus === PaymentStatus.FAILED
+                ? PaymentStatus.FAILED
+                : undefined,
+    });
     let customerId = existingOrder.customerId;
     let acquiredReservations: ReservationEntry[] = [];
     let deductedEntries: ReservationEntry[] = [];
@@ -1261,6 +1281,9 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             totalAmount,
             shippingCharge: data.shippingCharge,
             discountAmount: data.discountAmount,
+            paidAmount: nextPaymentState.paidAmount,
+            balanceDue: nextPaymentState.balanceDue,
+            paymentStatus: nextPaymentState.paymentStatus,
             status: data.status,
             customerId,
             version: existingOrder.version + 1,
