@@ -71,9 +71,18 @@ export type {
 } from "./gateway-settings";
 
 // --- Legacy function exports (backward compatibility) ---
-export { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent, createRefund, verifyStripeWebhook, getStripe } from "./stripe";
+export {
+  createPaymentIntent,
+  capturePaymentIntent,
+  cancelPaymentIntent,
+  createRefund,
+  retrieveStripeRefund,
+  listStripeRefundsForCharge,
+  verifyStripeWebhook,
+  getStripe,
+} from "./stripe";
 export { initSSLCommerzSession, validateSSLCommerzIPN, validateSSLCommerzPayment, initiateSSLCommerzRefund, querySSLCommerzRefundStatus } from "./sslcommerz";
-export { createPolarCheckout, createPolarRefund, verifyPolarWebhook } from "./polar";
+export { createPolarCheckout, createPolarRefund, listPolarRefunds, verifyPolarWebhook } from "./polar";
 export { initCODTracking, recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
 
 // --- Payment processing ---
@@ -90,8 +99,20 @@ export type {
 } from "./payment-state";
 
 // --- Refund service ---
-export { processRefund, processReturn } from "./refund-service";
-export type { RefundRequest, RefundResult as RefundServiceResult } from "./refund-service";
+export { finalizeAcceptedRefundAttemptIds, processRefund, processReturn } from "./refund-service";
+export type {
+  FinalizeAcceptedRefundAttemptsResult,
+  RefundRequest,
+  RefundResult as RefundServiceResult,
+} from "./refund-service";
+export {
+  reconcileDueRefundAttempts,
+  reconcileRefundAttemptById,
+} from "./refund-reconciliation";
+export type {
+  RefundReconciliationOptions,
+  RefundReconciliationResult,
+} from "./refund-reconciliation";
 export {
   ACTIVE_REFUND_ATTEMPT_STATUSES,
   ORDER_REFUND_MUTATION_BLOCKED_MESSAGE,

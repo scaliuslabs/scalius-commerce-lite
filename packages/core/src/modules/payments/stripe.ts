@@ -161,6 +161,7 @@ export async function createRefund(
   amount?: number,
   reason?: Stripe.RefundCreateParams["reason"],
   idempotencyKey?: string,
+  metadata?: Record<string, string>,
 ): Promise<{ success: boolean; refundId?: string; error?: string }> {
   try {
     const stripe = getStripe(secretKey);
@@ -168,12 +169,69 @@ export async function createRefund(
       charge: chargeId,
       ...(amount !== undefined ? { amount: Math.round(amount) } : {}),
       ...(reason ? { reason } : {}),
+      ...(metadata ? { metadata } : {}),
     }, idempotencyKey ? { idempotencyKey } : undefined);
     return { success: true, refundId: refund.id };
   } catch (err: unknown) {
     const message = err instanceof Stripe.errors.StripeError
       ? err.message
       : "Failed to create refund";
+    return { success: false, error: message };
+  }
+}
+
+export interface StripeRefundSnapshot {
+  id: string;
+  status: string | null;
+  amount: number;
+  currency: string;
+  charge: string | null;
+  metadata: Record<string, string>;
+}
+
+function mapStripeRefund(refund: Stripe.Refund): StripeRefundSnapshot {
+  return {
+    id: refund.id,
+    status: refund.status,
+    amount: refund.amount,
+    currency: refund.currency,
+    charge: typeof refund.charge === "string" ? refund.charge : refund.charge?.id ?? null,
+    metadata: refund.metadata ?? {},
+  };
+}
+
+export async function retrieveStripeRefund(
+  secretKey: string,
+  refundId: string,
+): Promise<{ success: boolean; refund?: StripeRefundSnapshot; error?: string }> {
+  try {
+    const stripe = getStripe(secretKey);
+    const refund = await stripe.refunds.retrieve(refundId);
+    return { success: true, refund: mapStripeRefund(refund) };
+  } catch (err: unknown) {
+    const message = err instanceof Stripe.errors.StripeError
+      ? err.message
+      : "Failed to retrieve Stripe refund";
+    return { success: false, error: message };
+  }
+}
+
+export async function listStripeRefundsForCharge(
+  secretKey: string,
+  chargeId: string,
+  limit = 10,
+): Promise<{ success: boolean; refunds?: StripeRefundSnapshot[]; error?: string }> {
+  try {
+    const stripe = getStripe(secretKey);
+    const refunds = await stripe.refunds.list({
+      charge: chargeId,
+      limit: Math.max(1, Math.min(100, Math.floor(limit))),
+    });
+    return { success: true, refunds: refunds.data.map(mapStripeRefund) };
+  } catch (err: unknown) {
+    const message = err instanceof Stripe.errors.StripeError
+      ? err.message
+      : "Failed to list Stripe refunds";
     return { success: false, error: message };
   }
 }
@@ -253,6 +311,7 @@ export class StripeProvider implements PaymentProvider {
       params.amount,
       reason,
       params.metadata?.idempotencyKey,
+      params.metadata,
     );
 
     if (!result.success) {

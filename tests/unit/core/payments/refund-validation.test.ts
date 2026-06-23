@@ -350,7 +350,18 @@ function createRefundDbWithLostStatusCas() {
     sslcommerzBankTranId: null,
     polarCheckoutId: null,
   };
-  const selectResults = [order, null, null, [payment], []];
+  const refundAttempt = {
+    id: "rfa_refund_ord_refund_cas_7_1",
+    orderId: order.id,
+    refundPaymentId: "refund_ord_refund_cas_7_1",
+    providerRefundId: "refund_gateway_1",
+  };
+  const refundPayment = {
+    paymentType: "refund",
+    status: "refunded",
+    amount: 100,
+  };
+  const selectResults = [order, null, null, [payment], [], [refundAttempt], order, [payment, refundPayment]];
   let selectIndex = 0;
   let updateIndex = 0;
 
@@ -848,7 +859,7 @@ describe("refund validation", () => {
         orderId: "ord_refund_cas",
         reason: "Customer cancelled before fulfillment",
         gateway: "cod",
-      })).rejects.toThrow("Refund payment was accepted, but order status reconciliation lost a concurrent update.");
+      })).rejects.toThrow("Refund payment was accepted, but local order reconciliation lost a concurrent update.");
 
       expect(createRefund).toHaveBeenCalledOnce();
       expect(applyInventoryForStatusChange).not.toHaveBeenCalled();

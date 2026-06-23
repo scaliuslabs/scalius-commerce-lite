@@ -9,6 +9,8 @@ import {
   cleanupExpiredCustomerSessions,
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { cleanupExpiredScannerTokenClaims } from "@scalius/core/auth";
+import { reconcileDueRefundAttempts } from "@scalius/core/modules/payments";
+import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
@@ -22,6 +24,7 @@ export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
+export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
 
 export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionContext): Promise<void> {
   const db = getDb(env);
@@ -95,6 +98,33 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     console.log(
       `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
         `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, skipped=${notificationOutbox.skipped}`,
+    );
+  }
+
+  const refundReconciliation = await reconcileDueRefundAttempts(db, env.CACHE, {
+    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+  });
+  if (refundReconciliation.finalizedOrderIds.length > 0) {
+    await invalidateProductAvailabilityCaches(
+      db,
+      { orderIds: refundReconciliation.finalizedOrderIds },
+      { env, executionCtx },
+    );
+  }
+  if (
+    refundReconciliation.scanned > 0 ||
+    refundReconciliation.failed > 0 ||
+    refundReconciliation.deferred > 0 ||
+    refundReconciliation.errors.length > 0 ||
+    refundReconciliation.hasMore
+  ) {
+    console.log(
+      `[scheduled] Refund reconciliation: scanned=${refundReconciliation.scanned}, ` +
+        `claimed=${refundReconciliation.claimed}, finalized=${refundReconciliation.finalized}, ` +
+        `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
+        `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
+        `hasMore=${refundReconciliation.hasMore}`,
     );
   }
 

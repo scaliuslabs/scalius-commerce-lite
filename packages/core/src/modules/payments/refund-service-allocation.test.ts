@@ -145,6 +145,21 @@ function createDbMock({
     return chain;
   };
 
+  const acceptedRefundCount = () =>
+    updateValues.filter((values) => values.providerStatus === "accepted").length;
+
+  const finalizerAttemptRows = () =>
+    refundAttemptInsertValues.slice(0, acceptedRefundCount());
+
+  const finalizerPaymentRows = () => [
+    ...payments,
+    ...insertValues.slice(0, acceptedRefundCount()).map((values) => ({
+      paymentType: "refund",
+      status: PaymentRecordStatus.REFUNDED,
+      amount: values.amount,
+    })),
+  ];
+
   return {
     batch,
     insert: vi.fn(() => ({
@@ -180,7 +195,13 @@ function createDbMock({
             ? pendingRefund
             : selectCall === 4
               ? payments
-              : refunds;
+              : selectCall === 5
+                ? refunds
+                : selectCall === 6
+                  ? finalizerAttemptRows()
+                  : selectCall === 7
+                    ? order
+                    : finalizerPaymentRows();
       return chainFor(result);
     }),
     insertValues,
