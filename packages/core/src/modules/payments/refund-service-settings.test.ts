@@ -90,8 +90,10 @@ function createDbMock(gateway: Gateway) {
         : selectCall === 2
           ? null
           : selectCall === 3
-            ? [payment]
-            : [];
+            ? null
+            : selectCall === 4
+              ? [payment]
+              : [];
       const chain = {
         from: vi.fn(() => chain),
         where: vi.fn(() => chain),

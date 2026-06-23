@@ -319,8 +319,11 @@ function createReturnDbWithLostStatusCas() {
     version: 4,
   };
 
+  const selectResults = [order, null, null];
+  let selectIndex = 0;
+
   return {
-    select: vi.fn(() => createChain(order)),
+    select: vi.fn(() => createChain(selectResults[selectIndex++])),
     update: vi.fn(() => createChain([])),
   };
 }
@@ -347,7 +350,7 @@ function createRefundDbWithLostStatusCas() {
     sslcommerzBankTranId: null,
     polarCheckoutId: null,
   };
-  const selectResults = [order, null, [payment], []];
+  const selectResults = [order, null, null, [payment], []];
   let selectIndex = 0;
   let updateIndex = 0;
 
@@ -356,7 +359,7 @@ function createRefundDbWithLostStatusCas() {
     insert: vi.fn(() => createChain([{ id: "refund_ord_refund_cas_7" }])),
     update: vi.fn(() => {
       updateIndex += 1;
-      return createChain(updateIndex === 4 ? [] : [{ id: order.id, version: 9 }]);
+      return createChain(updateIndex === 6 ? [] : [{ id: order.id, version: 9 }]);
     }),
     delete: vi.fn(() => createChain(undefined)),
     batch: vi.fn(async () => [
@@ -374,8 +377,11 @@ function createAlreadyReturnedDb() {
     version: 5,
   };
 
+  const selectResults = [order, null, null];
+  let selectIndex = 0;
+
   return {
-    select: vi.fn(() => createChain(order)),
+    select: vi.fn(() => createChain(selectResults[selectIndex++])),
     update: vi.fn(() => createChain([{ id: order.id }])),
   };
 }
@@ -842,11 +848,7 @@ describe("refund validation", () => {
         orderId: "ord_refund_cas",
         reason: "Customer cancelled before fulfillment",
         gateway: "cod",
-      })).resolves.toMatchObject({
-        success: true,
-        amount: 100,
-        isFullRefund: true,
-      });
+      })).rejects.toThrow("Refund payment was accepted, but order status reconciliation lost a concurrent update.");
 
       expect(createRefund).toHaveBeenCalledOnce();
       expect(applyInventoryForStatusChange).not.toHaveBeenCalled();

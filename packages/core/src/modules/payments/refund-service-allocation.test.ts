@@ -115,12 +115,17 @@ function refundRow(overrides: Partial<PaymentRow>): PaymentRow {
 function createDbMock({
   payments,
   refunds = [],
+  activeAttempt = null,
+  pendingRefund = null,
 }: {
   payments: PaymentRow[];
   refunds?: PaymentRow[];
+  activeAttempt?: Record<string, unknown> | null;
+  pendingRefund?: Record<string, unknown> | null;
 }) {
   let selectCall = 0;
   const insertValues: Array<Record<string, unknown>> = [];
+  const refundAttemptInsertValues: Array<Record<string, unknown>> = [];
   const updateValues: Array<Record<string, unknown>> = [];
 
   const batch = vi.fn(async (statements: unknown[]) => [
@@ -144,7 +149,11 @@ function createDbMock({
     batch,
     insert: vi.fn(() => ({
       values: vi.fn((values: Record<string, unknown>) => {
-        insertValues.push(values);
+        if ("attemptKey" in values || "refundPaymentId" in values) {
+          refundAttemptInsertValues.push(values);
+        } else {
+          insertValues.push(values);
+        }
         return { kind: "insert", values };
       }),
     })),
@@ -166,13 +175,16 @@ function createDbMock({
       const result = selectCall === 1
         ? order
         : selectCall === 2
-          ? null
+          ? activeAttempt
           : selectCall === 3
-            ? payments
-            : refunds;
+            ? pendingRefund
+            : selectCall === 4
+              ? payments
+              : refunds;
       return chainFor(result);
     }),
     insertValues,
+    refundAttemptInsertValues,
     updateValues,
   };
 }
@@ -236,6 +248,25 @@ describe("refund allocation", () => {
       expect.objectContaining({ sourcePaymentId: "pay_balance", allocationIndex: 0 }),
       expect.objectContaining({ sourcePaymentId: "pay_deposit", allocationIndex: 1 }),
     ]);
+    expect(db.refundAttemptInsertValues).toHaveLength(2);
+    expect(db.refundAttemptInsertValues).toEqual([
+      expect.objectContaining({
+        sourcePaymentId: "pay_balance",
+        refundPaymentId: "refund_order_1_3_1",
+        status: "pending",
+        providerIdempotencyKey: "refund:order_1:pay_balance:4",
+      }),
+      expect.objectContaining({
+        sourcePaymentId: "pay_deposit",
+        refundPaymentId: "refund_order_1_3_2",
+        status: "pending",
+        providerIdempotencyKey: "refund:order_1:pay_deposit:4",
+      }),
+    ]);
+    expect(db.updateValues).toContainEqual(expect.objectContaining({
+      status: "refunded",
+      providerStatus: "accepted",
+    }));
   });
 
   it("spills a partial refund into an older payment when the latest payment remaining is insufficient", async () => {
@@ -369,10 +400,33 @@ describe("refund allocation", () => {
       metadata: expect.stringContaining('"providerOutcome":"unknown"'),
     }));
     expect(db.updateValues).toContainEqual(expect.objectContaining({
+      status: "provider_unknown",
+      providerStatus: "unknown",
+    }));
+    expect(db.updateValues).toContainEqual(expect.objectContaining({
       paidAmount: 30,
       balanceDue: 70,
       paymentStatus: PaymentStatus.PARTIAL,
     }));
+  });
+
+  it("blocks a new refund while a durable refund attempt is active", async () => {
+    const db = createDbMock({
+      payments: [
+        stripePayment({ id: "pay_1", amount: 100, stripeChargeId: "ch_1" }),
+      ],
+      activeAttempt: { id: "rfa_active", status: "provider_unknown" },
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      amount: 40,
+      reason: "customer_request",
+      gateway: "stripe",
+    })).rejects.toThrow("A refund is already in progress");
+
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
   });
 
   it("leaves the whole refund pending when the first provider outcome is unknown", async () => {
@@ -395,6 +449,10 @@ describe("refund allocation", () => {
     expect(db.updateValues).toContainEqual(expect.objectContaining({
       status: PaymentRecordStatus.PENDING,
       metadata: expect.stringContaining('"providerOutcome":"unknown"'),
+    }));
+    expect(db.updateValues).toContainEqual(expect.objectContaining({
+      status: "provider_unknown",
+      providerStatus: "unknown",
     }));
     expect(db.updateValues).not.toContainEqual(expect.objectContaining({
       paidAmount: expect.any(Number),

@@ -1,5 +1,5 @@
 // src/db/schema/orders.ts
-// Order domain tables: orders, checkoutAttempts, orderItems, orderPayments, paymentPlans,
+// Order domain tables: orders, checkoutAttempts, orderItems, orderPayments, refundAttempts, paymentPlans,
 // codTracking, webhookEvents, orderNotificationOutbox,
 // orderNotificationDeliveryReceipts, abandonedCheckouts.
 
@@ -186,6 +186,65 @@ export const orderPayments = sqliteTable("order_payments", {
     // idx_order_payments_sslcommerz_val_unique ON (order_id, sslcommerz_val_id) WHERE sslcommerz_val_id IS NOT NULL
 ]);
 
+export const refundAttempts = sqliteTable("refund_attempts", {
+    id: text("id").primaryKey(),
+    attemptKey: text("attempt_key").notNull(),
+    refundGroupId: text("refund_group_id").notNull(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    sourcePaymentId: text("source_payment_id")
+        .notNull()
+        .references(() => orderPayments.id, { onDelete: "cascade" }),
+    refundPaymentId: text("refund_payment_id")
+        .notNull()
+        .references(() => orderPayments.id, { onDelete: "cascade" }),
+    gateway: text("gateway").notNull(),
+    amount: real("amount").notNull(),
+    currency: text("currency").notNull().default("BDT"),
+    reason: text("reason").notNull(),
+    requestHash: text("request_hash").notNull(),
+    providerIdempotencyKey: text("provider_idempotency_key").notNull(),
+    refundReference: text("refund_reference").notNull(),
+    allocationIndex: integer("allocation_index").notNull().default(0),
+    allocationCount: integer("allocation_count").notNull().default(1),
+    sourceTransactionId: text("source_transaction_id"),
+    providerRefundId: text("provider_refund_id"),
+    providerCorrelationId: text("provider_correlation_id"),
+    providerStatus: text("provider_status"),
+    requestPayload: text("request_payload"),
+    responsePayload: text("response_payload"),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextProbeAt: integer("next_probe_at").notNull().default(UNIX_NOW),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastProbeAt: integer("last_probe_at"),
+    lastError: text("last_error"),
+    metadata: text("metadata"),
+    refundedAt: integer("refunded_at"),
+    failedAt: integer("failed_at"),
+    cancelledAt: integer("cancelled_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("refund_attempts_attempt_key_unique").on(table.attemptKey),
+    uniqueIndex("refund_attempts_provider_idempotency_key_unique").on(table.providerIdempotencyKey),
+    uniqueIndex("refund_attempts_reference_unique").on(table.refundReference),
+    uniqueIndex("refund_attempts_group_allocation_unique").on(table.refundGroupId, table.allocationIndex),
+    index("refund_attempts_order_id_idx").on(table.orderId),
+    index("refund_attempts_order_status_idx").on(table.orderId, table.status),
+    index("refund_attempts_status_probe_idx").on(table.status, table.nextProbeAt, table.createdAt),
+    index("refund_attempts_status_claim_idx").on(table.status, table.claimExpiresAt, table.createdAt),
+    index("refund_attempts_source_payment_id_idx").on(table.sourcePaymentId),
+    index("refund_attempts_source_payment_status_idx").on(table.sourcePaymentId, table.status),
+    index("refund_attempts_refund_payment_id_idx").on(table.refundPaymentId),
+    index("refund_attempts_provider_refund_idx").on(table.gateway, table.providerRefundId),
+    // Manual migration also creates these partial unique indexes (not expressible in Drizzle):
+    // refund_attempts_provider_refund_unique ON (gateway, provider_refund_id) WHERE provider_refund_id IS NOT NULL
+    // refund_attempts_live_source_payment_singleflight ON (source_payment_id) WHERE status IN ('pending','processing','provider_unknown','reconcile_required')
+]);
+
 export const paymentSessionAttempts = sqliteTable("payment_session_attempts", {
     id: text("id").primaryKey(),
     attemptKey: text("attempt_key").notNull(),
@@ -363,6 +422,7 @@ export type Order = InferSelectModel<typeof orders>;
 export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
+export type RefundAttempt = InferSelectModel<typeof refundAttempts>;
 export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;
 export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;

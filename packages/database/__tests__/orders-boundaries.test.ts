@@ -17,6 +17,9 @@ const ADMIN_ORDER_FILTER_INDEXES_MIGRATION = fileURLToPath(
 const ADMIN_ORDER_SINGLE_FILTER_INDEXES_MIGRATION = fileURLToPath(
     new URL("../migrations/0059_admin_order_single_filter_indexes.sql", import.meta.url),
 );
+const REFUND_ATTEMPTS_MIGRATION = fileURLToPath(
+    new URL("../migrations/0064_refund_attempts.sql", import.meta.url),
+);
 
 describe("order schema boundaries", () => {
     it("keeps admin order search and default list indexes aligned", () => {
@@ -67,5 +70,25 @@ describe("order schema boundaries", () => {
         expect(listMigrationSource).toContain(
             "CREATE INDEX IF NOT EXISTS `orders_fulfillment_list_idx` ON `orders` (`deleted_at`, `fulfillment_status`, `updated_at`)",
         );
+    });
+    it("keeps refund attempt reconciliation indexes aligned", () => {
+        const schemaSource = readFileSync(ORDERS_SCHEMA_SOURCE, "utf8");
+        const migrationSource = readFileSync(REFUND_ATTEMPTS_MIGRATION, "utf8");
+
+        expect(schemaSource).toContain('export const refundAttempts = sqliteTable("refund_attempts"');
+        expect(schemaSource).toContain('uniqueIndex("refund_attempts_attempt_key_unique").on(table.attemptKey)');
+        expect(schemaSource).toContain('index("refund_attempts_status_probe_idx").on(table.status, table.nextProbeAt, table.createdAt)');
+        expect(schemaSource).toContain("refund_attempts_live_source_payment_singleflight");
+        expect(schemaSource).toContain("provider_unknown");
+        expect(schemaSource).toContain("reconcile_required");
+
+        expect(migrationSource).toContain("CREATE TABLE `refund_attempts`");
+        expect(migrationSource).toContain("FOREIGN KEY (`source_payment_id`) REFERENCES `order_payments`(`id`)");
+        expect(migrationSource).toContain("FOREIGN KEY (`refund_payment_id`) REFERENCES `order_payments`(`id`)");
+        expect(migrationSource).toContain("CREATE INDEX `refund_attempts_status_probe_idx` ON `refund_attempts` (`status`,`next_probe_at`,`created_at`)");
+        expect(migrationSource).toContain("CREATE UNIQUE INDEX `refund_attempts_provider_refund_unique`");
+        expect(migrationSource).toContain("WHERE `provider_refund_id` IS NOT NULL");
+        expect(migrationSource).toContain("CREATE UNIQUE INDEX `refund_attempts_live_source_payment_singleflight`");
+        expect(migrationSource).toContain("'pending','processing','provider_unknown','reconcile_required'");
     });
 });
