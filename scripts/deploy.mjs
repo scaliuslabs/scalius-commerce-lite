@@ -21,9 +21,9 @@
 
 import { execSync } from "child_process";
 import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
+import { delimiter, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { pnpmShellCommand } from "./dev-local-utils.mjs";
+import { resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -41,7 +41,10 @@ const appDirsByTarget = {
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
 };
-const pnpm = pnpmShellCommand();
+const pnpmExecutable = resolvePnpmExecutable();
+process.env.SCALIUS_PNPM_BIN = pnpmExecutable;
+process.env.PATH = `${dirname(pnpmExecutable)}${delimiter}${process.env.PATH || ""}`;
+const pnpm = shellQuote(pnpmExecutable);
 
 // Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
 process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
@@ -310,7 +313,3 @@ function checkDistEnvFiles(targets = deployTargets) {
     process.exit(1);
   }
 })();
-
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`;
-}
