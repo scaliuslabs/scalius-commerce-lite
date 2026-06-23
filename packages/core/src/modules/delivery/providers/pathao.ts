@@ -13,7 +13,7 @@ import type {
 import type { DeliveryProviderInterface } from "../provider";
 import { mapProviderStatus } from "../status-mapper";
 import type { Database } from "@scalius/database/client";
-import { getExternalLocationIds } from "../locations";
+import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "../locations";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 
 /**
@@ -193,11 +193,14 @@ export class PathaoProvider implements DeliveryProviderInterface {
         "pathao",
       );
 
-      if (!externalLocationIds.city || !externalLocationIds.zone) {
+      if (
+        !isPositiveIntegerExternalLocationId(externalLocationIds.city) ||
+        !isPositiveIntegerExternalLocationId(externalLocationIds.zone)
+      ) {
         console.error(`[PathaoProvider] Missing external location mappings. City: ${order.city} -> ${externalLocationIds.city}, Zone: ${order.zone} -> ${externalLocationIds.zone}, Area: ${order.area} -> ${externalLocationIds.area}`);
         return {
           success: false,
-          message: `Pathao requires precisely mapped numeric location IDs. Missing mapping for: ${[!externalLocationIds.city && "city", !externalLocationIds.zone && "zone"].filter(Boolean).join(", ")}. Please configure these in the Delivery Locations settings.`,
+          message: `Pathao requires precisely mapped numeric location IDs. Missing mapping for: ${[!isPositiveIntegerExternalLocationId(externalLocationIds.city) && "city", !isPositiveIntegerExternalLocationId(externalLocationIds.zone) && "zone"].filter(Boolean).join(", ")}. Please configure these in the Delivery Locations settings.`,
         };
       }
 

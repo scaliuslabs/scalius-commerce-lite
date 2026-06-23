@@ -18,6 +18,18 @@ export interface LocationData {
   sortOrder?: number;
 }
 
+export function isPositiveIntegerExternalLocationId(value: string | number | null | undefined): boolean {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value > 0;
+  }
+
+  if (typeof value === "string") {
+    return /^[1-9]\d*$/.test(value.trim());
+  }
+
+  return false;
+}
+
 // ─────────────────────────────────────────
 // City / Zone / Area helpers
 // ─────────────────────────────────────────

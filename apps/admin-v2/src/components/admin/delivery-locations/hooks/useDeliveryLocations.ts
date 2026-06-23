@@ -54,6 +54,23 @@ const DEFAULT_PAGINATION: PaginationState = {
   totalPages: 1,
 };
 
+const isPositiveIntegerPathaoId = (value: string | number | undefined): boolean => {
+  if (value === undefined) return true;
+  if (typeof value === "number") return Number.isInteger(value) && value > 0;
+  return /^[1-9]\d*$/.test(value.trim());
+};
+
+const normalizeExternalIds = (
+  externalIds: Record<string, string | number>,
+): Record<string, string | number> => {
+  const next = { ...externalIds };
+  const pathaoId = next.pathao;
+  if (typeof pathaoId === "string" && /^[1-9]\d*$/.test(pathaoId.trim())) {
+    next.pathao = Number(pathaoId.trim());
+  }
+  return next;
+};
+
 export function useDeliveryLocations() {
   const queryClient = useQueryClient();
 
@@ -268,6 +285,11 @@ export function useDeliveryLocations() {
       return;
     }
 
+    if (!isPositiveIntegerPathaoId(formData.externalIds.pathao)) {
+      toast.error("Pathao ID must be a positive whole number.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -275,7 +297,7 @@ export function useDeliveryLocations() {
         name: formData.name,
         type: activeTab,
         parentId: activeTab === "city" ? null : formData.parentId || null,
-        externalIds: formData.externalIds,
+        externalIds: normalizeExternalIds(formData.externalIds),
         metadata: editMode && editingLocation ? editingLocation.metadata : {},
         isActive: formData.isActive,
       };

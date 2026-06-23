@@ -321,4 +321,70 @@ describe("delivery provider active-state authority", () => {
 
     expect(updates).toHaveLength(0);
   });
+
+  it("rejects Pathao shipment creation before placeholder insert when location mappings are missing", async () => {
+    const { db, inserts } = createSequentialSelectDb([
+      [{
+        id: "order_1",
+        totalAmount: 100,
+        paidAmount: 0,
+        city: "city_1",
+        zone: "zone_1",
+        area: null,
+      }],
+      [{
+        id: "provider_pathao",
+        type: "pathao",
+        isActive: true,
+        credentials: "{}",
+        config: "{}",
+      }],
+      [{ id: "city_1", externalIds: "{}" }],
+      [{ id: "zone_1", externalIds: "{}" }],
+    ]);
+
+    await expect(createShipment(
+      db as never,
+      "order_1",
+      "provider_pathao",
+    )).resolves.toMatchObject({
+      success: false,
+      message: "Pathao requires mapped numeric location IDs before shipment creation. Missing mapping for: city, zone. Configure Pathao IDs in Delivery Locations settings.",
+    });
+
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("rejects invalid Pathao numeric mappings before provider work", async () => {
+    const { db, inserts } = createSequentialSelectDb([
+      [{
+        id: "order_1",
+        totalAmount: 100,
+        paidAmount: 0,
+        city: "city_1",
+        zone: "zone_1",
+        area: null,
+      }],
+      [{
+        id: "provider_pathao",
+        type: "pathao",
+        isActive: true,
+        credentials: "{}",
+        config: "{}",
+      }],
+      [{ id: "city_1", externalIds: JSON.stringify({ pathao: 0 }) }],
+      [{ id: "zone_1", externalIds: JSON.stringify({ pathao: "1.5" }) }],
+    ]);
+
+    await expect(createShipment(
+      db as never,
+      "order_1",
+      "provider_pathao",
+    )).resolves.toMatchObject({
+      success: false,
+      message: "Pathao requires mapped numeric location IDs before shipment creation. Missing mapping for: city, zone. Configure Pathao IDs in Delivery Locations settings.",
+    });
+
+    expect(inserts).toHaveLength(0);
+  });
 });

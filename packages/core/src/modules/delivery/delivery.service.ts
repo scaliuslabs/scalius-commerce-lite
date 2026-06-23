@@ -8,6 +8,7 @@ import { and, eq, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "../orders/shipment-claim";
+import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "./locations";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
@@ -35,6 +36,42 @@ function mergeShipmentMetadata(
   }
 
   return JSON.stringify({ ...parsed, ...next });
+}
+
+async function preflightProviderShipmentSetup(
+  db: Database,
+  providerType: string,
+  order: { city?: string | null; zone?: string | null; area?: string | null },
+): Promise<ShipmentResult | null> {
+  if (providerType !== "pathao") return null;
+
+  if (!order.city || !order.zone) {
+    return {
+      success: false,
+      message: `Missing required location information: ${[!order.city && "city", !order.zone && "zone"].filter(Boolean).join(", ")}`,
+    };
+  }
+
+  const externalLocationIds = await getExternalLocationIds(
+    db,
+    {
+      city: order.city,
+      zone: order.zone,
+      area: order.area,
+    },
+    "pathao",
+  );
+  const missingMappings = [
+    !isPositiveIntegerExternalLocationId(externalLocationIds.city) && "city",
+    !isPositiveIntegerExternalLocationId(externalLocationIds.zone) && "zone",
+  ].filter(Boolean);
+
+  if (missingMappings.length === 0) return null;
+
+  return {
+    success: false,
+    message: `Pathao requires mapped numeric location IDs before shipment creation. Missing mapping for: ${missingMappings.join(", ")}. Configure Pathao IDs in Delivery Locations settings.`,
+  };
 }
 
 export async function markShipmentReconciliationRequired(
@@ -244,6 +281,9 @@ export async function createShipment(
       message: `Provider with ID ${providerId} is not active`,
     };
   }
+
+  const preflightFailure = await preflightProviderShipmentSetup(db, provider.type, order);
+  if (preflightFailure) return preflightFailure;
 
   // Load order items with product names for item description and count
   const items = await db
