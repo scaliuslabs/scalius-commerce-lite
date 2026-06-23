@@ -238,6 +238,12 @@ export async function createShipment(
       message: `Provider with ID ${providerId} not found`,
     };
   }
+  if (provider.isActive !== true) {
+    return {
+      success: false,
+      message: `Provider with ID ${providerId} is not active`,
+    };
+  }
 
   // Load order items with product names for item description and count
   const items = await db
@@ -422,6 +428,9 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
   const provider = await getDeliveryProvider(db, shipment.providerId);
   if (!provider) {
     throw new NotFoundError(`Provider with ID ${shipment.providerId} not found`);
+  }
+  if (provider.isActive !== true) {
+    throw new ValidationError(`Provider with ID ${shipment.providerId} is not active`);
   }
 
   if (!shipment.externalId) {

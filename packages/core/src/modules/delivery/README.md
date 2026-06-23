@@ -28,11 +28,11 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `saveDeliveryProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. |
 | `deleteDeliveryProvider` | `(db, id)` | Hard delete |
 | `testDeliveryProvider` | `(db, id, encryptionKey?)` | Tests connection via provider instance |
-| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Insert-first pattern (see below). Enriches with order item names and quantities. |
+| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Requires an active provider, then uses the insert-first pattern (see below). Enriches with order item names and quantities. |
 | `getShipment` | `(db, id)` | Single shipment by ID |
 | `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
 | `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
-| `checkShipmentStatus` | `(db, shipmentId, encryptionKey?)` | Polls provider API, updates DB record |
+| `checkShipmentStatus` | `(db, shipmentId, encryptionKey?)` | Requires the shipment provider to still be active, polls provider API, updates DB record |
 | `deleteShipmentRecord` | `(db, id)` | Hard delete shipment only after claim/reconciliation safety checks. Rejects active order shipment claims, `reconcile_required`, and unresolved expired claimed rows; clears stale failed/cancelled claims before deletion. |
 
 ## Tracking Functions (`tracking.ts`)
@@ -107,6 +107,8 @@ Single format: 11 mappings including `_approval_pending` suffixes. Normalized to
 Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries can repair stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
 
 Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `ORDER_NOTIFICATIONS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added.
+
+Delivery webhook verification is active-provider authoritative. `verifyDeliveryWebhook()` must find exactly one active provider for the courier type; zero or multiple active providers fail closed before signature/IP checks. The webhook routes then scope shipment lookup by the verified `providerId` and `providerType` as well as the external consignment/tracking identifier, so an old/inactive provider row or another provider's colliding external id cannot update a shipment. Admin-triggered shipment creation and status polling also reject inactive provider IDs before provider API calls or local placeholder writes.
 
 ## Credential Storage
 

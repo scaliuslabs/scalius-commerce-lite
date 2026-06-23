@@ -1,7 +1,7 @@
 // Webhook signature verification for delivery provider webhooks.
 // Supports HMAC-SHA256 signature verification and IP allowlist fallback.
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { deliveryProviders } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
 import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
@@ -9,6 +9,8 @@ import { getEncryptionKey } from "../utils/encryption-key";
 
 interface WebhookVerificationResult {
   verified: boolean;
+  /** Active delivery provider row used for verification. */
+  providerId: string | null;
   /** null when no provider found; otherwise the parsed credentials */
   credentials: Record<string, unknown> | null;
   /** null when no provider found; otherwise the parsed config */
@@ -87,17 +89,28 @@ export async function verifyDeliveryWebhook(
 ): Promise<WebhookVerificationResult> {
   const db = getDb(env);
 
-  // Look up the active provider by type
-  const provider = await db
+  // Look up the active provider by type. Inactive provider credentials must not
+  // keep accepting callbacks after a merchant disables or rotates a courier.
+  const activeProviders = await db
     .select()
     .from(deliveryProviders)
-    .where(eq(deliveryProviders.type, providerType))
-    .get();
+    .where(and(
+      eq(deliveryProviders.type, providerType),
+      eq(deliveryProviders.isActive, true),
+    ))
+    .orderBy(desc(deliveryProviders.updatedAt))
+    .limit(2);
 
-  if (!provider) {
-    console.warn(`[webhook-auth] No provider found for type: ${providerType}`);
-    return { verified: false, credentials: null, config: null, reason: "Provider not configured" };
+  if (activeProviders.length === 0) {
+    console.warn(`[webhook-auth] No active provider found for type: ${providerType}`);
+    return { verified: false, providerId: null, credentials: null, config: null, reason: "Provider not configured" };
   }
+  if (activeProviders.length > 1) {
+    console.warn(`[webhook-auth] Multiple active providers found for type: ${providerType}`);
+    return { verified: false, providerId: null, credentials: null, config: null, reason: "Multiple active providers configured" };
+  }
+
+  const provider = activeProviders[0]!;
 
   const encryptionKey = getEncryptionKey(env as Record<string, unknown>);
   const rawCreds = provider.credentials
@@ -106,9 +119,10 @@ export async function verifyDeliveryWebhook(
   const credentials = parseWebhookObject(rawCreds, "credentials", providerType);
   if (!credentials) {
     return {
-      verified: false,
-      credentials: null,
-      config: null,
+        verified: false,
+        providerId: provider.id,
+        credentials: null,
+        config: null,
       reason: "Invalid provider credentials",
     };
   }
@@ -119,6 +133,7 @@ export async function verifyDeliveryWebhook(
   if (!config) {
     return {
       verified: false,
+      providerId: provider.id,
       credentials,
       config: null,
       reason: "Invalid provider config",
@@ -137,6 +152,7 @@ export async function verifyDeliveryWebhook(
           console.warn(`[webhook-auth] [pathao] Missing X-PATHAO-Signature header`);
           return {
             verified: false,
+            providerId: provider.id,
             credentials,
             config,
             reason: "Missing X-PATHAO-Signature header",
@@ -147,13 +163,14 @@ export async function verifyDeliveryWebhook(
           console.warn(`[webhook-auth] [pathao] Invalid X-PATHAO-Signature`);
           return {
             verified: false,
+            providerId: provider.id,
             credentials,
             config,
             reason: "Invalid X-PATHAO-Signature",
           };
         }
 
-        return { verified: true, credentials, config };
+        return { verified: true, providerId: provider.id, credentials, config };
       }
 
       // Steadfast sends Authorization: Bearer {token} header
@@ -164,6 +181,7 @@ export async function verifyDeliveryWebhook(
           console.warn(`[webhook-auth] [steadfast] Missing or invalid Authorization header`);
           return {
             verified: false,
+            providerId: provider.id,
             credentials,
             config,
             reason: "Missing Authorization Bearer token",
@@ -175,13 +193,14 @@ export async function verifyDeliveryWebhook(
           console.warn(`[webhook-auth] [steadfast] Invalid Bearer token`);
           return {
             verified: false,
+            providerId: provider.id,
             credentials,
             config,
             reason: "Invalid Bearer token",
           };
         }
 
-        return { verified: true, credentials, config };
+        return { verified: true, providerId: provider.id, credentials, config };
       }
 
       // Generic fallback: HMAC-SHA256 via X-Webhook-Signature header
@@ -191,6 +210,7 @@ export async function verifyDeliveryWebhook(
           console.warn(`[webhook-auth] [${providerType}] Missing X-Webhook-Signature header`);
           return {
             verified: false,
+            providerId: provider.id,
             credentials,
             config,
             reason: "Missing X-Webhook-Signature header",
@@ -208,13 +228,14 @@ export async function verifyDeliveryWebhook(
           console.warn(`[webhook-auth] [${providerType}] Invalid webhook signature`);
           return {
             verified: false,
+            providerId: provider.id,
             credentials,
             config,
             reason: "Invalid webhook signature",
           };
         }
 
-        return { verified: true, credentials, config };
+        return { verified: true, providerId: provider.id, credentials, config };
       }
     }
   }
@@ -231,6 +252,7 @@ export async function verifyDeliveryWebhook(
       console.warn(`[webhook-auth] [${providerType}] Cannot determine request IP`);
       return {
         verified: false,
+        providerId: provider.id,
         credentials,
         config,
         reason: "Cannot determine request IP for allowlist check",
@@ -243,13 +265,14 @@ export async function verifyDeliveryWebhook(
       );
       return {
         verified: false,
+        providerId: provider.id,
         credentials,
         config,
         reason: `IP ${requestIp} not in allowed webhook IPs`,
       };
     }
 
-    return { verified: true, credentials, config };
+    return { verified: true, providerId: provider.id, credentials, config };
   }
 
   // --- Strategy 3: No security configured — REJECT ---
@@ -258,5 +281,5 @@ export async function verifyDeliveryWebhook(
     `Set credentials.webhookSecret or config.allowedWebhookIps for this provider.`,
   );
 
-  return { verified: false, credentials, config, reason: "No webhook authentication configured for this provider" };
+  return { verified: false, providerId: provider.id, credentials, config, reason: "No webhook authentication configured for this provider" };
 }
