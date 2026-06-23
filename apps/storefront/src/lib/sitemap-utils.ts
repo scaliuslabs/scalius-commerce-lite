@@ -137,3 +137,18 @@ export function getSitemapHeaders(): HeadersInit {
     'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
   };
 }
+
+export function xmlDataUnavailableResponse(
+  message = 'Storefront catalog data is temporarily unavailable',
+): Response {
+  return new Response(message, {
+    status: 503,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Retry-After': '30',
+    },
+  });
+}

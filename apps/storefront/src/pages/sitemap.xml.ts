@@ -4,7 +4,7 @@
  */
 
 import type { APIRoute } from 'astro';
-import { generateSitemapIndex, getSitemapHeaders } from '@/lib/sitemap-utils';
+import { generateSitemapIndex, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import { getAllProducts } from '@/lib/api/products';
 import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext } from 'astro';
@@ -37,6 +37,9 @@ export const GET: APIRoute = async (_context: APIContext) => {
 
     // Fetch just 1 product to get the total count for pagination
     const productsResponse = await getAllProducts({ limit: 1 });
+    if (!productsResponse) {
+      return xmlDataUnavailableResponse('Sitemap index is temporarily unavailable');
+    }
     const totalProducts = productsResponse?.pagination?.total || 0;
 
     // Calculate how many product sitemap chunks we need

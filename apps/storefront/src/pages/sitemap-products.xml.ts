@@ -5,7 +5,7 @@
  * Limit: 50,000 URLs per sitemap page (as per sitemap protocol)
  */
 
-import { generateSitemap, getSitemapHeaders } from '@/lib/sitemap-utils';
+import { generateSitemap, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllProducts } from '@/lib/api/products';
 import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
@@ -42,7 +42,11 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       limit: limitParams,
     });
 
-    if (!firstResponse || !firstResponse.data || firstResponse.data.length === 0) {
+    if (!firstResponse) {
+      return xmlDataUnavailableResponse('Product sitemap is temporarily unavailable');
+    }
+
+    if (!firstResponse.data || firstResponse.data.length === 0) {
       if (sitemapPage > 1) {
         return new Response('Page not found', { status: 404 });
       }
@@ -67,6 +71,9 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
 
       const batchResponses = await Promise.all(fetchPromises);
       for (const res of batchResponses) {
+        if (!res) {
+          return xmlDataUnavailableResponse('Product sitemap is temporarily unavailable');
+        }
         if (res && res.data) {
           allProducts.push(...res.data.filter((p) => p.isActive !== false));
         }

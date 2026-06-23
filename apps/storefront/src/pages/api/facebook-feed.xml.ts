@@ -21,6 +21,7 @@ import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 
 export const prerender = false;
 
@@ -235,11 +236,11 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       limit: limitParams,
     });
 
-    if (
-      !firstResponse ||
-      !firstResponse.data ||
-      firstResponse.data.length === 0
-    ) {
+    if (!firstResponse) {
+      return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
+    }
+
+    if (!firstResponse.data || firstResponse.data.length === 0) {
       if (page > 1) {
         return new Response("Page not found", { status: 404 });
       }
@@ -277,6 +278,9 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
 
       const batchResponses = await Promise.all(fetchPromises);
       for (const res of batchResponses) {
+        if (!res) {
+          return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
+        }
         if (res && res.data) {
           allProducts.push(...res.data.filter((p) => p.isActive !== false));
         }

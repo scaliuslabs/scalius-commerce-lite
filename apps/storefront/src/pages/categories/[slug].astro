@@ -30,6 +30,7 @@ import {
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import {
   SlidersHorizontal,
   X,
@@ -52,12 +53,11 @@ if (!hasDynamicFilters && queryState.redirectPath) {
 let sortBy = queryState.sortBy;
 let currentFilters = queryState.currentFilters;
 
-let category: Category | null = null;
-let productsResponse: CategoryProductsResponse | null = null;
-let attributes: FilterableAttribute[] = [];
-let layoutData: LayoutData | null = null;
-let categoryWidgets: ApiWidget[] = [];
-let error: string | null = null;
+let category: Category | null;
+let productsResponse: CategoryProductsResponse | null;
+let attributes: FilterableAttribute[];
+let layoutData: LayoutData | null;
+let categoryWidgets: ApiWidget[];
 let productListOptions: ProductListOptions = queryState.options;
 
 try {
@@ -131,14 +131,22 @@ try {
   }
 
   if (productsResponse?.categoryNotFound) return new Response(null, { status: 404 });
-  if (!productsResponse?.category) {
-    error = "An error occurred while fetching products. Please try again.";
+  if (!layoutData || !productsResponse || !productsResponse.category) {
+    const response = storefrontDataUnavailableResponse(
+      "We could not load this category. Please try again shortly.",
+    );
+    response.headers.set("X-Storefront-Data-State", "unavailable");
+    return response;
   } else {
     category = productsResponse.category;
   }
 } catch (e: unknown) {
   console.error("Error fetching category data:", e);
-  error = "An error occurred while fetching products. Please try again.";
+  const response = storefrontDataUnavailableResponse(
+    "We could not load this category. Please try again shortly.",
+  );
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
 }
 
 const products: Product[] = productsResponse?.data || [];
@@ -420,15 +428,7 @@ const collectionJsonLd = category
           </div>
 
           {
-            error && (
-              <div class="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-lg mb-6">
-                {error}
-              </div>
-            )
-          }
-
-          {
-            products.length === 0 && !error && (
+            products.length === 0 && (
               <div class="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-lg shadow-sm border border-gray-100 text-center">
                 <Search className="w-16 h-16 text-gray-400 mb-4" />
                 <h3 class="text-xl font-bold text-gray-900 mb-2">
