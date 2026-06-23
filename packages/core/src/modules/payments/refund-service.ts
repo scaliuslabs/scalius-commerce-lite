@@ -29,6 +29,11 @@ import { getCurrencyConfig } from "../settings/settings.service";
 import { canTransitionTo } from "../orders/order-state-machine";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
 import { computePaymentStateAfterRefund } from "./payment-state";
+import type {
+    PaymentProvider,
+    RefundParams as ProviderRefundParams,
+    RefundResult as ProviderRefundResult,
+} from "./provider";
 
 export interface RefundRequest {
     orderId: string;
@@ -49,6 +54,7 @@ export interface RefundResult {
 }
 
 const REFUND_IN_PROGRESS_MESSAGE = "A refund is already in progress for this order. Please wait and retry.";
+const REFUND_PROVIDER_DEADLINE_MS = 25_000;
 const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
     OrderStatus.PENDING,
     OrderStatus.PROCESSING,
@@ -68,6 +74,16 @@ interface RefundAllocation {
 
 interface CompletedRefundAllocation extends RefundAllocation {
     refundId?: string;
+}
+
+class ProviderRefundOutcomeUnknownError extends ServiceUnavailableError {
+    readonly originalError: unknown;
+
+    constructor(originalError: unknown) {
+        super("Refund provider outcome is unknown. The refund remains pending to prevent duplicate refunds until it is reconciled.");
+        this.name = "ProviderRefundOutcomeUnknownError";
+        this.originalError = originalError;
+    }
 }
 
 function getRefundClaimBaseId(orderId: string, orderVersion: number): string {
@@ -205,6 +221,10 @@ function isConstraintError(error: unknown): boolean {
     return /constraint|unique|primary key/i.test(message);
 }
 
+function isProviderRefundOutcomeUnknownError(error: unknown): error is ProviderRefundOutcomeUnknownError {
+    return error instanceof ProviderRefundOutcomeUnknownError;
+}
+
 function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean): string | undefined {
     if (!isFullRefund) {
         return canTransitionTo("order", currentStatus, OrderStatus.PARTIALLY_REFUNDED)
@@ -280,6 +300,7 @@ function buildRefundMetadata(params: {
     allocationCount: number;
     status: "pending" | "refunded" | "failed";
     refundId?: string;
+    providerOutcome?: "not_dispatched" | "accepted" | "rejected" | "unknown";
     error?: unknown;
 }): string {
     const failedMessage = params.error instanceof Error
@@ -303,8 +324,19 @@ function buildRefundMetadata(params: {
         providerIdempotencyKey: params.allocation.idempotencyKey,
         refundReference: params.allocation.refundReference,
         claimVersion: params.claimVersion,
+        providerOutcome: params.providerOutcome ?? (
+            params.status === "refunded"
+                ? "accepted"
+                : params.status === "failed"
+                    ? "rejected"
+                    : "not_dispatched"
+        ),
         ...(params.refundId ? { refundId: params.refundId, providerRefundId: params.refundId } : {}),
         ...(params.status === "pending" ? { claimedAt: new Date().toISOString() } : {}),
+        ...(params.status === "pending" && params.providerOutcome === "unknown" ? {
+            error: failedMessage,
+            providerOutcomeUnknownAt: new Date().toISOString(),
+        } : {}),
         ...(params.status === "refunded" ? { refundedAt: new Date().toISOString() } : {}),
         ...(params.status === "failed" ? { error: failedMessage, failedAt: new Date().toISOString() } : {}),
     });
@@ -334,6 +366,40 @@ async function markRefundAllocationsFailed(
                 allocationCount: params.allocationCount,
                 status: "failed",
                 error: params.error,
+            }),
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(orderPayments.id, allocation.id))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ) as any);
+}
+
+async function markRefundAllocationsProviderUnknown(
+    db: Database,
+    params: {
+        request: RefundRequest;
+        allocations: RefundAllocation[];
+        groupId: string;
+        claimVersion: number;
+        allocationCount: number;
+        error: unknown;
+    },
+): Promise<void> {
+    if (params.allocations.length === 0) return;
+
+    await db.batch(params.allocations.map((allocation) =>
+        db.update(orderPayments).set({
+            status: PaymentRecordStatus.PENDING,
+            metadata: buildRefundMetadata({
+                request: params.request,
+                allocation,
+                groupId: params.groupId,
+                claimVersion: params.claimVersion,
+                allocationCount: params.allocationCount,
+                status: "pending",
+                providerOutcome: "unknown",
+                error: isProviderRefundOutcomeUnknownError(params.error)
+                    ? params.error.originalError
+                    : params.error,
             }),
             updatedAt: sql`unixepoch()`,
         }).where(eq(orderPayments.id, allocation.id))
@@ -517,14 +583,44 @@ async function dispatchRefund(
         providerAmount = refundAmount;
     }
 
-    const result = await provider.createRefund({
+    const refundParams = {
         transactionId,
         amount: providerAmount,
         reason: params.reason,
         metadata: providerMetadata,
-    });
+    };
+
+    let result: ProviderRefundResult;
+    try {
+        result = gateway === "cod"
+            ? await provider.createRefund(refundParams)
+            : await callProviderRefundWithDeadline(provider, refundParams);
+    } catch (error: unknown) {
+        if (gateway === "cod") throw error;
+        throw new ProviderRefundOutcomeUnknownError(error);
+    }
 
     return result.refundId;
+}
+
+async function callProviderRefundWithDeadline(
+    provider: PaymentProvider,
+    params: ProviderRefundParams,
+): Promise<ProviderRefundResult> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+        return await Promise.race([
+            provider.createRefund(params),
+            new Promise<never>((_, reject) => {
+                timeout = setTimeout(() => {
+                    reject(new Error(`Refund provider did not settle within ${REFUND_PROVIDER_DEADLINE_MS}ms`));
+                }, REFUND_PROVIDER_DEADLINE_MS);
+            }),
+        ]);
+    } finally {
+        if (timeout) clearTimeout(timeout);
+    }
 }
 
 /**
@@ -708,8 +804,10 @@ export async function processRefund(
     }
 
     // 4. Dispatch to gateway via unified PaymentProvider interface after the
-    // local claim succeeds. If the provider rejects the refund, release the
-    // reserved paid amount and mark the claim failed.
+    // local claim succeeds. Pre-provider failures become terminal failed rows.
+    // Once a provider call starts, timeout/network/provider exceptions are
+    // ambiguous: leave uncompleted rows pending so duplicate retries are blocked
+    // until reconciliation proves whether the gateway accepted the refund.
     const completedAllocations: CompletedRefundAllocation[] = [];
     try {
         for (const allocation of allocations) {
@@ -751,15 +849,27 @@ export async function processRefund(
         }
     } catch (error: unknown) {
         const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
-        const failedAllocations = allocations.filter((allocation) => !completedIds.has(allocation.id));
-        await markRefundAllocationsFailed(db, {
-            request: params,
-            allocations: failedAllocations,
-            groupId: refundGroupId,
-            claimVersion,
-            allocationCount: allocations.length,
-            error,
-        });
+        const unresolvedAllocations = allocations.filter((allocation) => !completedIds.has(allocation.id));
+
+        if (isProviderRefundOutcomeUnknownError(error)) {
+            await markRefundAllocationsProviderUnknown(db, {
+                request: params,
+                allocations: unresolvedAllocations,
+                groupId: refundGroupId,
+                claimVersion,
+                allocationCount: allocations.length,
+                error,
+            });
+        } else {
+            await markRefundAllocationsFailed(db, {
+                request: params,
+                allocations: unresolvedAllocations,
+                groupId: refundGroupId,
+                claimVersion,
+                allocationCount: allocations.length,
+                error,
+            });
+        }
 
         const completedAmount = roundPrice(completedAllocations.reduce((sum, allocation) => sum + allocation.amount, 0));
         if (completedAmount > 0) {
@@ -771,9 +881,18 @@ export async function processRefund(
                 isFullRefund: false,
                 expectedVersion: claimedOrder.version,
             });
+            const remainingAmount = roundPrice(refundAmount - completedAmount);
+            if (isProviderRefundOutcomeUnknownError(error)) {
+                throw new ServiceUnavailableError(
+                    `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
+                );
+            }
             throw new ServiceUnavailableError(
-                `Refund partially processed: ${completedAmount} was accepted by the provider, but ${roundPrice(refundAmount - completedAmount)} could not be completed. Please review before retrying.`,
+                `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} could not be completed. Please review before retrying.`,
             );
+        }
+        if (isProviderRefundOutcomeUnknownError(error)) {
+            throw error;
         }
         throw error;
     }

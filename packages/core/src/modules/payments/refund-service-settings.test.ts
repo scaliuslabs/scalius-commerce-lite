@@ -34,7 +34,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { PaymentStatus, OrderStatus } from "@scalius/database/schema";
+import { PaymentRecordStatus, PaymentStatus, OrderStatus } from "@scalius/database/schema";
 import { processRefund } from "./refund-service";
 
 type Gateway = "stripe" | "sslcommerz" | "polar";
@@ -169,7 +169,7 @@ describe("refund gateway settings freshness", () => {
     }));
   });
 
-  it("releases the local refund claim when a fresh settings read fails", async () => {
+  it("marks the local refund claim failed when a fresh settings read fails before provider dispatch", async () => {
     mocks.getStripeSettings.mockRejectedValue(new Error("d1 overloaded"));
     const db = createDbMock("stripe");
     const kv = { id: "kv" } as unknown as KVNamespace;
@@ -190,6 +190,10 @@ describe("refund gateway settings freshness", () => {
       expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(db.batch).toHaveBeenCalledTimes(2);
+    expect(db.updateSets).toContainEqual(expect.objectContaining({
+      status: PaymentRecordStatus.FAILED,
+      metadata: expect.stringContaining('"providerOutcome":"rejected"'),
+    }));
     expect(mocks.createPaymentProvider).not.toHaveBeenCalled();
   });
 
