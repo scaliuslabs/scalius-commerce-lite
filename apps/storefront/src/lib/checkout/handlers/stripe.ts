@@ -153,7 +153,13 @@ export const stripeHandler: GatewayHandler = {
       throw new Error("Payment was not completed");
     } catch (err: unknown) {
       if (err instanceof CheckoutOrderError) {
-        return { success: false, error: err.message, cartIssues: err.cartIssues };
+        return {
+          success: false,
+          error: err.message,
+          errorCode: err.errorCode,
+          status: err.status,
+          cartIssues: err.cartIssues,
+        };
       }
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }

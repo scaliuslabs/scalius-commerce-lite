@@ -117,6 +117,54 @@ describe("checkout create-order proxy Origin guard", () => {
     expect(setCookie).toContain("cs_auth=; Max-Age=0");
   });
 
+  it.each([
+    {
+      status: 409,
+      errorCode: "CHECKOUT_ATTEMPT_CONFLICT",
+      error: "This checkout was already submitted with different details.",
+    },
+    {
+      status: 429,
+      errorCode: "CHECKOUT_RATE_LIMITED",
+      error: "Too many checkout attempts. Please wait before trying again.",
+    },
+    {
+      status: 503,
+      errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
+      error: "Checkout is temporarily unavailable. Please try again shortly.",
+    },
+  ])("preserves backend checkout failure status $status through the proxy", async ({
+    status,
+    errorCode,
+    error,
+  }) => {
+    mocks.createOrder.mockResolvedValueOnce({
+      success: false,
+      error,
+      errorCode,
+      status,
+      details: { retryable: status !== 409 },
+    });
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/checkout/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [] }),
+      }),
+    } as never);
+    const json = await response.json() as {
+      error?: string;
+      errorCode?: string;
+      details?: unknown;
+    };
+
+    expect(response.status).toBe(status);
+    expect(json.error).toBe(error);
+    expect(json.errorCode).toBe(errorCode);
+    expect(json.details).toEqual({ retryable: status !== 409 });
+  });
+
   it("attaches an initial online payment session after order creation succeeds", async () => {
     mocks.createOrder.mockResolvedValueOnce({
       success: true,

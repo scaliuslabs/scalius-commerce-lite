@@ -9,12 +9,27 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../create-order", () => ({
   createOrder: mocks.createOrder,
   CheckoutOrderError: class CheckoutOrderError extends Error {
-    status = 400;
-    details = undefined;
-    cartIssues = [];
+    status: number;
+    errorCode?: string;
+    details: unknown;
+    cartIssues: unknown[];
+
+    constructor(message: string, options: {
+      status?: number;
+      errorCode?: string;
+      details?: unknown;
+      cartIssues?: unknown[];
+    } = {}) {
+      super(message);
+      this.status = options.status ?? 400;
+      this.errorCode = options.errorCode;
+      this.details = options.details;
+      this.cartIssues = options.cartIssues ?? [];
+    }
   },
 }));
 
+import { CheckoutOrderError } from "../create-order";
 import { polarHandler } from "./polar";
 import { sslcommerzHandler } from "./sslcommerz";
 import { stripeHandler } from "./stripe";
@@ -186,6 +201,33 @@ describe("hosted online payment handlers", () => {
     expect(result.redirectUrl).toBe(
       `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
     );
+  });
+
+  it.each([
+    { handler: sslcommerzHandler, gateway: "sslcommerz" },
+    { handler: polarHandler, gateway: "polar" },
+  ])("returns backend order failure status for $gateway before payment setup", async ({
+    handler,
+  }) => {
+    mocks.createOrder.mockRejectedValueOnce(new CheckoutOrderError(
+      "Order creation failed (503)",
+      {
+        status: 503,
+        errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
+        details: { retryable: true },
+        cartIssues: [],
+      },
+    ));
+
+    const result = await handler.processPayment(makeContext());
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: false,
+      error: "Order creation failed (503)",
+      errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
+      status: 503,
+    });
   });
 });
 
