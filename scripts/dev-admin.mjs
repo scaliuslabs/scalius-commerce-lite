@@ -20,6 +20,7 @@ import {
   assertPassword,
   assertStringOptions,
   parseOptions,
+  resolvePnpmExecutable,
   resolveLocalStatePath,
   trimTrailingSlash,
 } from "./dev-local-utils.mjs";
@@ -27,6 +28,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
+const pnpmExecutable = resolvePnpmExecutable();
 const args = process.argv.slice(2);
 const validCommands = new Set(["create", "reset", "status", "help"]);
 
@@ -150,7 +152,7 @@ async function withApi(work) {
 
     ensureLocalMigrations();
     console.log(`Starting temporary API worker at ${config.apiBaseUrl}...`);
-    child = spawn("pnpm", ["--filter", "@scalius/api", "dev"], {
+    child = spawn(pnpmExecutable, ["--filter", "@scalius/api", "dev"], {
       cwd: root,
       stdio: "inherit",
       env: {
@@ -288,7 +290,7 @@ function resetLocalAuthTables() {
 
   console.log(`Resetting local auth tables in D1 database "${dbName}"...`);
   execFileSync(
-    "pnpm",
+    pnpmExecutable,
     [
       "exec",
       "wrangler",

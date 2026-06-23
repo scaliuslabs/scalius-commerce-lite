@@ -16,6 +16,52 @@ API_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_API_READY_TIMEOUT_SECONDS:-60}"
 STAGGER_SECONDS="${SCALIUS_DEV_STAGGER_SECONDS:-3}"
 API_PID=""
 
+resolve_pnpm_bin() {
+  if [ -n "${SCALIUS_PNPM_BIN:-}" ]; then
+    printf "%s\n" "$SCALIUS_PNPM_BIN"
+    return
+  fi
+
+  if command -v pnpm >/dev/null 2>&1; then
+    command -v pnpm
+    return
+  fi
+
+  if [ -n "${npm_execpath:-}" ] && [ -f "$npm_execpath" ]; then
+    case "$npm_execpath" in
+      *pnpm*|*corepack*)
+        printf "%s\n" "$npm_execpath"
+        return
+        ;;
+    esac
+  fi
+
+  local node_bin node_prefix candidate
+  node_bin="$(command -v node 2>/dev/null || true)"
+  if [ -n "$node_bin" ]; then
+    node_prefix="$(cd "$(dirname "$node_bin")/.." && pwd)"
+    candidate="$node_prefix/lib/node_modules/corepack/shims/pnpm"
+    if [ -f "$candidate" ]; then
+      printf "%s\n" "$candidate"
+      return
+    fi
+  fi
+
+  for candidate in \
+    "$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/pnpm" \
+    "$HOME"/.nvm/versions/node/*/lib/node_modules/corepack/shims/pnpm; do
+    if [ -f "$candidate" ]; then
+      printf "%s\n" "$candidate"
+      return
+    fi
+  done
+
+  printf "%s\n" "pnpm"
+}
+
+PNPM_BIN="$(resolve_pnpm_bin)"
+export SCALIUS_PNPM_BIN="$PNPM_BIN"
+
 lsof_dev_ports() {
   local args=()
   local port
@@ -30,6 +76,14 @@ kill_dev_ports() {
   if [ "${SCALIUS_DEV_KILL_ALL_WORKERD:-0}" = "1" ]; then
     pkill -9 -f "workerd" 2>/dev/null
   fi
+}
+
+stop_storefront_background() {
+  if [ "$DRY_RUN" = "1" ]; then
+    return
+  fi
+
+  (cd "$ROOT_DIR/apps/storefront" && "$PNPM_BIN" exec astro dev stop >/dev/null 2>&1) || true
 }
 
 apply_local_migrations() {
@@ -56,9 +110,11 @@ cleanup() {
 
   echo ""
   echo "Shutting down dev servers..."
+  stop_storefront_background
   kill_dev_ports
   sleep 1
   # Second pass for stubborn processes
+  stop_storefront_background
   kill_dev_ports
   echo "Done."
   exit "$status"
@@ -73,6 +129,7 @@ if [ "$DRY_RUN" != "1" ]; then
   STALE=$(lsof_dev_ports)
   if [ -n "$STALE" ]; then
     echo "Killing stale processes on dev ports..."
+    stop_storefront_background
     kill_dev_ports
     sleep 1
   fi
@@ -90,32 +147,44 @@ validate_numeric_setting() {
 start_api() {
   echo "Starting API worker (port 8787)..."
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] cd apps/api && pnpm dev"
+    echo "[dry-run] cd apps/api && $PNPM_BIN dev"
     return
   fi
 
-  (cd "$ROOT_DIR/apps/api" && pnpm dev) &
+  (cd "$ROOT_DIR/apps/api" && "$PNPM_BIN" dev) &
   API_PID=$!
 }
 
 start_admin() {
   echo "Starting admin dashboard (port 4323)..."
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] cd apps/admin-v2 && pnpm dev"
+    echo "[dry-run] cd apps/admin-v2 && $PNPM_BIN dev"
     return
   fi
 
-  (cd "$ROOT_DIR/apps/admin-v2" && pnpm dev) &
+  (cd "$ROOT_DIR/apps/admin-v2" && "$PNPM_BIN" dev) &
 }
 
 start_storefront() {
   echo "Starting storefront (port 4322)..."
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] cd apps/storefront && pnpm dev"
+    echo "[dry-run] cd apps/storefront && $PNPM_BIN dev"
     return
   fi
 
-  (cd "$ROOT_DIR/apps/storefront" && pnpm dev) &
+  (
+    cd "$ROOT_DIR/apps/storefront" || exit 1
+    "$PNPM_BIN" dev
+    status=$?
+    if [ "$status" -ne 0 ]; then
+      exit "$status"
+    fi
+
+    if "$PNPM_BIN" exec astro dev status >/dev/null 2>&1; then
+      echo "Storefront is running in Astro background mode; streaming astro dev logs."
+      exec "$PNPM_BIN" exec astro dev logs --follow
+    fi
+  ) &
 }
 
 wait_for_api_ready() {
@@ -209,7 +278,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
     exit 0
   fi
 
-  turbo run dev "$@" &
+  "$PNPM_BIN" exec turbo run dev "$@" &
   wait $!
   exit 0
 fi

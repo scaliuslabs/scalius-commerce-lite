@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { dirname, join } from "path";
+import { tmpdir } from "os";
 import {
   assertLocalSecretSync,
   collectLocalUrlConfigIssues,
   collectLocalSecretSyncIssues,
   getArgValue,
   parseEnvFileContent,
+  resolvePnpmExecutable,
   resolveLocalStatePath,
   resolveSharedLocalSecrets,
 } from "./dev-local-utils.mjs";
@@ -104,5 +108,25 @@ describe("local dev script helpers", () => {
       { label: "apps/storefront/.env.development", key: "PUBLIC_API_URL", value: "", port: 8787, pathname: "/api/v1" },
       { label: "apps/storefront/.env.development", key: "PUBLIC_API_BASE_URL", value: undefined, port: 8787, pathname: "" },
     ])).toEqual([]);
+  });
+
+  it("resolves pnpm from the current Node Corepack shim when PATH is bare", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "scalius-pnpm-resolve-"));
+    try {
+      const nodeBin = join(tempRoot, "bin", "node");
+      const corepackPnpm = join(tempRoot, "lib", "node_modules", "corepack", "shims", "pnpm");
+      mkdirSync(dirname(nodeBin), { recursive: true });
+      mkdirSync(dirname(corepackPnpm), { recursive: true });
+      writeFileSync(nodeBin, "");
+      writeFileSync(corepackPnpm, "#!/bin/sh\n");
+      chmodSync(corepackPnpm, 0o755);
+
+      expect(resolvePnpmExecutable({
+        env: { PATH: "/missing", HOME: join(tempRoot, "home") },
+        nodeExecPath: nodeBin,
+      })).toBe(corepackPnpm);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

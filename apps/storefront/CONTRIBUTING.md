@@ -59,7 +59,7 @@ It connects to the **Scalius Commerce Lite** backend for data and commerce logic
     ```bash
     pnpm dev:storefront
     ```
-    The storefront runs at `http://localhost:4322`; the local API runs at `http://localhost:8787`. Use `pnpm dev` when you also want the admin dashboard.
+    The storefront runs at `http://localhost:4322`; the local API runs at `http://localhost:8787`. Use `pnpm dev` when you also want the admin dashboard. Astro 7 may run storefront dev in background mode in non-interactive sessions; the root wrapper streams `astro dev logs` and stops the background server on cleanup. For Astro-only debugging, use `pnpm --filter @scalius/storefront exec astro dev --background --host 127.0.0.1 --port 4322`, then `astro dev status`, `astro dev logs`, and `astro dev stop`.
 
 ## 💻 Development Workflow
 
