@@ -48,7 +48,10 @@ interface VariantTableProps {
   onAddVariant: () => void;
   isBulkEditing?: boolean;
   draftUpdates?: Record<string, Record<string, unknown>>;
+  draftNewIds?: string[];
   onBulkEditChange?: (variantId: string, field: VariantBulkEditField, value: VariantBulkEditValue) => void;
+  onAddBulkRow?: () => void;
+  onRemoveBulkRow?: (id: string) => void;
   productName?: string;
   addVariantDefaults?: Partial<VariantFormValues>;
 }
@@ -70,7 +73,10 @@ export function VariantTable({
   onAddVariant,
   isBulkEditing,
   draftUpdates,
+  draftNewIds = [],
   onBulkEditChange,
+  onAddBulkRow,
+  onRemoveBulkRow,
   productName,
   addVariantDefaults,
 }: VariantTableProps) {
@@ -134,14 +140,14 @@ export function VariantTable({
       )}
 
       <div className={cn(
-        "overflow-hidden rounded-md border shadow-sm",
+        "overflow-hidden rounded-lg border",
         showMobileCards && "hidden md:block",
         showMobileEditor && "hidden md:block",
       )}>
-        <Table className="min-w-[1024px]">
-          <TableHeader className="bg-muted/50">
-            <TableRow className="hover:bg-muted/50">
-              <TableHead className="w-10 border-r py-1.5 pl-3 pr-1 align-middle">
+        <Table>
+          <TableHeader className="bg-muted/40">
+            <TableRow className="hover:bg-transparent border-b border-border/60">
+              <TableHead className="w-9 py-2 pl-3 pr-1 align-middle">
                 <Checkbox
                   checked={allSelected}
                   ref={(el) => {
@@ -155,27 +161,37 @@ export function VariantTable({
                   className="h-3.5 w-3.5"
                 />
               </TableHead>
-              <TableHead className="min-w-[140px] border-r py-2 text-xs font-medium">SKU</TableHead>
-              <TableHead className="min-w-[105px] border-r py-2 text-xs font-medium">
-                <span className="block">Option 1</span>
-                <span className="block text-[10px] font-normal text-muted-foreground">size/weight</span>
-              </TableHead>
-              <TableHead className="min-w-[105px] border-r py-2 text-xs font-medium">
-                <span className="block">Option 2</span>
-                <span className="block text-[10px] font-normal text-muted-foreground">color/style</span>
-              </TableHead>
-              <TableHead className="min-w-[56px] border-r py-2 text-xs font-medium">Weight</TableHead>
-              <TableHead className="min-w-[80px] border-r py-2 text-xs font-medium">Price</TableHead>
-              <TableHead className="min-w-[116px] border-r py-2 text-xs font-medium" title="Whether this SKU has a stock quantity limit">Stock limit</TableHead>
-              <TableHead className="min-w-[68px] border-r py-2 text-xs font-medium" title="Physical items in your warehouse">On Hand</TableHead>
-              <TableHead className="min-w-[68px] border-r py-2 text-xs font-medium" title="Physical items minus items reserved by active orders">Available</TableHead>
-              <TableHead className="min-w-[82px] border-r py-2 text-xs font-medium">Discount</TableHead>
-              <TableHead className="min-w-[86px] border-r py-2 text-xs font-medium">Updated</TableHead>
-              <TableHead className="sticky right-0 z-20 w-[72px] bg-muted/50 py-2 pr-2 text-right text-xs font-medium shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">Actions</TableHead>
+              {isBulkEditing ? (
+                <>
+                  <TableHead className="min-w-[110px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">SKU</TableHead>
+                  <TableHead className="min-w-[90px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <span className="block leading-none">Option 1</span>
+                    <span className="mt-0.5 block text-[9px] normal-case tracking-normal text-muted-foreground/50">size/weight</span>
+                  </TableHead>
+                  <TableHead className="min-w-[90px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <span className="block leading-none">Option 2</span>
+                    <span className="mt-0.5 block text-[9px] normal-case tracking-normal text-muted-foreground/50">color/style</span>
+                  </TableHead>
+                  <TableHead className="min-w-[72px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Weight</TableHead>
+                  <TableHead className="min-w-[88px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Price</TableHead>
+                  <TableHead className="min-w-[110px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Limit</TableHead>
+                  <TableHead className="min-w-[80px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Stock</TableHead>
+                  <TableHead className="sticky right-0 z-20 w-[44px] bg-muted/40 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70"></TableHead>
+                </>
+              ) : (
+                <>
+                  <TableHead className="min-w-[110px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">SKU</TableHead>
+                  <TableHead className="min-w-[140px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Options</TableHead>
+                  <TableHead className="min-w-[100px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Price</TableHead>
+                  <TableHead className="min-w-[130px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Inventory</TableHead>
+                  <TableHead className="min-w-[72px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Updated</TableHead>
+                  <TableHead className="sticky right-0 z-20 w-[64px] bg-muted/40 py-2 pr-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70"></TableHead>
+                </>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {variants.length === 0 && !isAdding && (
+            {variants.length === 0 && !isAdding && draftNewIds.length === 0 && (
               <TableRow>
                 <TableCell colSpan={12} className="h-24 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
@@ -184,7 +200,7 @@ export function VariantTable({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={onAddVariant}
+                      onClick={isBulkEditing ? onAddBulkRow : onAddVariant}
                       className="mt-2"
                     >
                       <Plus className="mr-1 h-3 w-3" />
@@ -230,6 +246,31 @@ export function VariantTable({
               );
             })}
 
+            {isBulkEditing && draftNewIds.map((newId) => {
+              const draft = draftUpdates?.[newId] || {};
+              const dummyVariant = {
+                id: newId,
+                sku: draft.sku || '',
+                price: draft.price || 0,
+                stock: draft.stock || 0,
+                trackInventory: draft.trackInventory ?? true,
+                size: draft.size || null,
+                color: draft.color || null,
+                weight: draft.weight || null,
+              } as ProductVariant;
+
+              return (
+                <VariantBulkEditRow
+                  key={newId}
+                  variant={dummyVariant}
+                  draftUpdate={draftUpdates?.[newId]}
+                  onChange={onBulkEditChange!}
+                  isNew={true}
+                  onRemoveNew={() => onRemoveBulkRow?.(newId)}
+                />
+              );
+            })}
+
             {isAdding && (
               <VariantFormRow
                 defaultValues={addVariantDefaults}
@@ -243,13 +284,13 @@ export function VariantTable({
       </div>
 
       {/* Add option button at the bottom - only show if not adding */}
-      {!isAdding && variants.length > 0 && (
+      {!isAdding && (variants.length > 0 || draftNewIds.length > 0) && (
         <div className="flex justify-start pt-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={onAddVariant}
+            onClick={isBulkEditing ? onAddBulkRow : onAddVariant}
             disabled={isAnyRowEditing}
             className="h-8 text-xs"
           >

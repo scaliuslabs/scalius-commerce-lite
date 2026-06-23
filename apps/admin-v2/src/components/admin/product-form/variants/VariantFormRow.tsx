@@ -90,13 +90,9 @@ function VariantOptionForm({
     ? Math.max(0, Number(stockValue ?? 0) - (initialData?.reservedStock ?? 0))
     : null;
   const saveLabel = isEditMode ? "Save option" : "Create option";
-  const compactInputClass = layout === "row"
-    ? "h-8 rounded-[4px] border border-transparent bg-transparent px-2 text-xs shadow-none transition-colors hover:border-border hover:bg-background focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-0"
-    : "h-8 rounded-[4px] bg-background px-2 text-xs shadow-none focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-0";
-  const messageClass = layout === "row"
-    ? "absolute left-1 top-full z-20 mt-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground shadow"
-    : "px-1 pt-0.5 text-[10px]";
-  const cellClass = "h-10 border-r p-0 align-middle last:border-r-0";
+  const compactInputClass = "h-7 rounded-[4px] bg-background px-2 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/20 focus-visible:ring-offset-0 border border-border/60";
+  const messageClass = "px-1 pt-0.5 text-[10px] text-destructive font-medium";
+
   const controlProps = {
     form,
     symbol,
@@ -112,112 +108,67 @@ function VariantOptionForm({
     onSubmit: form.handleSubmit(handleSubmit),
   };
 
-  if (layout === "card") {
-    return (
-      <Form {...form}>
-        <div className="rounded-lg border bg-background p-2 shadow-sm">
-          <div className="mb-2 flex items-center justify-between gap-2 border-b pb-2">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-foreground">
-                {isEditMode ? "Edit option" : "Add option"}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                Option 1/2 can be size, weight, color, style, or pack.
-              </p>
-            </div>
-            <ActionButtons {...controlProps} compact />
-          </div>
+  const EditorContent = (
+    <div className={cn(
+      "rounded-lg bg-card p-3 border",
+      layout === "row" && "mx-0.5 my-1 border-primary/15 bg-background ring-1 ring-primary/10 shadow-md animate-in fade-in zoom-in-[0.99] duration-150 ease-out relative z-20"
+    )}>
+      <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-border/30 pb-2">
+        <p className="text-[13px] font-semibold text-foreground">
+          {isEditMode ? "Edit option" : "Add option"}
+        </p>
+        <ActionButtons {...controlProps} compact />
+      </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <LabeledCell label="SKU" className="col-span-2">
-              <SkuField {...controlProps} autoFocus={isEditMode} />
-            </LabeledCell>
-            <LabeledCell label="Option 1" hint="size, weight">
-              <OptionOneField {...controlProps} autoFocus={!isEditMode} />
-            </LabeledCell>
-            <LabeledCell label="Option 2" hint="color, style">
-              <OptionTwoField {...controlProps} />
-            </LabeledCell>
-            <LabeledCell label="Price">
-              <PriceField {...controlProps} />
-            </LabeledCell>
-            <LabeledCell label="Weight">
-              <WeightField {...controlProps} />
-            </LabeledCell>
-            <LabeledCell label="Stock" className="col-span-2">
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <StockField {...controlProps} />
-                <StockLimitField {...controlProps} />
-              </div>
-              <AvailabilityNote availableStock={availableStock} trackInventory={trackInventory} />
-            </LabeledCell>
-            <LabeledCell label="Discount" className="col-span-2">
-              <DiscountField {...controlProps} />
-            </LabeledCell>
-            <LabeledCell label="Barcode" className="col-span-2">
-              <BarcodeFields {...controlProps} />
-            </LabeledCell>
-          </div>
-        </div>
-      </Form>
-    );
+      <div className={cn(
+        "grid gap-x-2.5 gap-y-2",
+        layout === "row" ? "grid-cols-2 sm:grid-cols-4 lg:grid-cols-8" : "grid-cols-2"
+      )}>
+        <LabeledCell label="SKU" className={layout === "row" ? "col-span-2" : "col-span-2"}>
+          <SkuField {...controlProps} autoFocus={isEditMode} />
+        </LabeledCell>
+        <LabeledCell label="Option 1" hint="size" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
+          <OptionOneField {...controlProps} autoFocus={!isEditMode} />
+        </LabeledCell>
+        <LabeledCell label="Option 2" hint="color" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
+          <OptionTwoField {...controlProps} />
+        </LabeledCell>
+        <LabeledCell label="Price" className={layout === "row" ? "col-span-1" : ""}>
+          <PriceField {...controlProps} />
+        </LabeledCell>
+        <LabeledCell label="Weight" className={layout === "row" ? "col-span-1" : ""}>
+          <WeightField {...controlProps} />
+        </LabeledCell>
+        <LabeledCell label="Limit" className={layout === "row" ? "col-span-1" : ""}>
+          <StockLimitField {...controlProps} />
+        </LabeledCell>
+        <LabeledCell label="Stock" className={layout === "row" ? "col-span-1" : ""}>
+          <StockField {...controlProps} />
+        </LabeledCell>
+
+        <LabeledCell label="Discount" className={layout === "row" ? "col-span-2 sm:col-span-4 lg:col-span-4" : "col-span-2"}>
+          <DiscountField {...controlProps} />
+        </LabeledCell>
+        <LabeledCell label="Barcode" className={layout === "row" ? "col-span-2 sm:col-span-4 lg:col-span-4" : "col-span-2"}>
+          <BarcodeFields {...controlProps} />
+        </LabeledCell>
+      </div>
+
+      {layout === "card" && <div className="mt-1"><AvailabilityNote availableStock={availableStock} trackInventory={trackInventory} /></div>}
+      {layout === "row" && <div className="mt-1"><AvailabilityNote availableStock={availableStock} trackInventory={trackInventory} /></div>}
+    </div>
+  );
+
+  if (layout === "card") {
+    return <Form {...form}>{EditorContent}</Form>;
   }
 
   return (
     <Form {...form}>
-      <TableRow className="border-y border-primary/25 bg-primary/[0.025] hover:bg-primary/[0.035]">
-        <TableCell className={cn(cellClass, "w-10")}>
-          <span
-            className="mx-auto block h-3.5 w-3.5 rounded-[4px] border border-primary/45 bg-primary/10"
-            title={isEditMode ? "Editing option" : "Adding option"}
-          />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[140px] px-1")}>
-          <SkuField {...controlProps} autoFocus={isEditMode} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[105px] px-1")}>
-          <OptionOneField {...controlProps} autoFocus={!isEditMode} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[105px] px-1")}>
-          <OptionTwoField {...controlProps} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[56px] px-1")}>
-          <WeightField {...controlProps} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[80px] px-1")}>
-          <PriceField {...controlProps} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[116px] px-1")}>
-          <StockLimitField {...controlProps} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[68px] px-1")}>
-          <StockField {...controlProps} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[68px]")}>
-          {trackInventory ? (
-            <span className="block px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-              {availableStock ?? "New"}
-            </span>
-          ) : (
-            <span className="block px-2 text-xs text-muted-foreground">-</span>
-          )}
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[82px] px-1")}>
-          <DiscountField {...controlProps} />
-        </TableCell>
-        <TableCell className={cn(cellClass, "min-w-[86px]")}>
-          <span className="text-[11px] text-muted-foreground">
-            {isEditMode ? "Editing" : "New"}
-          </span>
-        </TableCell>
-        <TableCell
-          className={cn(
-            cellClass,
-            "sticky right-0 z-20 w-[72px] min-w-[72px] bg-primary/[0.025] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]",
-          )}
-        >
-          <div className="flex items-center justify-end gap-1 px-1">
-            <ActionButtons {...controlProps} />
+      <TableRow className="border-b transition-colors bg-muted/5">
+        <TableCell colSpan={7} className="p-0">
+          <div className="overflow-hidden">
+            {EditorContent}
           </div>
         </TableCell>
       </TableRow>
@@ -384,8 +335,8 @@ function StockField({ form, compactInputClass, messageClass, trackInventory }: C
               />
             </FormControl>
           ) : (
-            <div className="flex h-8 items-center px-2 text-xs text-muted-foreground">
-              -
+            <div className="flex h-7 items-center px-2 text-[11px] text-muted-foreground/50">
+              —
             </div>
           )}
           <FormMessage className={messageClass} />
@@ -404,7 +355,7 @@ function StockLimitField({ form }: ControlProps) {
         <FormItem className="space-y-0">
           <FormControl>
             <div
-              className="grid h-8 grid-cols-2 overflow-hidden rounded-[4px] border border-border bg-background p-0.5 text-[11px] shadow-none"
+              className="grid h-7 grid-cols-2 overflow-hidden rounded-[4px] border border-border/60 bg-muted/20 p-px text-[10px] shadow-none"
               role="group"
               aria-label="Stock limit for this option"
             >
@@ -586,13 +537,13 @@ function ActionButtons({
 }: ControlProps & { compact?: boolean }) {
   if (compact) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="icon"
           onClick={onCancel}
-          className="h-8 w-8 shadow-none after:shadow-none"
+          className="h-7 w-7 text-muted-foreground/60 hover:text-foreground"
           disabled={isSubmitting}
           aria-label={isEditMode ? "Cancel option edit" : "Cancel option creation"}
           title={isEditMode ? "Cancel option edit" : "Cancel option creation"}
@@ -604,7 +555,7 @@ function ActionButtons({
           variant="outline"
           size="icon"
           onClick={onSubmit}
-          className="h-8 w-8 border-emerald-200 bg-emerald-50 text-emerald-700 shadow-none hover:bg-emerald-100 hover:text-emerald-800 after:shadow-none dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+          className="h-7 w-7 border-emerald-200 bg-emerald-50 text-emerald-700 shadow-none hover:bg-emerald-100 hover:text-emerald-800 after:shadow-none dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
           disabled={isSubmitting}
           aria-label={saveLabel}
           title={saveLabel}
@@ -666,9 +617,9 @@ function LabeledCell({
 }) {
   return (
     <div className={className}>
-      <div className="mb-1 flex items-baseline justify-between gap-2 px-0.5">
-        <span className="text-[11px] font-medium text-foreground">{label}</span>
-        {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
+      <div className="mb-0.5 flex items-baseline justify-between gap-1 px-0.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{label}</span>
+        {hint && <span className="text-[9px] text-muted-foreground/50">{hint}</span>}
       </div>
       {children}
     </div>
