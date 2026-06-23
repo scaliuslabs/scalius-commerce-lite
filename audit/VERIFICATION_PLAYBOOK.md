@@ -728,6 +728,7 @@ Use browser checks after storefront changes:
 - `sitemap-static.xml` excludes cart/checkout/account/private pages.
 - Future `publishedAt` pages are not visible and not in sitemap.
 - Cache purge changes are visible after L1 clear and Cache API/L2 behavior is tested under Wrangler or deployed Worker runtime.
+- Required storefront SSR data failures do not become cacheable empty pages: `/`, `/search`, and `/categories/{slug}` should use the non-cacheable temporary-unavailable path when required data is missing, while product sitemap/feed routes return `503 no-store` on `getAllProducts() === null` or partial paginated product-read failures.
 
 Useful commands:
 
@@ -735,6 +736,7 @@ Useful commands:
 curl -i 'http://localhost:4322/api/v1/search?q=test'
 curl -s http://localhost:4322/sitemap-static.xml | rg '/cart|/checkout|/account'
 curl -s http://localhost:4322/cart | rg -i 'noindex|robots'
+pnpm --filter @scalius/storefront exec vitest run src/lib/storefront-unavailable-response.test.ts src/lib/api/products.test.ts src/lib/page-data-boundaries.test.ts src/lib/route-tests/sitemap-products.test.ts src/lib/route-tests/sitemap-index.test.ts src/lib/route-tests/api/facebook-feed.test.ts --passWithNoTests
 ```
 
 ## Hard-To-Run Areas

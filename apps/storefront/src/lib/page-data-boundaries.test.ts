@@ -194,6 +194,33 @@ describe("storefront page data boundaries", () => {
     expect(source.slice(fastPromiseAllIndex)).toContain("attributesPromise");
   });
 
+  it("fails cacheable listing/home pages closed when required backend data is missing", () => {
+    const homepageSource = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/index.astro`,
+      "utf8",
+    );
+    const searchSource = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/search/index.astro`,
+      "utf8",
+    );
+    const categorySource = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/categories/[slug].astro`,
+      "utf8",
+    );
+
+    expect(homepageSource).toContain("storefrontDataUnavailableResponse");
+    expect(homepageSource).toContain("if (!layoutData || !homepageData)");
+    expect(searchSource).toContain("storefrontDataUnavailableResponse");
+    expect(searchSource).toContain("if (!layoutData || !productsResponse)");
+    expect(categorySource).toContain("storefrontDataUnavailableResponse");
+    expect(categorySource).toContain(
+      "if (!layoutData || !productsResponse || !productsResponse.category)",
+    );
+    expect(categorySource).toContain(
+      "const response = storefrontDataUnavailableResponse(\n      \"We could not load this category. Please try again shortly.\"",
+    );
+  });
+
   it("trusts CMS page render data without refetching page widgets", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/[slug].astro`,

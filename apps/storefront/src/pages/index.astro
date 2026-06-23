@@ -11,11 +11,20 @@ import {
 } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 
 // Parallel fetch: layout data + homepage data
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
   getHomepageData(),
 );
+
+if (!layoutData || !homepageData) {
+  const response = storefrontDataUnavailableResponse(
+    "We could not load the storefront homepage data. Please try again shortly.",
+  );
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
+}
 
 const seo = homepageData?.seo ?? {
   siteTitle: null as string | null,

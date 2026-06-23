@@ -245,14 +245,18 @@ export async function getAllProducts(
     cacheKey,
     async () => {
       try {
-        const { data } = await getApiV1Products({
+        const { data, error } = await getApiV1Products({
           client: getConfiguredSdkClient(),
           query: normalizedOptions as Record<string, unknown>,
         });
+        if (error) {
+          console.error("Error fetching all products:", error);
+          return null;
+        }
         const d = unwrapData<{ products: Product[]; pagination: PaginatedResponse<Product>["pagination"] }>(data);
         return d
           ? { data: d.products, pagination: d.pagination }
-          : { data: [], pagination: emptyProductPagination(options) };
+          : null;
       } catch (error: unknown) {
         console.error("Error fetching all products:", error);
         return null;
