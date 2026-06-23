@@ -581,6 +581,10 @@ Update this file when a future agent starts or finishes a slice. Keep evidence s
 
 ## Local Dev Verification Notes
 
+2026-06-23:
+
+- `DEV-004` full deploy verification after the Corepack `pnpm.mjs` resolver fix: `pnpm run deploy` passed root typecheck, root build, dist secret checks, remote D1 migration check (`No migrations to apply`), and deployed API `cfef47b8-52c7-4fdc-927d-46751fa2fe89`, admin `91c5f827-5d5b-4e31-8ff2-e3730d9d71e9`, and storefront `e4153b3a-eb20-41f5-ab5b-794eb07e3564`. Live checks after deploy: API `/api/v1/health` 200, storefront `/health` 200, public checkout config `success: true`, storefront homepage browser render 200 with no console/page errors, dashboard login 200 with POST form/no credential URL leakage, demo admin sign-in reached `/admin`, and account profile edit controls rendered correctly; human-like name editing enabled `Save changes`, `Cancel` restored the original name, and no console/page errors or horizontal overflow were observed.
+
 2026-06-13:
 
 - `pnpm dev:admin:status` starts a temporary API worker with `apps/api/wrangler.local.jsonc`, reaches `GET /api/v1/setup`, reports local admin status, and stops without a Cloudflare remote proxy session.
