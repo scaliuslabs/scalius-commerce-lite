@@ -383,6 +383,12 @@ pnpm dev:doctor:storefront  # Require API :8787 + storefront :4322 to be running
 pnpm dev:doctor:all     # Require API, admin-v2, and storefront to be running
 ```
 
+Root Turbo commands (`build`, `typecheck`, `lint`, migration helpers, and SDK
+generation) run through `scripts/turbo-run.mjs`, which resolves the active
+Corepack/pnpm executable before invoking Turbo. This keeps the documented
+commands working in shells where Node is available but `pnpm` is not already on
+`PATH`.
+
 ---
 
 ## Local Development

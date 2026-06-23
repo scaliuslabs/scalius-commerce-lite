@@ -756,47 +756,48 @@ async function loadReservationVariantStates(
   | { success: true; variants: Map<string, ReservationVariantState> }
   | { success: false; results: StockOperationResult[]; error: string }
 > {
-  const variants = new Map<string, ReservationVariantState>();
+  const requestedVariantIds = entries.map((entry) => entry.variantId);
+  const rows = await db
+    .select({
+      id: productVariants.id,
+      stock: productVariants.stock,
+      reservedStock: productVariants.reservedStock,
+      preorderStock: productVariants.preorderStock,
+      allowPreorder: productVariants.allowPreorder,
+      allowBackorder: productVariants.allowBackorder,
+      backorderLimit: productVariants.backorderLimit,
+      trackInventory: productVariants.trackInventory,
+      stockVersion: productVariants.stockVersion,
+    })
+    .from(productVariants)
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .where(
+      and(
+        inArray(productVariants.id, requestedVariantIds),
+        isNull(productVariants.deletedAt),
+        eq(products.isActive, true),
+        isNull(products.deletedAt),
+      ),
+    )
+    .all();
 
-  for (const entry of entries) {
-    const variant = await db
-      .select({
-        id: productVariants.id,
-        stock: productVariants.stock,
-        reservedStock: productVariants.reservedStock,
-        preorderStock: productVariants.preorderStock,
-        allowPreorder: productVariants.allowPreorder,
-        allowBackorder: productVariants.allowBackorder,
-        backorderLimit: productVariants.backorderLimit,
-        trackInventory: productVariants.trackInventory,
-        stockVersion: productVariants.stockVersion,
-      })
-      .from(productVariants)
-      .innerJoin(products, eq(products.id, productVariants.productId))
-      .where(
-        and(
-          eq(productVariants.id, entry.variantId),
-          isNull(productVariants.deletedAt),
-          eq(products.isActive, true),
-          isNull(products.deletedAt),
-        ),
-      )
-      .get();
+  const variants = new Map<string, ReservationVariantState>(
+    rows.map((variant) => [variant.id, variant]),
+  );
+  const missingEntries = entries.filter((entry) => !variants.has(entry.variantId));
 
-    if (!variant) {
-      return {
+  if (missingEntries.length > 0) {
+    return {
+      success: false,
+      results: missingEntries.map((entry) => ({
         success: false,
-        results: [{
-          success: false,
-          variantId: entry.variantId,
-          previousStock: 0,
-          newStock: 0,
-          error: `Variant ${entry.variantId} not found`,
-        }],
+        variantId: entry.variantId,
+        previousStock: 0,
+        newStock: 0,
         error: `Variant ${entry.variantId} not found`,
-      };
-    }
-    variants.set(entry.variantId, variant);
+      })),
+      error: `Variant ${missingEntries[0]!.variantId} not found`,
+    };
   }
 
   return { success: true, variants };

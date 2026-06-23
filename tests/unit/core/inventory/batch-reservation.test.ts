@@ -304,9 +304,13 @@ function createReserveStockBatchDb(options: {
         where() {
           return {
             get: async () => {
+              if ("count" in projection) return { count: options.releaseCount ?? 0 };
+              return null;
+            },
+            all: async () => {
               if ("stock" in projection) {
                 return variant
-                  ? {
+                  ? [{
                       id: variant.id,
                       stock: variant.stock,
                       reservedStock: variant.reservedStock,
@@ -314,14 +318,13 @@ function createReserveStockBatchDb(options: {
                       allowPreorder: variant.allowPreorder,
                       allowBackorder: variant.allowBackorder,
                       backorderLimit: variant.backorderLimit,
+                      trackInventory: true,
                       stockVersion: variant.version,
-                    }
-                  : null;
+                    }]
+                  : [];
               }
-              if ("count" in projection) return { count: options.releaseCount ?? 0 };
-              return null;
+              return options.existingMovements ?? [];
             },
-            all: async () => options.existingMovements ?? [],
           };
         },
       };
