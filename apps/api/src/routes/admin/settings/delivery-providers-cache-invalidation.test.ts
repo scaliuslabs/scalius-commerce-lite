@@ -45,7 +45,13 @@ const providerRecord = {
   id: "provider_pathao",
   name: "Pathao",
   type: "pathao",
-  credentials: JSON.stringify({ clientSecret: "secret", password: "pass" }),
+  credentials: JSON.stringify({
+    baseUrl: "https://api-hermes.pathao.com",
+    clientId: "client",
+    clientSecret: "secret",
+    username: "merchant",
+    password: "pass",
+  }),
   config: JSON.stringify({ storeId: "store_1" }),
   isActive: true,
   createdAt: 1,
@@ -106,7 +112,13 @@ describe("delivery provider cache invalidation", () => {
         body: JSON.stringify({
           name: "Pathao",
           type: "pathao",
-          credentials: { clientSecret: "secret", password: "pass" },
+          credentials: {
+            baseUrl: "https://api-hermes.pathao.com",
+            clientId: "client",
+            clientSecret: "secret",
+            username: "merchant",
+            password: "pass",
+          },
           config: { storeId: "store_1" },
           isActive: true,
         }),
@@ -123,10 +135,83 @@ describe("delivery provider cache invalidation", () => {
     expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        credentials: JSON.stringify({ clientSecret: "secret", password: "pass" }),
+        credentials: JSON.stringify({
+          baseUrl: "https://api-hermes.pathao.com",
+          clientId: "client",
+          clientSecret: "secret",
+          username: "merchant",
+          password: "pass",
+        }),
       }),
       "credential-key",
     );
+  });
+
+  it("creates omitted-active providers as inactive so setup drafts can be saved", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Pathao",
+          type: "pathao",
+          credentials: { clientSecret: "secret" },
+          config: {},
+        }),
+      },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isActive: false }),
+      "credential-key",
+    );
+  });
+
+  it("rejects active providers with incomplete required setup before saving", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Pathao",
+          type: "pathao",
+          credentials: {
+            baseUrl: "https://api-hermes.pathao.com",
+            clientSecret: "secret",
+            password: "pass",
+          },
+          config: { storeId: "store_1" },
+          isActive: true,
+        }),
+      },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Delivery provider cannot be activated until required setup is complete.",
+        details: {
+          blockers: [
+            { key: "clientId" },
+            { key: "username" },
+          ],
+        },
+      },
+    });
+    expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
 
   it("invalidates checkout caches after provider updates", async () => {
@@ -141,7 +226,13 @@ describe("delivery provider cache invalidation", () => {
           id: "provider_pathao",
           name: "Pathao",
           type: "pathao",
-          credentials: { clientSecret: "••••••••••••", password: "••••••••••••" },
+          credentials: {
+            baseUrl: "https://api-hermes.pathao.com",
+            clientId: "client",
+            clientSecret: "••••••••••••",
+            username: "merchant",
+            password: "••••••••••••",
+          },
           config: { storeId: "store_2" },
           isActive: false,
         }),
@@ -157,7 +248,13 @@ describe("delivery provider cache invalidation", () => {
     expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        credentials: JSON.stringify({ clientSecret: "secret", password: "pass" }),
+        credentials: JSON.stringify({
+          baseUrl: "https://api-hermes.pathao.com",
+          clientId: "client",
+          clientSecret: "secret",
+          username: "merchant",
+          password: "pass",
+        }),
       }),
       "credential-key",
     );
@@ -259,7 +356,13 @@ describe("delivery provider cache invalidation", () => {
         body: JSON.stringify({
           name: "Pathao",
           type: "pathao",
-          credentials: { clientSecret: "secret", password: "pass" },
+          credentials: {
+            baseUrl: "https://api-hermes.pathao.com",
+            clientId: "client",
+            clientSecret: "secret",
+            username: "merchant",
+            password: "pass",
+          },
           config: { storeId: "store_1" },
           isActive: true,
         }),
@@ -292,7 +395,13 @@ describe("delivery provider cache invalidation", () => {
           id: "provider_pathao",
           name: "Pathao",
           type: "pathao",
-          credentials: { clientSecret: "secret", password: "pass" },
+          credentials: {
+            baseUrl: "https://api-hermes.pathao.com",
+            clientId: "client",
+            clientSecret: "secret",
+            username: "merchant",
+            password: "pass",
+          },
           config: { storeId: "store_1" },
           isActive: true,
         }),
@@ -306,6 +415,34 @@ describe("delivery provider cache invalidation", () => {
       expect.objectContaining({ env }),
     );
     expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
+  });
+
+  it("creates missing providers from update as inactive when isActive is omitted", async () => {
+    const { app, env } = createTestApp();
+    mocks.getDeliveryProvider.mockResolvedValueOnce(null);
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "provider_pathao",
+          name: "Pathao",
+          type: "pathao",
+          credentials: { clientSecret: "secret" },
+          config: {},
+        }),
+      },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isActive: false }),
+      "credential-key",
+    );
   });
 
   it("invalidates checkout caches after provider deletion", async () => {

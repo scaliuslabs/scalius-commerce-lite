@@ -11,6 +11,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `factory.ts` | `createProvider()` -- factory that parses credentials (with optional AES-GCM decryption via `decryptCredentialsGraceful()`) and config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Read paths tolerate legacy plaintext/JWT-encrypted rows only for migration. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
+| `provider-readiness.ts` | Pure activation-readiness rules for Pathao/Steadfast required fields, shared by API saves and admin UI blockers |
 | `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`), `getTrackingUrl()` |
 | `status-mapper.ts` | `mapProviderStatus()` + `ShipmentStatusCode` enum -- normalizes provider-specific statuses to 14 canonical codes |
 | `locations.ts` | Location CRUD and external ID resolution functions |
@@ -109,6 +110,10 @@ Before updating, performs CAS update on `orders.version` to prevent race conditi
 Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `ORDER_NOTIFICATIONS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added.
 
 Delivery webhook verification is active-provider authoritative. `verifyDeliveryWebhook()` must find exactly one active provider for the courier type; zero or multiple active providers fail closed before signature/IP checks. The webhook routes then scope shipment lookup by the verified `providerId` and `providerType` as well as the external consignment/tracking identifier, so an old/inactive provider row or another provider's colliding external id cannot update a shipment. Admin-triggered shipment creation and status polling also reject inactive provider IDs before provider API calls or local placeholder writes.
+
+## Provider Activation Readiness
+
+Delivery providers are inactive drafts by default on both create and update-as-create paths. Turning a provider active is a local readiness gate, not a live-network test: `assertDeliveryProviderReadyForActivation()` rejects incomplete required fields before DB writes or checkout-cache invalidation, while `testDeliveryProvider()` remains the explicit merchant action for live courier connectivity. Pathao activation requires `baseUrl`, `clientId`, `clientSecret`, `username`, `password`, and `storeId`; Steadfast activation requires `baseUrl`, `apiKey`, and `secretKey`. The admin panel uses the same pure `getDeliveryProviderActivationBlockers()` helper to disable activation and list missing fields, including when masked stored secrets are present.
 
 ## Credential Storage
 
