@@ -284,7 +284,7 @@ The `GET /checkout/config` endpoint returns:
 
 Storefront SSR pages at `apps/storefront/src/pages/api/checkout/` act as proxies:
 
-1. Browser calls storefront proxy (e.g., `POST /api/checkout/stripe-intent`)
+1. Browser calls storefront proxy (e.g., `POST /api/checkout/stripe-intent`) after order creation returns a committed `orderId` and receipt proof
 2. Proxy calls API worker via service binding (e.g., `POST /payment/stripe/intent`) using the server-side `API_TOKEN`
 3. Proxy unwraps the `{success, data}` envelope before returning to browser
 4. Browser receives flat response (e.g., `{clientSecret, paymentIntentId, ...}`)
@@ -299,6 +299,8 @@ Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
 - A `registry.ts` with `registerGateway()` / `getGateway()`
 - Handler implementations per gateway that each: call `createOrder()`, then call their respective proxy endpoint, then either redirect (SSLCommerz/Polar) or confirm client-side (Stripe)
 - All handlers are registered in `index.ts` on import
+
+Normal checkout order creation does not request an attached `initialPaymentSession`; this keeps the authoritative order commit response independent from provider latency. The same-origin create-order proxy keeps an explicit opt-in `initialPaymentSession: true` branch for covered diagnostics/experiments, but the default browser flow creates Stripe/SSLCommerz/Polar sessions through the gateway-specific proxies with only `orderId` and receipt proof. API payment-session routes must await the durable `payment_session_attempts` created row before returning, while scheduling only the best-effort `orders.paymentIntentId` recovery hint through `executionCtx.waitUntil()` when available.
 
 ## API Endpoints Summary
 

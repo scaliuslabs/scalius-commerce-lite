@@ -45,6 +45,10 @@ import {
 
 type PaymentRouteContext = Context<{ Bindings: Env }>;
 
+type WaitUntilExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 type PaymentSessionProof =
   | { kind: "receipt"; receiptToken: string }
   | { kind: "customer_account"; customerId: string };
@@ -244,14 +248,14 @@ export async function createStripePaymentSession(
     response: responsePayload,
   });
 
-  try {
-    await db
+  await scheduleOrderRecoveryHint(
+    c,
+    db
       .update(orders)
       .set({ paymentIntentId: result.paymentIntentId, updatedAt: sql`unixepoch()` })
-      .where(eq(orders.id, input.orderId));
-  } catch (error: unknown) {
-    console.error("[payments] Stripe session was created, but local order recovery hint failed:", error);
-  }
+      .where(eq(orders.id, input.orderId)),
+    "[payments] Stripe session was created, but local order recovery hint failed:",
+  );
 
   return {
     gateway: "stripe",
@@ -431,15 +435,15 @@ export async function createSSLCommerzPaymentSession(
     response: responsePayload,
   });
 
-  try {
-    if (result.sessionKey) {
-      await db
+  if (result.sessionKey) {
+    await scheduleOrderRecoveryHint(
+      c,
+      db
         .update(orders)
         .set({ paymentIntentId: result.sessionKey, updatedAt: sql`unixepoch()` })
-        .where(eq(orders.id, input.orderId));
-    }
-  } catch (error: unknown) {
-    console.error("[payments] SSLCommerz session was created, but local order recovery hint failed:", error);
+        .where(eq(orders.id, input.orderId)),
+      "[payments] SSLCommerz session was created, but local order recovery hint failed:",
+    );
   }
 
   return {
@@ -593,18 +597,18 @@ export async function createPolarPaymentSession(
     response: responsePayload,
   });
 
-  try {
-    await db
+  await scheduleOrderRecoveryHint(
+    c,
+    db
       .update(orders)
       .set({
         paymentIntentId: result.checkoutId,
         paymentMethod: PaymentMethod.POLAR,
         updatedAt: sql`unixepoch()`,
       })
-      .where(eq(orders.id, input.orderId));
-  } catch (error: unknown) {
-    console.error("[payments] Polar session was created, but local order recovery hint failed:", error);
-  }
+      .where(eq(orders.id, input.orderId)),
+    "[payments] Polar session was created, but local order recovery hint failed:",
+  );
 
   return {
     gateway: "polar",
@@ -711,6 +715,33 @@ function activeRecovery(
     requiresCardForm: gateway === "stripe",
     hostedRedirect: gateway !== "stripe",
   };
+}
+
+function getWaitUntilExecutionContext(c: PaymentRouteContext): WaitUntilExecutionContext | undefined {
+  try {
+    const executionCtx = c.executionCtx as unknown as WaitUntilExecutionContext | undefined;
+    return executionCtx && typeof executionCtx.waitUntil === "function"
+      ? executionCtx
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function scheduleOrderRecoveryHint(
+  c: PaymentRouteContext,
+  write: PromiseLike<unknown>,
+  logMessage: string,
+): Promise<void> {
+  const guardedWrite = Promise.resolve(write).catch((error: unknown) => {
+    console.error(logMessage, error);
+  });
+  const executionCtx = getWaitUntilExecutionContext(c);
+  if (executionCtx) {
+    executionCtx.waitUntil(guardedWrite);
+    return;
+  }
+  await guardedWrite;
 }
 
 function identityProof(proof: PaymentSessionProof): Pick<Parameters<typeof buildPaymentSessionAttemptIdentity>[0], "receiptToken" | "proof"> {

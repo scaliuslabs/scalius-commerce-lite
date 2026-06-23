@@ -204,7 +204,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 
 | Route | Purpose |
 |-------|---------|
-| `checkout/create-order.ts` | Create order via API (queue-based, with polling) |
+| `checkout/create-order.ts` | Create order via API with synchronous D1 checkout-attempt idempotency; normal online checkout creates gateway sessions through gateway-specific proxies after order commit |
 | `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
 | `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
 | `checkout/polar-session.ts` | Create Polar checkout session |
