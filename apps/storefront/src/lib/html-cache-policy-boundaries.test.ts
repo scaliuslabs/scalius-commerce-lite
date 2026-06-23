@@ -39,4 +39,21 @@ describe("storefront HTML cache policy boundaries", () => {
     expect(source).toContain("/^\\/api\\/facebook-feed\\.xml$/");
     expect(source).toContain("isCacheablePublicResponse(response)");
   });
+
+  it("keeps health checks out of the cache and CSP middleware lane", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/middleware.ts`,
+      "utf8",
+    );
+
+    const fastPathIndex = source.indexOf("const FAST_PASS_THROUGH_PATHS = [");
+    const healthPatternIndex = source.indexOf("/^\\/health\\/?$/", fastPathIndex);
+    const fastBypassIndex = source.indexOf("BYPASS_FAST", fastPathIndex);
+    const cspIndex = source.indexOf("return await setPageCspHeader");
+
+    expect(fastPathIndex).toBeGreaterThan(-1);
+    expect(healthPatternIndex).toBeGreaterThan(fastPathIndex);
+    expect(fastBypassIndex).toBeGreaterThan(healthPatternIndex);
+    expect(cspIndex).toBeGreaterThan(fastBypassIndex);
+  });
 });

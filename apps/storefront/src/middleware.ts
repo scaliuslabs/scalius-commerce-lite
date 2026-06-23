@@ -43,6 +43,14 @@ const CACHEABLE_PATHS = [
   /^\/(?!api|cart|checkout|buy|order-success|account|health|robots\.txt)[^/.]*$/,
 ];
 
+const FAST_PASS_THROUGH_PATHS = [
+  /^\/health\/?$/,
+];
+
+function isFastPassThroughPath(pathname: string): boolean {
+  return FAST_PASS_THROUGH_PATHS.some((regex) => regex.test(pathname));
+}
+
 // Check if we're running in Cloudflare Workers environment
 const isCloudflareEnvironment = () => {
   return typeof caches !== "undefined";
@@ -101,6 +109,12 @@ function getEnv(): Env | null {
 const cachingMiddleware = defineMiddleware(async (context, next) => {
   const { request, url, locals } = context;
   const hostname = url.hostname;
+
+  if (isFastPassThroughPath(url.pathname)) {
+    const response = await next();
+    response.headers.set("X-Cache-Status", "BYPASS_FAST");
+    return response;
+  }
 
   const isCacheablePath = CACHEABLE_PATHS.some((regex) =>
     regex.test(url.pathname),
