@@ -165,6 +165,44 @@ describe("checkout create-order proxy Origin guard", () => {
     expect(json.details).toEqual({ retryable: status !== 409 });
   });
 
+  it("does not attach an initial online payment session unless explicitly requested", async () => {
+    mocks.createOrder.mockResolvedValueOnce({
+      success: true,
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "sslcommerz",
+    });
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/checkout/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkoutRequestId: "checkout_req_123456",
+          paymentMethod: "sslcommerz",
+        }),
+      }),
+    } as never);
+    const json = await response.json() as {
+      data?: {
+        id?: string;
+        receiptToken?: string;
+        initialPaymentSession?: unknown;
+        initialPaymentSessionError?: string;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(json.data).toMatchObject({
+      id: "order_1",
+      receiptToken: "receipt_1",
+    });
+    expect(json.data?.initialPaymentSession).toBeUndefined();
+    expect(json.data?.initialPaymentSessionError).toBeUndefined();
+  });
+
   it("attaches an initial online payment session after order creation succeeds", async () => {
     mocks.createOrder.mockResolvedValueOnce({
       success: true,

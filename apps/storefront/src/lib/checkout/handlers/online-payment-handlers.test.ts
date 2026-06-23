@@ -273,6 +273,59 @@ describe("Stripe checkout handler", () => {
     expect(result.clearCheckoutSessionOnRedirect).toBeUndefined();
   });
 
+  it("creates a Stripe intent after order commit when no fused session is returned", async () => {
+    document.body.innerHTML = `
+      <div id="stripeCardElement"></div>
+      <div id="stripeError"></div>
+    `;
+    const stripeCard = {
+      mount: vi.fn(),
+      on: vi.fn(),
+    };
+    const stripeInstance = {
+      elements: vi.fn(() => ({
+        create: vi.fn(() => stripeCard),
+      })),
+      confirmCardPayment: vi.fn(async () => ({
+        paymentIntent: { status: "succeeded" },
+      })),
+    };
+    vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
+    const container = document.createElement("div");
+    container.dataset.publishableKey = "pk_fallback";
+    await stripeHandler.onSelect?.(container);
+
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "stripe",
+    });
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        clientSecret: "pi_secret_fallback",
+      }),
+    } as Response);
+
+    const result = await stripeHandler.processPayment(makeContext());
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/checkout/stripe-intent",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "receipt_1" }),
+      }),
+    );
+    expect(stripeInstance.confirmCardPayment).toHaveBeenCalledWith("pi_secret_fallback", {
+      payment_method: { card: stripeCard },
+    });
+    expect(result).toEqual({
+      success: true,
+      redirectUrl: "/order-success?orderId=order_1&token=receipt_1&payment=stripe",
+    });
+  });
+
   it("uses the fused Stripe PaymentIntent returned by order creation", async () => {
     document.body.innerHTML = `
       <div id="stripeCardElement"></div>

@@ -93,14 +93,20 @@ interface DbMockOptions {
   partialPaymentAmount?: number;
   paymentPlan?: { depositAmount?: number; balanceDue: number; status: string } | null;
   insertError?: unknown;
+  updateResult?: unknown;
+  updateError?: unknown;
 }
 
 function createDbMock(options: string | DbMockOptions = "stripe") {
   const opts: DbMockOptions = typeof options === "string" ? { paymentMethod: options } : options;
   const currentOrder = { ...orderRow, ...opts.order, paymentMethod: opts.paymentMethod ?? "stripe" };
   const insertedValues: unknown[] = [];
+  const updateWhere = vi.fn(async () => {
+    if (opts.updateError) throw opts.updateError;
+    return opts.updateResult;
+  });
   const updateQuery = {
-    set: vi.fn(() => ({ where: vi.fn(async () => undefined) })),
+    set: vi.fn(() => ({ where: updateWhere })),
   };
   const insertQuery = {
     values: vi.fn((values: unknown) => {
@@ -183,6 +189,20 @@ function envFor(kv: ReturnType<typeof createKvMock>) {
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://shop.example.test",
   } as never;
+}
+
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -1034,6 +1054,127 @@ describe("payment session receipt-token proof", () => {
       expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
       expect.objectContaining({ response: firstJson.data }),
     );
+  });
+
+  it("awaits the durable payment-session attempt before returning the provider response", async () => {
+    const created = deferred();
+    mocks.markPaymentSessionAttemptCreated.mockReturnValueOnce(created.promise);
+    const hintWrite = deferred();
+    const executionCtx = { waitUntil: vi.fn() };
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      updateResult: hintWrite.promise,
+    });
+
+    const responsePromise = Promise.resolve(app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+      executionCtx as never,
+    ));
+    const race = await Promise.race([
+      responsePromise.then(() => "response"),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 25)),
+    ]);
+
+    expect(race).toBe("pending");
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled();
+
+    created.resolve(undefined);
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+
+    hintWrite.resolve(undefined);
+    await executionCtx.waitUntil.mock.calls[0]?.[0];
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+    },
+  ])("schedules the $label order recovery hint after the response when executionCtx is available", async ({
+    paymentMethod,
+    path,
+  }) => {
+    const hintWrite = deferred();
+    const executionCtx = { waitUntil: vi.fn() };
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod,
+      updateResult: hintWrite.promise,
+    });
+
+    const responsePromise = Promise.resolve(app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+      executionCtx as never,
+    ));
+    const race = await Promise.race([
+      responsePromise.then(() => "response"),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 25)),
+    ]);
+    if (race !== "response") {
+      hintWrite.resolve(undefined);
+      await responsePromise;
+    }
+
+    expect(race).toBe("response");
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+
+    hintWrite.resolve(undefined);
+    await executionCtx.waitUntil.mock.calls[0]?.[0];
+  });
+
+  it("logs order recovery hint failures without failing a created Stripe session", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const executionCtx = { waitUntil: vi.fn() };
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      updateError: new Error("D1 hint write failed"),
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+      executionCtx as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+    await expect(executionCtx.waitUntil.mock.calls[0]?.[0]).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[payments] Stripe session was created, but local order recovery hint failed:",
+      expect.any(Error),
+    );
+    errorSpy.mockRestore();
   });
 
   it.each([

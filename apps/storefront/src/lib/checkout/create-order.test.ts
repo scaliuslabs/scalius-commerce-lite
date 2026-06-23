@@ -50,7 +50,7 @@ describe("createOrder", () => {
       initialPaymentSession?: boolean;
       items: Array<Record<string, unknown>>;
     };
-    expect(body.initialPaymentSession).toBe(false);
+    expect(body).not.toHaveProperty("initialPaymentSession");
     expect(body.items).toEqual([
       expect.objectContaining({
         cartKey: "prod_1:default",
@@ -64,7 +64,7 @@ describe("createOrder", () => {
     ]);
   });
 
-  it("requests an initial payment session for online methods and returns it when present", async () => {
+  it("does not request an initial payment session for online methods by default", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       success: true,
       data: {
@@ -82,7 +82,7 @@ describe("createOrder", () => {
 
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(String(init?.body)) as { initialPaymentSession?: boolean };
-    expect(body.initialPaymentSession).toBe(true);
+    expect(body).not.toHaveProperty("initialPaymentSession");
     expect(result.initialPaymentSession).toEqual({
       gateway: "sslcommerz",
       gatewayUrl: "https://ssl.example.test/pay",

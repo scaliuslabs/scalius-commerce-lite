@@ -191,10 +191,7 @@ export async function createOrder(
   const res = await fetch("/api/checkout/create-order", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...payload,
-      initialPaymentSession: paymentMethod !== "cod",
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
