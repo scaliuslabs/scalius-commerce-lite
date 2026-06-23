@@ -46,13 +46,31 @@ export function LocationFormDialog({
   loadingParents,
   onSubmit,
 }: LocationFormDialogProps) {
+  const locationLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+  const pathaoExternalId = formData.externalIds.pathao;
+  const setPathaoExternalId = (value: string) => {
+    setFormData((prev) => {
+      const externalIds = { ...prev.externalIds };
+      const trimmed = value.trim();
+
+      if (!trimmed) {
+        delete externalIds.pathao;
+      } else {
+        const numericValue = Number(trimmed);
+        externalIds.pathao = Number.isFinite(numericValue) ? numericValue : trimmed;
+      }
+
+      return { ...prev, externalIds };
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {editMode ? "Edit" : "Add New"}{" "}
-            {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+            {locationLabel}
           </DialogTitle>
           <DialogDescription>
             {editMode ? "Update" : "Create a new"} {activeTab} for delivery
@@ -135,6 +153,25 @@ export function LocationFormDialog({
                 }
               />
               <Label htmlFor="isActive">Active</Label>
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <div className="space-y-2">
+                <Label htmlFor="pathaoExternalId">Pathao {locationLabel} ID</Label>
+                <Input
+                  id="pathaoExternalId"
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  placeholder={`Pathao ${activeTab} ID`}
+                  value={pathaoExternalId === undefined ? "" : String(pathaoExternalId)}
+                  onChange={(event) => setPathaoExternalId(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Import fills this automatically; edit it when correcting Pathao shipment mappings.
+                </p>
+              </div>
             </div>
           </div>
 

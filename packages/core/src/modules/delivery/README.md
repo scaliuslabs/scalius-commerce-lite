@@ -29,7 +29,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `saveDeliveryProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. |
 | `deleteDeliveryProvider` | `(db, id)` | Hard delete |
 | `testDeliveryProvider` | `(db, id, encryptionKey?)` | Tests connection via provider instance |
-| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Requires an active provider, then uses the insert-first pattern (see below). Enriches with order item names and quantities. |
+| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Requires an active provider, preflights Pathao city/zone mappings, then uses the insert-first pattern (see below). Enriches with order item names and quantities. |
 | `getShipment` | `(db, id)` | Single shipment by ID |
 | `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
 | `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
@@ -74,6 +74,8 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 
 Provider shipment creation is coordinated by order-level shipment claims in the orders module. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution.
 
+For Pathao, positive-integer city and zone `externalIds.pathao` mappings are mandatory before the insert-first placeholder is written. Area mappings remain optional because Pathao accepts some shipments without area IDs, but when present the provider payload includes them.
+
 ## Status Mapping
 
 `ShipmentStatusCode` enum (14 canonical statuses):
@@ -109,7 +111,7 @@ Before updating, performs CAS update on `orders.version` to prevent race conditi
 
 Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `ORDER_NOTIFICATIONS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added.
 
-Delivery webhook verification is active-provider authoritative. `verifyDeliveryWebhook()` must find exactly one active provider for the courier type; zero or multiple active providers fail closed before signature/IP checks. The webhook routes then scope shipment lookup by the verified `providerId` and `providerType` as well as the external consignment/tracking identifier, so an old/inactive provider row or another provider's colliding external id cannot update a shipment. Admin-triggered shipment creation and status polling also reject inactive provider IDs before provider API calls or local placeholder writes.
+Delivery webhook verification is active-provider authoritative. `verifyDeliveryWebhook()` must find exactly one active provider for the courier type; zero or multiple active providers fail closed before signature/IP checks. The webhook routes then scope shipment lookup by the verified `providerId` and `providerType` as well as the external consignment/tracking identifier, so an old/inactive provider row or another provider's colliding external id cannot update a shipment. Admin-triggered shipment creation and status polling also reject inactive provider IDs before provider API calls or local placeholder writes. Pathao shipment creation preflights required city/zone mappings before provider token work or local placeholder writes; the Pathao provider keeps its own mapping check as defense-in-depth.
 
 ## Provider Activation Readiness
 
