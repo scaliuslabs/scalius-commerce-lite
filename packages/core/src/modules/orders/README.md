@@ -215,8 +215,8 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | POST | `/:id/shipments` | `DeliveryService.createShipment()` | Create delivery shipment |
 | GET | `/:id/shipments/:shipmentId` | `DeliveryService.getShipment()` | Single shipment detail |
 | DELETE | `/:id/shipments/:shipmentId` | `DeliveryService.deleteShipment()` | Delete shipment |
-| POST | `/:id/shipments/:shipmentId/status` | `DeliveryService.checkShipmentStatus()` | Check status from provider |
-| POST | `/:id/shipments/:shipmentId/refresh` | check + update order status | Refresh and sync order status |
+| POST | `/:id/shipments/:shipmentId/status` | shared check + sync helper | Check provider status, sync order/inventory/cache/notifications |
+| POST | `/:id/shipments/:shipmentId/refresh` | shared check + sync helper | Refresh provider status, sync order/inventory/cache/notifications |
 | POST | `/:id/return` | `processReturn()` | Return with optional auto-refund |
 | POST | `/:id/refund` | `processRefund()` | Refund with optional gateway |
 | GET | `/:id/form-data` | direct query | Order + products for edit form |
@@ -229,7 +229,7 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 |--------|------|---------|---------|
 | GET | `/:id` | `DeliveryService.getShipment()` | Get shipment by ID |
 | DELETE | `/:id` | `DeliveryService.deleteShipment()` | Delete shipment |
-| POST | `/:id/check-status` | check + notify | Check and update from provider |
+| POST | `/:id/check-status` | shared check + sync helper | Check provider status, sync order/inventory/cache/notifications |
 
 ### Storefront (`/api/v1/orders`)
 

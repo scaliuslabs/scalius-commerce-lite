@@ -14434,13 +14434,27 @@ export type PostApiV1AdminShipmentsByIdCheckStatusResponses = {
         data: {
             message: string;
             statusCheck: {
+                id: string;
+                orderId: string;
+                providerId: string | null;
+                providerType: string | null;
                 status: string;
-                statusChanged: boolean;
-                orderStatusUpdate: {
-                    status: string;
-                    [key: string]: unknown;
-                } | null;
+                rawStatus: string | null;
+                externalId: string | null;
+                trackingId: string | null;
+                trackingUrl: string | null;
+                courierName: string | null;
+                note: string | null;
+                metadata: string | null;
                 lastChecked: string;
+                shipmentItems: string | null;
+                shipmentAmount: number | null;
+                isFinalShipment: boolean | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                providerName: string | null;
+                statusChanged: boolean;
+                orderStatusUpdate: boolean;
                 [key: string]: unknown;
             };
         };
@@ -24068,12 +24082,16 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses = {
             courierName: string | null;
             note: string | null;
             metadata: string | null;
-            lastChecked: string | number | null;
+            lastChecked: string;
             shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
             createdAt: string | number;
             updatedAt: string | number;
+            providerName: string | null;
+            statusChanged: boolean;
+            orderStatusUpdate: boolean;
+            [key: string]: unknown;
         };
     };
 };

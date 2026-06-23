@@ -2068,7 +2068,7 @@ export const deleteApiV1AdminOrdersByIdShipmentsByShipmentId = <ThrowOnError ext
 export const getApiV1AdminOrdersByIdShipmentsByShipmentId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdShipmentsByShipmentIdData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, GetApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, GetApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}', ...options });
 
 /**
- * Check shipment status from provider
+ * Check shipment status from provider and sync order
  */
 export const postApiV1AdminOrdersByIdShipmentsByShipmentIdStatus = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/status', ...options });
 
