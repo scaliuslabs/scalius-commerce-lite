@@ -30,6 +30,10 @@ import { getCurrencyConfig } from "../settings/settings.service";
 import { canTransitionTo } from "../orders/order-state-machine";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
 import { computePaymentStateAfterRefund } from "./payment-state";
+import {
+    REFUND_IN_PROGRESS_MESSAGE,
+    assertNoActiveRefundAttempt,
+} from "./refund-attempt-guard";
 import type {
     PaymentProvider,
     RefundParams as ProviderRefundParams,
@@ -54,7 +58,6 @@ export interface RefundResult {
     error?: string;
 }
 
-const REFUND_IN_PROGRESS_MESSAGE = "A refund is already in progress for this order. Please wait and retry.";
 const REFUND_PROVIDER_DEADLINE_MS = 25_000;
 const REFUND_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const MAX_REFUND_ATTEMPT_ERROR_LENGTH = 500;
@@ -63,12 +66,6 @@ const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
     OrderStatus.PROCESSING,
     OrderStatus.CONFIRMED,
 ]);
-const ACTIVE_REFUND_ATTEMPT_STATUSES = [
-    "pending",
-    "processing",
-    "provider_unknown",
-    "reconcile_required",
-] as const;
 
 type CapturedPayment = OrderPayment & { paymentMethod: PaymentGateway };
 
@@ -341,39 +338,6 @@ async function updateOrderStatusIfVersionMatches(
         .returning({ id: orders.id });
 
     return result.length > 0;
-}
-
-async function assertNoActiveRefundAttempt(db: Database, orderId: string): Promise<void> {
-    const activeAttempt = await db
-        .select({ id: refundAttempts.id, status: refundAttempts.status })
-        .from(refundAttempts)
-        .where(
-            and(
-                eq(refundAttempts.orderId, orderId),
-                inArray(refundAttempts.status, [...ACTIVE_REFUND_ATTEMPT_STATUSES]),
-            ),
-        )
-        .get();
-
-    if (activeAttempt) {
-        throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
-    }
-
-    const pendingRefund = await db
-        .select({ id: orderPayments.id })
-        .from(orderPayments)
-        .where(
-            and(
-                eq(orderPayments.orderId, orderId),
-                eq(orderPayments.paymentType, "refund"),
-                eq(orderPayments.status, "pending"),
-            ),
-        )
-        .get();
-
-    if (pendingRefund) {
-        throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
-    }
 }
 
 function buildRefundMetadata(params: {
@@ -923,7 +887,7 @@ export async function processRefund(
         throw new ConflictError("Order is already fully refunded");
     }
 
-    await assertNoActiveRefundAttempt(db, params.orderId);
+    await assertNoActiveRefundAttempt(db, params.orderId, { message: REFUND_IN_PROGRESS_MESSAGE });
 
     // Determine and validate refund amount before any gateway calls
     const paidAmount = order.paidAmount ?? 0;

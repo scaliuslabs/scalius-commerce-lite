@@ -258,6 +258,8 @@ COD collection validates against computed outstanding balance when a stored `bal
 7. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
 8. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
 
+Active refund attempts also block conflicting post-sale order mutations. Status updates, bulk/manual shipment creation, COD collection/return, admin order edits, trash/restore/delete flows, shipment-driven order-status sync, and direct fulfillment-status updates call the shared `refund-attempt-guard.ts` helper before changing order/payment/inventory state. COD failure logging remains allowed because it records delivery evidence only and does not collect money, return stock, or change order status.
+
 `processReturn()`: Sets order status to `RETURNED`, restores inventory via `applyInventoryForStatusChange()`, optionally triggers auto-refund. Orders in `delivered`, `completed`, or `shipped` status can be returned; an already-`returned` retry is accepted only to resume inventory reconciliation and optional auto-refund.
 
 ### Gateway Settings Storage

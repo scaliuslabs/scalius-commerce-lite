@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OrderStatus } from "@scalius/database/schema";
+import { deliveryShipments, orderPayments, orders, refundAttempts, OrderStatus } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
@@ -16,32 +16,46 @@ function createDbMock({
   orderStatus,
   orderOverrides = {},
   updateRows = [{ id: "order_1" }],
+  activeRefundAttempt = null,
+  legacyPendingRefund = null,
 }: {
   shipmentStatus: string;
   orderStatus: string;
   orderOverrides?: Record<string, unknown>;
   updateRows?: Array<{ id: string }>;
+  activeRefundAttempt?: Record<string, unknown> | null;
+  legacyPendingRefund?: Record<string, unknown> | null;
 }) {
   const updates: Array<Record<string, unknown>> = [];
-  const selectResults = [
-    [{ id: "shipment_1", orderId: "order_1", status: shipmentStatus }],
-    [{
-      id: "order_1",
-      status: orderStatus,
-      version: 5,
-      customerPhone: "01700000000",
-      customerEmail: "customer@example.com",
-      ...orderOverrides,
-    }],
-  ];
+  const shipmentRow = { id: "shipment_1", orderId: "order_1", status: shipmentStatus };
+  const orderRow = {
+    id: "order_1",
+    status: orderStatus,
+    version: 5,
+    customerPhone: "01700000000",
+    customerEmail: "customer@example.com",
+    ...orderOverrides,
+  };
+
+  const chainFor = (result: unknown) => {
+    const chain = {
+      where: vi.fn(() => chain),
+      get: vi.fn(async () => result ?? null),
+      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
+        Promise.resolve(Array.isArray(result) ? result : result ? [result] : []).then(resolve, reject),
+    };
+    return chain;
+  };
 
   const db = {
     select() {
       return {
-        from() {
-          return {
-            where: async () => selectResults.shift() ?? [],
-          };
+        from(table: unknown) {
+          if (table === deliveryShipments) return chainFor([shipmentRow]);
+          if (table === orders) return chainFor([orderRow]);
+          if (table === refundAttempts) return chainFor(activeRefundAttempt);
+          if (table === orderPayments) return chainFor(legacyPendingRefund);
+          return chainFor([]);
         },
       };
     },
@@ -169,6 +183,20 @@ describe("delivery shipment to order status mapping", () => {
     await expect(updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery"))
       .rejects.toThrow("active shipment creation");
 
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("throws during an active refund attempt so delivery webhooks can retry", async () => {
+    const { db, updates } = createDbMock({
+      shipmentStatus: "out_for_delivery",
+      orderStatus: OrderStatus.CONFIRMED,
+      activeRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "provider_unknown" },
+    });
+
+    await expect(updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery"))
+      .rejects.toThrow("active refund operation");
+
+    expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 

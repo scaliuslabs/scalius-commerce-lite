@@ -16,6 +16,13 @@ describe("admin shipment status route boundaries", () => {
     expect(source).not.toContain("catch (e: unknown) {\n        throw new ValidationError");
   });
 
+  it("keeps direct fulfillment-status updates blocked during active refunds", () => {
+    const source = readFileSync(ORDERS_STATUS_SOURCE, "utf8");
+
+    expect(source).toContain("assertNoActiveRefundAttempt");
+    expect(source).toContain("await assertNoActiveRefundAttempt(db, orderId)");
+  });
+
   it("keeps standalone shipment checks on the same sync helper and boolean response contract", () => {
     const source = readFileSync(SHIPMENTS_SOURCE, "utf8");
 

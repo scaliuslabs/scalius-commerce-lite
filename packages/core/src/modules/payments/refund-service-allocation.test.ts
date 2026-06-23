@@ -429,6 +429,25 @@ describe("refund allocation", () => {
     expect(db.batch).not.toHaveBeenCalled();
   });
 
+  it("blocks a new refund while a legacy pending refund row exists", async () => {
+    const db = createDbMock({
+      payments: [
+        stripePayment({ id: "pay_1", amount: 100, stripeChargeId: "ch_1" }),
+      ],
+      pendingRefund: { id: "refund_pending" },
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      amount: 40,
+      reason: "customer_request",
+      gateway: "stripe",
+    })).rejects.toThrow("A refund is already in progress");
+
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
   it("leaves the whole refund pending when the first provider outcome is unknown", async () => {
     mocks.providerCreateRefund.mockRejectedValueOnce(new Error("network timeout"));
 

@@ -92,6 +92,21 @@ export type {
 // --- Refund service ---
 export { processRefund, processReturn } from "./refund-service";
 export type { RefundRequest, RefundResult as RefundServiceResult } from "./refund-service";
+export {
+  ACTIVE_REFUND_ATTEMPT_STATUSES,
+  ORDER_REFUND_MUTATION_BLOCKED_MESSAGE,
+  REFUND_IN_PROGRESS_MESSAGE,
+  assertNoActiveRefundAttempt,
+  assertNoActiveRefundAttemptsForOrders,
+  findActiveRefundAttempt,
+  findActiveRefundAttemptsForOrders,
+  noActiveRefundAttemptForOrderColumnCondition,
+  noActiveRefundAttemptForOrderIdCondition,
+} from "./refund-attempt-guard";
+export type {
+  ActiveRefundAttemptSnapshot,
+  ActiveRefundAttemptStatus,
+} from "./refund-attempt-guard";
 
 // --- Public payment session attempts ---
 export {

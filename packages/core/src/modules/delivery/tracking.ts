@@ -4,6 +4,10 @@ import { applyInventoryForStatusChange } from "../inventory/inventory-transition
 import { canTransitionTo } from "../orders/order-state-machine";
 import type { Database } from "@scalius/database/client";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
+import {
+  assertNoActiveRefundAttempt,
+  noActiveRefundAttemptForOrderIdCondition,
+} from "../payments/refund-attempt-guard";
 
 /**
  * Updates the order status based on shipment status if applicable
@@ -47,6 +51,7 @@ export async function updateOrderStatusFromShipment(
       return;
     }
     assertNoActiveShipmentClaim(order);
+    await assertNoActiveRefundAttempt(db, order.id);
 
     // Map shipment status to order status
     let newOrderStatus = order.status;
@@ -128,6 +133,7 @@ export async function updateOrderStatusFromShipment(
         .where(and(
           eq(orders.id, order.id),
           eq(orders.version, order.version),
+          noActiveRefundAttemptForOrderIdCondition(order.id),
         ))
         .returning({ id: orders.id });
 
