@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   ADMIN_QUERY_GC_TIME_MS,
+  ADMIN_QUERY_RETRY,
   ADMIN_QUERY_STALE_TIME_MS,
   createAdminQueryClient,
 } from "./admin-query-client";
 
 describe("admin query client defaults", () => {
-  it("keeps idle-tab resume refetches opt-in", () => {
+  it("keeps idle-tab resume refetches and long retry chains opt-in", () => {
     const client = createAdminQueryClient();
     const defaults = client.getDefaultOptions().queries;
 
@@ -15,6 +16,7 @@ describe("admin query client defaults", () => {
       gcTime: ADMIN_QUERY_GC_TIME_MS,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
+      retry: ADMIN_QUERY_RETRY,
     });
   });
 });

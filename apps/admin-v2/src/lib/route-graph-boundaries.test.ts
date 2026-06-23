@@ -577,12 +577,12 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
       "utf8",
     );
-    const adminRouteContextSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "admin-route-context.ts"),
+    const adminScrollSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-scroll-restoration.ts"),
       "utf8",
     );
-    const scrollSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "admin-scroll-restoration.ts"),
+    const adminRouteContextSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-route-context.ts"),
       "utf8",
     );
 
@@ -591,6 +591,8 @@ describe("admin route graph boundaries", () => {
     expect(routerSource).not.toContain('defaultPreload: "intent"');
     expect(queryClientSource).toContain("refetchOnWindowFocus: false");
     expect(queryClientSource).toContain("refetchOnReconnect: false");
+    expect(queryClientSource).toContain("retry: ADMIN_QUERY_RETRY");
+    expect(queryClientSource).toContain("ADMIN_QUERY_RETRY = false");
     expect(cacheQuerySource.match(/refetchOnReconnect: true/g)?.length).toBe(3);
     expect(orderDetailSource).toContain("refetchInterval: 30_000");
     expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
@@ -620,15 +622,17 @@ describe("admin route graph boundaries", () => {
       "~/lib/api-query-options/settings",
     );
     expect(settingsQueryOptionsSource).not.toContain("getStorefrontUrl");
+    expect(routerSource).toContain("scrollRestoration: true");
     expect(routerSource).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
     expect(routerSource).toContain("scrollRestorationBehavior: \"instant\"");
-    expect(adminRouteSource).toContain("useAdminNestedScrollRestoration();");
+    expect(adminRouteSource).toContain('data-scroll-restoration-id="admin-main-scroll"');
+    expect(adminRouteSource).toContain("useAdminNestedScrollRestoration()");
+    expect(adminScrollSource).toContain('window.addEventListener("popstate"');
+    expect(adminScrollSource).toContain("schedulePopRestore(event.toLocation.href)");
+    expect(adminScrollSource).not.toContain("scrollElement.scrollTop = 0");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_FRESH_MS");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_STALE_MS");
     expect(adminRouteContextSource).toContain("refreshAdminRouteContextInBackground");
-    expect(scrollSource).toContain('router.subscribe("onBeforeLoad"');
-    expect(scrollSource).toContain('router.subscribe("onRendered"');
-    expect(scrollSource).toContain('window.addEventListener("popstate"');
   });
 
   it("keeps product list route first paint independent from secondary stats", () => {

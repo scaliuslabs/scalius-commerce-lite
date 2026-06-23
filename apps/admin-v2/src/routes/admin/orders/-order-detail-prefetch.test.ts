@@ -50,6 +50,7 @@ type PrefetchClient = Parameters<typeof prefetchOrderDetailQueries>[0];
 function createQueryClient(
   paymentMethod: string | null,
   options?: {
+    hangPayments?: boolean;
     rejectPayments?: boolean;
     rejectProviders?: boolean;
     rejectShipments?: boolean;
@@ -62,6 +63,9 @@ function createQueryClient(
     return [];
   });
   const prefetchQuery = vi.fn(async (queryOptions: { queryKey: readonly unknown[] }) => {
+    if (options?.hangPayments && queryOptions.queryKey[1] === "payments") {
+      await new Promise(() => {});
+    }
     if (options?.rejectShipments && queryOptions.queryKey[1] === "shipments") {
       throw new Error("shipments temporarily unavailable");
     }
@@ -129,7 +133,8 @@ describe("order detail prefetch", () => {
     const { queryClient } = createQueryClient("stripe", { rejectPayments: true });
 
     await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledWith("Order payment prefetch skipped", expect.any(Error));
+    await Promise.resolve();
+    expect(warn).toHaveBeenCalledWith("Order detail warm query skipped", expect.any(Error));
   });
 
   it("keeps the order page loadable when delivery provider prefetch fails", async () => {
@@ -137,7 +142,8 @@ describe("order detail prefetch", () => {
     const { queryClient } = createQueryClient("stripe", { rejectProviders: true });
 
     await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledWith("Order delivery provider prefetch skipped", expect.any(Error));
+    await Promise.resolve();
+    expect(warn).toHaveBeenCalledWith("Order detail warm query skipped", expect.any(Error));
   });
 
   it("keeps the order page loadable when shipment prefetch fails", async () => {
@@ -145,6 +151,13 @@ describe("order detail prefetch", () => {
     const { queryClient } = createQueryClient("stripe", { rejectShipments: true });
 
     await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledWith("Order shipment prefetch skipped", expect.any(Error));
+    await Promise.resolve();
+    expect(warn).toHaveBeenCalledWith("Order detail warm query skipped", expect.any(Error));
+  });
+
+  it("does not wait for optional warm queries before letting the route render", async () => {
+    const { queryClient } = createQueryClient("stripe", { hangPayments: true });
+
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
   });
 });
