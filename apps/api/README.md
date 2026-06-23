@@ -129,6 +129,8 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/payment/sslcommerz` | `routes/payment/sslcommerz-routes.ts` | Create session + redirect handlers |
 | `/payment/polar` | `routes/payment/polar-routes.ts` | Create checkout session + redirect handlers |
 
+`routes/payment/payment-session-create.ts` is the shared receipt-token and customer-account session boundary. Created durable attempts replay as `200`; live duplicate processing attempts return `202` with `Retry-After` and `Cache-Control: no-store`; failed or stale attempts are reclaimable.
+
 ### Setup & Documentation
 
 | Route | Purpose |

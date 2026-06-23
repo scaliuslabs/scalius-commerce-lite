@@ -300,4 +300,55 @@ describe("checkout create-order proxy Origin guard", () => {
     expect(json.data?.initialPaymentSession).toBeUndefined();
     expect(json.data?.initialPaymentSessionError).toBe("Polar unavailable");
   });
+
+  it("keeps the committed order response when initial payment session creation is already processing", async () => {
+    mocks.createOrder.mockResolvedValueOnce({
+      success: true,
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+      totalAmount: 125,
+      paymentMethod: "sslcommerz",
+    });
+    mocks.fetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({
+        success: true,
+        data: {
+          status: "processing",
+          retryable: true,
+          retryAfterSeconds: 2,
+          message: "Payment session creation is already processing. Please try again shortly.",
+        },
+      }),
+    });
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/checkout/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkoutRequestId: "checkout_req_123456",
+          paymentMethod: "sslcommerz",
+          initialPaymentSession: true,
+        }),
+      }),
+    } as never);
+    const json = await response.json() as {
+      success?: boolean;
+      data?: {
+        id?: string;
+        initialPaymentSession?: unknown;
+        initialPaymentSessionError?: string;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.data?.id).toBe("order_1");
+    expect(json.data?.initialPaymentSession).toBeUndefined();
+    expect(json.data?.initialPaymentSessionError).toBe(
+      "Payment session creation is already processing. Please try again shortly.",
+    );
+  });
 });

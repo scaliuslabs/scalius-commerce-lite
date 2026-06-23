@@ -11,7 +11,8 @@ import {
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
-import { createSSLCommerzPaymentSession } from "./payment-session-create";
+import { createSSLCommerzPaymentSession, isPaymentSessionProcessingResult } from "./payment-session-create";
+import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -50,6 +51,7 @@ const createSessionRoute = createRoute({
         },
       },
     },
+    202: paymentSessionProcessingResponse,
     ...errorResponses,
     503: serviceUnavailableResponse,
   },
@@ -68,6 +70,10 @@ app.openapi(createSessionRoute, async (c) => {
     proof: { kind: "receipt", receiptToken: body.receiptToken },
     returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
   });
+
+  if (isPaymentSessionProcessingResult(result)) {
+    return acceptedPaymentSessionProcessing(c, result);
+  }
 
   return ok(c, result.hosted);
 });

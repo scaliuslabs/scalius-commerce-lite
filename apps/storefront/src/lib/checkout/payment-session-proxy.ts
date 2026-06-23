@@ -1,4 +1,55 @@
 export const PAYMENT_SESSION_PROXY_TIMEOUT_MS = 15_000;
+export const PAYMENT_SESSION_PROCESSING_MESSAGE = "Payment is still being prepared. Please try again shortly.";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isPaymentSessionProcessingPayload(value: unknown): value is Record<string, unknown> & {
+  status: "processing";
+} {
+  return isRecord(value) && value.status === "processing";
+}
+
+export function getPaymentSessionProcessingMessage(value: unknown): string {
+  if (isRecord(value) && typeof value.message === "string" && value.message.trim()) {
+    return value.message;
+  }
+  return PAYMENT_SESSION_PROCESSING_MESSAGE;
+}
+
+export function paymentSessionProxySuccessResponse(
+  res: Response,
+  json: { data?: Record<string, unknown> } | Record<string, unknown>,
+): Response {
+  const source: Record<string, unknown> = isRecord(json) ? json : {};
+  const unwrapped: Record<string, unknown> = isRecord(source.data) ? source.data : source;
+  const isProcessing = res.status === 202 || isPaymentSessionProcessingPayload(unwrapped);
+  const headers = new Headers({ "Content-Type": "application/json" });
+
+  if (isProcessing) {
+    const retryAfterSeconds = isRecord(unwrapped) && typeof unwrapped.retryAfterSeconds === "number"
+      ? Math.max(1, Math.ceil(unwrapped.retryAfterSeconds))
+      : 2;
+    headers.set("Retry-After", String(retryAfterSeconds));
+    headers.set("Cache-Control", "no-store");
+    return new Response(JSON.stringify({
+      retryable: true,
+      ...unwrapped,
+      status: "processing",
+      message: getPaymentSessionProcessingMessage(unwrapped),
+      retryAfterSeconds,
+    }), {
+      status: 202,
+      headers,
+    });
+  }
+
+  return new Response(JSON.stringify(unwrapped), {
+    status: 200,
+    headers,
+  });
+}
 
 export function getPaymentSessionApiErrorMessage(json: { error?: unknown }, fallback: string): string {
   if (typeof json.error === "string") return json.error;

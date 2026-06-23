@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { ConflictError } from "@scalius/core/errors";
 import {
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
@@ -53,13 +52,21 @@ describe("payment session attempts", () => {
     expect(fake.rows[0]?.attempts).toBe(1);
   });
 
-  it("rejects duplicate claims while the first attempt is still processing", async () => {
+  it("returns a processing state for duplicate claims while the first attempt is still processing", async () => {
     const fake = createFakePaymentSessionDb();
     const identity = await buildIdentity();
 
     await claimPaymentSessionAttempt(fake.db, identity);
 
-    await expect(claimPaymentSessionAttempt(fake.db, identity)).rejects.toBeInstanceOf(ConflictError);
+    await expect(claimPaymentSessionAttempt(fake.db, identity)).resolves.toEqual({
+      status: "processing",
+      retryable: true,
+      retryAfterSeconds: 2,
+      orderId: "order_1",
+      gateway: "stripe",
+      paymentType: "full",
+      message: "Payment session creation is already processing. Please try again shortly.",
+    });
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attempts).toBe(1);
   });

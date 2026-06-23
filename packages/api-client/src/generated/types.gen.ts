@@ -3377,6 +3377,21 @@ export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses = {
             };
         };
     };
+    /**
+     * Payment session creation is already processing
+     */
+    202: {
+        success: true;
+        data: {
+            status: 'processing';
+            retryable: true;
+            retryAfterSeconds: number;
+            orderId: string;
+            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            paymentType: 'full' | 'deposit' | 'balance';
+            message: string;
+        };
+    };
 };
 
 export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponse = PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses[keyof PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses];
@@ -32419,6 +32434,21 @@ export type PostApiV1PaymentStripeIntentResponses = {
             currency: string;
         };
     };
+    /**
+     * Payment session creation is already processing
+     */
+    202: {
+        success: true;
+        data: {
+            status: 'processing';
+            retryable: true;
+            retryAfterSeconds: number;
+            orderId: string;
+            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            paymentType: 'full' | 'deposit' | 'balance';
+            message: string;
+        };
+    };
 };
 
 export type PostApiV1PaymentStripeIntentResponse = PostApiV1PaymentStripeIntentResponses[keyof PostApiV1PaymentStripeIntentResponses];
@@ -32528,6 +32558,21 @@ export type PostApiV1PaymentSslcommerzSessionResponses = {
         data: {
             gatewayUrl?: string;
             sessionKey?: string;
+        };
+    };
+    /**
+     * Payment session creation is already processing
+     */
+    202: {
+        success: true;
+        data: {
+            status: 'processing';
+            retryable: true;
+            retryAfterSeconds: number;
+            orderId: string;
+            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            paymentType: 'full' | 'deposit' | 'balance';
+            message: string;
         };
     };
 };
@@ -32643,6 +32688,21 @@ export type PostApiV1PaymentPolarSessionResponses = {
         data: {
             gatewayUrl?: string;
             checkoutId?: string;
+        };
+    };
+    /**
+     * Payment session creation is already processing
+     */
+    202: {
+        success: true;
+        data: {
+            status: 'processing';
+            retryable: true;
+            retryAfterSeconds: number;
+            orderId: string;
+            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            paymentType: 'full' | 'deposit' | 'balance';
+            message: string;
         };
     };
 };

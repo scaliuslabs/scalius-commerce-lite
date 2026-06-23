@@ -43,5 +43,7 @@ describe("order success side effects", () => {
     const retryScript = pageSource.slice(retryScriptIndex);
     expect(retryScript).not.toContain("clearCart");
     expect(retryScript).not.toContain("trackFbPurchase");
+    expect(retryScript.indexOf('response.status === 202 || data.status === "processing"'))
+      .toBeLessThan(retryScript.indexOf("Payment gateway did not return a redirect URL."));
   });
 });

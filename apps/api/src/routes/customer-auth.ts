@@ -46,8 +46,13 @@ import {
   createPolarPaymentSession,
   createSSLCommerzPaymentSession,
   createStripePaymentSession,
+  isPaymentSessionProcessingResult,
   resolveCustomerPaymentSessionRecovery,
 } from "./payment/payment-session-create";
+import {
+  acceptedPaymentSessionProcessing,
+  paymentSessionProcessingResponse,
+} from "./payment/payment-session-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const customerAuthIntentSchema = z.enum(["sign_in", "sign_up"]);
@@ -901,6 +906,7 @@ const createCustomerOrderPaymentSessionRoute = createRoute({
         },
       },
     },
+    202: paymentSessionProcessingResponse,
     ...errorResponses,
     409: conflictResponse,
     503: serviceUnavailableResponse,
@@ -938,6 +944,9 @@ app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
 
   if (paymentRecovery.gateway === "stripe") {
     const result = await createStripePaymentSession(c, input);
+    if (isPaymentSessionProcessingResult(result)) {
+      return acceptedPaymentSessionProcessing(c, result);
+    }
     return ok(c, {
       gateway: result.gateway,
       paymentType: result.paymentType,
@@ -949,6 +958,9 @@ app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
 
   if (paymentRecovery.gateway === "sslcommerz") {
     const result = await createSSLCommerzPaymentSession(c, input);
+    if (isPaymentSessionProcessingResult(result)) {
+      return acceptedPaymentSessionProcessing(c, result);
+    }
     return ok(c, {
       gateway: result.gateway,
       paymentType: result.paymentType,
@@ -959,6 +971,9 @@ app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
   }
 
   const result = await createPolarPaymentSession(c, input);
+  if (isPaymentSessionProcessingResult(result)) {
+    return acceptedPaymentSessionProcessing(c, result);
+  }
   return ok(c, {
     gateway: result.gateway,
     paymentType: result.paymentType,

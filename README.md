@@ -102,7 +102,7 @@ flowchart TB
 
     subgraph API ["API Worker (Hono)"]
         direction TB
-        HonoApp["258 OpenAPI paths / 356 operations<br/>(@hono/zod-openapi)"]
+        HonoApp["261 OpenAPI paths / 359 operations<br/>(@hono/zod-openapi)"]
         QueueConsumer["Queue Consumer<br/>(payments, notifications, OTP)"]
         CoreModules["@scalius/core<br/>(domain services)"]
     end

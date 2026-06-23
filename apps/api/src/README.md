@@ -129,7 +129,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/payment/sslcommerz` | `routes/payment/sslcommerz-routes.ts` | Create session + redirect handlers |
 | `/payment/polar` | `routes/payment/polar-routes.ts` | Create checkout session + redirect handlers |
 
-`routes/payment/payment-session-create.ts` is the shared session-creation boundary for Stripe, SSLCommerz, and Polar. Receipt-token checkout retries and authenticated customer-account retries both go through it, so gateway freshness, checkout-flow policy, payment-plan preparation, provider deadlines, and `payment_session_attempts` idempotency stay identical across initial checkout and post-sale recovery. Account-owned sessions use a customer-account proof and account return URLs; they never accept or return receipt tokens.
+`routes/payment/payment-session-create.ts` is the shared session-creation boundary for Stripe, SSLCommerz, and Polar. Receipt-token checkout retries and authenticated customer-account retries both go through it, so gateway freshness, checkout-flow policy, payment-plan preparation, provider deadlines, and `payment_session_attempts` idempotency stay identical across initial checkout and post-sale recovery. Created attempts replay as `200`; live duplicate processing attempts return `202` with `Retry-After` and `Cache-Control: no-store`; failed or stale attempts are reclaimable. Account-owned sessions use a customer-account proof and account return URLs; they never accept or return receipt tokens.
 
 ### Setup & Documentation
 

@@ -13,6 +13,7 @@ import {
   claimPaymentSessionAttempt,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
+  type PaymentSessionAttemptProcessingResult,
 } from "@scalius/core/modules/payments/payment-session-attempts";
 import {
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
@@ -99,6 +100,8 @@ export type PolarSessionResponse = {
   checkoutId?: string;
 };
 
+export type PaymentSessionProcessingResponse = PaymentSessionAttemptProcessingResult;
+
 export type CreatedCustomerPaymentSession =
   | {
       gateway: "stripe";
@@ -121,6 +124,12 @@ export type CreatedCustomerPaymentSession =
       currency: string;
       hosted: PolarSessionResponse;
     };
+
+export function isPaymentSessionProcessingResult(
+  value: unknown,
+): value is PaymentSessionProcessingResponse {
+  return typeof value === "object" && value !== null && (value as { status?: unknown }).status === "processing";
+}
 
 type PaymentSessionOrderRow = {
   id: string;
@@ -151,7 +160,7 @@ const POLAR_SUPPORTED_CURRENCIES = new Set([
 export async function createStripePaymentSession(
   c: PaymentRouteContext,
   input: CreatePaymentSessionInput,
-): Promise<CreatedCustomerPaymentSession & { gateway: "stripe" }> {
+): Promise<(CreatedCustomerPaymentSession & { gateway: "stripe" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
   assertOrderCanUseGateway(order, PaymentMethod.STRIPE, "Stripe");
@@ -205,6 +214,7 @@ export async function createStripePaymentSession(
       stripe: attemptClaim.response,
     };
   }
+  if (attemptClaim.status === "processing") return attemptClaim;
 
   let result: Awaited<ReturnType<typeof createPaymentIntent>>;
   try {
@@ -311,7 +321,7 @@ export async function resolveCustomerPaymentSessionRecovery(
 export async function createSSLCommerzPaymentSession(
   c: PaymentRouteContext,
   input: CreatePaymentSessionInput,
-): Promise<CreatedCustomerPaymentSession & { gateway: "sslcommerz" }> {
+): Promise<(CreatedCustomerPaymentSession & { gateway: "sslcommerz" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
   assertOrderCanUseGateway(order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
@@ -381,6 +391,7 @@ export async function createSSLCommerzPaymentSession(
       hosted: attemptClaim.response,
     };
   }
+  if (attemptClaim.status === "processing") return attemptClaim;
 
   let result: Awaited<ReturnType<typeof initSSLCommerzSession>>;
   try {
@@ -458,7 +469,7 @@ export async function createSSLCommerzPaymentSession(
 export async function createPolarPaymentSession(
   c: PaymentRouteContext,
   input: CreatePaymentSessionInput,
-): Promise<CreatedCustomerPaymentSession & { gateway: "polar" }> {
+): Promise<(CreatedCustomerPaymentSession & { gateway: "polar" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   const kv = c.env.CACHE;
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
@@ -546,6 +557,7 @@ export async function createPolarPaymentSession(
       hosted: attemptClaim.response,
     };
   }
+  if (attemptClaim.status === "processing") return attemptClaim;
 
   let result: Awaited<ReturnType<typeof createPolarCheckout>>;
   try {

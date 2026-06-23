@@ -469,6 +469,12 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
           const error = typeof data.error === "string" ? data.error : "Could not start payment. Please try again.";
           throw new Error(error);
         }
+        if (response.status === 202 || data.status === "processing") {
+          const message = typeof data.message === "string" && data.message.trim()
+            ? data.message
+            : "Payment is still being prepared. Please try again shortly.";
+          throw new Error(message);
+        }
         const gatewayUrl = typeof data.gatewayUrl === "string" ? data.gatewayUrl : "";
         if (!gatewayUrl) {
           throw new Error("Payment gateway did not return a redirect URL.");

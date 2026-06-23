@@ -2,6 +2,10 @@ import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
 import { resolveCheckoutPaymentRequest } from "../payment-mode";
 import { buildPaymentRecoveryUrl } from "../payment-recovery";
+import {
+  getPaymentSessionProcessingMessage,
+  isPaymentSessionProcessingPayload,
+} from "../payment-session-proxy";
 
 export const polarHandler: GatewayHandler = {
   id: "polar",
@@ -51,6 +55,9 @@ export const polarHandler: GatewayHandler = {
         }
 
         const sessionData = await sessionRes.json();
+        if (sessionRes.status === 202 || isPaymentSessionProcessingPayload(sessionData)) {
+          throw new Error(getPaymentSessionProcessingMessage(sessionData));
+        }
         gatewayUrl = sessionData.gatewayUrl as string;
       }
       if (!gatewayUrl) throw new Error("No gateway URL received");

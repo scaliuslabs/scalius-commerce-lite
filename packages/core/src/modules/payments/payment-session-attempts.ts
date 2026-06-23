@@ -42,11 +42,23 @@ export interface ClaimedPaymentSessionAttempt {
   providerCorrelationId?: string | null;
 }
 
+export type PaymentSessionAttemptProcessingResult = {
+  status: "processing";
+  retryable: true;
+  retryAfterSeconds: number;
+  orderId: string;
+  gateway: PaymentSessionGateway;
+  paymentType: PaymentType;
+  message: string;
+};
+
 export type PaymentSessionAttemptClaimResult<TResponse> =
   | { status: "claimed"; attempt: ClaimedPaymentSessionAttempt }
-  | { status: "replay"; response: TResponse };
+  | { status: "replay"; response: TResponse }
+  | PaymentSessionAttemptProcessingResult;
 
 const PAYMENT_SESSION_ATTEMPT_LEASE_SECONDS = 5 * 60;
+const PAYMENT_SESSION_PROCESSING_RETRY_AFTER_SECONDS = 2;
 const MAX_ERROR_LENGTH = 500;
 
 type AttemptRow = typeof paymentSessionAttempts.$inferSelect;
@@ -203,7 +215,19 @@ export async function claimPaymentSessionAttempt<TResponse>(
     throw new ServiceUnavailableError("Payment session attempt state is unavailable. Please try again.");
   }
 
-  throw new ConflictError("A payment session is already being created for this order. Please try again shortly.");
+  if (latest.status === "processing") {
+    return {
+      status: "processing",
+      retryable: true,
+      retryAfterSeconds: PAYMENT_SESSION_PROCESSING_RETRY_AFTER_SECONDS,
+      orderId: latest.orderId,
+      gateway: latest.gateway as PaymentSessionGateway,
+      paymentType: latest.paymentType as PaymentType,
+      message: "Payment session creation is already processing. Please try again shortly.",
+    };
+  }
+
+  throw new ServiceUnavailableError("Payment session attempt state is unavailable. Please try again.");
 }
 
 export async function markPaymentSessionAttemptCreated<TResponse>(

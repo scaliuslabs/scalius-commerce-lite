@@ -60,6 +60,13 @@ interface CustomerOrderPaymentSessionData {
   };
 }
 
+interface CustomerOrderPaymentSessionProcessingData {
+  status: "processing";
+  retryable?: boolean;
+  retryAfterSeconds?: number;
+  message?: string;
+}
+
 export type CustomerAuthIntent = "sign_in" | "sign_up";
 export type CustomerOtpChannel = "email" | "sms" | "whatsapp";
 
@@ -573,7 +580,7 @@ export async function createCustomerOrderPaymentSession(orderId: string): Promis
       cache: "no-store",
       body: JSON.stringify({}),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
-    const raw = await readEnvelope<CustomerOrderPaymentSessionData>(res);
+    const raw = await readEnvelope<CustomerOrderPaymentSessionData | CustomerOrderPaymentSessionProcessingData>(res);
     if (!res.ok || isFailedEnvelope(raw)) {
       return {
         success: false,
@@ -581,8 +588,15 @@ export async function createCustomerOrderPaymentSession(orderId: string): Promis
         status: res.status,
       };
     }
-    const session = raw.data ?? (raw as unknown as CustomerOrderPaymentSessionData);
-    return { success: true, session };
+    const session = raw.data ?? (raw as unknown as CustomerOrderPaymentSessionData | CustomerOrderPaymentSessionProcessingData);
+    if ("status" in session && session.status === "processing") {
+      return {
+        success: false,
+        error: session.message || "Payment is still being prepared. Please try again shortly.",
+        status: res.status,
+      };
+    }
+    return { success: true, session: session as CustomerOrderPaymentSessionData };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error), status: 0 };
   }

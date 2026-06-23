@@ -65,6 +65,24 @@ describe("customer auth API helpers", () => {
     });
   });
 
+  it("treats customer payment-session processing responses as retryable failures", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        status: "processing",
+        retryable: true,
+        retryAfterSeconds: 2,
+        message: "Payment session creation is already processing. Please try again shortly.",
+      },
+    }), { status: 202, headers: { "Content-Type": "application/json" } })));
+
+    await expect(createCustomerOrderPaymentSession("order_1")).resolves.toEqual({
+      success: false,
+      error: "Payment session creation is already processing. Please try again shortly.",
+      status: 202,
+    });
+  });
+
   it("rejects missing order ids before sending a request", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
