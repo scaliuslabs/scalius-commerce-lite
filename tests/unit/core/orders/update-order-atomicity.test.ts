@@ -32,9 +32,11 @@ type UpdateOrder = typeof import("../../../../packages/core/src/modules/orders/o
 type RestoreOrder = typeof import("../../../../packages/core/src/modules/orders/orders.admin").restoreOrder;
 
 type MockChain = {
+  __kind?: string;
   from: ReturnType<typeof vi.fn>;
   innerJoin: ReturnType<typeof vi.fn>;
   where: ReturnType<typeof vi.fn>;
+  select: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   values: ReturnType<typeof vi.fn>;
   returning: ReturnType<typeof vi.fn>;
@@ -154,6 +156,13 @@ function createChain(result: unknown): MockChain {
   chain.from = vi.fn(() => chain);
   chain.innerJoin = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);
+  chain.select = vi.fn((callback?: unknown) => {
+    if (typeof callback === "function") {
+      const qbSelect = vi.fn(() => chain);
+      callback({ select: qbSelect });
+    }
+    return chain;
+  });
   chain.set = vi.fn(() => chain);
   chain.values = vi.fn(() => chain);
   chain.returning = vi.fn(() => result);
@@ -206,16 +215,23 @@ function createUpdateOrderDb(options: {
     select: vi.fn(() => createChain(selectResults[selectIndex++])),
     update: vi.fn(() => {
       events.push("order-cas-update");
-      return createChain(options.orderUpdateResult ?? [{ id: ORDER_ID }]);
+      const chain = createChain(options.orderUpdateResult ?? [{ id: ORDER_ID }]);
+      chain.__kind = "order-update";
+      chain.returning = vi.fn(() => chain);
+      return chain;
     }),
     insert: vi.fn(() => createChain([{ id: "inserted" }])),
     delete: vi.fn(() => createChain(undefined)),
-    batch: vi.fn(async () => {
-      events.push("item-replacement-batch");
+    batch: vi.fn(async (statements: unknown[]) => {
+      events.push("atomic-order-edit-batch");
       if (options.itemReplacementError) {
         throw options.itemReplacementError;
       }
-      return [];
+      return statements.map((statement) =>
+        (statement as MockChain).__kind === "order-update"
+          ? options.orderUpdateResult ?? [{ id: ORDER_ID }]
+          : [],
+      );
     }),
   };
 }
@@ -448,9 +464,9 @@ describe("updateOrder inventory atomicity", () => {
     );
     expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, positiveEntries, ORDER_ID);
     expect(inventoryMocks.restoreDeductedMultiple).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["validate", "reserve", "order-cas-update", "release"]);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(db.delete).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["validate", "reserve", "order-cas-update", "atomic-order-edit-batch", "release"]);
   });
 
   it("reserves and deducts deducted-order positive deltas before write, then restores deducted stock on CAS failure", async () => {
@@ -477,9 +493,9 @@ describe("updateOrder inventory atomicity", () => {
     expect(inventoryMocks.deductMultiple).toHaveBeenCalledWith(db, positiveEntries, ORDER_ID);
     expect(inventoryMocks.restoreDeductedMultiple).toHaveBeenCalledWith(db, positiveEntries, ORDER_ID);
     expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["reserve", "deduct", "order-cas-update", "restore-deducted"]);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(db.delete).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["reserve", "deduct", "order-cas-update", "atomic-order-edit-batch", "restore-deducted"]);
   });
 
   it("reserves restored-order reactivation items before write and releases them on CAS failure", async () => {
@@ -514,9 +530,9 @@ describe("updateOrder inventory atomicity", () => {
     expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, newEntries, ORDER_ID);
     expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
     expect(inventoryMocks.restoreDeductedMultiple).not.toHaveBeenCalled();
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["reserve", "order-cas-update", "release"]);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(db.delete).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["reserve", "order-cas-update", "atomic-order-edit-batch", "release"]);
   });
 
   it("fails reserved quantity decreases before item replacement when reservation release fails", async () => {
@@ -569,9 +585,9 @@ describe("updateOrder inventory atomicity", () => {
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
     );
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["release", "order-cas-update", "reserve"]);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(db.delete).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
   });
 
   it("fails deducted quantity decreases before item replacement when deducted restore fails", async () => {
@@ -628,9 +644,9 @@ describe("updateOrder inventory atomicity", () => {
     const restoredEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
     expect(inventoryMocks.restoreDeductedMultiple).toHaveBeenCalledWith(db, restoredEntries, ORDER_ID);
     expect(inventoryMocks.deductMultiple).toHaveBeenCalledWith(db, restoredEntries, ORDER_ID);
-    expect(db.delete).not.toHaveBeenCalled();
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["restore-deducted", "order-cas-update", "deduct"]);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(db.delete).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["restore-deducted", "order-cas-update", "atomic-order-edit-batch", "deduct"]);
   });
 
   it("compensates full reserved-order cancellation release when the order CAS fails", async () => {
@@ -658,9 +674,9 @@ describe("updateOrder inventory atomicity", () => {
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
     );
-    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.delete).toHaveBeenCalledTimes(1);
     expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["release", "order-cas-update", "reserve"]);
+    expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
   });
 
   it("compensates inventory if atomic item replacement fails after the order CAS", async () => {
@@ -682,7 +698,7 @@ describe("updateOrder inventory atomicity", () => {
       "regular",
     );
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["release", "order-cas-update", "item-replacement-batch", "reserve"]);
+    expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
   });
 
   it("reconciles inventory when retrying an edit after status already reached shipped", async () => {
