@@ -199,6 +199,52 @@ export const orderItemSchema = z
     fulfillmentStatus: z.string(),
   })
 
+export const orderRefundAttemptSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  gateway: z.string(),
+  status: z.string(),
+  providerStatus: z.string().nullable(),
+  active: z.boolean(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  message: z.string(),
+  createdAt: nullableTimestampSchema,
+  updatedAt: nullableTimestampSchema,
+  nextProbeAt: nullableTimestampSchema,
+  lastProbeAt: nullableTimestampSchema,
+  refundedAt: nullableTimestampSchema,
+  failedAt: nullableTimestampSchema,
+  refundPaymentId: z.string().optional(),
+  sourcePaymentId: z.string().optional(),
+  refundReference: z.string().optional(),
+  providerRefundId: z.string().nullable().optional(),
+  allocationIndex: z.number().optional(),
+  allocationCount: z.number().optional(),
+  attempts: z.number().optional(),
+  lastError: z.string().nullable().optional(),
+});
+
+export const activeRefundOperationSchema = z.object({
+  active: z.literal(true),
+  status: z.string(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  message: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  gateway: z.string(),
+  attemptCount: z.number(),
+  nextProbeAt: nullableTimestampSchema,
+  lastProbeAt: nullableTimestampSchema,
+  providerStatus: z.string().nullable(),
+  providerRefundId: z.string().nullable().optional(),
+  refundReference: z.string().nullable().optional(),
+  lastError: z.string().nullable().optional(),
+});
+
 /** Order detail — returned by getOrderDetails (admin). */
 export const orderDetailSchema = z
   .object({
@@ -230,6 +276,8 @@ export const orderDetailSchema = z
     itemCount: z.number(),
     items: z.array(orderItemSchema),
     latestShipment: orderShipmentSummarySchema.nullable(),
+    refundAttempts: z.array(orderRefundAttemptSchema),
+    activeRefundOperation: activeRefundOperationSchema.nullable(),
   })
 
 // ─────────────────────────────────────────

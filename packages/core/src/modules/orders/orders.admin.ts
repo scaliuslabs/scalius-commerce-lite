@@ -51,6 +51,10 @@ import {
     assertNoActiveRefundAttemptsForOrders,
     noActiveRefundAttemptForOrderIdCondition,
 } from "../payments/refund-attempt-guard";
+import {
+    listOrderRefundAttempts,
+    summarizeActiveRefundOperation,
+} from "../payments/refund-attempt-visibility";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -579,30 +583,33 @@ export async function getOrderDetails(
 
     if (!order) return null;
 
-    const items = await db
-        .select({
-            id: orderItems.id,
-            productId: orderItems.productId,
-            variantId: orderItems.variantId,
-            quantity: orderItems.quantity,
-            price: orderItems.price,
-            productName: products.name,
-            productImage: productImages.url,
-            variantSize: productVariants.size,
-            variantColor: productVariants.color,
-            fulfillmentStatus: orderItems.fulfillmentStatus,
-        })
-        .from(orderItems)
-        .leftJoin(products, eq(products.id, orderItems.productId))
-        .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-        .leftJoin(
-            productImages,
-            and(
-                eq(productImages.productId, orderItems.productId),
-                eq(productImages.isPrimary, true),
-            ),
-        )
-        .where(eq(orderItems.orderId, id));
+    const [items, refundAttemptViews] = await Promise.all([
+        db
+            .select({
+                id: orderItems.id,
+                productId: orderItems.productId,
+                variantId: orderItems.variantId,
+                quantity: orderItems.quantity,
+                price: orderItems.price,
+                productName: products.name,
+                productImage: productImages.url,
+                variantSize: productVariants.size,
+                variantColor: productVariants.color,
+                fulfillmentStatus: orderItems.fulfillmentStatus,
+            })
+            .from(orderItems)
+            .leftJoin(products, eq(products.id, orderItems.productId))
+            .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+            .leftJoin(
+                productImages,
+                and(
+                    eq(productImages.productId, orderItems.productId),
+                    eq(productImages.isPrimary, true),
+                ),
+            )
+            .where(eq(orderItems.orderId, id)),
+        listOrderRefundAttempts(db, id, { audience: "admin" }),
+    ]);
 
     const formattedItems = items.map((item) => ({
         id: item.id,
@@ -624,6 +631,8 @@ export async function getOrderDetails(
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
         items: formattedItems,
         latestShipment: null,
+        refundAttempts: refundAttemptViews,
+        activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
     };
 }
 

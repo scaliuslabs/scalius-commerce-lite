@@ -204,4 +204,113 @@ describe("customer auth API helpers", () => {
       unavailable: true,
     });
   });
+
+  it("preserves buyer-safe refund progress in order detail responses", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        order: {
+          id: "order_1",
+          invoiceNumber: 1001,
+          status: "processing",
+          totalAmount: 100,
+          paidAmount: 100,
+          balanceDue: 0,
+          shippingCharge: 0,
+          discountAmount: null,
+          paymentStatus: "paid",
+          paymentMethod: "stripe",
+          fulfillmentStatus: "pending",
+          expectedDelivery: null,
+          shippingAddress: "Dhaka",
+          city: "city_dhaka",
+          zone: "zone_mirpur",
+          area: null,
+          cityName: "Dhaka",
+          zoneName: "Mirpur",
+          areaName: null,
+          notes: null,
+          createdAt: "2026-06-24T00:00:00.000Z",
+          updatedAt: "2026-06-24T00:00:00.000Z",
+        },
+        items: [],
+        shipments: [],
+        payments: [],
+        refundAttempts: [{
+          id: "rfa_1",
+          orderId: "order_1",
+          amount: 100,
+          currency: "BDT",
+          gateway: "stripe",
+          status: "checking",
+          providerStatus: null,
+          active: true,
+          severity: "warning",
+          label: "Refund being verified",
+          message: "The payment provider has not returned a final result yet. The merchant is verifying the refund.",
+          createdAt: "2026-06-24T00:00:00.000Z",
+          updatedAt: "2026-06-24T00:01:00.000Z",
+          nextProbeAt: "2026-06-24T00:15:00.000Z",
+          lastProbeAt: "2026-06-24T00:00:00.000Z",
+          refundedAt: null,
+          failedAt: null,
+        }],
+        activeRefundOperation: {
+          active: true,
+          status: "checking",
+          severity: "warning",
+          label: "Refund being verified",
+          message: "The payment provider has not returned a final result yet. The merchant is verifying the refund.",
+          amount: 100,
+          currency: "BDT",
+          gateway: "stripe",
+          attemptCount: 1,
+          nextProbeAt: "2026-06-24T00:15:00.000Z",
+          lastProbeAt: "2026-06-24T00:00:00.000Z",
+          providerStatus: null,
+        },
+        paymentPlan: null,
+        cod: null,
+        notifications: [],
+        paymentRecovery: {
+          eligible: false,
+          gateway: null,
+          paymentType: null,
+          amountDue: 0,
+          label: null,
+          reason: "Refund in progress",
+          requiresCardForm: false,
+          hostedRedirect: false,
+        },
+        timeline: [{
+          id: "refund:rfa_1",
+          type: "refund",
+          status: "checking",
+          label: "Refund being verified",
+          happenedAt: "2026-06-24T00:01:00.000Z",
+          details: "The payment provider has not returned a final result yet. The merchant is verifying the refund.",
+        }],
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const result = await getCustomerOrderDetail("order_1");
+
+    expect(result).toMatchObject({
+      success: true,
+      detail: {
+        refundAttempts: [{
+          status: "checking",
+          providerStatus: null,
+        }],
+        activeRefundOperation: {
+          status: "checking",
+          providerStatus: null,
+        },
+        timeline: [{ type: "refund" }],
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("provider_unknown");
+    expect(JSON.stringify(result)).not.toContain("reconcile_required");
+    expect(JSON.stringify(result)).not.toContain("providerRefundId");
+  });
 });

@@ -372,11 +372,46 @@ export interface CustomerOrderDetailNotification {
 
 export interface CustomerOrderTimelineEvent {
   id: string;
-  type: "order" | "payment" | "shipment" | "notification";
+  type: "order" | "payment" | "refund" | "shipment" | "notification";
   status: string;
   label: string;
   happenedAt: string | null;
   details?: string | null;
+}
+
+export interface CustomerOrderRefundAttempt {
+  id: string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  gateway: string;
+  status: "queued" | "checking" | "processing" | "settled" | "failed";
+  providerStatus: null;
+  active: boolean;
+  severity: "info" | "success" | "warning" | "danger";
+  label: string;
+  message: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  nextProbeAt: string | null;
+  lastProbeAt: string | null;
+  refundedAt: string | null;
+  failedAt: string | null;
+}
+
+export interface CustomerActiveRefundOperation {
+  active: true;
+  status: string;
+  severity: "info" | "success" | "warning" | "danger";
+  label: string;
+  message: string;
+  amount: number;
+  currency: string;
+  gateway: string;
+  attemptCount: number;
+  nextProbeAt: string | null;
+  lastProbeAt: string | null;
+  providerStatus: null;
 }
 
 export interface CustomerPaymentRecovery {
@@ -433,6 +468,8 @@ export interface CustomerOrderDetail {
     isFinalShipment: boolean;
   }>;
   payments: CustomerOrderDetailPayment[];
+  refundAttempts: CustomerOrderRefundAttempt[];
+  activeRefundOperation: CustomerActiveRefundOperation | null;
   paymentPlan: CustomerOrderDetailPaymentPlan | null;
   cod: CustomerOrderDetailCod | null;
   notifications: CustomerOrderDetailNotification[];

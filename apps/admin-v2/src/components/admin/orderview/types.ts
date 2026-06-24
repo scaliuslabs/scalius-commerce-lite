@@ -16,6 +16,52 @@ export interface OrderItem {
   fulfillmentStatus?: string | null;
 }
 
+export interface OrderRefundAttempt {
+  id: string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  gateway: string;
+  status: string;
+  providerStatus: string | null;
+  active: boolean;
+  severity: "info" | "success" | "warning" | "danger";
+  label: string;
+  message: string;
+  createdAt: OrderTimestamp | null;
+  updatedAt: OrderTimestamp | null;
+  nextProbeAt: OrderTimestamp | null;
+  lastProbeAt: OrderTimestamp | null;
+  refundedAt: OrderTimestamp | null;
+  failedAt: OrderTimestamp | null;
+  refundPaymentId?: string;
+  sourcePaymentId?: string;
+  refundReference?: string;
+  providerRefundId?: string | null;
+  allocationIndex?: number;
+  allocationCount?: number;
+  attempts?: number;
+  lastError?: string | null;
+}
+
+export interface ActiveRefundOperation {
+  active: true;
+  status: string;
+  severity: "info" | "success" | "warning" | "danger";
+  label: string;
+  message: string;
+  amount: number;
+  currency: string;
+  gateway: string;
+  attemptCount: number;
+  nextProbeAt: OrderTimestamp | null;
+  lastProbeAt: OrderTimestamp | null;
+  providerStatus: string | null;
+  providerRefundId?: string | null;
+  refundReference?: string | null;
+  lastError?: string | null;
+}
+
 export interface Order {
   id: string;
   customerName: string;
@@ -46,6 +92,8 @@ export interface Order {
   balanceDue?: number | null;
   fulfillmentStatus?: string | null;
   inventoryPool?: string | null;
+  refundAttempts?: OrderRefundAttempt[];
+  activeRefundOperation?: ActiveRefundOperation | null;
 }
 
 export interface OrderShipment {

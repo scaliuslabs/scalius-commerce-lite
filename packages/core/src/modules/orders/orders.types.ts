@@ -2,6 +2,10 @@
 // Shared TypeScript interfaces for the orders module.
 
 import type { OrderNotificationType } from "../notifications/notification-types";
+import type {
+    ActiveRefundOperationView,
+    OrderRefundAttemptView,
+} from "../payments/refund-attempt-visibility";
 
 // ─────────────────────────────────────────
 // Admin types
@@ -65,6 +69,8 @@ export interface OrderDetails extends OrderListItem {
         variantColor: string | null;
         fulfillmentStatus: string;
     }[];
+    refundAttempts: OrderRefundAttemptView[];
+    activeRefundOperation: ActiveRefundOperationView | null;
 }
 
 // ─────────────────────────────────────────
