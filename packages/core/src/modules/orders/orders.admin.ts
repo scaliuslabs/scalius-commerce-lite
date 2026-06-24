@@ -15,6 +15,7 @@ import {
     deliveryProviders,
     OrderStatus,
     PaymentStatus,
+    ItemFulfillmentStatus,
 } from "@scalius/database/schema";
 import {
     applyInventoryForStatusChange,
@@ -110,6 +111,99 @@ function addAdminOrderSkuIssue(
         code,
         message,
     });
+}
+
+function orderEditReadyCondition(orderId: string, expectedVersion: number) {
+    return sql`EXISTS (
+        SELECT 1 FROM ${orders}
+        WHERE ${orders.id} = ${orderId}
+          AND ${orders.version} = ${expectedVersion}
+          AND ${orders.deletedAt} IS NULL
+          AND ${noActiveRefundAttemptForOrderIdCondition(orderId)}
+    )`;
+}
+
+function orderEditCommittedCondition(orderId: string, committedVersion: number) {
+    return sql`changes() = 1
+        AND EXISTS (
+            SELECT 1 FROM ${orders}
+            WHERE ${orders.id} = ${orderId}
+              AND ${orders.version} = ${committedVersion}
+              AND ${orders.deletedAt} IS NULL
+        )`;
+}
+
+function buildGuardedCustomerInsert(
+    db: Database,
+    orderId: string,
+    customerId: string,
+    data: UpdateOrderData,
+    totalAmount: number,
+    expectedOrderVersion: number,
+): SQLiteBatchItem {
+    return db.insert(customers).select(sql`
+        SELECT
+            ${customerId},
+            ${data.customerName},
+            ${data.customerEmail},
+            ${data.customerPhone},
+            ${data.shippingAddress},
+            ${data.city},
+            ${data.zone},
+            ${data.area},
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            1,
+            ${totalAmount},
+            unixepoch(),
+            unixepoch(),
+            unixepoch(),
+            NULL
+        WHERE ${orderEditReadyCondition(orderId, expectedOrderVersion)}
+    `);
+}
+
+function buildGuardedOrderItemInsert(
+    db: Database,
+    orderId: string,
+    committedOrderVersion: number,
+    item: AdminOrderItemWithInventory<UpdateOrderData["items"][number]>,
+): SQLiteBatchItem {
+    const itemId = "item_" + nanoid();
+    return db.insert(orderItems).select(sql`
+        SELECT
+            ${itemId},
+            ${orderId},
+            ${item.productId},
+            ${item.variantId},
+            ${item.quantity},
+            ${item.price},
+            NULL,
+            NULL,
+            ${item.inventoryTracked ? 1 : 0},
+            ${ItemFulfillmentStatus.PENDING},
+            unixepoch()
+        WHERE ${orderEditCommittedCondition(orderId, committedOrderVersion)}
+    `);
+}
+
+function buildGuardedOrderItemsDelete(
+    db: Database,
+    orderId: string,
+    committedOrderVersion: number,
+    existingItems: Array<{ id: string }>,
+): SQLiteBatchItem | null {
+    const itemIds = existingItems.map((item) => item.id).filter(Boolean);
+    if (itemIds.length === 0) return null;
+
+    return db.delete(orderItems).where(and(
+        eq(orderItems.orderId, orderId),
+        inArray(orderItems.id, itemIds),
+        orderEditCommittedCondition(orderId, committedOrderVersion),
+    ));
 }
 
 function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
@@ -1134,6 +1228,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 : undefined,
     });
     let customerId = existingOrder.customerId;
+    let newCustomerId: string | null = null;
     let acquiredReservations: ReservationEntry[] = [];
     let deductedEntries: ReservationEntry[] = [];
     let releasedReservations: ReservationEntry[] = [];
@@ -1231,71 +1326,70 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             if (customer) {
                 customerId = customer.id;
             } else {
-                const [newCustomer] = await db.insert(customers).values({
-                    id: "cust_" + nanoid(),
-                    name: data.customerName,
-                    phone: data.customerPhone,
-                    email: data.customerEmail,
-                    address: data.shippingAddress,
-                    city: data.city,
-                    zone: data.zone,
-                    area: data.area,
-                    totalOrders: 1,
-                    totalSpent: totalAmount,
-                    lastOrderAt: sql`unixepoch()`,
-                    createdAt: sql`unixepoch()`,
-                    updatedAt: sql`unixepoch()`,
-                }).returning();
-                if (newCustomer) customerId = newCustomer.id;
+                newCustomerId = "cust_" + nanoid();
+                customerId = newCustomerId;
             }
         }
 
-        const updateResult = await db.update(orders).set({
-            customerName: data.customerName,
-            customerPhone: data.customerPhone,
-            customerEmail: data.customerEmail,
-            shippingAddress: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
-            cityName,
-            zoneName,
-            areaName,
-            notes: data.notes,
-            totalAmount,
-            shippingCharge: data.shippingCharge,
-            discountAmount: data.discountAmount,
-            paidAmount: nextPaymentState.paidAmount,
-            balanceDue: nextPaymentState.balanceDue,
-            paymentStatus: nextPaymentState.paymentStatus,
-            status: data.status,
-            customerId,
-            version: existingOrder.version + 1,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(orders.id, id),
-            eq(orders.version, existingOrder.version),
-            noActiveRefundAttemptForOrderIdCondition(id),
-        )).returning({ id: orders.id });
+        const committedOrderVersion = existingOrder.version + 1;
+        const atomicEditStatements: SQLiteBatchItem[] = [];
+        if (newCustomerId) {
+            atomicEditStatements.push(buildGuardedCustomerInsert(
+                db,
+                id,
+                newCustomerId,
+                data,
+                totalAmount,
+                existingOrder.version,
+            ));
+        }
 
-        if (updateResult.length === 0) {
+        const orderUpdateResultIndex = atomicEditStatements.length;
+        atomicEditStatements.push(
+            db.update(orders).set({
+                customerName: data.customerName,
+                customerPhone: data.customerPhone,
+                customerEmail: data.customerEmail,
+                shippingAddress: data.shippingAddress,
+                city: data.city,
+                zone: data.zone,
+                area: data.area,
+                cityName,
+                zoneName,
+                areaName,
+                notes: data.notes,
+                totalAmount,
+                shippingCharge: data.shippingCharge,
+                discountAmount: data.discountAmount,
+                paidAmount: nextPaymentState.paidAmount,
+                balanceDue: nextPaymentState.balanceDue,
+                paymentStatus: nextPaymentState.paymentStatus,
+                status: data.status,
+                customerId,
+                version: committedOrderVersion,
+                updatedAt: sql`unixepoch()`,
+            }).where(and(
+                eq(orders.id, id),
+                eq(orders.version, existingOrder.version),
+                noActiveRefundAttemptForOrderIdCondition(id),
+            )).returning({ id: orders.id }),
+        );
+
+        for (const item of trackedNewItems) {
+            atomicEditStatements.push(buildGuardedOrderItemInsert(db, id, committedOrderVersion, item));
+        }
+
+        const guardedOldItemsDelete = buildGuardedOrderItemsDelete(db, id, committedOrderVersion, existingItems);
+        if (guardedOldItemsDelete) {
+            atomicEditStatements.push(guardedOldItemsDelete);
+        }
+
+        const batchResults = await safeBatch(db, atomicEditStatements) as unknown[];
+        const updateResult = batchResults[orderUpdateResultIndex] as Array<{ id: string }> | undefined;
+
+        if ((updateResult?.length ?? 0) === 0) {
             throw new ConflictError("Order was modified by another request. Please reload and try again.");
         }
-
-        const itemReplacementStatements: SQLiteBatchItem[] = [db.delete(orderItems).where(eq(orderItems.orderId, id))];
-        if (data.items.length > 0) {
-            itemReplacementStatements.push(db.insert(orderItems).values(trackedNewItems.map((item) => ({
-                id: "item_" + nanoid(),
-                orderId: id,
-                productId: item.productId,
-                variantId: item.variantId,
-                quantity: item.quantity,
-                price: item.price,
-                inventoryTracked: item.inventoryTracked,
-                createdAt: sql`unixepoch()`,
-            }))));
-        }
-        await safeBatch(db, itemReplacementStatements);
         writesCommitted = true;
 
         if (!statusTransitionHandled) {
