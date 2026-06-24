@@ -10,6 +10,14 @@ import { CDN_DOMAINS } from "./src/lib/image-config.ts";
 import cloudflare from "@astrojs/cloudflare";
 
 const persistStatePath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
+const reactSingletonDeps = [
+  "react",
+  "react-dom",
+  "react-dom/client",
+  "react-dom/server",
+  "react/jsx-runtime",
+  "react/jsx-dev-runtime",
+];
 
 // https://astro.build/config
 export default defineConfig({
@@ -40,12 +48,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     resolve: {
-      dedupe: [
-        "react",
-        "react-dom",
-        "react/jsx-runtime",
-        "react/jsx-dev-runtime",
-      ],
+      dedupe: reactSingletonDeps,
       alias:
         process.env.NODE_ENV === "production"
           ? {
