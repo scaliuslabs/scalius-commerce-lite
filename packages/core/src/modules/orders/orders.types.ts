@@ -158,6 +158,7 @@ export interface OrderIngestQueuePayload {
         inventoryAction: string;
     };
     items: {
+        cartKey?: string | null;
         productId: string;
         variantId: string | null;
         quantity: number;

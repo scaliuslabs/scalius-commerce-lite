@@ -6,6 +6,7 @@ import { cartStore } from "../../store/cart";
 import type { CheckoutLanguageData } from "../api/types";
 import type { CartValidationIssue, CartValidationResult } from "../api/orders";
 import { applyCheckoutButtonState } from "./checkout-button-state";
+import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import { reconcileValidatedCartSnapshot } from "./validation-reconciliation";
@@ -342,6 +343,76 @@ describe("reconcileValidatedCartSnapshot", () => {
     expect(state.totalItems).toBe(2);
     expect(state.totalAmount).toBe(300);
     expect(state.discount).toBeNull();
+  });
+
+  it("does not reconcile a stale explicit cart key onto another row by index", () => {
+    cartStore.set({
+      items: {
+        current_line: {
+          id: "prod_current",
+          name: "Current product",
+          price: 150,
+          quantity: 1,
+          variantId: "variant_current",
+          freeDelivery: false,
+        },
+      },
+      totalItems: 1,
+      totalAmount: 150,
+      discount: null,
+    });
+
+    expect(reconcileValidatedCartSnapshot({
+      valid: true,
+      issues: [],
+      subtotal: 300,
+      hasFreeDeliveryProduct: true,
+      items: [
+        {
+          index: 0,
+          cartKey: "removed_line",
+          productId: "prod_removed",
+          variantId: "variant_removed",
+          quantity: 1,
+          unitPrice: 300,
+          productName: "Removed product",
+          variantLabel: null,
+          freeDelivery: true,
+          availableQuantity: 5,
+        },
+      ],
+    })).toBe(false);
+
+    expect(cartStore.get().items.current_line?.freeDelivery).toBe(false);
+  });
+});
+
+describe("resolveCartKeyForValidatedLine", () => {
+  const items = {
+    current_line: {
+      id: "prod_current",
+      name: "Current product",
+      price: 150,
+      quantity: 1,
+      variantId: "variant_current",
+    },
+  };
+
+  it("does not fall back by index when a server repair issue names a missing cart key", () => {
+    expect(resolveCartKeyForValidatedLine({
+      index: 0,
+      cartKey: "old_line",
+      productId: "prod_old",
+      variantId: "variant_old",
+    }, items)).toBeNull();
+  });
+
+  it("keeps product and variant fallback for older validation payloads without cart keys", () => {
+    expect(resolveCartKeyForValidatedLine({
+      index: 99,
+      productId: "prod_current",
+      variantId: "variant_current",
+    }, items)).toBe("current_line");
   });
 });
 

@@ -53,6 +53,7 @@ function createPayload(overrides: Partial<OrderIngestQueuePayload> = {}): OrderI
     },
     items: [
       {
+        cartKey: "line_1",
         productId: "prod_1",
         variantId: "variant_1",
         quantity: 2,
@@ -224,6 +225,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       details: {
         itemIssues: [
           {
+            cartKey: "line_1",
             code: "QUANTITY_UNAVAILABLE",
             productName: "Discounted Product",
             message: "Discounted Product is no longer available in the requested quantity.",

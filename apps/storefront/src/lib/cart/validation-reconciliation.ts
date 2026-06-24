@@ -1,24 +1,6 @@
-import { cartStore, type CartItem } from "../../store/cart";
+import { cartStore } from "../../store/cart";
 import type { CartValidationResult } from "../api/orders";
-
-function keyForValidatedItem(
-  item: CartValidationResult["items"][number],
-  items: Record<string, CartItem>,
-): string | null {
-  if (item.cartKey && items[item.cartKey]) return item.cartKey;
-
-  const match = Object.entries(items).find(([, cartItem], index) => {
-    const itemVariant = cartItem.variantId && cartItem.variantId !== "default"
-      ? cartItem.variantId
-      : null;
-    return (
-      index === item.index ||
-      (cartItem.id === item.productId && itemVariant === item.variantId)
-    );
-  });
-
-  return match?.[0] ?? null;
-}
+import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 
 export function reconcileValidatedCartSnapshot(
   validation: CartValidationResult,
@@ -29,7 +11,7 @@ export function reconcileValidatedCartSnapshot(
   let changed = false;
 
   for (const validatedItem of validation.items) {
-    const key = keyForValidatedItem(validatedItem, nextItems);
+    const key = resolveCartKeyForValidatedLine(validatedItem, nextItems);
     if (!key) continue;
 
     const currentItem = nextItems[key];

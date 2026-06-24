@@ -35,6 +35,7 @@ import {
   selectCartKeysForBulkRepair,
   type BulkCartRepairAction,
 } from "./bulk-repair-actions";
+import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -353,17 +354,7 @@ function issueKeyForCart(
   issue: CartValidationIssue,
   items: Record<string, CartItem>,
 ): string | null {
-  if (issue.cartKey && items[issue.cartKey]) return issue.cartKey;
-
-  const match = Object.entries(items).find(([, item], index) => {
-    const itemVariant = item.variantId && item.variantId !== "default" ? item.variantId : null;
-    return (
-      index === issue.index ||
-      (item.id === issue.productId && itemVariant === issue.variantId)
-    );
-  });
-
-  return match?.[0] ?? null;
+  return resolveCartKeyForValidatedLine(issue, items);
 }
 
 function setCartValidationIssues(
