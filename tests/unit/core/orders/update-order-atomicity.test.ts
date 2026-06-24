@@ -87,6 +87,35 @@ const restoreFailure = {
   error: "restore failed",
 };
 
+function activeLocationRows() {
+  return [
+    {
+      id: "dhaka",
+      name: "Dhaka",
+      type: "city",
+      parentId: null,
+      isActive: true,
+      deletedAt: null,
+    },
+    {
+      id: "zone1",
+      name: "Mirpur",
+      type: "zone",
+      parentId: "dhaka",
+      isActive: true,
+      deletedAt: null,
+    },
+    {
+      id: "area1",
+      name: "Section 10",
+      type: "area",
+      parentId: "zone1",
+      isActive: true,
+      deletedAt: null,
+    },
+  ];
+}
+
 let updateOrder: UpdateOrder;
 let restoreOrder: RestoreOrder;
 let events: string[];
@@ -143,6 +172,7 @@ function createUpdateOrderDb(options: {
   legacyPendingRefund?: Record<string, unknown> | null;
   orderUpdateResult?: unknown[];
   itemReplacementError?: Error;
+  locationRows?: ReturnType<typeof activeLocationRows>;
 }) {
   let selectIndex = 0;
   const liveSkuRows = [
@@ -164,7 +194,7 @@ function createUpdateOrderDb(options: {
     },
   ];
   const selectResults = [
-    [],
+    options.locationRows ?? activeLocationRows(),
     options.existingOrder,
     options.activeRefundAttempt ?? null,
     options.legacyPendingRefund ?? null,
@@ -282,6 +312,46 @@ function updateData(overrides: Partial<Parameters<UpdateOrder>[2]> = {}): Parame
 }
 
 describe("updateOrder inventory atomicity", () => {
+  it("rejects invalid delivery-location hierarchy before order, refund, or inventory reads", async () => {
+    const db = createUpdateOrderDb({
+      existingOrder: existingOrder({ inventoryAction: "reserved" }),
+      existingItems: [item(1)],
+      locationRows: [
+        {
+          id: "dhaka",
+          name: "Dhaka",
+          type: "city",
+          parentId: null,
+          isActive: true,
+          deletedAt: null,
+        },
+        {
+          id: "zone1",
+          name: "Mirpur",
+          type: "zone",
+          parentId: "other_city",
+          isActive: true,
+          deletedAt: null,
+        },
+      ],
+    });
+
+    await expect(updateOrder(db as never, ORDER_ID, updateData()))
+      .rejects.toMatchObject({
+        name: "ValidationError",
+        code: "VALIDATION_ERROR",
+        message: "Selected zone is no longer available for the chosen city.",
+      });
+
+    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
   it("rejects active shipment claims before inventory pre-writes", async () => {
     const db = createUpdateOrderDb({
       existingOrder: {

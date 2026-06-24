@@ -39,6 +39,35 @@ interface AdminOrderSkuIssue {
     message: string;
 }
 
+function activeLocationRows() {
+    return [
+        {
+            id: "city_dhaka",
+            name: "Dhaka",
+            type: "city",
+            parentId: null,
+            isActive: true,
+            deletedAt: null,
+        },
+        {
+            id: "zone_mirpur",
+            name: "Mirpur",
+            type: "zone",
+            parentId: "city_dhaka",
+            isActive: true,
+            deletedAt: null,
+        },
+        {
+            id: "area_section_10",
+            name: "Section 10",
+            type: "area",
+            parentId: "zone_mirpur",
+            isActive: true,
+            deletedAt: null,
+        },
+    ];
+}
+
 function createSkuDb(rows: SkuRow[]) {
     const where = vi.fn(async () => rows);
     const innerJoin = vi.fn(() => ({ where }));
@@ -60,7 +89,7 @@ function queryResult<T>(rows: T[], getValue: unknown = rows[0] ?? null) {
     };
 }
 
-function createOrderDbWithSkuRows(rows: SkuRow[]) {
+function createOrderDbWithSkuRows(rows: SkuRow[], locationRows = activeLocationRows()) {
     let selectCall = 0;
     const insertValues: Array<Record<string, unknown> | Array<Record<string, unknown>>> = [];
     const updateValues: Array<Record<string, unknown>> = [];
@@ -90,7 +119,7 @@ function createOrderDbWithSkuRows(rows: SkuRow[]) {
             };
         }
 
-        const result = selectCall === 1 ? queryResult([]) : queryResult([], null);
+        const result = selectCall === 1 ? queryResult(locationRows) : queryResult([], null);
         return {
             from: vi.fn(() => ({
                 where: vi.fn(() => result),
@@ -273,6 +302,91 @@ describe("resolveAdminOrderItemInventory", () => {
                 code: "VARIANT_MISMATCH",
             }),
         ]);
+        expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+        expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+        expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
+        expect(batch).not.toHaveBeenCalled();
+        expect(insert).not.toHaveBeenCalled();
+        expect(update).not.toHaveBeenCalled();
+    });
+
+    it("stores canonical active delivery-location names instead of submitted labels", async () => {
+        const { db, batch, insertValues } = createOrderDbWithSkuRows([
+            {
+                id: "var_untracked",
+                productId: "prod_active",
+                trackInventory: false,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+            },
+        ]);
+
+        await createOrder(db, createOrderInput({
+            area: "area_section_10",
+            cityName: "Forged City",
+            zoneName: "Forged Zone",
+            areaName: "Forged Area",
+            items: [
+                {
+                    productId: "prod_active",
+                    variantId: "var_untracked",
+                    quantity: 1,
+                    price: 100,
+                },
+            ],
+        }));
+
+        const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
+            !Array.isArray(values) && "cityName" in values && "zoneName" in values,
+        );
+
+        expect(batch).toHaveBeenCalledTimes(1);
+        expect(orderInsert).toMatchObject({
+            city: "city_dhaka",
+            zone: "zone_mirpur",
+            area: "area_section_10",
+            cityName: "Dhaka",
+            zoneName: "Mirpur",
+            areaName: "Section 10",
+        });
+    });
+
+    it("rejects inactive or cross-parent delivery locations before inventory and order writes", async () => {
+        const { db, batch, insert, update } = createOrderDbWithSkuRows(
+            [
+                {
+                    id: "var_untracked",
+                    productId: "prod_active",
+                    trackInventory: false,
+                    variantDeletedAt: null,
+                    productActive: true,
+                    productDeletedAt: null,
+                },
+            ],
+            [
+                {
+                    id: "city_dhaka",
+                    name: "Dhaka",
+                    type: "city",
+                    parentId: null,
+                    isActive: true,
+                    deletedAt: null,
+                },
+                {
+                    id: "zone_mirpur",
+                    name: "Mirpur",
+                    type: "zone",
+                    parentId: "city_other",
+                    isActive: true,
+                    deletedAt: null,
+                },
+            ],
+        );
+
+        await expect(createOrder(db, createOrderInput()))
+            .rejects.toThrow("Selected zone is no longer available for the chosen city.");
+
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
         expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
         expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
