@@ -105,8 +105,23 @@ function createTestApp(
   return app;
 }
 
-function createAdminUserListDbMock() {
-  const adminUsers = [
+function createAdminUserListDbMock(options: {
+  adminUsers?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    emailVerified: boolean;
+    image: string | null;
+    twoFactorEnabled: boolean;
+    mustChangePassword: boolean;
+    mustEnrollTwoFactor: boolean;
+    isSuperAdmin: boolean;
+    createdAt: number;
+  }>;
+  roleRows?: Array<{ id: string; name: string; displayName: string }>;
+  overrideRows?: Array<{ permissionName: string; granted: boolean }>;
+} = {}) {
+  const adminUsers = options.adminUsers ?? [
     {
       id: "admin_2",
       name: "Ops Admin",
@@ -120,20 +135,26 @@ function createAdminUserListDbMock() {
       createdAt: 1,
     },
   ];
-  const roleRows = [
+  const roleRows = options.roleRows ?? [
     { id: "role_1", name: "manager", displayName: "Manager" },
   ];
-  const overrideRows = [
+  const overrideRows = options.overrideRows ?? [
     { permissionName: "products.view", granted: true },
     { permissionName: "orders.refund", granted: false },
   ];
 
   return {
+    selectDistinct: vi.fn(() => ({
+      from: vi.fn(() => ({
+        leftJoin: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({
+            where: vi.fn(async () => adminUsers),
+          })),
+        })),
+      })),
+    })),
     select: vi.fn((selection: Record<string, unknown>) => ({
       from: vi.fn(() => {
-        if ("emailVerified" in selection) {
-          return { where: vi.fn(async () => adminUsers) };
-        }
         if ("displayName" in selection) {
           return {
             innerJoin: vi.fn(() => ({
@@ -150,6 +171,52 @@ function createAdminUserListDbMock() {
         }
         return { where: vi.fn(async () => []) };
       }),
+    })),
+  };
+}
+
+function createAdminDeleteDbMock(options: {
+  targetUser?: { id: string; role: string | null; isSuperAdmin: boolean } | null;
+  targetPrincipalRows?: Array<{ id: string }>;
+  adminPrincipalRows?: Array<{ id: string }>;
+} = {}) {
+  const targetUser = options.targetUser ?? {
+    id: "rbac_admin",
+    role: "user",
+    isSuperAdmin: false,
+  };
+  const targetPrincipalRows = options.targetPrincipalRows ?? [{ id: "rbac_admin" }];
+  const adminPrincipalRows = options.adminPrincipalRows ?? [
+    { id: "user_1" },
+    { id: "rbac_admin" },
+  ];
+  const deleteWhere = vi.fn(async () => undefined);
+  const principalWhereCalls: unknown[] = [];
+
+  return {
+    __deleteWhere: deleteWhere,
+    __principalWhereCalls: principalWhereCalls,
+    delete: vi.fn(() => ({ where: deleteWhere })),
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          get: vi.fn(async () => targetUser),
+        })),
+      })),
+    })),
+    selectDistinct: vi.fn(() => ({
+      from: vi.fn(() => ({
+        leftJoin: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({
+            where: vi.fn(async (predicate: unknown) => {
+              principalWhereCalls.push(predicate);
+              return principalWhereCalls.length === 1
+                ? targetPrincipalRows
+                : adminPrincipalRows;
+            }),
+          })),
+        })),
+      })),
     })),
   };
 }
@@ -278,6 +345,55 @@ describe("admin auth management user permissions", () => {
     ]);
   });
 
+  it("lists direct-permission admin principals even when they have no assigned roles", async () => {
+    const db = createAdminUserListDbMock({
+      adminUsers: [
+        {
+          id: "direct_perm_admin",
+          name: "Direct Permission Admin",
+          email: "direct@example.com",
+          emailVerified: true,
+          image: null,
+          twoFactorEnabled: true,
+          mustChangePassword: false,
+          mustEnrollTwoFactor: false,
+          isSuperAdmin: false,
+          createdAt: 1,
+        },
+      ],
+      roleRows: [],
+      overrideRows: [
+        { permissionName: "team.view", granted: true },
+      ],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users", {
+      method: "GET",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = await response.json() as {
+      data?: {
+        users?: Array<{
+          id: string;
+          roles: Array<{ name: string }>;
+          overrides: { grants: string[]; denials: string[] };
+        }>;
+      };
+    };
+    expect(body.data?.users).toEqual([
+      expect.objectContaining({
+        id: "direct_perm_admin",
+        roles: [],
+        overrides: {
+          grants: ["team.view"],
+          denials: [],
+        },
+      }),
+    ]);
+  });
+
   it("does not re-check legacy user.role inside user-management handlers", () => {
     const source = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
@@ -285,8 +401,42 @@ describe("admin auth management user permissions", () => {
     );
 
     expect(source).not.toContain('sessionUser.role !== "admin"');
+    expect(source).not.toContain('.where(eq(user.role, "admin"))');
+    expect(source).toContain("selectDistinct");
+    expect(source).toContain("isNotNull(userRoles.id)");
+    expect(source).toContain("isNotNull(userPermissions.id)");
+    expect(source).toContain("eq(userPermissions.granted, true)");
     expect(source).not.toContain("Only administrators can create new admin users");
     expect(source).not.toContain("Only administrators can delete admin users");
+  });
+
+  it("deletes a role-bearing admin principal even when the legacy role is not admin", async () => {
+    const db = createAdminDeleteDbMock();
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users/rbac_admin", {
+      method: "DELETE",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(db.__deleteWhere).toHaveBeenCalledOnce();
+    expect(db.__principalWhereCalls).toHaveLength(2);
+  });
+
+  it("does not delete plain non-admin Better Auth users through team management", async () => {
+    const db = createAdminDeleteDbMock({
+      targetPrincipalRows: [],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users/customer_user", {
+      method: "DELETE",
+    });
+    const body = await response.json() as { error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(db.__deleteWhere).not.toHaveBeenCalled();
   });
 });
 

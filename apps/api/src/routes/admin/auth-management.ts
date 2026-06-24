@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import type { Database } from "@scalius/database/client";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
@@ -75,6 +75,15 @@ function generateBootstrapPassword(length = 32): string {
     return password;
 }
 
+function adminPrincipalPredicate() {
+    return or(
+        eq(user.role, "admin"),
+        eq(user.isSuperAdmin, true),
+        isNotNull(userRoles.id),
+        isNotNull(userPermissions.id),
+    );
+}
+
 // ─────────────────────────────────────────
 // Admin Users Management
 // ─────────────────────────────────────────
@@ -110,7 +119,7 @@ app.openapi(listUsersRoute, async (c) => {
         const db = c.get("db");
 
         const adminUsers = await db
-            .select({
+            .selectDistinct({
                 id: user.id,
                 name: user.name,
                 email: user.email,
@@ -123,7 +132,12 @@ app.openapi(listUsersRoute, async (c) => {
                 createdAt: user.createdAt
             })
             .from(user)
-            .where(eq(user.role, "admin"));
+            .leftJoin(userRoles, eq(userRoles.userId, user.id))
+            .leftJoin(userPermissions, and(
+                eq(userPermissions.userId, user.id),
+                eq(userPermissions.granted, true),
+            ))
+            .where(adminPrincipalPredicate());
 
         const usersWithRoles = await Promise.all(
             adminUsers.map(async (adminUser) => {
@@ -299,11 +313,30 @@ app.openapi(deleteUserRoute, async (c) => {
             throw new ValidationError("You cannot delete your own account");
         }
 
-        const userToDelete = await db.select({ id: user.id, role: user.role }).from(user).where(eq(user.id, userId)).get();
+        const userToDelete = await db.select({ id: user.id, role: user.role, isSuperAdmin: user.isSuperAdmin }).from(user).where(eq(user.id, userId)).get();
         if (!userToDelete) throw new NotFoundError("User not found");
-        if (userToDelete.role !== "admin") throw new ValidationError("Can only delete admin users through this endpoint");
+        if (userToDelete.isSuperAdmin) throw new ValidationError("Cannot delete a super admin user");
 
-        const adminCount = await db.select({ id: user.id }).from(user).where(eq(user.role, "admin"));
+        const targetAdminPrincipal = await db
+            .selectDistinct({ id: user.id })
+            .from(user)
+            .leftJoin(userRoles, eq(userRoles.userId, user.id))
+            .leftJoin(userPermissions, and(
+                eq(userPermissions.userId, user.id),
+                eq(userPermissions.granted, true),
+            ))
+            .where(and(eq(user.id, userId), adminPrincipalPredicate()));
+        if (targetAdminPrincipal.length === 0) throw new ValidationError("Can only delete admin users through this endpoint");
+
+        const adminCount = await db
+            .selectDistinct({ id: user.id })
+            .from(user)
+            .leftJoin(userRoles, eq(userRoles.userId, user.id))
+            .leftJoin(userPermissions, and(
+                eq(userPermissions.userId, user.id),
+                eq(userPermissions.granted, true),
+            ))
+            .where(adminPrincipalPredicate());
         if (adminCount.length <= 1) throw new ValidationError("Cannot delete the last admin user");
 
         await db.delete(user).where(eq(user.id, userId));
