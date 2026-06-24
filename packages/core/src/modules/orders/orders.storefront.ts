@@ -4,7 +4,6 @@
 import type { Database } from "@scalius/database/client";
 import { subtractPrice, addPrices, roundPrice } from "@scalius/shared/price-utils";
 import {
-    deliveryLocations,
     discounts,
     siteSettings,
     shippingMethods,
@@ -15,7 +14,7 @@ import {
 } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ValidationError } from "@scalius/core/errors";
 import type {
@@ -29,15 +28,11 @@ import {
     validateStorefrontCartItems,
     type StorefrontCartValidationResult,
 } from "./cart-validation";
-
-interface LocationRow {
-    id: string;
-    name: string;
-    type: "city" | "zone" | "area";
-    parentId: string | null;
-    isActive: boolean;
-    deletedAt: Date | number | null;
-}
+import {
+    resolveActiveDeliveryLocationNamesFromRows,
+    selectActiveDeliveryLocationRows,
+    type ActiveDeliveryLocationRow,
+} from "./delivery-location-validation";
 
 interface ShippingMethodRow {
     fee: number;
@@ -82,34 +77,8 @@ export async function validateStorefrontDeliveryPreflight(
     data: StorefrontDeliveryPreflightInput,
     cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct">,
 ): Promise<StorefrontDeliveryPreflightResult> {
-    const locationIds = [data.city, data.zone, data.area].filter(
-        (id): id is string => typeof id === "string" && id.trim().length > 0,
-    );
-
     const readBatch: unknown[] = [];
-    if (locationIds.length > 0) {
-        readBatch.push(
-            storefrontDb
-                .select({
-                    id: deliveryLocations.id,
-                    name: deliveryLocations.name,
-                    type: deliveryLocations.type,
-                    parentId: deliveryLocations.parentId,
-                    isActive: deliveryLocations.isActive,
-                    deletedAt: deliveryLocations.deletedAt,
-                })
-                .from(deliveryLocations)
-                .where(
-                    and(
-                        inArray(deliveryLocations.id, locationIds),
-                        eq(deliveryLocations.isActive, true),
-                        isNull(deliveryLocations.deletedAt),
-                    ),
-                ),
-        );
-    } else {
-        readBatch.push(storefrontDb.select().from(deliveryLocations).limit(0));
-    }
+    readBatch.push(selectActiveDeliveryLocationRows(storefrontDb, data));
 
     if (!cartValidation.hasFreeDeliveryProduct && data.shippingMethodId) {
         readBatch.push(
@@ -135,22 +104,8 @@ export async function validateStorefrontDeliveryPreflight(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     const [locationRows, shippingMethodRows] = await storefrontDb.batch(readBatch as any);
 
-    const locationResults = Array.isArray(locationRows) ? locationRows as LocationRow[] : [];
-    const locationMap = new Map(locationResults.map((location) => [location.id, location]));
-    const city = locationMap.get(data.city);
-    if (!city || city.type !== "city" || city.parentId !== null || city.isActive !== true || city.deletedAt != null) {
-        throw new ValidationError("Selected city is no longer available for checkout.");
-    }
-
-    const zone = locationMap.get(data.zone);
-    if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
-        throw new ValidationError("Selected zone is no longer available for the chosen city.");
-    }
-
-    const area = data.area ? locationMap.get(data.area) : null;
-    if (data.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
-        throw new ValidationError("Selected area is no longer available for the chosen zone.");
-    }
+    const locationResults = Array.isArray(locationRows) ? locationRows as ActiveDeliveryLocationRow[] : [];
+    const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, locationResults);
 
     let shippingCharge = 0;
     if (!cartValidation.hasFreeDeliveryProduct) {
@@ -175,9 +130,9 @@ export async function validateStorefrontDeliveryPreflight(
 
     return markTrustedStorefrontDeliveryPreflightResult({
         shippingCharge,
-        cityName: city.name,
-        zoneName: zone.name,
-        areaName: area?.name ?? null,
+        cityName: locationNames.cityName,
+        zoneName: locationNames.zoneName,
+        areaName: locationNames.areaName,
     });
 }
 

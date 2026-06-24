@@ -13,7 +13,6 @@ import {
     productImages,
     deliveryShipments,
     deliveryProviders,
-    deliveryLocations,
     OrderStatus,
     PaymentStatus,
 } from "@scalius/database/schema";
@@ -32,7 +31,7 @@ import {
 } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 
-import { sql, desc, eq, inArray, isNull, isNotNull, and, type SQL } from "drizzle-orm";
+import { sql, desc, eq, inArray, isNotNull, and, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
@@ -55,6 +54,7 @@ import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
+import { resolveActiveDeliveryLocationNames } from "./delivery-location-validation";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -662,23 +662,7 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
         paidAmount: 0,
     });
 
-    // Resolve location names (read-only, safe outside transaction)
-    const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
-    const locationMap = new Map<string, string>();
-    if (locationIds.length > 0) {
-        const locationResults = await db
-            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
-            .from(deliveryLocations)
-            .where(and(
-                inArray(deliveryLocations.id, locationIds),
-                isNull(deliveryLocations.deletedAt),
-            ));
-        locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
-    }
-
-    const cityName = data.cityName || (data.city ? locationMap.get(data.city) || data.city : "");
-    const zoneName = data.zoneName || (data.zone ? locationMap.get(data.zone) || data.zone : "");
-    const areaName = data.areaName || (data.area ? locationMap.get(data.area) || null : null);
+    const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
 
     // Get or create customer (read outside batch, writes inside)
     const existingCustomer = await db
@@ -1097,22 +1081,7 @@ async function compensatePreWriteInventory(
 }
 
 export async function updateOrder(db: Database, id: string, data: UpdateOrderData): Promise<{ id: string }> {
-    const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
-    const locationMap = new Map<string, string>();
-    if (locationIds.length > 0) {
-        const locationResults = await db
-            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
-            .from(deliveryLocations)
-            .where(and(
-                inArray(deliveryLocations.id, locationIds),
-                isNull(deliveryLocations.deletedAt),
-            ));
-        locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
-    }
-
-    const cityName = data.cityName || (data.city ? locationMap.get(data.city) || data.city : "");
-    const zoneName = data.zoneName || (data.zone ? locationMap.get(data.zone) || data.zone : "");
-    const areaName = data.areaName || (data.area ? locationMap.get(data.area) || null : null);
+    const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
 
     const existingOrder = await db
         .select({
