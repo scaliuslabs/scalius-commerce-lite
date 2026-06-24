@@ -40,7 +40,7 @@ import {
   ChevronUp,
   ReceiptText,
 } from "lucide-react";
-import type { Order } from "./types";
+import type { ActiveRefundOperation, Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   orderCodQueryOptions,
@@ -84,6 +84,13 @@ interface PaymentPlan {
   status: string;
 }
 
+interface OrderPaymentsResult {
+  payments: OrderPayment[];
+  plan: PaymentPlan | null;
+  refundAttempts?: OrderRefundAttempt[];
+  activeRefundOperation?: ActiveRefundOperation | null;
+}
+
 interface CODTracking {
   id: string;
   deliveryAttempts: number;
@@ -117,6 +124,20 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cod: "Cash on Delivery",
   polar: "Polar",
 };
+
+const REFUND_SEVERITY_CLASS: Record<string, string> = {
+  info: "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100",
+  warning: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100",
+  danger: "border-red-200 bg-red-50 text-red-950 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
+};
+
+function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString();
+}
 
 interface PaymentCardProps {
   order: Order;
@@ -158,9 +179,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
     ...orderPaymentsQueryOptions(order.id),
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
-  const paymentsResult = paymentsData as { payments: OrderPayment[]; plan: PaymentPlan | null } | null;
+  const paymentsResult = paymentsData as OrderPaymentsResult | null;
   const payments = paymentsResult?.payments ?? [];
   const plan = paymentsResult?.plan ?? null;
+  const refundAttempts = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
+  const activeRefundOperation = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
+  const isRefundLocked = Boolean(activeRefundOperation?.active);
 
   // COD data — conditionally fetch (useQuery, not suspense, since it's optional)
   const { data: codData } = useQuery({
@@ -176,6 +200,10 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
   function submitCODAction() {
     if (!codAction) return;
+    if (isRefundLocked) {
+      toast.error("Order locked", { description: "Complete or reconcile the active refund before changing COD status." });
+      return;
+    }
 
     if (codAction === "collected") {
       if (!collectedBy.trim()) {
@@ -222,6 +250,10 @@ export function PaymentCard({ order }: PaymentCardProps) {
   }
 
   function handleIssueRefund() {
+    if (isRefundLocked) {
+      toast.error("Refund locked", { description: "Complete or reconcile the active refund before starting another refund." });
+      return;
+    }
     const amount = parseFloat(refundAmount);
     if (isNaN(amount) || amount <= 0 || amount > (order.paidAmount ?? 0)) {
       toast.error("Error", { description: "Valid refund amount up to the paid amount is required." });
@@ -258,6 +290,27 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-4">
+          {activeRefundOperation && (
+            <div
+              role="status"
+              className={`rounded-lg border p-3 text-sm ${REFUND_SEVERITY_CLASS[activeRefundOperation.severity] ?? REFUND_SEVERITY_CLASS.info}`}
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{activeRefundOperation.label}</p>
+                  <p className="mt-1 opacity-90">{activeRefundOperation.message}</p>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80">
+                    <span>{activeRefundOperation.currency} {activeRefundOperation.amount.toLocaleString()}</span>
+                    <span>{activeRefundOperation.attemptCount} allocation{activeRefundOperation.attemptCount === 1 ? "" : "s"}</span>
+                    {activeRefundOperation.refundReference && <span className="font-mono">Ref {activeRefundOperation.refundReference}</span>}
+                    {activeRefundOperation.nextProbeAt && <span>Next check {formatTimestamp(activeRefundOperation.nextProbeAt)}</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Payment method + status */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm">
@@ -412,6 +465,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   <Button
                     size="sm"
                     className="flex-1"
+                    disabled={isRefundLocked}
                     onClick={() => {
                       setCollectedBy("");
                       setCollectedAmount(String(grandTotal));
@@ -424,6 +478,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={isRefundLocked}
                     onClick={() => {
                       setFailReason("not_home");
                       setFailNotes("");
@@ -437,6 +492,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                     <Button
                       size="sm"
                       variant="ghost"
+                      disabled={isRefundLocked}
                       onClick={() => setCodAction("returned")}
                     >
                       Return
@@ -453,15 +509,41 @@ export function PaymentCard({ order }: PaymentCardProps) {
               <Button
                 variant="outline"
                 size="sm"
+                disabled={isRefundLocked}
                 onClick={() => {
+                  if (isRefundLocked) return;
                   setRefundAmount(String(order.paidAmount));
                   setRefundReason("requested_by_customer");
                   setIsRefundDialogOpen(true);
                 }}
               >
                 <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                Issue Refund
+                {isRefundLocked ? "Refund locked" : "Issue Refund"}
               </Button>
+            </div>
+          )}
+
+          {refundAttempts.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Refund operations</div>
+              {refundAttempts.map((attempt) => (
+                <div key={attempt.id} className="flex items-start justify-between gap-3 text-xs">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">{attempt.label}</span>
+                      <Badge variant={attempt.severity === "danger" ? "destructive" : attempt.severity === "success" ? "default" : "secondary"} className="text-[10px]">
+                        {attempt.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">{attempt.message}</p>
+                    {attempt.lastError && <p className="mt-1 truncate text-destructive">{attempt.lastError}</p>}
+                    {attempt.providerRefundId && <p className="mt-1 font-mono text-muted-foreground">Provider refund: {attempt.providerRefundId}</p>}
+                  </div>
+                  <span className="shrink-0 font-medium text-foreground">
+                    {attempt.currency} {attempt.amount.toLocaleString()}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -623,10 +705,14 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">
-              <div className="flex justify-between">
-                <span>Maximum refundable:</span>
-                <span className="font-medium text-foreground">{symbol}{(order.paidAmount ?? 0).toLocaleString()}</span>
-              </div>
+              {isRefundLocked ? (
+                <span>Refund amount is locked while refund recovery is active.</span>
+              ) : (
+                <div className="flex justify-between">
+                  <span>Maximum refundable:</span>
+                  <span className="font-medium text-foreground">{symbol}{(order.paidAmount ?? 0).toLocaleString()}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -661,7 +747,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
             <Button variant="outline" onClick={() => setIsRefundDialogOpen(false)} disabled={refundMutation.isPending}>
               Cancel
             </Button>
-            <Button onClick={handleIssueRefund} disabled={refundMutation.isPending}>
+            <Button onClick={handleIssueRefund} disabled={refundMutation.isPending || isRefundLocked}>
               {refundMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Submit Refund
             </Button>

@@ -23,6 +23,10 @@ import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import {
+    listOrderRefundAttempts,
+    summarizeActiveRefundOperation,
+} from "../payments/refund-attempt-visibility";
 
 // Re-export schemas from the canonical validation module
 export {
@@ -58,7 +62,7 @@ interface CustomerOrderShipmentSummary {
 
 export interface CustomerOrderDetailTimelineEvent {
     id: string;
-    type: "order" | "payment" | "shipment" | "notification";
+    type: "order" | "payment" | "refund" | "shipment" | "notification";
     status: string;
     label: string;
     happenedAt: string | null;
@@ -608,7 +612,8 @@ export async function getCustomerOrderDetail(
         throw new NotFoundError("Order not found");
     }
 
-    const [items, shipments, payments, plans, codRows, notificationReceipts] = await db.batch([
+    const [batchedRows, refundAttemptViews] = await Promise.all([
+        db.batch([
         db
             .select({
                 id: orderItems.id,
@@ -722,7 +727,11 @@ export async function getCustomerOrderDetail(
                 inArray(orderNotificationDeliveryReceipts.channel, ["email", "sms", "whatsapp"]),
             ))
             .orderBy(desc(orderNotificationDeliveryReceipts.createdAt)),
-    ] as Parameters<Database["batch"]>[0]) as [
+        ] as Parameters<Database["batch"]>[0]),
+        listOrderRefundAttempts(db, orderId, { audience: "customer" }),
+    ]);
+
+    const [items, shipments, payments, plans, codRows, notificationReceipts] = batchedRows as [
         Array<{
             id: string;
             productId: string;
@@ -872,6 +881,17 @@ export async function getCustomerOrderDetail(
         });
     }
 
+    for (const refund of refundAttemptViews) {
+        timeline.push({
+            id: `refund:${refund.id}`,
+            type: "refund",
+            status: refund.status,
+            label: refund.label,
+            happenedAt: refund.refundedAt ?? refund.failedAt ?? refund.lastProbeAt ?? refund.updatedAt ?? refund.createdAt,
+            details: refund.message,
+        });
+    }
+
     for (const shipment of formattedShipments) {
         timeline.push({
             id: `shipment:${shipment.id}`,
@@ -916,6 +936,8 @@ export async function getCustomerOrderDetail(
         items: formattedItems,
         shipments: formattedShipments,
         payments: formattedPayments,
+        refundAttempts: refundAttemptViews,
+        activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "customer"),
         paymentPlan,
         cod,
         notifications,

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Truck, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
+import { AlertTriangle, Truck, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
 import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
 import type { Order, OrderShipment } from "./types";
@@ -35,8 +35,13 @@ const CreateShipmentForm = ({
 }) => {
   const [selectedProviderId, setSelectedProviderId] = React.useState("");
   const shipmentMutation = useCreateOrderShipment();
+  const refundLocked = Boolean(order.activeRefundOperation?.active);
 
   const handleCreateShipment = () => {
+    if (refundLocked) {
+      toast.error("Order locked", { description: "Complete or reconcile the active refund before creating shipments." });
+      return;
+    }
     if (!selectedProviderId) {
       toast.error("Error", { description: "Please select a delivery provider." });
       return;
@@ -56,6 +61,14 @@ const CreateShipmentForm = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 p-4">
+        {order.activeRefundOperation && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{order.activeRefundOperation.message}</span>
+            </div>
+          </div>
+        )}
         <div className="space-y-3">
           {order.deliveryProviders && order.deliveryProviders.length > 0 && (
             <>
@@ -66,7 +79,7 @@ const CreateShipmentForm = ({
                 <Select
                   value={selectedProviderId}
                   onValueChange={setSelectedProviderId}
-                  disabled={shipmentMutation.isPending}
+                  disabled={shipmentMutation.isPending || refundLocked}
                 >
                   <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
                     <SelectValue placeholder="Select provider" />
@@ -86,7 +99,7 @@ const CreateShipmentForm = ({
               </div>
               <Button
                 className="w-full"
-                disabled={shipmentMutation.isPending || !selectedProviderId}
+                disabled={shipmentMutation.isPending || !selectedProviderId || refundLocked}
                 onClick={handleCreateShipment}
               >
                 {shipmentMutation.isPending && (

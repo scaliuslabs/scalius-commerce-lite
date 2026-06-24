@@ -111,7 +111,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 | POST | `/logout` | `deleteCustomerSession` | Revoke D1 session, clear cookies |
 | PUT | `/profile` | `updateCustomerProfile` | Update name/address/city/zone/area through canonical active delivery-location IDs |
 | GET | `/orders` | `getCustomerOrders` | Customer's latest 50 orders matched by `customerId` only, with items, product names/images, and one latest shipment summary for tracking display |
-| GET | `/orders/{id}` | `getCustomerOrderDetail` + API payment recovery preview | Customer-scoped order detail, items, shipments, payments, payment plan, COD, notification receipts, timeline, and policy-backed `paymentRecovery` preview |
+| GET | `/orders/{id}` | `getCustomerOrderDetail` + API payment/recovery previews | Customer-scoped order detail, items, shipments, payments, payment plan, COD, notification receipts, buyer-safe refund attempts, refund timeline events, active refund recovery notice, and policy-backed `paymentRecovery` preview |
 | POST | `/orders/{id}/payment-session` | API payment session creation | Create an owned-order Stripe/SSLCommerz/Polar payment session from the customer session and order state; strict empty body; no receipt-token input/output |
 
 ## Data Flow

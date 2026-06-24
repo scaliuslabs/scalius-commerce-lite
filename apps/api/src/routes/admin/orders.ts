@@ -22,7 +22,14 @@ import { eq, and, isNull, inArray } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
-import { orderSummarySchema, orderDetailSchema, orderItemSchema, productVariantSchema } from "../../schemas/entities";
+import {
+    activeRefundOperationSchema,
+    orderDetailSchema,
+    orderItemSchema,
+    orderRefundAttemptSchema,
+    orderSummarySchema,
+    productVariantSchema,
+} from "../../schemas/entities";
 import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
@@ -35,6 +42,10 @@ import {
 } from "../../utils/cache-invalidation";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
+import {
+    listOrderRefundAttempts,
+    summarizeActiveRefundOperation,
+} from "@scalius/core/modules/payments";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -118,7 +129,6 @@ const orderPaymentSchema = z.object({
     codCollectedBy: z.string().nullable(),
     codCollectedAt: z.union([z.string(), z.number()]).nullable(),
     codReceiptUrl: z.string().nullable(),
-    metadata: z.string().nullable(),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
 });
@@ -556,7 +566,16 @@ const getPaymentsRoute = createRoute({
     responses: {
         200: {
             description: "Order payments",
-            content: { "application/json": { schema: successEnvelope(z.object({ payments: z.array(orderPaymentSchema), plan: paymentPlanSchema })) } },
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        payments: z.array(orderPaymentSchema),
+                        plan: paymentPlanSchema,
+                        refundAttempts: z.array(orderRefundAttemptSchema),
+                        activeRefundOperation: activeRefundOperationSchema.nullable(),
+                    })),
+                },
+            },
         },
     }
 });
@@ -565,12 +584,37 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
-    const [payments, plan] = await Promise.all([
-        db.select().from(orderPayments).where(eq(orderPayments.orderId, orderId)).all(),
-        db.select().from(paymentPlans).where(eq(paymentPlans.orderId, orderId)).get()
+    const [payments, plan, refundAttemptViews] = await Promise.all([
+        db.select({
+            id: orderPayments.id,
+            orderId: orderPayments.orderId,
+            amount: orderPayments.amount,
+            currency: orderPayments.currency,
+            paymentMethod: orderPayments.paymentMethod,
+            paymentType: orderPayments.paymentType,
+            status: orderPayments.status,
+            stripePaymentIntentId: orderPayments.stripePaymentIntentId,
+            stripeChargeId: orderPayments.stripeChargeId,
+            sslcommerzTranId: orderPayments.sslcommerzTranId,
+            sslcommerzValId: orderPayments.sslcommerzValId,
+            sslcommerzBankTranId: orderPayments.sslcommerzBankTranId,
+            polarCheckoutId: orderPayments.polarCheckoutId,
+            codCollectedBy: orderPayments.codCollectedBy,
+            codCollectedAt: orderPayments.codCollectedAt,
+            codReceiptUrl: orderPayments.codReceiptUrl,
+            createdAt: orderPayments.createdAt,
+            updatedAt: orderPayments.updatedAt,
+        }).from(orderPayments).where(eq(orderPayments.orderId, orderId)).all(),
+        db.select().from(paymentPlans).where(eq(paymentPlans.orderId, orderId)).get(),
+        listOrderRefundAttempts(db, orderId, { audience: "admin" }),
     ]);
 
-    return ok(c, { payments, plan: plan ?? null });
+    return ok(c, {
+        payments,
+        plan: plan ?? null,
+        refundAttempts: refundAttemptViews,
+        activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
+    });
 }) as unknown as AdminRouteHandler<typeof getPaymentsRoute>);
 
 // ─── GET /:id/form-data ──────────────────────────────────────────────────────

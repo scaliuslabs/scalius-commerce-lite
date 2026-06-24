@@ -20,6 +20,7 @@ import {
   CreditCard,
   Package,
   Printer,
+  AlertTriangle,
 } from "lucide-react";
 import type { Order } from "./types";
 import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
@@ -69,6 +70,8 @@ const InfoItem = ({
 export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const { symbol } = useCurrency();
   const fulfillmentMutation = useUpdateFulfillmentStatus();
+  const activeRefundOperation = order.activeRefundOperation;
+  const refundLocked = Boolean(activeRefundOperation?.active);
   const getStatusBadge = (status: string) => {
     const { badgeClass } = getStatusBadgeClass(status);
     return (
@@ -180,7 +183,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             </InfoItem>
             {order.paymentStatus && (
               <InfoItem icon={CreditCard} label="Payment">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant="secondary"
                     className={`text-xs ${PAYMENT_STATUS_COLORS[order.paymentStatus] ?? ""}`}
@@ -192,6 +195,12 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                       {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
                     </span>
                   )}
+                  {activeRefundOperation && (
+                    <Badge variant="secondary" className="gap-1 border-amber-200 bg-amber-50 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                      <AlertTriangle className="h-3 w-3" />
+                      Refund recovery
+                    </Badge>
+                  )}
                 </div>
               </InfoItem>
             )}
@@ -200,6 +209,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                 <Select
                   value={order.fulfillmentStatus}
                   onValueChange={(value) => {
+                    if (refundLocked) return;
                     if (
                       value !== order.fulfillmentStatus &&
                       isFulfillmentStatus(value)
@@ -207,7 +217,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                       fulfillmentMutation.mutate({ orderId: order.id, status: value });
                     }
                   }}
-                  disabled={fulfillmentMutation.isPending}
+                  disabled={fulfillmentMutation.isPending || refundLocked}
                 >
                   <SelectTrigger className={`h-7 w-auto min-w-[100px] gap-1 rounded-full border-0 px-2.5 text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}>
                     <SelectValue />
@@ -239,13 +249,22 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
           <Button
             variant="outline"
             size="sm"
-            asChild
             className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
+            asChild={!refundLocked}
+            disabled={refundLocked}
+            title={refundLocked ? "Complete or reconcile the active refund before editing this order." : undefined}
           >
-            <Link to={`/admin/orders/${order.id}/edit` as string}>
-              <Pencil className="h-4 w-4" />
-              Edit Order
-            </Link>
+            {refundLocked ? (
+              <>
+                <Pencil className="h-4 w-4" />
+                Edit locked
+              </>
+            ) : (
+              <Link to={`/admin/orders/${order.id}/edit` as string}>
+                <Pencil className="h-4 w-4" />
+                Edit Order
+              </Link>
+            )}
           </Button>
         </div>
       </div>

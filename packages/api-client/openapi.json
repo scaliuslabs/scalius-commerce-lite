@@ -10141,6 +10141,221 @@
                             }
                           }
                         },
+                        "refundAttempts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "gateway": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "providerStatus": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "info",
+                                  "success",
+                                  "warning",
+                                  "danger"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "nextProbeAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "lastProbeAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "refundedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "failedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderId",
+                              "amount",
+                              "currency",
+                              "gateway",
+                              "status",
+                              "providerStatus",
+                              "active",
+                              "severity",
+                              "label",
+                              "message",
+                              "createdAt",
+                              "updatedAt",
+                              "nextProbeAt",
+                              "lastProbeAt",
+                              "refundedAt",
+                              "failedAt"
+                            ]
+                          }
+                        },
+                        "activeRefundOperation": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "active": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "success",
+                                "warning",
+                                "danger"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "gateway": {
+                              "type": "string"
+                            },
+                            "attemptCount": {
+                              "type": "number"
+                            },
+                            "nextProbeAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "lastProbeAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "providerStatus": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "active",
+                            "status",
+                            "severity",
+                            "label",
+                            "message",
+                            "amount",
+                            "currency",
+                            "gateway",
+                            "attemptCount",
+                            "nextProbeAt",
+                            "lastProbeAt",
+                            "providerStatus"
+                          ]
+                        },
                         "paymentPlan": {
                           "type": "object",
                           "nullable": true,
@@ -10414,6 +10629,7 @@
                                 "enum": [
                                   "order",
                                   "payment",
+                                  "refund",
                                   "shipment",
                                   "notification"
                                 ]
@@ -10517,6 +10733,8 @@
                         "items",
                         "shipments",
                         "payments",
+                        "refundAttempts",
+                        "activeRefundOperation",
                         "paymentPlan",
                         "cod",
                         "notifications",
@@ -80564,6 +80782,259 @@
                             "updatedAt",
                             "createdAt"
                           ]
+                        },
+                        "refundAttempts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "gateway": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "providerStatus": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "info",
+                                  "success",
+                                  "warning",
+                                  "danger"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "nextProbeAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "lastProbeAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "refundedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "failedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "refundPaymentId": {
+                                "type": "string"
+                              },
+                              "sourcePaymentId": {
+                                "type": "string"
+                              },
+                              "refundReference": {
+                                "type": "string"
+                              },
+                              "providerRefundId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "allocationIndex": {
+                                "type": "number"
+                              },
+                              "allocationCount": {
+                                "type": "number"
+                              },
+                              "attempts": {
+                                "type": "number"
+                              },
+                              "lastError": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderId",
+                              "amount",
+                              "currency",
+                              "gateway",
+                              "status",
+                              "providerStatus",
+                              "active",
+                              "severity",
+                              "label",
+                              "message",
+                              "createdAt",
+                              "updatedAt",
+                              "nextProbeAt",
+                              "lastProbeAt",
+                              "refundedAt",
+                              "failedAt"
+                            ]
+                          }
+                        },
+                        "activeRefundOperation": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "active": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "success",
+                                "warning",
+                                "danger"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "gateway": {
+                              "type": "string"
+                            },
+                            "attemptCount": {
+                              "type": "number"
+                            },
+                            "nextProbeAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "lastProbeAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "providerStatus": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "providerRefundId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "refundReference": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "lastError": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "active",
+                            "status",
+                            "severity",
+                            "label",
+                            "message",
+                            "amount",
+                            "currency",
+                            "gateway",
+                            "attemptCount",
+                            "nextProbeAt",
+                            "lastProbeAt",
+                            "providerStatus"
+                          ]
                         }
                       },
                       "required": [
@@ -80594,7 +81065,9 @@
                         "deletedAt",
                         "itemCount",
                         "items",
-                        "latestShipment"
+                        "latestShipment",
+                        "refundAttempts",
+                        "activeRefundOperation"
                       ]
                     }
                   },
@@ -81081,10 +81554,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "metadata": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -81123,7 +81592,6 @@
                               "codCollectedBy",
                               "codCollectedAt",
                               "codReceiptUrl",
-                              "metadata",
                               "createdAt",
                               "updatedAt"
                             ]
@@ -81215,11 +81683,266 @@
                             "createdAt",
                             "updatedAt"
                           ]
+                        },
+                        "refundAttempts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "gateway": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "providerStatus": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "info",
+                                  "success",
+                                  "warning",
+                                  "danger"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "nextProbeAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "lastProbeAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "refundedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "failedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "refundPaymentId": {
+                                "type": "string"
+                              },
+                              "sourcePaymentId": {
+                                "type": "string"
+                              },
+                              "refundReference": {
+                                "type": "string"
+                              },
+                              "providerRefundId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "allocationIndex": {
+                                "type": "number"
+                              },
+                              "allocationCount": {
+                                "type": "number"
+                              },
+                              "attempts": {
+                                "type": "number"
+                              },
+                              "lastError": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderId",
+                              "amount",
+                              "currency",
+                              "gateway",
+                              "status",
+                              "providerStatus",
+                              "active",
+                              "severity",
+                              "label",
+                              "message",
+                              "createdAt",
+                              "updatedAt",
+                              "nextProbeAt",
+                              "lastProbeAt",
+                              "refundedAt",
+                              "failedAt"
+                            ]
+                          }
+                        },
+                        "activeRefundOperation": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "active": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "success",
+                                "warning",
+                                "danger"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "gateway": {
+                              "type": "string"
+                            },
+                            "attemptCount": {
+                              "type": "number"
+                            },
+                            "nextProbeAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "lastProbeAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "providerStatus": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "providerRefundId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "refundReference": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "lastError": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "active",
+                            "status",
+                            "severity",
+                            "label",
+                            "message",
+                            "amount",
+                            "currency",
+                            "gateway",
+                            "attemptCount",
+                            "nextProbeAt",
+                            "lastProbeAt",
+                            "providerStatus"
+                          ]
                         }
                       },
                       "required": [
                         "payments",
-                        "plan"
+                        "plan",
+                        "refundAttempts",
+                        "activeRefundOperation"
                       ]
                     }
                   },

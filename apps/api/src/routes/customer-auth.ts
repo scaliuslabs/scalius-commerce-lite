@@ -689,6 +689,41 @@ const customerPaymentRecoverySchema = z.object({
   hostedRedirect: z.boolean(),
 });
 
+const customerRefundAttemptSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  gateway: z.string(),
+  status: z.string(),
+  providerStatus: z.string().nullable(),
+  active: z.boolean(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  message: z.string(),
+  createdAt: nullableTimestampSchema,
+  updatedAt: nullableTimestampSchema,
+  nextProbeAt: nullableTimestampSchema,
+  lastProbeAt: nullableTimestampSchema,
+  refundedAt: nullableTimestampSchema,
+  failedAt: nullableTimestampSchema,
+});
+
+const customerActiveRefundOperationSchema = z.object({
+  active: z.literal(true),
+  status: z.string(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  message: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  gateway: z.string(),
+  attemptCount: z.number(),
+  nextProbeAt: nullableTimestampSchema,
+  lastProbeAt: nullableTimestampSchema,
+  providerStatus: z.string().nullable(),
+});
+
 const customerOrderDetailSchema = z.object({
   order: z.object({
     id: z.string(),
@@ -757,6 +792,8 @@ const customerOrderDetailSchema = z.object({
     createdAt: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
   }).passthrough()),
+  refundAttempts: z.array(customerRefundAttemptSchema),
+  activeRefundOperation: customerActiveRefundOperationSchema.nullable(),
   paymentPlan: z.object({
     totalAmount: z.number(),
     depositAmount: z.number(),
@@ -794,7 +831,7 @@ const customerOrderDetailSchema = z.object({
   }).passthrough()),
   timeline: z.array(z.object({
     id: z.string(),
-    type: z.enum(["order", "payment", "shipment", "notification"]),
+    type: z.enum(["order", "payment", "refund", "shipment", "notification"]),
     status: z.string(),
     label: z.string(),
     happenedAt: nullableTimestampSchema,

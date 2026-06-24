@@ -128,6 +128,16 @@ export type {
   ActiveRefundAttemptSnapshot,
   ActiveRefundAttemptStatus,
 } from "./refund-attempt-guard";
+export {
+  formatRefundAttemptForVisibility,
+  listOrderRefundAttempts,
+  summarizeActiveRefundOperation,
+} from "./refund-attempt-visibility";
+export type {
+  ActiveRefundOperationView,
+  OrderRefundAttemptView,
+  RefundAttemptVisibilityRow,
+} from "./refund-attempt-visibility";
 
 // --- Public payment session attempts ---
 export {

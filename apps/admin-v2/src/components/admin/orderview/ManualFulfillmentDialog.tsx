@@ -63,6 +63,7 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
   const [shipmentAmount, setShipmentAmount] = useState("");
   const [note, setNote] = useState("");
   const mutation = useCreateFulfillmentShipment();
+  const refundLocked = Boolean(order.activeRefundOperation?.active);
 
   const fulfillableItems = useMemo(
     () => order.items.filter(isFulfillableItem),
@@ -75,7 +76,8 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
   const orderStatus = normalizeStatus(order.status);
   const canCreateShipment =
     FULFILLMENT_READY_ORDER_STATUSES.has(orderStatus) &&
-    fulfillableItemIds.length > 0;
+    fulfillableItemIds.length > 0 &&
+    !refundLocked;
   const allFulfillableSelected =
     fulfillableItemIds.length > 0 &&
     fulfillableItemIds.every((id) => selectedItemIds.includes(id));
@@ -104,6 +106,10 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (refundLocked) {
+      toast.error("Order locked", { description: "Complete or reconcile the active refund before creating fulfillments." });
+      return;
+    }
     if (selectedItemIds.length === 0) {
       toast.error("Select at least one item");
       return;
@@ -138,7 +144,9 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
 
   const triggerTitle = canCreateShipment
     ? "Create own courier fulfillment"
-    : "Confirm the order before fulfillment";
+    : refundLocked
+      ? "Refund recovery is active"
+      : "Confirm the order before fulfillment";
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !mutation.isPending && setOpen(nextOpen)}>
