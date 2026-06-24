@@ -355,6 +355,7 @@ export async function createStorefrontOrder(
             inventoryAction: cartValidation.items.some(item => item.variantId !== null && item.inventoryTracked) ? "reserved" : "none",
         },
         items: data.items.map((item, idx) => ({
+            cartKey: validatedItemByIndex.get(idx)?.cartKey ?? item.cartKey ?? null,
             productId: item.productId,
             variantId: validatedItemByIndex.get(idx)?.variantId ?? item.variantId,
             quantity: item.quantity,

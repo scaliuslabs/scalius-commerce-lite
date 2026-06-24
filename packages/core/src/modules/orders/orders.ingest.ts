@@ -195,6 +195,7 @@ function buildReservationItemIssues(
             const variantLabel = item?.variantLabel ?? null;
             return {
                 index: index >= 0 ? index : 0,
+                cartKey: item?.cartKey ?? null,
                 productId: item?.productId ?? "",
                 variantId: result.variantId,
                 code: "QUANTITY_UNAVAILABLE",
