@@ -110,7 +110,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 | GET | `/me` | `getCustomerBySession` | Return session info or `{ authenticated: false }` |
 | POST | `/logout` | `deleteCustomerSession` | Revoke D1 session, clear cookies |
 | PUT | `/profile` | `updateCustomerProfile` | Update name/address/city/zone/area through canonical active delivery-location IDs |
-| GET | `/orders` | `getCustomerOrders` | Customer's latest 50 orders matched by `customerId` only, with items, product names/images, one latest shipment summary, server-computed customer-visible `balanceDue`, aggregate account `summary`, and `pagination.hasMore` |
+| GET | `/orders` | `getCustomerOrders` | Customer's cursor-paginated account orders matched by `customerId` only, with items, product names/images, one latest shipment summary, server-computed customer-visible `balanceDue`, aggregate account `summary`, and `pagination.hasMore`/`nextCursor` |
 | GET | `/orders/{id}` | `getCustomerOrderDetail` + API payment/recovery previews | Customer-scoped order detail, items, shipments, payments, payment plan, COD, notification receipts, buyer-safe refund attempts, refund timeline events, active refund recovery notice, and policy-backed `paymentRecovery` preview |
 | POST | `/orders/{id}/payment-session` | API payment session creation | Create an owned-order Stripe/SSLCommerz/Polar payment session from the customer session and order state; strict empty body; no receipt-token input/output |
 
@@ -132,12 +132,14 @@ The storefront proxy rewrites cookies (strips `Domain=`, changes `SameSite=None`
 ### Customer Stats
 ```
 Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE customers SET totalOrders, totalSpent, lastOrderAt
-Customer account order history -> getCustomerOrders() -> live aggregate summary over all non-deleted customer orders + latest 50 orders + orderItems/product images + latest deliveryShipments/deliveryProviders summary
+Customer account order history -> getCustomerOrders() -> live aggregate summary over all non-deleted customer orders + keyset-paginated order page + orderItems/product images + latest deliveryShipments/deliveryProviders summary
 Customer account order detail -> getCustomerOrderDetail() -> order + items + shipments + payments + paymentPlan/COD + notification receipts + timeline
 Customer account payment recovery -> API customer-auth route -> shared payment-session policy/gateway readiness/attempt helpers -> gateway
 ```
 
 Customer account money display deliberately does not reuse `customers.totalSpent`, because that denormalized admin/customer-row counter is maintained by order writers and has historical gross-order semantics. `getCustomerOrders()` computes account `summary.totalSpent` from active paid amounts across all non-deleted owned orders, returns zero customer-visible due for cancelled/refunded/returned/partially-refunded/failed-payment orders, and returns stored `orders.balanceDue` only for active payable order states. `getCustomerOrderDetail()` applies the same customer-visible balance projection so refunded orders never look like unpaid debts to buyers.
+
+Customer account order history uses keyset pagination over `(orders.createdAt, orders.id)` with a default/max page size of 50. The account `summary` is intentionally computed across all non-deleted owned orders, not the current page. Detail timelines start with an immutable `Order placed` event using the order creation timestamp and add a separate `Current status: ...` event so delivered/refunded/cancelled orders do not rewrite the original placement milestone.
 
 `paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy.
 
@@ -212,4 +214,4 @@ Customer account order history is scoped by `orders.customerId`, not by mutable 
 
 4. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
-5. **Customer order list is intentionally capped**: `/customer-auth/orders` remains a latest-50 list endpoint with `pagination.hasMore`; its account summary is not capped. Full payment/shipment/notification timeline data belongs on `/customer-auth/orders/{id}`. Cursor pagination for older account orders and customer-facing return/cancel eligibility are still not implemented.
+5. **No customer self-service cancellation/return requests yet**: Account order history/detail can show payment, shipment, refund, notification, and recovery state, but customer-facing return/cancel/refund-request eligibility and workflow remain tracked outside this module.

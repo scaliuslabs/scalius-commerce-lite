@@ -334,6 +334,7 @@ export interface CustomerOrdersPagination {
   limit: number;
   returned: number;
   hasMore: boolean;
+  nextCursor: string | null;
 }
 
 export interface CustomerOrderDetailPayment {
@@ -540,7 +541,10 @@ export async function updateCustomerProfile(data: ProfileUpdateData): Promise<{
 /**
  * Get customer order history. Requires active session (cs_tok cookie).
  */
-export async function getCustomerOrders(): Promise<{
+export async function getCustomerOrders(options: {
+  cursor?: string | null;
+  limit?: number;
+} = {}): Promise<{
   success: boolean;
   orders: CustomerOrder[];
   customer?: CustomerInfo;
@@ -551,7 +555,11 @@ export async function getCustomerOrders(): Promise<{
   unavailable?: boolean;
 }> {
   try {
-    const res = await customerAuthFetch(authUrl("orders"), {
+    const params = new URLSearchParams();
+    if (options.cursor) params.set("cursor", options.cursor);
+    if (options.limit) params.set("limit", String(options.limit));
+    const path = params.size > 0 ? `orders?${params.toString()}` : "orders";
+    const res = await customerAuthFetch(authUrl(path), {
       credentials: "include",
       cache: "no-store",
     });

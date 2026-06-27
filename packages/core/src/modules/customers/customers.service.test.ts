@@ -3,7 +3,10 @@ import { customerSessions, customers, OrderStatus, PaymentStatus } from "@scaliu
 
 import {
   bulkDeleteCustomers,
+  buildCustomerOrderBaseTimelineEvents,
+  decodeCustomerOrdersCursor,
   deleteCustomer,
+  encodeCustomerOrdersCursor,
   getCustomerSpendContribution,
   getCustomerVisibleBalanceDue,
   permanentlyDeleteCustomer,
@@ -159,5 +162,51 @@ describe("customer account order money projection", () => {
       completedOrders: 1,
       pendingOrders: 1,
     });
+  });
+});
+
+describe("customer account order history pagination and timeline", () => {
+  it("round-trips stable order-history cursors", () => {
+    const cursor = encodeCustomerOrdersCursor({
+      id: "order_2026/06 with spaces",
+      createdAt: 1_780_000_000,
+    });
+
+    expect(cursor).toBe("1780000000~order_2026%2F06%20with%20spaces");
+    expect(decodeCustomerOrdersCursor(cursor ?? undefined)).toEqual({
+      id: "order_2026/06 with spaces",
+      createdAt: 1_780_000_000,
+    });
+  });
+
+  it("rejects malformed order-history cursors", () => {
+    expect(() => decodeCustomerOrdersCursor("not-a-cursor")).toThrow("Invalid order-history cursor.");
+    expect(() => decodeCustomerOrdersCursor("0~order_1")).toThrow("Invalid order-history cursor.");
+  });
+
+  it("keeps order-created timeline copy immutable and adds current status separately", () => {
+    expect(buildCustomerOrderBaseTimelineEvents({
+      id: "order_1",
+      status: OrderStatus.DELIVERED,
+      createdAt: 1_780_000_000,
+      updatedAt: 1_780_003_600,
+    })).toEqual([
+      {
+        id: "order-created:order_1",
+        type: "order",
+        status: "placed",
+        label: "Order placed",
+        happenedAt: "2026-05-28T20:26:40.000Z",
+        details: "We received your order.",
+      },
+      {
+        id: "order-status:order_1:delivered",
+        type: "order",
+        status: OrderStatus.DELIVERED,
+        label: "Current status: Delivered",
+        happenedAt: "2026-05-28T21:26:40.000Z",
+        details: "Order is currently Delivered.",
+      },
+    ]);
   });
 });

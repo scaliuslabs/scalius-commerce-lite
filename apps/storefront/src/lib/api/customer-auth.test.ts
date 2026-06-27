@@ -225,6 +225,7 @@ describe("customer auth API helpers", () => {
           limit: 50,
           returned: 50,
           hasMore: true,
+          nextCursor: "1780000000~order_1",
         },
       },
     }), { status: 200, headers: { "Content-Type": "application/json" } })));
@@ -238,8 +239,50 @@ describe("customer auth API helpers", () => {
       },
       pagination: {
         hasMore: true,
+        nextCursor: "1780000000~order_1",
       },
     });
+  });
+
+  it("requests cursor-paginated customer order history", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        orders: [],
+        summary: {
+          totalOrders: 51,
+          totalSpent: 12500,
+          completedOrders: 49,
+          pendingOrders: 1,
+        },
+        pagination: {
+          limit: 25,
+          returned: 0,
+          hasMore: false,
+          nextCursor: null,
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getCustomerOrders({
+      cursor: "1780000000~order_1",
+      limit: 25,
+    })).resolves.toMatchObject({
+      success: true,
+      pagination: {
+        limit: 25,
+        nextCursor: null,
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/customer-auth/orders?cursor=1780000000%7Eorder_1&limit=25",
+      expect.objectContaining({
+        credentials: "include",
+        cache: "no-store",
+      }),
+    );
   });
 
   it("marks order-detail network failures as retryable", async () => {

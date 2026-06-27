@@ -9296,6 +9296,27 @@
           "Customer Auth"
         ],
         "summary": "Get orders for authenticated customer",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Customer orders list",
@@ -9581,12 +9602,17 @@
                             },
                             "hasMore": {
                               "type": "boolean"
+                            },
+                            "nextCursor": {
+                              "type": "string",
+                              "nullable": true
                             }
                           },
                           "required": [
                             "limit",
                             "returned",
-                            "hasMore"
+                            "hasMore",
+                            "nextCursor"
                           ]
                         },
                         "customer": {

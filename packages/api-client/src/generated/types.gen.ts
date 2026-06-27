@@ -2893,7 +2893,10 @@ export type PutApiV1CustomerAuthProfileResponse = PutApiV1CustomerAuthProfileRes
 export type GetApiV1CustomerAuthOrdersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        cursor?: string;
+        limit?: number;
+    };
     url: '/api/v1/customer-auth/orders';
 };
 
@@ -3031,6 +3034,7 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 limit: number;
                 returned: number;
                 hasMore: boolean;
+                nextCursor: string | null;
             };
             customer: {
                 id?: string;
