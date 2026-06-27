@@ -48,6 +48,28 @@ async function reconcileInventoryForStatus(
     await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
 }
 
+async function rollbackStatusClaimIfInventoryUnchanged(
+    db: Database,
+    params: {
+        orderId: string;
+        previousStatus: string;
+        claimedStatus: string;
+        claimedVersion: number;
+        previousInventoryAction: string;
+    },
+): Promise<void> {
+    await db.update(orders).set({
+        status: params.previousStatus,
+        version: sql`${orders.version} + 1`,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(orders.id, params.orderId),
+        eq(orders.status, params.claimedStatus),
+        eq(orders.version, params.claimedVersion),
+        eq(orders.inventoryAction, params.previousInventoryAction),
+    ));
+}
+
 function createShipmentClaimId(): string {
     return `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
@@ -548,8 +570,21 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         throw new ConflictError("Order was modified by another request. Please reload and try again.");
     }
 
-    // CAS succeeded — we own this transition. Now apply inventory side effects.
-    await reconcileInventoryForStatus(db, orderId, status);
+    // CAS succeeded. If inventory reconciliation fails before the order's
+    // inventoryAction changes, roll back the buyer-visible status so operators
+    // do not see a completed transition with stale stock counters.
+    try {
+        await reconcileInventoryForStatus(db, orderId, status);
+    } catch (error: unknown) {
+        await rollbackStatusClaimIfInventoryUnchanged(db, {
+            orderId,
+            previousStatus: existingOrder.status,
+            claimedStatus: status,
+            claimedVersion: existingOrder.version + 1,
+            previousInventoryAction: existingOrder.inventoryAction as string,
+        });
+        throw error;
+    }
 
     // Build notification payload if the new status warrants one
     const notificationType = NOTIFICATION_STATUSES[status];

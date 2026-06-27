@@ -796,6 +796,29 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
   });
 
+  it("rolls back the visible admin status when inventory reconciliation fails before inventoryAction changes", async () => {
+    const inventoryError = new Error("inventory transition failed");
+    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(inventoryError);
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: PaymentMethod.STRIPE,
+        paymentStatus: PaymentStatus.PAID,
+      },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+      .rejects.toThrow("inventory transition failed");
+
+    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 9 });
+    expect(updates[1]).toMatchObject({ status: OrderStatus.CONFIRMED });
+  });
+
   it("rejects admin status updates while a shipment claim is active", async () => {
     const { db } = createDbMock({
       selectedOrder: {
