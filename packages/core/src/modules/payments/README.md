@@ -186,7 +186,7 @@ Dispatches `PaymentQueueMessage` types:
 - **No external gateway**: All operations are DB-only
 - **Tracking lifecycle**: `pending` -> `collected` (success) or `failed` (delivery attempt failed) -> `returned` (all attempts exhausted)
 - **`initCODTracking()`**: Creates a `codTracking` record with `deliveryAttempts: 0`, `codStatus: "pending"`
-- **`recordCODCollection()`**: Idempotent (checks for existing succeeded payment). Atomically via `db.batch()`: updates `codTracking` (collected status + details), inserts `orderPayments` (status: succeeded), updates `orders` (paymentStatus: PAID, paidAmount, balanceDue: 0). Fetches `getCurrencyConfig()` for currency code before batch.
+- **`recordCODCollection()`**: Idempotent (checks for existing succeeded payment). Atomically via `db.batch()`: updates `codTracking` (collected status + details), inserts `orderPayments` (status: succeeded), updates `orders` (paymentStatus: PAID, paidAmount, balanceDue: 0). Fetches `getCurrencyConfig()` for currency code before batch. Admin COD collection records this evidence before inventory reconciliation so retries can safely repair stock/status without duplicating payment rows.
 - **`recordCODFailure()`**: Increments `deliveryAttempts`, sets `codStatus: "failed"`, records `failureReason` (not_home/refused/no_cash/wrong_address/other)
 - **`markCODReturned()`**: Sets `codStatus: "returned"`
 - **CODProvider.createPayment()**: Calls `initCODTracking()`, returns `transactionId: "COD-{orderId}"` (no clientSecret or redirectUrl)

@@ -27,6 +27,7 @@ import {
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import { validateTransition } from "./order-state-machine";
 import type { StatusUpdateResult } from "./orders.types";
 import type { OrderNotificationType } from "../notifications/notification-types";
@@ -67,9 +68,9 @@ async function clearShipmentClaim(db: Database, orderId: string, claimId: string
         ));
 }
 
-async function hasRecordedCodCollection(db: Database, orderId: string): Promise<boolean> {
+async function getRecordedCodCollection(db: Database, orderId: string): Promise<{ amount: number } | null> {
     const payment = await db
-        .select({ id: orderPayments.id })
+        .select({ id: orderPayments.id, amount: orderPayments.amount })
         .from(orderPayments)
         .where(and(
             eq(orderPayments.orderId, orderId),
@@ -78,7 +79,7 @@ async function hasRecordedCodCollection(db: Database, orderId: string): Promise<
         ))
         .get();
 
-    if (!payment) return false;
+    if (!payment) return null;
 
     const tracking = await db
         .select({ id: codTracking.id })
@@ -89,7 +90,13 @@ async function hasRecordedCodCollection(db: Database, orderId: string): Promise<
         ))
         .get();
 
-    return Boolean(tracking);
+    if (!tracking) return null;
+    const amount = Number(payment.amount);
+    return Number.isFinite(amount) ? { amount: roundPrice(amount) } : null;
+}
+
+async function hasRecordedCodCollection(db: Database, orderId: string): Promise<boolean> {
+    return Boolean(await getRecordedCodCollection(db, orderId));
 }
 
 async function holdShipmentClaimForReconciliation(db: Database, orderId: string, claimId: string): Promise<void> {
@@ -275,6 +282,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
         totalAmount: orders.totalAmount,
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
+        inventoryAction: orders.inventoryAction,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
@@ -284,15 +292,44 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
     switch (body.action) {
         case "collected": {
             await assertNoActiveRefundAttempt(db, orderId);
-            const collection = validateCODCollectionDetails(order, {
-                collectedBy: body.collectedBy as string,
-                collectedAmount: body.collectedAmount as number,
-            });
+            const existingCodCollection = await getRecordedCodCollection(db, orderId);
+            const collection = existingCodCollection
+                ? null
+                : validateCODCollectionDetails(order, {
+                    collectedBy: body.collectedBy as string,
+                    collectedAmount: body.collectedAmount as number,
+                });
+
+            if (existingCodCollection) {
+                const requestedAmount = typeof body.collectedAmount === "number"
+                    ? roundPrice(body.collectedAmount)
+                    : Number.NaN;
+                if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+                    throw new ValidationError("COD collected amount must be a positive finite number.");
+                }
+                if (!pricesEqual(existingCodCollection.amount, requestedAmount)) {
+                    throw new ValidationError("COD collection was already recorded with a different amount.", {
+                        recordedAmount: existingCodCollection.amount,
+                        collectedAmount: requestedAmount,
+                    });
+                }
+            }
 
             // Validate transition to DELIVERED. If current status is CONFIRMED,
             // transition through SHIPPED first (COD collection implies delivery).
             let currentVersion = order.version;
             let currentStatus = order.status;
+            let deliveredClaim: { previousStatus: string; claimedVersion: number } | null = null;
+            const rollbackDeliveredClaim = async () => {
+                if (!deliveredClaim) return;
+                await rollbackOrderStatusIfInventoryUnchanged(db, {
+                    orderId,
+                    previousStatus: deliveredClaim.previousStatus,
+                    claimedStatus: OrderStatus.DELIVERED,
+                    claimedVersion: deliveredClaim.claimedVersion,
+                    previousInventoryAction: order.inventoryAction as string,
+                });
+            };
             if (order.status === OrderStatus.CONFIRMED) {
                 validateTransition("order", order.status, OrderStatus.SHIPPED);
                 const shipResult = await db.update(orders).set({ status: OrderStatus.SHIPPED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(
@@ -306,16 +343,33 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             }
             if (currentStatus !== OrderStatus.DELIVERED) {
                 validateTransition("order", currentStatus, OrderStatus.DELIVERED);
+                const deliveredVersion = currentVersion + 1;
                 const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(
                     eq(orders.id, orderId),
                     eq(orders.version, currentVersion),
                     noActiveRefundAttemptForOrderIdCondition(orderId),
                 )).returning({ id: orders.id });
                 if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+                deliveredClaim = {
+                    previousStatus: currentStatus,
+                    claimedVersion: deliveredVersion,
+                };
             }
-            await reconcileInventoryForStatus(db, orderId, OrderStatus.DELIVERED);
-            const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
-            if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
+            if (collection) {
+                try {
+                    const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
+                    if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
+                } catch (error: unknown) {
+                    await rollbackDeliveredClaim();
+                    throw error;
+                }
+            }
+            try {
+                await reconcileInventoryForStatus(db, orderId, OrderStatus.DELIVERED);
+            } catch (error: unknown) {
+                await rollbackDeliveredClaim();
+                throw error;
+            }
             return { message: "COD collection recorded" };
         }
         case "failed": {
