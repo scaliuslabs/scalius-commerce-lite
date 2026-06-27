@@ -168,6 +168,36 @@ describe("admin route graph boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps customer notification channels limited to implemented delivery paths", () => {
+    const notificationSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "NotificationChannelsBuilder.tsx",
+      ),
+      "utf8",
+    );
+    const customerChannelBlock = notificationSource.slice(
+      notificationSource.indexOf("const CHANNELS"),
+      notificationSource.indexOf("const ADMIN_STATUSES"),
+    );
+    const adminChannelBlock = notificationSource.slice(
+      notificationSource.indexOf("const ADMIN_CHANNELS"),
+      notificationSource.indexOf("const DEFAULT_WHATSAPP_TEMPLATE"),
+    );
+
+    expect(customerChannelBlock).toContain('key: "email"');
+    expect(customerChannelBlock).toContain('key: "sms"');
+    expect(customerChannelBlock).toContain('key: "whatsapp"');
+    expect(customerChannelBlock).not.toContain('key: "push"');
+    expect(adminChannelBlock).toContain('key: "push"');
+    expect(notificationSource).toContain("SMS notifications are locked until an active SMS provider is ready.");
+    expect(notificationSource).toContain("smsProviderConfigured");
+    expect(notificationSource).toContain('ch.key === "sms" && !isSmsConfigured');
+  });
+
   it("keeps admin route guards off the full Better Auth runtime", () => {
     const authFunctionsSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "auth.fns.ts"),

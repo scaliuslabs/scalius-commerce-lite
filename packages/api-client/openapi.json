@@ -74489,12 +74489,21 @@
                         },
                         "whatsappConfigured": {
                           "type": "boolean"
+                        },
+                        "smsProviderConfigured": {
+                          "type": "boolean"
+                        },
+                        "smsProviderError": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
                         "channels",
                         "whatsappTemplate",
-                        "whatsappConfigured"
+                        "whatsappConfigured",
+                        "smsProviderConfigured",
+                        "smsProviderError"
                       ]
                     }
                   },
@@ -74846,12 +74855,21 @@
                         },
                         "whatsappConfigured": {
                           "type": "boolean"
+                        },
+                        "smsProviderConfigured": {
+                          "type": "boolean"
+                        },
+                        "smsProviderError": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
                         "channels",
                         "whatsappTemplate",
-                        "whatsappConfigured"
+                        "whatsappConfigured",
+                        "smsProviderConfigured",
+                        "smsProviderError"
                       ]
                     }
                   },

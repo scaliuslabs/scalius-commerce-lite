@@ -22916,6 +22916,8 @@ export type GetApiV1AdminSettingsNotificationChannelsResponses = {
                 languageCode: string;
             };
             whatsappConfigured: boolean;
+            smsProviderConfigured: boolean;
+            smsProviderError: string | null;
         };
     };
 };
@@ -23023,6 +23025,8 @@ export type PutApiV1AdminSettingsNotificationChannelsResponses = {
                 languageCode: string;
             };
             whatsappConfigured: boolean;
+            smsProviderConfigured: boolean;
+            smsProviderError: string | null;
         };
     };
 };
