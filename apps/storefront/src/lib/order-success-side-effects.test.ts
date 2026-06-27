@@ -30,6 +30,26 @@ describe("order success side effects", () => {
     expect(buttonsSource).not.toContain("@/store/cart");
   });
 
+  it("guides guest receipts without pretending they are account-owned", () => {
+    const pageSource = readFileSync(
+      sourcePath("pages", "order-success.astro"),
+      "utf8",
+    );
+    const buttonsSource = readFileSync(
+      sourcePath("components", "OrderSuccessButtons.tsx"),
+      "utf8",
+    );
+
+    expect(pageSource).toContain("<OrderSuccessButtons orderId={order.id} client:load />");
+    expect(buttonsSource).toContain("Keep this private receipt link");
+    expect(buttonsSource).toContain("Guest orders are tracked from this private receipt link.");
+    expect(buttonsSource).toContain("Account history only includes orders placed while signed in.");
+    expect(buttonsSource).toContain("navigator.clipboard");
+    expect(buttonsSource).toContain("Sign In For Future Orders");
+    expect(buttonsSource).toContain("open-auth-modal");
+    expect(buttonsSource).toContain("/account/orders/${encodeURIComponent(orderId)}");
+  });
+
   it("keeps hosted payment retry outside the finalization side-effect path", () => {
     const pageSource = readFileSync(
       sourcePath("pages", "order-success.astro"),
