@@ -157,10 +157,32 @@ export async function recordCODCollection(
           collectedAmount,
         });
       }
+      const collectedTracking = await db
+        .select({ id: codTracking.id })
+        .from(codTracking)
+        .where(
+          and(
+            eq(codTracking.orderId, params.orderId),
+            eq(codTracking.codStatus, "collected"),
+          ),
+        )
+        .get();
+      if (!collectedTracking) {
+        throw new ValidationError("COD collection payment exists but collected tracking is missing.");
+      }
       return { success: true }; // Already recorded — idempotent
     }
 
     const collection = validateCODCollectionDetails(order, params);
+
+    const tracking = await db
+      .select({ id: codTracking.id })
+      .from(codTracking)
+      .where(eq(codTracking.orderId, params.orderId))
+      .get();
+    if (!tracking) {
+      throw new ValidationError("COD tracking record is missing for this order.");
+    }
 
     // Fetch currency config before batch
     const currencyConfig = await getCurrencyConfig(db);
@@ -251,16 +273,22 @@ export async function markCODReturned(
   orderId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await db
+    const result = await db
       .update(codTracking)
       .set({
         codStatus: "returned",
         updatedAt: sql`unixepoch()`,
       })
-      .where(eq(codTracking.orderId, orderId));
+      .where(eq(codTracking.orderId, orderId))
+      .returning({ id: codTracking.id });
+
+    if (result.length === 0) {
+      throw new ValidationError("COD tracking record is missing for this order.");
+    }
 
     return { success: true };
   } catch (err: unknown) {
+    if (err instanceof ValidationError) throw err;
     const message = err instanceof Error ? err.message : "Failed to mark COD as returned";
     return { success: false, error: message };
   }

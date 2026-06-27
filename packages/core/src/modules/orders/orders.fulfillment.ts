@@ -379,6 +379,17 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
         }
         case "returned": {
             await assertNoActiveRefundAttempt(db, orderId);
+            let returnClaim: { previousStatus: string; claimedVersion: number } | null = null;
+            const rollbackReturnClaim = async () => {
+                if (!returnClaim) return;
+                await rollbackOrderStatusIfInventoryUnchanged(db, {
+                    orderId,
+                    previousStatus: returnClaim.previousStatus,
+                    claimedStatus: OrderStatus.RETURNED,
+                    claimedVersion: returnClaim.claimedVersion,
+                    previousInventoryAction: order.inventoryAction as string,
+                });
+            };
             if (order.status !== OrderStatus.RETURNED) {
                 validateTransition("order", order.status, OrderStatus.RETURNED);
                 const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(
@@ -387,10 +398,24 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     noActiveRefundAttemptForOrderIdCondition(orderId),
                 )).returning({ id: orders.id });
                 if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
+                returnClaim = {
+                    previousStatus: order.status,
+                    claimedVersion: order.version + 1,
+                };
             }
-            const retResult = await markCODReturned(db, orderId);
-            if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
-            await reconcileInventoryForStatus(db, orderId, OrderStatus.RETURNED);
+            try {
+                const retResult = await markCODReturned(db, orderId);
+                if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
+            } catch (error: unknown) {
+                await rollbackReturnClaim();
+                throw error;
+            }
+            try {
+                await reconcileInventoryForStatus(db, orderId, OrderStatus.RETURNED);
+            } catch (error: unknown) {
+                await rollbackReturnClaim();
+                throw error;
+            }
             return { message: "Order marked as returned" };
         }
         default:
