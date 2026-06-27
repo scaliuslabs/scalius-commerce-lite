@@ -20,7 +20,9 @@ export interface RefundAttemptVisibilityRow {
   refundReference: string;
   allocationIndex: number;
   allocationCount: number;
+  sourceTransactionId: string | null;
   providerRefundId: string | null;
+  providerCorrelationId: string | null;
   providerStatus: string | null;
   status: string;
   attempts: number;
@@ -51,10 +53,13 @@ export interface OrderRefundAttemptView {
   lastProbeAt: string | null;
   refundedAt: string | null;
   failedAt: string | null;
+  reason?: string;
   refundPaymentId?: string;
   sourcePaymentId?: string;
+  sourceTransactionId?: string | null;
   refundReference?: string;
   providerRefundId?: string | null;
+  providerCorrelationId?: string | null;
   allocationIndex?: number;
   allocationCount?: number;
   attempts?: number;
@@ -74,7 +79,10 @@ export interface ActiveRefundOperationView {
   nextProbeAt: string | null;
   lastProbeAt: string | null;
   providerStatus: string | null;
+  reason?: string | null;
+  sourceTransactionId?: string | null;
   providerRefundId?: string | null;
+  providerCorrelationId?: string | null;
   refundReference?: string | null;
   lastError?: string | null;
 }
@@ -206,10 +214,13 @@ export function formatRefundAttemptForVisibility(
 
   return {
     ...base,
+    reason: row.reason,
     refundPaymentId: row.refundPaymentId,
     sourcePaymentId: row.sourcePaymentId,
+    sourceTransactionId: row.sourceTransactionId,
     refundReference: row.refundReference,
     providerRefundId: row.providerRefundId,
+    providerCorrelationId: row.providerCorrelationId,
     allocationIndex: row.allocationIndex,
     allocationCount: row.allocationCount,
     attempts: row.attempts,
@@ -246,7 +257,10 @@ export function summarizeActiveRefundOperation(
     lastProbeAt: primary.lastProbeAt,
     providerStatus: primary.providerStatus,
     ...(audience === "admin" ? {
+      reason: primary.reason ?? null,
+      sourceTransactionId: primary.sourceTransactionId ?? null,
       providerRefundId: primary.providerRefundId ?? null,
+      providerCorrelationId: primary.providerCorrelationId ?? null,
       refundReference: primary.refundReference ?? null,
       lastError: primary.lastError ?? null,
     } : {}),
@@ -272,7 +286,9 @@ export async function listOrderRefundAttempts(
       refundReference: refundAttempts.refundReference,
       allocationIndex: refundAttempts.allocationIndex,
       allocationCount: refundAttempts.allocationCount,
+      sourceTransactionId: refundAttempts.sourceTransactionId,
       providerRefundId: refundAttempts.providerRefundId,
+      providerCorrelationId: refundAttempts.providerCorrelationId,
       providerStatus: refundAttempts.providerStatus,
       status: refundAttempts.status,
       attempts: refundAttempts.attempts,

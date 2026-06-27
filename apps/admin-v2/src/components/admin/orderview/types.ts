@@ -34,10 +34,13 @@ export interface OrderRefundAttempt {
   lastProbeAt: OrderTimestamp | null;
   refundedAt: OrderTimestamp | null;
   failedAt: OrderTimestamp | null;
+  reason?: string;
   refundPaymentId?: string;
   sourcePaymentId?: string;
+  sourceTransactionId?: string | null;
   refundReference?: string;
   providerRefundId?: string | null;
+  providerCorrelationId?: string | null;
   allocationIndex?: number;
   allocationCount?: number;
   attempts?: number;
@@ -57,7 +60,10 @@ export interface ActiveRefundOperation {
   nextProbeAt: OrderTimestamp | null;
   lastProbeAt: OrderTimestamp | null;
   providerStatus: string | null;
+  reason?: string | null;
+  sourceTransactionId?: string | null;
   providerRefundId?: string | null;
+  providerCorrelationId?: string | null;
   refundReference?: string | null;
   lastError?: string | null;
 }

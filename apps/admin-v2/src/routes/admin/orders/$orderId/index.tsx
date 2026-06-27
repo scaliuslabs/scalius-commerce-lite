@@ -109,6 +109,8 @@ function toOrderViewModel(
     paidAmount: order.paidAmount,
     balanceDue: order.balanceDue,
     fulfillmentStatus: order.fulfillmentStatus,
+    refundAttempts: order.refundAttempts,
+    activeRefundOperation: order.activeRefundOperation,
   };
 }
 

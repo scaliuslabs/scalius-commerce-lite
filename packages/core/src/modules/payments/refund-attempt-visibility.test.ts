@@ -17,7 +17,9 @@ const row: RefundAttemptVisibilityRow = {
   refundReference: "refund_order_1_1",
   allocationIndex: 0,
   allocationCount: 1,
+  sourceTransactionId: "ch_123",
   providerRefundId: "re_123",
+  providerCorrelationId: "corr_123",
   providerStatus: "accepted",
   status: "reconcile_required",
   attempts: 2,
@@ -38,7 +40,10 @@ describe("refund attempt visibility", () => {
       status: "reconcile_required",
       providerStatus: "accepted",
       providerRefundId: "re_123",
+      providerCorrelationId: "corr_123",
+      sourceTransactionId: "ch_123",
       refundReference: "refund_order_1_1",
+      reason: "requested_by_customer",
       refundPaymentId: "refund_1",
       sourcePaymentId: "pay_1",
       lastError: "local CAS lost",
@@ -57,7 +62,12 @@ describe("refund attempt visibility", () => {
     });
     expect(JSON.stringify(view)).not.toContain("reconcile_required");
     expect(JSON.stringify(view)).not.toContain("providerRefundId");
+    expect(JSON.stringify(view)).not.toContain("providerCorrelationId");
+    expect(JSON.stringify(view)).not.toContain("sourceTransactionId");
     expect(JSON.stringify(view)).not.toContain("refundReference");
+    expect(JSON.stringify(view)).not.toContain("ch_123");
+    expect(JSON.stringify(view)).not.toContain("corr_123");
+    expect(JSON.stringify(view)).not.toContain("requested_by_customer");
     expect(JSON.stringify(view)).not.toContain("local CAS lost");
   });
 
@@ -73,5 +83,7 @@ describe("refund attempt visibility", () => {
     });
     expect(JSON.stringify(summary)).not.toContain("reconcile_required");
     expect(JSON.stringify(summary)).not.toContain("re_123");
+    expect(JSON.stringify(summary)).not.toContain("corr_123");
+    expect(JSON.stringify(summary)).not.toContain("ch_123");
   });
 });
