@@ -28,6 +28,7 @@ import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { canTransitionTo } from "../orders/order-state-machine";
+import { rollbackOrderStatusIfInventoryUnchanged } from "../orders/order-status-claim";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
 import { computeOrderPaymentState } from "./payment-state";
 import {
@@ -1257,6 +1258,7 @@ export async function processReturn(
             id: orders.id,
             status: orders.status,
             paymentStatus: orders.paymentStatus,
+            inventoryAction: orders.inventoryAction,
             version: orders.version,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -1293,7 +1295,20 @@ export async function processReturn(
         throw new ConflictError("Order was modified by another request. Please reload and try again.");
     }
 
-    await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
+    try {
+        await applyInventoryForStatusChange(db, params.orderId, OrderStatus.RETURNED);
+    } catch (error: unknown) {
+        if (order.status !== OrderStatus.RETURNED) {
+            await rollbackOrderStatusIfInventoryUnchanged(db, {
+                orderId: params.orderId,
+                previousStatus: order.status,
+                claimedStatus: OrderStatus.RETURNED,
+                claimedVersion: order.version + 1,
+                previousInventoryAction: order.inventoryAction as string,
+            });
+        }
+        throw error;
+    }
 
     // Auto-refund if requested and order has payments
     let refundResult: RefundResult | undefined;

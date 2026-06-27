@@ -266,7 +266,7 @@ Scheduled maintenance calls `reconcileDueRefundAttempts()` in small batches. `re
 
 `refund-attempt-visibility.ts` is the only refund-attempt projection that admin/customer surfaces should use. Admin order detail and payment history expose sanitized refund attempts plus `activeRefundOperation` so operators can see why status, COD, shipment, fulfillment, edit, and refund actions are locked during recovery. Customer order detail maps internal statuses such as `provider_unknown` and `reconcile_required` to buyer-safe progress states and timeline copy; it must not expose provider payloads, request hashes, idempotency keys, claim state, raw metadata, or raw gateway error names.
 
-`processReturn()`: Sets order status to `RETURNED`, restores inventory via `applyInventoryForStatusChange()`, optionally triggers auto-refund. Orders in `delivered`, `completed`, or `shipped` status can be returned; an already-`returned` retry is accepted only to resume inventory reconciliation and optional auto-refund.
+`processReturn()`: Sets order status to `RETURNED`, restores inventory via `applyInventoryForStatusChange()`, optionally triggers auto-refund. Orders in `delivered`, `completed`, or `shipped` status can be returned; an already-`returned` retry is accepted only to resume inventory reconciliation and optional auto-refund. If the `RETURNED` status claim wins but inventory restoration fails before `inventoryAction` changes, the shared order-status rollback helper reverts the visible status behind the claimed version/status/action guard.
 
 ### Gateway Settings Storage
 
