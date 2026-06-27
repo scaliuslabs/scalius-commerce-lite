@@ -13,6 +13,26 @@ export interface StaleQueuedWebhookSweepResult {
   hasMore: boolean;
 }
 
+export interface PaymentWebhookDlqEvidence {
+  webhookEventId?: string | null;
+  fallbackEventId: string;
+  provider: string;
+  eventType: string;
+  orderId: string | null;
+  queueMessageId: string;
+  queueType: string;
+  attempts: number;
+  observedAtSeconds: number;
+  messageTimestampSeconds: number | null;
+  payment: Record<string, unknown>;
+}
+
+export interface PaymentWebhookDlqRecordResult {
+  id: string;
+  status: "failed" | "processed" | "manual_reconciliation";
+  inserted: boolean;
+}
+
 export interface WebhookEventClaim {
   id: string;
   provider: string;
@@ -231,6 +251,49 @@ export async function failStaleQueuedPaymentWebhookEvents(
   };
 }
 
+export async function recordPaymentWebhookDlqEvidence(
+  db: Database,
+  evidence: PaymentWebhookDlqEvidence,
+): Promise<PaymentWebhookDlqRecordResult> {
+  const id = evidence.webhookEventId ?? evidence.fallbackEventId;
+  const existing = await db
+    .select({
+      id: webhookEvents.id,
+      status: webhookEvents.status,
+      result: webhookEvents.result,
+    })
+    .from(webhookEvents)
+    .where(eq(webhookEvents.id, id))
+    .get();
+
+  const nextStatus = resolveDlqStatus(existing?.status);
+  const result = serializePaymentWebhookDlqEvidence(evidence, existing?.status ?? null, existing?.result ?? null);
+
+  if (!existing) {
+    await db.insert(webhookEvents).values({
+      id,
+      provider: evidence.provider,
+      eventType: evidence.eventType,
+      orderId: evidence.orderId,
+      status: nextStatus,
+      result,
+      processedAt: sql`unixepoch()`,
+    });
+    return { id, status: nextStatus, inserted: true };
+  }
+
+  await db
+    .update(webhookEvents)
+    .set({
+      status: nextStatus,
+      result,
+      processedAt: sql`unixepoch()`,
+    })
+    .where(eq(webhookEvents.id, id));
+
+  return { id, status: nextStatus, inserted: false };
+}
+
 async function markWebhookEvent(
   db: Database,
   id: string,
@@ -245,4 +308,39 @@ async function markWebhookEvent(
       processedAt: sql`unixepoch()`,
     })
     .where(eq(webhookEvents.id, id));
+}
+
+function resolveDlqStatus(status: string | null | undefined): "failed" | "processed" | "manual_reconciliation" {
+  if (status === "processed" || status === "manual_reconciliation") return status;
+  return "failed";
+}
+
+function serializePaymentWebhookDlqEvidence(
+  evidence: PaymentWebhookDlqEvidence,
+  previousStatus: string | null,
+  previousResult: string | null,
+): string {
+  return JSON.stringify({
+    reason: "payment_events_dlq",
+    queueMessageId: evidence.queueMessageId,
+    queueType: evidence.queueType,
+    orderId: evidence.orderId,
+    attempts: evidence.attempts,
+    observedAtSeconds: evidence.observedAtSeconds,
+    messageTimestampSeconds: evidence.messageTimestampSeconds,
+    provider: evidence.provider,
+    eventType: evidence.eventType,
+    payment: evidence.payment,
+    previousStatus,
+    previousResult: parseStoredWebhookResult(previousResult),
+  });
+}
+
+function parseStoredWebhookResult(result: string | null): unknown {
+  if (!result) return null;
+  try {
+    return JSON.parse(result) as unknown;
+  } catch {
+    return result;
+  }
 }

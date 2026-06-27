@@ -51,6 +51,9 @@ import {
   markWebhookEventFailed,
   markWebhookEventManualReconciliation,
   markWebhookEventProcessed,
+  recordPaymentWebhookDlqEvidence,
+  buildWebhookEventId,
+  type PaymentWebhookDlqEvidence,
 } from "./utils/webhook-idempotency";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
@@ -215,6 +218,11 @@ export async function handleQueueBatch(
 ): Promise<void> {
   const db = getDb(env);
 
+  if (batch.queue === "payment-events-dlq") {
+    await handlePaymentEventsDlqBatch(batch as unknown as MessageBatch<QueueBody>, db);
+    return;
+  }
+
   // Order ingest uses a different strategy and must be routed by queue name so
   // a mixed/manual batch is not cast wholesale to order messages.
   if (batch.queue === "order-ingest" || batch.queue === "order-ingest-queue") {
@@ -262,6 +270,44 @@ export async function handleQueueBatch(
       msg.retry({ delaySeconds: 30 });
     }
   }
+}
+
+async function handlePaymentEventsDlqBatch(
+  batch: MessageBatch<QueueBody>,
+  db: ReturnType<typeof getDb>,
+): Promise<void> {
+  const results = await Promise.allSettled(
+    batch.messages.map((msg) => archivePaymentEventsDlqMessage(msg, db)),
+  );
+
+  for (let i = 0; i < batch.messages.length; i++) {
+    const result = results[i];
+    const msg = batch.messages[i];
+    if (!result || !msg) continue;
+    if (result.status === "fulfilled") {
+      msg.ack();
+    } else {
+      console.error(`[Queue] Failed to archive payment DLQ message ${msg.id}:`, result.reason);
+      msg.retry({ delaySeconds: 300 });
+    }
+  }
+}
+
+async function archivePaymentEventsDlqMessage(
+  msg: Message<QueueBody>,
+  db: ReturnType<typeof getDb>,
+): Promise<void> {
+  const payload = msg.body;
+  if (!isPaymentQueuePayload(payload)) {
+    console.warn(`[Queue] Ignoring non-payment message in payment-events-dlq id=${msg.id}`);
+    return;
+  }
+
+  const evidence = createPaymentWebhookDlqEvidence(msg as Message<PaymentOnlyQueueMessage>);
+  const result = await recordPaymentWebhookDlqEvidence(db, evidence);
+  console.warn(
+    `[Queue] Archived payment DLQ message ${msg.id} for webhook ${result.id} with status=${result.status}`,
+  );
 }
 
 // ── Single message processor ───────────────────────────────────────────────
@@ -589,6 +635,101 @@ function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueM
 function getPaymentWebhookEventId(payload: QueueBody): string | undefined {
   if (!isPaymentQueuePayload(payload)) return undefined;
   return payload.webhookEventId;
+}
+
+function createPaymentWebhookDlqEvidence(
+  msg: Message<PaymentOnlyQueueMessage>,
+): PaymentWebhookDlqEvidence {
+  const payload = msg.body;
+  const provider = getPaymentProviderFromQueueType(payload.type);
+  return {
+    webhookEventId: payload.webhookEventId,
+    fallbackEventId: buildWebhookEventId(provider, `${payload.type}.dlq`, msg.id),
+    provider,
+    eventType: payload.type,
+    orderId: payload.orderId,
+    queueMessageId: msg.id,
+    queueType: payload.type,
+    attempts: msg.attempts,
+    observedAtSeconds: Math.floor(Date.now() / 1000),
+    messageTimestampSeconds: toUnixSeconds(msg.timestamp),
+    payment: getPaymentDlqSnapshot(payload),
+  };
+}
+
+function getPaymentProviderFromQueueType(type: PaymentOnlyQueueMessage["type"]): string {
+  const provider = type.split(".")[1];
+  return provider && PAYMENT_WEBHOOK_PROVIDER_SET.has(provider) ? provider : "unknown";
+}
+
+const PAYMENT_WEBHOOK_PROVIDER_SET = new Set(["stripe", "sslcommerz", "polar"]);
+
+function toUnixSeconds(value: Date | number | string | undefined): number | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.floor(date.getTime() / 1000);
+}
+
+function getPaymentDlqSnapshot(payload: PaymentOnlyQueueMessage): Record<string, unknown> {
+  switch (payload.type) {
+    case "payment.stripe.confirmed":
+      return {
+        paymentIntentId: payload.paymentIntentId,
+        amount: payload.amount,
+        currency: payload.currency,
+        chargeId: payload.chargeId ?? null,
+        paymentType: payload.metadata?.paymentType ?? null,
+      };
+    case "payment.stripe.failed":
+      return {
+        paymentIntentId: payload.paymentIntentId,
+        failureCode: payload.failureCode ?? null,
+        failureMessage: payload.failureMessage ?? null,
+      };
+    case "payment.stripe.canceled":
+      return { paymentIntentId: payload.paymentIntentId };
+    case "payment.stripe.refunded":
+      return {
+        paymentIntentId: payload.paymentIntentId,
+        amountRefunded: payload.amountRefunded,
+        chargeId: payload.chargeId,
+      };
+    case "payment.sslcommerz.confirmed":
+      return {
+        tranId: payload.tranId,
+        valId: payload.valId,
+        bankTranId: payload.bankTranId,
+        amount: payload.amount,
+        currency: payload.currency,
+        paymentType: payload.paymentType ?? null,
+      };
+    case "payment.sslcommerz.failed":
+      return {
+        tranId: payload.tranId,
+        status: payload.status,
+      };
+    case "payment.polar.confirmed":
+      return {
+        checkoutId: payload.checkoutId,
+        amount: payload.amount ?? null,
+        currency: payload.currency ?? null,
+        paymentType: payload.paymentType ?? null,
+      };
+    case "payment.polar.failed":
+      return {
+        checkoutId: payload.checkoutId,
+        reason: payload.reason ?? null,
+      };
+    case "payment.polar.refunded":
+      return {
+        polarCheckoutId: payload.polarCheckoutId,
+        amountRefunded: payload.amountRefunded,
+        totalAmount: payload.totalAmount,
+        currency: payload.currency,
+        polarStatus: payload.polarStatus,
+      };
+  }
 }
 
 function createPaymentWebhookQueueResult(

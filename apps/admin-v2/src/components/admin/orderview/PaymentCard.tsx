@@ -89,6 +89,19 @@ interface OrderPaymentsResult {
   plan: PaymentPlan | null;
   refundAttempts?: OrderRefundAttempt[];
   activeRefundOperation?: ActiveRefundOperation | null;
+  paymentWebhookIssues?: PaymentWebhookIssue[];
+}
+
+interface PaymentWebhookIssue {
+  id: string;
+  provider: string;
+  eventType: string;
+  status: "failed" | "manual_reconciliation";
+  message: string;
+  error: string | null;
+  queueType: string | null;
+  queueMessageId: string | null;
+  processedAt: OrderTimestamp;
 }
 
 interface CODTracking {
@@ -184,6 +197,15 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const plan = paymentsResult?.plan ?? null;
   const refundAttempts = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefundOperation = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
+  const paymentWebhookIssues = paymentsResult?.paymentWebhookIssues ?? [];
+  const paymentWebhookIssueViews = paymentWebhookIssues.map((issue) => ({
+    ...issue,
+    label: issue.status === "manual_reconciliation" ? "manual review" : "failed",
+    title: issue.status === "manual_reconciliation" ? "Payment webhook needs review" : "Payment webhook failed",
+    processedLabel: formatTimestamp(issue.processedAt),
+  }));
+  const latestPaymentWebhookIssue = paymentWebhookIssueViews[0];
+  const olderPaymentWebhookIssues = paymentWebhookIssueViews.slice(1);
   const isRefundLocked = Boolean(activeRefundOperation?.active);
 
   // COD data — conditionally fetch (useQuery, not suspense, since it's optional)
@@ -417,6 +439,69 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                   Retry
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {latestPaymentWebhookIssue && (
+            <div
+              role="status"
+              className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-950 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100"
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{latestPaymentWebhookIssue.title}</p>
+                      <p className="mt-1 opacity-90">
+                        Check the gateway dashboard before changing payment-sensitive order state.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 border-red-300 bg-white/60 px-2 text-xs text-red-950 hover:bg-red-100 dark:border-red-900/50 dark:bg-black/10 dark:text-red-100"
+                      onClick={() => void refetchPayments()}
+                      disabled={paymentsFetching}
+                    >
+                      {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      Refresh
+                    </Button>
+                  </div>
+                  <div className="rounded-md border border-red-200/70 bg-white/50 p-2 dark:border-red-900/40 dark:bg-black/10">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">
+                        {PAYMENT_METHOD_LABELS[latestPaymentWebhookIssue.provider] ?? latestPaymentWebhookIssue.provider}
+                      </span>
+                      <Badge variant="destructive" className="text-[10px]">
+                        {latestPaymentWebhookIssue.label}
+                      </Badge>
+                      <span className="font-mono text-[11px] opacity-80">{latestPaymentWebhookIssue.eventType}</span>
+                    </div>
+                    <p className="mt-1 opacity-90">{latestPaymentWebhookIssue.message}</p>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 opacity-75">
+                      {latestPaymentWebhookIssue.processedLabel && <span>{latestPaymentWebhookIssue.processedLabel}</span>}
+                      {latestPaymentWebhookIssue.queueType && <span className="font-mono">{latestPaymentWebhookIssue.queueType}</span>}
+                      {latestPaymentWebhookIssue.queueMessageId && <span className="font-mono">{latestPaymentWebhookIssue.queueMessageId}</span>}
+                    </div>
+                  </div>
+                  {olderPaymentWebhookIssues.length > 0 && (
+                    <div className="space-y-1">
+                      {olderPaymentWebhookIssues.map((issue) => (
+                        <div key={issue.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-red-200/60 bg-white/30 px-2 py-1 dark:border-red-900/30 dark:bg-black/10">
+                          <span className="font-medium">
+                            {PAYMENT_METHOD_LABELS[issue.provider] ?? issue.provider}
+                          </span>
+                          <Badge variant="destructive" className="text-[10px]">{issue.label}</Badge>
+                          <span className="font-mono text-[11px] opacity-80">{issue.eventType}</span>
+                          {issue.processedLabel && <span className="opacity-70">{issue.processedLabel}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

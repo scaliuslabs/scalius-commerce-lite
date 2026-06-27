@@ -24985,6 +24985,17 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 refundReference?: string | null;
                 lastError?: string | null;
             } | null;
+            paymentWebhookIssues: Array<{
+                id: string;
+                provider: string;
+                eventType: string;
+                status: 'failed' | 'manual_reconciliation';
+                message: string;
+                error: string | null;
+                queueType: string | null;
+                queueMessageId: string | null;
+                processedAt: string | number;
+            }>;
         };
     };
 };

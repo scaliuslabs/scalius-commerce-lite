@@ -30,6 +30,7 @@ import {
     orderSummarySchema,
     productVariantSchema,
 } from "../../schemas/entities";
+import { timestampSchema } from "../../schemas/timestamps";
 import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
@@ -46,6 +47,7 @@ import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
 } from "@scalius/core/modules/payments";
+import { listPaymentWebhookIssuesForOrder } from "../../utils/payment-webhook-issues";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -147,6 +149,18 @@ const paymentPlanSchema = z.object({
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
 }).nullable();
+
+const paymentWebhookIssueSchema = z.object({
+    id: z.string(),
+    provider: z.string(),
+    eventType: z.string(),
+    status: z.enum(["failed", "manual_reconciliation"]),
+    message: z.string(),
+    error: z.string().nullable(),
+    queueType: z.string().nullable(),
+    queueMessageId: z.string().nullable(),
+    processedAt: timestampSchema,
+});
 
 const orderFormDataSchema = z.object({
     id: z.string(),
@@ -573,6 +587,7 @@ const getPaymentsRoute = createRoute({
                         plan: paymentPlanSchema,
                         refundAttempts: z.array(orderRefundAttemptSchema),
                         activeRefundOperation: activeRefundOperationSchema.nullable(),
+                        paymentWebhookIssues: z.array(paymentWebhookIssueSchema),
                     })),
                 },
             },
@@ -584,7 +599,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
-    const [payments, plan, refundAttemptViews] = await Promise.all([
+    const [payments, plan, refundAttemptViews, paymentWebhookIssues] = await Promise.all([
         db.select({
             id: orderPayments.id,
             orderId: orderPayments.orderId,
@@ -607,6 +622,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         }).from(orderPayments).where(eq(orderPayments.orderId, orderId)).all(),
         db.select().from(paymentPlans).where(eq(paymentPlans.orderId, orderId)).get(),
         listOrderRefundAttempts(db, orderId, { audience: "admin" }),
+        listPaymentWebhookIssuesForOrder(db, orderId),
     ]);
 
     return ok(c, {
@@ -614,6 +630,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         plan: plan ?? null,
         refundAttempts: refundAttemptViews,
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
+        paymentWebhookIssues,
     });
 }) as unknown as AdminRouteHandler<typeof getPaymentsRoute>);
 

@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventProcessed: vi.fn(),
   markWebhookEventFailed: vi.fn(),
   markWebhookEventManualReconciliation: vi.fn(),
+  recordPaymentWebhookDlqEvidence: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -106,9 +107,16 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
 }));
 
 vi.mock("./utils/webhook-idempotency", () => ({
+  buildWebhookEventId: (provider: string, eventType: string, sourceEventId: string) =>
+    `${provider}:${eventType}:${sourceEventId}`
+      .toLowerCase()
+      .replace(/[^a-z0-9:_-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, ""),
   markWebhookEventProcessed: mocks.markWebhookEventProcessed,
   markWebhookEventFailed: mocks.markWebhookEventFailed,
   markWebhookEventManualReconciliation: mocks.markWebhookEventManualReconciliation,
+  recordPaymentWebhookDlqEvidence: mocks.recordPaymentWebhookDlqEvidence,
 }));
 
 import { handleQueueBatch, type PaymentQueueMessage } from "./queue-consumer";
@@ -250,6 +258,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.markWebhookEventProcessed.mockResolvedValue(undefined);
     mocks.markWebhookEventFailed.mockResolvedValue(undefined);
     mocks.markWebhookEventManualReconciliation.mockResolvedValue(undefined);
+    mocks.recordPaymentWebhookDlqEvidence.mockResolvedValue({
+      id: "stripe:payment_intent.succeeded:evt_dlq",
+      status: "failed",
+      inserted: false,
+    });
   });
 
   afterEach(() => {
@@ -450,6 +463,68 @@ describe("handleQueueBatch payment confirmation retries", () => {
       }),
     );
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
+  });
+
+  it("archives payment DLQ messages without reprocessing payment side effects", async () => {
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      webhookEventId: "stripe:payment_intent.succeeded:evt_dlq",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_dlq",
+      amount: 12345,
+      currency: "usd",
+      metadata: { paymentType: "deposit", ignored: "not persisted" },
+    }, 5);
+
+    await handleQueueBatch(createBatch([message], "payment-events-dlq") as never, {} as Env);
+
+    expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+    expect(mocks.recordPaymentWebhookDlqEvidence).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({
+        webhookEventId: "stripe:payment_intent.succeeded:evt_dlq",
+        provider: "stripe",
+        eventType: "payment.stripe.confirmed",
+        orderId: "order-stripe",
+        queueMessageId: message.id,
+        queueType: "payment.stripe.confirmed",
+        attempts: 5,
+        messageTimestampSeconds: 1_767_225_600,
+        payment: {
+          paymentIntentId: "pi_dlq",
+          amount: 12345,
+          currency: "usd",
+          chargeId: null,
+          paymentType: "deposit",
+        },
+      }),
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("retries payment DLQ messages when evidence persistence fails", async () => {
+    mocks.recordPaymentWebhookDlqEvidence.mockRejectedValueOnce(new Error("D1 unavailable"));
+    const message = createMessage({
+      type: "payment.sslcommerz.confirmed",
+      webhookEventId: "sslcommerz:ipn:tran:val",
+      orderId: "order-ssl",
+      tranId: "tran_123",
+      valId: "val_123",
+      bankTranId: "bank_123",
+      amount: 1200,
+      currency: "BDT",
+      paymentType: "full",
+    }, 5);
+
+    await handleQueueBatch(createBatch([message], "payment-events-dlq") as never, {} as Env);
+
+    expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
+    expect(mocks.recordPaymentWebhookDlqEvidence).toHaveBeenCalledTimes(1);
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 300 });
   });
 
   it("retries confirmed payment messages when order-created notification enqueue fails", async () => {

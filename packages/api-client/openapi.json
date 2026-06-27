@@ -81936,13 +81936,74 @@
                             "lastProbeAt",
                             "providerStatus"
                           ]
+                        },
+                        "paymentWebhookIssues": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "eventType": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "failed",
+                                  "manual_reconciliation"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "queueType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "queueMessageId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "processedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "provider",
+                              "eventType",
+                              "status",
+                              "message",
+                              "error",
+                              "queueType",
+                              "queueMessageId",
+                              "processedAt"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "payments",
                         "plan",
                         "refundAttempts",
-                        "activeRefundOperation"
+                        "activeRefundOperation",
+                        "paymentWebhookIssues"
                       ]
                     }
                   },
