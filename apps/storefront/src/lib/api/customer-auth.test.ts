@@ -191,6 +191,57 @@ describe("customer auth API helpers", () => {
     });
   });
 
+  it("preserves server-computed order-history balance and account summary", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        orders: [{
+          id: "order_1",
+          status: "partial",
+          totalAmount: 100,
+          paidAmount: 25,
+          balanceDue: 75,
+          shippingCharge: 60,
+          discountAmount: 0,
+          paymentStatus: "partial",
+          paymentMethod: "sslcommerz",
+          fulfillmentStatus: "pending",
+          shippingAddress: "Dhaka",
+          cityName: "Dhaka",
+          zoneName: "Mirpur",
+          areaName: null,
+          notes: null,
+          createdAt: "2026-06-24T00:00:00.000Z",
+          latestShipment: null,
+          items: [],
+        }],
+        summary: {
+          totalOrders: 51,
+          totalSpent: 12500,
+          completedOrders: 49,
+          pendingOrders: 1,
+        },
+        pagination: {
+          limit: 50,
+          returned: 50,
+          hasMore: true,
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    await expect(getCustomerOrders()).resolves.toMatchObject({
+      success: true,
+      orders: [{ id: "order_1", balanceDue: 75 }],
+      summary: {
+        totalOrders: 51,
+        totalSpent: 12500,
+      },
+      pagination: {
+        hasMore: true,
+      },
+    });
+  });
+
   it("marks order-detail network failures as retryable", async () => {
     const abortError = Object.assign(new Error("aborted"), { name: "AbortError" });
     vi.stubGlobal("fetch", vi.fn(async () => {

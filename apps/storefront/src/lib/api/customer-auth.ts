@@ -34,6 +34,8 @@ interface ProfileData {
 interface OrdersData {
   orders: CustomerOrder[];
   customer?: CustomerInfo;
+  summary?: CustomerOrdersSummary;
+  pagination?: CustomerOrdersPagination;
 }
 
 interface SessionData {
@@ -305,6 +307,7 @@ export interface CustomerOrder {
   status: string;
   totalAmount: number;
   paidAmount: number;
+  balanceDue: number;
   shippingCharge: number;
   discountAmount: number | null;
   paymentStatus: string;
@@ -318,6 +321,19 @@ export interface CustomerOrder {
   createdAt: string | null;
   latestShipment: CustomerOrderShipment | null;
   items: CustomerOrderItem[];
+}
+
+export interface CustomerOrdersSummary {
+  totalOrders: number;
+  totalSpent: number;
+  completedOrders: number;
+  pendingOrders: number;
+}
+
+export interface CustomerOrdersPagination {
+  limit: number;
+  returned: number;
+  hasMore: boolean;
 }
 
 export interface CustomerOrderDetailPayment {
@@ -528,6 +544,8 @@ export async function getCustomerOrders(): Promise<{
   success: boolean;
   orders: CustomerOrder[];
   customer?: CustomerInfo;
+  summary?: CustomerOrdersSummary;
+  pagination?: CustomerOrdersPagination;
   error?: string;
   status?: number;
   unavailable?: boolean;
@@ -548,7 +566,13 @@ export async function getCustomerOrders(): Promise<{
         unavailable: isTemporaryReadFailure(res.status) || res.ok,
       };
     }
-    return { success: true, orders: data.orders || [], customer: data.customer };
+    return {
+      success: true,
+      orders: data.orders || [],
+      customer: data.customer,
+      ...(data.summary ? { summary: data.summary } : {}),
+      ...(data.pagination ? { pagination: data.pagination } : {}),
+    };
   } catch (error: unknown) {
     return {
       success: false,

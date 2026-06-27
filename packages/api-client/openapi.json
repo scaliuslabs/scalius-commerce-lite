@@ -9321,11 +9321,60 @@
                               "id": {
                                 "type": "string"
                               },
+                              "invoiceNumber": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "status": {
                                 "type": "string"
                               },
                               "totalAmount": {
                                 "type": "number"
+                              },
+                              "paidAmount": {
+                                "type": "number"
+                              },
+                              "balanceDue": {
+                                "type": "number"
+                              },
+                              "shippingCharge": {
+                                "type": "number"
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "paymentStatus": {
+                                "type": "string"
+                              },
+                              "paymentMethod": {
+                                "type": "string"
+                              },
+                              "fulfillmentStatus": {
+                                "type": "string"
+                              },
+                              "expectedDelivery": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "shippingAddress": {
+                                "type": "string"
+                              },
+                              "cityName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "zoneName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "areaName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "notes": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -9418,18 +9467,127 @@
                                   "updatedAt",
                                   "createdAt"
                                 ]
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "productId": {
+                                      "type": "string"
+                                    },
+                                    "variantId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "quantity": {
+                                      "type": "number"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "productName": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "productSlug": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "productImage": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "variantSize": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "variantColor": {
+                                      "type": "string",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "productId",
+                                    "variantId",
+                                    "quantity",
+                                    "price",
+                                    "productName",
+                                    "productSlug",
+                                    "productImage",
+                                    "variantSize",
+                                    "variantColor"
+                                  ],
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
                               }
                             },
                             "required": [
                               "id",
                               "status",
                               "totalAmount",
-                              "createdAt"
+                              "paidAmount",
+                              "balanceDue",
+                              "shippingCharge",
+                              "discountAmount",
+                              "paymentStatus",
+                              "paymentMethod",
+                              "fulfillmentStatus",
+                              "shippingAddress",
+                              "cityName",
+                              "zoneName",
+                              "notes",
+                              "createdAt",
+                              "items"
                             ],
                             "additionalProperties": {
                               "nullable": true
                             }
                           }
+                        },
+                        "summary": {
+                          "type": "object",
+                          "properties": {
+                            "totalOrders": {
+                              "type": "number"
+                            },
+                            "totalSpent": {
+                              "type": "number"
+                            },
+                            "completedOrders": {
+                              "type": "number"
+                            },
+                            "pendingOrders": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "totalOrders",
+                            "totalSpent",
+                            "completedOrders",
+                            "pendingOrders"
+                          ]
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "limit": {
+                              "type": "number"
+                            },
+                            "returned": {
+                              "type": "number"
+                            },
+                            "hasMore": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "limit",
+                            "returned",
+                            "hasMore"
+                          ]
                         },
                         "customer": {
                           "type": "object",
@@ -9482,6 +9640,8 @@
                       },
                       "required": [
                         "orders",
+                        "summary",
+                        "pagination",
                         "customer"
                       ]
                     }

@@ -13,13 +13,16 @@ import {
     orderNotificationDeliveryReceipts,
     orderPayments,
     orders,
+    OrderStatus,
     paymentPlans,
+    PaymentStatus,
     productImages,
     products,
     productVariants,
 } from "@scalius/database/schema";
 import { sql, isNull, inArray, asc, desc, eq, and, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { addPrices, roundPrice } from "@scalius/shared/price-utils";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -60,6 +63,19 @@ interface CustomerOrderShipmentSummary {
     createdAt: string | null;
 }
 
+type CustomerOrderListItem = {
+    orderId: string;
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+    price: number;
+    productName: string | null;
+    productSlug: string | null;
+    productImage: string | null;
+    variantSize: string | null;
+    variantColor: string | null;
+};
+
 export interface CustomerOrderDetailTimelineEvent {
     id: string;
     type: "order" | "payment" | "refund" | "shipment" | "notification";
@@ -75,6 +91,88 @@ const normalizeStatusLabel = (status: string): string =>
         .filter(Boolean)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ");
+
+const CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES = [
+    OrderStatus.CANCELLED,
+    OrderStatus.REFUNDED,
+    OrderStatus.RETURNED,
+    OrderStatus.PARTIALLY_REFUNDED,
+] as const;
+const CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET = new Set<string>(CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES);
+
+const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES = [
+    PaymentStatus.FAILED,
+    PaymentStatus.REFUNDED,
+] as const;
+const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET = new Set<string>(CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES);
+
+const CUSTOMER_COMPLETED_ORDER_STATUSES = [
+    OrderStatus.DELIVERED,
+    OrderStatus.COMPLETED,
+] as const;
+const CUSTOMER_COMPLETED_ORDER_STATUS_SET = new Set<string>(CUSTOMER_COMPLETED_ORDER_STATUSES);
+
+const CUSTOMER_PENDING_ORDER_STATUSES = [
+    OrderStatus.PENDING,
+    OrderStatus.PROCESSING,
+    OrderStatus.CONFIRMED,
+] as const;
+const CUSTOMER_PENDING_ORDER_STATUS_SET = new Set<string>(CUSTOMER_PENDING_ORDER_STATUSES);
+
+type CustomerOrderMoneyState = {
+    status: string;
+    paymentStatus: string;
+    totalAmount: number | null | undefined;
+    paidAmount: number | null | undefined;
+    balanceDue?: number | null | undefined;
+};
+
+export type CustomerAccountOrderSummary = {
+    totalOrders: number;
+    totalSpent: number;
+    completedOrders: number;
+    pendingOrders: number;
+};
+
+export function getCustomerVisibleBalanceDue(order: CustomerOrderMoneyState): number {
+    if (
+        CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET.has(order.status) ||
+        CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET.has(order.paymentStatus)
+    ) {
+        return 0;
+    }
+
+    const storedBalance = order.balanceDue === null || order.balanceDue === undefined
+        ? Number.NaN
+        : Number(order.balanceDue);
+    if (Number.isFinite(storedBalance)) {
+        return roundPrice(Math.max(0, storedBalance));
+    }
+
+    const totalAmount = roundPrice(Math.max(0, Number(order.totalAmount ?? 0)));
+    const paidAmount = roundPrice(Math.max(0, Number(order.paidAmount ?? 0)));
+    return roundPrice(Math.max(0, totalAmount - paidAmount));
+}
+
+export function getCustomerSpendContribution(order: CustomerOrderMoneyState): number {
+    if (
+        CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET.has(order.status) ||
+        CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET.has(order.paymentStatus)
+    ) {
+        return 0;
+    }
+
+    return roundPrice(Math.max(0, Number(order.paidAmount ?? 0)));
+}
+
+export function summarizeCustomerAccountOrders(rows: CustomerOrderMoneyState[]): CustomerAccountOrderSummary {
+    return {
+        totalOrders: rows.length,
+        totalSpent: addPrices(...rows.map(getCustomerSpendContribution)),
+        completedOrders: rows.filter((order) => CUSTOMER_COMPLETED_ORDER_STATUS_SET.has(order.status)).length,
+        pendingOrders: rows.filter((order) => CUSTOMER_PENDING_ORDER_STATUS_SET.has(order.status)).length,
+    };
+}
 
 export async function listCustomers(
     db: Database,
@@ -428,13 +526,33 @@ export async function getCustomerOrders(
         }
         : null;
 
-    const customerOrders = await db
+    const accountSummaryQuery = db
+        .select({
+            totalOrders: sql<number>`CAST(count(*) AS INTEGER)`,
+            totalSpent: sql<number>`COALESCE(SUM(CASE
+                WHEN ${inArray(orders.status, [...CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES])}
+                    OR ${inArray(orders.paymentStatus, [...CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES])}
+                THEN 0
+                ELSE CASE WHEN ${orders.paidAmount} > 0 THEN ${orders.paidAmount} ELSE 0 END
+            END), 0)`,
+            completedOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_COMPLETED_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
+            pendingOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_PENDING_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
+        })
+        .from(orders)
+        .where(and(
+            eq(orders.customerId, customerId),
+            isNull(orders.deletedAt),
+        ));
+
+    const orderListLimit = 50;
+    const customerOrdersQuery = db
         .select({
             id: orders.id,
             invoiceNumber: orders.invoiceNumber,
             status: orders.status,
             totalAmount: orders.totalAmount,
             paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
             shippingCharge: orders.shippingCharge,
             discountAmount: orders.discountAmount,
             paymentStatus: orders.paymentStatus,
@@ -444,6 +562,7 @@ export async function getCustomerOrders(
             shippingAddress: orders.shippingAddress,
             cityName: orders.cityName,
             zoneName: orders.zoneName,
+            areaName: orders.areaName,
             notes: orders.notes,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
         })
@@ -453,11 +572,55 @@ export async function getCustomerOrders(
             isNull(orders.deletedAt),
         ))
         .orderBy(desc(orders.createdAt))
-        .limit(50);
+        .limit(orderListLimit + 1);
+
+    const [accountSummaryRows, customerOrdersWithLookahead] = await db.batch([
+        accountSummaryQuery,
+        customerOrdersQuery,
+    ] as Parameters<Database["batch"]>[0]) as [
+        Array<CustomerAccountOrderSummary>,
+        Array<{
+            id: string;
+            invoiceNumber: number | null;
+            status: string;
+            totalAmount: number;
+            paidAmount: number;
+            balanceDue: number;
+            shippingCharge: number;
+            discountAmount: number | null;
+            paymentStatus: string;
+            paymentMethod: string;
+            fulfillmentStatus: string;
+            expectedDelivery: string | null;
+            shippingAddress: string;
+            cityName: string | null;
+            zoneName: string | null;
+            areaName: string | null;
+            notes: string | null;
+            createdAt: number | null;
+        }>,
+    ];
+
+    const customerOrders = customerOrdersWithLookahead.slice(0, orderListLimit);
+    const hasMore = customerOrdersWithLookahead.length > orderListLimit;
+    const accountSummary = accountSummaryRows[0];
+    const summary: CustomerAccountOrderSummary = accountSummary
+        ? {
+            totalOrders: Number(accountSummary.totalOrders ?? 0),
+            totalSpent: roundPrice(Number(accountSummary.totalSpent ?? 0)),
+            completedOrders: Number(accountSummary.completedOrders ?? 0),
+            pendingOrders: Number(accountSummary.pendingOrders ?? 0),
+        }
+        : {
+            totalOrders: 0,
+            totalSpent: 0,
+            completedOrders: 0,
+            pendingOrders: 0,
+        };
 
     // Fetch items for all orders in one batch
     const orderIds = customerOrders.map((o) => o.id);
-    const itemsByOrder = new Map<string, Array<Record<string, unknown>>>();
+    const itemsByOrder = new Map<string, CustomerOrderListItem[]>();
     const latestShipmentByOrder = new Map<string, CustomerOrderShipmentSummary>();
 
     if (orderIds.length > 0) {
@@ -505,18 +668,7 @@ export async function getCustomerOrders(
                 .where(sql`${deliveryShipments.orderId} IN ${orderIds}`)
                 .orderBy(desc(deliveryShipments.createdAt)),
         ] as Parameters<Database["batch"]>[0]) as [
-            Array<{
-                orderId: string;
-                productId: string;
-                variantId: string | null;
-                quantity: number;
-                price: number;
-                productName: string | null;
-                productSlug: string | null;
-                productImage: string | null;
-                variantSize: string | null;
-                variantColor: string | null;
-            }>,
+            CustomerOrderListItem[],
             Array<{
                 id: string;
                 orderId: string;
@@ -560,6 +712,7 @@ export async function getCustomerOrders(
     // Format response
     const formattedOrders = customerOrders.map((order) => ({
         ...order,
+        balanceDue: getCustomerVisibleBalanceDue(order),
         createdAt: order.createdAt
             ? new Date(order.createdAt * 1000).toISOString()
             : null,
@@ -567,7 +720,16 @@ export async function getCustomerOrders(
         items: itemsByOrder.get(order.id) || []
     }));
 
-    return { orders: formattedOrders, customerProfile };
+    return {
+        orders: formattedOrders,
+        customerProfile,
+        summary,
+        pagination: {
+            limit: orderListLimit,
+            returned: formattedOrders.length,
+            hasMore,
+        },
+    };
 }
 
 export async function getCustomerOrderDetail(
@@ -930,6 +1092,7 @@ export async function getCustomerOrderDetail(
     return {
         order: {
             ...order,
+            balanceDue: getCustomerVisibleBalanceDue(order),
             createdAt: timestampToIso(order.createdAt),
             updatedAt: timestampToIso(order.updatedAt),
         },

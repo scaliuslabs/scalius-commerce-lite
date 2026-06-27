@@ -135,6 +135,19 @@ describe("customer auth private cache policy", () => {
           id: "order_1",
           status: "pending",
           totalAmount: 100,
+          paidAmount: 25,
+          balanceDue: 75,
+          shippingCharge: 60,
+          discountAmount: 0,
+          paymentStatus: "partial",
+          paymentMethod: "sslcommerz",
+          fulfillmentStatus: "pending",
+          expectedDelivery: null,
+          shippingAddress: "House 1",
+          cityName: "Dhaka",
+          zoneName: "Mirpur",
+          areaName: "Section 10",
+          notes: null,
           createdAt: "2026-06-18T00:00:00.000Z",
           latestShipment: {
             id: "shipment_1",
@@ -149,8 +162,20 @@ describe("customer auth private cache policy", () => {
             updatedAt: "2026-06-18T01:00:00.000Z",
             createdAt: "2026-06-18T00:30:00.000Z",
           },
+          items: [],
         },
       ],
+      summary: {
+        totalOrders: 51,
+        totalSpent: 12500,
+        completedOrders: 49,
+        pendingOrders: 1,
+      },
+      pagination: {
+        limit: 50,
+        returned: 50,
+        hasMore: true,
+      },
       customerProfile: {
         id: "customer_1",
         name: "Customer",
@@ -611,6 +636,8 @@ describe("customer auth private cache policy", () => {
         orders: [
           {
             id: "order_1",
+            paidAmount: 25,
+            balanceDue: 75,
             latestShipment: {
               id: "shipment_1",
               providerType: "steadfast",
@@ -621,6 +648,15 @@ describe("customer auth private cache policy", () => {
             },
           },
         ],
+        summary: {
+          totalOrders: 51,
+          totalSpent: 12500,
+          completedOrders: 49,
+          pendingOrders: 1,
+        },
+        pagination: {
+          hasMore: true,
+        },
       },
     });
   });

@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { customerSessions, customers } from "@scalius/database/schema";
+import { customerSessions, customers, OrderStatus, PaymentStatus } from "@scalius/database/schema";
 
 import {
   bulkDeleteCustomers,
   deleteCustomer,
+  getCustomerSpendContribution,
+  getCustomerVisibleBalanceDue,
   permanentlyDeleteCustomer,
+  summarizeCustomerAccountOrders,
 } from "./customers.service";
 
 const existingCustomer = {
@@ -74,5 +77,87 @@ describe("customers service session revocation", () => {
     const permanentDb = createDb();
     await bulkDeleteCustomers(permanentDb as never, ["cust_1", "cust_2"], true);
     expect(permanentDb.delete).toHaveBeenCalledWith(customerSessions);
+  });
+});
+
+describe("customer account order money projection", () => {
+  it("hides actionable balance due for closed or refunded customer-visible states", () => {
+    for (const status of [
+      OrderStatus.CANCELLED,
+      OrderStatus.RETURNED,
+      OrderStatus.REFUNDED,
+      OrderStatus.PARTIALLY_REFUNDED,
+    ]) {
+      expect(getCustomerVisibleBalanceDue({
+        status,
+        paymentStatus: PaymentStatus.UNPAID,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+      })).toBe(0);
+    }
+
+    expect(getCustomerVisibleBalanceDue({
+      status: OrderStatus.PENDING,
+      paymentStatus: PaymentStatus.REFUNDED,
+      totalAmount: 100,
+      paidAmount: 0,
+      balanceDue: 100,
+    })).toBe(0);
+  });
+
+  it("keeps stored active balances with a safe computed fallback", () => {
+    expect(getCustomerVisibleBalanceDue({
+      status: OrderStatus.CONFIRMED,
+      paymentStatus: PaymentStatus.PARTIAL,
+      totalAmount: 100,
+      paidAmount: 40,
+      balanceDue: 60,
+    })).toBe(60);
+
+    expect(getCustomerVisibleBalanceDue({
+      status: OrderStatus.PENDING,
+      paymentStatus: PaymentStatus.UNPAID,
+      totalAmount: 100,
+      paidAmount: 25,
+      balanceDue: null,
+    })).toBe(75);
+  });
+
+  it("summarizes lifetime account stats independently from displayed order pages", () => {
+    const visibleOrders = [
+      {
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.UNPAID,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+      },
+    ];
+    const allOrders = [
+      ...visibleOrders,
+      {
+        status: OrderStatus.DELIVERED,
+        paymentStatus: PaymentStatus.PAID,
+        totalAmount: 500,
+        paidAmount: 500,
+        balanceDue: 0,
+      },
+      {
+        status: OrderStatus.REFUNDED,
+        paymentStatus: PaymentStatus.REFUNDED,
+        totalAmount: 300,
+        paidAmount: 0,
+        balanceDue: 300,
+      },
+    ];
+
+    expect(visibleOrders.reduce((sum, order) => sum + getCustomerSpendContribution(order), 0)).toBe(0);
+    expect(summarizeCustomerAccountOrders(allOrders)).toEqual({
+      totalOrders: 3,
+      totalSpent: 500,
+      completedOrders: 1,
+      pendingOrders: 1,
+    });
   });
 });
