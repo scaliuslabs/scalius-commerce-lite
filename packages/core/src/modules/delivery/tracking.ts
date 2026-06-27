@@ -1,4 +1,4 @@
-import { deliveryShipments, orders } from "@scalius/database/schema";
+import { deliveryShipments, orders, ShipmentStatus } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { canTransitionTo } from "../orders/order-state-machine";
@@ -8,6 +8,103 @@ import {
   assertNoActiveRefundAttempt,
   noActiveRefundAttemptForOrderIdCondition,
 } from "../payments/refund-attempt-guard";
+import { markShipmentReconciliationRequired } from "./delivery.service";
+
+function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
+  if (!metadata) return {};
+  if (typeof metadata === "string") {
+    try {
+      const parsed = JSON.parse(metadata) as unknown;
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {};
+}
+
+async function markInventoryReconciliationRequired(
+  db: Database,
+  shipmentId: string,
+  shipmentStatus: string,
+  orderStatus: string,
+  error: unknown,
+): Promise<void> {
+  try {
+    await markShipmentReconciliationRequired(
+      db,
+      shipmentId,
+      "order_status_inventory_reconcile_failed",
+      {
+        status: shipmentStatus,
+        metadata: {
+          orderStatusSync: {
+            shipmentStatus,
+            orderStatus,
+            failedStep: "inventory_reconciliation",
+          },
+        },
+      },
+      error,
+    );
+  } catch (markError: unknown) {
+    console.error("Failed to mark shipment reconciliation after inventory sync failure:", {
+      shipmentId,
+      shipmentStatus,
+      orderStatus,
+      error: markError instanceof Error ? { message: markError.message, stack: markError.stack } : markError,
+    });
+  }
+}
+
+async function clearShipmentReconciliationIfNeeded(
+  db: Database,
+  shipment: { id: string; status?: string | null; metadata?: unknown },
+  shipmentStatus: string,
+): Promise<void> {
+  if (shipment.status !== ShipmentStatus.RECONCILE_REQUIRED) return;
+
+  const metadata = parseShipmentMetadata(shipment.metadata);
+  delete metadata.reconciliation;
+  delete metadata.orderStatusSync;
+
+  await db
+    .update(deliveryShipments)
+    .set({
+      status: shipmentStatus,
+      rawStatus: shipmentStatus,
+      metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(and(
+      eq(deliveryShipments.id, shipment.id),
+      eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
+    ));
+}
+
+async function reconcileShipmentInventory(
+  db: Database,
+  shipment: { id: string; status?: string | null; metadata?: unknown },
+  orderId: string,
+  orderStatus: string,
+  shipmentStatus: string,
+): Promise<void> {
+  try {
+    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, orderStatus);
+    await db
+      .update(orders)
+      .set({ inventoryAction: newInventoryAction })
+      .where(eq(orders.id, orderId));
+    await clearShipmentReconciliationIfNeeded(db, shipment, shipmentStatus);
+  } catch (error: unknown) {
+    await markInventoryReconciliationRequired(db, shipment.id, shipmentStatus, orderStatus, error);
+    throw error;
+  }
+}
 
 /**
  * Updates the order status based on shipment status if applicable
@@ -144,14 +241,10 @@ export async function updateOrderStatusFromShipment(
         return null;
       }
 
-      // CAS succeeded — we own this transition. Now apply inventory side effects.
-      const newInventoryAction = await applyInventoryForStatusChange(db, order.id, newOrderStatus);
-
-      // Persist the new inventory action (version was already bumped above)
-      await db
-        .update(orders)
-        .set({ inventoryAction: newInventoryAction })
-        .where(eq(orders.id, order.id));
+      // CAS succeeded; if inventory reconciliation fails, the webhook/admin
+      // status-check caller can retry and operators see the shipment recovery
+      // marker instead of a silent status/inventory split.
+      await reconcileShipmentInventory(db, shipment, order.id, newOrderStatus, newStatus);
 
       console.log(
         `Updated order ${order.id} status from ${order.status} to ${newOrderStatus}`,
@@ -164,11 +257,7 @@ export async function updateOrderStatusFromShipment(
       };
     }
 
-    const newInventoryAction = await applyInventoryForStatusChange(db, order.id, newOrderStatus);
-    await db
-      .update(orders)
-      .set({ inventoryAction: newInventoryAction })
-      .where(eq(orders.id, order.id));
+    await reconcileShipmentInventory(db, shipment, order.id, newOrderStatus, newStatus);
 
     return null;
   } catch (error: unknown) {
