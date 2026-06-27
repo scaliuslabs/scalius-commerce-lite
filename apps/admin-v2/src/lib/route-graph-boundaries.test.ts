@@ -978,5 +978,8 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("Payment history unavailable");
     expect(source).toContain("refetchPayments");
     expect(source).toContain("Retry before reviewing");
+    expect(source).toContain("paymentWebhookIssues");
+    expect(source).toContain("Payment webhook needs review");
+    expect(source).toContain("Check the gateway dashboard before changing payment-sensitive order state.");
   });
 });
