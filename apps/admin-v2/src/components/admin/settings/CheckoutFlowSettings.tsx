@@ -96,7 +96,14 @@ export default function CheckoutFlowSettings() {
         isError,
         refetch,
     } = useQuery(checkoutFlowSettingsQueryOptions());
-    const { data: paymentMethods, isLoading: paymentMethodsLoading } = useQuery(paymentMethodsQueryOptions());
+    const {
+        data: paymentMethods,
+        isLoading: paymentMethodsLoading,
+        isFetching: paymentMethodsFetching,
+        isError: paymentMethodsError,
+        error: paymentMethodsQueryError,
+        refetch: refetchPaymentMethods,
+    } = useQuery(paymentMethodsQueryOptions());
     const {
         data: checkoutReadiness,
         isLoading: checkoutReadinessLoading,
@@ -135,9 +142,15 @@ export default function CheckoutFlowSettings() {
             methodsPayload.gatewayStatus?.cod?.enabled === true &&
             (methodsPayload.gatewayStatus?.cod?.usable ?? methodsPayload.gatewayStatus?.cod?.configured === true);
     }, [paymentMethods]);
+    const paymentMethodsPending = paymentMethodsLoading || (paymentMethodsFetching && !paymentMethods);
+    const paymentMethodsUnavailable = !paymentMethodsPending && !paymentMethods;
 
     const flowIssues = useMemo(() => {
         const issues: string[] = [];
+        if (paymentMethodsUnavailable) {
+            issues.push("Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.");
+            return issues;
+        }
         if (paymentMethods && checkoutMode === "guest_cod_only" && !codEnabled) {
             issues.push("Enable Cash on Delivery in Payment Gateways before using Fast COD Only.");
         }
@@ -155,7 +168,7 @@ export default function CheckoutFlowSettings() {
             issues.push("Advance payments need at least one enabled and configured online gateway.");
         }
         return issues;
-    }, [activeOnlineMethods.length, checkoutMode, codEnabled, partialPaymentAmount, partialPaymentEnabled, paymentMethods]);
+    }, [activeOnlineMethods.length, checkoutMode, codEnabled, partialPaymentAmount, partialPaymentEnabled, paymentMethods, paymentMethodsUnavailable]);
 
     const flowSummary = buildCheckoutFlowSummary({
         guestCheckoutEnabled,
@@ -167,20 +180,29 @@ export default function CheckoutFlowSettings() {
     const readinessIssues = readiness?.issues ?? [];
     const previewIssues = [...flowIssues, ...readinessIssues];
     const readinessPending = checkoutReadinessLoading || (checkoutReadinessFetching && !readiness);
-    const previewLoading = paymentMethodsLoading || readinessPending;
+    const previewLoading = paymentMethodsPending || readinessPending;
     const readinessUnknown = !readiness && !readinessPending;
     const readinessCheckUnavailable = !readinessPending && (checkoutReadinessError || readinessUnknown);
     const readinessErrorMessage = checkoutReadinessQueryError instanceof Error
         ? checkoutReadinessQueryError.message
         : null;
-    const previewCardClass = previewIssues.length > 0
+    const paymentMethodsErrorMessage = paymentMethodsQueryError instanceof Error
+        ? paymentMethodsQueryError.message
+        : null;
+    const hasConfirmedPreviewIssue = previewIssues.length > 0 && !paymentMethodsUnavailable;
+    const previewCardClass = hasConfirmedPreviewIssue
         ? "border-destructive/40 bg-destructive/5"
-        : readinessCheckUnavailable
+        : paymentMethodsUnavailable || readinessCheckUnavailable
             ? "border-amber-500/30 bg-amber-500/5"
             : "border-emerald-500/30 bg-emerald-500/5";
+    const saveBlocked = paymentMethodsPending || flowIssues.length > 0;
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
+        if (paymentMethodsPending) {
+            toast.error("Wait for payment readiness to finish loading before saving checkout flow changes.");
+            return;
+        }
         if (flowIssues.length > 0) return;
         setSaving(true);
 
@@ -267,9 +289,9 @@ export default function CheckoutFlowSettings() {
             <Card className={previewCardClass}>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
-                        {previewIssues.length > 0 ? (
+                        {hasConfirmedPreviewIssue ? (
                             <AlertTriangle className="h-4 w-4 text-destructive" />
-                        ) : readinessCheckUnavailable ? (
+                        ) : paymentMethodsUnavailable || readinessCheckUnavailable ? (
                             <AlertTriangle className="h-4 w-4 text-amber-500" />
                         ) : (
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -282,8 +304,9 @@ export default function CheckoutFlowSettings() {
                     <div className="grid gap-2">
                         <ReadinessRow
                             label="Payment flow"
-                            ready={flowIssues.length === 0}
-                            loading={paymentMethodsLoading}
+                            ready={paymentMethodsUnavailable ? undefined : flowIssues.length === 0}
+                            loading={paymentMethodsPending}
+                            unknown={paymentMethodsUnavailable}
                             icon={CheckCircle2}
                         />
                         <ReadinessRow
@@ -301,6 +324,33 @@ export default function CheckoutFlowSettings() {
                             icon={MapPinned}
                         />
                     </div>
+                    {paymentMethodsUnavailable && (
+                        <Alert className="border-amber-500/30 bg-amber-500/5">
+                            <AlertTriangle className="h-4 w-4 text-amber-500" />
+                            <AlertDescription className="flex flex-col gap-3 text-sm text-amber-700 dark:text-amber-400 sm:flex-row sm:items-center sm:justify-between">
+                                <span className="min-w-0">
+                                    <span className="block font-medium">Payment method readiness could not be loaded.</span>
+                                    {paymentMethodsError && paymentMethodsErrorMessage && (
+                                        <span className="mt-1 block text-xs opacity-85">{paymentMethodsErrorMessage}</span>
+                                    )}
+                                    <span className="mt-1 block text-xs opacity-85">
+                                        Checkout-flow saves are locked until Payment Gateways loads successfully.
+                                    </span>
+                                </span>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => void refetchPaymentMethods()}
+                                    disabled={paymentMethodsFetching}
+                                    className="shrink-0"
+                                >
+                                    {paymentMethodsFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Retry payment check
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     {readinessCheckUnavailable && (
                         <Alert className="border-amber-500/30 bg-amber-500/5">
                             <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -334,7 +384,11 @@ export default function CheckoutFlowSettings() {
                                 <p className="text-xs text-muted-foreground">Checking checkout readiness...</p>
                             )}
                             {previewIssues.length > 0 && (
-                            <ul className="space-y-1 text-sm text-destructive">
+                            <ul
+                                className={`space-y-1 text-sm ${
+                                    paymentMethodsUnavailable ? "text-amber-700 dark:text-amber-400" : "text-destructive"
+                                }`}
+                            >
                                 {previewIssues.map((issue) => (
                                     <li key={issue}>{issue}</li>
                                 ))}
@@ -432,7 +486,7 @@ export default function CheckoutFlowSettings() {
             <div className="flex justify-end pt-4 border-t border-border">
                 <Button
                     onClick={() => handleSubmit()}
-                    disabled={saving || flowIssues.length > 0}
+                    disabled={saving || saveBlocked}
                     className="min-w-[140px]"
                 >
                     {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
