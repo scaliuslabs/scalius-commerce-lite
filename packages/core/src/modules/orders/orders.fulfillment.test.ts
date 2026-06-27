@@ -359,7 +359,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
-  it("reconciles delivered inventory before recording COD collection", async () => {
+  it("records COD collection before reconciling delivered inventory", async () => {
     const { db, updates } = createDbMock({
       selectedOrder: {
         status: OrderStatus.SHIPPED,
@@ -367,6 +367,7 @@ describe("orders fulfillment side-effect ordering", () => {
         totalAmount: 100,
         paidAmount: 0,
         balanceDue: 100,
+        inventoryAction: "reserved",
       },
       updateResults: [[{ id: "order_1" }]],
     });
@@ -378,9 +379,101 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
     expect(mocks.recordCODCollection).toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
+    expect(mocks.recordCODCollection.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.applyInventoryForStatusChange.mock.invocationCallOrder[0]!,
+    );
     expect(updates.at(-1)).toMatchObject({ inventoryAction: "deducted" });
+  });
+
+  it("rolls back the delivered claim when COD collection recording fails", async () => {
+    mocks.recordCODCollection.mockResolvedValueOnce({ success: false, error: "ledger write failed" });
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.SHIPPED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+        inventoryAction: "reserved",
+      },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await expect(
+      processCodAction(db as never, "order_1", {
+        action: "collected",
+        collectedBy: "Courier A",
+        collectedAmount: 100,
+      }),
+    ).rejects.toThrow("ledger write failed");
+
+    expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED, version: 4 });
+    expect(updates[1]).toMatchObject({ status: OrderStatus.SHIPPED });
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the delivered claim when COD inventory reconciliation fails after collection", async () => {
+    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("inventory transition failed"));
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.SHIPPED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+        inventoryAction: "reserved",
+      },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await expect(
+      processCodAction(db as never, "order_1", {
+        action: "collected",
+        collectedBy: "Courier A",
+        collectedAmount: 100,
+      }),
+    ).rejects.toThrow("inventory transition failed");
+
+    expect(mocks.recordCODCollection).toHaveBeenCalled();
+    expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED, version: 4 });
+    expect(updates[1]).toMatchObject({ status: OrderStatus.SHIPPED });
+  });
+
+  it("retries COD delivered inventory reconciliation when collection evidence already exists", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.SHIPPED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 100,
+        balanceDue: 0,
+        inventoryAction: "reserved",
+      },
+      selectedPayment: {
+        id: "pay_1",
+        amount: 100,
+        paymentMethod: PaymentMethod.COD,
+        status: PaymentRecordStatus.SUCCEEDED,
+      },
+      selectedCodTracking: {
+        id: "cod_1",
+        codStatus: CodStatus.COLLECTED,
+      },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await processCodAction(db as never, "order_1", {
+      action: "collected",
+      collectedBy: "Courier A",
+      collectedAmount: 100,
+    });
+
+    expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
+    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
   });
 
   it("retries COD collection inventory reconciliation when the order is already delivered", async () => {
@@ -725,6 +818,7 @@ describe("orders fulfillment side-effect ordering", () => {
       },
       selectedPayment: {
         id: "pay_1",
+        amount: 100,
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
       },
@@ -754,6 +848,7 @@ describe("orders fulfillment side-effect ordering", () => {
       },
       selectedPayment: {
         id: "pay_1",
+        amount: 100,
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
       },
