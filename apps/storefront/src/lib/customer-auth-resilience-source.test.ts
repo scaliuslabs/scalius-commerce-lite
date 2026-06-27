@@ -33,6 +33,17 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain("showOnly(\"error\")");
   });
 
+  it("surfaces payment and refund context on account order-list cards", () => {
+    const source = readStorefrontSource("src/pages/account.astro");
+
+    expect(source).toContain("function renderOrderPaymentContext(order: CustomerOrder): string");
+    expect(source).toContain("Payment needs attention");
+    expect(source).toContain("balance due");
+    expect(source).toContain("Refund or return update");
+    expect(source).toContain("Open the timeline for buyer-safe refund and return details.");
+    expect(source).toContain("${renderOrderPaymentContext(order)}");
+  });
+
   it("does not open the auth modal when checkout session verification is temporarily unavailable", () => {
     const source = readStorefrontSource("src/pages/cart.astro");
 
