@@ -606,8 +606,22 @@ const getCustomerOrdersRoute = createRoute({
           schema: successEnvelope(z.object({
             orders: z.array(z.object({
               id: z.string(),
+              invoiceNumber: z.number().nullable().optional(),
               status: z.string(),
               totalAmount: z.number(),
+              paidAmount: z.number(),
+              balanceDue: z.number(),
+              shippingCharge: z.number(),
+              discountAmount: z.number().nullable(),
+              paymentStatus: z.string(),
+              paymentMethod: z.string(),
+              fulfillmentStatus: z.string(),
+              expectedDelivery: z.string().nullable().optional(),
+              shippingAddress: z.string(),
+              cityName: z.string().nullable(),
+              zoneName: z.string().nullable(),
+              areaName: z.string().nullable().optional(),
+              notes: z.string().nullable(),
               createdAt: nullableTimestampSchema,
               latestShipment: z.object({
                 id: z.string(),
@@ -622,7 +636,29 @@ const getCustomerOrdersRoute = createRoute({
                 updatedAt: nullableTimestampSchema,
                 createdAt: nullableTimestampSchema,
               }).nullable().optional(),
+              items: z.array(z.object({
+                productId: z.string(),
+                variantId: z.string().nullable(),
+                quantity: z.number(),
+                price: z.number(),
+                productName: z.string().nullable(),
+                productSlug: z.string().nullable(),
+                productImage: z.string().nullable(),
+                variantSize: z.string().nullable(),
+                variantColor: z.string().nullable(),
+              }).passthrough()),
             }).passthrough()),
+            summary: z.object({
+              totalOrders: z.number(),
+              totalSpent: z.number(),
+              completedOrders: z.number(),
+              pendingOrders: z.number(),
+            }),
+            pagination: z.object({
+              limit: z.number(),
+              returned: z.number(),
+              hasMore: z.boolean(),
+            }),
             customer: z.object({
               id: z.string().optional(),
               name: z.string(),
@@ -658,7 +694,21 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
 
   // Match orders EXCLUSIVELY by customerId
   if (!session.customerId) {
-    return ok(c, { orders: [], customer: sessionProfile });
+    return ok(c, {
+      orders: [],
+      customer: sessionProfile,
+      summary: {
+        totalOrders: 0,
+        totalSpent: 0,
+        completedOrders: 0,
+        pendingOrders: 0,
+      },
+      pagination: {
+        limit: 50,
+        returned: 0,
+        hasMore: false,
+      },
+    });
   }
 
   const db = c.get("db");
@@ -674,7 +724,12 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
       }
     : sessionProfile;
 
-  return ok(c, { orders: result.orders, customer });
+  return ok(c, {
+    orders: result.orders,
+    customer,
+    summary: result.summary,
+    pagination: result.pagination,
+  });
 });
 
 const customerPaymentRecoverySchema = z.object({

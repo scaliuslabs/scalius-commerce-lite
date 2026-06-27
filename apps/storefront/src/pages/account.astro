@@ -363,7 +363,7 @@ const layoutData = await getLayoutData();
              ${(order.discountAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between text-primary text-xs"><span>Discount</span><span>-${formatCurrency(order.discountAmount!)}</span></div>` : ""}
              <div class="w-full sm:w-64 flex justify-between font-bold text-foreground mt-1 pt-1 border-t border-border"><span>Order Total</span><span>${formatCurrency(order.totalAmount)}</span></div>
              ${(order.paidAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-emerald-600 mt-1 pt-1 border-t border-border"><span>Paid Amount</span><span>${formatCurrency(order.paidAmount)}</span></div>` : ""}
-             ${(order.totalAmount - (order.paidAmount || 0)) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-destructive mt-1 pt-0.5"><span>Due Amount</span><span>${formatCurrency(order.totalAmount - (order.paidAmount || 0))}</span></div>` : ""}
+             ${(order.balanceDue ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-destructive mt-1 pt-0.5"><span>Due Amount</span><span>${formatCurrency(order.balanceDue)}</span></div>` : ""}
              ${order.shippingAddress ? `<div class="w-full text-left mt-2 text-[11px] text-muted-foreground"><span class="font-semibold text-foreground">Shipped to:</span> ${escapeHtml(order.shippingAddress)}${order.cityName ? `, ${escapeHtml(order.cityName)}` : ""}${order.zoneName ? `, ${escapeHtml(order.zoneName)}` : ""}</div>` : ""}
            </div>
         </div>
@@ -465,11 +465,13 @@ const layoutData = await getLayoutData();
       ordersError.classList.remove("hidden");
       document.getElementById("orderCount")!.textContent = "Unavailable";
     } else {
-      const totalSpent = orders.reduce((s, o) => s + o.totalAmount, 0);
-      const completed = orders.filter((o) => o.status === "delivered" || o.status === "completed").length;
-      const pending = orders.filter((o) => o.status === "pending" || o.status === "confirmed" || o.status === "processing").length;
+      const summary = result.summary;
+      const totalOrders = summary?.totalOrders ?? orders.length;
+      const totalSpent = summary?.totalSpent ?? orders.reduce((s, o) => s + Math.max(0, o.paidAmount ?? 0), 0);
+      const completed = summary?.completedOrders ?? orders.filter((o) => o.status === "delivered" || o.status === "completed").length;
+      const pending = summary?.pendingOrders ?? orders.filter((o) => o.status === "pending" || o.status === "confirmed" || o.status === "processing").length;
 
-      document.getElementById("statTotalOrders")!.textContent = String(orders.length);
+      document.getElementById("statTotalOrders")!.textContent = String(totalOrders);
       document.getElementById("statTotalSpent")!.textContent = formatCurrency(totalSpent);
 
       const statCompleted = document.getElementById("statCompleted");
@@ -477,7 +479,10 @@ const layoutData = await getLayoutData();
 
       const statPending = document.getElementById("statPending");
       if (statPending) statPending.textContent = String(pending);
-      document.getElementById("orderCount")!.textContent = `${orders.length} order${orders.length !== 1 ? "s" : ""}`;
+      const hasMoreOrders = Boolean(result.pagination?.hasMore);
+      document.getElementById("orderCount")!.textContent = hasMoreOrders
+        ? `${orders.length} of ${totalOrders} orders`
+        : `${orders.length} order${orders.length !== 1 ? "s" : ""}`;
 
       if (orders.length === 0) {
         emptyOrders.classList.remove("hidden");

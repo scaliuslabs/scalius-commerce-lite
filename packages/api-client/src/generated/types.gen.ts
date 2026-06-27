@@ -2977,8 +2977,22 @@ export type GetApiV1CustomerAuthOrdersResponses = {
         data: {
             orders: Array<{
                 id: string;
+                invoiceNumber?: number | null;
                 status: string;
                 totalAmount: number;
+                paidAmount: number;
+                balanceDue: number;
+                shippingCharge: number;
+                discountAmount: number | null;
+                paymentStatus: string;
+                paymentMethod: string;
+                fulfillmentStatus: string;
+                expectedDelivery?: string | null;
+                shippingAddress: string;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName?: string | null;
+                notes: string | null;
                 createdAt: string | number | null;
                 latestShipment?: {
                     id: string;
@@ -2993,8 +3007,31 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     updatedAt: string | number | null;
                     createdAt: string | number | null;
                 } | null;
+                items: Array<{
+                    productId: string;
+                    variantId: string | null;
+                    quantity: number;
+                    price: number;
+                    productName: string | null;
+                    productSlug: string | null;
+                    productImage: string | null;
+                    variantSize: string | null;
+                    variantColor: string | null;
+                    [key: string]: unknown;
+                }>;
                 [key: string]: unknown;
             }>;
+            summary: {
+                totalOrders: number;
+                totalSpent: number;
+                completedOrders: number;
+                pendingOrders: number;
+            };
+            pagination: {
+                limit: number;
+                returned: number;
+                hasMore: boolean;
+            };
             customer: {
                 id?: string;
                 name: string;
