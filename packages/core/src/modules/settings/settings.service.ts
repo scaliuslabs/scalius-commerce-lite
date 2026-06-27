@@ -10,6 +10,7 @@ import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
+import { getSmsProviderReadiness } from "../../integrations/sms";
 
 // ─────────────────────────────────────────
 // Types
@@ -198,7 +199,8 @@ export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Prom
 // ─────────────────────────────────────────
 
 const NOTIFICATIONS_CATEGORY = "notifications";
-const VALID_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
+const VALID_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
+type NotificationChannel = (typeof VALID_NOTIFICATION_CHANNELS)[number];
 
 export interface OrderWhatsAppTemplateSettings {
     templateName: string;
@@ -246,7 +248,14 @@ export async function getNotificationChannels(
  * Normalize channel data which may be in boolean-map format (from the UI)
  * or string-array format (canonical). Returns string-array format.
  */
-function normalizeParsedChannels(parsed: unknown): Record<string, string[]> {
+function isValidNotificationChannel(channel: string): channel is NotificationChannel {
+    return (VALID_NOTIFICATION_CHANNELS as readonly string[]).includes(channel);
+}
+
+function normalizeParsedChannels(
+    parsed: unknown,
+    options: { allowUnsupported?: boolean } = {},
+): Record<string, string[]> {
     if (!parsed || typeof parsed !== "object") return DEFAULT_NOTIFICATION_CHANNELS;
 
     // If the UI wrapped it in { channels: ... }, unwrap
@@ -259,12 +268,15 @@ function normalizeParsedChannels(parsed: unknown): Record<string, string[]> {
         if (!(ORDER_NOTIFICATION_TYPES as readonly string[]).includes(status)) continue;
         if (Array.isArray(value)) {
             // Already in string array format
-            result[status] = value.filter((v): v is string => typeof v === "string");
+            result[status] = value
+                .filter((v): v is string => typeof v === "string")
+                .filter((channel) => options.allowUnsupported || isValidNotificationChannel(channel));
         } else if (value && typeof value === "object") {
             // Boolean map format from UI: { email: true, sms: false, ... }
             result[status] = Object.entries(value as Record<string, boolean>)
                 .filter(([, enabled]) => enabled)
-                .map(([channel]) => channel);
+                .map(([channel]) => channel)
+                .filter((channel) => options.allowUnsupported || isValidNotificationChannel(channel));
         }
     }
     return result;
@@ -281,13 +293,26 @@ export async function updateNotificationChannels(
     encryptionKey?: string,
 ): Promise<Record<string, string[]>> {
     // Normalize from whatever format the UI sends
+    const requestedChannels = normalizeParsedChannels(input, { allowUnsupported: true });
+
+    if (channelsRequirePush(requestedChannels)) {
+        throw new ValidationError("Customer push notifications are not implemented yet. Use Email, SMS, or WhatsApp for customer order notifications.");
+    }
+
     const channels = normalizeParsedChannels(input);
 
     // Validate channel values against the known set
     for (const [status, statusChannels] of Object.entries(channels)) {
-        channels[status] = statusChannels.filter((c) =>
-            (VALID_NOTIFICATION_CHANNELS as readonly string[]).includes(c),
-        );
+        channels[status] = statusChannels.filter(isValidNotificationChannel);
+    }
+
+    if (channelsRequireSms(channels)) {
+        const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
+        if (!smsReadiness.configured) {
+            throw new ValidationError(
+                `Configure an active SMS provider before enabling SMS order notifications.${smsReadiness.error ? ` ${smsReadiness.error}` : ""}`,
+            );
+        }
     }
 
     if (channelsRequireWhatsApp(channels) && !(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
@@ -364,6 +389,18 @@ function normalizeOrderWhatsAppTemplateSettings(
 function channelsRequireWhatsApp(channels: Record<string, string[]>): boolean {
     return Object.values(channels).some((statusChannels) =>
         statusChannels.includes("whatsapp"),
+    );
+}
+
+function channelsRequireSms(channels: Record<string, string[]>): boolean {
+    return Object.values(channels).some((statusChannels) =>
+        statusChannels.includes("sms"),
+    );
+}
+
+function channelsRequirePush(channels: Record<string, string[]>): boolean {
+    return Object.values(channels).some((statusChannels) =>
+        statusChannels.includes("push"),
     );
 }
 

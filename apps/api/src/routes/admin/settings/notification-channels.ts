@@ -11,6 +11,7 @@ import {
     updateOrderWhatsAppTemplateSettings,
     isWhatsAppCloudApiConfigured,
 } from "@scalius/core/modules/settings/settings.service";
+import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
@@ -32,6 +33,8 @@ const customerNotificationSettingsSchema = z.object({
     channels: channelsSchema,
     whatsappTemplate: whatsappTemplateSchema,
     whatsappConfigured: z.boolean(),
+    smsProviderConfigured: z.boolean(),
+    smsProviderError: z.string().nullable(),
 });
 
 const updateCustomerNotificationSettingsSchema = z.object({
@@ -60,7 +63,14 @@ app.openapi(getChannelsRoute, async (c) => {
     const channels = await getNotificationChannels(db);
     const whatsappTemplate = await getOrderWhatsAppTemplateSettings(db);
     const whatsappConfigured = await isWhatsAppCloudApiConfigured(db, encryptionKey);
-    return ok(c, { channels, whatsappTemplate, whatsappConfigured });
+    const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
+    return ok(c, {
+        channels,
+        whatsappTemplate,
+        whatsappConfigured,
+        smsProviderConfigured: smsReadiness.configured,
+        smsProviderError: smsReadiness.error,
+    });
 });
 
 // PUT /notification-channels
@@ -90,7 +100,14 @@ app.openapi(updateChannelsRoute, async (c) => {
         ? await updateOrderWhatsAppTemplateSettings(db, whatsappTemplateInput)
         : await getOrderWhatsAppTemplateSettings(db);
     const whatsappConfigured = await isWhatsAppCloudApiConfigured(db, encryptionKey);
-    return ok(c, { channels: updated, whatsappTemplate, whatsappConfigured });
+    const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
+    return ok(c, {
+        channels: updated,
+        whatsappTemplate,
+        whatsappConfigured,
+        smsProviderConfigured: smsReadiness.configured,
+        smsProviderError: smsReadiness.error,
+    });
 });
 
 // GET /notification-channels/admin-channels

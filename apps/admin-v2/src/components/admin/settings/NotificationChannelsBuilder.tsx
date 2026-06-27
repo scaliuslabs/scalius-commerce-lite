@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Save, Bell, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Loader2, Save, Bell, ShieldCheck } from "lucide-react";
 import {
   getNotificationChannels,
   updateNotificationChannels,
@@ -33,7 +33,6 @@ const CHANNELS = [
   { key: "email", label: "Email" },
   { key: "sms", label: "SMS" },
   { key: "whatsapp", label: "WhatsApp" },
-  { key: "push", label: "Push" },
 ] as const;
 
 const ADMIN_STATUSES = ORDER_STATUSES;
@@ -63,7 +62,6 @@ function getDefaultConfig(): ChannelConfig {
       email: true,
       sms: false,
       whatsapp: false,
-      push: false,
     };
   }
   return config;
@@ -83,6 +81,8 @@ export function NotificationChannelsBuilder() {
   const [channels, setChannels] = useState<ChannelConfig>(getDefaultConfig());
   const [whatsAppTemplate, setWhatsAppTemplate] = useState<WhatsAppTemplateConfig>(DEFAULT_WHATSAPP_TEMPLATE);
   const [isWhatsAppConfigured, setIsWhatsAppConfigured] = useState(false);
+  const [isSmsConfigured, setIsSmsConfigured] = useState(false);
+  const [smsProviderError, setSmsProviderError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -97,9 +97,14 @@ export function NotificationChannelsBuilder() {
           channels?: Record<string, string[]>;
           whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
           whatsappConfigured?: boolean;
+          smsProviderConfigured?: boolean;
+          smsProviderError?: string | null;
         };
         const whatsappConfigured = Boolean(data?.whatsappConfigured);
+        const smsConfigured = Boolean(data?.smsProviderConfigured);
         setIsWhatsAppConfigured(whatsappConfigured);
+        setIsSmsConfigured(smsConfigured);
+        setSmsProviderError(data?.smsProviderError ?? null);
         const channelData = data?.channels;
         if (channelData && typeof channelData === "object") {
           const config = getDefaultConfig();
@@ -107,9 +112,11 @@ export function NotificationChannelsBuilder() {
             const enabledChannels = channelData[status.key];
             if (Array.isArray(enabledChannels)) {
               for (const ch of CHANNELS) {
-                config[status.key][ch.key] = ch.key === "whatsapp" && !whatsappConfigured
-                  ? false
-                  : enabledChannels.includes(ch.key);
+                config[status.key][ch.key] =
+                  (ch.key === "whatsapp" && !whatsappConfigured) ||
+                  (ch.key === "sms" && !smsConfigured)
+                    ? false
+                    : enabledChannels.includes(ch.key);
               }
             }
           }
@@ -156,13 +163,14 @@ export function NotificationChannelsBuilder() {
   }, []);
 
   const handleToggle = (status: StatusKey, channel: ChannelKey) => {
+    if ((channel === "whatsapp" && !isWhatsAppConfigured) || (channel === "sms" && !isSmsConfigured)) {
+      return;
+    }
     setChannels((prev) => ({
       ...prev,
       [status]: {
         ...prev[status],
-        [channel]: channel === "whatsapp" && !isWhatsAppConfigured
-          ? false
-          : !prev[status][channel],
+        [channel]: !prev[status][channel],
       },
     }));
   };
@@ -286,6 +294,26 @@ export function NotificationChannelsBuilder() {
             </div>
           </div>
 
+          {(!isSmsConfigured || !isWhatsAppConfigured) && (
+            <div className="mb-4 grid gap-2">
+              {!isSmsConfigured && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    SMS notifications are locked until an active SMS provider is ready.
+                    {smsProviderError ? ` ${smsProviderError}` : ""}
+                  </span>
+                </div>
+              )}
+              {!isWhatsAppConfigured && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>WhatsApp notifications are locked until Meta WhatsApp Cloud API credentials are ready.</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -314,7 +342,7 @@ export function NotificationChannelsBuilder() {
                       <td key={ch.key} className="text-center py-3 px-4">
                         <Checkbox
                           checked={channels[status.key]?.[ch.key] ?? false}
-                          disabled={ch.key === "whatsapp" && !isWhatsAppConfigured}
+                          disabled={(ch.key === "whatsapp" && !isWhatsAppConfigured) || (ch.key === "sms" && !isSmsConfigured)}
                           onCheckedChange={() =>
                             handleToggle(status.key, ch.key)
                           }

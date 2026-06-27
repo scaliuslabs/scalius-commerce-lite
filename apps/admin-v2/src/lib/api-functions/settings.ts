@@ -187,6 +187,8 @@ export interface NotificationChannelsPayload {
     languageCode: string;
   };
   whatsappConfigured?: boolean;
+  smsProviderConfigured?: boolean;
+  smsProviderError?: string | null;
 }
 export type UpdateNotificationChannelsInput = NotificationChannelsPayload;
 export type AdminNotificationChannelsPayload = NotificationChannelsPayload;
