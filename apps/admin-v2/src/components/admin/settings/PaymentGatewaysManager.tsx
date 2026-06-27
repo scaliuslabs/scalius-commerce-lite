@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-    Loader2, CheckCircle2, ChevronDown, Zap, AlertTriangle,
+    Loader2, CheckCircle2, ChevronDown, Zap, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionContent } from "@/components/ui/accordion";
@@ -52,6 +52,7 @@ export default function PaymentGatewaysManager() {
     const queryClient = useQueryClient();
     const { data: checkoutFlowSettings } = useQuery(checkoutFlowSettingsQueryOptions());
     const [loading, setLoading] = useState(true);
+    const [methodsLoadError, setMethodsLoadError] = useState<string | null>(null);
     const [methods, setMethods] = useState<PaymentMethodsData | null>(null);
     const [enabledMethods, setEnabledMethods] = useState<Set<MethodKey>>(new Set(["cod"]));
     const [defaultMethod, setDefaultMethod] = useState<MethodKey>("cod");
@@ -77,12 +78,18 @@ export default function PaymentGatewaysManager() {
     // Load only payment-methods on mount (1 API call)
     const loadMethods = useCallback(async () => {
         setLoading(true);
+        setMethodsLoadError(null);
         try {
             const d = await getPaymentMethods() as PaymentMethodsData;
             setMethods(d);
             setEnabledMethods(new Set(d.enabledMethods));
             setDefaultMethod(d.defaultMethod);
-        } catch { toast.error("Failed to load payment settings"); }
+        } catch (err) {
+            const message = getServerFnError(err, "Failed to load payment settings");
+            setMethods(null);
+            setMethodsLoadError(message);
+            toast.error(message);
+        }
         finally { setLoading(false); }
     }, []);
 
@@ -128,6 +135,11 @@ export default function PaymentGatewaysManager() {
     };
 
     const saveMethods = async (silent = false) => {
+        if (loading || !methods) {
+            const message = "Reload payment settings before saving checkout visibility.";
+            if (!silent) toast.error(message);
+            return false;
+        }
         setSavingMethods(true);
         try {
             await updatePaymentMethods({ data: { enabledMethods: Array.from(enabledMethods), defaultMethod } });
@@ -235,6 +247,33 @@ export default function PaymentGatewaysManager() {
     };
 
     if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+
+    if (!methods) {
+        return (
+            <Card className="max-w-4xl border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base font-semibold text-amber-950 dark:text-amber-100">
+                        <AlertTriangle className="h-4 w-4" />
+                        Payment settings could not be loaded
+                    </CardTitle>
+                    <CardDescription className="text-amber-900/80 dark:text-amber-200/80">
+                        Checkout visibility is locked until the saved payment-method settings load successfully.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    <p className="rounded-md border border-amber-200/70 bg-background/70 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:text-amber-100">
+                        {methodsLoadError ?? "Reload payment settings before changing checkout visibility."}
+                    </p>
+                </CardContent>
+                <CardFooter className="justify-end">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => void loadMethods()}>
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                        Retry
+                    </Button>
+                </CardFooter>
+            </Card>
+        );
+    }
 
     const defaultOptions = ALL_METHODS.filter((method) => enabledMethods.has(method) && methodAllowedByFlow(method));
     const canSaveMethods = defaultOptions.length > 0 && defaultOptions.includes(defaultMethod);

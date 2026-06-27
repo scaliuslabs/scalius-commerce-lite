@@ -293,6 +293,24 @@ describe("payment settings cache invalidation", () => {
         );
     });
 
+    it("allows an intentional COD-only save in standard checkout mode", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/payment-methods", {
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(mocks.safeBatch).toHaveBeenCalledWith(
+            expect.objectContaining({ id: "db" }),
+            expect.arrayContaining([
+                expect.objectContaining({ statement: "upsert-payment-method-setting" }),
+            ]),
+        );
+        expect(mocks.safeBatch.mock.calls[0]?.[1]).toHaveLength(2);
+    });
+
     it("reports Stripe as not checkout-configured without a publishable key", async () => {
         const { app, env } = createTestApp();
         mocks.getStripeSettings.mockResolvedValueOnce({
