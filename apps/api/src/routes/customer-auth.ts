@@ -598,6 +598,12 @@ const getCustomerOrdersRoute = createRoute({
   path: "/orders",
   tags: ["Customer Auth"],
   summary: "Get orders for authenticated customer",
+  request: {
+    query: z.object({
+      cursor: z.string().min(1).optional(),
+      limit: z.coerce.number().int().min(1).max(50).optional(),
+    }),
+  },
   responses: {
     200: {
       description: "Customer orders list",
@@ -658,6 +664,7 @@ const getCustomerOrdersRoute = createRoute({
               limit: z.number(),
               returned: z.number(),
               hasMore: z.boolean(),
+              nextCursor: z.string().nullable(),
             }),
             customer: z.object({
               id: z.string().optional(),
@@ -684,6 +691,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   setPrivateNoStoreHeaders(c);
 
   const { session } = await requireCustomerSession(c);
+  const query = c.req.valid("query");
 
   // Build a fallback customer profile from session data
   const sessionProfile = {
@@ -704,15 +712,16 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
         pendingOrders: 0,
       },
       pagination: {
-        limit: 50,
+        limit: query.limit ?? 50,
         returned: 0,
         hasMore: false,
+        nextCursor: null,
       },
     });
   }
 
   const db = c.get("db");
-  const result = await getCustomerOrders(db, session.customerId);
+  const result = await getCustomerOrders(db, session.customerId, query);
 
   // Merge session data into profile (DB profile wins, session fills gaps)
   const customer = result.customerProfile

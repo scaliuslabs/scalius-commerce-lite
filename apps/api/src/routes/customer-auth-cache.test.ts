@@ -175,6 +175,7 @@ describe("customer auth private cache policy", () => {
         limit: 50,
         returned: 50,
         hasMore: true,
+        nextCursor: "1780000000~order_1",
       },
       customerProfile: {
         id: "customer_1",
@@ -656,9 +657,30 @@ describe("customer auth private cache policy", () => {
         },
         pagination: {
           hasMore: true,
+          nextCursor: "1780000000~order_1",
         },
       },
     });
+  });
+
+  it("forwards cursor pagination options to customer order history reads", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders?cursor=1780000000~order_1&limit=25",
+      { headers: { Cookie: "cs_tok=session_1" } },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getCustomerOrders).toHaveBeenCalledWith(
+      expect.anything(),
+      "customer_1",
+      {
+        cursor: "1780000000~order_1",
+        limit: 25,
+      },
+    );
   });
 
   it("marks customer order detail reads as private no-store and scopes by customer id", async () => {

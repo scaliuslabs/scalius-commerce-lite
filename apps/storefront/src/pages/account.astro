@@ -479,27 +479,35 @@ const layoutData = await getLayoutData();
 
       const statPending = document.getElementById("statPending");
       if (statPending) statPending.textContent = String(pending);
-      const hasMoreOrders = Boolean(result.pagination?.hasMore);
-      document.getElementById("orderCount")!.textContent = hasMoreOrders
-        ? `${orders.length} of ${totalOrders} orders`
-        : `${orders.length} order${orders.length !== 1 ? "s" : ""}`;
+      let loadedOrders = [...orders];
+      let nextCursor = result.pagination?.nextCursor ?? null;
+      let loadingMoreOrders = false;
+      const updateOrderCount = () => {
+        document.getElementById("orderCount")!.textContent = nextCursor
+          ? `${loadedOrders.length} of ${totalOrders} orders`
+          : `${loadedOrders.length} order${loadedOrders.length !== 1 ? "s" : ""}`;
+      };
+      updateOrderCount();
 
-      if (orders.length === 0) {
+      if (loadedOrders.length === 0) {
         emptyOrders.classList.remove("hidden");
       } else {
         // Client-side pagination: show ORDERS_PER_PAGE at a time
         const ORDERS_PER_PAGE = 5;
-        let visibleCount = Math.min(ORDERS_PER_PAGE, orders.length);
+        let visibleCount = Math.min(ORDERS_PER_PAGE, loadedOrders.length);
 
         function renderVisibleOrders() {
-          ordersList.innerHTML = orders.slice(0, visibleCount).map(renderOrder).join("");
+          ordersList.innerHTML = loadedOrders.slice(0, visibleCount).map(renderOrder).join("");
           bindOrderDetailToggles(ordersList);
 
           const showMoreText = document.getElementById("showMoreText")!;
 
-          if (visibleCount < orders.length) {
-            const remaining = orders.length - visibleCount;
+          if (visibleCount < loadedOrders.length) {
+            const remaining = loadedOrders.length - visibleCount;
             showMoreText.textContent = `Show More (${remaining} remaining)`;
+            showMoreContainer.classList.remove("hidden");
+          } else if (nextCursor) {
+            showMoreText.textContent = "Load Older Orders";
             showMoreContainer.classList.remove("hidden");
           } else {
             showMoreContainer.classList.add("hidden");
@@ -510,8 +518,36 @@ const layoutData = await getLayoutData();
 
         const showMoreBtn = document.getElementById("showMoreBtn") as HTMLButtonElement | null;
         if (showMoreBtn) {
-          showMoreBtn.onclick = () => {
-            visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, orders.length);
+          showMoreBtn.onclick = async () => {
+            if (visibleCount < loadedOrders.length) {
+              visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, loadedOrders.length);
+              renderVisibleOrders();
+              ordersList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              return;
+            }
+
+            if (!nextCursor || loadingMoreOrders) return;
+            loadingMoreOrders = true;
+            showMoreBtn.disabled = true;
+            const showMoreText = document.getElementById("showMoreText")!;
+            showMoreText.textContent = "Loading...";
+            const nextPage = await getCustomerOrders({ cursor: nextCursor });
+            loadingMoreOrders = false;
+            showMoreBtn.disabled = false;
+
+            if (!nextPage.success) {
+              showMoreText.textContent = "Could not load older orders. Try again";
+              return;
+            }
+
+            const existingIds = new Set(loadedOrders.map((order) => order.id));
+            loadedOrders = [
+              ...loadedOrders,
+              ...nextPage.orders.filter((order) => !existingIds.has(order.id)),
+            ];
+            nextCursor = nextPage.pagination?.nextCursor ?? null;
+            visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, loadedOrders.length);
+            updateOrderCount();
             renderVisibleOrders();
             ordersList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
           };

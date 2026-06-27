@@ -134,6 +134,55 @@ export type CustomerAccountOrderSummary = {
     pendingOrders: number;
 };
 
+type CustomerOrdersCursor = {
+    createdAt: number;
+    id: string;
+};
+
+export type CustomerOrdersPageOptions = {
+    cursor?: string;
+    limit?: number;
+};
+
+const CUSTOMER_ORDERS_DEFAULT_LIMIT = 50;
+const CUSTOMER_ORDERS_MAX_LIMIT = 50;
+const CUSTOMER_ORDER_CURSOR_SEPARATOR = "~";
+
+export function encodeCustomerOrdersCursor(order: { createdAt: number | null | undefined; id: string }): string | null {
+    if (!order.createdAt || !Number.isFinite(Number(order.createdAt))) return null;
+    return `${Math.floor(Number(order.createdAt))}${CUSTOMER_ORDER_CURSOR_SEPARATOR}${encodeURIComponent(order.id)}`;
+}
+
+export function decodeCustomerOrdersCursor(cursor: string | undefined): CustomerOrdersCursor | null {
+    const trimmed = cursor?.trim();
+    if (!trimmed) return null;
+
+    const separatorIndex = trimmed.indexOf(CUSTOMER_ORDER_CURSOR_SEPARATOR);
+    if (separatorIndex <= 0 || separatorIndex === trimmed.length - 1) {
+        throw new ValidationError("Invalid order-history cursor.");
+    }
+
+    const createdAt = Number(trimmed.slice(0, separatorIndex));
+    const encodedId = trimmed.slice(separatorIndex + 1);
+    let id: string;
+    try {
+        id = decodeURIComponent(encodedId);
+    } catch {
+        throw new ValidationError("Invalid order-history cursor.");
+    }
+
+    if (!Number.isInteger(createdAt) || createdAt <= 0 || !id) {
+        throw new ValidationError("Invalid order-history cursor.");
+    }
+
+    return { createdAt, id };
+}
+
+function normalizeCustomerOrdersLimit(limit: number | undefined): number {
+    if (!Number.isFinite(Number(limit))) return CUSTOMER_ORDERS_DEFAULT_LIMIT;
+    return Math.min(Math.max(Math.floor(Number(limit)), 1), CUSTOMER_ORDERS_MAX_LIMIT);
+}
+
 export function getCustomerVisibleBalanceDue(order: CustomerOrderMoneyState): number {
     if (
         CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET.has(order.status) ||
@@ -172,6 +221,33 @@ export function summarizeCustomerAccountOrders(rows: CustomerOrderMoneyState[]):
         completedOrders: rows.filter((order) => CUSTOMER_COMPLETED_ORDER_STATUS_SET.has(order.status)).length,
         pendingOrders: rows.filter((order) => CUSTOMER_PENDING_ORDER_STATUS_SET.has(order.status)).length,
     };
+}
+
+export function buildCustomerOrderBaseTimelineEvents(order: {
+    id: string;
+    status: string;
+    createdAt: number | null;
+    updatedAt: number | null;
+}): CustomerOrderDetailTimelineEvent[] {
+    const currentStatusLabel = normalizeStatusLabel(order.status);
+    return [
+        {
+            id: `order-created:${order.id}`,
+            type: "order",
+            status: "placed",
+            label: "Order placed",
+            happenedAt: timestampToIso(order.createdAt),
+            details: "We received your order.",
+        },
+        {
+            id: `order-status:${order.id}:${order.status}`,
+            type: "order",
+            status: order.status,
+            label: `Current status: ${currentStatusLabel}`,
+            happenedAt: timestampToIso(order.updatedAt ?? order.createdAt),
+            details: `Order is currently ${currentStatusLabel}.`,
+        },
+    ];
 }
 
 export async function listCustomers(
@@ -502,6 +578,7 @@ export async function bulkDeleteCustomers(db: Database, ids: string[], permanent
 export async function getCustomerOrders(
     db: Database,
     customerId: string,
+    options: CustomerOrdersPageOptions = {},
 ) {
     // Fetch full customer profile from DB
     const dbCustomer = await db
@@ -544,7 +621,22 @@ export async function getCustomerOrders(
             isNull(orders.deletedAt),
         ));
 
-    const orderListLimit = 50;
+    const orderListLimit = normalizeCustomerOrdersLimit(options.limit);
+    const cursor = decodeCustomerOrdersCursor(options.cursor);
+    const orderWhereConditions: SQL[] = [
+        eq(orders.customerId, customerId),
+        isNull(orders.deletedAt),
+    ];
+    if (cursor) {
+        orderWhereConditions.push(sql`(
+            CAST(${orders.createdAt} AS INTEGER) < ${cursor.createdAt}
+            OR (
+                CAST(${orders.createdAt} AS INTEGER) = ${cursor.createdAt}
+                AND ${orders.id} < ${cursor.id}
+            )
+        )`);
+    }
+
     const customerOrdersQuery = db
         .select({
             id: orders.id,
@@ -567,11 +659,8 @@ export async function getCustomerOrders(
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
         })
         .from(orders)
-        .where(and(
-            eq(orders.customerId, customerId),
-            isNull(orders.deletedAt),
-        ))
-        .orderBy(desc(orders.createdAt))
+        .where(and(...orderWhereConditions))
+        .orderBy(desc(orders.createdAt), desc(orders.id))
         .limit(orderListLimit + 1);
 
     const [accountSummaryRows, customerOrdersWithLookahead] = await db.batch([
@@ -603,6 +692,7 @@ export async function getCustomerOrders(
 
     const customerOrders = customerOrdersWithLookahead.slice(0, orderListLimit);
     const hasMore = customerOrdersWithLookahead.length > orderListLimit;
+    const nextCursor = hasMore ? encodeCustomerOrdersCursor(customerOrders[customerOrders.length - 1]!) : null;
     const accountSummary = accountSummaryRows[0];
     const summary: CustomerAccountOrderSummary = accountSummary
         ? {
@@ -728,6 +818,7 @@ export async function getCustomerOrders(
             limit: orderListLimit,
             returned: formattedOrders.length,
             hasMore,
+            nextCursor,
         },
     };
 }
@@ -1021,16 +1112,7 @@ export async function getCustomerOrderDetail(
         createdAt: timestampToIso(receipt.createdAt),
     }));
 
-    const timeline: CustomerOrderDetailTimelineEvent[] = [
-        {
-            id: `order-created:${order.id}`,
-            type: "order",
-            status: order.status,
-            label: "Order placed",
-            happenedAt: timestampToIso(order.createdAt),
-            details: `Status: ${normalizeStatusLabel(order.status)}`,
-        },
-    ];
+    const timeline: CustomerOrderDetailTimelineEvent[] = buildCustomerOrderBaseTimelineEvents(order);
 
     for (const payment of formattedPayments) {
         timeline.push({
