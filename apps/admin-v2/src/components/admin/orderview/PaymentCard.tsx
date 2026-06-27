@@ -60,17 +60,23 @@ type CodFailureReason = Extract<
 
 interface OrderPayment {
   id: string;
+  orderId: string;
   amount: number;
   currency: string;
   paymentMethod: string;
   paymentType: string;
   status: string;
   stripePaymentIntentId: string | null;
+  stripeChargeId: string | null;
   sslcommerzTranId: string | null;
   sslcommerzValId: string | null;
+  sslcommerzBankTranId: string | null;
+  polarCheckoutId: string | null;
   codCollectedBy: string | null;
   codCollectedAt: number | null;
+  codReceiptUrl: string | null;
   createdAt: number;
+  updatedAt: number;
 }
 
 interface PaymentPlan {
@@ -147,9 +153,50 @@ const REFUND_SEVERITY_CLASS: Record<string, string> = {
 
 function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
   if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
+  const date = value instanceof Date
+    ? value
+    : typeof value === "number"
+      ? new Date(value < 10_000_000_000 ? value * 1000 : value)
+      : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleString();
+}
+
+function formatRefundReason(reason: string | null | undefined): string | null {
+  if (!reason) return null;
+  return reason
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function refundTimestampLabel(attempt: OrderRefundAttempt): string | null {
+  const settledAt = formatTimestamp(attempt.refundedAt);
+  if (settledAt) return `Settled ${settledAt}`;
+
+  const failedAt = formatTimestamp(attempt.failedAt);
+  if (failedAt) return `Failed ${failedAt}`;
+
+  const nextProbeAt = formatTimestamp(attempt.nextProbeAt);
+  if (nextProbeAt) return `Next check ${nextProbeAt}`;
+
+  const lastProbeAt = formatTimestamp(attempt.lastProbeAt);
+  if (lastProbeAt) return `Last checked ${lastProbeAt}`;
+
+  return formatTimestamp(attempt.createdAt);
+}
+
+function paymentReferences(payment: OrderPayment): Array<{ label: string; value: string }> {
+  return [
+    { label: "Payment row", value: payment.id },
+    { label: "Stripe intent", value: payment.stripePaymentIntentId ?? "" },
+    { label: "Stripe charge", value: payment.stripeChargeId ?? "" },
+    { label: "SSL tran", value: payment.sslcommerzTranId ?? "" },
+    { label: "SSL val", value: payment.sslcommerzValId ?? "" },
+    { label: "SSL bank tran", value: payment.sslcommerzBankTranId ?? "" },
+    { label: "Polar checkout", value: payment.polarCheckoutId ?? "" },
+  ].filter((entry) => entry.value);
 }
 
 interface PaymentCardProps {
@@ -320,15 +367,18 @@ export function PaymentCard({ order }: PaymentCardProps) {
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold">{activeRefundOperation.label}</p>
-                  <p className="mt-1 opacity-90">{activeRefundOperation.message}</p>
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80">
-                    <span>{activeRefundOperation.currency} {activeRefundOperation.amount.toLocaleString()}</span>
-                    <span>{activeRefundOperation.attemptCount} allocation{activeRefundOperation.attemptCount === 1 ? "" : "s"}</span>
-                    {activeRefundOperation.refundReference && <span className="font-mono">Ref {activeRefundOperation.refundReference}</span>}
-                    {activeRefundOperation.nextProbeAt && <span>Next check {formatTimestamp(activeRefundOperation.nextProbeAt)}</span>}
-                  </div>
-                </div>
+	                  <p className="font-semibold">{activeRefundOperation.label}</p>
+	                  <p className="mt-1 opacity-90">{activeRefundOperation.message}</p>
+	                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80">
+	                    <span>{activeRefundOperation.currency} {activeRefundOperation.amount.toLocaleString()}</span>
+	                    <span>{activeRefundOperation.attemptCount} allocation{activeRefundOperation.attemptCount === 1 ? "" : "s"}</span>
+	                    {activeRefundOperation.reason && <span>Reason: {formatRefundReason(activeRefundOperation.reason)}</span>}
+	                    {activeRefundOperation.refundReference && <span className="font-mono">Ref {activeRefundOperation.refundReference}</span>}
+	                    {activeRefundOperation.providerRefundId && <span className="font-mono">Provider {activeRefundOperation.providerRefundId}</span>}
+	                    {activeRefundOperation.providerCorrelationId && <span className="font-mono">Correlation {activeRefundOperation.providerCorrelationId}</span>}
+	                    {activeRefundOperation.nextProbeAt && <span>Next check {formatTimestamp(activeRefundOperation.nextProbeAt)}</span>}
+	                  </div>
+	                </div>
               </div>
             </div>
           )}
@@ -611,24 +661,41 @@ export function PaymentCard({ order }: PaymentCardProps) {
           {refundAttempts.length > 0 && (
             <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Refund operations</div>
-              {refundAttempts.map((attempt) => (
-                <div key={attempt.id} className="flex items-start justify-between gap-3 text-xs">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-foreground">{attempt.label}</span>
-                      <Badge variant={attempt.severity === "danger" ? "destructive" : attempt.severity === "success" ? "default" : "secondary"} className="text-[10px]">
-                        {attempt.status}
-                      </Badge>
+              {refundAttempts.map((attempt) => {
+                const timestampLabel = refundTimestampLabel(attempt);
+                return (
+                  <div key={attempt.id} className="flex items-start justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-foreground">{attempt.label}</span>
+                        <Badge variant={attempt.severity === "danger" ? "destructive" : attempt.severity === "success" ? "default" : "secondary"} className="text-[10px]">
+                          {attempt.status}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">{attempt.message}</p>
+                      {attempt.lastError && <p className="mt-1 truncate text-destructive">{attempt.lastError}</p>}
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+                        {attempt.reason && <span>Reason: {formatRefundReason(attempt.reason)}</span>}
+                        {attempt.refundReference && <span className="font-mono">Internal ref: {attempt.refundReference}</span>}
+                        {attempt.providerRefundId && <span className="font-mono">Provider refund: {attempt.providerRefundId}</span>}
+                        {attempt.providerCorrelationId && <span className="font-mono">Correlation: {attempt.providerCorrelationId}</span>}
+                        {attempt.providerStatus && <span>Provider status: {attempt.providerStatus}</span>}
+                        {attempt.sourcePaymentId && <span className="font-mono">Source: {attempt.sourcePaymentId}</span>}
+                        {attempt.sourceTransactionId && <span className="font-mono">Source txn: {attempt.sourceTransactionId}</span>}
+                        {attempt.refundPaymentId && <span className="font-mono">Refund row: {attempt.refundPaymentId}</span>}
+                        {attempt.allocationCount && attempt.allocationCount > 1 && (
+                          <span>Allocation {(attempt.allocationIndex ?? 0) + 1} of {attempt.allocationCount}</span>
+                        )}
+                        {attempt.attempts != null && attempt.attempts > 0 && <span>{attempt.attempts} probe attempt{attempt.attempts === 1 ? "" : "s"}</span>}
+                        {timestampLabel && <span>{timestampLabel}</span>}
+                      </div>
                     </div>
-                    <p className="mt-1 text-muted-foreground">{attempt.message}</p>
-                    {attempt.lastError && <p className="mt-1 truncate text-destructive">{attempt.lastError}</p>}
-                    {attempt.providerRefundId && <p className="mt-1 font-mono text-muted-foreground">Provider refund: {attempt.providerRefundId}</p>}
+                    <span className="shrink-0 font-medium text-foreground">
+                      {attempt.currency} {attempt.amount.toLocaleString()}
+                    </span>
                   </div>
-                  <span className="shrink-0 font-medium text-foreground">
-                    {attempt.currency} {attempt.amount.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -657,23 +724,32 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       {p.status}
                     </Badge>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>{PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</span>
-                    <span className="font-medium text-foreground">
-                      {p.currency} {p.amount.toLocaleString()}
-                    </span>
-                  </div>
-                  {p.stripePaymentIntentId && (
-                    <div className="text-muted-foreground font-mono truncate">
-                      PI: {p.stripePaymentIntentId}
-                    </div>
-                  )}
-                  {p.sslcommerzTranId && (
-                    <div className="text-muted-foreground font-mono truncate">
-                      Tran: {p.sslcommerzTranId}
-                    </div>
-                  )}
-                </div>
+	                  <div className="flex justify-between text-muted-foreground">
+	                    <span>{PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</span>
+	                    <span className="font-medium text-foreground">
+	                      {p.currency} {p.amount.toLocaleString()}
+	                    </span>
+	                  </div>
+	                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+	                    {paymentReferences(p).map((reference) => (
+	                      <span key={`${p.id}-${reference.label}`} className="min-w-0 truncate font-mono">
+	                        {reference.label}: {reference.value}
+	                      </span>
+	                    ))}
+	                    {p.codCollectedBy && <span>COD collector: {p.codCollectedBy}</span>}
+	                    {formatTimestamp(p.codCollectedAt) && <span>COD collected: {formatTimestamp(p.codCollectedAt)}</span>}
+	                  </div>
+	                  {p.codReceiptUrl && (
+	                    <a
+	                      href={p.codReceiptUrl}
+	                      target="_blank"
+	                      rel="noreferrer"
+	                      className="inline-flex text-muted-foreground underline underline-offset-2 hover:text-foreground"
+	                    >
+	                      COD receipt
+	                    </a>
+	                  )}
+	                </div>
               ))}
             </div>
           )}

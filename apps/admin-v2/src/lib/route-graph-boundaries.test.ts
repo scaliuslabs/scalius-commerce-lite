@@ -1039,5 +1039,18 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("paymentWebhookIssues");
     expect(source).toContain("Payment webhook needs review");
     expect(source).toContain("Check the gateway dashboard before changing payment-sensitive order state.");
+    expect(source).toContain("Internal ref:");
+    expect(source).toContain("Provider refund:");
+    expect(source).toContain("Refund row:");
+  });
+
+  it("keeps order-detail refund recovery context as the payment-card fallback", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("refundAttempts: order.refundAttempts");
+    expect(source).toContain("activeRefundOperation: order.activeRefundOperation");
   });
 });
