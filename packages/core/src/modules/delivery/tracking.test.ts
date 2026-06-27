@@ -1,18 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deliveryShipments, orderPayments, orders, refundAttempts, OrderStatus } from "@scalius/database/schema";
+import { deliveryShipments, orderPayments, orders, refundAttempts, OrderStatus, ShipmentStatus } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
+  markShipmentReconciliationRequired: vi.fn(),
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
+vi.mock("./delivery.service", () => ({
+  markShipmentReconciliationRequired: mocks.markShipmentReconciliationRequired,
+}));
+
 import { updateOrderStatusFromShipment } from "./tracking";
 
 function createDbMock({
   shipmentStatus,
+  shipmentOverrides = {},
   orderStatus,
   orderOverrides = {},
   updateRows = [{ id: "order_1" }],
@@ -20,6 +26,7 @@ function createDbMock({
   legacyPendingRefund = null,
 }: {
   shipmentStatus: string;
+  shipmentOverrides?: Record<string, unknown>;
   orderStatus: string;
   orderOverrides?: Record<string, unknown>;
   updateRows?: Array<{ id: string }>;
@@ -27,7 +34,8 @@ function createDbMock({
   legacyPendingRefund?: Record<string, unknown> | null;
 }) {
   const updates: Array<Record<string, unknown>> = [];
-  const shipmentRow = { id: "shipment_1", orderId: "order_1", status: shipmentStatus };
+  const updateTables: unknown[] = [];
+  const shipmentRow = { id: "shipment_1", orderId: "order_1", status: shipmentStatus, ...shipmentOverrides };
   const orderRow = {
     id: "order_1",
     status: orderStatus,
@@ -59,7 +67,8 @@ function createDbMock({
         },
       };
     },
-    update() {
+    update(table: unknown) {
+      updateTables.push(table);
       return {
         set(values: Record<string, unknown>) {
           updates.push(values);
@@ -75,7 +84,7 @@ function createDbMock({
     },
   };
 
-  return { db, updates };
+  return { db, updates, updateTables };
 }
 
 describe("delivery shipment to order status mapping", () => {
@@ -84,6 +93,7 @@ describe("delivery shipment to order status mapping", () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     mocks.applyInventoryForStatusChange.mockResolvedValue("deducted");
+    mocks.markShipmentReconciliationRequired.mockResolvedValue(undefined);
   });
 
   it("maps out_for_delivery to shipped", async () => {
@@ -215,5 +225,68 @@ describe("delivery shipment to order status mapping", () => {
       OrderStatus.SHIPPED,
     );
     expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
+  });
+
+  it("marks the shipment for reconciliation when inventory fails after the order status CAS wins", async () => {
+    const inventoryError = new Error("inventory transition failed");
+    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(inventoryError);
+    const { db, updates } = createDbMock({
+      shipmentStatus: "out_for_delivery",
+      orderStatus: OrderStatus.CONFIRMED,
+    });
+
+    await expect(updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery"))
+      .rejects.toThrow("inventory transition failed");
+
+    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 6 });
+    expect(mocks.markShipmentReconciliationRequired).toHaveBeenCalledWith(
+      db,
+      "shipment_1",
+      "order_status_inventory_reconcile_failed",
+      {
+        status: "out_for_delivery",
+        metadata: {
+          orderStatusSync: {
+            shipmentStatus: "out_for_delivery",
+            orderStatus: OrderStatus.SHIPPED,
+            failedStep: "inventory_reconciliation",
+          },
+        },
+      },
+      inventoryError,
+    );
+  });
+
+  it("clears shipment reconciliation after a same-status inventory retry succeeds", async () => {
+    const { db, updates, updateTables } = createDbMock({
+      shipmentStatus: ShipmentStatus.RECONCILE_REQUIRED,
+      shipmentOverrides: {
+        metadata: JSON.stringify({
+          reconciliation: { required: true },
+          orderStatusSync: { failedStep: "inventory_reconciliation" },
+        }),
+      },
+      orderStatus: OrderStatus.SHIPPED,
+      orderOverrides: {
+        inventoryAction: "reserved",
+      },
+    });
+
+    const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery");
+
+    expect(result).toBeNull();
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
+      db,
+      "order_1",
+      OrderStatus.SHIPPED,
+    );
+    expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
+    expect(updateTables[1]).toBe(deliveryShipments);
+    expect(updates[1]).toMatchObject({
+      status: "out_for_delivery",
+      rawStatus: "out_for_delivery",
+      metadata: null,
+    });
+    expect(mocks.markShipmentReconciliationRequired).not.toHaveBeenCalled();
   });
 });
