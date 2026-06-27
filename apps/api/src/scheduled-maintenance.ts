@@ -12,6 +12,7 @@ import { cleanupExpiredScannerTokenClaims } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
+import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
@@ -25,6 +26,8 @@ export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
+export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
+export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 
 export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionContext): Promise<void> {
   const db = getDb(env);
@@ -125,6 +128,25 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
         `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
         `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
         `hasMore=${refundReconciliation.hasMore}`,
+    );
+  }
+
+  const staleQueuedPaymentWebhookCutoff =
+    Math.floor(Date.now() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60;
+  const staleQueuedPaymentWebhooks = await failStaleQueuedPaymentWebhookEvents(
+    db,
+    staleQueuedPaymentWebhookCutoff,
+    { limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT },
+  );
+  if (
+    staleQueuedPaymentWebhooks.scanned > 0 ||
+    staleQueuedPaymentWebhooks.failed > 0 ||
+    staleQueuedPaymentWebhooks.hasMore
+  ) {
+    console.log(
+      `[scheduled] Stale queued payment webhook sweep: scanned=${staleQueuedPaymentWebhooks.scanned}, ` +
+        `failed=${staleQueuedPaymentWebhooks.failed}, limit=${staleQueuedPaymentWebhooks.limit}, ` +
+        `hasMore=${staleQueuedPaymentWebhooks.hasMore}`,
     );
   }
 

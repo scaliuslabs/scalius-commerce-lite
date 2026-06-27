@@ -333,6 +333,7 @@ export const webhookEvents = sqliteTable("webhook_events", {
 }, (table) => [
     index("webhook_events_provider_idx").on(table.provider),
     index("webhook_events_order_id_idx").on(table.orderId),
+    index("webhook_events_status_processed_at_idx").on(table.status, table.processedAt),
 ]);
 
 export const orderNotificationOutbox = sqliteTable("order_notification_outbox", {

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     cleanupExpiredScannerTokenClaims: vi.fn(),
     reconcileDueRefundAttempts: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
+    failStaleQueuedPaymentWebhookEvents: vi.fn(),
   };
 });
 
@@ -56,6 +57,10 @@ vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
 }));
 
+vi.mock("./utils/webhook-idempotency", () => ({
+  failStaleQueuedPaymentWebhookEvents: mocks.failStaleQueuedPaymentWebhookEvents,
+}));
+
 import {
   ABANDONED_CHECKOUT_RETENTION_DAYS,
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
@@ -67,6 +72,8 @@ import {
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
+  STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES,
+  STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
   runScheduledMaintenance,
@@ -158,6 +165,12 @@ describe("runScheduledMaintenance", () => {
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
       hasMore: false,
     });
+    mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({
+      scanned: 0,
+      failed: 0,
+      limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
+      hasMore: false,
+    });
   });
 
   afterEach(() => {
@@ -211,6 +224,12 @@ describe("runScheduledMaintenance", () => {
       errors: [],
       finalizedOrderIds: ["order_refunded"],
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+      hasMore: false,
+    });
+    mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({
+      scanned: 2,
+      failed: 2,
+      limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
       hasMore: false,
     });
     mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
@@ -285,6 +304,11 @@ describe("runScheduledMaintenance", () => {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     });
+    expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalledWith(
+      mocks.db,
+      Math.floor(now.getTime() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60,
+      { limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT },
+    );
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalledWith(
       mocks.db,
       Math.floor(now.getTime() / 1000),
@@ -318,6 +342,7 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalled();
+    expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpRateLimits).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();

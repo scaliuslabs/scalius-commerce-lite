@@ -1,9 +1,17 @@
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { webhookEvents } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 
 export type WebhookEventStatus = "processing" | "queued" | "processed" | "failed" | "manual_reconciliation";
 export const DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS = 5 * 60;
+export const PAYMENT_WEBHOOK_PROVIDERS = ["stripe", "sslcommerz", "polar"] as const;
+
+export interface StaleQueuedWebhookSweepResult {
+  scanned: number;
+  failed: number;
+  limit: number;
+  hasMore: boolean;
+}
 
 export interface WebhookEventClaim {
   id: string;
@@ -165,6 +173,62 @@ export async function markWebhookEventManualReconciliation(
   result?: unknown,
 ): Promise<void> {
   await markWebhookEvent(db, id, "manual_reconciliation", result);
+}
+
+export async function failStaleQueuedPaymentWebhookEvents(
+  db: Database,
+  cutoffSeconds: number,
+  options: { limit?: number } = {},
+): Promise<StaleQueuedWebhookSweepResult> {
+  const limit = Math.max(1, Math.min(options.limit ?? 25, 100));
+  const cutoffDate = new Date(cutoffSeconds * 1000);
+  const candidates = await db
+    .select({
+      id: webhookEvents.id,
+      provider: webhookEvents.provider,
+      eventType: webhookEvents.eventType,
+      orderId: webhookEvents.orderId,
+      processedAt: webhookEvents.processedAt,
+    })
+    .from(webhookEvents)
+    .where(and(
+      eq(webhookEvents.status, "queued"),
+      inArray(webhookEvents.provider, PAYMENT_WEBHOOK_PROVIDERS),
+      lte(webhookEvents.processedAt, cutoffDate),
+    ))
+    .limit(limit + 1);
+
+  const targetRows = candidates.slice(0, limit);
+  if (targetRows.length === 0) {
+    return { scanned: 0, failed: 0, limit, hasMore: false };
+  }
+
+  const sweptAtSeconds = Math.floor(Date.now() / 1000);
+  const result = {
+    reason: "stale_queued_payment_webhook",
+    cutoffSeconds,
+    sweptAtSeconds,
+    count: targetRows.length,
+  };
+  const updated = await db
+    .update(webhookEvents)
+    .set({
+      status: "failed",
+      result: JSON.stringify(result),
+      processedAt: sql`unixepoch()`,
+    })
+    .where(and(
+      eq(webhookEvents.status, "queued"),
+      inArray(webhookEvents.id, targetRows.map((row) => row.id)),
+    ))
+    .returning({ id: webhookEvents.id });
+
+  return {
+    scanned: targetRows.length,
+    failed: updated.length,
+    limit,
+    hasMore: candidates.length > limit,
+  };
 }
 
 async function markWebhookEvent(

@@ -3,6 +3,7 @@ import type { Database } from "@scalius/database/client";
 import {
   DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS,
   claimWebhookEvent,
+  failStaleQueuedPaymentWebhookEvents,
 } from "./webhook-idempotency";
 
 interface StoredWebhookEvent {
@@ -74,6 +75,68 @@ function createWebhookDb(
           then: (resolve: (value: unknown[]) => void, reject: (reason?: unknown) => void) =>
             Promise.resolve(applyUpdate(values, false)).then(resolve, reject),
           returning: async () => applyUpdate(values, true),
+        }),
+      }),
+    }),
+  } as unknown as Database;
+
+  return { db, rows };
+}
+
+function createStaleQueuedWebhookSweepDb(
+  initialRows: StoredWebhookEvent[],
+  cutoffSeconds: number,
+): { db: Database; rows: Map<string, StoredWebhookEvent> } {
+  const rows = new Map(initialRows.map((row) => [row.id, { ...row }]));
+  let selectedIds: string[] = [];
+  let updateLimit = 0;
+
+  const paymentProviders = new Set(["stripe", "sslcommerz", "polar"]);
+  const staleQueuedRows = () => [...rows.values()]
+    .filter((row) =>
+      row.status === "queued" &&
+      paymentProviders.has(row.provider) &&
+      row.processedAt <= cutoffSeconds,
+    )
+    .sort((left, right) => left.processedAt - right.processedAt);
+
+  const db = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async (limit: number) => {
+            updateLimit = Math.max(0, limit - 1);
+            const selected = staleQueuedRows().slice(0, limit);
+            selectedIds = selected.map((row) => row.id);
+            return selected.map((row) => ({
+              id: row.id,
+              provider: row.provider,
+              eventType: row.eventType,
+              orderId: row.orderId,
+              processedAt: row.processedAt,
+            }));
+          },
+        }),
+      }),
+    }),
+    update: () => ({
+      set: (values: Record<string, unknown>) => ({
+        where: () => ({
+          returning: async () => {
+            const targetIds = new Set(selectedIds.slice(0, updateLimit));
+            const updated: Array<{ id: string }> = [];
+            for (const id of targetIds) {
+              const row = rows.get(id);
+              if (!row || row.status !== "queued") continue;
+              rows.set(id, {
+                ...row,
+                status: String(values.status),
+                result: String(values.result),
+              });
+              updated.push({ id });
+            }
+            return updated;
+          },
         }),
       }),
     }),
@@ -221,6 +284,76 @@ describe("webhook idempotency claims", () => {
         existing: { status },
       });
     }
+  });
+
+  it("marks only stale queued payment webhook events failed in bounded batches", async () => {
+    const cutoffSeconds = 1_000;
+    const { db, rows } = createStaleQueuedWebhookSweepDb([
+      {
+        id: "stripe:payment_intent.succeeded:evt_old",
+        provider: "stripe",
+        eventType: "payment_intent.succeeded",
+        orderId: "order_1",
+        status: "queued",
+        result: null,
+        processedAt: 900,
+      },
+      {
+        id: "polar:order.paid:evt_old",
+        provider: "polar",
+        eventType: "order.paid",
+        orderId: "order_2",
+        status: "queued",
+        result: null,
+        processedAt: 950,
+      },
+      {
+        id: "sslcommerz:ipn:evt_extra",
+        provider: "sslcommerz",
+        eventType: "ipn",
+        orderId: "order_3",
+        status: "queued",
+        result: null,
+        processedAt: 990,
+      },
+      {
+        id: "pathao:shipment:evt_old",
+        provider: "pathao",
+        eventType: "shipment",
+        orderId: "order_4",
+        status: "queued",
+        result: null,
+        processedAt: 800,
+      },
+      {
+        id: "stripe:payment_intent.succeeded:evt_fresh",
+        provider: "stripe",
+        eventType: "payment_intent.succeeded",
+        orderId: "order_5",
+        status: "queued",
+        result: null,
+        processedAt: 1_001,
+      },
+    ], cutoffSeconds);
+
+    const result = await failStaleQueuedPaymentWebhookEvents(db, cutoffSeconds, { limit: 2 });
+
+    expect(result).toEqual({
+      scanned: 2,
+      failed: 2,
+      limit: 2,
+      hasMore: true,
+    });
+    expect(rows.get("stripe:payment_intent.succeeded:evt_old")?.status).toBe("failed");
+    expect(rows.get("polar:order.paid:evt_old")?.status).toBe("failed");
+    expect(rows.get("sslcommerz:ipn:evt_extra")?.status).toBe("queued");
+    expect(rows.get("pathao:shipment:evt_old")?.status).toBe("queued");
+    expect(rows.get("stripe:payment_intent.succeeded:evt_fresh")?.status).toBe("queued");
+    expect(JSON.parse(rows.get("stripe:payment_intent.succeeded:evt_old")?.result ?? "{}")).toMatchObject({
+      reason: "stale_queued_payment_webhook",
+      cutoffSeconds,
+      count: 2,
+    });
   });
 
   it("throws insert failures when no existing claim is found", async () => {
