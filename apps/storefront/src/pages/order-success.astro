@@ -329,7 +329,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
       </div>
     </div>
 
-    <OrderSuccessButtons client:load />
+    <OrderSuccessButtons orderId={order.id} client:load />
     ) : (
       <div class="mx-auto max-w-lg py-10 text-center">
         <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
