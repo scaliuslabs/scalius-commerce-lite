@@ -316,6 +316,7 @@ function createReturnDbWithLostStatusCas() {
     id: "ord_return_cas",
     status: OrderStatus.DELIVERED,
     paymentStatus: PaymentStatus.PAID,
+    inventoryAction: "deducted",
     version: 4,
   };
 
@@ -325,6 +326,33 @@ function createReturnDbWithLostStatusCas() {
   return {
     select: vi.fn(() => createChain(selectResults[selectIndex++])),
     update: vi.fn(() => createChain([])),
+  };
+}
+
+function createReturnDbWithInventoryFailureAfterStatusCas() {
+  const order = {
+    id: "ord_return_inventory",
+    status: OrderStatus.DELIVERED,
+    paymentStatus: PaymentStatus.PAID,
+    inventoryAction: "deducted",
+    version: 4,
+  };
+
+  const selectResults = [order, null, null];
+  let selectIndex = 0;
+  const updates: Array<Record<string, unknown>> = [];
+
+  return {
+    updates,
+    select: vi.fn(() => createChain(selectResults[selectIndex++])),
+    update: vi.fn(() => {
+      const chain = createChain([{ id: order.id }]);
+      chain.set = vi.fn((values: Record<string, unknown>) => {
+        updates.push(values);
+        return chain;
+      });
+      return chain;
+    }),
   };
 }
 
@@ -385,6 +413,7 @@ function createAlreadyReturnedDb() {
     id: "ord_return_cas",
     status: OrderStatus.RETURNED,
     paymentStatus: PaymentStatus.PAID,
+    inventoryAction: "restored",
     version: 5,
   };
 
@@ -844,6 +873,31 @@ describe("refund validation", () => {
       })).rejects.toThrow("Order was modified by another request");
 
       expect(applyInventoryForStatusChange).not.toHaveBeenCalled();
+    });
+
+    it("rolls back the return status claim when inventory restoration fails before inventoryAction changes", async () => {
+      const inventoryError = new Error("inventory transition failed");
+      const applyInventoryForStatusChange = vi.fn(async () => {
+        throw inventoryError;
+      });
+      const { processReturn } = await importRefundServiceWithMocks({
+        applyInventoryForStatusChange,
+      });
+      const db = createReturnDbWithInventoryFailureAfterStatusCas();
+
+      await expect(processReturn(db as never, undefined, {
+        orderId: "ord_return_inventory",
+        reason: "Customer returned package",
+        autoRefund: false,
+      })).rejects.toThrow("inventory transition failed");
+
+      expect(applyInventoryForStatusChange).toHaveBeenCalledWith(
+        db,
+        "ord_return_inventory",
+        OrderStatus.RETURNED,
+      );
+      expect(db.updates[0]).toMatchObject({ status: OrderStatus.RETURNED });
+      expect(db.updates[1]).toMatchObject({ status: OrderStatus.DELIVERED });
     });
 
     it("does not call refund inventory release when the cancellation status CAS loses", async () => {

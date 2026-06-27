@@ -38,6 +38,7 @@ import {
     SHIPMENT_CLAIM_CONFLICT_MESSAGE,
     SHIPMENT_CLAIM_LEASE_SECONDS,
 } from "./shipment-claim";
+import { rollbackOrderStatusIfInventoryUnchanged } from "./order-status-claim";
 
 async function reconcileInventoryForStatus(
     db: Database,
@@ -46,28 +47,6 @@ async function reconcileInventoryForStatus(
 ): Promise<void> {
     const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
     await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
-}
-
-async function rollbackStatusClaimIfInventoryUnchanged(
-    db: Database,
-    params: {
-        orderId: string;
-        previousStatus: string;
-        claimedStatus: string;
-        claimedVersion: number;
-        previousInventoryAction: string;
-    },
-): Promise<void> {
-    await db.update(orders).set({
-        status: params.previousStatus,
-        version: sql`${orders.version} + 1`,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(
-        eq(orders.id, params.orderId),
-        eq(orders.status, params.claimedStatus),
-        eq(orders.version, params.claimedVersion),
-        eq(orders.inventoryAction, params.previousInventoryAction),
-    ));
 }
 
 function createShipmentClaimId(): string {
@@ -576,7 +555,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     try {
         await reconcileInventoryForStatus(db, orderId, status);
     } catch (error: unknown) {
-        await rollbackStatusClaimIfInventoryUnchanged(db, {
+        await rollbackOrderStatusIfInventoryUnchanged(db, {
             orderId,
             previousStatus: existingOrder.status,
             claimedStatus: status,

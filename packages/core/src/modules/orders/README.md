@@ -112,7 +112,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 3. **COD paid-state guard**: If order is COD and new status is DELIVERED or COMPLETED, the order must already have successful COD collection evidence. Generic status updates do not synthesize COD payment state.
 4. CAS update on `version` column FIRST (prevents race between admin + webhook)
 5. On CAS success, or when retry sees the requested status already persisted, applies inventory side effects via `applyInventoryForStatusChange()`
-6. Persists/reconfirms the resulting `inventoryAction`
+6. Persists/reconfirms the resulting `inventoryAction`; if inventory throws before `inventoryAction` changes, `rollbackOrderStatusIfInventoryUnchanged()` reverts the visible status behind the claimed version/status/action guard
 7. Returns `StatusUpdateResult` with optional notification payload and transition dedupe key
 8. API route records the notification in `order_notification_outbox`, then relays it to `ORDER_NOTIFICATIONS_QUEUE` when available
 
