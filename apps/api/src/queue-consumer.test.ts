@@ -28,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   markAuthOtpDeliveryReceiptFailed: vi.fn(),
   markAuthOtpDeliveryReceiptSkipped: vi.fn(),
   createAuthOtpProviderClientReference: vi.fn(() => "otpclientref1"),
+  markWebhookEventProcessed: vi.fn(),
+  markWebhookEventFailed: vi.fn(),
+  markWebhookEventManualReconciliation: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -102,19 +105,25 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
   getAdminNotificationChannels: mocks.getAdminNotificationChannels,
 }));
 
+vi.mock("./utils/webhook-idempotency", () => ({
+  markWebhookEventProcessed: mocks.markWebhookEventProcessed,
+  markWebhookEventFailed: mocks.markWebhookEventFailed,
+  markWebhookEventManualReconciliation: mocks.markWebhookEventManualReconciliation,
+}));
+
 import { handleQueueBatch, type PaymentQueueMessage } from "./queue-consumer";
 import type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 
-function createMessage(body: PaymentQueueMessage): Message<PaymentQueueMessage>;
-function createMessage(body: OrderIngestQueueMessage): Message<OrderIngestQueueMessage>;
-function createMessage<T>(body: T): Message<T>;
-function createMessage<T>(body: T): Message<T> {
+function createMessage(body: PaymentQueueMessage, attempts?: number): Message<PaymentQueueMessage>;
+function createMessage(body: OrderIngestQueueMessage, attempts?: number): Message<OrderIngestQueueMessage>;
+function createMessage<T>(body: T, attempts?: number): Message<T>;
+function createMessage<T>(body: T, attempts = 1): Message<T> {
   const record = body as Record<string, unknown>;
   return {
     id: `msg-${String(record.type)}-${String(record.orderId ?? "no-order")}`,
     timestamp: new Date("2026-01-01T00:00:00Z"),
     body,
-    attempts: 1,
+    attempts,
     ack: vi.fn(),
     retry: vi.fn(),
   };
@@ -238,6 +247,9 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.markAuthOtpDeliveryReceiptFailed.mockResolvedValue(undefined);
     mocks.markAuthOtpDeliveryReceiptSkipped.mockResolvedValue(undefined);
     mocks.createAuthOtpProviderClientReference.mockReturnValue("otpclientref1");
+    mocks.markWebhookEventProcessed.mockResolvedValue(undefined);
+    mocks.markWebhookEventFailed.mockResolvedValue(undefined);
+    mocks.markWebhookEventManualReconciliation.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -280,6 +292,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect(message.ack).not.toHaveBeenCalled();
       expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
     }
+    expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
   });
 
   it("acks confirmed payment messages when processing succeeds", async () => {
@@ -314,6 +327,39 @@ describe("handleQueueBatch payment confirmation retries", () => {
         retryOnQueueFailure: true,
       }),
     );
+    expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
+  });
+
+  it("marks webhook events processed after confirmed payment side effects succeed", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    const notificationQueue = { send: vi.fn(async () => undefined) };
+
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      webhookEventId: "stripe:payment_intent.succeeded:evt_1",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_123",
+      amount: 12345,
+      currency: "usd",
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+    } as unknown as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.markWebhookEventProcessed).toHaveBeenCalledWith(
+      { id: "db" },
+      "stripe:payment_intent.succeeded:evt_1",
+      expect.objectContaining({
+        queueMessageId: message.id,
+        queueType: "payment.stripe.confirmed",
+        orderId: "order-stripe",
+        gateway: "stripe",
+        outcome: "confirmed",
+      }),
+    );
+    expect(mocks.markWebhookEventManualReconciliation).not.toHaveBeenCalled();
   });
 
   it("acks non-retryable confirmed payment guard failures", async () => {
@@ -325,6 +371,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     const message = createMessage({
       type: "payment.stripe.confirmed",
+      webhookEventId: "stripe:payment_intent.succeeded:evt_late",
       orderId: "order-stripe",
       paymentIntentId: "pi_late",
       amount: 12345,
@@ -339,6 +386,70 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining("requires manual reconciliation"),
     );
+    expect(mocks.markWebhookEventManualReconciliation).toHaveBeenCalledWith(
+      { id: "db" },
+      "stripe:payment_intent.succeeded:evt_late",
+      expect.objectContaining({
+        queueMessageId: message.id,
+        queueType: "payment.stripe.confirmed",
+        orderId: "order-stripe",
+        gateway: "stripe",
+        outcome: "manual_reconciliation",
+        error: "Cannot pay a cancelled order",
+      }),
+    );
+  });
+
+  it("keeps retryable webhook failures queued before the terminal delivery attempt", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: false, error: "D1 batch failed" });
+
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      webhookEventId: "stripe:payment_intent.succeeded:evt_retry",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_retry",
+      amount: 12345,
+      currency: "usd",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventManualReconciliation).not.toHaveBeenCalled();
+  });
+
+  it("marks retryable webhook failures failed on the terminal delivery attempt", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: false, error: "D1 batch failed" });
+
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      webhookEventId: "stripe:payment_intent.succeeded:evt_terminal",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_terminal",
+      amount: 12345,
+      currency: "usd",
+    }, 4);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(mocks.markWebhookEventFailed).toHaveBeenCalledWith(
+      { id: "db" },
+      "stripe:payment_intent.succeeded:evt_terminal",
+      expect.objectContaining({
+        queueMessageId: message.id,
+        queueType: "payment.stripe.confirmed",
+        orderId: "order-stripe",
+        terminalDeliveryAttempt: 4,
+        maxRetries: 3,
+        error: "stripe payment confirmation failed for order order-stripe: D1 batch failed",
+      }),
+    );
+    expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 
   it("retries confirmed payment messages when order-created notification enqueue fails", async () => {
