@@ -47,23 +47,36 @@ import {
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
+import {
+  markWebhookEventFailed,
+  markWebhookEventManualReconciliation,
+  markWebhookEventProcessed,
+} from "./utils/webhook-idempotency";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
+type PaymentWebhookCompletionStatus = "processed" | "manual_reconciliation";
+
+// Mirrors apps/api/wrangler*.jsonc for PAYMENT_EVENTS_QUEUE. Cloudflare delivers
+// the first attempt plus max_retries additional attempts before DLQ/deletion.
+const PAYMENT_EVENTS_MAX_RETRIES = 3;
+const PAYMENT_EVENTS_TERMINAL_DELIVERY_ATTEMPT = PAYMENT_EVENTS_MAX_RETRIES + 1;
 
 function assertPaymentConfirmed(
   result: PaymentConfirmationResult,
   gateway: "stripe" | "sslcommerz" | "polar",
   orderId: string,
-): void {
+): PaymentWebhookCompletionStatus {
   if (!result.success) {
     if (result.retryable === false) {
       console.warn(
         `[Queue] ${gateway} payment confirmation for order ${orderId} requires manual reconciliation: ${result.error ?? "unknown error"}`,
       );
-      return;
+      return "manual_reconciliation";
     }
     throw new Error(`${gateway} payment confirmation failed for order ${orderId}: ${result.error ?? "unknown error"}`);
   }
+
+  return "processed";
 }
 
 async function enqueueOrderCreatedAfterPaymentConfirmed(
@@ -90,8 +103,12 @@ async function enqueueOrderCreatedAfterPaymentConfirmed(
 // Re-export so webhook routes can import message types from one place.
 export type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 
+type PaymentWebhookEventLink = {
+  webhookEventId?: string;
+};
+
 export type PaymentQueueMessage =
-  | {
+  | (PaymentWebhookEventLink & {
     type: "payment.stripe.confirmed";
     orderId: string;
     paymentIntentId: string;
@@ -99,27 +116,27 @@ export type PaymentQueueMessage =
     currency: string;
     chargeId?: string;
     metadata?: Record<string, string>;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.stripe.failed";
     orderId: string;
     paymentIntentId: string;
     failureCode?: string;
     failureMessage?: string;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.stripe.canceled";
     orderId: string;
     paymentIntentId: string;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.stripe.refunded";
     orderId: string;
     paymentIntentId: string;
     amountRefunded: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
     chargeId: string;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.sslcommerz.confirmed";
     orderId: string;
     tranId: string;
@@ -130,14 +147,14 @@ export type PaymentQueueMessage =
     cardType?: string;
     cardBrand?: string;
     paymentType?: string;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.sslcommerz.failed";
     orderId: string;
     tranId: string;
     status: string;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.polar.confirmed";
     orderId: string;
     checkoutId: string;
@@ -145,14 +162,14 @@ export type PaymentQueueMessage =
     currency?: string;
     paymentType?: string;
     metadata?: Record<string, string>;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.polar.failed";
     orderId: string;
     checkoutId: string;
     reason?: string;
-  }
-  | {
+  })
+  | (PaymentWebhookEventLink & {
     type: "payment.polar.refunded";
     orderId: string;
     polarCheckoutId: string;
@@ -160,7 +177,7 @@ export type PaymentQueueMessage =
     totalAmount: number; // in smallest currency unit (cents) — original total from Polar
     currency: string;
     polarStatus: string; // "refunded" (full) or "partially_refunded"
-  }
+  })
   | {
     type: "order.notification";
     outboxId?: string;
@@ -237,6 +254,11 @@ export async function handleQueueBatch(
       msg.ack();
     } else {
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
+      await markPaymentWebhookEventFailedOnTerminalAttempt(
+        db,
+        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderIngestQueueMessage>,
+        result.reason,
+      );
       msg.retry({ delaySeconds: 30 });
     }
   }
@@ -255,6 +277,8 @@ async function processQueueMessage(
 ): Promise<void> {
   const payload = msg.body;
   console.log(`[Queue] Processing message type=${payload.type} id=${msg.id}`);
+  let paymentWebhookStatus: PaymentWebhookCompletionStatus | undefined;
+  let paymentWebhookResult: Record<string, unknown> | undefined;
 
   switch (payload.type) {
     // ── Auth / OTP ─────────────────────────────────────────────────────────
@@ -281,17 +305,30 @@ async function processQueueMessage(
         amount: amountInMajor,
         metadata: { currency: payload.currency },
       });
-      assertPaymentConfirmed(result, "stripe", payload.orderId);
+      const completionStatus = assertPaymentConfirmed(result, "stripe", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "stripe");
       }
+      paymentWebhookStatus = completionStatus;
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "stripe",
+        outcome: result.success ? "confirmed" : "manual_reconciliation",
+        error: result.success ? null : result.error ?? null,
+      });
       console.log(`[Queue] Stripe payment confirmed for order ${payload.orderId}`);
       break;
     }
 
     case "payment.stripe.failed": {
       await processPaymentFailed(db, payload.orderId, "stripe", payload.paymentIntentId);
+      paymentWebhookStatus = "processed";
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "stripe",
+        outcome: "failed",
+        failureCode: payload.failureCode ?? null,
+        failureMessage: payload.failureMessage ?? null,
+      });
       console.log(`[Queue] Stripe payment failed for order ${payload.orderId}`);
       break;
     }
@@ -299,6 +336,11 @@ async function processQueueMessage(
     case "payment.stripe.canceled": {
       await releaseOrderInventory(db, payload.orderId);
       await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+      paymentWebhookStatus = "processed";
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "stripe",
+        outcome: "canceled",
+      });
       console.log(`[Queue] Stripe payment cancelled, inventory released for order ${payload.orderId}`);
       break;
     }
@@ -306,6 +348,12 @@ async function processQueueMessage(
     case "payment.stripe.refunded": {
       // Refunds are handled synchronously via the refund endpoint.
       // This message exists for audit / notification purposes.
+      paymentWebhookStatus = "processed";
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "stripe",
+        outcome: "refunded",
+        amountRefunded: payload.amountRefunded,
+      });
       console.log(`[Queue] Stripe refund recorded for order ${payload.orderId}`);
       break;
     }
@@ -323,17 +371,29 @@ async function processQueueMessage(
         amount: payload.amount,
         metadata: { currency: payload.currency, cardType: payload.cardType, cardBrand: payload.cardBrand },
       });
-      assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
+      const completionStatus = assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "sslcommerz");
       }
+      paymentWebhookStatus = completionStatus;
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "sslcommerz",
+        outcome: result.success ? "confirmed" : "manual_reconciliation",
+        error: result.success ? null : result.error ?? null,
+      });
       console.log(`[Queue] SSLCommerz payment confirmed for order ${payload.orderId}`);
       break;
     }
 
     case "payment.sslcommerz.failed": {
       await processPaymentFailed(db, payload.orderId, "sslcommerz", payload.tranId);
+      paymentWebhookStatus = "processed";
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "sslcommerz",
+        outcome: "failed",
+        status: payload.status,
+      });
       console.log(`[Queue] SSLCommerz payment failed for order ${payload.orderId}`);
       break;
     }
@@ -370,17 +430,32 @@ async function processQueueMessage(
           ...payload.metadata,
         },
       });
-      assertPaymentConfirmed(result, "polar", payload.orderId);
+      const completionStatus = assertPaymentConfirmed(result, "polar", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "polar");
       }
+      paymentWebhookStatus = completionStatus;
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "polar",
+        outcome: result.success ? "confirmed" : "manual_reconciliation",
+        error: result.success ? null : result.error ?? null,
+        recordAmount,
+        gatewayAmount: gatewayAmountMajor,
+        gatewayCurrency: polarCurrency,
+      });
       console.log(`[Queue] Polar payment confirmed for order ${payload.orderId} (recorded: ${recordAmount}, gateway: ${gatewayAmountMajor} ${polarCurrency})`);
       break;
     }
 
     case "payment.polar.failed": {
       await processPaymentFailed(db, payload.orderId, "polar", payload.checkoutId);
+      paymentWebhookStatus = "processed";
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+        gateway: "polar",
+        outcome: "failed",
+        reason: payload.reason ?? null,
+      });
       console.log(`[Queue] Polar payment failed for order ${payload.orderId}`);
       break;
     }
@@ -398,6 +473,14 @@ async function processQueueMessage(
       });
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+        paymentWebhookStatus = "processed";
+        paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
+          gateway: "polar",
+          outcome: "refunded",
+          amountRefunded: payload.amountRefunded,
+          totalAmount: payload.totalAmount,
+          polarStatus: payload.polarStatus,
+        });
         console.log(`[Queue] Polar refund processed for order ${payload.orderId} (status: ${payload.polarStatus})`);
       } else {
         throw new Error(`Polar refund failed for order ${payload.orderId}: ${result.error}`);
@@ -489,6 +572,75 @@ async function processQueueMessage(
     default: {
       console.warn(`[Queue] Unknown message type:`, (payload as Record<string, unknown>).type);
     }
+  }
+
+  if (paymentWebhookStatus && paymentWebhookResult) {
+    await markPaymentWebhookEventCompleted(db, msg, paymentWebhookStatus, paymentWebhookResult);
+  }
+}
+
+type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderIngestQueueMessage;
+type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
+
+function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {
+  return typeof payload.type === "string" && payload.type.startsWith("payment.");
+}
+
+function getPaymentWebhookEventId(payload: QueueBody): string | undefined {
+  if (!isPaymentQueuePayload(payload)) return undefined;
+  return payload.webhookEventId;
+}
+
+function createPaymentWebhookQueueResult(
+  payload: PaymentOnlyQueueMessage,
+  queueMessageId: string,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    queueMessageId,
+    queueType: payload.type,
+    orderId: payload.orderId,
+    ...extra,
+  };
+}
+
+async function markPaymentWebhookEventCompleted(
+  db: ReturnType<typeof getDb>,
+  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage>,
+  status: PaymentWebhookCompletionStatus,
+  result: Record<string, unknown>,
+): Promise<void> {
+  const webhookEventId = getPaymentWebhookEventId(msg.body);
+  if (!webhookEventId) return;
+
+  if (status === "manual_reconciliation") {
+    await markWebhookEventManualReconciliation(db, webhookEventId, result);
+    return;
+  }
+
+  await markWebhookEventProcessed(db, webhookEventId, result);
+}
+
+async function markPaymentWebhookEventFailedOnTerminalAttempt(
+  db: ReturnType<typeof getDb>,
+  msg: Message<QueueBody>,
+  error: unknown,
+): Promise<void> {
+  const webhookEventId = getPaymentWebhookEventId(msg.body);
+  if (!webhookEventId) return;
+  if (msg.attempts < PAYMENT_EVENTS_TERMINAL_DELIVERY_ATTEMPT) return;
+
+  try {
+    await markWebhookEventFailed(db, webhookEventId, {
+      queueMessageId: msg.id,
+      queueType: msg.body.type,
+      orderId: isPaymentQueuePayload(msg.body) ? msg.body.orderId : null,
+      terminalDeliveryAttempt: msg.attempts,
+      maxRetries: PAYMENT_EVENTS_MAX_RETRIES,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } catch (markError) {
+    console.error("[Queue] Failed to mark payment webhook event terminal failure:", markError);
   }
 }
 

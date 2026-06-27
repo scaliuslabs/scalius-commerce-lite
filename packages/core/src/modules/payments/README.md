@@ -115,7 +115,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `refundAttempts` | Durable refund operation ledger. One row per refund allocation/payment row, with request hash, source/refund payment IDs, provider idempotency/reference keys, provider refund ID/status, probe scheduling, and active statuses (`pending`, `processing`, `provider_unknown`, `reconcile_required`) that block duplicate refund attempts until reconciliation completes. |
 | `paymentPlans` | Partial payment tracking. `orderId` (unique), `totalAmount`, `depositAmount`, `balanceDue`, `depositPaidAt`, `balancePaidAt`, `status` (pending/deposit_paid/completed/cancelled) |
 | `codTracking` | COD-specific tracking. `orderId` (unique), `deliveryAttempts`, `lastAttemptAt`, `codStatus` (pending/collected/failed/returned), `failureReason`, `collectedBy`, `collectedAmount`, `collectedAt`, `receiptUrl` |
-| `webhookEvents` | Webhook event log for auditing. `provider`, `eventType`, `orderId`, `status` (processed/failed), `result` |
+| `webhookEvents` | Webhook event log for auditing. `provider`, `eventType`, `orderId`, `status` (`processing`/`queued`/`processed`/`failed`/`manual_reconciliation`), `result` |
 
 ### Enums (`packages/database/src/schema/enums.ts`)
 
@@ -126,6 +126,8 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 ### Queue Consumer (`apps/api/src/queue-consumer.ts`)
 
 Dispatches `PaymentQueueMessage` types:
+
+Payment webhook handlers attach the source `webhookEventId` to queued payment messages. The consumer closes that durable event only after the queued side effects finish: `processed` for successful side effects, `manual_reconciliation` for non-retryable business-state conflicts, and `failed` only on the terminal payment queue delivery attempt before DLQ/deletion.
 
 | Message Type | Handler | Action |
 |------|---------|--------|
@@ -211,8 +213,8 @@ Uses `roundPrice()` and `pricesEqual()` from `@scalius/shared/price-utils` for f
 Four layers of duplicate prevention:
 
 1. **Session creation level**: Public Stripe, SSLCommerz, and Polar routes claim `payment_session_attempts` before provider calls using a canonical key derived from order id, receipt token hash or customer-account proof, gateway, payment type, server-derived amount/currency, and route-owned callback/customer context. Volatile caller retry metadata is not part of the identity. Created attempts store the replay payload (`clientSecret`/redirect URL/session id) so identical proof/return-target retries return the original session without touching the provider again. Live in-flight attempts are single-flight per order/gateway/payment type through a D1 partial unique index and return a retryable `202 processing` response instead of creating a duplicate or surfacing a hard conflict. Failed or stale attempts are reclaimable. Stripe also receives the same durable attempt key as its provider idempotency key.
-2. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue failures mark the event `failed` so provider retries can reclaim it. Fresh `processing` claims dedupe in-flight work, while stale `processing` claims are lease-reclaimable so isolate failures before queue send do not black-hole provider retries.
-3. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry)
+2. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue-send failures mark the event `failed` so provider retries can reclaim it. Queued payment messages carry the source `webhookEventId`, and the queue consumer marks it `processed`, `manual_reconciliation`, or terminal `failed` after the actual side effects finish. Fresh `processing` claims dedupe in-flight work, while stale `processing` claims are lease-reclaimable so isolate failures before queue send do not black-hole provider retries.
+3. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on retry). With `max_retries = 3`, payment webhook rows stay `queued` through transient failures and are marked failed only on the fourth delivery attempt.
 4. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (Stripe payment intent, SSLCommerz validation id with transaction-id fallback for legacy failed attempts, Polar checkout id) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders.
 
 COD collection (`recordCODCollection()`) has its own idempotency: queries for existing succeeded payment with `paymentMethod: "cod"`.

@@ -144,6 +144,7 @@ polarWebhookRoutes.post("/", async (c) => {
                     if (status === "failed" || status === "expired") {
                         await queue.send({
                             type: "payment.polar.failed",
+                            webhookEventId: eventId,
                             orderId: orderId || "",
                             checkoutId: payload.data.id,
                             reason: status
@@ -158,6 +159,7 @@ polarWebhookRoutes.post("/", async (c) => {
                     if (orderId) {
                         await queue.send({
                             type: "payment.polar.confirmed",
+                            webhookEventId: eventId,
                             orderId,
                             checkoutId: payload.data.id,
                             amount: payload.data.amount,
@@ -185,6 +187,7 @@ polarWebhookRoutes.post("/", async (c) => {
                     if (orderId && refundedAmountCents > 0) {
                         await queue.send({
                             type: "payment.polar.refunded",
+                            webhookEventId: eventId,
                             orderId,
                             polarCheckoutId,
                             amountRefunded: refundedAmountCents,

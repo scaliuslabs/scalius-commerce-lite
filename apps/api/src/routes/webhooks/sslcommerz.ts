@@ -293,7 +293,7 @@ app.post("/", async (c) => {
   }
 
   try {
-    await queue.send(message);
+    await queue.send({ ...message, webhookEventId: eventId });
     await markWebhookEventQueued(db, eventId, {
       tranId,
       orderId,

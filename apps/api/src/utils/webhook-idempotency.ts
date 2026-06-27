@@ -2,7 +2,7 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { webhookEvents } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 
-export type WebhookEventStatus = "processing" | "queued" | "processed" | "failed";
+export type WebhookEventStatus = "processing" | "queued" | "processed" | "failed" | "manual_reconciliation";
 export const DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS = 5 * 60;
 
 export interface WebhookEventClaim {
@@ -157,6 +157,14 @@ export async function markWebhookEventFailed(
   result?: unknown,
 ): Promise<void> {
   await markWebhookEvent(db, id, "failed", result);
+}
+
+export async function markWebhookEventManualReconciliation(
+  db: Database,
+  id: string,
+  result?: unknown,
+): Promise<void> {
+  await markWebhookEvent(db, id, "manual_reconciliation", result);
 }
 
 async function markWebhookEvent(
