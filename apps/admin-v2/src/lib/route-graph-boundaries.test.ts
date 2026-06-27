@@ -518,6 +518,20 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("setMethods(null)");
   });
 
+  it("keeps checkout flow saves locked behind payment readiness", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "settings", "CheckoutFlowSettings.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("isFetching: paymentMethodsFetching");
+    expect(source).toContain("const paymentMethodsUnavailable = !paymentMethodsPending && !paymentMethods");
+    expect(source).toContain("Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.");
+    expect(source).toContain("Checkout-flow saves are locked until Payment Gateways loads successfully.");
+    expect(source).toContain("Retry payment check");
+    expect(source).toContain("disabled={saving || saveBlocked}");
+  });
+
   it("keeps admin discount form values out of native GET submissions", () => {
     const discountForms = [
       join(ADMIN_SRC_ROOT, "components", "admin", "discount", "AmountOffOrderForm.tsx"),
