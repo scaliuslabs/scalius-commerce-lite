@@ -145,7 +145,7 @@ All 9 statuses that trigger notifications are covered. Each dispatches to enable
 `processCodAction()` handles three actions with CAS protection on the order version:
 - `collected`: CAS-updates the order toward `delivered`, records collection via `recordCODCollection()` before inventory movement, rolls back the delivered claim if COD evidence or inventory repair fails, and treats existing COD evidence as a retry signal
 - `failed`: Records failure via `recordCODFailure()`
-- `returned`: CAS update first unless already returned on retry, then marks COD returned and applies inventory restoration
+- `returned`: CAS-updates the order toward `returned`, marks COD returned before inventory restoration, rolls back the returned claim if the COD marker or inventory repair fails, and retries inventory restoration when the order is already returned
 
 ### Bulk Ship Orders
 
