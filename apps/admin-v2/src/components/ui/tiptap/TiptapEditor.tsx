@@ -23,15 +23,10 @@ export function TiptapEditor({
   compact = false,
   autoFocus = false,
 }: TiptapEditorProps) {
-  const [isMounted, setIsMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const hasAutoFocusedRef = useRef(false);
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Handle Escape key and body scroll lock for fullscreen
   useEffect(() => {
@@ -138,13 +133,13 @@ export function TiptapEditor({
   });
 
   useEffect(() => {
-    if (editorInstance && content !== editorInstance.getHTML() && isMounted) {
+    if (editorInstance && content !== editorInstance.getHTML()) {
       editorInstance.commands.setContent(content, { emitUpdate: false });
     }
-  }, [content, editorInstance, isMounted]);
+  }, [content, editorInstance]);
 
   useEffect(() => {
-    if (!autoFocus || !editorInstance || !isMounted || hasAutoFocusedRef.current) {
+    if (!autoFocus || !editorInstance || hasAutoFocusedRef.current) {
       return;
     }
 
@@ -152,18 +147,7 @@ export function TiptapEditor({
     queueMicrotask(() => {
       editorInstance.commands.focus("end");
     });
-  }, [autoFocus, editorInstance, isMounted]);
-
-  if (!isMounted) {
-    return (
-      <div className={cn("border rounded-md", className)}>
-        <div className="border border-input rounded-t-md p-1 bg-background h-10"></div>
-        <div className="max-w-none p-4 min-h-[200px] focus-visible:outline-none text-sm border-t">
-          <div className="text-muted-foreground">{placeholder}</div>
-        </div>
-      </div>
-    );
-  }
+  }, [autoFocus, editorInstance]);
 
   const editorContent = (
     <div
