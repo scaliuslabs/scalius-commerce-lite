@@ -129,8 +129,9 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 | `cancelled` | `order_cancelled` |
 | `returned` | `order_returned` |
 | `refunded` | `order_refunded` |
+| `partially_refunded` | `order_partially_refunded` |
 
-All 9 buyer-visible order statuses that trigger status notifications are covered. Payment milestones can also enqueue order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `order_notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
+All 10 buyer-visible order statuses that trigger status notifications are covered. Payment milestones can also enqueue order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `order_notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
 
 ### Fulfillment Flow
 

@@ -35,6 +35,7 @@ import {
     REFUND_IN_PROGRESS_MESSAGE,
     assertNoActiveRefundAttempt,
 } from "./refund-attempt-guard";
+import type { OrderNotificationType } from "../notifications/notification-types";
 import type {
     PaymentProvider,
     RefundParams as ProviderRefundParams,
@@ -58,6 +59,7 @@ export interface RefundResult {
     isFullRefund: boolean;
     error?: string;
     refundNotification?: {
+        notificationType: Extract<OrderNotificationType, "order_refunded" | "order_partially_refunded">;
         dedupeKey: string;
         amount: number;
         refundId?: string;
@@ -153,6 +155,10 @@ function buildRefundReference(orderId: string, sourcePaymentId: string, claimVer
 
 function buildFullRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
     return `refund:${orderId}:${refundGroupId}:full`;
+}
+
+function buildPartialRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
+    return `refund:${orderId}:${refundGroupId}:partial`;
 }
 
 function computeRefundedBySourcePayment(
@@ -1243,13 +1249,14 @@ export async function processRefund(
         refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
         amount: refundAmount,
         isFullRefund,
-        ...(isFullRefund ? {
-            refundNotification: {
-                dedupeKey: buildFullRefundNotificationDedupeKey(params.orderId, refundGroupId),
-                amount: refundAmount,
-                refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
-            },
-        } : {}),
+        refundNotification: {
+            notificationType: isFullRefund ? "order_refunded" : "order_partially_refunded",
+            dedupeKey: isFullRefund
+                ? buildFullRefundNotificationDedupeKey(params.orderId, refundGroupId)
+                : buildPartialRefundNotificationDedupeKey(params.orderId, refundGroupId),
+            amount: refundAmount,
+            refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
+        },
     };
 }
 

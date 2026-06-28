@@ -53,7 +53,7 @@ Sends transactional order emails to customers. Connected via queue.
 
 **Channel Preference Checking**: When a `db` parameter is provided, the function checks notification channel preferences via `getNotificationChannels()` from the settings service before sending. If the email channel is disabled for the given event, the email is silently skipped. If the check fails, it defaults to sending email.
 
-**Supported email types** (10 total):
+**Supported order notification types** (11 total):
 - `order_created` -- "We've received your order"
 - `order_confirmed` -- "Your order has been confirmed"
 - `order_processing` -- "Your order is being processed"
@@ -63,6 +63,7 @@ Sends transactional order emails to customers. Connected via queue.
 - `order_cancelled` -- "Your order has been cancelled"
 - `order_returned` -- "Your order return has been processed"
 - `order_refunded` -- "Your refund has been processed"
+- `order_partially_refunded` -- "A partial refund has been processed"
 - `payment_balance_paid` -- "Your remaining payment has been received"
 
 Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Cloudflare Email by default, Resend fallback). Receipt-mode email sends pass the deterministic receipt key to Resend as `Idempotency-Key`; Cloudflare Email returns `messageId`, which is stored on the receipt.

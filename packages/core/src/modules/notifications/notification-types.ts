@@ -8,6 +8,7 @@ export const ORDER_NOTIFICATION_TYPES = [
     "order_cancelled",
     "order_returned",
     "order_refunded",
+    "order_partially_refunded",
     "payment_balance_paid",
 ] as const;
 
@@ -23,6 +24,7 @@ export const ORDER_NOTIFICATION_LABELS: Record<OrderNotificationType, string> = 
     order_cancelled: "Order Cancelled",
     order_returned: "Order Returned",
     order_refunded: "Order Refunded",
+    order_partially_refunded: "Partial Refund",
     payment_balance_paid: "Balance Paid",
 };
 

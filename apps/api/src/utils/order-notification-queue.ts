@@ -46,6 +46,8 @@ export function getOrderNotificationTypeForStatus(status: string): OrderNotifica
             return "order_returned";
         case "refunded":
             return "order_refunded";
+        case "partially_refunded":
+            return "order_partially_refunded";
         default:
             return null;
     }
@@ -140,10 +142,13 @@ export async function enqueueOrderBalancePaidNotificationForOrder(options: {
     return result;
 }
 
-export async function enqueueOrderRefundedNotificationForOrder(options: {
+type RefundNotificationType = Extract<OrderNotificationType, "order_refunded" | "order_partially_refunded">;
+
+export async function enqueueOrderRefundNotificationForOrder(options: {
     db: Database;
     queue: OrderNotificationQueue | undefined;
     orderId: string;
+    notificationType: RefundNotificationType;
     dedupeKey: string;
     source: string;
     data?: Record<string, unknown>;
@@ -151,7 +156,7 @@ export async function enqueueOrderRefundedNotificationForOrder(options: {
     const orderRows = await selectSingleOrder(options.db, options.orderId);
     const order = orderRows[0];
     if (!order) {
-        console.warn(`[${options.source}] Skipped order_refunded notification for missing order ${options.orderId}`);
+        console.warn(`[${options.source}] Skipped ${options.notificationType} notification for missing order ${options.orderId}`);
         return {
             orderId: options.orderId,
             enqueued: false,
@@ -167,7 +172,7 @@ export async function enqueueOrderRefundedNotificationForOrder(options: {
             orderId: options.orderId,
             customerEmail: order.customerEmail ?? undefined,
             customerName: order.customerName || "Customer",
-            notificationType: "order_refunded",
+            notificationType: options.notificationType,
             data: options.data,
         },
         dedupeKey: options.dedupeKey,
