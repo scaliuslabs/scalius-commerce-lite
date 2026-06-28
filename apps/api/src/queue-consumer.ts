@@ -77,6 +77,8 @@ type ConfirmedPaymentType = "full" | "deposit" | "balance";
 // the first attempt plus max_retries additional attempts before DLQ/deletion.
 const PAYMENT_EVENTS_MAX_RETRIES = 3;
 const PAYMENT_EVENTS_TERMINAL_DELIVERY_ATTEMPT = PAYMENT_EVENTS_MAX_RETRIES + 1;
+const QUEUE_BATCH_CONCURRENCY_LIMIT = 3;
+const DLQ_BATCH_CONCURRENCY_LIMIT = 2;
 
 function assertPaymentConfirmed(
   result: PaymentConfirmationResult,
@@ -318,14 +320,17 @@ export async function handleQueueBatch(
     return;
   }
 
-  // Process each payment/notification/OTP message independently
-  const results = await Promise.allSettled(
-    batch.messages.map((msg) => processQueueMessage(
+  logQueueBatchConcurrency(batch.queue, batch.messages.length, QUEUE_BATCH_CONCURRENCY_LIMIT);
+
+  const results = await runSettledWithConcurrency(
+    batch.messages,
+    QUEUE_BATCH_CONCURRENCY_LIMIT,
+    (msg) => processQueueMessage(
       msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
       db,
       env,
       executionCtx,
-    )),
+    ),
   );
 
   // Ack successful, retry failed with backoff
@@ -351,8 +356,12 @@ async function handlePaymentEventsDlqBatch(
   batch: MessageBatch<QueueBody>,
   db: ReturnType<typeof getDb>,
 ): Promise<void> {
-  const results = await Promise.allSettled(
-    batch.messages.map((msg) => archivePaymentEventsDlqMessage(msg, db)),
+  logQueueBatchConcurrency(batch.queue, batch.messages.length, DLQ_BATCH_CONCURRENCY_LIMIT);
+
+  const results = await runSettledWithConcurrency(
+    batch.messages,
+    DLQ_BATCH_CONCURRENCY_LIMIT,
+    (msg) => archivePaymentEventsDlqMessage(msg, db),
   );
 
   for (let i = 0; i < batch.messages.length; i++) {
@@ -372,8 +381,12 @@ async function handleStorefrontCacheDlqBatch(
   batch: MessageBatch<StorefrontCacheQueueMessage>,
   db: ReturnType<typeof getDb>,
 ): Promise<void> {
-  const results = await Promise.allSettled(
-    batch.messages.map((msg) => archiveStorefrontCacheQueueFailure(db, msg, batch.queue)),
+  logQueueBatchConcurrency(batch.queue, batch.messages.length, DLQ_BATCH_CONCURRENCY_LIMIT);
+
+  const results = await runSettledWithConcurrency(
+    batch.messages,
+    DLQ_BATCH_CONCURRENCY_LIMIT,
+    (msg) => archiveStorefrontCacheQueueFailure(db, msg, batch.queue),
   );
 
   for (let i = 0; i < batch.messages.length; i++) {
@@ -390,6 +403,43 @@ async function handleStorefrontCacheDlqBatch(
       msg.retry({ delaySeconds: 300 });
     }
   }
+}
+
+async function runSettledWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrencyLimit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<Array<PromiseSettledResult<R>>> {
+  if (items.length === 0) return [];
+
+  const limit = Math.max(1, Math.min(concurrencyLimit, items.length));
+  const results: Array<PromiseSettledResult<R> | undefined> = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+
+      try {
+        results[index] = { status: "fulfilled", value: await fn(items[index] as T, index) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: limit }, () => worker()));
+  return results as Array<PromiseSettledResult<R>>;
+}
+
+function logQueueBatchConcurrency(queue: string, messageCount: number, concurrencyLimit: number): void {
+  if (messageCount <= concurrencyLimit) return;
+
+  console.log(
+    `[Queue] Processing ${messageCount} message(s) from ${queue} with concurrency limit ${concurrencyLimit}`,
+  );
 }
 
 async function archivePaymentEventsDlqMessage(

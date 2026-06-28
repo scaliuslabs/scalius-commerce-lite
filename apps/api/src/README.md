@@ -295,7 +295,7 @@ Normal buyer checkout is synchronous and D1-fenced. `POST /orders` requires a st
 
 ### Payment/Notification/OTP/Cache Queues
 
-Messages processed independently with `Promise.allSettled`. Successful messages are acked; failed messages retry with 30-second delay.
+Messages are processed independently through a bounded all-settled helper so one queue invocation cannot fan out a full `max_batch_size` worth of D1/provider work at once. Normal payment, notification, OTP, purge, and warm batches run at most `3` messages concurrently; DLQ evidence archive batches run at most `2` messages concurrently. Successful messages are acked; failed normal messages retry with 30-second delay, and failed DLQ evidence writes retry with 300-second delay. Keep the per-message ack/retry loops as the authority for delivery outcome semantics.
 
 | Message Type | Handler | Action |
 |---|---|---|
