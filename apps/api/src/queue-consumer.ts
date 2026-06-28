@@ -50,9 +50,14 @@ import {
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import {
+  createStorefrontCacheWarmMessageForPurge,
+  enqueueStorefrontCacheWarm,
   invalidateProductAvailabilityCaches,
   purgeStorefrontForPrefixes,
+  warmStorefrontHtmlPaths,
   type StorefrontCachePurgeQueueMessage,
+  type StorefrontCacheQueueMessage as CacheQueueMessage,
+  type StorefrontCacheWarmQueueMessage,
 } from "./utils/cache-invalidation";
 import {
   markWebhookEventFailed,
@@ -284,7 +289,7 @@ export type AuthOtpQueueMessage =
     name: string;
   };
 
-export type StorefrontCacheQueueMessage = StorefrontCachePurgeQueueMessage;
+export type StorefrontCacheQueueMessage = CacheQueueMessage;
 
 // ── Queue batch handler ────────────────────────────────────────────────────
 
@@ -399,7 +404,12 @@ async function processQueueMessage(
     // ── Storefront cache purge/rewarm coordination ─────────────────────────
 
     case "storefront.cache_purge": {
-      await processStorefrontCachePurgeQueueMessage(payload, env);
+      await processStorefrontCachePurgeQueueMessage(payload, env, executionCtx);
+      break;
+    }
+
+    case "storefront.cache_warm": {
+      await processStorefrontCacheWarmQueueMessage(payload, env);
       break;
     }
 
@@ -728,8 +738,9 @@ function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueM
 }
 
 async function processStorefrontCachePurgeQueueMessage(
-  payload: StorefrontCacheQueueMessage,
+  payload: StorefrontCachePurgeQueueMessage,
   env: Env,
+  executionCtx?: ExecutionContext,
 ): Promise<void> {
   const result = await purgeStorefrontForPrefixes(payload.prefixes, env, {
     groups: payload.groups,
@@ -737,6 +748,7 @@ async function processStorefrontCachePurgeQueueMessage(
     exactKeys: payload.exactKeys,
     htmlPaths: payload.htmlPaths,
     operationId: payload.operationId,
+    warm: false,
   });
 
   if (!result.attempted) {
@@ -755,6 +767,84 @@ async function processStorefrontCachePurgeQueueMessage(
 
   console.log(
     `[Queue] Storefront cache purge ${payload.operationId} completed from ${payload.source}`,
+  );
+
+  const warmMessage = createStorefrontCacheWarmMessageForPurge(payload);
+  if (!warmMessage) return;
+
+  try {
+    const enqueueResult = await enqueueStorefrontCacheWarm(warmMessage, env);
+    if (enqueueResult.enqueued) {
+      console.log(
+        `[Queue] Storefront cache warm ${warmMessage.operationId} enqueued for ${warmMessage.paths.length} path(s)`,
+      );
+      return;
+    }
+
+    console.warn(
+      `[Queue] Storefront cache warm queue unavailable (${enqueueResult.skippedReason}); falling back to direct warm.`,
+    );
+  } catch (error: unknown) {
+    console.error("[Queue] Failed to enqueue storefront cache warm:", error);
+  }
+
+  scheduleStorefrontWarmFallback(warmMessage, env, executionCtx);
+}
+
+function scheduleStorefrontWarmFallback(
+  payload: StorefrontCacheWarmQueueMessage,
+  env: Env,
+  executionCtx?: ExecutionContext,
+): void {
+  const warmPromise = warmStorefrontHtmlPaths(payload.paths, env)
+    .then((result) => {
+      if (!result.ok) {
+        console.warn(
+          `[Queue] Storefront cache warm ${payload.operationId} fallback had retryable failures: ${result.retryableFailures.join(", ")}`,
+        );
+      }
+    })
+    .catch((error: unknown) => {
+      console.error(`[Queue] Storefront cache warm ${payload.operationId} fallback failed:`, error);
+    });
+
+  if (executionCtx && typeof executionCtx.waitUntil === "function") {
+    executionCtx.waitUntil(warmPromise);
+  } else {
+    void warmPromise;
+  }
+}
+
+async function processStorefrontCacheWarmQueueMessage(
+  payload: StorefrontCacheWarmQueueMessage,
+  env: Env,
+): Promise<void> {
+  const result = await warmStorefrontHtmlPaths(payload.paths, env);
+
+  if (!result.attempted) {
+    if (result.skippedReason === "no-paths") {
+      console.warn(
+        `[Queue] Ignoring empty storefront cache warm message from ${payload.source}`,
+      );
+      return;
+    }
+    throw new Error(`Storefront cache warm skipped: ${result.skippedReason ?? "unknown"}`);
+  }
+
+  if (!result.ok) {
+    throw new Error(
+      `Storefront cache warm failed for ${result.retryableFailures.join(", ")}`,
+    );
+  }
+
+  if (result.skippedFailures.length > 0) {
+    console.warn(
+      `[Queue] Storefront cache warm ${payload.operationId} skipped non-retryable path(s): ${result.skippedFailures.join(", ")}`,
+    );
+  }
+
+  console.log(
+    `[Queue] Storefront cache warm ${payload.operationId} completed from ${payload.source}: ${result.successful}/${result.paths.length} path(s) warmed`,
   );
 }
 

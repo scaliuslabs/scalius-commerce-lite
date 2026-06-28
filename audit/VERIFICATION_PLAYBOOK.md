@@ -341,7 +341,7 @@ pnpm exec vitest run --config apps/api/vitest.config.ts apps/api/src/utils/cache
 curl -i https://storefront.scalius.com/api/purge-cache
 ```
 
-Expected result: `GET /api/purge-cache` is non-mutating and returns `405 Allow: POST` unless rejecting query-string credentials with `400`; it must not read/write the KV cache-version key, clear L1, or warm pages. `POST /api/purge-cache` remains the mutating path. Full/HTML-affecting purges bump the KV version, clear L1, and warm critical pages; prefix-only non-HTML purges still bump the version so L2 Cache API keys move but do not warm critical pages.
+Expected result: `GET /api/purge-cache` is non-mutating and returns `405 Allow: POST` unless rejecting query-string credentials with `400`; it must not read/write the KV cache-version key, clear L1, or warm pages. `POST /api/purge-cache` remains the mutating path. Full/HTML-affecting direct purges bump the KV version, clear L1, and warm critical pages. Queue-driven purges send `warm:false`, then enqueue `storefront.cache_warm` only after purge success so retrying a warm failure cannot repeat the purge or version bump. Exact warm paths are canonicalized/capped; retryable warm failures retry the warm message, while `404`/other non-retryable warm misses are logged and acknowledged.
 
 Widget cache invalidation checks:
 

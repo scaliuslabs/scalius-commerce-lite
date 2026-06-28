@@ -370,6 +370,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     exactKeys?: string[];
     htmlPaths?: string[];
     bumpVersion?: boolean;
+    warm?: boolean;
   };
   try {
     body = await request.json();
@@ -387,7 +388,9 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     exactKeys = [],
     htmlPaths: requestedHtmlPaths = [],
     bumpVersion = false,
+    warm = true,
   } = body;
+  const shouldScheduleWarm = warm !== false;
   const htmlPaths = normalizeExactHtmlPaths(requestedHtmlPaths);
   const hostname = url.hostname;
   const cacheNamespace = resolveCacheNamespace(env, hostname);
@@ -456,7 +459,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         currentVersionForExactDeletes,
         currentExactGenerations,
       );
-      if (htmlPaths.length > 0) {
+      if (shouldScheduleWarm && htmlPaths.length > 0) {
         locals.cfContext.waitUntil(warmExactHtmlPaths(url.origin, htmlPaths));
         exactHtmlWarmScheduled = true;
       }
@@ -476,10 +479,10 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     }
 
     // Warm critical HTML caches only for groups that affect rendered pages.
-    if (newVersion !== null && shouldWarmCaches) {
+    if (shouldScheduleWarm && newVersion !== null && shouldWarmCaches) {
       locals.cfContext.waitUntil(warmCriticalCaches(url.origin));
     }
-    if (htmlPaths.length > 0 && !exactHtmlWarmScheduled) {
+    if (shouldScheduleWarm && htmlPaths.length > 0 && !exactHtmlWarmScheduled) {
       locals.cfContext.waitUntil(warmExactHtmlPaths(url.origin, htmlPaths));
     }
 
@@ -504,8 +507,11 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
           htmlPathsCleared: htmlPaths.length,
           htmlPathsDeleted,
           cacheWarmingStarted:
-            (newVersion !== null && shouldWarmCaches) ||
-            (newVersion === null && htmlPaths.length > 0),
+            shouldScheduleWarm &&
+            (
+              (newVersion !== null && shouldWarmCaches) ||
+              (newVersion === null && htmlPaths.length > 0)
+            ),
         },
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },

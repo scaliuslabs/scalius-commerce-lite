@@ -6,11 +6,13 @@ import {
   WIDGET_CACHE_GROUPS,
   collectCmsShortcodePageInvalidation,
   collectProductAvailabilityCacheInvalidation,
+  createStorefrontCacheWarmMessageForPurge,
   getCatalogStorefrontHtmlPaths,
   getGroupsForPath,
   getProductAvailabilityApiCacheKeys,
   getProductAvailabilityApiCachePatterns,
   getProductAvailabilityStorefrontPrefixes,
+  getStorefrontWarmPathsForPurge,
   getStorefrontPrefixesForGroups,
   invalidateGroups,
   invalidateProductAvailabilityCacheSubjects,
@@ -25,6 +27,7 @@ import {
   resolveProductAvailabilityCacheSubjects,
   triggerStorefrontPurgeForGroups,
   triggerStorefrontPurgeForPrefixes,
+  warmStorefrontHtmlPaths,
 } from "./cache-invalidation";
 
 describe("catalog cache groups", () => {
@@ -310,6 +313,39 @@ describe("triggerStorefrontPurgeForGroups", () => {
       groups: ["widgets"],
       prefixes: ["widget_wid_1", "widgets_scope_product_prod_1"],
       bumpVersion: false,
+    });
+  });
+
+  it("can suppress storefront-side warming for queue-driven purge messages", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await purgeStorefrontForPrefixes(
+      ["product_slug_fish"],
+      {
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+      {
+        groups: ["products"],
+        bumpVersion: false,
+        exactKeys: ["product_variants_prod_1"],
+        htmlPaths: ["/products/fish"],
+        operationId: "purge_op_1",
+        warm: false,
+      },
+    );
+
+    expect(result).toEqual({ attempted: true, ok: true, status: 200 });
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      operationId: "purge_op_1",
+      groups: ["products"],
+      prefixes: ["product_slug_fish"],
+      exactKeys: ["product_variants_prod_1"],
+      htmlPaths: ["/products/fish"],
+      bumpVersion: false,
+      warm: false,
     });
   });
 
@@ -725,6 +761,79 @@ describe("triggerStorefrontPurgeForGroups", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("derives bounded warm-only queue messages from completed purge messages", () => {
+    const warmMessage = createStorefrontCacheWarmMessageForPurge({
+      type: "storefront.cache_purge",
+      operationId: "purge_op_1",
+      groups: ["products"],
+      prefixes: ["product_slug_fish"],
+      exactKeys: ["product_variants_prod_1"],
+      htmlPaths: ["/products/fish?utm_source=ad", "/products/fish"],
+      bumpVersion: true,
+      source: "catalog:products",
+      requestedAt: 1_790_000_000_000,
+    });
+
+    expect(getStorefrontWarmPathsForPurge({
+      type: "storefront.cache_purge",
+      operationId: "checkout_op_1",
+      groups: ["checkout"],
+      prefixes: ["checkout_config", "global_shipping_methods"],
+      bumpVersion: false,
+      source: "api-groups",
+      requestedAt: 1_790_000_000_000,
+    })).toEqual([]);
+    expect(warmMessage).toMatchObject({
+      type: "storefront.cache_warm",
+      operationId: "purge_op_1",
+      paths: ["/", "/products/fish"],
+      source: "catalog:products:warm",
+      requestedAt: expect.any(Number),
+    });
+  });
+
+  it("warms storefront paths and reports only retryable failures as retry-worthy", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      if (pathname === "/products/fish") {
+        return new Response("ok", { status: 200 });
+      }
+      if (pathname === "/gone") {
+        return new Response("gone", { status: 404 });
+      }
+      return new Response("busy", { status: 503 });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await warmStorefrontHtmlPaths(
+      ["/products/fish?utm_source=ad", "/gone", "/busy"],
+      {
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+    );
+
+    expect(result).toMatchObject({
+      attempted: true,
+      ok: false,
+      paths: ["/products/fish", "/gone", "/busy"],
+      successful: 1,
+      skipped: 1,
+      retryableFailures: ["/busy (503)"],
+      skippedFailures: ["/gone (404)"],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL("/products/fish", "https://storefront.example.com"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Cache-Control": "no-cache",
+          "X-Cache-Warm": "true",
+        }),
+      }),
+    );
   });
 
   it("schedules product catalog storefront purges with dependent collection caches", async () => {

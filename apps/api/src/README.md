@@ -275,7 +275,7 @@ Admin inventory stock edits are availability-only changes. They should pass the 
 
 Search facet caching uses `api:attributes:search-filters` and must stay in both the `search` and `attributes` invalidation groups: product/search changes alter matching category neighborhoods, while attribute writes alter available filter values.
 
-Catalog invalidation also owns bounded storefront listing rewarm hints. `invalidateCatalogCaches()` sends the normal group prefixes and HTML-version bump through `storefront-cache`, then includes canonical exact `htmlPaths`: product/category/discount writes always warm `/search`, category writes should include affected `/categories/{slug}`, and product writes should include old/new affected category pages when the route already has or can cheaply resolve category IDs. Attribute metadata/value writes use `invalidateApiAndScheduleStorefrontGroups(["attributes", "products"], c, { htmlPaths: ["/search"] })` so filter sidebar changes do not leave the search listing cold. All paths are canonicalized through the shared storefront cache-path helper and capped at `MAX_STOREFRONT_EXACT_HTML_PATHS`.
+Catalog invalidation also owns bounded storefront listing rewarm hints. `invalidateCatalogCaches()` sends the normal group prefixes and HTML-version bump through `storefront-cache`, then includes canonical exact `htmlPaths`: product/category/discount writes always warm `/search`, category writes should include affected `/categories/{slug}`, and product writes should include old/new affected category pages when the route already has or can cheaply resolve category IDs. The queue consumer posts purge requests with `warm:false` and, only after purge succeeds, enqueues a separate `storefront.cache_warm` message for `/` and/or the exact paths. Warm retries therefore never repeat the purge or global version bump. Attribute metadata/value writes use `invalidateApiAndScheduleStorefrontGroups(["attributes", "products"], c, { htmlPaths: ["/search"] })` so filter sidebar changes do not leave the search listing cold. All paths are canonicalized through the shared storefront cache-path helper and capped at `MAX_STOREFRONT_EXACT_HTML_PATHS`.
 
 ### Hero and Widget Cache Rules
 
@@ -287,7 +287,7 @@ Admin widget writes first invalidate API widget/pattern keys, then enqueue store
 
 ## Queue Consumer
 
-`src/queue-consumer.ts` dispatches payment, notification, OTP, and storefront cache purge messages by type. Storefront order creation is not queue-backed.
+`src/queue-consumer.ts` dispatches payment, notification, OTP, storefront cache purge, and storefront cache warm messages by type. Storefront order creation is not queue-backed.
 
 ### Storefront Order Submit
 

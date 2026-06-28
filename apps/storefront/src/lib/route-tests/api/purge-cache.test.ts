@@ -192,6 +192,42 @@ describe("storefront cache purge route", () => {
     );
   });
 
+  it("can suppress immediate warming while still mutating purge state", async () => {
+    const { POST } = await import("../../../pages/api/purge-cache");
+    const request = new Request("https://storefront.example.com/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        groups: ["products"],
+        prefixes: ["product_slug_fish"],
+        htmlPaths: ["/products/fish"],
+        bumpVersion: true,
+        warm: false,
+      }),
+    });
+
+    const response = await POST({
+      request,
+      url: new URL(request.url),
+      locals: { cfContext: { waitUntil: mocks.waitUntil } },
+    } as unknown as Parameters<typeof POST>[0]);
+    const body = (await response.json()) as {
+      success?: boolean;
+      details?: { newVersion?: number; cacheWarmingStarted?: boolean };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.details?.newVersion).toBe(5);
+    expect(body.details?.cacheWarmingStarted).toBe(false);
+    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith("v_storefront.example.com", "5");
+    expect(mocks.waitUntil).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("warms canonical exact listing paths after a bumped catalog purge", async () => {
     mocks.cacheDelete.mockResolvedValue(true);
     const { POST } = await import("../../../pages/api/purge-cache");
