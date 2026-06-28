@@ -22,9 +22,11 @@ export {
   createOrderNotificationOutboxInsertValues,
   enqueueOrderNotificationOutboxById,
   flushPendingOrderNotificationOutbox,
+  listOrderNotificationOutboxForOrder,
   markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent,
   recordAndEnqueueOrderNotification,
+  retryFailedOrderNotificationOutboxById,
 } from "./order-notification-outbox";
 export type { OrderNotificationType } from "./notification-types";
 export type {
@@ -37,6 +39,8 @@ export type {
 } from "./order-notification-delivery-receipts";
 export type {
   OrderNotificationInput,
+  OrderNotificationDeliveryReceiptView,
+  OrderNotificationOutboxView,
   OrderNotificationOutboxStatus,
   OrderNotificationQueue,
   OrderNotificationQueueMessage,

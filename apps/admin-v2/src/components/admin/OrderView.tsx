@@ -9,6 +9,7 @@ import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { ShipmentCard } from "./orderview/ShipmentCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { PaymentCard } from "./orderview/PaymentCard";
+import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
 
 interface OrderViewProps {
   order: Order;
@@ -27,6 +28,7 @@ export function OrderView({ order }: OrderViewProps) {
           <div className="space-y-4 lg:col-span-4">
             <OrderStatusCard order={order} />
             <PaymentCard order={order} />
+            <OrderNotificationsCard order={order} />
             <ShipmentCard order={order} />
             <OrderNotesCard order={order} />
           </div>

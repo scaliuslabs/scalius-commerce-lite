@@ -4,6 +4,7 @@ import {
   getOrderCod,
   getOrderFormData,
   getOrderItems,
+  getOrderNotifications,
   getOrders,
   getOrderPayments,
   getOrderShipments,
@@ -45,6 +46,13 @@ export const orderPaymentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.payments(orderId),
     queryFn: () => getOrderPayments({ data: { orderId } }),
+    staleTime: 0,
+  });
+
+export const orderNotificationsQueryOptions = (orderId: string) =>
+  queryOptions({
+    queryKey: queryKeys.orders.notifications(orderId),
+    queryFn: () => getOrderNotifications({ data: { orderId } }),
     staleTime: 0,
   });
 

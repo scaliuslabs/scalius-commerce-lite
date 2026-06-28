@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
   claimOrderNotificationOutboxForProcessing,
+  listOrderNotificationOutboxForOrder,
   recordAndEnqueueOrderNotification,
+  retryFailedOrderNotificationOutboxById,
 } from "./order-notification-outbox";
 
 interface StoredOutboxRow {
@@ -24,21 +26,46 @@ interface StoredOutboxRow {
   updatedAt: number;
 }
 
+interface StoredReceiptRow {
+  id: string;
+  receiptKey: string;
+  outboxId: string;
+  orderId: string;
+  notificationType: string;
+  channel: string;
+  provider: string;
+  recipientHash: string;
+  recipientMasked: string | null;
+  status: string;
+  providerMessageId: string | null;
+  providerStatus: string | null;
+  rawResponse: string | null;
+  attempts: number;
+  nextAttemptAt: number;
+  claimId: string | null;
+  claimExpiresAt: number | null;
+  lastError: string | null;
+  lastAttemptAt: number | null;
+  acceptedAt: number | null;
+  deliveredAt: number | null;
+  failedAt: number | null;
+  skippedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 const now = 1_000;
 
-function createOutboxDb(initialRows: StoredOutboxRow[] = []) {
+function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: StoredReceiptRow[] = []) {
   const rows = new Map(initialRows.map((row) => [row.id, { ...row }]));
+  const receipts = new Map(initialReceipts.map((row) => [row.id, { ...row }]));
 
   const firstRow = () => [...rows.values()][0];
   const project = (row: StoredOutboxRow, projection?: Record<string, unknown>) => {
     if (!projection) return { ...row };
-    if ("id" in projection && Object.keys(projection).length === 1) return { id: row.id };
-    return {
-      id: row.id,
-      payload: row.payload,
-      claimId: row.claimId,
-      attempts: row.attempts,
-    };
+    return Object.fromEntries(
+      Object.keys(projection).map((key) => [key, row[key as keyof StoredOutboxRow]]),
+    );
   };
 
   const applyUpdate = (values: Record<string, unknown>, returning: boolean) => {
@@ -75,7 +102,11 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = []) {
           : values.claimExpiresAt === null
             ? null
             : row.claimExpiresAt,
-      nextAttemptAt: values.status === "failed" ? now + 60 : row.nextAttemptAt,
+      nextAttemptAt: values.status === "failed"
+        ? now + 60
+        : values.status === "pending"
+          ? now
+          : row.nextAttemptAt,
       queuedAt: values.status === "queued" ? now : row.queuedAt,
       sentAt: values.status === "sent" ? now : row.sentAt,
       updatedAt: now,
@@ -105,19 +136,31 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = []) {
       },
     }),
     select: (projection?: Record<string, unknown>) => ({
-      from: () => ({
+      from: () => {
+        const keys = projection ? Object.keys(projection) : [];
+        const isReceiptQuery = keys.includes("receiptKey");
+        const selectedRows = () => isReceiptQuery
+          ? [...receipts.values()]
+          : [...rows.values()].map((row) => project(row, projection));
+        const thenableRows = (items: unknown[]) => ({
+          all: async () => items,
+          then: (resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) =>
+            Promise.resolve(items).then(resolve, reject),
+        });
+        return {
         where: () => ({
           get: async () => {
             const row = firstRow();
             return row ? project(row, projection) : undefined;
           },
           orderBy: () => ({
-            limit: (limit: number) => ({
-              all: async () => [...rows.values()].slice(0, limit).map((row) => project(row, projection)),
-            }),
+            limit: (limit: number) => thenableRows(selectedRows().slice(0, limit)),
+            then: (resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) =>
+              Promise.resolve(selectedRows()).then(resolve, reject),
           }),
         }),
-      }),
+      };
+      },
     }),
     update: () => ({
       set: (values: Record<string, unknown>) => ({
@@ -154,6 +197,37 @@ function createRow(overrides: Partial<StoredOutboxRow> = {}): StoredOutboxRow {
     lastError: null,
     queuedAt: null,
     sentAt: null,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+function createReceipt(overrides: Partial<StoredReceiptRow> = {}): StoredReceiptRow {
+  return {
+    id: "receipt_1",
+    receiptKey: "outbox_1:email:recipient_hash",
+    outboxId: "outbox_1",
+    orderId: "order_1",
+    notificationType: "order_created",
+    channel: "email",
+    provider: "cloudflare",
+    recipientHash: "recipient_hash",
+    recipientMasked: "b***@example.com",
+    status: "failed",
+    providerMessageId: null,
+    providerStatus: "temporary_error",
+    rawResponse: null,
+    attempts: 2,
+    nextAttemptAt: now + 60,
+    claimId: null,
+    claimExpiresAt: null,
+    lastError: "provider timeout",
+    lastAttemptAt: now,
+    acceptedAt: null,
+    deliveredAt: null,
+    failedAt: now,
+    skippedAt: null,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -253,5 +327,82 @@ describe("order notification outbox", () => {
     const result = await claimOrderNotificationOutboxForProcessing(db, "outbox_1");
 
     expect(result).toEqual({ claimed: false, reason: "already_sent" });
+  });
+
+  it("lists outbox rows with delivery receipt state for an order", async () => {
+    const { db } = createOutboxDb(
+      [createRow({ status: "failed", lastError: "delivery failed" })],
+      [createReceipt()],
+    );
+
+    const result = await listOrderNotificationOutboxForOrder(db, "order_1");
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "outbox_1",
+      orderId: "order_1",
+      notificationType: "order_created",
+      status: "failed",
+      lastError: "delivery failed",
+      receipts: [{
+        id: "receipt_1",
+        channel: "email",
+        provider: "cloudflare",
+        status: "failed",
+        lastError: "provider timeout",
+      }],
+    });
+  });
+
+  it("retries failed outbox rows through the existing enqueue path", async () => {
+    const { db, rows } = createOutboxDb([createRow({
+      status: "failed",
+      attempts: 2,
+      lastError: "delivery failed",
+      nextAttemptAt: now + 3_600,
+    })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await retryFailedOrderNotificationOutboxById({
+      db,
+      queue,
+      orderId: "order_1",
+      outboxId: "outbox_1",
+    });
+
+    expect(result).toMatchObject({
+      outboxId: "outbox_1",
+      dedupeKey: "order_created:order_1",
+      created: false,
+      enqueued: true,
+    });
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      outboxId: "outbox_1",
+      orderId: "order_1",
+      notificationType: "order_created",
+    }));
+    expect(rows.get("outbox_1")).toMatchObject({
+      status: "queued",
+      lastError: null,
+      claimId: null,
+    });
+  });
+
+  it("does not retry sent outbox rows", async () => {
+    const { db } = createOutboxDb([createRow({ status: "sent", sentAt: now })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await retryFailedOrderNotificationOutboxById({
+      db,
+      queue,
+      orderId: "order_1",
+      outboxId: "outbox_1",
+    });
+
+    expect(result).toMatchObject({
+      enqueued: false,
+      skippedReason: "already_sent",
+    });
+    expect(queue.send).not.toHaveBeenCalled();
   });
 });

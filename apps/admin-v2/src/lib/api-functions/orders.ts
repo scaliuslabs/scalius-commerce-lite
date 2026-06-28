@@ -89,6 +89,52 @@ export type BulkDeleteOrdersInput =
   ApiBody<PostApiV1AdminOrdersBulkDeleteData>;
 export type OrderPaymentsPayload =
   ApiData<GetApiV1AdminOrdersByIdPaymentsResponse>;
+export interface OrderNotificationReceiptDto {
+  id: string;
+  receiptKey: string;
+  channel: string;
+  provider: string;
+  recipientMasked: string | null;
+  status: string;
+  providerMessageId: string | null;
+  providerStatus: string | null;
+  attempts: number;
+  nextAttemptAt: string | number | null;
+  lastAttemptAt: string | number | null;
+  lastError: string | null;
+  acceptedAt: string | number | null;
+  deliveredAt: string | number | null;
+  failedAt: string | number | null;
+  skippedAt: string | number | null;
+  createdAt: string | number;
+  updatedAt: string | number;
+}
+export interface OrderNotificationOutboxDto {
+  id: string;
+  dedupeKey: string;
+  orderId: string;
+  notificationType: string;
+  source: string;
+  status: string;
+  attempts: number;
+  nextAttemptAt: string | number;
+  lastError: string | null;
+  queuedAt: string | number | null;
+  sentAt: string | number | null;
+  createdAt: string | number;
+  updatedAt: string | number;
+  receipts: OrderNotificationReceiptDto[];
+}
+export interface OrderNotificationsPayload {
+  notifications: OrderNotificationOutboxDto[];
+}
+export interface RetryOrderNotificationPayload {
+  outboxId: string;
+  dedupeKey: string;
+  created: boolean;
+  enqueued: boolean;
+  skippedReason?: string;
+}
 export type OrderCodPayload = ApiData<GetApiV1AdminOrdersByIdCodResponse>;
 export type UpdateOrderCodInput = { orderId: string } &
   ApiBody<PostApiV1AdminOrdersByIdCodData>;
@@ -232,6 +278,20 @@ export const getOrderPayments = createServerFn({ method: "GET" })
   .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderPaymentsPayload>(`/orders/${data.orderId}/payments`);
+  });
+
+export const getOrderNotifications = createServerFn({ method: "GET" })
+  .validator((data: { orderId: string }) => data)
+  .handler(async ({ data }) => {
+    return apiGet<OrderNotificationsPayload>(`/orders/${data.orderId}/notifications`);
+  });
+
+export const retryOrderNotification = createServerFn({ method: "POST" })
+  .validator((data: { orderId: string; outboxId: string }) => data)
+  .handler(async ({ data }) => {
+    return apiPost<RetryOrderNotificationPayload>(
+      `/orders/${data.orderId}/notifications/${data.outboxId}/retry`,
+    );
   });
 
 export const getOrderCod = createServerFn({ method: "GET" })

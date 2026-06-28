@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
-import { orderNotificationOutbox } from "@scalius/database/schema";
-import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { orderNotificationDeliveryReceipts, orderNotificationOutbox } from "@scalius/database/schema";
+import { and, asc, desc, eq, inArray, lte, or, sql } from "drizzle-orm";
 import type { OrderNotificationType } from "./notification-types";
 
 export type OrderNotificationOutboxStatus =
@@ -47,6 +47,44 @@ export interface RecordAndEnqueueOrderNotificationResult {
         | "busy"
         | "missing"
         | "queue_failed";
+}
+
+export interface OrderNotificationDeliveryReceiptView {
+    id: string;
+    receiptKey: string;
+    channel: string;
+    provider: string;
+    recipientMasked: string | null;
+    status: string;
+    providerMessageId: string | null;
+    providerStatus: string | null;
+    attempts: number;
+    nextAttemptAt: number | null;
+    lastAttemptAt: number | null;
+    lastError: string | null;
+    acceptedAt: number | null;
+    deliveredAt: number | null;
+    failedAt: number | null;
+    skippedAt: number | null;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface OrderNotificationOutboxView {
+    id: string;
+    dedupeKey: string;
+    orderId: string;
+    notificationType: OrderNotificationType;
+    source: string;
+    status: OrderNotificationOutboxStatus;
+    attempts: number;
+    nextAttemptAt: number;
+    lastError: string | null;
+    queuedAt: number | null;
+    sentAt: number | null;
+    createdAt: number;
+    updatedAt: number;
+    receipts: OrderNotificationDeliveryReceiptView[];
 }
 
 type OutboxRow = typeof orderNotificationOutbox.$inferSelect;
@@ -225,6 +263,181 @@ export async function flushPendingOrderNotificationOutbox(options: {
     }
 
     return { scanned: dueRows.length, enqueued, failed, skipped };
+}
+
+export async function listOrderNotificationOutboxForOrder(
+    db: Database,
+    orderId: string,
+    options: { limit?: number } = {},
+): Promise<OrderNotificationOutboxView[]> {
+    const limit = Math.max(1, Math.min(options.limit ?? 20, 50));
+    const rows = await db
+        .select({
+            id: orderNotificationOutbox.id,
+            dedupeKey: orderNotificationOutbox.dedupeKey,
+            orderId: orderNotificationOutbox.orderId,
+            notificationType: orderNotificationOutbox.notificationType,
+            source: orderNotificationOutbox.source,
+            status: orderNotificationOutbox.status,
+            attempts: orderNotificationOutbox.attempts,
+            nextAttemptAt: orderNotificationOutbox.nextAttemptAt,
+            lastError: orderNotificationOutbox.lastError,
+            queuedAt: orderNotificationOutbox.queuedAt,
+            sentAt: orderNotificationOutbox.sentAt,
+            createdAt: orderNotificationOutbox.createdAt,
+            updatedAt: orderNotificationOutbox.updatedAt,
+        })
+        .from(orderNotificationOutbox)
+        .where(eq(orderNotificationOutbox.orderId, orderId))
+        .orderBy(desc(orderNotificationOutbox.createdAt))
+        .limit(limit);
+
+    if (rows.length === 0) return [];
+
+    const receipts = await db
+        .select({
+            id: orderNotificationDeliveryReceipts.id,
+            receiptKey: orderNotificationDeliveryReceipts.receiptKey,
+            outboxId: orderNotificationDeliveryReceipts.outboxId,
+            channel: orderNotificationDeliveryReceipts.channel,
+            provider: orderNotificationDeliveryReceipts.provider,
+            recipientMasked: orderNotificationDeliveryReceipts.recipientMasked,
+            status: orderNotificationDeliveryReceipts.status,
+            providerMessageId: orderNotificationDeliveryReceipts.providerMessageId,
+            providerStatus: orderNotificationDeliveryReceipts.providerStatus,
+            attempts: orderNotificationDeliveryReceipts.attempts,
+            nextAttemptAt: orderNotificationDeliveryReceipts.nextAttemptAt,
+            lastAttemptAt: orderNotificationDeliveryReceipts.lastAttemptAt,
+            lastError: orderNotificationDeliveryReceipts.lastError,
+            acceptedAt: orderNotificationDeliveryReceipts.acceptedAt,
+            deliveredAt: orderNotificationDeliveryReceipts.deliveredAt,
+            failedAt: orderNotificationDeliveryReceipts.failedAt,
+            skippedAt: orderNotificationDeliveryReceipts.skippedAt,
+            createdAt: orderNotificationDeliveryReceipts.createdAt,
+            updatedAt: orderNotificationDeliveryReceipts.updatedAt,
+        })
+        .from(orderNotificationDeliveryReceipts)
+        .where(inArray(orderNotificationDeliveryReceipts.outboxId, rows.map((row) => row.id)))
+        .orderBy(asc(orderNotificationDeliveryReceipts.createdAt));
+
+    const receiptsByOutboxId = new Map<string, OrderNotificationDeliveryReceiptView[]>();
+    for (const receipt of receipts) {
+        const current = receiptsByOutboxId.get(receipt.outboxId) ?? [];
+        current.push({
+            id: receipt.id,
+            receiptKey: receipt.receiptKey,
+            channel: receipt.channel,
+            provider: receipt.provider,
+            recipientMasked: receipt.recipientMasked,
+            status: receipt.status,
+            providerMessageId: receipt.providerMessageId,
+            providerStatus: receipt.providerStatus,
+            attempts: receipt.attempts,
+            nextAttemptAt: receipt.nextAttemptAt,
+            lastAttemptAt: receipt.lastAttemptAt,
+            lastError: receipt.lastError,
+            acceptedAt: receipt.acceptedAt,
+            deliveredAt: receipt.deliveredAt,
+            failedAt: receipt.failedAt,
+            skippedAt: receipt.skippedAt,
+            createdAt: receipt.createdAt,
+            updatedAt: receipt.updatedAt,
+        });
+        receiptsByOutboxId.set(receipt.outboxId, current);
+    }
+
+    return rows.map((row) => ({
+        ...row,
+        notificationType: row.notificationType as OrderNotificationType,
+        status: row.status as OrderNotificationOutboxStatus,
+        receipts: receiptsByOutboxId.get(row.id) ?? [],
+    }));
+}
+
+export async function retryFailedOrderNotificationOutboxById(options: {
+    db: Database;
+    queue: OrderNotificationQueue | undefined;
+    orderId: string;
+    outboxId: string;
+}): Promise<RecordAndEnqueueOrderNotificationResult> {
+    const existing = await selectOutboxById(options.db, options.outboxId);
+    if (!existing || existing.orderId !== options.orderId) {
+        return {
+            outboxId: options.outboxId,
+            dedupeKey: "",
+            created: false,
+            enqueued: false,
+            skippedReason: "missing",
+        };
+    }
+    if (existing.status === "sent") {
+        return {
+            outboxId: existing.id,
+            dedupeKey: existing.dedupeKey,
+            created: false,
+            enqueued: false,
+            skippedReason: "already_sent",
+        };
+    }
+    if (existing.status !== "failed" && existing.status !== "pending") {
+        return {
+            outboxId: existing.id,
+            dedupeKey: existing.dedupeKey,
+            created: false,
+            enqueued: false,
+            skippedReason: "busy",
+        };
+    }
+    if (!options.queue) {
+        await options.db
+            .update(orderNotificationOutbox)
+            .set({
+                status: "pending",
+                nextAttemptAt: sql`unixepoch()`,
+                lastError: null,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                eq(orderNotificationOutbox.id, existing.id),
+                eq(orderNotificationOutbox.orderId, options.orderId),
+                inArray(orderNotificationOutbox.status, ["pending", "failed"]),
+            ));
+        return {
+            outboxId: existing.id,
+            dedupeKey: existing.dedupeKey,
+            created: false,
+            enqueued: false,
+            skippedReason: "no_queue",
+        };
+    }
+
+    await options.db
+        .update(orderNotificationOutbox)
+        .set({
+            status: "pending",
+            nextAttemptAt: sql`unixepoch()`,
+            lastError: null,
+            claimId: null,
+            claimExpiresAt: null,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(orderNotificationOutbox.id, existing.id),
+            eq(orderNotificationOutbox.orderId, options.orderId),
+            inArray(orderNotificationOutbox.status, ["pending", "failed"]),
+        ));
+
+    const result = await enqueueOrderNotificationOutboxById({
+        db: options.db,
+        queue: options.queue,
+        outboxId: existing.id,
+    });
+
+    return {
+        ...result,
+        dedupeKey: existing.dedupeKey,
+        created: false,
+    };
 }
 
 export async function claimOrderNotificationOutboxForProcessing(

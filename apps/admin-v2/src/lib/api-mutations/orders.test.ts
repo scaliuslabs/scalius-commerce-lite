@@ -14,6 +14,7 @@ const reactQueryMocks = vi.hoisted(() => {
 
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
+  info: vi.fn(),
   success: vi.fn(),
 }));
 
@@ -32,6 +33,7 @@ vi.mock("../api-functions/orders", () => ({
   createOrder: vi.fn(),
   createOrderShipment: vi.fn(),
   refundOrder: vi.fn(),
+  retryOrderNotification: vi.fn(),
   restoreOrder: vi.fn(),
   returnOrder: vi.fn(),
   updateFulfillmentStatus: vi.fn(),
@@ -41,7 +43,7 @@ vi.mock("../api-functions/orders", () => ({
 }));
 
 import { queryKeys } from "../query-keys";
-import { useUpdateOrderCod } from "./orders";
+import { useRetryOrderNotification, useUpdateOrderCod } from "./orders";
 
 type MutationOptions = {
   onSuccess?: (data: unknown, variables: { orderId: string }) => void;
@@ -65,5 +67,21 @@ describe("order COD mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.cod("ord_123"),
     });
+  });
+});
+
+describe("order notification mutations", () => {
+  it("invalidates notification history after a retry is queued", () => {
+    const mutation = useRetryOrderNotification() as MutationOptions;
+
+    mutation.onSuccess?.(
+      { enqueued: true },
+      { orderId: "ord_123", outboxId: "outbox_1" } as never,
+    );
+
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.notifications("ord_123"),
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("Notification retry queued");
   });
 });
