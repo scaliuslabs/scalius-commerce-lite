@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { QuickActions } from "~/components/admin/QuickActions";
@@ -62,11 +62,6 @@ export const Route = createFileRoute("/admin/")({
         console.warn("Dashboard summary prefetch skipped", error);
       }
     });
-    void queryClient.prefetchQuery(dashboardActivityQueryOptions()).catch((error) => {
-      if (!isTransientD1Error(error)) {
-        console.warn("Dashboard activity prefetch skipped", error);
-      }
-    });
   },
   head: () => ({ meta: [{ title: "Dashboard | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
@@ -74,12 +69,14 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function DashboardPage() {
+  const shouldFetchActivity = useDashboardActivityEnabled();
   const summaryQuery = useQuery({
     ...dashboardSummaryQueryOptions(),
     retry: (failureCount, error) => failureCount < 3 && isTransientD1Error(error),
   });
   const activityQuery = useQuery({
     ...dashboardActivityQueryOptions(),
+    enabled: shouldFetchActivity,
     retry: (failureCount, error) => failureCount < 3 && isTransientD1Error(error),
   });
   const data = summaryQuery.data ?? EMPTY_DASHBOARD_SUMMARY;
@@ -147,6 +144,29 @@ function DashboardPage() {
       )}
     </div>
   );
+}
+
+function useDashboardActivityEnabled() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const win = window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (win.requestIdleCallback) {
+      const idleId = win.requestIdleCallback(() => setEnabled(true), {
+        timeout: 1500,
+      });
+      return () => win.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = window.setTimeout(() => setEnabled(true), 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  return enabled;
 }
 
 function DashboardStatsPanelLoading() {
