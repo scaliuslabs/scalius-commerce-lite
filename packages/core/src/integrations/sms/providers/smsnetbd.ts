@@ -3,6 +3,7 @@
 // API docs: https://api.sms.net.bd — single API key auth, form-data POST.
 
 import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
+import { classifySmsProviderFailure } from "../retryability";
 
 export interface SmsNetBdConfig {
   apiKey: string;
@@ -39,7 +40,11 @@ export class SmsNetBdProvider implements SmsProvider {
     try {
       json = JSON.parse(text);
     } catch {
-      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      return {
+        success: false,
+        rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        retryable: classifySmsProviderFailure(undefined, res.status),
+      };
     }
 
     if (json.error === 0) {
@@ -49,6 +54,11 @@ export class SmsNetBdProvider implements SmsProvider {
         rawStatus: json.msg,
       };
     }
-    return { success: false, rawStatus: `error=${json.error}: ${json.msg}` };
+    const rawStatus = `error=${json.error}: ${json.msg}`;
+    return {
+      success: false,
+      rawStatus,
+      retryable: classifySmsProviderFailure(rawStatus),
+    };
   }
 }

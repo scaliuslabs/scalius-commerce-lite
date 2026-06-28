@@ -86,7 +86,10 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
 
     if (values.status === "processing") {
       const staleProcessing = row.status === "processing" && row.claimExpiresAt != null && row.claimExpiresAt <= now;
-      if (!(["pending", "failed", "enqueueing", "queued"].includes(row.status) || staleProcessing)) {
+      const duePendingOrFailed = ["pending", "failed"].includes(row.status) && row.nextAttemptAt <= now;
+      const queued = row.status === "queued";
+      const staleEnqueueing = row.status === "enqueueing" && row.claimExpiresAt != null && row.claimExpiresAt <= now;
+      if (!(duePendingOrFailed || queued || staleEnqueueing || staleProcessing)) {
         return [];
       }
     }
@@ -331,6 +334,44 @@ describe("order notification outbox", () => {
     const result = await claimOrderNotificationOutboxForProcessing(db, "outbox_1");
 
     expect(result).toEqual({ claimed: false, reason: "already_sent" });
+  });
+
+  it("does not process failed rows before their outbox retry time", async () => {
+    const { db, rows } = createOutboxDb([createRow({
+      status: "failed",
+      attempts: 5,
+      nextAttemptAt: now + 3_600,
+      lastError: "provider auth failed",
+    })]);
+
+    const result = await claimOrderNotificationOutboxForProcessing(db, "outbox_1");
+
+    expect(result).toEqual({ claimed: false, reason: "busy" });
+    expect(rows.get("outbox_1")).toMatchObject({
+      status: "failed",
+      attempts: 5,
+      nextAttemptAt: now + 3_600,
+      lastError: "provider auth failed",
+    });
+  });
+
+  it("processes fresh queued rows immediately", async () => {
+    const { db, rows } = createOutboxDb([createRow({
+      status: "queued",
+      attempts: 1,
+      queuedAt: now,
+    })]);
+
+    const result = await claimOrderNotificationOutboxForProcessing(db, "outbox_1");
+
+    expect(result).toMatchObject({
+      claimed: true,
+      outboxId: "outbox_1",
+    });
+    expect(rows.get("outbox_1")).toMatchObject({
+      status: "processing",
+      attempts: 2,
+    });
   });
 
   it("lists outbox rows with delivery receipt state for an order", async () => {

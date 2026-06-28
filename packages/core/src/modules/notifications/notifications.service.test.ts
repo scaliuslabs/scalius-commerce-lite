@@ -525,6 +525,47 @@ describe("order notification dispatch", () => {
         });
     });
 
+    it("records non-retryable SMS provider credential failures as skipped receipts", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.sendSms.mockResolvedValue({
+            success: false,
+            rawStatus: "error=405: Authorization required",
+            retryable: false,
+        });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "smsnetbd",
+            sendSms: mocks.sendSms,
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_auth",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_auth",
+            },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "error=405: Authorization required",
+            expect.objectContaining({
+                provider: "smsnetbd",
+                providerStatus: "error=405: Authorization required",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("sends WhatsApp order templates through durable receipts", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockResolvedValue({

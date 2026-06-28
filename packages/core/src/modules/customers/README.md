@@ -55,7 +55,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after challenge creation, it deletes the exact D1 challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
-5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, rechecks the current country policy against the submitted and pinned phone contacts, atomically consumes the matching channel-scoped D1 challenge, atomically increments wrong-code attempts, rechecks sign-up collection policy, uses the phone/email fields pinned when the OTP was issued, and on success signs in an existing active customer or creates a new customer only for explicit `sign_up` intent before creating a 30-day D1 session keyed by an HMAC token hash. Email sign-in requires exactly one active customer row for that email; ambiguous active matches fail closed and deleted matches direct the buyer to store support. New sign-ups set `profileCompletionRequiredAt` until the required delivery profile is complete. Unknown sign-in and duplicate sign-up guidance happens here, after OTP proof, not at send time.
+5. `verifyOtp()` -- normalizes identifier to E.164 for phone method, rechecks the current country policy against the submitted and pinned phone contacts, atomically consumes the matching channel-scoped D1 challenge, atomically increments wrong-code attempts, rechecks sign-up collection policy, uses the phone/email fields pinned when the OTP was issued, and on success signs in an existing active customer or creates a new customer only for explicit `sign_up` intent before creating a 30-day D1 session keyed by an HMAC token hash. Successful OTP proof marks `accountClaimedAt`, `lastAuthenticatedAt`, and only the channel-proven `phoneVerifiedAt` or `emailVerifiedAt`; collected secondary contacts are not marked verified. New sign-up customer creation and session creation must remain one D1 batch so a session persistence failure cannot leave a login-capable orphan customer row. Email sign-in requires exactly one active customer row for that email; ambiguous active matches fail closed and deleted matches direct the buyer to store support. New sign-ups set `profileCompletionRequiredAt` until the required delivery profile is complete. Unknown sign-in and duplicate sign-up guidance happens here, after OTP proof, not at send time.
 
 **Delivery idempotency:**
 - Email sends pass `deliveryKey` as `idempotencyKey`; Resend forwards it as `Idempotency-Key`, while Cloudflare Email stores the returned `messageId`
@@ -71,6 +71,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
   two hostname labels.
 - Session TTL: 30 days
 - `customer_sessions` stores only `tokenHash`, `customerId`, expiry/revocation timestamps, and audit timestamps. The raw cookie token is never persisted.
+- `customers.accountClaimedAt`, `phoneVerifiedAt`, `emailVerifiedAt`, and `lastAuthenticatedAt` are the explicit account-state layer. `verifyOtp()` updates them after proof; admin/customer CRUD must not infer verification from collected contact fields.
 - `getCustomerBySession()` hashes the cookie token, requires an active non-expired session row, joins the live `customers` row, rejects soft-deleted/missing customers, and returns the canonical profile projection including address, city/zone/area IDs, resolved labels, `profileComplete`, and `needsProfileCompletion`.
 - `deleteCustomerSession()` revokes the D1 row; scheduled maintenance deletes expired and old revoked rows in bounded batches.
 - `updateCustomerProfile()` rechecks the current country policy for the existing customer phone, validates active delivery-location hierarchy, stores canonical city/zone/area IDs plus resolved labels, updates profile-completion timestamps, and returns a fresh customer/session projection from D1.
@@ -160,6 +161,7 @@ Customer account order history uses keyset pagination over `(orders.createdAt, o
 - `id` (PK, `cust_` prefix from admin, nanoid from auth), `name`, `email` (nullable, indexed), `phone` (unique, indexed)
 - `address`, `city`, `zone`, `area` (location IDs), `cityName`, `zoneName`, `areaName` (denormalized display names)
 - `totalOrders`, `totalSpent`, `lastOrderAt` (materialized by orders domain)
+- `accountClaimedAt`, `phoneVerifiedAt`, `emailVerifiedAt`, `lastAuthenticatedAt` (nullable account/auth proof state)
 - `profileCompletionRequiredAt`, `profileCompletedAt`
 - `createdAt`, `updatedAt`, `deletedAt` (soft delete)
 
@@ -207,6 +209,8 @@ Customer account order history uses keyset pagination over `(orders.createdAt, o
 
 Customer account order history is scoped by `orders.customerId`, not by mutable phone/email contact fields. Storefront checkout attaches `orders.customerId` only when the API has resolved an active `customer_sessions` row and the session phone matches the checkout phone. True guest checkout orders keep `orders.customerId = null`; the submitted phone remains delivery/fraud/contact data, not account ownership proof.
 
+Guest orders are recoverable through the private receipt token/link, not by later matching phone or email. A future guest-to-account claim flow must require the receipt token plus immutable contact proof and an active session; do not attach historical guest orders to accounts by mutable contact matching alone.
+
 ## Known Gaps
 
 1. **History route not in service**: The `GET /{id}/history` endpoint contains significant business logic inline in the route handler (batch query for customer + history + orders, location enrichment) rather than delegating to the service layer.
@@ -218,3 +222,5 @@ Customer account order history is scoped by `orders.customerId`, not by mutable 
 4. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
 5. **No customer self-service cancellation/return requests yet**: Account order history/detail can show payment, shipment, refund, notification, and recovery state, but customer-facing return/cancel/refund-request eligibility and workflow remain tracked outside this module.
+
+6. **No guest-order account claim flow yet**: True guest orders remain receipt-token-only and are intentionally absent from account history until a receipt-token-backed claim model exists.

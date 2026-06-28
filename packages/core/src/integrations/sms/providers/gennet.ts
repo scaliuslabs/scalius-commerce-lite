@@ -3,6 +3,7 @@
 // API docs: <domain>/api/v3/ — account-specific domain, api_token auth, JSON POST.
 
 import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
+import { classifySmsProviderFailure } from "../retryability";
 
 export interface GennetConfig {
   apiToken: string;
@@ -58,7 +59,11 @@ export class GennetProvider implements SmsProvider {
     try {
       json = JSON.parse(text);
     } catch {
-      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      return {
+        success: false,
+        rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        retryable: classifySmsProviderFailure(undefined, res.status),
+      };
     }
 
     // Duplicate csms_id (4023) means already sent — treat as success on retry
@@ -73,9 +78,11 @@ export class GennetProvider implements SmsProvider {
         rawStatus: "Duplicate csms_id - already sent",
       };
     }
+    const rawStatus = `${json.status_code}: ${json.error_message}`;
     return {
       success: false,
-      rawStatus: `${json.status_code}: ${json.error_message}`,
+      rawStatus,
+      retryable: classifySmsProviderFailure(rawStatus),
     };
   }
 }

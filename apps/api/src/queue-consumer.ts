@@ -892,6 +892,7 @@ async function processQueueMessage(
           ).catch((markError: unknown) => {
             console.error("[Queue] Failed to mark order notification outbox failure:", markError);
           });
+          return;
         }
         throw error;
       }
