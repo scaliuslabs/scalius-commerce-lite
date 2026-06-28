@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
     cleanupExpiredCustomerSessions: vi.fn(),
     cleanupExpiredScannerTokenClaims: vi.fn(),
     reconcileDueRefundAttempts: vi.fn(),
+    reconcileStripeExternalRefundWebhooks: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
     enqueueOrderRefundNotificationForOrder: vi.fn(),
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock("@scalius/core/auth", () => ({
 
 vi.mock("@scalius/core/modules/payments", () => ({
   reconcileDueRefundAttempts: mocks.reconcileDueRefundAttempts,
+  reconcileStripeExternalRefundWebhooks: mocks.reconcileStripeExternalRefundWebhooks,
 }));
 
 vi.mock("./utils/cache-invalidation", () => ({
@@ -77,6 +79,7 @@ import {
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
+  STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
   STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES,
   STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
@@ -169,6 +172,18 @@ describe("runScheduledMaintenance", () => {
       finalizedOrderIds: [],
       refundNotifications: [],
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+      hasMore: false,
+    });
+    mocks.reconcileStripeExternalRefundWebhooks.mockResolvedValue({
+      scanned: 0,
+      imported: 0,
+      finalized: 0,
+      skipped: 0,
+      deferred: 0,
+      errors: [],
+      finalizedOrderIds: [],
+      refundNotifications: [],
+      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
       hasMore: false,
     });
     mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({
@@ -334,6 +349,10 @@ describe("runScheduledMaintenance", () => {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     });
+    expect(mocks.reconcileStripeExternalRefundWebhooks).toHaveBeenCalledWith(mocks.db, undefined, {
+      encryptionKey: undefined,
+      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+    });
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
       db: mocks.db,
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
@@ -397,6 +416,49 @@ describe("runScheduledMaintenance", () => {
         limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
       },
     );
+  });
+
+  it("invalidates and enqueues notifications after Stripe external refunds are locally reconciled", async () => {
+    const env = createEnv();
+    const executionCtx = createExecutionContext();
+    mocks.reconcileStripeExternalRefundWebhooks.mockResolvedValue({
+      scanned: 1,
+      imported: 1,
+      finalized: 1,
+      skipped: 0,
+      deferred: 0,
+      errors: [],
+      finalizedOrderIds: ["order_stripe_refunded"],
+      refundNotifications: [{
+        orderId: "order_stripe_refunded",
+        notificationType: "order_partially_refunded",
+        dedupeKey: "refund-reconcile:order_stripe_refunded:rfa_stripe_external_re_1:partial",
+        amount: 15,
+        refundId: "re_1",
+      }],
+      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+      hasMore: false,
+    });
+
+    await runScheduledMaintenance(env, executionCtx);
+
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      mocks.db,
+      { orderIds: ["order_stripe_refunded"] },
+      { env, executionCtx },
+    );
+    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+      db: mocks.db,
+      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      orderId: "order_stripe_refunded",
+      notificationType: "order_partially_refunded",
+      dedupeKey: "refund-reconcile:order_stripe_refunded:rfa_stripe_external_re_1:partial",
+      source: "refund-reconciliation",
+      data: {
+        amount: 15,
+        refundId: "re_1",
+      },
+    });
   });
 
   it("does not invalidate availability caches when a sweep has no affected subjects", async () => {

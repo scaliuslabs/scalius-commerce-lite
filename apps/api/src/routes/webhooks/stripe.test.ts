@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
         metadata: { orderId: "ord_1", paymentType: "full" },
       },
     },
-  },
+  } as Record<string, unknown>,
   getStripeSettings: vi.fn(),
   verifyStripeWebhook: vi.fn(),
   claimWebhookEvent: vi.fn(),
@@ -153,6 +153,58 @@ describe("Stripe webhook route", () => {
       expect.objectContaining({ eventType: "payment_intent.succeeded" }),
     );
     expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+  });
+
+  it("queues Stripe refund webhook evidence with individual provider refund ids", async () => {
+    mocks.event = {
+      id: "evt_stripe_refund",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_refund",
+          amount_refunded: 1500,
+          currency: "bdt",
+          payment_intent: "pi_refund",
+          metadata: { orderId: "ord_refund", paymentType: "full" },
+          refunds: {
+            data: [
+              { id: "re_1", amount: 1500, currency: "bdt", status: "succeeded" },
+            ],
+          },
+        },
+      },
+    };
+    mocks.verifyStripeWebhook.mockResolvedValue(mocks.event);
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" });
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(200);
+    expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({
+        id: "stripe:charge-refunded:evt_stripe_refund",
+        provider: "stripe",
+        eventType: "charge.refunded",
+        orderId: "ord_refund",
+      }),
+    );
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      webhookEventId: "stripe:charge-refunded:evt_stripe_refund",
+      type: "payment.stripe.refunded",
+      orderId: "ord_refund",
+      paymentIntentId: "pi_refund",
+      amountRefunded: 1500,
+      currency: "bdt",
+      chargeId: "ch_refund",
+      refunds: [{
+        id: "re_1",
+        amount: 1500,
+        currency: "bdt",
+        status: "succeeded",
+      }],
+    }));
   });
 
   it("returns retryable failure without claiming when fresh settings cannot be read", async () => {

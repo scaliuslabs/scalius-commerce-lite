@@ -36,7 +36,7 @@ vi.mock("./refund-service", () => ({
   finalizeAcceptedRefundAttemptIds: mocks.finalizeAcceptedRefundAttemptIds,
 }));
 
-import { reconcileDueRefundAttempts } from "./refund-reconciliation";
+import { reconcileDueRefundAttempts, reconcileStripeExternalRefundWebhooks } from "./refund-reconciliation";
 
 type SelectResult = unknown[] | Record<string, unknown> | undefined;
 
@@ -62,10 +62,14 @@ function createDbMock(selectResults: SelectResult[], returningResults: unknown[]
   const selectQueue = [...selectResults];
   const returningQueue = [...returningResults];
   const updateSets: Array<Record<string, unknown>> = [];
+  const insertValues: Array<Record<string, unknown>> = [];
 
   const db = {
     select: vi.fn(() => ({
       from: () => ({
+        innerJoin: () => ({
+          where: async () => selectQueue.shift() ?? [],
+        }),
         where: () => ({
           orderBy: () => ({
             limit: async () => selectQueue.shift() ?? [],
@@ -73,6 +77,12 @@ function createDbMock(selectResults: SelectResult[], returningResults: unknown[]
           get: async () => selectQueue.shift(),
         }),
       }),
+    })),
+    insert: vi.fn(() => ({
+      values: (values: Record<string, unknown>) => {
+        insertValues.push(values);
+        return { values };
+      },
     })),
     update: vi.fn(() => ({
       set: (values: Record<string, unknown>) => {
@@ -89,7 +99,7 @@ function createDbMock(selectResults: SelectResult[], returningResults: unknown[]
     batch: vi.fn(async () => []),
   };
 
-  return { db: db as unknown as Database, rawDb: db, updateSets };
+  return { db: db as unknown as Database, rawDb: db, updateSets, insertValues };
 }
 
 describe("refund attempt reconciliation", () => {
@@ -282,6 +292,115 @@ describe("refund attempt reconciliation", () => {
       status: "failed",
       providerStatus: "failed",
       providerRefundId: "re_failed",
+    });
+  });
+
+  it("imports succeeded Stripe dashboard refunds through the local refund finalizer", async () => {
+    mocks.listStripeRefundsForCharge.mockResolvedValue({
+      success: true,
+      refunds: [{
+        id: "re_dash_1",
+        status: "succeeded",
+        amount: 1500,
+        currency: "bdt",
+        charge: "ch_1",
+        metadata: {},
+      }],
+    });
+    mocks.finalizeAcceptedRefundAttemptIds.mockResolvedValue({
+      orderIds: ["order_1"],
+      finalizedAttemptIds: ["rfa_stripe_external_re_dash_1"],
+      refundNotifications: [{
+        orderId: "order_1",
+        notificationType: "order_partially_refunded",
+        dedupeKey: "refund-reconcile:order_1:rfa_stripe_external_re_dash_1:partial",
+        amount: 15,
+        refundId: "re_dash_1",
+      }],
+    });
+    const { db, rawDb, insertValues, updateSets } = createDbMock([
+      [{
+        id: "stripe:charge-refunded:evt_refund",
+        orderId: "order_1",
+        result: JSON.stringify({
+          chargeId: "ch_1",
+          paymentIntentId: "pi_1",
+          amountRefunded: 1500,
+          currency: "bdt",
+        }),
+      }],
+      {
+        id: "pay_1",
+        orderId: "order_1",
+        amount: 100,
+        currency: "BDT",
+        stripePaymentIntentId: "pi_1",
+        stripeChargeId: "ch_1",
+      },
+      undefined,
+      [],
+    ]);
+
+    const result = await reconcileStripeExternalRefundWebhooks(db, undefined, {
+      encryptionKey: "cred_key",
+      nowSeconds: 1_765_000_000,
+      limit: 5,
+    });
+
+    expect(mocks.getStripeSettings).toHaveBeenCalledWith(db, undefined, "cred_key", { bypassMemoryCache: true });
+    expect(mocks.listStripeRefundsForCharge).toHaveBeenCalledWith("sk_test", "ch_1", 100);
+    expect(rawDb.batch).toHaveBeenCalledTimes(1);
+    expect(insertValues[0]).toMatchObject({
+      id: "refund_stripe_external_re_dash_1",
+      orderId: "order_1",
+      amount: 15,
+      currency: "BDT",
+      paymentMethod: "stripe",
+      paymentType: "refund",
+      status: "pending",
+      stripePaymentIntentId: "pi_1",
+      stripeChargeId: "ch_1",
+    });
+    expect(insertValues[1]).toMatchObject({
+      id: "rfa_stripe_external_re_dash_1",
+      attemptKey: "external:stripe:re_dash_1",
+      refundGroupId: "stripe_external_order_1_re_dash_1",
+      orderId: "order_1",
+      sourcePaymentId: "pay_1",
+      refundPaymentId: "refund_stripe_external_re_dash_1",
+      gateway: "stripe",
+      amount: 15,
+      providerRefundId: "re_dash_1",
+      providerStatus: "succeeded",
+      status: "reconcile_required",
+    });
+    expect(mocks.finalizeAcceptedRefundAttemptIds).toHaveBeenCalledWith(db, ["rfa_stripe_external_re_dash_1"]);
+    expect(updateSets.at(-1)).toMatchObject({
+      status: "processed",
+    });
+    expect(JSON.parse(String(updateSets.at(-1)?.result))).toMatchObject({
+      stripeExternalRefundReconciliation: {
+        outcome: "external_refund_reconciled",
+        importedRefundIds: ["re_dash_1"],
+        providerRefundIds: ["re_dash_1"],
+        imported: 1,
+        finalized: 1,
+        deferred: 0,
+      },
+    });
+    expect(result).toMatchObject({
+      scanned: 1,
+      imported: 1,
+      finalized: 1,
+      skipped: 0,
+      deferred: 0,
+      finalizedOrderIds: ["order_1"],
+      refundNotifications: [{
+        orderId: "order_1",
+        notificationType: "order_partially_refunded",
+        amount: 15,
+        refundId: "re_dash_1",
+      }],
     });
   });
 });
