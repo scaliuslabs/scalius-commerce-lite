@@ -38,6 +38,7 @@ import { useCurrency } from "@/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { formatRelativeDate } from "@scalius/shared/timestamps";
+import type { OrderActionPermissions } from "@/lib/order-action-permissions";
 
 interface OrderMobileCardProps {
   order: OrderListItem;
@@ -52,6 +53,7 @@ interface OrderMobileCardProps {
   onRestore: (id: string) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
   onShipmentStatusUpdated: (updatedShipment: { id: string; orderId: string; [key: string]: unknown }) => void;
+  orderActions: OrderActionPermissions;
 }
 
 const formatDate = formatRelativeDate;
@@ -88,9 +90,13 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   onRestore,
   onStatusUpdate,
   onShipmentStatusUpdated,
+  orderActions,
 }: OrderMobileCardProps) {
   const navigate = useNavigate();
   const { symbol } = useCurrency();
+  const customerRoute = orderActions.canEditOrders
+    ? `/admin/orders/${order.id}/edit`
+    : `/admin/orders/${order.id}`;
   return (
     <Card
       className={`mb-3 overflow-hidden border transition-all duration-200 ${
@@ -111,23 +117,25 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
         {/* Header Row */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-start gap-3">
-            <div
-              onClick={(e) => {
-                e.preventDefault();
-                onToggleSelection(order.id);
-              }}
-              className="cursor-pointer mt-0.5 select-none"
-            >
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={() => {}}
-                className="cursor-pointer pointer-events-none"
-                aria-label={`Select order ${order.id}`}
-              />
-            </div>
+            {orderActions.canSelectOrdersForBulkActions && (
+              <div
+                onClick={(e) => {
+                  e.preventDefault();
+                  onToggleSelection(order.id);
+                }}
+                className="cursor-pointer mt-0.5 select-none"
+              >
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={() => {}}
+                  className="cursor-pointer pointer-events-none"
+                  aria-label={`Select order ${order.id}`}
+                />
+              </div>
+            )}
             <div>
               <Link
-                to={`/admin/orders/${order.id}/edit` as string}
+                to={customerRoute as string}
                 className="text-base font-semibold text-[var(--foreground)] hover:text-primary transition-colors"
               >
                 {order.customerName}
@@ -193,6 +201,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
             orderId={order.id}
             isLoading={isUpdatingStatus}
             showTrashed={showTrashed}
+            canChangeStatus={orderActions.canChangeOrderStatus}
             onStatusUpdate={onStatusUpdate}
           />
           {shipment ? (
@@ -210,6 +219,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                         : undefined,
                 }}
                 onStatusUpdated={onShipmentStatusUpdated}
+                canRefresh={orderActions.canManageOrderShipments}
               />
             </div>
           ) : (
@@ -234,7 +244,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <Eye className="h-4 w-4" />
             </Button>
 
-            {!showTrashed && (
+            {!showTrashed && orderActions.canEditOrders && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -247,24 +257,28 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
 
             {showTrashed ? (
               <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-primary"
-                  onClick={() => onRestore(order.id)}
-                >
-                  <Undo className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-destructive"
-                  onClick={() => onPermanentDelete(order.id)}
-                >
-                  <XCircle className="h-4 w-4" />
-                </Button>
+                {orderActions.canRestoreOrders && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-primary"
+                    onClick={() => onRestore(order.id)}
+                  >
+                    <Undo className="h-4 w-4" />
+                  </Button>
+                )}
+                {orderActions.canDeleteOrders && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-destructive"
+                    onClick={() => onPermanentDelete(order.id)}
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                )}
               </>
-            ) : (
+            ) : orderActions.canDeleteOrders ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -273,7 +287,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </CardContent>

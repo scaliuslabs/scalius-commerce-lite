@@ -29,6 +29,7 @@ import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { useUpdateFulfillmentStatus } from "@/lib/api-mutations/orders";
 import type { UpdateFulfillmentStatusInput } from "@/lib/api-functions/orders";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 
 type FulfillmentStatus = UpdateFulfillmentStatusInput["status"];
 
@@ -70,6 +71,7 @@ const InfoItem = ({
 
 export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const { symbol } = useCurrency();
+  const orderActions = useOrderActionPermissions();
   const fulfillmentMutation = useUpdateFulfillmentStatus();
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
@@ -210,7 +212,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                 <Select
                   value={order.fulfillmentStatus}
                   onValueChange={(value) => {
-                    if (refundLocked) return;
+                    if (refundLocked || !orderActions.canManageOrderShipments) return;
                     if (
                       value !== order.fulfillmentStatus &&
                       isFulfillmentStatus(value)
@@ -218,7 +220,11 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                       fulfillmentMutation.mutate({ orderId: order.id, status: value });
                     }
                   }}
-                  disabled={fulfillmentMutation.isPending || refundLocked}
+                  disabled={
+                    fulfillmentMutation.isPending ||
+                    refundLocked ||
+                    !orderActions.canManageOrderShipments
+                  }
                 >
                   <SelectTrigger className={`h-7 w-auto min-w-[100px] gap-1 rounded-full border-0 px-2.5 text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}>
                     <SelectValue />
@@ -247,26 +253,28 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
               Print Invoice
             </Link>
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
-            asChild={!refundLocked}
-            disabled={refundLocked}
-            title={refundLocked ? "Complete or reconcile the active refund before editing this order." : undefined}
-          >
-            {refundLocked ? (
-              <>
-                <Pencil className="h-4 w-4" />
-                Edit locked
-              </>
-            ) : (
-              <Link to={`/admin/orders/${order.id}/edit` as string}>
-                <Pencil className="h-4 w-4" />
-                Edit Order
-              </Link>
-            )}
-          </Button>
+          {orderActions.canEditOrders && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
+              asChild={!refundLocked}
+              disabled={refundLocked}
+              title={refundLocked ? "Complete or reconcile the active refund before editing this order." : undefined}
+            >
+              {refundLocked ? (
+                <>
+                  <Pencil className="h-4 w-4" />
+                  Edit locked
+                </>
+              ) : (
+                <Link to={`/admin/orders/${order.id}/edit` as string}>
+                  <Pencil className="h-4 w-4" />
+                  Edit Order
+                </Link>
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>

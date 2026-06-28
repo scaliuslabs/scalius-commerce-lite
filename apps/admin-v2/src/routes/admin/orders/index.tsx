@@ -43,6 +43,7 @@ import { OrderToolbar } from "~/components/admin/data-table/toolbars/OrderToolba
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ShoppingBag } from "lucide-react";
 import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 
 const DeleteOrderDialog = lazy(() =>
   import("~/components/admin/order-list/DeleteOrderDialog").then((module) => ({
@@ -190,6 +191,7 @@ function OrdersPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { symbol } = useCurrency();
+  const orderActions = useOrderActionPermissions();
   const showTrashed = search.trashed;
 
   // ── Local state ───────────────────────────────────────────────
@@ -365,28 +367,64 @@ function OrdersPage() {
 
   const handleEdit = useCallback(
     (id: string) => {
+      if (!orderActions.canEditOrders) {
+        toast.error("Edit unavailable", {
+          description: "Your role can view orders but cannot edit them.",
+        });
+        return;
+      }
       void navigate({ to: `/admin/orders/${id}/edit` as string });
     },
-    [navigate],
+    [navigate, orderActions.canEditOrders],
   );
 
   const handleDelete = useCallback(
-    (id: string) => setOrderToDelete(id),
-    [],
+    (id: string) => {
+      if (!orderActions.canDeleteOrders) {
+        toast.error("Delete unavailable", {
+          description: "Your role can view orders but cannot delete them.",
+        });
+        return;
+      }
+      setOrderToDelete(id);
+    },
+    [orderActions.canDeleteOrders],
   );
 
   const handlePermanentDelete = useCallback(
-    (id: string) => setOrderToDelete(id),
-    [],
+    (id: string) => {
+      if (!orderActions.canDeleteOrders) {
+        toast.error("Delete unavailable", {
+          description: "Your role can view orders but cannot delete them.",
+        });
+        return;
+      }
+      setOrderToDelete(id);
+    },
+    [orderActions.canDeleteOrders],
   );
 
   const handleRestore = useCallback(
-    (id: string) => restoreMut.mutate(id),
-    [restoreMut],
+    (id: string) => {
+      if (!orderActions.canRestoreOrders) {
+        toast.error("Restore unavailable", {
+          description: "Your role can view deleted orders but cannot restore them.",
+        });
+        return;
+      }
+      restoreMut.mutate(id);
+    },
+    [restoreMut, orderActions.canRestoreOrders],
   );
 
   const handleStatusUpdate = useCallback(
     (orderId: string, newStatus: string) => {
+      if (!orderActions.canChangeOrderStatus) {
+        toast.error("Status change unavailable", {
+          description: "Your role can view orders but cannot change order status.",
+        });
+        return;
+      }
       setUpdatingStatusIds((prev) => new Set(prev).add(orderId));
       statusMutation.mutate(
         { orderId, status: newStatus.toLowerCase() },
@@ -401,7 +439,7 @@ function OrdersPage() {
         },
       );
     },
-    [statusMutation],
+    [statusMutation, orderActions.canChangeOrderStatus],
   );
 
   const handleShipmentStatusUpdated = useCallback(
@@ -418,6 +456,12 @@ function OrdersPage() {
 
   const handleSingleDelete = useCallback(() => {
     if (!orderToDelete) return;
+    if (!orderActions.canDeleteOrders) {
+      toast.error("Delete unavailable", {
+        description: "Your role can view orders but cannot delete them.",
+      });
+      return;
+    }
     bulkDeleteMut.mutate(
       { orderIds: [orderToDelete], permanent: showTrashed },
       {
@@ -426,11 +470,17 @@ function OrdersPage() {
         },
       },
     );
-  }, [orderToDelete, showTrashed, bulkDeleteMut]);
+  }, [orderToDelete, showTrashed, bulkDeleteMut, orderActions.canDeleteOrders]);
 
   const handleBulkDeleteClick = useCallback(() => {
+    if (!orderActions.canBulkDeleteOrders) {
+      toast.error("Bulk delete unavailable", {
+        description: "Your role can view orders but cannot delete them.",
+      });
+      return;
+    }
     setIsBulkDeleteOpen(true);
-  }, []);
+  }, [orderActions.canBulkDeleteOrders]);
 
   // NOTE: handleBulkDeleteConfirm and handleBulkShipmentSubmit are defined
   // after useServerTable to avoid using selectedIds/clearSelection before declaration.
@@ -454,6 +504,7 @@ function OrdersPage() {
         onPermanentDelete: handlePermanentDelete,
         onStatusUpdate: handleStatusUpdate,
         onShipmentStatusUpdated: handleShipmentStatusUpdated,
+        orderActions,
       }),
     [
       showTrashed,
@@ -466,6 +517,7 @@ function OrdersPage() {
       handlePermanentDelete,
       handleStatusUpdate,
       handleShipmentStatusUpdated,
+      orderActions,
     ],
   );
 
@@ -645,6 +697,12 @@ function OrdersPage() {
 
   // ── Bulk delete handler (after useServerTable for selectedIds/clearSelection) ──
   const handleBulkDeleteConfirm = useCallback(() => {
+    if (!orderActions.canBulkDeleteOrders) {
+      toast.error("Bulk delete unavailable", {
+        description: "Your role can view orders but cannot delete them.",
+      });
+      return;
+    }
     bulkDeleteMut.mutate(
       { orderIds: selectedIds, permanent: showTrashed },
       {
@@ -657,12 +715,18 @@ function OrdersPage() {
         },
       },
     );
-  }, [showTrashed, bulkDeleteMut, selectedIds, clearSelection]);
+  }, [showTrashed, bulkDeleteMut, selectedIds, clearSelection, orderActions.canBulkDeleteOrders]);
 
   // ── Bulk shipment handler (after useServerTable for selectedIds/clearSelection) ──
   const handleBulkShipmentSubmit = useCallback(
     async (providerId: string) => {
       if (isShipping || selectedIds.length === 0) return;
+      if (!orderActions.canBulkShipOrders) {
+        toast.error("Shipping unavailable", {
+          description: "Your role can view orders but cannot manage shipments.",
+        });
+        return;
+      }
       setIsShipping(true);
       let successCount = 0;
       const shippedOrderIds: string[] = [];
@@ -711,7 +775,14 @@ function OrdersPage() {
         toast.warning(`${failedOrderIds.length} selected order(s) still need shipment.`);
       }
     },
-    [queryClient, selectedIds, clearSelection, deselectIds, isShipping],
+    [
+      queryClient,
+      selectedIds,
+      clearSelection,
+      deselectIds,
+      isShipping,
+      orderActions.canBulkShipOrders,
+    ],
   );
 
   // ── Sync shipment statuses when data changes ──────────────────
@@ -752,6 +823,7 @@ function OrdersPage() {
           onRestore={handleRestore}
           onStatusUpdate={handleStatusUpdate}
           onShipmentStatusUpdated={handleShipmentStatusUpdated}
+          orderActions={orderActions}
         />
       );
     },
@@ -766,6 +838,7 @@ function OrdersPage() {
       handleRestore,
       handleStatusUpdate,
       handleShipmentStatusUpdated,
+      orderActions,
     ],
   );
 
@@ -790,6 +863,12 @@ function OrdersPage() {
       onBulkDelete={handleBulkDeleteClick}
       onBulkShip={() => {
         if (isShipping || selectedIds.length === 0) return;
+        if (!orderActions.canBulkShipOrders) {
+          toast.error("Shipping unavailable", {
+            description: "Your role can view orders but cannot manage shipments.",
+          });
+          return;
+        }
         setIsShippingDialogOpen(true);
       }}
       isBulkActionBusy={isShipping || bulkDeleteMut.isPending}
@@ -797,6 +876,7 @@ function OrdersPage() {
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}
       countdown={countdown}
+      orderActions={orderActions}
     />
   );
 

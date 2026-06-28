@@ -34,6 +34,7 @@ import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator"
 import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraudCheckIndicator";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn } from "./column-factories";
+import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 
 /** Minimal shipment shape used in the order list */
 interface OrderShipment {
@@ -61,6 +62,7 @@ interface OrderColumnOptions {
     orderId: string;
     [key: string]: unknown;
   }) => void;
+  orderActions: OrderActionPermissions;
 }
 
 // PaymentStatusBadge imported from shared StatusBadges registry
@@ -86,10 +88,7 @@ function PaymentMethodLabel({ method }: { method: string }) {
 export function getOrderColumns(
   opts: OrderColumnOptions,
 ): ColumnDef<OrderListItem, unknown>[] {
-  return [
-    // ── Select ────────────────────────────────────────────────────
-    createSelectColumn<OrderListItem>({ getLabel: (r) => (r as OrderListItem).customerName }),
-
+  const columns: ColumnDef<OrderListItem, unknown>[] = [
     // ── Customer ──────────────────────────────────────────────────
     {
       accessorKey: "customerName",
@@ -98,6 +97,9 @@ export function getOrderColumns(
       ),
       cell: ({ row }) => {
         const order = row.original;
+        const customerRoute = opts.orderActions.canEditOrders
+          ? `/admin/orders/${order.id}/edit`
+          : `/admin/orders/${order.id}`;
         return (
           <div className="space-y-1.5 max-w-[300px]">
             <div className="flex items-center gap-1.5">
@@ -105,7 +107,7 @@ export function getOrderColumns(
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Link
-                      to={`/admin/orders/${order.id}/edit` as string}
+                      to={customerRoute as string}
                       className="group/link text-sm font-semibold text-[var(--foreground)] transition-all duration-200 hover:text-primary hover:underline"
                     >
                       {order.customerName}
@@ -222,6 +224,7 @@ export function getOrderColumns(
             orderId={order.id}
             isLoading={opts.updatingStatusIds.has(order.id)}
             showTrashed={opts.showTrashed}
+            canChangeStatus={opts.orderActions.canChangeOrderStatus}
             onStatusUpdate={opts.onStatusUpdate}
           />
         );
@@ -268,6 +271,7 @@ export function getOrderColumns(
                       : undefined,
               }}
               onStatusUpdated={opts.onShipmentStatusUpdated}
+              canRefresh={opts.orderActions.canManageOrderShipments}
             />
             {trkId && trackingUrl && (
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1">
@@ -350,7 +354,7 @@ export function getOrderColumns(
               </Tooltip>
             </TooltipProvider>
 
-            {!opts.showTrashed && (
+            {!opts.showTrashed && opts.orderActions.canEditOrders && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -369,37 +373,41 @@ export function getOrderColumns(
 
             {opts.showTrashed ? (
               <>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => opts.onRestore(order.id)}
-                        className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-[var(--primary)] transition-all duration-200 hover:bg-[var(--muted)]/80 hover:scale-105 hover:shadow-sm active:scale-95"
-                      >
-                        <Undo className="h-4 w-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Restore Order</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                {opts.orderActions.canRestoreOrders && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => opts.onRestore(order.id)}
+                          className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-[var(--primary)] transition-all duration-200 hover:bg-[var(--muted)]/80 hover:scale-105 hover:shadow-sm active:scale-95"
+                        >
+                          <Undo className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Restore Order</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
 
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => opts.onPermanentDelete(order.id)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--destructive)]/10 text-[var(--destructive)] transition-all duration-200 hover:bg-[var(--destructive)]/20 hover:scale-105 hover:shadow-sm active:scale-95"
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Delete Permanently</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                {opts.orderActions.canDeleteOrders && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => opts.onPermanentDelete(order.id)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--destructive)]/10 text-[var(--destructive)] transition-all duration-200 hover:bg-[var(--destructive)]/20 hover:scale-105 hover:shadow-sm active:scale-95"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Delete Permanently</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </>
-            ) : (
+            ) : opts.orderActions.canDeleteOrders ? (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -414,7 +422,7 @@ export function getOrderColumns(
                   <TooltipContent>Move to Trash</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            )}
+            ) : null}
           </div>
         );
       },
@@ -422,4 +430,14 @@ export function getOrderColumns(
       size: 100,
     },
   ];
+
+  if (opts.orderActions.canSelectOrdersForBulkActions) {
+    columns.unshift(
+      createSelectColumn<OrderListItem>({
+        getLabel: (r) => (r as OrderListItem).customerName,
+      }),
+    );
+  }
+
+  return columns;
 }

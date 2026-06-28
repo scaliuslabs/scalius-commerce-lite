@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { DataTableToolbar } from "../DataTableToolbar";
 import type { DateRange } from "react-day-picker";
+import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 
 const DateRangePickerWithPresets = lazy(() =>
   import("~/components/admin/order-list/DateRangePickerWithPresets").then(
@@ -91,6 +92,7 @@ interface OrderToolbarProps {
   autoRefreshEnabled: boolean;
   onToggleAutoRefresh: () => void;
   countdown: number;
+  orderActions: OrderActionPermissions;
 }
 
 function formatRangeDate(date: Date) {
@@ -228,22 +230,28 @@ export function OrderToolbar({
   autoRefreshEnabled,
   onToggleAutoRefresh,
   countdown,
+  orderActions,
 }: OrderToolbarProps) {
+  const showBulkDelete = selectedCount > 0 && orderActions.canBulkDeleteOrders;
+  const showBulkShip =
+    selectedCount > 0 && !showTrashed && orderActions.canBulkShipOrders;
   const bulkActions: ReactNode =
-    selectedCount > 0 ? (
+    showBulkDelete || showBulkShip ? (
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={onBulkDelete}
-          disabled={isBulkActionBusy}
-          className="h-9 px-3 text-xs"
-        >
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-          {showTrashed ? "Delete Permanently" : "Move to Trash"} (
-          {selectedCount})
-        </Button>
-        {!showTrashed && (
+        {showBulkDelete && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={onBulkDelete}
+            disabled={isBulkActionBusy}
+            className="h-9 px-3 text-xs"
+          >
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+            {showTrashed ? "Delete Permanently" : "Move to Trash"} (
+            {selectedCount})
+          </Button>
+        )}
+        {showBulkShip && (
           <Button
             variant="outline"
             size="sm"
@@ -290,7 +298,7 @@ export function OrderToolbar({
           )}
         </Link>
       </Button>
-      {!showTrashed && (
+      {!showTrashed && orderActions.canCreateOrders && (
         <Button size="sm" asChild className="h-9 px-3 text-xs">
           <Link to="/admin/orders/new">
             <Plus className="mr-1.5 h-3.5 w-3.5" />

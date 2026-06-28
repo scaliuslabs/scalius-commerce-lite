@@ -30,6 +30,7 @@ import type {
 } from "@/lib/api-functions/orders";
 import type { Order, OrderTimestamp } from "./types";
 import { formatOrderTimestamp } from "./formatters";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 
 const STATUS_STYLES: Record<string, string> = {
   sent: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100",
@@ -172,9 +173,11 @@ function ReceiptRow({ receipt }: { receipt: OrderNotificationReceiptDto }) {
 function NotificationRow({
   orderId,
   notification,
+  canRetryNotifications,
 }: {
   orderId: string;
   notification: OrderNotificationOutboxDto;
+  canRetryNotifications: boolean;
 }) {
   const retryMutation = useRetryOrderNotification();
   const timestamp = outboxTimestamp(notification);
@@ -206,7 +209,7 @@ function NotificationRow({
               {outboxAttemptLabel(notification)}
             </span>
           </div>
-          {canRetry(notification) && (
+          {canRetryNotifications && canRetry(notification) && (
             <Button
               type="button"
               size="sm"
@@ -244,6 +247,7 @@ function NotificationRow({
 
 export function OrderNotificationsCard({ order }: { order: Order }) {
   const isHydrated = useHydrated();
+  const orderActions = useOrderActionPermissions();
   const {
     data,
     isLoading,
@@ -312,6 +316,7 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
                 key={notification.id}
                 orderId={order.id}
                 notification={notification}
+                canRetryNotifications={orderActions.canRetryOrderNotifications}
               />
             ))}
           </div>
