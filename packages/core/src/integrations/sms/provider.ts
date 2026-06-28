@@ -14,6 +14,7 @@ export interface SendSmsResult {
   success: boolean;
   providerRef?: string; // Provider-assigned reference ID
   rawStatus?: string; // Raw status string for debugging/logging (per SMS-07)
+  retryable?: boolean; // false for provider/account/config validation errors
 }
 
 /**

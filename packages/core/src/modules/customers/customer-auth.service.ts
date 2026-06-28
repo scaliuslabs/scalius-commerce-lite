@@ -5,7 +5,8 @@
 import { nanoid } from "nanoid";
 import { customers, customerSessions, deliveryLocations, siteSettings, settings as genericSettings } from "@scalius/database/schema";
 import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import {
     ValidationError,
     ForbiddenError,
@@ -379,6 +380,60 @@ function assertPolicyRequiredFields(
 }
 
 type CustomerAuthProfileRow = typeof customers.$inferSelect;
+type CustomerInsertRow = typeof customers.$inferInsert;
+type SQLiteBatchItem = BatchItem<"sqlite">;
+type SQLTimestamp = ReturnType<typeof sql>;
+
+function customerAccountStateForProof(input: {
+    verifiedEmail?: string | null;
+    verifiedPhone?: string | null;
+}): {
+    accountClaimedAt: SQLTimestamp;
+    phoneVerifiedAt?: SQLTimestamp;
+    emailVerifiedAt?: SQLTimestamp;
+    lastAuthenticatedAt: SQLTimestamp;
+} {
+    const updates: {
+        accountClaimedAt: SQLTimestamp;
+        phoneVerifiedAt?: SQLTimestamp;
+        emailVerifiedAt?: SQLTimestamp;
+        lastAuthenticatedAt: SQLTimestamp;
+    } = {
+        accountClaimedAt: sql`coalesce(${customers.accountClaimedAt}, unixepoch())`,
+        lastAuthenticatedAt: sql`unixepoch()`,
+    };
+
+    if (input.verifiedPhone) {
+        updates.phoneVerifiedAt = sql`coalesce(${customers.phoneVerifiedAt}, unixepoch())`;
+    }
+    if (input.verifiedEmail) {
+        updates.emailVerifiedAt = sql`coalesce(${customers.emailVerifiedAt}, unixepoch())`;
+    }
+
+    return updates;
+}
+
+function customerAccountInsertStateForProof(input: {
+    verifiedEmail?: string | null;
+    verifiedPhone?: string | null;
+    authenticatedAt: Date;
+}): Pick<CustomerInsertRow, "accountClaimedAt" | "phoneVerifiedAt" | "emailVerifiedAt" | "lastAuthenticatedAt"> {
+    return {
+        accountClaimedAt: input.authenticatedAt,
+        phoneVerifiedAt: input.verifiedPhone ? input.authenticatedAt : null,
+        emailVerifiedAt: input.verifiedEmail ? input.authenticatedAt : null,
+        lastAuthenticatedAt: input.authenticatedAt,
+    };
+}
+
+function isCustomerUniqueConstraintError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+        message.includes("customer_phone_unique") ||
+        message.includes("UNIQUE constraint failed: customers.phone") ||
+        message.includes("customers.phone")
+    );
+}
 
 export interface CustomerAuthProfile {
     identifier?: string;
@@ -767,8 +822,10 @@ export async function verifyOtp(
         contactEncryptionKey: input.credentialEncryptionKey,
     });
     const intent = normalizeCustomerAuthIntent(challenge.intent ?? input.intent);
-    const verifiedEmail = challenge.method === "email" ? challenge.identifier : challenge.contactEmail;
-    const verifiedPhone = challenge.method === "phone" ? challenge.identifier : challenge.phone;
+    const otpVerifiedEmail = challenge.method === "email" ? challenge.identifier : null;
+    const otpVerifiedPhone = challenge.method === "phone" ? challenge.identifier : null;
+    const verifiedEmail = otpVerifiedEmail ?? challenge.contactEmail;
+    const verifiedPhone = otpVerifiedPhone ?? challenge.phone;
     if (verifiedPhone) {
         normalizePhoneOrThrow(verifiedPhone, phoneCountryPolicy);
     }
@@ -779,6 +836,7 @@ export async function verifyOtp(
     let resolvedEmail = method === "email" ? normalizedIdentifier : verifiedEmail;
     let isNewUser = false;
     let customerProfileRow: CustomerAuthProfileRow | null | undefined;
+    let pendingCustomerInsertValues: CustomerInsertRow | null = null;
 
     try {
         if (intent === "sign_up") {
@@ -859,18 +917,23 @@ export async function verifyOtp(
             // Determine phone value
             const customerPhone = phoneForNewCustomer;
 
-            const newCustomerValues = {
+            const newCustomerValues: CustomerInsertRow = {
                 id: customerId,
                 name: customerName,
                 email: resolvedEmail || null,
                 phone: customerPhone || "",
+                ...customerAccountInsertStateForProof({
+                    verifiedEmail: otpVerifiedEmail,
+                    verifiedPhone: otpVerifiedPhone,
+                    authenticatedAt: profileRequiredAt,
+                }),
                 profileCompletionRequiredAt: profileRequiredAt,
                 profileCompletedAt: null,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
+                createdAt: profileRequiredAt,
+                updatedAt: profileRequiredAt,
             };
 
-            await db.insert(customers).values(newCustomerValues);
+            pendingCustomerInsertValues = newCustomerValues;
             customerProfileRow = {
                 id: customerId,
                 name: customerName,
@@ -883,6 +946,10 @@ export async function verifyOtp(
                 cityName: null,
                 zoneName: null,
                 areaName: null,
+                accountClaimedAt: profileRequiredAt,
+                phoneVerifiedAt: otpVerifiedPhone ? profileRequiredAt : null,
+                emailVerifiedAt: otpVerifiedEmail ? profileRequiredAt : null,
+                lastAuthenticatedAt: profileRequiredAt,
                 profileCompletionRequiredAt: profileRequiredAt,
                 profileCompletedAt: null,
                 totalOrders: 0,
@@ -943,14 +1010,41 @@ export async function verifyOtp(
         expiresAt: sessionExpiresAtSeconds * 1000,
     };
 
-    await db.insert(customerSessions).values({
+    const sessionInsertValues = {
         tokenHash,
         customerId,
         expiresAt: sessionExpiresAtSeconds,
         revokedAt: null,
         createdAt: nowSeconds,
         updatedAt: nowSeconds,
-    });
+    };
+
+    const sessionStatements: SQLiteBatchItem[] = [];
+    if (pendingCustomerInsertValues) {
+        sessionStatements.push(
+            db.insert(customers).values(pendingCustomerInsertValues) as SQLiteBatchItem,
+        );
+    } else {
+        sessionStatements.push(
+            db
+                .update(customers)
+                .set(customerAccountStateForProof({ verifiedEmail: otpVerifiedEmail, verifiedPhone: otpVerifiedPhone }))
+                .where(and(eq(customers.id, customerId), isNull(customers.deletedAt))) as SQLiteBatchItem,
+        );
+    }
+    sessionStatements.push(
+        db.insert(customerSessions).values(sessionInsertValues) as SQLiteBatchItem,
+    );
+
+    try {
+        await safeBatch(db, sessionStatements);
+    } catch (error: unknown) {
+        if (isCustomerUniqueConstraintError(error)) {
+            throw new ValidationError("An account already exists for this phone number. Sign in instead.");
+        }
+        console.warn("[CustomerAuth] Account/session persistence failed:", error);
+        throw new ServiceUnavailableError("Customer session could not be created. Please try again.");
+    }
 
     return {
         success: true,

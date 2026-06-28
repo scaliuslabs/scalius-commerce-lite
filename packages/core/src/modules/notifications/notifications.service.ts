@@ -536,6 +536,7 @@ export async function sendOrderNotificationEmail(
                                 providerMessageId: smsResult.providerRef,
                                 providerStatus: smsResult.rawStatus,
                                 rawResponse: smsResult.rawStatus,
+                                retryable: smsResult.retryable,
                             };
                         },
                     }));

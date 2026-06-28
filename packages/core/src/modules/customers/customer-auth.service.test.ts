@@ -79,6 +79,22 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?:
   const queue = [...selectResults];
   const insertValues = vi.fn(async (_values: unknown) => undefined);
   const insertCalls: Array<{ table: unknown; values: unknown }> = [];
+  const updateCalls: Array<{ table: unknown; values: unknown }> = [];
+  type FakeStatement =
+    | { type: "insert"; table: unknown; values: unknown }
+    | { type: "update"; table: unknown; values: unknown };
+  const executeStatement = async (statement: FakeStatement) => {
+    if (statement.type === "insert") {
+      insertCalls.push({ table: statement.table, values: statement.values });
+      await insertValues(statement.values);
+      return [];
+    }
+    updateCalls.push({ table: statement.table, values: statement.values });
+    return [];
+  };
+  const batch = vi.fn(async (statements: FakeStatement[]) =>
+    Promise.all(statements.map(executeStatement))
+  );
   return {
     select: vi.fn(() => ({
         from: vi.fn(() => ({
@@ -111,13 +127,17 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?:
       })),
     })),
     insert: vi.fn((table: unknown) => ({
-      values: vi.fn(async (values: unknown) => {
-        insertCalls.push({ table, values });
-        return insertValues(values);
-      }),
+      values: vi.fn((values: unknown) => ({ type: "insert", table, values })),
     })),
+    update: vi.fn((table: unknown) => ({
+      set: vi.fn((values: unknown) => ({
+        where: vi.fn(() => ({ type: "update", table, values })),
+      })),
+    })),
+    batch,
     insertValues,
     insertCalls,
+    updateCalls,
   };
 }
 
@@ -661,6 +681,13 @@ describe("customer auth service intent handling", () => {
       customerId: "cust_active",
       revokedAt: null,
     });
+    expect(db.updateCalls[0]?.values).toMatchObject({
+      accountClaimedAt: expect.anything(),
+      emailVerifiedAt: expect.anything(),
+      lastAuthenticatedAt: expect.anything(),
+    });
+    expect(db.updateCalls[0]?.values as Record<string, unknown>).not.toHaveProperty("phoneVerifiedAt");
+    expect(db.batch).toHaveBeenCalledTimes(1);
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -760,6 +787,10 @@ describe("customer auth service intent handling", () => {
     expect(db.insertValues).toHaveBeenCalledWith(expect.objectContaining({
       email: "original@example.com",
       phone: "+8801712345678",
+      accountClaimedAt: expect.anything(),
+      phoneVerifiedAt: expect.anything(),
+      emailVerifiedAt: null,
+      lastAuthenticatedAt: expect.anything(),
       profileCompletionRequiredAt: expect.any(Date),
       profileCompletedAt: null,
     }));
@@ -773,6 +804,84 @@ describe("customer auth service intent handling", () => {
     });
     expect((sessionInsert?.values as { tokenHash?: string }).tokenHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(sessionInsert?.values)).not.toContain(result.session?.token);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("marks only the OTP-proven email as verified when email sign-up collects phone", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [] },
+      { all: [] },
+      { get: null },
+      { get: null },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:email:buyer@example.com",
+      method: "email",
+      channel: "email",
+      intent: "sign_up",
+      identifier: "buyer@example.com",
+      contactEmail: "buyer@example.com",
+      phone: "+8801712345678",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).resolves.toMatchObject({
+      success: true,
+      isNewUser: true,
+    });
+
+    expect(db.insertValues).toHaveBeenCalledWith(expect.objectContaining({
+      email: "buyer@example.com",
+      phone: "+8801712345678",
+      accountClaimedAt: expect.anything(),
+      phoneVerifiedAt: null,
+      emailVerifiedAt: expect.anything(),
+      lastAuthenticatedAt: expect.anything(),
+    }));
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("does not persist a sign-up customer outside the account/session batch when session persistence fails", async () => {
+    const db = createDb([
+      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { get: null },
+      { get: null },
+      { get: null },
+      { get: null },
+    ]);
+    db.batch.mockRejectedValueOnce(new Error("session insert failed"));
+    const kv = createKv();
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "phone",
+      channel: "sms",
+      identifier: "+8801712345678",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("Customer session could not be created. Please try again.");
+
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(db.batch.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(db.insertValues).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 

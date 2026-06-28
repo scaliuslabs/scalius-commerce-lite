@@ -1293,7 +1293,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
-  it("marks durable order notifications failed before queue retry when dispatch throws", async () => {
+  it("marks durable order notifications failed and acks so D1 owns retry timing when dispatch throws", async () => {
     mocks.sendOrderNotificationEmail.mockRejectedValue(new Error("email provider down"));
     const message = createMessage({
       type: "order.notification",
@@ -1312,11 +1312,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
       2,
       expect.any(Error),
     );
-    expect(message.ack).not.toHaveBeenCalled();
-    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
   });
 
-  it("marks durable order notifications failed when receipt outcomes need retry", async () => {
+  it("marks durable order notifications failed without immediate queue retry when receipt outcomes need retry", async () => {
     mocks.sendOrderNotificationEmail.mockResolvedValue({
       outcomes: [{
         channel: "email",
@@ -1347,6 +1347,23 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.any(Error),
     );
     expect(mocks.markOrderNotificationOutboxSent).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("still uses Cloudflare queue retry for legacy order notifications without an outbox id", async () => {
+    mocks.sendOrderNotificationEmail.mockRejectedValue(new Error("email provider down"));
+    const message = createMessage({
+      type: "order.notification",
+      orderId: "order-legacy-fail",
+      customerName: "Legacy Fail Customer",
+      notificationType: "order_cancelled",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.markOrderNotificationOutboxProcessingFailed).not.toHaveBeenCalled();
+    expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 

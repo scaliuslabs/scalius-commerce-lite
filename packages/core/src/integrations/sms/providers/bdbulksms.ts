@@ -3,6 +3,7 @@
 // API docs: https://api.bdbulksms.net — token auth, JSON POST.
 
 import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
+import { classifySmsProviderFailure } from "../retryability";
 
 export interface BdBulkSmsConfig {
   token: string;
@@ -34,7 +35,11 @@ export class BdBulkSmsProvider implements SmsProvider {
     try {
       json = JSON.parse(text);
     } catch {
-      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      return {
+        success: false,
+        rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        retryable: classifySmsProviderFailure(undefined, res.status),
+      };
     }
 
     const first = json[0];
@@ -45,6 +50,11 @@ export class BdBulkSmsProvider implements SmsProvider {
         rawStatus: first.statusmsg,
       };
     }
-    return { success: false, rawStatus: first?.statusmsg ?? "Unknown error" };
+    const rawStatus = first?.statusmsg ?? "Unknown error";
+    return {
+      success: false,
+      rawStatus,
+      retryable: classifySmsProviderFailure(rawStatus),
+    };
   }
 }

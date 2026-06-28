@@ -3,6 +3,7 @@
 // API docs: https://api.mimsms.com — username + API key auth, JSON POST.
 
 import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
+import { classifySmsProviderFailure } from "../retryability";
 
 export interface MimSmsConfig {
   userName: string; // Email address
@@ -47,7 +48,11 @@ export class MimSmsProvider implements SmsProvider {
     try {
       json = JSON.parse(text);
     } catch {
-      return { success: false, rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      return {
+        success: false,
+        rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        retryable: classifySmsProviderFailure(undefined, res.status),
+      };
     }
 
     if (json.statusCode === "200" && json.status === "Success") {
@@ -57,9 +62,11 @@ export class MimSmsProvider implements SmsProvider {
         rawStatus: json.responseResult,
       };
     }
+    const rawStatus = `${json.statusCode}: ${json.responseResult}`;
     return {
       success: false,
-      rawStatus: `${json.statusCode}: ${json.responseResult}`,
+      rawStatus,
+      retryable: classifySmsProviderFailure(rawStatus),
     };
   }
 }

@@ -52,6 +52,36 @@ function humanize(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function describeNotificationIssue(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  const normalized = text.toLowerCase();
+
+  if (normalized.includes("authorization required") || normalized.includes("unauthorized")) {
+    return "Provider rejected the saved credentials. Save valid credentials or disable this channel.";
+  }
+  if (normalized.includes("could not be decrypted")) {
+    return "Saved credentials cannot be decrypted. Save the provider credentials again.";
+  }
+  if (normalized.includes("invalid api key") || normalized.includes("invalid token")) {
+    return "Provider rejected the API key or token. Save valid credentials or disable this channel.";
+  }
+  if (normalized.includes("missing_email_recipient") || normalized.includes("missing email")) {
+    return "Customer email was not collected for this order.";
+  }
+  if (normalized.includes("missing_whatsapp_credentials")) {
+    return "WhatsApp is enabled, but Meta Cloud API credentials are not ready.";
+  }
+  if (normalized.includes("missing_whatsapp_recipient")) {
+    return "Customer phone was not available for WhatsApp delivery.";
+  }
+  if (normalized.includes("delivery_receipt_busy")) {
+    return "A previous retry is still cooling down; the outbox will not resend before its schedule.";
+  }
+
+  return text;
+}
+
 function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
   if (!value) return null;
   const date = value instanceof Date
@@ -89,6 +119,10 @@ function canRetry(outbox: OrderNotificationOutboxDto): boolean {
 function ReceiptRow({ receipt }: { receipt: OrderNotificationReceiptDto }) {
   const Icon = CHANNEL_ICONS[receipt.channel] ?? Send;
   const timestamp = receiptTimestamp(receipt);
+  const providerStatus = describeNotificationIssue(receipt.providerStatus);
+  const lastError = describeNotificationIssue(receipt.lastError);
+  const showLastError = lastError && lastError !== providerStatus;
+
   return (
     <div className="grid gap-2 rounded-md border border-border bg-background/50 p-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0 space-y-1">
@@ -100,13 +134,13 @@ function ReceiptRow({ receipt }: { receipt: OrderNotificationReceiptDto }) {
           </Badge>
           <span className="text-muted-foreground">{receipt.provider}</span>
         </div>
-        <div className="truncate text-muted-foreground">
+        <div className="truncate text-muted-foreground" title={receipt.providerStatus ?? undefined}>
           {receipt.recipientMasked ?? "No recipient"}
-          {receipt.providerStatus ? ` • ${receipt.providerStatus}` : ""}
+          {providerStatus ? ` • ${providerStatus}` : ""}
         </div>
-        {receipt.lastError && (
-          <div className="line-clamp-2 text-red-600 dark:text-red-300">
-            {receipt.lastError}
+        {showLastError && (
+          <div className="line-clamp-2 text-red-600 dark:text-red-300" title={receipt.lastError ?? undefined}>
+            {lastError}
           </div>
         )}
       </div>
@@ -127,6 +161,7 @@ function NotificationRow({
 }) {
   const retryMutation = useRetryOrderNotification();
   const timestamp = outboxTimestamp(notification);
+  const lastError = describeNotificationIssue(notification.lastError);
   const retrying =
     retryMutation.isPending &&
     retryMutation.variables?.outboxId === notification.id;
@@ -168,9 +203,12 @@ function NotificationRow({
         </div>
       </div>
 
-      {notification.lastError && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-          {notification.lastError}
+      {lastError && (
+        <div
+          className="line-clamp-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200"
+          title={notification.lastError ?? undefined}
+        >
+          {lastError}
         </div>
       )}
 

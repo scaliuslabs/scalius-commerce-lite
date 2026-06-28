@@ -78,23 +78,20 @@ export function DeferredTiptapEditor({
   useEffect(() => {
     if (shouldMountEditor || typeof window === "undefined") return undefined;
 
-    let cancelled = false;
     let idleHandle: number | null = null;
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     let observer: IntersectionObserver | null = null;
 
-    const preloadAndMount = () => {
-      void loadTiptapEditorModule().then(() => {
-        if (!cancelled) setShouldMountEditor(true);
-      });
+    const preloadEditor = () => {
+      void loadTiptapEditorModule();
     };
 
     const schedulePreload = () => {
       if ("requestIdleCallback" in window) {
-        idleHandle = window.requestIdleCallback(preloadAndMount, { timeout: 1200 });
+        idleHandle = window.requestIdleCallback(preloadEditor, { timeout: 1200 });
         return;
       }
-      timeoutHandle = setTimeout(preloadAndMount, 250);
+      timeoutHandle = setTimeout(preloadEditor, 250);
     };
 
     if ("IntersectionObserver" in window && containerRef.current) {
@@ -113,7 +110,6 @@ export function DeferredTiptapEditor({
     }
 
     return () => {
-      cancelled = true;
       observer?.disconnect();
       if (idleHandle !== null && "cancelIdleCallback" in window) {
         window.cancelIdleCallback(idleHandle);

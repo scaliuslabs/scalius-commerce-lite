@@ -471,9 +471,13 @@ export async function claimOrderNotificationOutboxForProcessing(
             and(
                 eq(orderNotificationOutbox.id, outboxId),
                 or(
-                    inArray(orderNotificationOutbox.status, ["pending", "failed", "enqueueing", "queued"]),
                     and(
-                        eq(orderNotificationOutbox.status, "processing"),
+                        inArray(orderNotificationOutbox.status, ["pending", "failed"]),
+                        lte(orderNotificationOutbox.nextAttemptAt, sql`unixepoch()`),
+                    ),
+                    eq(orderNotificationOutbox.status, "queued"),
+                    and(
+                        inArray(orderNotificationOutbox.status, ["enqueueing", "processing"]),
                         lte(orderNotificationOutbox.claimExpiresAt, sql`unixepoch()`),
                     ),
                 ),
