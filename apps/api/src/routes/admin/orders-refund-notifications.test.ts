@@ -11,10 +11,14 @@ const mocks = vi.hoisted(() => ({
     enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/payments/refund-service", () => ({
-    processReturn: mocks.processReturn,
-    processRefund: mocks.processRefund,
-}));
+vi.mock("@scalius/core/modules/payments/refund-service", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@scalius/core/modules/payments/refund-service")>();
+    return {
+        ...actual,
+        processReturn: mocks.processReturn,
+        processRefund: mocks.processRefund,
+    };
+});
 
 vi.mock("@scalius/core/auth/rbac/helpers", () => ({
     getUserPermissions: mocks.getUserPermissions,
@@ -33,6 +37,8 @@ vi.mock("../../utils/order-notification-queue", () => ({
     enqueueOrderStatusChangeNotification: mocks.enqueueOrderStatusChangeNotification,
 }));
 
+import { PartialRefundProcessedError } from "@scalius/core/modules/payments/refund-service";
+import { errorResponseFromError } from "../../utils/api-response";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 
 const db = { id: "db" };
@@ -50,6 +56,10 @@ function createTestApp() {
         c.set("db", db as never);
         c.set("user", { id: "admin_1" } as never);
         await next();
+    });
+    app.onError((error, c) => {
+        const { body, status } = errorResponseFromError(error);
+        return c.json(body, status);
     });
     app.route("/orders", adminOrdersRefundRoutes);
 
@@ -141,6 +151,64 @@ describe("admin refund notification routes", () => {
         });
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).not.toHaveProperty("refundNotification");
+    });
+
+    it("enqueues committed refund facts even when a split refund returns an operator-facing failure", async () => {
+        mocks.processRefund.mockRejectedValue(new PartialRefundProcessedError(
+            "Refund partially processed: 70 was accepted by the provider, but 30 has an unknown provider outcome. Do not retry until the pending refund is reconciled.",
+            {
+                affectedOrderIds: ["order_1"],
+                gateway: "stripe",
+                refundNotifications: [{
+                    orderId: "order_1",
+                    notificationType: "order_partially_refunded",
+                    dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_3_1:partial",
+                    amount: 70,
+                    refundId: "refund_balance",
+                }, {
+                    orderId: "order_1",
+                    notificationType: "refund_processing",
+                    dedupeKey: "refund:order_1:refund_order_1_3:processing",
+                    amount: 30,
+                }],
+            },
+        ));
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: "split_gateway_timeout" }),
+        }, env);
+
+        expect(response.status).toBe(503);
+        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+            db,
+            { orderIds: ["order_1"] },
+            expect.anything(),
+        );
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
+            db,
+            queue,
+            orderId: "order_1",
+            notificationType: "order_partially_refunded",
+            dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_3_1:partial",
+            source: "orders-refund-partial-failure",
+            data: { amount: 70, gateway: "stripe", refundId: "refund_balance" },
+        });
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(2, {
+            db,
+            queue,
+            orderId: "order_1",
+            notificationType: "refund_processing",
+            dedupeKey: "refund:order_1:refund_order_1_3:processing",
+            source: "orders-refund-partial-failure",
+            data: { amount: 30, gateway: "stripe" },
+        });
+        const body = await response.json() as { error: { code: string; message: string; details?: unknown } };
+        expect(body.error.code).toBe("SERVICE_UNAVAILABLE");
+        expect(body.error.message).toContain("Refund partially processed");
+        expect(body.error.details).toBeUndefined();
     });
 
     it("does not notify for already-refunded inventory repair results without a refund notification fact", async () => {
@@ -260,5 +328,76 @@ describe("admin refund notification routes", () => {
         });
         const body = await response.json() as { data: { refundResult?: Record<string, unknown> } };
         expect(body.data.refundResult).not.toHaveProperty("refundNotification");
+    });
+
+    it("enqueues returned and committed refund facts when auto-refund partially commits then fails", async () => {
+        mocks.processReturn.mockRejectedValue(new PartialRefundProcessedError(
+            "Refund partially processed: 70 was accepted by the provider, but 30 has an unknown provider outcome. Do not retry until the pending refund is reconciled.",
+            {
+                affectedOrderIds: ["order_1"],
+                gateway: "stripe",
+                statusChange: {
+                    orderId: "order_1",
+                    previousStatus: "delivered",
+                    newStatus: "returned",
+                    version: 7,
+                },
+                refundNotifications: [{
+                    orderId: "order_1",
+                    notificationType: "order_partially_refunded",
+                    dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_7_1:partial",
+                    amount: 70,
+                    refundId: "refund_balance",
+                }, {
+                    orderId: "order_1",
+                    notificationType: "refund_processing",
+                    dedupeKey: "refund:order_1:refund_order_1_7:processing",
+                    amount: 30,
+                }],
+            },
+        ));
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/return", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: "wrong_size", autoRefund: true }),
+        }, env);
+
+        expect(response.status).toBe(503);
+        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+            db,
+            { orderIds: ["order_1"] },
+            expect.anything(),
+        );
+        expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
+            db,
+            queue,
+            statusChange: {
+                orderId: "order_1",
+                previousStatus: "delivered",
+                newStatus: "returned",
+                version: 7,
+            },
+            source: "orders-return",
+        });
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
+            db,
+            queue,
+            orderId: "order_1",
+            notificationType: "order_partially_refunded",
+            dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_7_1:partial",
+            source: "orders-return-refund-partial-failure",
+            data: { amount: 70, gateway: "stripe", refundId: "refund_balance" },
+        });
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(2, {
+            db,
+            queue,
+            orderId: "order_1",
+            notificationType: "refund_processing",
+            dedupeKey: "refund:order_1:refund_order_1_7:processing",
+            source: "orders-return-refund-partial-failure",
+            data: { amount: 30, gateway: "stripe" },
+        });
     });
 });

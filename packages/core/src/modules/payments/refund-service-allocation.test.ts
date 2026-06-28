@@ -35,7 +35,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { processRefund } from "./refund-service";
+import { PartialRefundProcessedError, processRefund } from "./refund-service";
 
 type PaymentRow = {
   id: string;
@@ -148,8 +148,13 @@ function createDbMock({
   const acceptedRefundCount = () =>
     updateValues.filter((values) => values.providerStatus === "accepted").length;
 
-  const finalizerAttemptRows = () =>
-    refundAttemptInsertValues.slice(0, acceptedRefundCount());
+  const finalizerAttemptRows = () => {
+    const acceptedUpdates = updateValues.filter((values) => values.providerStatus === "accepted");
+    return refundAttemptInsertValues.slice(0, acceptedRefundCount()).map((values, index) => ({
+      ...values,
+      providerRefundId: acceptedUpdates[index]?.providerRefundId,
+    }));
+  };
 
   const finalizerPaymentRows = () => [
     ...payments,
@@ -427,11 +432,35 @@ describe("refund allocation", () => {
       ],
     });
 
-    await expect(processRefund(db as never, undefined, {
+    const promise = processRefund(db as never, undefined, {
       orderId: "order_1",
       reason: "customer_request",
       gateway: "stripe",
-    })).rejects.toThrow("Refund partially processed: 70 was accepted by the provider, but 30 has an unknown provider outcome.");
+    });
+
+    await expect(promise).rejects.toThrow("Refund partially processed: 70 was accepted by the provider, but 30 has an unknown provider outcome.");
+    await expect(promise).rejects.toBeInstanceOf(PartialRefundProcessedError);
+    await promise.catch((error: unknown) => {
+      expect(error).toBeInstanceOf(PartialRefundProcessedError);
+      const partialError = error as PartialRefundProcessedError;
+      expect(partialError.affectedOrderIds).toEqual(["order_1"]);
+      expect(partialError.gateway).toBe("stripe");
+      expect(partialError.refundNotifications).toEqual([
+        {
+          orderId: "order_1",
+          notificationType: "order_partially_refunded",
+          dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_3_1:partial",
+          amount: 70,
+          refundId: "refund_balance",
+        },
+        {
+          orderId: "order_1",
+          notificationType: "refund_processing",
+          dedupeKey: "refund:order_1:refund_order_1_3:processing",
+          amount: 30,
+        },
+      ]);
+    });
 
     expect(mocks.providerCreateRefund).toHaveBeenCalledTimes(2);
     expect(db.updateValues).toContainEqual(expect.objectContaining({
