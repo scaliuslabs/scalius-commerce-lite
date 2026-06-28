@@ -57,6 +57,11 @@ export interface RefundResult {
     amount: number;
     isFullRefund: boolean;
     error?: string;
+    refundNotification?: {
+        dedupeKey: string;
+        amount: number;
+        refundId?: string;
+    };
 }
 
 const REFUND_PROVIDER_DEADLINE_MS = 25_000;
@@ -144,6 +149,10 @@ function buildRefundReference(orderId: string, sourcePaymentId: string, claimVer
         .slice(-24)
         .toUpperCase();
     return `REF${suffix}`.slice(0, 30);
+}
+
+function buildFullRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
+    return `refund:${orderId}:${refundGroupId}:full`;
 }
 
 function computeRefundedBySourcePayment(
@@ -1234,6 +1243,13 @@ export async function processRefund(
         refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
         amount: refundAmount,
         isFullRefund,
+        ...(isFullRefund ? {
+            refundNotification: {
+                dedupeKey: buildFullRefundNotificationDedupeKey(params.orderId, refundGroupId),
+                amount: refundAmount,
+                refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
+            },
+        } : {}),
     };
 }
 
@@ -1251,7 +1267,15 @@ export async function processReturn(
         autoRefund: boolean;
     },
     encryptionKey?: string,
-): Promise<{ refundResult?: RefundResult }> {
+): Promise<{
+    refundResult?: RefundResult;
+    statusChange?: {
+        orderId: string;
+        previousStatus: string;
+        newStatus: string;
+        version: number;
+    };
+}> {
     // Verify order exists and is in a returnable state (include version for CAS)
     const order = await db
         .select({
@@ -1283,7 +1307,8 @@ export async function processReturn(
     // CAS update first: only apply inventory if this request actually owns the
     // RETURNED transition. This prevents orphan stock restoration when a
     // concurrent status change wins the order version race.
-    const orderStatusChanged = order.status === OrderStatus.RETURNED
+    const statusChanged = order.status !== OrderStatus.RETURNED;
+    const orderStatusChanged = !statusChanged
         ? true
         : await updateOrderStatusIfVersionMatches(db, {
             orderId: params.orderId,
@@ -1319,5 +1344,15 @@ export async function processReturn(
         }, encryptionKey);
     }
 
-    return { refundResult };
+    return {
+        refundResult,
+        ...(statusChanged ? {
+            statusChange: {
+                orderId: params.orderId,
+                previousStatus: order.status,
+                newStatus: OrderStatus.RETURNED,
+                version: order.version + 1,
+            },
+        } : {}),
+    };
 }

@@ -235,6 +235,10 @@ describe("refund allocation", () => {
   });
 
   it("allocates a full Stripe split-payment refund across balance and deposit charges with explicit amounts", async () => {
+    mocks.providerCreateRefund
+      .mockResolvedValueOnce({ refundId: "refund_balance" })
+      .mockResolvedValueOnce({ refundId: "refund_deposit" });
+
     const db = createDbMock({
       payments: [
         stripePayment({ id: "pay_balance", amount: 70, paymentType: "balance", stripeChargeId: "ch_balance" }),
@@ -251,6 +255,12 @@ describe("refund allocation", () => {
       gateway: "stripe",
       amount: 100,
       isFullRefund: true,
+      refundId: "refund_balance,refund_deposit",
+      refundNotification: {
+        amount: 100,
+        refundId: "refund_balance,refund_deposit",
+        dedupeKey: "refund:order_1:refund_order_1_3:full",
+      },
     });
 
     expect(mocks.providerCreateRefund).toHaveBeenCalledTimes(2);
@@ -298,13 +308,18 @@ describe("refund allocation", () => {
       ],
     });
 
-    await processRefund(db as never, undefined, {
+    const result = await processRefund(db as never, undefined, {
       orderId: "order_1",
       amount: 80,
       reason: "customer_request",
       gateway: "stripe",
     });
 
+    expect(result).toMatchObject({
+      success: true,
+      isFullRefund: false,
+    });
+    expect(result.refundNotification).toBeUndefined();
     expect(mocks.providerCreateRefund).toHaveBeenCalledTimes(2);
     expect(mocks.providerCreateRefund).toHaveBeenNthCalledWith(1, expect.objectContaining({
       transactionId: "ch_balance",

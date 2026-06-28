@@ -20,6 +20,7 @@ vi.mock("@scalius/core/modules/notifications", () => ({
 import {
     enqueueOrderCreatedNotificationForOrder,
     enqueueOrderNotificationsForStatus,
+    enqueueOrderRefundedNotificationForOrder,
     enqueueOrderStatusChangeNotification,
     getOrderNotificationTypeForStatus,
 } from "./order-notification-queue";
@@ -88,8 +89,10 @@ describe("order notification queue helpers", () => {
         expect(getOrderNotificationTypeForStatus("shipped")).toBe("order_shipped");
         expect(getOrderNotificationTypeForStatus("DELIVERED")).toBe("order_delivered");
         expect(getOrderNotificationTypeForStatus("returned")).toBe("order_returned");
+        expect(getOrderNotificationTypeForStatus("refunded")).toBe("order_refunded");
         expect(getOrderNotificationTypeForStatus("cancelled")).toBe("order_cancelled");
         expect(getOrderNotificationTypeForStatus("confirmed")).toBeNull();
+        expect(getOrderNotificationTypeForStatus("partially_refunded")).toBeNull();
     });
 
     it("enqueues a status-change notification with customer contact and tracking data", async () => {
@@ -177,6 +180,39 @@ describe("order notification queue helpers", () => {
                 customerName: "Buyer",
                 notificationType: "order_created",
                 source: "payment-stripe-confirmed",
+            }),
+        }));
+    });
+
+    it("enqueues refund notifications with an explicit refund dedupe key", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+        ]);
+        const queue = { send: vi.fn(async () => undefined) };
+
+        const result = await enqueueOrderRefundedNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            dedupeKey: "refund:order_1:refund_order_1_4:full",
+            source: "orders-refund",
+            data: { amount: 120, gateway: "stripe", refundId: "re_1" },
+        });
+
+        expect(result).toEqual({ orderId: "order_1", outboxId: "outbox_order_1", enqueued: true });
+        expect(queue.send).toHaveBeenCalledWith({
+            type: "order.notification",
+            orderId: "order_1",
+            customerEmail: "buyer@example.com",
+            customerName: "Buyer",
+            notificationType: "order_refunded",
+            data: { amount: 120, gateway: "stripe", refundId: "re_1" },
+        });
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(expect.objectContaining({
+            notification: expect.objectContaining({
+                dedupeKey: "refund:order_1:refund_order_1_4:full",
+                notificationType: "order_refunded",
+                source: "orders-refund",
             }),
         }));
     });
