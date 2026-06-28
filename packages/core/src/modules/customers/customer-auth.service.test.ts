@@ -26,7 +26,9 @@ vi.mock("./customer-auth-rate-limit", () => ({
 import {
   cleanupExpiredCustomerSessions,
   deleteCustomerSession,
+  getCookieConfig,
   getCustomerBySession,
+  normalizeCustomerAuthCookieDomain,
   sendOtp,
   updateCustomerProfile,
   verifyOtp,
@@ -43,6 +45,33 @@ const baseSiteSettings = {
   whatsappPhoneNumberId: null,
   whatsappTemplateName: "auth_otp",
 };
+
+describe("customer auth cookie domain", () => {
+  it("keeps customer auth cookies host-only by default for custom domains", () => {
+    expect(getCookieConfig("https://shop.example.co.uk")).toEqual({
+      sameSite: "None",
+      domainAttr: "",
+    });
+  });
+
+  it("uses an explicit cookie domain only when one is configured", () => {
+    expect(getCookieConfig("https://storefront.scalius.com", "scalius.com")).toEqual({
+      sameSite: "None",
+      domainAttr: "; Domain=.scalius.com",
+    });
+    expect(getCookieConfig("https://storefront.scalius.com", ".SCALIUS.com.")).toEqual({
+      sameSite: "None",
+      domainAttr: "; Domain=.scalius.com",
+    });
+  });
+
+  it("ignores invalid cookie domain values", () => {
+    expect(normalizeCustomerAuthCookieDomain("localhost")).toBe("");
+    expect(normalizeCustomerAuthCookieDomain("127.0.0.1")).toBe("");
+    expect(normalizeCustomerAuthCookieDomain("shop")).toBe("");
+    expect(normalizeCustomerAuthCookieDomain("https://example.com")).toBe("");
+  });
+});
 
 function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?: unknown[] }>) {
   const queue = [...selectResults];
