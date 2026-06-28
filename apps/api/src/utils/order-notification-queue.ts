@@ -43,6 +43,8 @@ export function getOrderNotificationTypeForStatus(status: string): OrderNotifica
             return "order_cancelled";
         case "returned":
             return "order_returned";
+        case "refunded":
+            return "order_refunded";
         default:
             return null;
     }
@@ -89,6 +91,41 @@ export async function enqueueOrderCreatedNotificationForOrder(options: {
         enqueued: result.enqueued,
         skippedReason: result.skippedReason,
     };
+}
+
+export async function enqueueOrderRefundedNotificationForOrder(options: {
+    db: Database;
+    queue: OrderNotificationQueue | undefined;
+    orderId: string;
+    dedupeKey: string;
+    source: string;
+    data?: Record<string, unknown>;
+}): Promise<EnqueueOrderNotificationResult> {
+    const orderRows = await selectSingleOrder(options.db, options.orderId);
+    const order = orderRows[0];
+    if (!order) {
+        console.warn(`[${options.source}] Skipped order_refunded notification for missing order ${options.orderId}`);
+        return {
+            orderId: options.orderId,
+            enqueued: false,
+            skippedReason: "order_missing",
+        };
+    }
+
+    return enqueueOrderNotificationMessage({
+        db: options.db,
+        queue: options.queue,
+        message: {
+            type: "order.notification",
+            orderId: options.orderId,
+            customerEmail: order.customerEmail ?? undefined,
+            customerName: order.customerName || "Customer",
+            notificationType: "order_refunded",
+            data: options.data,
+        },
+        dedupeKey: options.dedupeKey,
+        source: options.source,
+    });
 }
 
 export async function enqueueOrderStatusChangeNotification(options: {

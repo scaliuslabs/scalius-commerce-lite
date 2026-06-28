@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Database } from "@scalius/database/client";
 import { processReturn, processRefund } from "@scalius/core/modules/payments/refund-service";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
@@ -7,6 +8,10 @@ import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope } from "../../schemas/responses";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import {
+    enqueueOrderRefundedNotificationForOrder,
+    enqueueOrderStatusChangeNotification,
+} from "../../utils/order-notification-queue";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -24,6 +29,42 @@ const refundResultSchema = z.object({
 const returnResultSchema = successEnvelope(z.object({
     refundResult: refundResultSchema.optional(),
 }));
+
+async function enqueueFullRefundNotification(options: {
+    db: Database;
+    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    orderId: string;
+    result: {
+        gateway: string;
+        refundId?: string;
+        refundNotification?: {
+            dedupeKey: string;
+            amount: number;
+            refundId?: string;
+        };
+    };
+    source: string;
+}) {
+    const notification = options.result.refundNotification;
+    if (!notification) return;
+    await enqueueOrderRefundedNotificationForOrder({
+        db: options.db,
+        queue: options.queue,
+        orderId: options.orderId,
+        dedupeKey: notification.dedupeKey,
+        source: options.source,
+        data: {
+            amount: notification.amount,
+            gateway: options.result.gateway,
+            ...(notification.refundId ? { refundId: notification.refundId } : {}),
+        },
+    });
+}
+
+function publicRefundResult<T extends { refundNotification?: unknown }>(result: T): Omit<T, "refundNotification"> {
+    const { refundNotification: _refundNotification, ...publicResult } = result;
+    return publicResult;
+}
 
 // ─── POST /:id/return ────────────────────────────────────────────────────────
 
@@ -59,7 +100,26 @@ app.openapi(returnOrderRoute, async (c) => {
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false }, encryptionKey);
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    return ok(c, result);
+    if (result.statusChange) {
+        await enqueueOrderStatusChangeNotification({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            statusChange: result.statusChange,
+            source: "orders-return",
+        });
+    }
+    if (result.refundResult?.success) {
+        await enqueueFullRefundNotification({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            orderId,
+            result: result.refundResult,
+            source: "orders-return-refund",
+        });
+    }
+    return ok(c, {
+        ...(result.refundResult ? { refundResult: publicRefundResult(result.refundResult) } : {}),
+    });
 });
 
 // ─── POST /:id/refund ────────────────────────────────────────────────────────
@@ -100,7 +160,14 @@ app.openapi(refundOrderRoute, async (c) => {
     const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway }, encryptionKey);
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    return ok(c, result);
+    await enqueueFullRefundNotification({
+        db,
+        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        orderId,
+        result,
+        source: "orders-refund",
+    });
+    return ok(c, publicRefundResult(result));
 });
 
 export { app as adminOrdersRefundRoutes };
