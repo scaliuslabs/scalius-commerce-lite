@@ -359,6 +359,7 @@ export const orderNotificationOutbox = sqliteTable("order_notification_outbox", 
     uniqueIndex("order_notification_outbox_dedupe_key_unique").on(table.dedupeKey),
     index("order_notification_outbox_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
     index("order_notification_outbox_claim_idx").on(table.status, table.claimExpiresAt),
+    index("order_notification_outbox_queued_idx").on(table.status, table.queuedAt, table.createdAt),
     index("order_notification_outbox_order_id_idx").on(table.orderId),
 ]);
 

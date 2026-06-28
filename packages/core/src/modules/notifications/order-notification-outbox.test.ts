@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
   claimOrderNotificationOutboxForProcessing,
+  enqueueOrderNotificationOutboxById,
   listOrderNotificationOutboxForOrder,
   recordAndEnqueueOrderNotification,
   retryFailedOrderNotificationOutboxById,
+  flushPendingOrderNotificationOutbox,
+  STALE_QUEUED_REPLAY_SECONDS,
 } from "./order-notification-outbox";
 
 interface StoredOutboxRow {
@@ -75,7 +78,8 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
     if (values.status === "enqueueing") {
       const due = row.nextAttemptAt <= now;
       const staleClaim = row.claimExpiresAt != null && row.claimExpiresAt <= now;
-      if (!((["pending", "failed"].includes(row.status) && due) || (["enqueueing", "processing"].includes(row.status) && staleClaim))) {
+      const staleQueued = row.status === "queued" && row.queuedAt != null && row.queuedAt <= now - STALE_QUEUED_REPLAY_SECONDS;
+      if (!((["pending", "failed"].includes(row.status) && due) || (["enqueueing", "processing"].includes(row.status) && staleClaim) || staleQueued)) {
         return [];
       }
     }
@@ -404,5 +408,81 @@ describe("order notification outbox", () => {
       skippedReason: "already_sent",
     });
     expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it("re-enqueues stale queued rows through the normal enqueue claim", async () => {
+    const { db, rows } = createOutboxDb([createRow({
+      status: "queued",
+      attempts: 1,
+      queuedAt: now - STALE_QUEUED_REPLAY_SECONDS - 1,
+    })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await enqueueOrderNotificationOutboxById({
+      db,
+      queue,
+      outboxId: "outbox_1",
+    });
+
+    expect(result).toMatchObject({
+      outboxId: "outbox_1",
+      enqueued: true,
+    });
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      outboxId: "outbox_1",
+      orderId: "order_1",
+    }));
+    expect(rows.get("outbox_1")).toMatchObject({
+      status: "queued",
+      attempts: 2,
+      claimId: null,
+      lastError: null,
+      queuedAt: now,
+    });
+  });
+
+  it("does not re-enqueue fresh queued rows", async () => {
+    const { db } = createOutboxDb([createRow({
+      status: "queued",
+      attempts: 1,
+      queuedAt: now - STALE_QUEUED_REPLAY_SECONDS + 1,
+    })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await enqueueOrderNotificationOutboxById({
+      db,
+      queue,
+      outboxId: "outbox_1",
+    });
+
+    expect(result).toMatchObject({
+      outboxId: "outbox_1",
+      enqueued: false,
+      skippedReason: "already_queued",
+    });
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it("reports stale queued rows during scheduled outbox flushing", async () => {
+    const { db } = createOutboxDb([createRow({
+      status: "queued",
+      attempts: 1,
+      queuedAt: now - STALE_QUEUED_REPLAY_SECONDS - 1,
+    })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await flushPendingOrderNotificationOutbox({
+      db,
+      queue,
+      limit: 10,
+    });
+
+    expect(result).toEqual({
+      scanned: 1,
+      enqueued: 1,
+      failed: 0,
+      skipped: 0,
+      staleQueued: 1,
+    });
   });
 });
