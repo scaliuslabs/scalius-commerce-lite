@@ -19,6 +19,7 @@ import type {
   OrderShipmentDto,
 } from "~/lib/api-functions/orders";
 import type { OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
+import { useHydrated } from "~/hooks/use-hydrated";
 
 type ShipmentMetadata = Record<string, unknown> | string | null;
 
@@ -28,7 +29,7 @@ function toOptionalString(value: string | null | undefined): string | undefined 
 
 function toTimestamp(
   value: unknown,
-  fallback: OrderTimestamp = new Date().toISOString(),
+  fallback: OrderTimestamp,
 ): OrderTimestamp {
   return typeof value === "string" || typeof value === "number" || value instanceof Date
     ? value
@@ -44,9 +45,12 @@ function toMetadata(value: unknown): ShipmentMetadata {
   return null;
 }
 
-function toOrderShipment(shipment: OrderShipmentDto): OrderShipment {
+function toOrderShipment(
+  shipment: OrderShipmentDto,
+  fallbackTimestamp: OrderTimestamp,
+): OrderShipment {
   const raw = shipment as Record<string, unknown>;
-  const createdAt = toTimestamp(raw.createdAt);
+  const createdAt = toTimestamp(raw.createdAt, fallbackTimestamp);
   const updatedAt = toTimestamp(raw.updatedAt, createdAt);
   return {
     id: shipment.id,
@@ -102,7 +106,7 @@ function toOrderViewModel(
     cityName: toOptionalString(order.cityName),
     zoneName: toOptionalString(order.zoneName),
     areaName: order.areaName,
-    shipments: shipments.map(toOrderShipment),
+    shipments: shipments.map((shipment) => toOrderShipment(shipment, order.createdAt)),
     deliveryProviders,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
@@ -131,6 +135,7 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
 
 function OrderViewPage() {
   const { orderId } = Route.useParams();
+  const isHydrated = useHydrated();
   // Poll for webhook-driven updates (shipment status, payment confirmation)
   const { data: order } = useSuspenseQuery({
     ...orderQueryOptions(orderId),
@@ -139,11 +144,13 @@ function OrderViewPage() {
   });
   const { data: shipments = [] } = useQuery({
     ...orderShipmentsQueryOptions(orderId),
+    enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
   const { data: providers = [] } = useQuery({
     ...deliveryProvidersQueryOptions(),
+    enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
 

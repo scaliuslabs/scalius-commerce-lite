@@ -23,11 +23,13 @@ import {
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { orderNotificationsQueryOptions } from "@/lib/api-query-options/orders";
 import { useRetryOrderNotification } from "@/lib/api-mutations/orders";
+import { useHydrated } from "@/hooks/use-hydrated";
 import type {
   OrderNotificationOutboxDto,
   OrderNotificationReceiptDto,
 } from "@/lib/api-functions/orders";
 import type { Order, OrderTimestamp } from "./types";
+import { formatOrderTimestamp } from "./formatters";
 
 const STATUS_STYLES: Record<string, string> = {
   sent: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100",
@@ -83,14 +85,7 @@ function describeNotificationIssue(value: string | null | undefined): string | n
 }
 
 function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
-  if (!value) return null;
-  const date = value instanceof Date
-    ? value
-    : typeof value === "number"
-      ? new Date(value < 10_000_000_000 ? value * 1000 : value)
-      : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString();
+  return formatOrderTimestamp(value);
 }
 
 function statusClass(status: string): string {
@@ -146,7 +141,7 @@ function ReceiptRow({ receipt }: { receipt: OrderNotificationReceiptDto }) {
       </div>
       <div className="text-left text-muted-foreground sm:text-right">
         <div>{receipt.attempts} attempt{receipt.attempts === 1 ? "" : "s"}</div>
-        {timestamp && <div suppressHydrationWarning>{timestamp}</div>}
+        {timestamp && <div>{timestamp}</div>}
       </div>
     </div>
   );
@@ -180,7 +175,7 @@ function NotificationRow({
           </div>
           <div className="text-xs text-muted-foreground">
             {notification.source}
-            {timestamp ? <span suppressHydrationWarning> • {timestamp}</span> : null}
+            {timestamp ? <span> • {timestamp}</span> : null}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -224,6 +219,7 @@ function NotificationRow({
 }
 
 export function OrderNotificationsCard({ order }: { order: Order }) {
+  const isHydrated = useHydrated();
   const {
     data,
     isLoading,
@@ -231,6 +227,7 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
     refetch,
   } = useQuery({
     ...orderNotificationsQueryOptions(order.id),
+    enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
   const notifications = data?.notifications ?? [];
@@ -264,7 +261,7 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        {isLoading ? (
+        {!isHydrated || isLoading ? (
           <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading

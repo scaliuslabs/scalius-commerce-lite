@@ -1,9 +1,9 @@
 import { type FC } from "react";
-import { formatDate } from "@scalius/shared/timestamps";
 import { useShipmentStatus } from "@/hooks/use-shipment-status";
 import { History, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { formatOrderTimestamp } from "./orderview/formatters";
 
 interface ShipmentStatusIndicatorProps {
   shipment: {
@@ -22,30 +22,6 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   canRefresh = true,
 }) => {
   const { isRefreshing, refreshShipmentStatus } = useShipmentStatus();
-
-  // Calculate relative time for last checked
-  const getRelativeTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (diffInSeconds < 60) {
-      return `${diffInSeconds} sec${diffInSeconds !== 1 ? "s" : ""} ago`;
-    }
-
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes} min${diffInMinutes !== 1 ? "s" : ""} ago`;
-    }
-
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) {
-      return `${diffInHours} hour${diffInHours !== 1 ? "s" : ""} ago`;
-    }
-
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays} day${diffInDays !== 1 ? "s" : ""} ago`;
-  };
 
   // Get status color based on status
   const getStatusColor = (status: string) => {
@@ -88,11 +64,9 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
       .join(" ");
   };
 
-  // Format the full date for tooltip
-  const getFullDateForTooltip = (dateStr?: string) => {
+  const getLastCheckedLabel = (dateStr?: string) => {
     if (!dateStr) return "Never checked";
-    const result = formatDate(dateStr);
-    return result === "N/A" ? "Never checked" : result;
+    return formatOrderTimestamp(dateStr) ?? "Never checked";
   };
 
   return (
@@ -111,16 +85,14 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
           <TooltipTrigger asChild>
             <div className="flex items-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-help">
               <History className="h-3 w-3 mr-1" />
-              {shipment.lastChecked
-                ? getRelativeTime(shipment.lastChecked)
-                : "Never checked"}
+              {getLastCheckedLabel(shipment.lastChecked)}
             </div>
           </TooltipTrigger>
           <TooltipContent
             side="bottom"
             className="text-xs p-2 bg-[var(--popover)] text-[var(--popover-foreground)] border border-[var(--border)]"
           >
-            {getFullDateForTooltip(shipment.lastChecked)}
+            {getLastCheckedLabel(shipment.lastChecked)}
           </TooltipContent>
         </Tooltip>
 

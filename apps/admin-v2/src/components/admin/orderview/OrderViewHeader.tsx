@@ -23,11 +23,12 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import type { Order } from "./types";
-import { getStatusBadgeClass, formatDate } from "@scalius/shared/utils";
+import { getStatusBadgeClass } from "@scalius/shared/utils";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { useUpdateFulfillmentStatus } from "@/lib/api-mutations/orders";
 import type { UpdateFulfillmentStatusInput } from "@/lib/api-functions/orders";
+import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
 
 type FulfillmentStatus = UpdateFulfillmentStatusInput["status"];
 
@@ -174,11 +175,11 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
               <span className="font-mono text-sm">#{order.id}</span>
             </InfoItem>
             <InfoItem icon={CalendarClock} label="Order Date">
-              <span suppressHydrationWarning>{formatDate(order.createdAt)}</span>
+              <span>{formatOrderTimestamp(order.createdAt) ?? "N/A"}</span>
             </InfoItem>
             <InfoItem icon={DollarSign} label="Grand Total">
               <span className="font-semibold">
-                {symbol}{grandTotal.toLocaleString()}
+                {symbol}{formatOrderAmount(grandTotal)}
               </span>
             </InfoItem>
             {order.paymentStatus && (

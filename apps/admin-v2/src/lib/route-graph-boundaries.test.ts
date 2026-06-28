@@ -1048,6 +1048,52 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("Refund row:");
   });
 
+  it("keeps order detail SSR formatting deterministic", () => {
+    const orderViewSources = [
+      ...listSourceFiles(join(ADMIN_SRC_ROOT, "components", "admin", "orderview")),
+      join(ADMIN_SRC_ROOT, "components", "admin", "ShipmentStatusIndicator.tsx"),
+      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
+    ].map((file) => [relative(ADMIN_SRC_ROOT, file), readFileSync(file, "utf8")] as const);
+
+    for (const [file, source] of orderViewSources) {
+      expect(source, file).not.toMatch(/\.toLocale(?:String|DateString|TimeString)\(/);
+      expect(source, file).not.toContain("new Date().toISOString()");
+      expect(source, file).not.toContain("suppressHydrationWarning");
+    }
+
+    const formatterSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "formatters.ts"),
+      "utf8",
+    );
+    expect(formatterSource).toContain('const ORDER_TIME_ZONE = "Asia/Dhaka"');
+    expect(formatterSource).toContain('new Intl.DateTimeFormat("en-US"');
+  });
+
+  it("keeps order detail optional panels hydration-gated", () => {
+    const routeSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
+      "utf8",
+    );
+    const paymentSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "PaymentCard.tsx"),
+      "utf8",
+    );
+    const notificationsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "OrderNotificationsCard.tsx"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("const isHydrated = useHydrated()");
+    expect(routeSource).toContain("enabled: isHydrated");
+    expect(paymentSource).toContain("const isHydrated = useHydrated()");
+    expect(paymentSource).toContain("enabled: isHydrated");
+    expect(paymentSource).toContain("enabled: isHydrated && isCOD");
+    expect(paymentSource).toContain("(!isHydrated || paymentsLoading)");
+    expect(notificationsSource).toContain("const isHydrated = useHydrated()");
+    expect(notificationsSource).toContain("enabled: isHydrated");
+    expect(notificationsSource).toContain("!isHydrated || isLoading");
+  });
+
   it("keeps order-detail refund recovery context as the payment-card fallback", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
