@@ -59,6 +59,7 @@ import {
   type StorefrontCacheQueueMessage as CacheQueueMessage,
   type StorefrontCacheWarmQueueMessage,
 } from "./utils/cache-invalidation";
+import { archiveStorefrontCacheQueueFailure } from "./utils/storefront-cache-queue-failures";
 import {
   markWebhookEventFailed,
   markWebhookEventManualReconciliation,
@@ -309,6 +310,14 @@ export async function handleQueueBatch(
     return;
   }
 
+  if (batch.queue === "storefront-cache-dlq") {
+    await handleStorefrontCacheDlqBatch(
+      batch as unknown as MessageBatch<StorefrontCacheQueueMessage>,
+      db,
+    );
+    return;
+  }
+
   // Process each payment/notification/OTP message independently
   const results = await Promise.allSettled(
     batch.messages.map((msg) => processQueueMessage(
@@ -354,6 +363,30 @@ async function handlePaymentEventsDlqBatch(
       msg.ack();
     } else {
       console.error(`[Queue] Failed to archive payment DLQ message ${msg.id}:`, result.reason);
+      msg.retry({ delaySeconds: 300 });
+    }
+  }
+}
+
+async function handleStorefrontCacheDlqBatch(
+  batch: MessageBatch<StorefrontCacheQueueMessage>,
+  db: ReturnType<typeof getDb>,
+): Promise<void> {
+  const results = await Promise.allSettled(
+    batch.messages.map((msg) => archiveStorefrontCacheQueueFailure(db, msg, batch.queue)),
+  );
+
+  for (let i = 0; i < batch.messages.length; i++) {
+    const result = results[i];
+    const msg = batch.messages[i];
+    if (!result || !msg) continue;
+    if (result.status === "fulfilled") {
+      console.warn(
+        `[Queue] Archived storefront cache DLQ message ${msg.id} as ${result.value.id}`,
+      );
+      msg.ack();
+    } else {
+      console.error(`[Queue] Failed to archive storefront cache DLQ message ${msg.id}:`, result.reason);
       msg.retry({ delaySeconds: 300 });
     }
   }

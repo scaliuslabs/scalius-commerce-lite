@@ -67,7 +67,7 @@ packages/
 
 ### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 261 paths / 359 operations after the payment-session processing-response additions; regenerate with `pnpm generate:sdk` after API contract changes instead of trusting prose counts. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. The generator removes the development-only `/api/v1/media/{key}` passthrough so the generated contract matches production OpenAPI. Do not hand-edit files in `packages/api-client/src/generated/**`.
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 266 paths / 364 operations after the storefront cache DLQ endpoints; regenerate with `pnpm generate:sdk` after API contract changes instead of trusting prose counts. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. The generator removes the development-only `/api/v1/media/{key}` passthrough so the generated contract matches production OpenAPI. Do not hand-edit files in `packages/api-client/src/generated/**`.
 - **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files and 10 table-defining files; use fresh `rg`/Drizzle scans for volatile table/migration counts instead of trusting prose.
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.
@@ -287,6 +287,7 @@ See `packages/core/src/modules/payments/README.md`. Current payment reality is m
 | `order-notifications` | `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | `sendOrderNotificationEmail()` and `sendOrderNotification()` in `notifications.service.ts` |
 | `auth-otp` | `AUTH_OTP_QUEUE` | `auth.send_otp` | inline OTP branch in `apps/api/src/queue-consumer.ts` (email, WhatsApp, configured SMS provider) with D1 delivery receipt fencing |
 | `storefront-cache` | `STOREFRONT_CACHE_QUEUE` | `storefront.cache_purge`, `storefront.cache_warm` | `purgeStorefrontForPrefixes()` plus warm-only page fetches in `apps/api/src/utils/cache-invalidation.ts`; purge messages retry failed purge HTTP calls, then enqueue warm messages so warm retries never repeat purge/version bumps |
+| `storefront-cache-dlq` | none | terminal `storefront.cache_purge` / `storefront.cache_warm` failures | `archiveStorefrontCacheQueueFailure()` stores compact D1 evidence in `storefront_cache_queue_failures`; admin cache APIs list, replay by re-enqueueing the original payload, or ignore failures |
 
 All configured queues are consumed by `apps/api/src/queue-consumer.ts`. Buyer-facing checkout commits orders synchronously and reserves Queues for post-commit side effects, webhooks, notifications, OTP, storefront cache purge/warm retry, and durable background work. Payment/notification/OTP/cache messages process independently with ack/retry. If the Cloudflare account still shows a physical `order-ingest` queue, treat it as an external leftover unless a new architecture decision explicitly reintroduces async order creation; do not add `ORDER_INGEST_QUEUE` back to this repo.
 

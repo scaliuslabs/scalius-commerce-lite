@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventFailed: vi.fn(),
   markWebhookEventManualReconciliation: vi.fn(),
   recordPaymentWebhookDlqEvidence: vi.fn(),
+  archiveStorefrontCacheQueueFailure: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -124,6 +125,10 @@ vi.mock("./utils/webhook-idempotency", () => ({
   markWebhookEventFailed: mocks.markWebhookEventFailed,
   markWebhookEventManualReconciliation: mocks.markWebhookEventManualReconciliation,
   recordPaymentWebhookDlqEvidence: mocks.recordPaymentWebhookDlqEvidence,
+}));
+
+vi.mock("./utils/storefront-cache-queue-failures", () => ({
+  archiveStorefrontCacheQueueFailure: mocks.archiveStorefrontCacheQueueFailure,
 }));
 
 import {
@@ -260,6 +265,9 @@ describe("handleQueueBatch payment confirmation retries", () => {
       id: "stripe:payment_intent.succeeded:evt_dlq",
       status: "failed",
       inserted: false,
+    });
+    mocks.archiveStorefrontCacheQueueFailure.mockResolvedValue({
+      id: "scqf_1",
     });
   });
 
@@ -793,6 +801,51 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
     expect(mocks.recordPaymentWebhookDlqEvidence).toHaveBeenCalledTimes(1);
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 300 });
+  });
+
+  it("archives storefront cache DLQ messages without replaying cache side effects", async () => {
+    const message = createMessage<StorefrontCacheQueueMessage>({
+      type: "storefront.cache_purge",
+      operationId: "purge_dlq_1",
+      groups: ["products"],
+      prefixes: ["product_slug_fish"],
+      exactKeys: ["product_variants_prod_1"],
+      htmlPaths: ["/products/fish"],
+      bumpVersion: false,
+      source: "catalog:products",
+      requestedAt: 1_790_000_000_000,
+    }, 6);
+
+    await handleQueueBatch(createBatch([message], "storefront-cache-dlq"), {} as Env);
+
+    expect(mocks.archiveStorefrontCacheQueueFailure).toHaveBeenCalledWith(
+      { id: "db" },
+      message,
+      "storefront-cache-dlq",
+    );
+    expect(mocks.purgeStorefrontForPrefixes).not.toHaveBeenCalled();
+    expect(mocks.warmStorefrontHtmlPaths).not.toHaveBeenCalled();
+    expect(mocks.enqueueStorefrontCacheWarm).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("retries storefront cache DLQ messages when evidence persistence fails", async () => {
+    mocks.archiveStorefrontCacheQueueFailure.mockRejectedValueOnce(new Error("D1 unavailable"));
+    const message = createMessage<StorefrontCacheQueueMessage>({
+      type: "storefront.cache_warm",
+      operationId: "warm_dlq_1",
+      paths: ["/products/fish"],
+      source: "catalog:products:warm",
+      requestedAt: 1_790_000_000_000,
+    }, 6);
+
+    await handleQueueBatch(createBatch([message], "storefront-cache-dlq"), {} as Env);
+
+    expect(mocks.archiveStorefrontCacheQueueFailure).toHaveBeenCalledTimes(1);
+    expect(mocks.warmStorefrontHtmlPaths).not.toHaveBeenCalled();
     expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 300 });
   });

@@ -41,6 +41,7 @@ const allowedMissingSnapshots = new Set([
   "0064",
   "0065",
   "0066",
+  "0067",
 ]);
 
 const sqlFiles = readdirSync(migrationsDir)
