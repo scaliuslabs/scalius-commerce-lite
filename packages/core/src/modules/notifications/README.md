@@ -53,7 +53,7 @@ Sends transactional order emails to customers. Connected via queue.
 
 **Channel Preference Checking**: When a `db` parameter is provided, the function checks notification channel preferences via `getNotificationChannels()` from the settings service before sending. If the email channel is disabled for the given event, the email is silently skipped. If the check fails, it defaults to sending email.
 
-**Supported order notification types** (11 total):
+**Supported order notification types** (13 total):
 - `order_created` -- "We've received your order"
 - `order_confirmed` -- "Your order has been confirmed"
 - `order_processing` -- "Your order is being processed"
@@ -62,6 +62,8 @@ Sends transactional order emails to customers. Connected via queue.
 - `order_completed` -- "Your order is complete"
 - `order_cancelled` -- "Your order has been cancelled"
 - `order_returned` -- "Your order return has been processed"
+- `refund_processing` -- "Your refund is being processed"
+- `refund_failed` -- "Your refund could not be completed"
 - `order_refunded` -- "Your refund has been processed"
 - `order_partially_refunded` -- "A partial refund has been processed"
 - `payment_balance_paid` -- "Your remaining payment has been received"

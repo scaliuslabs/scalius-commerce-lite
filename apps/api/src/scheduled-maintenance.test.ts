@@ -240,6 +240,18 @@ describe("runScheduledMaintenance", () => {
         dedupeKey: "refund-reconcile:order_refunded:rfa_1:full",
         amount: 100,
         refundId: "re_1",
+      }, {
+        orderId: "order_processing",
+        notificationType: "refund_processing",
+        dedupeKey: "refund:order_processing:refund_order_processing_2:processing",
+        amount: 40,
+        refundId: "re_pending",
+      }, {
+        orderId: "order_failed",
+        notificationType: "refund_failed",
+        dedupeKey: "refund:order_failed:refund_order_failed_2:failed",
+        amount: 40,
+        refundId: "re_failed",
       }],
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
       hasMore: false,
@@ -322,7 +334,7 @@ describe("runScheduledMaintenance", () => {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     });
-    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
       db: mocks.db,
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
       orderId: "order_refunded",
@@ -332,6 +344,30 @@ describe("runScheduledMaintenance", () => {
       data: {
         amount: 100,
         refundId: "re_1",
+      },
+    });
+    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(2, {
+      db: mocks.db,
+      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      orderId: "order_processing",
+      notificationType: "refund_processing",
+      dedupeKey: "refund:order_processing:refund_order_processing_2:processing",
+      source: "refund-reconciliation",
+      data: {
+        amount: 40,
+        refundId: "re_pending",
+      },
+    });
+    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(3, {
+      db: mocks.db,
+      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      orderId: "order_failed",
+      notificationType: "refund_failed",
+      dedupeKey: "refund:order_failed:refund_order_failed_2:failed",
+      source: "refund-reconciliation",
+      data: {
+        amount: 40,
+        refundId: "re_failed",
       },
     });
     expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalledWith(

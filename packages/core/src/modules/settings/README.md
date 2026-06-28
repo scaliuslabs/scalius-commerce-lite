@@ -19,7 +19,7 @@ Central store configuration: site settings (singleton row), key-value settings, 
 | `getCurrencyConfig` | `(db, kv?) => Promise<CurrencyConfig>` | Returns `CurrencyConfig { code, symbol, usdExchangeRate, decimalPlaces }` from the `settings` table (`category = "currency"`). `decimalPlaces` is derived from ISO 4217 via `getDecimalPlaces()` from `@scalius/shared/currency`. Defaults to `BDT / ??? / 1 / 2`. KV-cached at `gw:currency` (300s TTL); admin cleanup of this legacy key is best-effort so checkout/layout invalidation still runs after committed writes |
 | `getSiteSettings` | `(db, kv?) => Promise<row>` | Returns the full `siteSettings` singleton row (headerConfig, footerConfig, storefrontUrl, etc.). KV-cached at `gw:site_settings` (300s TTL) |
 | `invalidateSiteSettingsCache` | `(kv?) => Promise<void>` | Deletes the `gw:site_settings` KV key. Called by admin settings routes after any update to the siteSettings table |
-| `getNotificationChannels` | `(db) => Promise<Record<string, string[]>>` | Returns notification channel preferences per order event. Normalizes both string-array format (canonical) and boolean-map format (from UI). Defaults to email-only for all 11 shared order notification types |
+| `getNotificationChannels` | `(db) => Promise<Record<string, string[]>>` | Returns notification channel preferences per order event. Normalizes both string-array format (canonical) and boolean-map format (from UI). Defaults to email-only for all 13 shared order notification types |
 | `updateNotificationChannels` | `(db, input, encryptionKey?) => Promise<Record<string, string[]>>` | Saves customer notification channel preferences. Accepts both UI format (boolean maps, possibly wrapped in `{ channels }`) and canonical format (string arrays). Customer channels are limited to implemented delivery paths (`email`, `sms`, `whatsapp`): customer `push` is rejected until storefront customer push exists end to end, SMS saves require a ready active SMS provider, and WhatsApp saves require Meta Cloud API credentials. Stores via `upsertSetting()` under category `notifications`, key `order_channels` |
 | `getOrderWhatsAppTemplateSettings` | `(db) => Promise<OrderWhatsAppTemplateSettings>` | Reads order WhatsApp template name/language from `settings.notifications`, defaulting to `order_status_update` / `en_US` |
 | `updateOrderWhatsAppTemplateSettings` | `(db, input) => Promise<OrderWhatsAppTemplateSettings>` | Validates and saves order WhatsApp template name/language under `whatsapp_order_template_name` and `whatsapp_order_template_language` |
@@ -37,6 +37,8 @@ Central store configuration: site settings (singleton row), key-value settings, 
     order_completed: ["email"],
     order_cancelled: ["email"],
     order_returned: ["email"],
+    refund_processing: ["email"],
+    refund_failed: ["email"],
     order_refunded: ["email"],
     order_partially_refunded: ["email"],
     payment_balance_paid: ["email"],

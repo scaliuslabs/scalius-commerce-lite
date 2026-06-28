@@ -185,6 +185,8 @@ describe("order notification dispatch", () => {
             "order_completed",
             "order_cancelled",
             "order_returned",
+            "refund_processing",
+            "refund_failed",
             "order_refunded",
             "order_partially_refunded",
             "payment_balance_paid",
@@ -266,6 +268,81 @@ describe("order notification dispatch", () => {
             to: "+8801700000000",
             message:
                 "Hi Refund Buyer, a partial refund has been processed for order #order_partial. Contact us if you have questions.",
+        });
+    });
+
+    it("renders refund processing and failed customer copy without provider internals", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            refund_processing: ["email", "sms"],
+            refund_failed: ["email", "sms"],
+        });
+        mocks.sendEmail.mockResolvedValue({
+            success: true,
+            provider: "cloudflare",
+            providerRef: "cf_msg_refund_state",
+            rawStatus: "accepted",
+        });
+        mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_refund_state" });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "Test SMS",
+            sendSms: mocks.sendSms,
+        });
+
+        await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Refund Buyer",
+            "order_refund_state",
+            "refund_processing",
+            { providerStatus: "requires_action", lastError: "raw provider failure" },
+            db,
+            { encryptionKey: "credential-key" },
+        );
+        await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Refund Buyer",
+            "order_refund_state",
+            "refund_failed",
+            { providerStatus: "failed", lastError: "raw provider failure" },
+            db,
+            { encryptionKey: "credential-key" },
+        );
+
+        expect(mocks.sendEmail).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({
+                subject: "Order #order_refund_state Refund Processing",
+                html: expect.stringContaining("refund for order"),
+            }),
+            {
+                db,
+                env: undefined,
+                encryptionKey: "credential-key",
+            },
+        );
+        expect(mocks.sendEmail).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                subject: "Order #order_refund_state Refund Failed",
+                html: expect.stringContaining("couldn't complete the refund"),
+            }),
+            {
+                db,
+                env: undefined,
+                encryptionKey: "credential-key",
+            },
+        );
+        expect(mocks.sendEmail.mock.calls[0]?.[0]?.html).not.toContain("raw provider failure");
+        expect(mocks.sendEmail.mock.calls[1]?.[0]?.html).not.toContain("raw provider failure");
+        expect(mocks.sendSms).toHaveBeenNthCalledWith(1, {
+            to: "+8801700000000",
+            message:
+                "Hi Refund Buyer, your refund for order #order_refund_state is being processed. We'll update you when it is complete.",
+        });
+        expect(mocks.sendSms).toHaveBeenNthCalledWith(2, {
+            to: "+8801700000000",
+            message:
+                "Hi Refund Buyer, we couldn't complete the refund for order #order_refund_state. Please contact support for help.",
         });
     });
 
