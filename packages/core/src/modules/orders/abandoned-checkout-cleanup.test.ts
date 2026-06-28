@@ -17,15 +17,21 @@ function createDbMock(selectRows: unknown[][]) {
     const selectQueue = [...selectRows];
     const operations: Array<{ op: string; limit?: number }> = [];
 
+    const limitedSelect = {
+        limit: async (limit: number) => {
+            operations.push({ op: "select.limit", limit });
+            return selectQueue.shift() ?? [];
+        },
+    };
+    const orderedSelect = {
+        orderBy: () => limitedSelect,
+        limit: limitedSelect.limit,
+    };
+
     const db = {
         select: vi.fn(() => ({
             from: () => ({
-                where: () => ({
-                    limit: async (limit: number) => {
-                        operations.push({ op: "select.limit", limit });
-                        return selectQueue.shift() ?? [];
-                    },
-                }),
+                where: () => orderedSelect,
             }),
         })),
         delete: vi.fn(() => ({

@@ -417,7 +417,11 @@ export const abandonedCheckouts = sqliteTable(
             .notNull()
             .default(UNIX_NOW),
     },
-    (table) => [unique("ab_checkout_id_unique").on(table.checkoutId)],
+    (table) => [
+        unique("ab_checkout_id_unique").on(table.checkoutId),
+        index("abandoned_checkouts_created_at_idx").on(table.createdAt, table.id),
+        index("abandoned_checkouts_empty_candidate_idx").on(table.customerPhone, table.updatedAt, table.id),
+    ],
 );
 
 export type Order = InferSelectModel<typeof orders>;

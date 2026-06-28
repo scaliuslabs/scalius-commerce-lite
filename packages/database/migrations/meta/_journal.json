@@ -477,6 +477,13 @@
       "when": 1782620000000,
       "tag": "0067_storefront_cache_queue_failures",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1782623299000,
+      "tag": "0068_abandoned_checkout_cleanup_indexes",
+      "breakpoints": true
     }
   ]
 }

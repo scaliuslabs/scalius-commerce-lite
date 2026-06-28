@@ -1,4 +1,4 @@
-import { inArray, sql } from "drizzle-orm";
+import { and, asc, inArray, isNull, lte } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { abandonedCheckouts } from "@scalius/database/schema";
 
@@ -92,7 +92,8 @@ export async function cleanupStaleAbandonedCheckouts(
     const expiredRows = await db
         .select({ id: abandonedCheckouts.id })
         .from(abandonedCheckouts)
-        .where(sql`${abandonedCheckouts.createdAt} <= ${expiredCutoff}`)
+        .where(lte(abandonedCheckouts.createdAt, new Date(expiredCutoff * 1000)))
+        .orderBy(asc(abandonedCheckouts.createdAt), asc(abandonedCheckouts.id))
         .limit(limit + 1);
     const expiredIds = expiredRows.slice(0, limit).map((row) => row.id);
 
@@ -116,7 +117,11 @@ export async function cleanupStaleAbandonedCheckouts(
             customerPhone: abandonedCheckouts.customerPhone,
         })
         .from(abandonedCheckouts)
-        .where(sql`${abandonedCheckouts.updatedAt} <= ${emptyCutoff}`)
+        .where(and(
+            isNull(abandonedCheckouts.customerPhone),
+            lte(abandonedCheckouts.updatedAt, new Date(emptyCutoff * 1000)),
+        ))
+        .orderBy(asc(abandonedCheckouts.updatedAt), asc(abandonedCheckouts.id))
         .limit(remainingLimit + 1) as AbandonedCheckoutEmptyCandidate[];
     const boundedCandidates = oldCandidates.slice(0, remainingLimit);
     const emptyIds = boundedCandidates
