@@ -377,6 +377,12 @@ describe("handleQueueBatch payment confirmation retries", () => {
     }
     expect(messages[3]?.ack).not.toHaveBeenCalled();
     expect(messages[3]?.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("event=queue_batch_completed"),
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("queue=payment-events-queue, messages=4, acked=3, retried=1"),
+    );
   });
 
   it("acks confirmed payment messages when processing succeeds", async () => {
@@ -931,6 +937,12 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(messages[2]?.ack).not.toHaveBeenCalled();
     expect(messages[2]?.retry).toHaveBeenCalledWith({ delaySeconds: 300 });
     expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("event=queue_batch_completed"),
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("queue=payment-events-dlq, messages=3, acked=2, retried=1"),
+    );
   });
 
   it("archives storefront cache DLQ messages without replaying cache side effects", async () => {
@@ -1465,6 +1477,31 @@ describe("handleQueueBatch payment confirmation retries", () => {
       },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps OTP identifiers and codes out of generic queue batch event logs", async () => {
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_private",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      identifier: "private-buyer@example.com",
+      code: "987654",
+      name: "Private Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message], "auth-otp"), {
+      CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+    } as Env);
+
+    const batchEventLogs = vi.mocked(console.log).mock.calls
+      .map(([entry]) => String(entry))
+      .filter((entry) => entry.includes("event=queue_batch_"));
+
+    expect(batchEventLogs.length).toBeGreaterThan(0);
+    expect(batchEventLogs.join("\n")).not.toContain("private-buyer@example.com");
+    expect(batchEventLogs.join("\n")).not.toContain("987654");
   });
 
   it("retries OTP email when providers fall back to local logging", async () => {

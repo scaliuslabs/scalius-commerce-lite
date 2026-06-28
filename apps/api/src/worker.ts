@@ -19,7 +19,10 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
   }
 
   // Cron: release orphaned reservations, archive stale incomplete online orders, and flush outboxes.
-  async scheduled(_controller: ScheduledController): Promise<void> {
-    await runScheduledMaintenance(this.env, this.ctx);
+  async scheduled(controller: ScheduledController): Promise<void> {
+    await runScheduledMaintenance(this.env, this.ctx, {
+      cron: controller.cron,
+      scheduledTime: controller.scheduledTime,
+    });
   }
 }

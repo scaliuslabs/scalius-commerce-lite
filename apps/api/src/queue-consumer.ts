@@ -320,7 +320,9 @@ export async function handleQueueBatch(
     return;
   }
 
-  logQueueBatchConcurrency(batch.queue, batch.messages.length, QUEUE_BATCH_CONCURRENCY_LIMIT);
+  const batchContext = createQueueBatchLogContext(batch, QUEUE_BATCH_CONCURRENCY_LIMIT);
+  logQueueBatchStarted(batchContext);
+  logQueueBatchConcurrency(batchContext);
 
   const results = await runSettledWithConcurrency(
     batch.messages,
@@ -333,6 +335,9 @@ export async function handleQueueBatch(
     ),
   );
 
+  let acked = 0;
+  let retried = 0;
+
   // Ack successful, retry failed with backoff
   for (let i = 0; i < batch.messages.length; i++) {
     const result = results[i];
@@ -340,6 +345,7 @@ export async function handleQueueBatch(
     if (!result || !msg) continue;
     if (result.status === "fulfilled") {
       msg.ack();
+      acked += 1;
     } else {
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
@@ -348,15 +354,20 @@ export async function handleQueueBatch(
         result.reason,
       );
       msg.retry({ delaySeconds: 30 });
+      retried += 1;
     }
   }
+
+  logQueueBatchCompleted(batchContext, acked, retried);
 }
 
 async function handlePaymentEventsDlqBatch(
   batch: MessageBatch<QueueBody>,
   db: ReturnType<typeof getDb>,
 ): Promise<void> {
-  logQueueBatchConcurrency(batch.queue, batch.messages.length, DLQ_BATCH_CONCURRENCY_LIMIT);
+  const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
+  logQueueBatchStarted(batchContext);
+  logQueueBatchConcurrency(batchContext);
 
   const results = await runSettledWithConcurrency(
     batch.messages,
@@ -364,30 +375,42 @@ async function handlePaymentEventsDlqBatch(
     (msg) => archivePaymentEventsDlqMessage(msg, db),
   );
 
+  let acked = 0;
+  let retried = 0;
+
   for (let i = 0; i < batch.messages.length; i++) {
     const result = results[i];
     const msg = batch.messages[i];
     if (!result || !msg) continue;
     if (result.status === "fulfilled") {
       msg.ack();
+      acked += 1;
     } else {
       console.error(`[Queue] Failed to archive payment DLQ message ${msg.id}:`, result.reason);
       msg.retry({ delaySeconds: 300 });
+      retried += 1;
     }
   }
+
+  logQueueBatchCompleted(batchContext, acked, retried);
 }
 
 async function handleStorefrontCacheDlqBatch(
   batch: MessageBatch<StorefrontCacheQueueMessage>,
   db: ReturnType<typeof getDb>,
 ): Promise<void> {
-  logQueueBatchConcurrency(batch.queue, batch.messages.length, DLQ_BATCH_CONCURRENCY_LIMIT);
+  const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
+  logQueueBatchStarted(batchContext);
+  logQueueBatchConcurrency(batchContext);
 
   const results = await runSettledWithConcurrency(
     batch.messages,
     DLQ_BATCH_CONCURRENCY_LIMIT,
     (msg) => archiveStorefrontCacheQueueFailure(db, msg, batch.queue),
   );
+
+  let acked = 0;
+  let retried = 0;
 
   for (let i = 0; i < batch.messages.length; i++) {
     const result = results[i];
@@ -398,12 +421,30 @@ async function handleStorefrontCacheDlqBatch(
         `[Queue] Archived storefront cache DLQ message ${msg.id} as ${result.value.id}`,
       );
       msg.ack();
+      acked += 1;
     } else {
       console.error(`[Queue] Failed to archive storefront cache DLQ message ${msg.id}:`, result.reason);
       msg.retry({ delaySeconds: 300 });
+      retried += 1;
     }
   }
+
+  logQueueBatchCompleted(batchContext, acked, retried);
 }
+
+type QueueBatchLogContext = {
+  batchId: string;
+  queue: string;
+  messageCount: number;
+  concurrencyLimit: number;
+  startedAt: number;
+  backlogCount: number | null;
+  backlogBytes: number | null;
+  oldestMessageAgeMs: number | null;
+  firstMessageId: string | null;
+  lastMessageId: string | null;
+  maxAttempts: number;
+};
 
 async function runSettledWithConcurrency<T, R>(
   items: readonly T[],
@@ -434,12 +475,66 @@ async function runSettledWithConcurrency<T, R>(
   return results as Array<PromiseSettledResult<R>>;
 }
 
-function logQueueBatchConcurrency(queue: string, messageCount: number, concurrencyLimit: number): void {
-  if (messageCount <= concurrencyLimit) return;
+function createQueueBatchLogContext<T>(
+  batch: MessageBatch<T>,
+  concurrencyLimit: number,
+): QueueBatchLogContext {
+  const startedAt = Date.now();
+  const metrics = batch.metadata?.metrics;
+  const oldestMessageTimestampMs = toTimestampMs(metrics?.oldestMessageTimestamp);
+  const attempts = batch.messages.map((message) => message.attempts);
+
+  return {
+    batchId: `qbatch_${startedAt.toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
+    queue: batch.queue,
+    messageCount: batch.messages.length,
+    concurrencyLimit,
+    startedAt,
+    backlogCount: typeof metrics?.backlogCount === "number" ? metrics.backlogCount : null,
+    backlogBytes: typeof metrics?.backlogBytes === "number" ? metrics.backlogBytes : null,
+    oldestMessageAgeMs: oldestMessageTimestampMs === null ? null : Math.max(0, startedAt - oldestMessageTimestampMs),
+    firstMessageId: batch.messages[0]?.id ?? null,
+    lastMessageId: batch.messages[batch.messages.length - 1]?.id ?? null,
+    maxAttempts: attempts.length > 0 ? Math.max(...attempts) : 0,
+  };
+}
+
+function logQueueBatchStarted(context: QueueBatchLogContext): void {
+  console.log(
+    `[Queue] event=queue_batch_started, batchId=${context.batchId}, queue=${context.queue}, ` +
+      `messages=${context.messageCount}, concurrencyLimit=${context.concurrencyLimit}, ` +
+      `backlogCount=${context.backlogCount ?? "unknown"}, backlogBytes=${context.backlogBytes ?? "unknown"}, ` +
+      `oldestMessageAgeMs=${context.oldestMessageAgeMs ?? "unknown"}, firstMessageId=${context.firstMessageId ?? "none"}, ` +
+      `lastMessageId=${context.lastMessageId ?? "none"}, maxAttempts=${context.maxAttempts}`,
+  );
+}
+
+function logQueueBatchConcurrency(context: QueueBatchLogContext): void {
+  if (context.messageCount <= context.concurrencyLimit) return;
 
   console.log(
-    `[Queue] Processing ${messageCount} message(s) from ${queue} with concurrency limit ${concurrencyLimit}`,
+    `[Queue] event=queue_batch_throttled, batchId=${context.batchId}, queue=${context.queue}, ` +
+      `messages=${context.messageCount}, concurrencyLimit=${context.concurrencyLimit}`,
   );
+}
+
+function logQueueBatchCompleted(
+  context: QueueBatchLogContext,
+  acked: number,
+  retried: number,
+): void {
+  console.log(
+    `[Queue] event=queue_batch_completed, batchId=${context.batchId}, queue=${context.queue}, ` +
+      `messages=${context.messageCount}, acked=${acked}, retried=${retried}, ` +
+      `concurrencyLimit=${context.concurrencyLimit}, durationMs=${Date.now() - context.startedAt}`,
+  );
+}
+
+function toTimestampMs(value: Date | number | string | undefined): number | null {
+  if (value === undefined) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  const timestamp = date.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 async function archivePaymentEventsDlqMessage(
