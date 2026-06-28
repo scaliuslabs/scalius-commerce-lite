@@ -64,7 +64,6 @@ export async function getPageRenderData(
         const { data, error } = await getApiV1StorefrontPagesSlugBySlug({
           client: getConfiguredSdkClient(),
           path: { slug },
-          headers: { "Cache-Control": "no-cache" },
         });
         if (error) return null;
         return unwrapEnvelope<PageRenderData>(data);

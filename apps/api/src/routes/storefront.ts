@@ -59,10 +59,19 @@ const homepageRoute = createRoute({
   }
 });
 
+app.use(
+  "/homepage",
+  cacheMiddleware({
+    ttl: CACHE_TTLS.STANDARD,
+    keyPrefix: "api:storefront:homepage:",
+    varyByQuery: false,
+    methods: ["GET"],
+  }),
+);
+
 app.openapi(homepageRoute, async (c) => {
   const db = c.get("db");
   const data = await getHomepageData(db) as unknown as HomepageData;
-  c.header("Cache-Control", "no-store, max-age=0");
   return ok(c, data);
 });
 
@@ -90,12 +99,21 @@ const pageBySlugRoute = createRoute({
   }
 });
 
+app.use(
+  "/pages/slug/:slug",
+  cacheMiddleware({
+    ttl: CACHE_TTLS.STANDARD,
+    keyPrefix: "api:storefront:page:",
+    varyByQuery: false,
+    methods: ["GET"],
+  }),
+);
+
 app.openapi(pageBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const data = await getPageRenderData(db, slug);
   if (!data) throw new NotFoundError("Page not found");
-  c.header("Cache-Control", "no-store, max-age=0");
   return ok(c, data);
 });
 
