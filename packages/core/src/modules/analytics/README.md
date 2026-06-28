@@ -59,6 +59,12 @@ Returns N most recent orders with customerName, totalAmount, status, createdAt (
 Returns per-day arrays for the last N days with zero-filling for days with no data:
 - `date` (YYYY-MM-DD), `orders`, `revenue`, `newCustomers`
 
+Dashboard reads emit generic Worker log events under `[dashboard-query]` with
+`dashboard_query_completed`, `dashboard_query_retry`, or `dashboard_query_failed`.
+Labels are `summary_stats`, `full_stats`, `recent_orders`, and
+`daily_activity_{days}d`; payloads include duration and attempt counts only, not
+order/customer values.
+
 ## Meta Conversions API
 
 ### Exported Functions (`meta.service.ts`)
