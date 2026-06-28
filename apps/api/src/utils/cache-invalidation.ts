@@ -79,9 +79,21 @@ export interface StorefrontCachePurgeQueueMessage {
   requestedAt: number;
 }
 
-type StorefrontPurgeQueue = Pick<Queue<StorefrontCachePurgeQueueMessage>, "send">;
+export interface StorefrontCacheWarmQueueMessage {
+  type: "storefront.cache_warm";
+  operationId: string;
+  paths: string[];
+  source: string;
+  requestedAt: number;
+}
+
+export type StorefrontCacheQueueMessage =
+  | StorefrontCachePurgeQueueMessage
+  | StorefrontCacheWarmQueueMessage;
+
+type StorefrontCacheQueue = Pick<Queue<StorefrontCacheQueueMessage>, "send">;
 type StorefrontPurgeEnv = Pick<Env, "PURGE_URL" | "PURGE_TOKEN"> & {
-  STOREFRONT_CACHE_QUEUE?: StorefrontPurgeQueue;
+  STOREFRONT_CACHE_QUEUE?: StorefrontCacheQueue;
 };
 
 export function normalizeStorefrontHtmlPaths(
@@ -378,6 +390,17 @@ export interface StorefrontPurgeResult {
   skippedReason?: "no-valid-groups" | "no-prefixes" | "missing-config";
 }
 
+export interface StorefrontWarmResult {
+  attempted: boolean;
+  ok: boolean;
+  paths: string[];
+  successful: number;
+  skipped: number;
+  retryableFailures: string[];
+  skippedFailures: string[];
+  skippedReason?: "missing-config" | "no-paths";
+}
+
 interface StorefrontPurgeBody {
   operationId?: string;
   groups: string[];
@@ -385,9 +408,10 @@ interface StorefrontPurgeBody {
   exactKeys?: string[];
   htmlPaths?: string[];
   bumpVersion: boolean;
+  warm?: boolean;
 }
 
-interface StorefrontCachePurgeEnqueueResult {
+interface StorefrontCacheQueueEnqueueResult {
   enqueued: boolean;
   skippedReason?: "missing-config" | "missing-queue";
 }
@@ -437,6 +461,7 @@ function buildStorefrontPrefixPurgeBody(
     exactKeys?: readonly string[];
     htmlPaths?: readonly string[];
     operationId?: string;
+    warm?: boolean;
   } = {},
 ): StorefrontPurgeBody | null {
   const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
@@ -458,6 +483,7 @@ function buildStorefrontPrefixPurgeBody(
     ...(uniqueExactKeys.length > 0 ? { exactKeys: uniqueExactKeys } : {}),
     ...(uniqueHtmlPaths.length > 0 ? { htmlPaths: uniqueHtmlPaths } : {}),
     bumpVersion: options.bumpVersion === true,
+    ...(options.warm === false ? { warm: false } : {}),
   };
 }
 
@@ -479,9 +505,9 @@ function createStorefrontCachePurgeMessage(
 }
 
 export async function enqueueStorefrontCachePurge(
-  message: StorefrontCachePurgeQueueMessage,
+  message: StorefrontCacheQueueMessage,
   env?: StorefrontPurgeEnv,
-): Promise<StorefrontCachePurgeEnqueueResult> {
+): Promise<StorefrontCacheQueueEnqueueResult> {
   if (!hasStorefrontPurgeConfig(env)) {
     return { enqueued: false, skippedReason: "missing-config" };
   }
@@ -493,6 +519,133 @@ export async function enqueueStorefrontCachePurge(
 
   await queue.send(message);
   return { enqueued: true };
+}
+
+export const enqueueStorefrontCacheWarm = enqueueStorefrontCachePurge;
+
+function shouldWarmCriticalPathForPurge(payload: StorefrontCachePurgeQueueMessage): boolean {
+  if (payload.bumpVersion) return true;
+  const hasExactTargets = Boolean(payload.exactKeys?.length || payload.htmlPaths?.length);
+  if (payload.prefixes.length === 0 || hasExactTargets) return false;
+  return !(payload.groups.length > 0 && payload.groups.every((group) => group === "checkout"));
+}
+
+export function getStorefrontWarmPathsForPurge(
+  payload: StorefrontCachePurgeQueueMessage,
+): string[] {
+  const paths = new Set<string>();
+  if (shouldWarmCriticalPathForPurge(payload)) {
+    paths.add("/");
+  }
+  for (const path of normalizeStorefrontHtmlPaths(payload.htmlPaths ?? [])) {
+    paths.add(path);
+  }
+  return [...paths];
+}
+
+export function createStorefrontCacheWarmMessageForPurge(
+  payload: StorefrontCachePurgeQueueMessage,
+): StorefrontCacheWarmQueueMessage | null {
+  const paths = getStorefrontWarmPathsForPurge(payload);
+  if (paths.length === 0) return null;
+  return {
+    type: "storefront.cache_warm",
+    operationId: payload.operationId,
+    paths,
+    source: `${payload.source}:warm`,
+    requestedAt: Date.now(),
+  };
+}
+
+function isRetryableWarmStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+async function warmStorefrontPath(baseUrl: string, path: string): Promise<{
+  path: string;
+  ok: boolean;
+  retryable: boolean;
+  status?: number;
+  error?: string;
+}> {
+  try {
+    const response = await fetch(new URL(path, baseUrl), {
+      headers: {
+        "X-Cache-Warm": "true",
+        "Cache-Control": "no-cache",
+      },
+    });
+
+    if (response.ok) {
+      return { path, ok: true, retryable: false, status: response.status };
+    }
+
+    return {
+      path,
+      ok: false,
+      retryable: isRetryableWarmStatus(response.status),
+      status: response.status,
+    };
+  } catch (error: unknown) {
+    return {
+      path,
+      ok: false,
+      retryable: true,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function warmStorefrontHtmlPaths(
+  paths: readonly string[],
+  env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+): Promise<StorefrontWarmResult> {
+  const uniquePaths = normalizeStorefrontHtmlPaths(paths);
+  if (uniquePaths.length === 0) {
+    return {
+      attempted: false,
+      ok: true,
+      paths: [],
+      successful: 0,
+      skipped: 0,
+      retryableFailures: [],
+      skippedFailures: [],
+      skippedReason: "no-paths",
+    };
+  }
+
+  if (!hasStorefrontPurgeConfig(env)) {
+    return {
+      attempted: false,
+      ok: false,
+      paths: uniquePaths,
+      successful: 0,
+      skipped: 0,
+      retryableFailures: [],
+      skippedFailures: [],
+      skippedReason: "missing-config",
+    };
+  }
+
+  const baseUrl = new URL(normalizeStorefrontPurgeUrl(env.PURGE_URL)).origin;
+  const results = await Promise.all(uniquePaths.map((path) => warmStorefrontPath(baseUrl, path)));
+  const successful = results.filter((result) => result.ok).length;
+  const retryableFailures = results
+    .filter((result) => !result.ok && result.retryable)
+    .map((result) => `${result.path}${result.status ? ` (${result.status})` : ""}${result.error ? ` (${result.error})` : ""}`);
+  const skippedFailures = results
+    .filter((result) => !result.ok && !result.retryable)
+    .map((result) => `${result.path}${result.status ? ` (${result.status})` : ""}`);
+
+  return {
+    attempted: true,
+    ok: retryableFailures.length === 0,
+    paths: uniquePaths,
+    successful,
+    skipped: skippedFailures.length,
+    retryableFailures,
+    skippedFailures,
+  };
 }
 
 function scheduleDirectStorefrontPurgeFallback(
@@ -582,6 +735,7 @@ export async function purgeStorefrontForPrefixes(
     exactKeys?: readonly string[];
     htmlPaths?: readonly string[];
     operationId?: string;
+    warm?: boolean;
   } = {},
 ): Promise<StorefrontPurgeResult> {
   const body = buildStorefrontPrefixPurgeBody(prefixes, options);

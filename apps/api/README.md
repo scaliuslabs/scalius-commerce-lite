@@ -278,7 +278,7 @@ It returns `503` with `status: "degraded"` when a required dependency is missing
 
 ## Queue Consumer
 
-`src/queue-consumer.ts` dispatches payment, notification, OTP, and storefront cache purge messages by type. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.
+`src/queue-consumer.ts` dispatches payment, notification, OTP, storefront cache purge, and storefront cache warm messages by type. Queue-driven purges call the storefront purge endpoint with `warm:false`; after the purge succeeds, a separate `storefront.cache_warm` message warms `/` and/or bounded exact HTML paths so warm retries never repeat the purge/version bump. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.
 
 ### Payment/Notification/OTP/Cache Queues
 

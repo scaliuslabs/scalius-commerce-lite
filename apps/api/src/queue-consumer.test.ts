@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   getCredentialEncryptionKey: vi.fn(() => "credential-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
   purgeStorefrontForPrefixes: vi.fn(),
+  createStorefrontCacheWarmMessageForPurge: vi.fn(),
+  enqueueStorefrontCacheWarm: vi.fn(),
+  warmStorefrontHtmlPaths: vi.fn(),
   enqueueOrderBalancePaidNotificationForOrder: vi.fn(),
   enqueueOrderCreatedNotificationForOrder: vi.fn(),
   enqueueOrderRefundNotificationForOrder: vi.fn(),
@@ -95,6 +98,9 @@ vi.mock("./utils/encryption-key", () => ({
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
   purgeStorefrontForPrefixes: mocks.purgeStorefrontForPrefixes,
+  createStorefrontCacheWarmMessageForPurge: mocks.createStorefrontCacheWarmMessageForPurge,
+  enqueueStorefrontCacheWarm: mocks.enqueueStorefrontCacheWarm,
+  warmStorefrontHtmlPaths: mocks.warmStorefrontHtmlPaths,
 }));
 
 vi.mock("./utils/order-notification-queue", () => ({
@@ -171,6 +177,17 @@ describe("handleQueueBatch payment confirmation retries", () => {
       attempted: true,
       ok: true,
       status: 200,
+    });
+    mocks.createStorefrontCacheWarmMessageForPurge.mockReturnValue(null);
+    mocks.enqueueStorefrontCacheWarm.mockResolvedValue({ enqueued: true });
+    mocks.warmStorefrontHtmlPaths.mockResolvedValue({
+      attempted: true,
+      ok: true,
+      paths: ["/"],
+      successful: 1,
+      skipped: 0,
+      retryableFailures: [],
+      skippedFailures: [],
     });
     mocks.sendEmail.mockResolvedValue({
       success: true,
@@ -877,6 +894,13 @@ describe("handleQueueBatch payment confirmation retries", () => {
   });
 
   it("acks storefront cache purge messages after the purge endpoint succeeds", async () => {
+    mocks.createStorefrontCacheWarmMessageForPurge.mockReturnValue({
+      type: "storefront.cache_warm",
+      operationId: "purge_op_1",
+      paths: ["/products/fish"],
+      source: "catalog:products:warm",
+      requestedAt: 1_790_000_000_001,
+    });
     const message = createMessage<StorefrontCacheQueueMessage>({
       type: "storefront.cache_purge",
       operationId: "purge_op_1",
@@ -906,10 +930,74 @@ describe("handleQueueBatch payment confirmation retries", () => {
         exactKeys: ["product_variants_prod_1"],
         htmlPaths: ["/products/fish"],
         operationId: "purge_op_1",
+        warm: false,
       },
+    );
+    expect(mocks.enqueueStorefrontCacheWarm).toHaveBeenCalledWith(
+      {
+        type: "storefront.cache_warm",
+        operationId: "purge_op_1",
+        paths: ["/products/fish"],
+        source: "catalog:products:warm",
+        requestedAt: 1_790_000_000_001,
+      },
+      expect.objectContaining({
+        PURGE_URL: "https://storefront.example.test/api/purge-cache",
+        PURGE_TOKEN: "secret",
+      }),
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("acks storefront cache warm messages after warm paths succeed", async () => {
+    const message = createMessage<StorefrontCacheQueueMessage>({
+      type: "storefront.cache_warm",
+      operationId: "purge_op_3",
+      paths: ["/", "/products/fish"],
+      source: "catalog:products:warm",
+      requestedAt: 1_790_000_000_000,
+    });
+
+    await handleQueueBatch(createBatch([message], "storefront-cache"), {
+      PURGE_URL: "https://storefront.example.test/api/purge-cache",
+      PURGE_TOKEN: "secret",
+    } as Env);
+
+    expect(mocks.warmStorefrontHtmlPaths).toHaveBeenCalledWith(
+      ["/", "/products/fish"],
+      expect.objectContaining({
+        PURGE_URL: "https://storefront.example.test/api/purge-cache",
+        PURGE_TOKEN: "secret",
+      }),
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("retries only storefront cache warm messages when warm paths have retryable failures", async () => {
+    mocks.warmStorefrontHtmlPaths.mockResolvedValue({
+      attempted: true,
+      ok: false,
+      paths: ["/products/fish"],
+      successful: 0,
+      skipped: 0,
+      retryableFailures: ["/products/fish (503)"],
+      skippedFailures: [],
+    });
+    const message = createMessage<StorefrontCacheQueueMessage>({
+      type: "storefront.cache_warm",
+      operationId: "purge_op_4",
+      paths: ["/products/fish"],
+      source: "catalog:products:warm",
+      requestedAt: 1_790_000_000_000,
+    });
+
+    await handleQueueBatch(createBatch([message], "storefront-cache"), {} as Env);
+
+    expect(mocks.purgeStorefrontForPrefixes).not.toHaveBeenCalled();
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
   it("retries storefront cache purge messages when the purge endpoint fails", async () => {
