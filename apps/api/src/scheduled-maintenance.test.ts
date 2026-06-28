@@ -107,6 +107,7 @@ describe("runScheduledMaintenance", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
     mocks.releaseExpiredReservations.mockResolvedValue({
       found: 0,
       released: 0,
@@ -304,7 +305,10 @@ describe("runScheduledMaintenance", () => {
       hasMore: false,
     });
 
-    await runScheduledMaintenance(env, executionCtx);
+    await runScheduledMaintenance(env, executionCtx, {
+      cron: "*/15 * * * *",
+      scheduledTime: now.getTime(),
+    });
 
     expect(mocks.getDb).toHaveBeenCalledWith(env);
     expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, {
@@ -347,6 +351,11 @@ describe("runScheduledMaintenance", () => {
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
     });
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_started"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("cron=*/15 * * * *"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("scheduledTime=2026-06-20T12:00:00.000Z"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("operation=inventory_expiry_sweep"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_completed"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("staleQueued=1"));
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, undefined, {
       encryptionKey: undefined,
@@ -479,5 +488,25 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.cleanupExpiredCustomerAuthOtpRateLimits).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
     expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalled();
+  });
+
+  it("logs operation and run failure timings before rethrowing scheduled errors", async () => {
+    const error = new Error("D1 queue overloaded");
+    mocks.cleanupStaleAbandonedCheckouts.mockRejectedValueOnce(error);
+
+    await expect(runScheduledMaintenance(createEnv(), createExecutionContext())).rejects.toThrow("D1 queue overloaded");
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("event=scheduled_operation_failed"),
+      error,
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("operation=abandoned_checkout_cleanup"),
+      error,
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("event=scheduled_run_failed"),
+      error,
+    );
   });
 });

@@ -31,6 +31,58 @@ export const STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 
+type ScheduledMaintenanceMetadata = {
+  cron?: string;
+  scheduledTime?: number;
+};
+
+type ScheduledRunContext = {
+  runId: string;
+  startedAt: number;
+  cron: string;
+  scheduledTime: string;
+};
+
+function createScheduledRunContext(metadata: ScheduledMaintenanceMetadata): ScheduledRunContext {
+  const startedAt = Date.now();
+  const scheduledDate = typeof metadata.scheduledTime === "number"
+    ? new Date(metadata.scheduledTime)
+    : null;
+  const scheduledTime = scheduledDate && !Number.isNaN(scheduledDate.getTime())
+    ? scheduledDate.toISOString()
+    : "unknown";
+
+  return {
+    runId: `sched_${startedAt.toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
+    startedAt,
+    cron: metadata.cron ?? "unknown",
+    scheduledTime,
+  };
+}
+
+async function timedScheduledOperation<T>(
+  runContext: ScheduledRunContext,
+  operation: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    const result = await fn();
+    console.log(
+      `[scheduled] event=scheduled_operation_completed, runId=${runContext.runId}, operation=${operation}, ` +
+        `durationMs=${Date.now() - startedAt}`,
+    );
+    return result;
+  } catch (error) {
+    console.error(
+      `[scheduled] event=scheduled_operation_failed, runId=${runContext.runId}, operation=${operation}, ` +
+        `durationMs=${Date.now() - startedAt}`,
+      error,
+    );
+    throw error;
+  }
+}
+
 async function enqueueReconciledRefundNotifications(
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -65,28 +117,68 @@ async function enqueueReconciledRefundNotifications(
   }
 }
 
-export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionContext): Promise<void> {
+export async function runScheduledMaintenance(
+  env: Env,
+  executionCtx: ExecutionContext,
+  metadata: ScheduledMaintenanceMetadata = {},
+): Promise<void> {
+  const runContext = createScheduledRunContext(metadata);
+  console.log(
+    `[scheduled] event=scheduled_run_started, runId=${runContext.runId}, cron=${runContext.cron}, ` +
+      `scheduledTime=${runContext.scheduledTime}`,
+  );
+
+  try {
+    await runScheduledMaintenanceInner(env, executionCtx, runContext);
+    console.log(
+      `[scheduled] event=scheduled_run_completed, runId=${runContext.runId}, durationMs=${Date.now() - runContext.startedAt}`,
+    );
+  } catch (error) {
+    console.error(
+      `[scheduled] event=scheduled_run_failed, runId=${runContext.runId}, durationMs=${Date.now() - runContext.startedAt}`,
+      error,
+    );
+    throw error;
+  }
+}
+
+async function runScheduledMaintenanceInner(
+  env: Env,
+  executionCtx: ExecutionContext,
+  runContext: ScheduledRunContext,
+): Promise<void> {
   const db = getDb(env);
-  const result = await releaseExpiredReservations(db, 30, {
-    limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
-  });
+  const timed = <T>(operation: string, fn: () => Promise<T>) =>
+    timedScheduledOperation(runContext, operation, fn);
+
+  const result = await timed("inventory_expiry_sweep", () =>
+    releaseExpiredReservations(db, 30, {
+      limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
+    }),
+  );
   if (result.releasedVariantIds.length > 0) {
-    await invalidateProductAvailabilityCaches(
-      db,
-      { variantIds: result.releasedVariantIds },
-      { env, executionCtx },
+    await timed("inventory_expiry_availability_invalidation", () =>
+      invalidateProductAvailabilityCaches(
+        db,
+        { variantIds: result.releasedVariantIds },
+        { env, executionCtx },
+      ),
     );
   }
 
   const staleIncompleteCutoff = Math.floor(Date.now() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60;
-  const staleIncompleteOrders = await archiveStaleIncompleteOrders(db, staleIncompleteCutoff, {
-    limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
-  });
+  const staleIncompleteOrders = await timed("stale_incomplete_order_cleanup", () =>
+    archiveStaleIncompleteOrders(db, staleIncompleteCutoff, {
+      limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
+    }),
+  );
   if (staleIncompleteOrders.archivedOrderIds.length > 0) {
-    await invalidateProductAvailabilityCaches(
-      db,
-      { orderIds: staleIncompleteOrders.archivedOrderIds },
-      { env, executionCtx },
+    await timed("stale_incomplete_order_availability_invalidation", () =>
+      invalidateProductAvailabilityCaches(
+        db,
+        { orderIds: staleIncompleteOrders.archivedOrderIds },
+        { env, executionCtx },
+      ),
     );
   }
   if (
@@ -107,11 +199,13 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
       (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
   );
 
-  const abandonedCheckoutCleanup = await cleanupStaleAbandonedCheckouts(db, Math.floor(Date.now() / 1000), {
-    retentionDays: ABANDONED_CHECKOUT_RETENTION_DAYS,
-    emptyMaxAgeMinutes: EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
-    limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
-  });
+  const abandonedCheckoutCleanup = await timed("abandoned_checkout_cleanup", () =>
+    cleanupStaleAbandonedCheckouts(db, Math.floor(Date.now() / 1000), {
+      retentionDays: ABANDONED_CHECKOUT_RETENTION_DAYS,
+      emptyMaxAgeMinutes: EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
+      limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
+    }),
+  );
   if (
     abandonedCheckoutCleanup.scannedExpired > 0 ||
     abandonedCheckoutCleanup.deletedExpired > 0 ||
@@ -128,11 +222,13 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     );
   }
 
-  const notificationOutbox = await flushPendingOrderNotificationOutbox({
-    db,
-    queue: env.ORDER_NOTIFICATIONS_QUEUE,
-    limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
-  });
+  const notificationOutbox = await timed("notification_outbox_flush", () =>
+    flushPendingOrderNotificationOutbox({
+      db,
+      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
+    }),
+  );
   if (
     notificationOutbox.scanned > 0 ||
     notificationOutbox.failed > 0 ||
@@ -145,19 +241,25 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     );
   }
 
-  const refundReconciliation = await reconcileDueRefundAttempts(db, env.CACHE, {
-    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-    limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
-  });
+  const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
+    reconcileDueRefundAttempts(db, env.CACHE, {
+      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+      limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+    }),
+  );
   if (refundReconciliation.finalizedOrderIds.length > 0) {
-    await invalidateProductAvailabilityCaches(
-      db,
-      { orderIds: refundReconciliation.finalizedOrderIds },
-      { env, executionCtx },
+    await timed("refund_reconciliation_availability_invalidation", () =>
+      invalidateProductAvailabilityCaches(
+        db,
+        { orderIds: refundReconciliation.finalizedOrderIds },
+        { env, executionCtx },
+      ),
     );
   }
   if (refundReconciliation.refundNotifications.length > 0) {
-    await enqueueReconciledRefundNotifications(db, env, refundReconciliation.refundNotifications);
+    await timed("refund_reconciliation_notification_enqueue", () =>
+      enqueueReconciledRefundNotifications(db, env, refundReconciliation.refundNotifications),
+    );
   }
   if (
     refundReconciliation.scanned > 0 ||
@@ -175,19 +277,25 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     );
   }
 
-  const stripeExternalRefunds = await reconcileStripeExternalRefundWebhooks(db, env.CACHE, {
-    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-    limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
-  });
+  const stripeExternalRefunds = await timed("stripe_external_refund_reconciliation", () =>
+    reconcileStripeExternalRefundWebhooks(db, env.CACHE, {
+      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+    }),
+  );
   if (stripeExternalRefunds.finalizedOrderIds.length > 0) {
-    await invalidateProductAvailabilityCaches(
-      db,
-      { orderIds: stripeExternalRefunds.finalizedOrderIds },
-      { env, executionCtx },
+    await timed("stripe_external_refund_availability_invalidation", () =>
+      invalidateProductAvailabilityCaches(
+        db,
+        { orderIds: stripeExternalRefunds.finalizedOrderIds },
+        { env, executionCtx },
+      ),
     );
   }
   if (stripeExternalRefunds.refundNotifications.length > 0) {
-    await enqueueReconciledRefundNotifications(db, env, stripeExternalRefunds.refundNotifications);
+    await timed("stripe_external_refund_notification_enqueue", () =>
+      enqueueReconciledRefundNotifications(db, env, stripeExternalRefunds.refundNotifications),
+    );
   }
   if (
     stripeExternalRefunds.scanned > 0 ||
@@ -207,10 +315,12 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
 
   const staleQueuedPaymentWebhookCutoff =
     Math.floor(Date.now() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60;
-  const staleQueuedPaymentWebhooks = await failStaleQueuedPaymentWebhookEvents(
-    db,
-    staleQueuedPaymentWebhookCutoff,
-    { limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT },
+  const staleQueuedPaymentWebhooks = await timed("stale_queued_payment_webhook_sweep", () =>
+    failStaleQueuedPaymentWebhookEvents(
+      db,
+      staleQueuedPaymentWebhookCutoff,
+      { limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT },
+    ),
   );
   if (
     staleQueuedPaymentWebhooks.scanned > 0 ||
@@ -224,9 +334,11 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     );
   }
 
-  const customerAuthOtpCleanup = await cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000), {
-    limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
-  });
+  const customerAuthOtpCleanup = await timed("customer_auth_otp_challenge_cleanup", () =>
+    cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000), {
+      limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
+    }),
+  );
   if (customerAuthOtpCleanup.scanned > 0 || customerAuthOtpCleanup.hasMore) {
     console.log(
       `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
@@ -235,9 +347,11 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     );
   }
 
-  const customerAuthOtpRateLimitCleanup = await cleanupExpiredCustomerAuthOtpRateLimits(db, Math.floor(Date.now() / 1000), {
-    limit: CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
-  });
+  const customerAuthOtpRateLimitCleanup = await timed("customer_auth_otp_rate_limit_cleanup", () =>
+    cleanupExpiredCustomerAuthOtpRateLimits(db, Math.floor(Date.now() / 1000), {
+      limit: CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
+    }),
+  );
   if (customerAuthOtpRateLimitCleanup.scanned > 0 || customerAuthOtpRateLimitCleanup.hasMore) {
     console.log(
       `[scheduled] Customer auth OTP rate-limit cleanup: scanned=${customerAuthOtpRateLimitCleanup.scanned}, ` +
@@ -246,9 +360,11 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     );
   }
 
-  const customerSessionCleanup = await cleanupExpiredCustomerSessions(db, Math.floor(Date.now() / 1000), {
-    limit: CUSTOMER_SESSION_SWEEP_LIMIT,
-  });
+  const customerSessionCleanup = await timed("customer_session_cleanup", () =>
+    cleanupExpiredCustomerSessions(db, Math.floor(Date.now() / 1000), {
+      limit: CUSTOMER_SESSION_SWEEP_LIMIT,
+    }),
+  );
   if (customerSessionCleanup.scanned > 0 || customerSessionCleanup.hasMore) {
     console.log(
       `[scheduled] Customer session cleanup: scanned=${customerSessionCleanup.scanned}, ` +
@@ -257,10 +373,12 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     );
   }
 
-  const scannerTokenClaimsCleanup = await cleanupExpiredScannerTokenClaims(db, {
-    nowSeconds: Math.floor(Date.now() / 1000),
-    limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
-  });
+  const scannerTokenClaimsCleanup = await timed("scanner_token_claim_cleanup", () =>
+    cleanupExpiredScannerTokenClaims(db, {
+      nowSeconds: Math.floor(Date.now() / 1000),
+      limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
+    }),
+  );
   if (scannerTokenClaimsCleanup.scanned > 0 || scannerTokenClaimsCleanup.hasMore) {
     console.log(
       `[scheduled] Scanner token claim cleanup: scanned=${scannerTokenClaimsCleanup.scanned}, ` +

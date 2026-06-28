@@ -10,7 +10,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
 | `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge/warm, and cache DLQ evidence |
-| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts through timestamp-indexed oldest-first passes, prunes expired customer OTP challenges, expired OTP rate-limit windows, expired/old customer sessions, and expired/old scanner QR claims, reconciles stale refund attempts with buyer-safe refund processing/failed/final notification facts, invalidates affected availability caches, and flushes the order notification outbox |
+| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; logs a run id plus per-operation durations; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts through timestamp-indexed oldest-first passes, prunes expired customer OTP challenges, expired OTP rate-limit windows, expired/old customer sessions, and expired/old scanner QR claims, reconciles stale refund attempts with buyer-safe refund processing/failed/final notification facts, invalidates affected availability caches, and flushes the order notification outbox |
 
 ## Route Organization
 
@@ -295,7 +295,9 @@ Normal buyer checkout is synchronous and D1-fenced. `POST /orders` requires a st
 
 ### Payment/Notification/OTP/Cache Queues
 
-Messages are processed independently through a bounded all-settled helper so one queue invocation cannot fan out a full `max_batch_size` worth of D1/provider work at once. Normal payment, notification, OTP, purge, and warm batches run at most `3` messages concurrently; DLQ evidence archive batches run at most `2` messages concurrently. Successful messages are acked; failed normal messages retry with 30-second delay, and failed DLQ evidence writes retry with 300-second delay. Keep the per-message ack/retry loops as the authority for delivery outcome semantics.
+Messages are processed independently through a bounded all-settled helper so one queue invocation cannot fan out a full `max_batch_size` worth of D1/provider work at once. Normal payment, notification, OTP, purge, and warm batches run at most `3` messages concurrently; DLQ evidence archive batches run at most `2` messages concurrently. Each batch logs `queue_batch_started` / `queue_batch_completed` with a batch id, queue name, message count, backlog metrics, first/last message ids, max attempts, ack/retry counts, concurrency limit, and duration. These generic logs must never include payload fields such as email, phone, OTP code, token, customer name, or provider secrets. Successful messages are acked; failed normal messages retry with 30-second delay, and failed DLQ evidence writes retry with 300-second delay. Keep the per-message ack/retry loops as the authority for delivery outcome semantics.
+
+Scheduled maintenance logs `scheduled_run_started` / `scheduled_run_completed` / `scheduled_run_failed` with a run id, cron metadata, scheduled time, and total duration. Each awaited sweep/reconciliation/invalidation/enqueue unit logs `scheduled_operation_completed` or `scheduled_operation_failed` with the same run id, operation name, and duration. These logs are console-only observability for D1/background pressure and must not add D1/KV writes or network calls.
 
 | Message Type | Handler | Action |
 |---|---|---|
