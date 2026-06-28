@@ -50,6 +50,9 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
   push: Bell,
 };
 
+const TERMINAL_DELIVERY_STATUSES = new Set(["accepted", "delivered", "skipped"]);
+const TERMINAL_OUTBOX_STATUSES = new Set(["sent"]);
+
 function humanize(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -111,6 +114,23 @@ function canRetry(outbox: OrderNotificationOutboxDto): boolean {
   return outbox.status === "failed" || outbox.status === "pending";
 }
 
+function deliveryAttemptLabel(receipt: OrderNotificationReceiptDto): string {
+  if (receipt.status === "skipped") {
+    return receipt.attempts > 1 ? "Stopped retrying" : "Not sent";
+  }
+  if (TERMINAL_DELIVERY_STATUSES.has(receipt.status)) {
+    return humanize(receipt.status);
+  }
+  return `${receipt.attempts} attempt${receipt.attempts === 1 ? "" : "s"}`;
+}
+
+function outboxAttemptLabel(outbox: OrderNotificationOutboxDto): string {
+  if (TERMINAL_OUTBOX_STATUSES.has(outbox.status)) {
+    return "Delivery settled";
+  }
+  return `${outbox.attempts} attempt${outbox.attempts === 1 ? "" : "s"}`;
+}
+
 function ReceiptRow({ receipt }: { receipt: OrderNotificationReceiptDto }) {
   const Icon = CHANNEL_ICONS[receipt.channel] ?? Send;
   const timestamp = receiptTimestamp(receipt);
@@ -140,7 +160,9 @@ function ReceiptRow({ receipt }: { receipt: OrderNotificationReceiptDto }) {
         )}
       </div>
       <div className="text-left text-muted-foreground sm:text-right">
-        <div>{receipt.attempts} attempt{receipt.attempts === 1 ? "" : "s"}</div>
+        <div title={`${receipt.attempts} recorded attempt${receipt.attempts === 1 ? "" : "s"}`}>
+          {deliveryAttemptLabel(receipt)}
+        </div>
         {timestamp && <div>{timestamp}</div>}
       </div>
     </div>
@@ -180,7 +202,9 @@ function NotificationRow({
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right text-xs text-muted-foreground">
-            {notification.attempts} attempt{notification.attempts === 1 ? "" : "s"}
+            <span title={`${notification.attempts} recorded attempt${notification.attempts === 1 ? "" : "s"}`}>
+              {outboxAttemptLabel(notification)}
+            </span>
           </div>
           {canRetry(notification) && (
             <Button

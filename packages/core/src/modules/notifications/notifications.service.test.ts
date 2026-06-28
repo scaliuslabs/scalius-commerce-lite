@@ -487,6 +487,43 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    it("records missing email provider setup as a skipped receipt", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["email"],
+        });
+        mocks.sendEmail.mockResolvedValue({
+            success: false,
+            provider: "log",
+            rawStatus: "No configured email provider available; email not delivered",
+        });
+
+        const result = await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Email Customer",
+            "order_email_setup",
+            "order_created",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_email_setup",
+            },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "No configured email provider available; email not delivered",
+            expect.objectContaining({
+                provider: "log",
+                providerStatus: "No configured email provider available; email not delivered",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("passes a deterministic client reference to SMS providers when receipts are enabled", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockResolvedValue({
@@ -560,6 +597,40 @@ describe("order notification dispatch", () => {
             expect.objectContaining({
                 provider: "smsnetbd",
                 providerStatus: "error=405: Authorization required",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("records missing SMS provider setup as a skipped receipt", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.getActiveSmsProvider.mockResolvedValue(null);
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_setup",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_setup",
+            },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "missing_sms_provider",
+            expect.objectContaining({
+                provider: "sms",
+                providerStatus: "missing_sms_provider",
+                rawResponse: "No active SMS provider configured",
             }),
         );
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
@@ -924,6 +995,37 @@ describe("order notification dispatch", () => {
         }));
         expect(mocks.markOrderNotificationDeliveryReceiptSkipped).not.toHaveBeenCalled();
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+    });
+
+    it("marks claimed push receipts skipped when Firebase credentials are not usable", async () => {
+        const pushDb = createPushDb([{ token: "fcm_token_1" }]);
+        mocks.sendEachForMulticast.mockRejectedValueOnce(
+            new Error("Failed to get access token: invalid_grant service account disabled"),
+        );
+
+        const result = await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_push_setup",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+            { outboxId: "outbox_push_setup" },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            pushDb.db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "Failed to get access token: invalid_grant service account disabled",
+            expect.objectContaining({
+                provider: "fcm",
+                providerStatus: "Failed to get access token: invalid_grant service account disabled",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
     });
 
     it("keeps transient FCM failures retryable in receipt mode", async () => {
