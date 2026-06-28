@@ -142,7 +142,10 @@ export async function enqueueOrderBalancePaidNotificationForOrder(options: {
     return result;
 }
 
-type RefundNotificationType = Extract<OrderNotificationType, "order_refunded" | "order_partially_refunded">;
+type RefundNotificationType = Extract<
+    OrderNotificationType,
+    "refund_processing" | "refund_failed" | "order_refunded" | "order_partially_refunded"
+>;
 
 export async function enqueueOrderRefundNotificationForOrder(options: {
     db: Database;

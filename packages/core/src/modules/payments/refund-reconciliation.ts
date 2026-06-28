@@ -45,6 +45,7 @@ type RecoverableRefundAttemptStatus = (typeof RECOVERABLE_REFUND_ATTEMPT_STATUSE
 type RefundAttemptProbeRow = Pick<
   RefundAttempt,
   | "id"
+  | "refundGroupId"
   | "orderId"
   | "refundPaymentId"
   | "gateway"
@@ -111,6 +112,21 @@ function serializeError(error: unknown): string {
 
 function responsePayload(value: Record<string, unknown> | undefined): string | null {
   return value ? JSON.stringify(value) : null;
+}
+
+function buildRefundAttemptStateNotificationFact(
+  attempt: RefundAttemptProbeRow,
+  notificationType: Extract<RefundNotificationFact["notificationType"], "refund_processing" | "refund_failed">,
+  options: { providerRefundId?: string | null } = {},
+): RefundNotificationFact {
+  const state = notificationType === "refund_processing" ? "processing" : "failed";
+  return {
+    orderId: attempt.orderId,
+    notificationType,
+    dedupeKey: `refund:${attempt.orderId}:${attempt.refundGroupId}:${state}`,
+    amount: roundPrice(attempt.amount),
+    refundId: options.providerRefundId ?? attempt.providerRefundId ?? undefined,
+  };
 }
 
 function metadataMatchesAttempt(
@@ -424,6 +440,7 @@ export async function reconcileRefundAttemptById(
   const attempt = await db
     .select({
       id: refundAttempts.id,
+      refundGroupId: refundAttempts.refundGroupId,
       orderId: refundAttempts.orderId,
       refundPaymentId: refundAttempts.refundPaymentId,
       gateway: refundAttempts.gateway,
@@ -473,11 +490,29 @@ export async function reconcileRefundAttemptById(
 
   if (outcome.outcome === "rejected") {
     await markAttemptFailed(db, attempt, outcome, nowSeconds);
-    return { status: "failed", orderIds: [], refundNotifications: [] };
+    return {
+      status: "failed",
+      orderIds: [],
+      refundNotifications: [
+        buildRefundAttemptStateNotificationFact(attempt, "refund_failed", {
+          providerRefundId: outcome.providerRefundId,
+        }),
+      ],
+    };
   }
 
   await markAttemptDeferred(db, attempt, outcome, nowSeconds);
-  return { status: "deferred", orderIds: [], refundNotifications: [] };
+  return {
+    status: "deferred",
+    orderIds: [],
+    refundNotifications: outcome.outcome === "processing"
+      ? [
+          buildRefundAttemptStateNotificationFact(attempt, "refund_processing", {
+            providerRefundId: outcome.providerRefundId,
+          }),
+        ]
+      : [],
+  };
 }
 
 export async function reconcileDueRefundAttempts(
@@ -524,12 +559,12 @@ export async function reconcileDueRefundAttempts(
       if (reconciliation.status === "finalized") {
         result.finalized += 1;
         result.finalizedOrderIds.push(...reconciliation.orderIds);
-        result.refundNotifications.push(...reconciliation.refundNotifications);
       } else if (reconciliation.status === "failed") {
         result.failed += 1;
       } else {
         result.deferred += 1;
       }
+      result.refundNotifications.push(...reconciliation.refundNotifications);
     } catch (error: unknown) {
       const message = serializeError(error);
       result.errors.push({ attemptId: candidate.id, message });

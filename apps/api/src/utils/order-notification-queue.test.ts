@@ -251,6 +251,56 @@ describe("order notification queue helpers", () => {
         }));
     });
 
+    it("enqueues refund processing and failed notifications with refund-group dedupe", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+        ]);
+        const queue = { send: vi.fn(async () => undefined) };
+
+        await enqueueOrderRefundNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            notificationType: "refund_processing",
+            dedupeKey: "refund:order_1:refund_order_1_4:processing",
+            source: "refund-reconciliation",
+            data: { amount: 40, refundId: "re_pending" },
+        });
+        await enqueueOrderRefundNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            notificationType: "refund_failed",
+            dedupeKey: "refund:order_1:refund_order_1_4:failed",
+            source: "refund-reconciliation",
+            data: { amount: 40, refundId: "re_failed" },
+        });
+
+        expect(queue.send).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            notificationType: "refund_processing",
+            data: { amount: 40, refundId: "re_pending" },
+        }));
+        expect(queue.send).toHaveBeenNthCalledWith(2, expect.objectContaining({
+            notificationType: "refund_failed",
+            data: { amount: 40, refundId: "re_failed" },
+        }));
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            notification: expect.objectContaining({
+                dedupeKey: "refund:order_1:refund_order_1_4:processing",
+                notificationType: "refund_processing",
+                source: "refund-reconciliation",
+            }),
+        }));
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenNthCalledWith(2, expect.objectContaining({
+            notification: expect.objectContaining({
+                dedupeKey: "refund:order_1:refund_order_1_4:failed",
+                notificationType: "refund_failed",
+                source: "refund-reconciliation",
+            }),
+        }));
+    });
+
     it("enqueues balance-paid notifications with order-level dedupe", async () => {
         const { db } = createDbMock([
             { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },

@@ -43,6 +43,7 @@ type SelectResult = unknown[] | Record<string, unknown> | undefined;
 function attemptRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "rfa_1",
+    refundGroupId: "refund_order_1_3",
     orderId: "order_1",
     refundPaymentId: "refund_1",
     gateway: "stripe",
@@ -194,6 +195,93 @@ describe("refund attempt reconciliation", () => {
       lastProbeAt: 1_765_000_000,
       nextProbeAt: 1_765_000_900,
       lastError: "stripe unavailable",
+    });
+  });
+
+  it("returns one buyer-safe processing notification when the provider still has the refund pending", async () => {
+    mocks.retrieveStripeRefund.mockResolvedValue({
+      success: true,
+      refund: {
+        id: "re_pending",
+        status: "pending",
+        amount: 2500,
+        currency: "bdt",
+        charge: "ch_1",
+      },
+    });
+    const { db, updateSets } = createDbMock([
+      [{ id: "rfa_1" }],
+      attemptRow(),
+    ]);
+
+    const result = await reconcileDueRefundAttempts(db, undefined, {
+      encryptionKey: "cred_key",
+      nowSeconds: 1_765_000_000,
+      limit: 5,
+    });
+
+    expect(result).toMatchObject({
+      claimed: 1,
+      finalized: 0,
+      failed: 0,
+      deferred: 1,
+      refundNotifications: [{
+        orderId: "order_1",
+        notificationType: "refund_processing",
+        dedupeKey: "refund:order_1:refund_order_1_3:processing",
+        amount: 25,
+        refundId: "re_pending",
+      }],
+    });
+    expect(mocks.finalizeAcceptedRefundAttemptIds).not.toHaveBeenCalled();
+    expect(updateSets.at(-1)).toMatchObject({
+      status: "provider_unknown",
+      providerStatus: "pending",
+      providerRefundId: "re_pending",
+      lastError: null,
+    });
+  });
+
+  it("returns one buyer-safe failed notification after the provider rejects a refund", async () => {
+    mocks.retrieveStripeRefund.mockResolvedValue({
+      success: true,
+      refund: {
+        id: "re_failed",
+        status: "failed",
+        amount: 2500,
+        currency: "bdt",
+        charge: "ch_1",
+      },
+    });
+    const { db, updateSets } = createDbMock([
+      [{ id: "rfa_1" }],
+      attemptRow(),
+    ]);
+
+    const result = await reconcileDueRefundAttempts(db, undefined, {
+      encryptionKey: "cred_key",
+      nowSeconds: 1_765_000_000,
+      limit: 5,
+    });
+
+    expect(result).toMatchObject({
+      claimed: 1,
+      finalized: 0,
+      failed: 1,
+      deferred: 0,
+      refundNotifications: [{
+        orderId: "order_1",
+        notificationType: "refund_failed",
+        dedupeKey: "refund:order_1:refund_order_1_3:failed",
+        amount: 25,
+        refundId: "re_failed",
+      }],
+    });
+    expect(mocks.finalizeAcceptedRefundAttemptIds).not.toHaveBeenCalled();
+    expect(updateSets.at(-1)).toMatchObject({
+      status: "failed",
+      providerStatus: "failed",
+      providerRefundId: "re_failed",
     });
   });
 });

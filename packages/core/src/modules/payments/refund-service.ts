@@ -66,9 +66,14 @@ export interface RefundResult {
     };
 }
 
+export type RefundCustomerNotificationType = Extract<
+    OrderNotificationType,
+    "refund_processing" | "refund_failed" | "order_refunded" | "order_partially_refunded"
+>;
+
 export interface RefundNotificationFact {
     orderId: string;
-    notificationType: Extract<OrderNotificationType, "order_refunded" | "order_partially_refunded">;
+    notificationType: RefundCustomerNotificationType;
     dedupeKey: string;
     amount: number;
     refundId?: string;

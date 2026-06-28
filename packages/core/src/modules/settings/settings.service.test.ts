@@ -66,6 +66,8 @@ describe("notification channel settings", () => {
 
         await expect(getNotificationChannels(db as never)).resolves.toMatchObject({
             order_created: ["email"],
+            refund_processing: ["email"],
+            refund_failed: ["email"],
             order_partially_refunded: ["email"],
             payment_balance_paid: ["email"],
         });

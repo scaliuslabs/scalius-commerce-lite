@@ -35,7 +35,7 @@ async function enqueueReconciledRefundNotifications(
   env: Env,
   notifications: Array<{
     orderId: string;
-    notificationType: "order_refunded" | "order_partially_refunded";
+    notificationType: "refund_processing" | "refund_failed" | "order_refunded" | "order_partially_refunded";
     dedupeKey: string;
     amount: number;
     refundId?: string;
