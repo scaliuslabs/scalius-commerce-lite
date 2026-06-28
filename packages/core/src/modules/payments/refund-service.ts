@@ -59,12 +59,17 @@ export interface RefundResult {
     isFullRefund: boolean;
     error?: string;
     refundNotification?: {
-        notificationType: Extract<OrderNotificationType, "order_refunded" | "order_partially_refunded">;
+        notificationType: RefundCompletionNotificationType;
         dedupeKey: string;
         amount: number;
         refundId?: string;
     };
 }
+
+export type RefundCompletionNotificationType = Extract<
+    OrderNotificationType,
+    "order_refunded" | "order_partially_refunded"
+>;
 
 export type RefundCustomerNotificationType = Extract<
     OrderNotificationType,
@@ -77,6 +82,38 @@ export interface RefundNotificationFact {
     dedupeKey: string;
     amount: number;
     refundId?: string;
+}
+
+type RefundCompletionNotificationFact = RefundNotificationFact & {
+    notificationType: RefundCompletionNotificationType;
+};
+
+export interface RefundRelatedOrderStatusChange {
+    orderId: string;
+    previousStatus: string;
+    newStatus: string;
+    version: number;
+}
+
+export class PartialRefundProcessedError extends ServiceUnavailableError {
+    readonly affectedOrderIds: string[];
+    readonly gateway: string;
+    readonly refundNotifications: RefundNotificationFact[];
+    readonly statusChange?: RefundRelatedOrderStatusChange;
+
+    constructor(message: string, options: {
+        affectedOrderIds: string[];
+        gateway: string;
+        refundNotifications: RefundNotificationFact[];
+        statusChange?: RefundRelatedOrderStatusChange;
+    }) {
+        super(message);
+        this.name = "PartialRefundProcessedError";
+        this.affectedOrderIds = options.affectedOrderIds;
+        this.gateway = options.gateway;
+        this.refundNotifications = options.refundNotifications;
+        this.statusChange = options.statusChange;
+    }
 }
 
 const REFUND_PROVIDER_DEADLINE_MS = 25_000;
@@ -172,6 +209,14 @@ function buildFullRefundNotificationDedupeKey(orderId: string, refundGroupId: st
 
 function buildPartialRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
     return `refund:${orderId}:${refundGroupId}:partial`;
+}
+
+function buildRefundStateNotificationDedupeKey(
+    orderId: string,
+    refundGroupId: string,
+    state: "processing" | "failed",
+): string {
+    return `refund:${orderId}:${refundGroupId}:${state}`;
 }
 
 function buildReconciledRefundNotificationDedupeKey(
@@ -977,6 +1022,43 @@ async function callProviderRefundWithDeadline(
     }
 }
 
+function getCompletedRefundIds(allocations: CompletedRefundAllocation[]): string | undefined {
+    return allocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined;
+}
+
+function buildDirectRefundNotificationFact(params: {
+    orderId: string;
+    refundGroupId: string;
+    amount: number;
+    isFullRefund: boolean;
+    refundId?: string;
+}): RefundCompletionNotificationFact {
+    return {
+        orderId: params.orderId,
+        notificationType: params.isFullRefund ? "order_refunded" : "order_partially_refunded",
+        dedupeKey: params.isFullRefund
+            ? buildFullRefundNotificationDedupeKey(params.orderId, params.refundGroupId)
+            : buildPartialRefundNotificationDedupeKey(params.orderId, params.refundGroupId),
+        amount: roundPrice(params.amount),
+        refundId: params.refundId,
+    };
+}
+
+function buildRefundStateNotificationFact(params: {
+    orderId: string;
+    refundGroupId: string;
+    notificationType: Extract<RefundCustomerNotificationType, "refund_processing" | "refund_failed">;
+    amount: number;
+}): RefundNotificationFact {
+    const state = params.notificationType === "refund_processing" ? "processing" : "failed";
+    return {
+        orderId: params.orderId,
+        notificationType: params.notificationType,
+        dedupeKey: buildRefundStateNotificationDedupeKey(params.orderId, params.refundGroupId, state),
+        amount: roundPrice(params.amount),
+    };
+}
+
 /**
  * Process a refund for an order.
  *
@@ -1248,8 +1330,9 @@ export async function processRefund(
 
         const completedAmount = roundPrice(completedAllocations.reduce((sum, allocation) => sum + allocation.amount, 0));
         if (completedAmount > 0) {
+            let finalizedResult: FinalizeAcceptedRefundAttemptsResult;
             try {
-                await finalizeAcceptedRefundAttemptIds(
+                finalizedResult = await finalizeAcceptedRefundAttemptIds(
                     db,
                     completedAllocations.map((allocation) => getRefundAttemptId(allocation)),
                 );
@@ -1260,13 +1343,35 @@ export async function processRefund(
                 );
             }
             const remainingAmount = roundPrice(refundAmount - completedAmount);
+            const affectedOrderIds = finalizedResult.orderIds.length > 0
+                ? finalizedResult.orderIds
+                : [params.orderId];
+            const refundNotifications: RefundNotificationFact[] = [...finalizedResult.refundNotifications];
             if (isProviderRefundOutcomeUnknownError(error)) {
-                throw new ServiceUnavailableError(
+                if (remainingAmount > 0) {
+                    refundNotifications.push(buildRefundStateNotificationFact({
+                        orderId: params.orderId,
+                        refundGroupId,
+                        notificationType: "refund_processing",
+                        amount: remainingAmount,
+                    }));
+                }
+                throw new PartialRefundProcessedError(
                     `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
+                    { affectedOrderIds, gateway: resultGateway, refundNotifications },
                 );
             }
-            throw new ServiceUnavailableError(
+            if (remainingAmount > 0) {
+                refundNotifications.push(buildRefundStateNotificationFact({
+                    orderId: params.orderId,
+                    refundGroupId,
+                    notificationType: "refund_failed",
+                    amount: remainingAmount,
+                }));
+            }
+            throw new PartialRefundProcessedError(
                 `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} could not be completed. Please review before retrying.`,
+                { affectedOrderIds, gateway: resultGateway, refundNotifications },
             );
         }
         if (isProviderRefundOutcomeUnknownError(error)) {
@@ -1285,19 +1390,25 @@ export async function processRefund(
         throw finalizeError;
     }
 
+    const refundNotification = buildDirectRefundNotificationFact({
+        orderId: params.orderId,
+        refundGroupId,
+        amount: refundAmount,
+        isFullRefund,
+        refundId: getCompletedRefundIds(completedAllocations),
+    });
+
     return {
         success: true,
         gateway: resultGateway,
-        refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
+        refundId: getCompletedRefundIds(completedAllocations),
         amount: refundAmount,
         isFullRefund,
         refundNotification: {
-            notificationType: isFullRefund ? "order_refunded" : "order_partially_refunded",
-            dedupeKey: isFullRefund
-                ? buildFullRefundNotificationDedupeKey(params.orderId, refundGroupId)
-                : buildPartialRefundNotificationDedupeKey(params.orderId, refundGroupId),
-            amount: refundAmount,
-            refundId: completedAllocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined,
+            notificationType: refundNotification.notificationType,
+            dedupeKey: refundNotification.dedupeKey,
+            amount: refundNotification.amount,
+            refundId: refundNotification.refundId,
         },
     };
 }
@@ -1387,10 +1498,27 @@ export async function processReturn(
     // Auto-refund if requested and order has payments
     let refundResult: RefundResult | undefined;
     if (params.autoRefund && order.paymentStatus !== PaymentStatus.UNPAID && order.paymentStatus !== PaymentStatus.REFUNDED) {
-        refundResult = await processRefund(db, kv, {
-            orderId: params.orderId,
-            reason: params.reason,
-        }, encryptionKey);
+        try {
+            refundResult = await processRefund(db, kv, {
+                orderId: params.orderId,
+                reason: params.reason,
+            }, encryptionKey);
+        } catch (error: unknown) {
+            if (error instanceof PartialRefundProcessedError && statusChanged) {
+                throw new PartialRefundProcessedError(error.message, {
+                    affectedOrderIds: error.affectedOrderIds,
+                    gateway: error.gateway,
+                    refundNotifications: error.refundNotifications,
+                    statusChange: {
+                        orderId: params.orderId,
+                        previousStatus: order.status,
+                        newStatus: OrderStatus.RETURNED,
+                        version: order.version + 1,
+                    },
+                });
+            }
+            throw error;
+        }
     }
 
     return {

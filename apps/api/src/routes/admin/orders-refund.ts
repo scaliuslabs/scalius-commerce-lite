@@ -1,6 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
-import { processReturn, processRefund } from "@scalius/core/modules/payments/refund-service";
+import {
+    PartialRefundProcessedError,
+    processReturn,
+    processRefund,
+    type RefundNotificationFact,
+} from "@scalius/core/modules/payments/refund-service";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ForbiddenError, ValidationError } from "../../utils/api-error";
@@ -48,19 +53,79 @@ async function enqueueRefundNotification(options: {
 }) {
     const notification = options.result.refundNotification;
     if (!notification) return;
+    await enqueueRefundNotificationFact({
+        db: options.db,
+        queue: options.queue,
+        orderId: options.orderId,
+        gateway: options.result.gateway,
+        notification,
+        source: options.source,
+    });
+}
+
+async function enqueueRefundNotificationFact(options: {
+    db: Database;
+    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    orderId: string;
+    gateway?: string;
+    notification: RefundNotificationFact | {
+        notificationType: "order_refunded" | "order_partially_refunded";
+        dedupeKey: string;
+        amount: number;
+        refundId?: string;
+    };
+    source: string;
+}) {
     await enqueueOrderRefundNotificationForOrder({
         db: options.db,
         queue: options.queue,
         orderId: options.orderId,
-        notificationType: notification.notificationType,
-        dedupeKey: notification.dedupeKey,
+        notificationType: options.notification.notificationType,
+        dedupeKey: options.notification.dedupeKey,
         source: options.source,
         data: {
-            amount: notification.amount,
-            gateway: options.result.gateway,
-            ...(notification.refundId ? { refundId: notification.refundId } : {}),
+            amount: options.notification.amount,
+            ...(options.gateway ? { gateway: options.gateway } : {}),
+            ...(options.notification.refundId ? { refundId: options.notification.refundId } : {}),
         },
     });
+}
+
+async function recordPartialRefundProcessedSideEffects(options: {
+    db: Database;
+    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    error: PartialRefundProcessedError;
+    context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
+    source: string;
+    statusSource?: string;
+}) {
+    try {
+        await invalidateProductAvailabilityCaches(
+            options.db,
+            { orderIds: options.error.affectedOrderIds },
+            options.context,
+        );
+        if (options.error.statusChange && options.statusSource) {
+            await enqueueOrderStatusChangeNotification({
+                db: options.db,
+                queue: options.queue,
+                statusChange: options.error.statusChange,
+                source: options.statusSource,
+            });
+        }
+        for (const notification of options.error.refundNotifications) {
+            await enqueueRefundNotificationFact({
+                db: options.db,
+                queue: options.queue,
+                orderId: notification.orderId,
+                gateway: options.error.gateway,
+                notification,
+                source: options.source,
+            });
+        }
+    } catch (sideEffectError: unknown) {
+        console.error("[orders-refund] Partial refund side effects failed after local commit:", sideEffectError);
+    }
 }
 
 function publicRefundResult<T extends { refundNotification?: unknown }>(result: T): Omit<T, "refundNotification"> {
@@ -100,7 +165,27 @@ app.openapi(returnOrderRoute, async (c) => {
     }
     const envCache = c.env?.CACHE;
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const result = await processReturn(db, envCache, { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false }, encryptionKey);
+    let result: Awaited<ReturnType<typeof processReturn>>;
+    try {
+        result = await processReturn(
+            db,
+            envCache,
+            { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false },
+            encryptionKey,
+        );
+    } catch (error: unknown) {
+        if (error instanceof PartialRefundProcessedError) {
+            await recordPartialRefundProcessedSideEffects({
+                db,
+                queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+                error,
+                context: c,
+                source: "orders-return-refund-partial-failure",
+                statusSource: "orders-return",
+            });
+        }
+        throw error;
+    }
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
     if (result.statusChange) {
         await enqueueOrderStatusChangeNotification({
@@ -159,7 +244,26 @@ app.openapi(refundOrderRoute, async (c) => {
     const db = c.get("db");
     const envCache = c.env?.CACHE;
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway }, encryptionKey);
+    let result: Awaited<ReturnType<typeof processRefund>>;
+    try {
+        result = await processRefund(
+            db,
+            envCache,
+            { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway },
+            encryptionKey,
+        );
+    } catch (error: unknown) {
+        if (error instanceof PartialRefundProcessedError) {
+            await recordPartialRefundProcessedSideEffects({
+                db,
+                queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+                error,
+                context: c,
+                source: "orders-refund-partial-failure",
+            });
+        }
+        throw error;
+    }
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
     await enqueueRefundNotification({
