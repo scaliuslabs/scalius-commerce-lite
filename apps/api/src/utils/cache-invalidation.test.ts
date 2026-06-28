@@ -836,6 +836,46 @@ describe("triggerStorefrontPurgeForGroups", () => {
     );
   });
 
+  it("warms storefront paths in small batches instead of fanning out every path", async () => {
+    const pendingResponses: Array<{
+      path: string;
+      resolve: (response: Response) => void;
+    }> = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => new Promise<Response>((resolve) => {
+      pendingResponses.push({
+        path: new URL(String(input)).pathname,
+        resolve,
+      });
+    }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resultPromise = warmStorefrontHtmlPaths(
+      ["/one", "/two", "/three"],
+      {
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(pendingResponses.map((pending) => pending.path)).toEqual(["/one", "/two"]);
+
+    pendingResponses[0]?.resolve(new Response("ok", { status: 200 }));
+    pendingResponses[1]?.resolve(new Response("ok", { status: 200 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(pendingResponses.map((pending) => pending.path)).toEqual(["/one", "/two", "/three"]);
+
+    pendingResponses[2]?.resolve(new Response("ok", { status: 200 }));
+    await expect(resultPromise).resolves.toMatchObject({
+      attempted: true,
+      ok: true,
+      successful: 3,
+    });
+  });
+
   it("schedules product catalog storefront purges with dependent collection caches", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     const waitUntil = vi.fn();
