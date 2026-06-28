@@ -15,6 +15,7 @@ import {
 } from "./api-cache-fence";
 
 export const MAX_STOREFRONT_EXACT_HTML_PATHS = 20;
+const STOREFRONT_WARM_PATH_BATCH_SIZE = 2;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -596,6 +597,25 @@ async function warmStorefrontPath(baseUrl: string, path: string): Promise<{
   }
 }
 
+type StorefrontWarmPathResult = Awaited<ReturnType<typeof warmStorefrontPath>>;
+
+async function warmStorefrontPathsInBatches(
+  baseUrl: string,
+  paths: readonly string[],
+): Promise<StorefrontWarmPathResult[]> {
+  const results: StorefrontWarmPathResult[] = [];
+
+  for (let index = 0; index < paths.length; index += STOREFRONT_WARM_PATH_BATCH_SIZE) {
+    const batch = paths.slice(index, index + STOREFRONT_WARM_PATH_BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map((path) => warmStorefrontPath(baseUrl, path)),
+    );
+    results.push(...batchResults);
+  }
+
+  return results;
+}
+
 export async function warmStorefrontHtmlPaths(
   paths: readonly string[],
   env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
@@ -628,7 +648,7 @@ export async function warmStorefrontHtmlPaths(
   }
 
   const baseUrl = new URL(normalizeStorefrontPurgeUrl(env.PURGE_URL)).origin;
-  const results = await Promise.all(uniquePaths.map((path) => warmStorefrontPath(baseUrl, path)));
+  const results = await warmStorefrontPathsInBatches(baseUrl, uniquePaths);
   const successful = results.filter((result) => result.ok).length;
   const retryableFailures = results
     .filter((result) => !result.ok && result.retryable)

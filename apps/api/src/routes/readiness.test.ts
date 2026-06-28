@@ -9,11 +9,18 @@ function createKv() {
   } as unknown as KVNamespace;
 }
 
-function createDb(options: { fail?: boolean; transientFailures?: number } = {}) {
+function createDb(options: {
+  delayMs?: number;
+  fail?: boolean;
+  transientFailures?: number;
+} = {}) {
   let attempts = 0;
   return {
     prepare: vi.fn(() => ({
       first: vi.fn(async () => {
+        if (options.delayMs) {
+          await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+        }
         attempts += 1;
         if (options.transientFailures && attempts <= options.transientFailures) {
           throw new Error("D1_ERROR: D1 DB is overloaded. Requests queued for too long.");
@@ -165,6 +172,33 @@ describe("API readiness route", () => {
         detail: "SELECT 1",
       });
       expect(db.prepare).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("allows remote D1 queue variance within the D1-specific readiness budget", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const env = createEnv({ DB: createDb({ delayMs: 2000 }) });
+
+    try {
+      const responsePromise = app.request("/api/v1/readyz", {}, env);
+      await vi.advanceTimersByTimeAsync(2000);
+      const response = await responsePromise;
+      const json = await response.json() as {
+        success?: boolean;
+        status?: string;
+        checks?: Record<string, { status?: string; detail?: string }>;
+      };
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.status).toBe("ready");
+      expect(json.checks?.d1).toMatchObject({
+        status: "ok",
+        detail: "SELECT 1",
+      });
     } finally {
       vi.useRealTimers();
     }

@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 
 const READINESS_TIMEOUT_MS = 1500;
+const READINESS_D1_TIMEOUT_MS = 3000;
 const READINESS_D1_RETRY_DELAYS_MS = [75, 200, 400] as const;
 const READINESS_KV_PROBE_KEY = "__scalius:readyz:probe";
 
@@ -64,11 +65,12 @@ async function runProbe(
   name: string,
   required: boolean,
   probe: () => Promise<string | undefined>,
+  timeoutMs = READINESS_TIMEOUT_MS,
 ): Promise<CheckResult> {
   const started = nowMs();
 
   try {
-    const detail = await withTimeout(probe());
+    const detail = await withTimeout(probe(), timeoutMs);
     return {
       name,
       required,
@@ -131,7 +133,7 @@ async function d1Check(env: Env): Promise<CheckResult> {
       throw new Error("unexpected D1 probe result");
     }
     return "SELECT 1";
-  });
+  }, READINESS_D1_TIMEOUT_MS);
 }
 
 async function kvCheck(name: string, kv: KVNamespace | undefined): Promise<CheckResult> {
