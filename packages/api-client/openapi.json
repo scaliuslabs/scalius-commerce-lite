@@ -15752,6 +15752,1195 @@
         }
       }
     },
+    "/api/v1/cache/storefront-dlq": {
+      "get": {
+        "tags": [
+          "Cache"
+        ],
+        "summary": "List storefront cache queue failures",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "replayed",
+                "ignored"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Storefront cache queue failures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "failures": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "queueName": {
+                                "type": "string"
+                              },
+                              "queueMessageId": {
+                                "type": "string"
+                              },
+                              "messageType": {
+                                "type": "string"
+                              },
+                              "operationId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "source": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "attempts": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "replayed",
+                                  "ignored"
+                                ]
+                              },
+                              "lastError": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "replayCount": {
+                                "type": "number"
+                              },
+                              "messageTimestamp": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "failedAt": {
+                                "type": "number"
+                              },
+                              "replayedAt": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "replayedBy": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "ignoredAt": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "ignoredBy": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "number"
+                              },
+                              "updatedAt": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "queueName",
+                              "queueMessageId",
+                              "messageType",
+                              "operationId",
+                              "source",
+                              "attempts",
+                              "status",
+                              "lastError",
+                              "replayCount",
+                              "messageTimestamp",
+                              "failedAt",
+                              "replayedAt",
+                              "replayedBy",
+                              "ignoredAt",
+                              "ignoredBy",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "failures"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cache/storefront-dlq/{id}/replay": {
+      "post": {
+        "tags": [
+          "Cache"
+        ],
+        "summary": "Replay a storefront cache queue failure",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Storefront cache queue failure replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        },
+                        "failure": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "queueName": {
+                              "type": "string"
+                            },
+                            "queueMessageId": {
+                              "type": "string"
+                            },
+                            "messageType": {
+                              "type": "string"
+                            },
+                            "operationId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "source": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "attempts": {
+                              "type": "number"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "replayed",
+                                "ignored"
+                              ]
+                            },
+                            "lastError": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "replayCount": {
+                              "type": "number"
+                            },
+                            "messageTimestamp": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "failedAt": {
+                              "type": "number"
+                            },
+                            "replayedAt": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "replayedBy": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "ignoredAt": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "ignoredBy": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "number"
+                            },
+                            "updatedAt": {
+                              "type": "number"
+                            },
+                            "payload": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ],
+                              "additionalProperties": {
+                                "nullable": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "queueName",
+                            "queueMessageId",
+                            "messageType",
+                            "operationId",
+                            "source",
+                            "attempts",
+                            "status",
+                            "lastError",
+                            "replayCount",
+                            "messageTimestamp",
+                            "failedAt",
+                            "replayedAt",
+                            "replayedBy",
+                            "ignoredAt",
+                            "ignoredBy",
+                            "createdAt",
+                            "updatedAt",
+                            "payload"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "message",
+                        "failure"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cache/storefront-dlq/{id}/ignore": {
+      "post": {
+        "tags": [
+          "Cache"
+        ],
+        "summary": "Ignore a storefront cache queue failure",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Storefront cache queue failure ignored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        },
+                        "failure": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "queueName": {
+                              "type": "string"
+                            },
+                            "queueMessageId": {
+                              "type": "string"
+                            },
+                            "messageType": {
+                              "type": "string"
+                            },
+                            "operationId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "source": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "attempts": {
+                              "type": "number"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "replayed",
+                                "ignored"
+                              ]
+                            },
+                            "lastError": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "replayCount": {
+                              "type": "number"
+                            },
+                            "messageTimestamp": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "failedAt": {
+                              "type": "number"
+                            },
+                            "replayedAt": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "replayedBy": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "ignoredAt": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "ignoredBy": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "number"
+                            },
+                            "updatedAt": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "queueName",
+                            "queueMessageId",
+                            "messageType",
+                            "operationId",
+                            "source",
+                            "attempts",
+                            "status",
+                            "lastError",
+                            "replayCount",
+                            "messageTimestamp",
+                            "failedAt",
+                            "replayedAt",
+                            "replayedBy",
+                            "ignoredAt",
+                            "ignoredBy",
+                            "createdAt",
+                            "updatedAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "message",
+                        "failure"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/cache/clear": {
       "post": {
         "tags": [
@@ -82254,6 +83443,381 @@
                         "refundAttempts",
                         "activeRefundOperation",
                         "paymentWebhookIssues"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/notifications": {
+      "get": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Get order notification delivery history",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order notification history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "notifications": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "dedupeKey": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "notificationType": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "attempts": {
+                                "type": "number"
+                              },
+                              "nextAttemptAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "lastError": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "queuedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "sentAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "receipts": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "receiptKey": {
+                                      "type": "string"
+                                    },
+                                    "channel": {
+                                      "type": "string"
+                                    },
+                                    "provider": {
+                                      "type": "string"
+                                    },
+                                    "recipientMasked": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "status": {
+                                      "type": "string"
+                                    },
+                                    "providerMessageId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "providerStatus": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "attempts": {
+                                      "type": "number"
+                                    },
+                                    "nextAttemptAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ],
+                                      "nullable": true
+                                    },
+                                    "lastAttemptAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ],
+                                      "nullable": true
+                                    },
+                                    "lastError": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "acceptedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ],
+                                      "nullable": true
+                                    },
+                                    "deliveredAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ],
+                                      "nullable": true
+                                    },
+                                    "failedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ],
+                                      "nullable": true
+                                    },
+                                    "skippedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ],
+                                      "nullable": true
+                                    },
+                                    "createdAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ]
+                                    },
+                                    "updatedAt": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "receiptKey",
+                                    "channel",
+                                    "provider",
+                                    "recipientMasked",
+                                    "status",
+                                    "providerMessageId",
+                                    "providerStatus",
+                                    "attempts",
+                                    "nextAttemptAt",
+                                    "lastAttemptAt",
+                                    "lastError",
+                                    "acceptedAt",
+                                    "deliveredAt",
+                                    "failedAt",
+                                    "skippedAt",
+                                    "createdAt",
+                                    "updatedAt"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "dedupeKey",
+                              "orderId",
+                              "notificationType",
+                              "source",
+                              "status",
+                              "attempts",
+                              "nextAttemptAt",
+                              "lastError",
+                              "queuedAt",
+                              "sentAt",
+                              "createdAt",
+                              "updatedAt",
+                              "receipts"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "notifications"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/notifications/{outboxId}/retry": {
+      "post": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Retry a failed order notification",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "outboxId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retry result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "outboxId": {
+                          "type": "string"
+                        },
+                        "dedupeKey": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        },
+                        "enqueued": {
+                          "type": "boolean"
+                        },
+                        "skippedReason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "outboxId",
+                        "dedupeKey",
+                        "created",
+                        "enqueued"
                       ]
                     }
                   },

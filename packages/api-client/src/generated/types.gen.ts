@@ -4806,6 +4806,352 @@ export type GetApiV1CacheLastClearedResponses = {
 
 export type GetApiV1CacheLastClearedResponse = GetApiV1CacheLastClearedResponses[keyof GetApiV1CacheLastClearedResponses];
 
+export type GetApiV1CacheStorefrontDlqData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'pending' | 'replayed' | 'ignored';
+        limit?: number;
+    };
+    url: '/api/v1/cache/storefront-dlq';
+};
+
+export type GetApiV1CacheStorefrontDlqErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CacheStorefrontDlqError = GetApiV1CacheStorefrontDlqErrors[keyof GetApiV1CacheStorefrontDlqErrors];
+
+export type GetApiV1CacheStorefrontDlqResponses = {
+    /**
+     * Storefront cache queue failures
+     */
+    200: {
+        success: true;
+        data: {
+            failures: Array<{
+                id: string;
+                queueName: string;
+                queueMessageId: string;
+                messageType: string;
+                operationId: string | null;
+                source: string | null;
+                attempts: number;
+                status: 'pending' | 'replayed' | 'ignored';
+                lastError: string | null;
+                replayCount: number;
+                messageTimestamp: number | null;
+                failedAt: number;
+                replayedAt: number | null;
+                replayedBy: string | null;
+                ignoredAt: number | null;
+                ignoredBy: string | null;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CacheStorefrontDlqResponse = GetApiV1CacheStorefrontDlqResponses[keyof GetApiV1CacheStorefrontDlqResponses];
+
+export type PostApiV1CacheStorefrontDlqByIdReplayData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/cache/storefront-dlq/{id}/replay';
+};
+
+export type PostApiV1CacheStorefrontDlqByIdReplayErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CacheStorefrontDlqByIdReplayError = PostApiV1CacheStorefrontDlqByIdReplayErrors[keyof PostApiV1CacheStorefrontDlqByIdReplayErrors];
+
+export type PostApiV1CacheStorefrontDlqByIdReplayResponses = {
+    /**
+     * Storefront cache queue failure replayed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            failure: {
+                id: string;
+                queueName: string;
+                queueMessageId: string;
+                messageType: string;
+                operationId: string | null;
+                source: string | null;
+                attempts: number;
+                status: 'pending' | 'replayed' | 'ignored';
+                lastError: string | null;
+                replayCount: number;
+                messageTimestamp: number | null;
+                failedAt: number;
+                replayedAt: number | null;
+                replayedBy: string | null;
+                ignoredAt: number | null;
+                ignoredBy: string | null;
+                createdAt: number;
+                updatedAt: number;
+                payload: {
+                    type: string;
+                    [key: string]: unknown;
+                };
+            };
+        };
+    };
+};
+
+export type PostApiV1CacheStorefrontDlqByIdReplayResponse = PostApiV1CacheStorefrontDlqByIdReplayResponses[keyof PostApiV1CacheStorefrontDlqByIdReplayResponses];
+
+export type PostApiV1CacheStorefrontDlqByIdIgnoreData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/cache/storefront-dlq/{id}/ignore';
+};
+
+export type PostApiV1CacheStorefrontDlqByIdIgnoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CacheStorefrontDlqByIdIgnoreError = PostApiV1CacheStorefrontDlqByIdIgnoreErrors[keyof PostApiV1CacheStorefrontDlqByIdIgnoreErrors];
+
+export type PostApiV1CacheStorefrontDlqByIdIgnoreResponses = {
+    /**
+     * Storefront cache queue failure ignored
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            failure: {
+                id: string;
+                queueName: string;
+                queueMessageId: string;
+                messageType: string;
+                operationId: string | null;
+                source: string | null;
+                attempts: number;
+                status: 'pending' | 'replayed' | 'ignored';
+                lastError: string | null;
+                replayCount: number;
+                messageTimestamp: number | null;
+                failedAt: number;
+                replayedAt: number | null;
+                replayedBy: string | null;
+                ignoredAt: number | null;
+                ignoredBy: string | null;
+                createdAt: number;
+                updatedAt: number;
+            };
+        };
+    };
+};
+
+export type PostApiV1CacheStorefrontDlqByIdIgnoreResponse = PostApiV1CacheStorefrontDlqByIdIgnoreResponses[keyof PostApiV1CacheStorefrontDlqByIdIgnoreResponses];
+
 export type PostApiV1CacheClearData = {
     body?: never;
     path?: never;
@@ -25058,6 +25404,91 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
 };
 
 export type GetApiV1AdminOrdersByIdPaymentsResponse = GetApiV1AdminOrdersByIdPaymentsResponses[keyof GetApiV1AdminOrdersByIdPaymentsResponses];
+
+export type GetApiV1AdminOrdersByIdNotificationsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/notifications';
+};
+
+export type GetApiV1AdminOrdersByIdNotificationsResponses = {
+    /**
+     * Order notification history
+     */
+    200: {
+        success: true;
+        data: {
+            notifications: Array<{
+                id: string;
+                dedupeKey: string;
+                orderId: string;
+                notificationType: string;
+                source: string;
+                status: string;
+                attempts: number;
+                nextAttemptAt: string | number;
+                lastError: string | null;
+                queuedAt: string | number | null;
+                sentAt: string | number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                receipts: Array<{
+                    id: string;
+                    receiptKey: string;
+                    channel: string;
+                    provider: string;
+                    recipientMasked: string | null;
+                    status: string;
+                    providerMessageId: string | null;
+                    providerStatus: string | null;
+                    attempts: number;
+                    nextAttemptAt: string | number | null;
+                    lastAttemptAt: string | number | null;
+                    lastError: string | null;
+                    acceptedAt: string | number | null;
+                    deliveredAt: string | number | null;
+                    failedAt: string | number | null;
+                    skippedAt: string | number | null;
+                    createdAt: string | number;
+                    updatedAt: string | number;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdNotificationsResponse = GetApiV1AdminOrdersByIdNotificationsResponses[keyof GetApiV1AdminOrdersByIdNotificationsResponses];
+
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryData = {
+    body?: never;
+    path: {
+        id: string;
+        outboxId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/notifications/{outboxId}/retry';
+};
+
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses = {
+    /**
+     * Retry result
+     */
+    200: {
+        success: true;
+        data: {
+            outboxId: string;
+            dedupeKey: string;
+            created: boolean;
+            enqueued: boolean;
+            skippedReason?: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponse = PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses[keyof PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses];
 
 export type GetApiV1AdminOrdersByIdFormDataData = {
     body?: never;

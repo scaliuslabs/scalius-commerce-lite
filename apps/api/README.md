@@ -9,7 +9,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | Handler | Purpose |
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
-| `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge |
+| `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge/warm, and cache DLQ evidence |
 | `scheduled(controller)` | Cron -- releases orphaned reservation movements, archives stale hosted-payment orders, prunes old/empty abandoned-checkout rows, expired customer OTP challenges, expired/old customer sessions, and expired/old scanner QR claims, and flushes notification outbox records every 15 minutes |
 
 ## Route Organization
@@ -278,7 +278,7 @@ It returns `503` with `status: "degraded"` when a required dependency is missing
 
 ## Queue Consumer
 
-`src/queue-consumer.ts` dispatches payment, notification, OTP, storefront cache purge, and storefront cache warm messages by type. Queue-driven purges call the storefront purge endpoint with `warm:false`; after the purge succeeds, a separate `storefront.cache_warm` message warms `/` and/or bounded exact HTML paths so warm retries never repeat the purge/version bump. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.
+`src/queue-consumer.ts` dispatches payment, notification, OTP, storefront cache purge, and storefront cache warm messages by type. Queue-driven purges call the storefront purge endpoint with `warm:false`; after the purge succeeds, a separate `storefront.cache_warm` message warms `/` and/or bounded exact HTML paths so warm retries never repeat the purge/version bump. Terminal `storefront-cache-dlq` messages are archived to D1 (`storefront_cache_queue_failures`) and can be listed, replayed, or ignored through the admin-protected cache API. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.
 
 ### Payment/Notification/OTP/Cache Queues
 
@@ -298,6 +298,8 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status notifications across enabled channels (email, SMS via 4 providers, Meta WhatsApp template message, FCM push). Queue messages with `outboxId` create per-channel delivery receipts so retries skip accepted/skipped targets and keep the parent outbox retryable while any enabled target is retryable. |
 | `auth.send_otp` | Email / WhatsApp / SMS | Claim `auth_otp_delivery_receipts`, skip terminal/expired OTP attempts, then send via email (`sendEmail()` with Cloudflare Email Service default and Resend fallback), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers). Resend receives `deliveryKey` as `Idempotency-Key`; GenNet receives a deterministic receipt-derived `csms_id`. |
 | `storefront.cache_purge` | `purgeStorefrontForPrefixes()` | Replay the normalized storefront purge payload through `/api/purge-cache`; non-2xx/missing-config failures retry through Cloudflare Queues/DLQ instead of being lost in `waitUntil()` logs. |
+| `storefront.cache_warm` | `warmStorefrontHtmlPaths()` | Warm only canonical HTML paths after a successful purge; retryable failures retry this message without repeating the purge/version bump. |
+| `storefront-cache-dlq` | `archiveStorefrontCacheQueueFailure()` | Archive terminal purge/warm failures into D1 so operators can replay the original queue payload or mark it ignored without raw Cloudflare Queue inspection. |
 
 ## How to Add a New Endpoint
 

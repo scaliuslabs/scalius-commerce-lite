@@ -343,6 +343,15 @@ curl -i https://storefront.scalius.com/api/purge-cache
 
 Expected result: `GET /api/purge-cache` is non-mutating and returns `405 Allow: POST` unless rejecting query-string credentials with `400`; it must not read/write the KV cache-version key, clear L1, or warm pages. `POST /api/purge-cache` remains the mutating path. Full/HTML-affecting direct purges bump the KV version, clear L1, and warm critical pages. Queue-driven purges send `warm:false`, then enqueue `storefront.cache_warm` only after purge success so retrying a warm failure cannot repeat the purge or version bump. Exact warm paths are canonicalized/capped; retryable warm failures retry the warm message, while `404`/other non-retryable warm misses are logged and acknowledged.
 
+Storefront cache queue recovery checks:
+
+```bash
+pnpm --filter @scalius/api test -- src/queue-consumer.test.ts src/routes/cache-storefront-dlq.test.ts src/routes/cache.test.ts
+pnpm exec wrangler queues info storefront-cache-dlq --config apps/api/wrangler.jsonc
+```
+
+Expected result: `storefront-cache-dlq` has `scalius-api` as a consumer, DLQ messages are archived to `storefront_cache_queue_failures` before ack, archive failures retry with a long delay, and admin cache replay re-enqueues the original purge/warm payload instead of mutating storefront caches inline.
+
 Widget cache invalidation checks:
 
 ```bash

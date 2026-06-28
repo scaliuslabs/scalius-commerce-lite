@@ -470,6 +470,13 @@
       "when": 1782615217133,
       "tag": "0066_order_notification_outbox_queued_index",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1782620000000,
+      "tag": "0067_storefront_cache_queue_failures",
+      "breakpoints": true
     }
   ]
 }

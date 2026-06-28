@@ -9,7 +9,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | Handler | Purpose |
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
-| `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge |
+| `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge/warm, and cache DLQ evidence |
 | `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts, expired customer OTP challenges, expired OTP rate-limit windows, expired/old customer sessions, and expired/old scanner QR claims, reconciles stale refund attempts with buyer-safe refund processing/failed/final notification facts, invalidates affected availability caches, and flushes the order notification outbox |
 
 ## Route Organization
@@ -287,7 +287,7 @@ Admin widget writes first invalidate API widget/pattern keys, then enqueue store
 
 ## Queue Consumer
 
-`src/queue-consumer.ts` dispatches payment, notification, OTP, storefront cache purge, and storefront cache warm messages by type. Storefront order creation is not queue-backed.
+`src/queue-consumer.ts` dispatches payment, notification, OTP, storefront cache purge, storefront cache warm, and storefront cache DLQ evidence messages by queue/type. Storefront order creation is not queue-backed.
 
 ### Storefront Order Submit
 
@@ -311,6 +311,8 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status notifications across enabled channels (email, SMS via 4 providers, Meta WhatsApp template message, FCM push). Queue messages with `outboxId` create per-channel delivery receipts so retries skip accepted/skipped targets and keep the parent outbox retryable while any enabled target is retryable. |
 | `auth.send_otp` | Email / WhatsApp / SMS | Claim `auth_otp_delivery_receipts`, skip terminal/expired OTP attempts, then send via email (`sendEmail()` with Cloudflare Email Service default and Resend fallback), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers). Resend receives `deliveryKey` as `Idempotency-Key`; GenNet receives a deterministic receipt-derived `csms_id`. |
 | `storefront.cache_purge` | `purgeStorefrontForPrefixes()` | Replay the normalized storefront purge payload through `/api/purge-cache`; non-2xx/missing-config failures retry through Cloudflare Queues/DLQ instead of being lost in `waitUntil()` logs. |
+| `storefront.cache_warm` | `warmStorefrontHtmlPaths()` | Warm only canonical HTML paths after a successful purge; retryable failures retry this message without repeating the purge/version bump. |
+| `storefront-cache-dlq` | `archiveStorefrontCacheQueueFailure()` | Archive terminal purge/warm failures into D1 (`storefront_cache_queue_failures`) so the admin cache API can list, replay, or ignore them without Cloudflare Queue dashboard dependence. |
 
 ## How to Add a New Endpoint
 

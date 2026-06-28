@@ -528,6 +528,15 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/cache/last-cleared": {
     GET: { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
   },
+  "/api/v1/cache/storefront-dlq": {
+    GET: { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
+  },
+  "/api/v1/cache/storefront-dlq/*/replay": {
+    POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
+  },
+  "/api/v1/cache/storefront-dlq/*/ignore": {
+    POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
+  },
   "/api/v1/cache/clear": {
     POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
     DELETE: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
