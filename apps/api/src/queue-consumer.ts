@@ -13,6 +13,7 @@
 //   payment.*        → src/modules/payments/process-payment.ts   (via switch below)
 //   order.notif      → src/modules/notifications/notifications.service.ts
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
+//   storefront.cache → src/utils/cache-invalidation.ts
 //
 // TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
 //       src/modules/notifications/otp.handler.ts
@@ -48,7 +49,11 @@ import {
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
-import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
+import {
+  invalidateProductAvailabilityCaches,
+  purgeStorefrontForPrefixes,
+  type StorefrontCachePurgeQueueMessage,
+} from "./utils/cache-invalidation";
 import {
   markWebhookEventFailed,
   markWebhookEventManualReconciliation,
@@ -279,6 +284,8 @@ export type AuthOtpQueueMessage =
     name: string;
   };
 
+export type StorefrontCacheQueueMessage = StorefrontCachePurgeQueueMessage;
+
 // ── Queue batch handler ────────────────────────────────────────────────────
 
 /**
@@ -286,7 +293,7 @@ export type AuthOtpQueueMessage =
  * Each message is processed independently; failures are retried by Cloudflare.
  */
 export async function handleQueueBatch(
-  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage>,
+  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
   env: Env,
   executionCtx?: ExecutionContext,
 ): Promise<void> {
@@ -300,7 +307,7 @@ export async function handleQueueBatch(
   // Process each payment/notification/OTP message independently
   const results = await Promise.allSettled(
     batch.messages.map((msg) => processQueueMessage(
-      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>,
+      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
       db,
       env,
       executionCtx,
@@ -318,7 +325,7 @@ export async function handleQueueBatch(
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
         db,
-        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>,
+        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
         result.reason,
       );
       msg.retry({ delaySeconds: 30 });
@@ -370,7 +377,7 @@ async function archivePaymentEventsDlqMessage(
  * Process a single payment, notification, or OTP queue message.
  */
 async function processQueueMessage(
-  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage>,
+  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
   executionCtx?: ExecutionContext,
@@ -386,6 +393,13 @@ async function processQueueMessage(
     //       to src/modules/notifications/otp.handler.ts
     case "auth.send_otp": {
       await processAuthOtpQueueMessage(payload, msg.id, db, env);
+      break;
+    }
+
+    // ── Storefront cache purge/rewarm coordination ─────────────────────────
+
+    case "storefront.cache_purge": {
+      await processStorefrontCachePurgeQueueMessage(payload, env);
       break;
     }
 
@@ -706,11 +720,42 @@ async function processQueueMessage(
   }
 }
 
-type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage;
+type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {
   return typeof payload.type === "string" && payload.type.startsWith("payment.");
+}
+
+async function processStorefrontCachePurgeQueueMessage(
+  payload: StorefrontCacheQueueMessage,
+  env: Env,
+): Promise<void> {
+  const result = await purgeStorefrontForPrefixes(payload.prefixes, env, {
+    groups: payload.groups,
+    bumpVersion: payload.bumpVersion,
+    exactKeys: payload.exactKeys,
+    htmlPaths: payload.htmlPaths,
+    operationId: payload.operationId,
+  });
+
+  if (!result.attempted) {
+    if (result.skippedReason === "no-prefixes" || result.skippedReason === "no-valid-groups") {
+      console.warn(
+        `[Queue] Ignoring empty storefront cache purge message from ${payload.source}`,
+      );
+      return;
+    }
+    throw new Error(`Storefront cache purge skipped: ${result.skippedReason ?? "unknown"}`);
+  }
+
+  if (!result.ok) {
+    throw new Error(`Storefront cache purge failed with status ${result.status ?? "unknown"}`);
+  }
+
+  console.log(
+    `[Queue] Storefront cache purge ${payload.operationId} completed from ${payload.source}`,
+  );
 }
 
 function getPaymentWebhookEventId(payload: QueueBody): string | undefined {
@@ -830,7 +875,7 @@ function createPaymentWebhookQueueResult(
 
 async function markPaymentWebhookEventCompleted(
   db: ReturnType<typeof getDb>,
-  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage>,
+  msg: Message<QueueBody>,
   status: PaymentWebhookCompletionStatus,
   result: Record<string, unknown>,
 ): Promise<void> {

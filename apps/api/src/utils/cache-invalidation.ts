@@ -67,6 +67,23 @@ export interface CmsShortcodePageInvalidation {
   bumpVersion: boolean;
 }
 
+export interface StorefrontCachePurgeQueueMessage {
+  type: "storefront.cache_purge";
+  operationId: string;
+  groups: string[];
+  prefixes: string[];
+  exactKeys?: string[];
+  htmlPaths?: string[];
+  bumpVersion: boolean;
+  source: string;
+  requestedAt: number;
+}
+
+type StorefrontPurgeQueue = Pick<Queue<StorefrontCachePurgeQueueMessage>, "send">;
+type StorefrontPurgeEnv = Pick<Env, "PURGE_URL" | "PURGE_TOKEN"> & {
+  STOREFRONT_CACHE_QUEUE?: StorefrontPurgeQueue;
+};
+
 export function normalizeStorefrontHtmlPaths(
   paths: readonly string[],
   maxPaths = MAX_STOREFRONT_EXACT_HTML_PATHS,
@@ -361,6 +378,20 @@ export interface StorefrontPurgeResult {
   skippedReason?: "no-valid-groups" | "no-prefixes" | "missing-config";
 }
 
+interface StorefrontPurgeBody {
+  operationId?: string;
+  groups: string[];
+  prefixes: string[];
+  exactKeys?: string[];
+  htmlPaths?: string[];
+  bumpVersion: boolean;
+}
+
+interface StorefrontCachePurgeEnqueueResult {
+  enqueued: boolean;
+  skippedReason?: "missing-config" | "missing-queue";
+}
+
 function storefrontPurgeHeaders(purgeToken: string): HeadersInit {
   return {
     Authorization: `Bearer ${purgeToken}`,
@@ -378,6 +409,131 @@ export function normalizeStorefrontPurgeUrl(purgeUrl: string): string {
   return url.toString();
 }
 
+function hasStorefrontPurgeConfig<T extends Pick<Env, "PURGE_URL" | "PURGE_TOKEN">>(
+  env?: T,
+): env is T & {
+  PURGE_URL: string;
+  PURGE_TOKEN: string;
+} {
+  return Boolean(env?.PURGE_URL && env.PURGE_TOKEN);
+}
+
+function buildStorefrontGroupPurgeBody(groups: readonly string[]): StorefrontPurgeBody | null {
+  const validGroups = groups.filter((g) => g in INVALIDATION_GROUPS);
+  if (validGroups.length === 0) return null;
+
+  return {
+    groups: validGroups,
+    prefixes: getStorefrontPrefixesForGroups(validGroups),
+    bumpVersion: shouldBumpStorefrontVersion(validGroups),
+  };
+}
+
+function buildStorefrontPrefixPurgeBody(
+  prefixes: readonly string[],
+  options: {
+    groups?: readonly string[];
+    bumpVersion?: boolean;
+    exactKeys?: readonly string[];
+    htmlPaths?: readonly string[];
+    operationId?: string;
+  } = {},
+): StorefrontPurgeBody | null {
+  const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
+  const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
+  const uniqueHtmlPaths = normalizeStorefrontHtmlPaths(options.htmlPaths ?? []);
+  if (
+    uniquePrefixes.length === 0 &&
+    uniqueExactKeys.length === 0 &&
+    uniqueHtmlPaths.length === 0 &&
+    options.bumpVersion !== true
+  ) {
+    return null;
+  }
+
+  return {
+    ...(options.operationId ? { operationId: options.operationId } : {}),
+    groups: [...new Set(options.groups ?? [])],
+    prefixes: uniquePrefixes,
+    ...(uniqueExactKeys.length > 0 ? { exactKeys: uniqueExactKeys } : {}),
+    ...(uniqueHtmlPaths.length > 0 ? { htmlPaths: uniqueHtmlPaths } : {}),
+    bumpVersion: options.bumpVersion === true,
+  };
+}
+
+function createStorefrontCachePurgeMessage(
+  body: StorefrontPurgeBody,
+  source: string,
+): StorefrontCachePurgeQueueMessage {
+  return {
+    type: "storefront.cache_purge",
+    operationId: body.operationId ?? crypto.randomUUID(),
+    groups: body.groups,
+    prefixes: body.prefixes,
+    ...(body.exactKeys ? { exactKeys: body.exactKeys } : {}),
+    ...(body.htmlPaths ? { htmlPaths: body.htmlPaths } : {}),
+    bumpVersion: body.bumpVersion,
+    source,
+    requestedAt: Date.now(),
+  };
+}
+
+export async function enqueueStorefrontCachePurge(
+  message: StorefrontCachePurgeQueueMessage,
+  env?: StorefrontPurgeEnv,
+): Promise<StorefrontCachePurgeEnqueueResult> {
+  if (!hasStorefrontPurgeConfig(env)) {
+    return { enqueued: false, skippedReason: "missing-config" };
+  }
+
+  const queue = env.STOREFRONT_CACHE_QUEUE;
+  if (typeof queue?.send !== "function") {
+    return { enqueued: false, skippedReason: "missing-queue" };
+  }
+
+  await queue.send(message);
+  return { enqueued: true };
+}
+
+function scheduleDirectStorefrontPurgeFallback(
+  task: () => Promise<StorefrontPurgeResult>,
+  executionCtx: WaitUntilExecutionContext | undefined,
+  failureLabel: string,
+): void {
+  const purgePromise = task().catch((err) => {
+    console.error(failureLabel, err);
+  });
+
+  if (executionCtx && typeof executionCtx.waitUntil === "function") {
+    executionCtx.waitUntil(purgePromise);
+  } else {
+    void purgePromise;
+  }
+}
+
+async function enqueueStorefrontCachePurgeOrFallback(
+  message: StorefrontCachePurgeQueueMessage,
+  env: StorefrontPurgeEnv | undefined,
+  executionCtx: WaitUntilExecutionContext | undefined,
+  fallback: () => Promise<StorefrontPurgeResult>,
+  failureLabel: string,
+): Promise<void> {
+  try {
+    const result = await enqueueStorefrontCachePurge(message, env);
+    if (result.enqueued || result.skippedReason === "missing-config") {
+      return;
+    }
+
+    console.warn(
+      `[Cache] Durable storefront cache purge queue unavailable (${result.skippedReason}); falling back to direct purge.`,
+    );
+  } catch (error: unknown) {
+    console.error("[Cache] Failed to enqueue storefront cache purge:", error);
+  }
+
+  scheduleDirectStorefrontPurgeFallback(fallback, executionCtx, failureLabel);
+}
+
 /**
  * Execute the storefront purge request and report whether it succeeded.
  * Content writes that immediately affect rendered pages can await this helper
@@ -387,31 +543,25 @@ export async function purgeStorefrontForGroups(
   groups: string[],
   env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
 ): Promise<StorefrontPurgeResult> {
-  const validGroups = groups.filter((g) => g in INVALIDATION_GROUPS);
-  if (validGroups.length === 0) {
+  const body = buildStorefrontGroupPurgeBody(groups);
+  if (!body) {
     return { attempted: false, ok: false, skippedReason: "no-valid-groups" };
   }
 
-  const purgeUrl = env?.PURGE_URL;
-  const purgeToken = env?.PURGE_TOKEN;
-  if (!purgeUrl || !purgeToken) {
+  if (!hasStorefrontPurgeConfig(env)) {
     return { attempted: false, ok: false, skippedReason: "missing-config" };
   }
 
-  const response = await fetch(normalizeStorefrontPurgeUrl(purgeUrl), {
+  const response = await fetch(normalizeStorefrontPurgeUrl(env.PURGE_URL), {
     method: "POST",
-    headers: storefrontPurgeHeaders(purgeToken),
-    body: JSON.stringify({
-      groups: validGroups,
-      prefixes: getStorefrontPrefixesForGroups(validGroups),
-      bumpVersion: shouldBumpStorefrontVersion(validGroups),
-    }),
+    headers: storefrontPurgeHeaders(env.PURGE_TOKEN),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     console.error("[Cache] Storefront group purge failed:", {
       status: response.status,
-      groups: validGroups,
+      groups: body.groups,
     });
   }
 
@@ -431,55 +581,29 @@ export async function purgeStorefrontForPrefixes(
     bumpVersion?: boolean;
     exactKeys?: readonly string[];
     htmlPaths?: readonly string[];
+    operationId?: string;
   } = {},
 ): Promise<StorefrontPurgeResult> {
-  const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
-  const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
-  const uniqueHtmlPaths = normalizeStorefrontHtmlPaths(options.htmlPaths ?? []);
-  if (
-    uniquePrefixes.length === 0 &&
-    uniqueExactKeys.length === 0 &&
-    uniqueHtmlPaths.length === 0 &&
-    options.bumpVersion !== true
-  ) {
+  const body = buildStorefrontPrefixPurgeBody(prefixes, options);
+  if (!body) {
     return { attempted: false, ok: false, skippedReason: "no-prefixes" };
   }
 
-  const purgeUrl = env?.PURGE_URL;
-  const purgeToken = env?.PURGE_TOKEN;
-  if (!purgeUrl || !purgeToken) {
+  if (!hasStorefrontPurgeConfig(env)) {
     return { attempted: false, ok: false, skippedReason: "missing-config" };
   }
 
-  const body: {
-    groups: string[];
-    prefixes: string[];
-    exactKeys?: string[];
-    htmlPaths?: string[];
-    bumpVersion: boolean;
-  } = {
-    groups: [...new Set(options.groups ?? [])],
-    prefixes: uniquePrefixes,
-    bumpVersion: options.bumpVersion === true,
-  };
-  if (uniqueExactKeys.length > 0) {
-    body.exactKeys = uniqueExactKeys;
-  }
-  if (uniqueHtmlPaths.length > 0) {
-    body.htmlPaths = uniqueHtmlPaths;
-  }
-
-  const response = await fetch(normalizeStorefrontPurgeUrl(purgeUrl), {
+  const response = await fetch(normalizeStorefrontPurgeUrl(env.PURGE_URL), {
     method: "POST",
-    headers: storefrontPurgeHeaders(purgeToken),
+    headers: storefrontPurgeHeaders(env.PURGE_TOKEN),
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     console.error("[Cache] Storefront prefix purge failed:", {
       status: response.status,
-      groups: options.groups,
-      prefixes: uniquePrefixes,
+      groups: body.groups,
+      prefixes: body.prefixes,
     });
   }
 
@@ -496,24 +620,25 @@ export async function purgeStorefrontForPrefixes(
  */
 export function triggerStorefrontPurgeForGroups(
   groups: string[],
-  env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+  env?: StorefrontPurgeEnv,
   executionCtx?: WaitUntilExecutionContext,
 ): void {
-  const validGroups = groups.filter((g) => g in INVALIDATION_GROUPS);
-  if (validGroups.length === 0) return;
+  const body = buildStorefrontGroupPurgeBody(groups);
+  if (!body || !hasStorefrontPurgeConfig(env)) return;
 
-  const purgeUrl = env?.PURGE_URL;
-  const purgeToken = env?.PURGE_TOKEN;
-  if (!purgeUrl || !purgeToken) return;
-
-  const purgePromise = purgeStorefrontForGroups(validGroups, env).catch((err) =>
-    console.error("[Cache] Storefront group purge failed:", err),
+  const message = createStorefrontCachePurgeMessage(body, "groups");
+  const enqueuePromise = enqueueStorefrontCachePurgeOrFallback(
+    message,
+    env,
+    executionCtx,
+    () => purgeStorefrontForGroups(body.groups, env),
+    "[Cache] Storefront group purge failed:",
   );
 
   if (executionCtx && typeof executionCtx.waitUntil === "function") {
-    executionCtx.waitUntil(purgePromise);
+    executionCtx.waitUntil(enqueuePromise);
   } else {
-    void purgePromise;
+    void enqueuePromise;
   }
 }
 
@@ -524,7 +649,7 @@ export function triggerStorefrontPurgeForGroups(
  */
 export function triggerStorefrontPurgeForPrefixes(
   prefixes: readonly string[],
-  env?: Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+  env?: StorefrontPurgeEnv,
   options: {
     groups?: readonly string[];
     bumpVersion?: boolean;
@@ -533,34 +658,28 @@ export function triggerStorefrontPurgeForPrefixes(
   } = {},
   executionCtx?: WaitUntilExecutionContext,
 ): void {
-  const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
-  const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
-  const uniqueHtmlPaths = normalizeStorefrontHtmlPaths(options.htmlPaths ?? []);
-  if (
-    uniquePrefixes.length === 0 &&
-    uniqueExactKeys.length === 0 &&
-    uniqueHtmlPaths.length === 0 &&
-    options.bumpVersion !== true
-  ) {
-    return;
-  }
+  const body = buildStorefrontPrefixPurgeBody(prefixes, options);
+  if (!body || !hasStorefrontPurgeConfig(env)) return;
 
-  const purgeUrl = env?.PURGE_URL;
-  const purgeToken = env?.PURGE_TOKEN;
-  if (!purgeUrl || !purgeToken) return;
-
-  const purgePromise = purgeStorefrontForPrefixes(
-    uniquePrefixes,
+  const message = createStorefrontCachePurgeMessage(body, "prefixes");
+  const enqueuePromise = enqueueStorefrontCachePurgeOrFallback(
+    message,
     env,
-    { ...options, exactKeys: uniqueExactKeys, htmlPaths: uniqueHtmlPaths },
-  ).catch((err) =>
-    console.error("[Cache] Storefront prefix purge failed:", err),
+    executionCtx,
+    () =>
+      purgeStorefrontForPrefixes(body.prefixes, env, {
+        groups: body.groups,
+        bumpVersion: body.bumpVersion,
+        exactKeys: body.exactKeys,
+        htmlPaths: body.htmlPaths,
+      }),
+    "[Cache] Storefront prefix purge failed:",
   );
 
   if (executionCtx && typeof executionCtx.waitUntil === "function") {
-    executionCtx.waitUntil(purgePromise);
+    executionCtx.waitUntil(enqueuePromise);
   } else {
-    void purgePromise;
+    void enqueuePromise;
   }
 }
 
@@ -587,15 +706,29 @@ export async function invalidateApiAndScheduleStorefrontGroups(
 ): Promise<void> {
   const normalizedGroups = [...groups];
   await invalidateGroups(normalizedGroups, c.env?.CACHE);
-  triggerStorefrontPurgeForPrefixes(
+  const body = buildStorefrontPrefixPurgeBody(
     getStorefrontPrefixesForGroups(normalizedGroups),
-    c.env,
     {
       groups: normalizedGroups,
       bumpVersion: shouldBumpStorefrontVersion(normalizedGroups),
       htmlPaths: options.htmlPaths,
     },
-    getOptionalExecutionContext(c),
+  );
+  const executionCtx = getOptionalExecutionContext(c);
+  if (!body || !hasStorefrontPurgeConfig(c.env)) return;
+
+  await enqueueStorefrontCachePurgeOrFallback(
+    createStorefrontCachePurgeMessage(body, "api-groups"),
+    c.env,
+    executionCtx,
+    () =>
+      purgeStorefrontForPrefixes(body.prefixes, c.env, {
+        groups: body.groups,
+        bumpVersion: body.bumpVersion,
+        exactKeys: body.exactKeys,
+        htmlPaths: body.htmlPaths,
+      }),
+    "[Cache] Storefront prefix purge failed:",
   );
 }
 
@@ -952,9 +1085,8 @@ export async function invalidateProductAvailabilityCacheSubjects(
     ),
   ]);
 
-  triggerStorefrontPurgeForPrefixes(
+  const body = buildStorefrontPrefixPurgeBody(
     shortcodeInvalidation.storefrontPrefixes,
-    c.env,
     {
       groups: ["products"],
       bumpVersion: shortcodeInvalidation.bumpVersion || shortcodeResult.failed,
@@ -964,7 +1096,22 @@ export async function invalidateProductAvailabilityCacheSubjects(
         ...shortcodeInvalidation.storefrontHtmlPaths,
       ],
     },
-    getOptionalExecutionContext(c),
+  );
+  const executionCtx = getOptionalExecutionContext(c);
+  if (!body || !hasStorefrontPurgeConfig(c.env)) return;
+
+  await enqueueStorefrontCachePurgeOrFallback(
+    createStorefrontCachePurgeMessage(body, "product-availability"),
+    c.env,
+    executionCtx,
+    () =>
+      purgeStorefrontForPrefixes(body.prefixes, c.env, {
+        groups: body.groups,
+        bumpVersion: body.bumpVersion,
+        exactKeys: body.exactKeys,
+        htmlPaths: body.htmlPaths,
+      }),
+    "[Cache] Storefront prefix purge failed:",
   );
 }
 
@@ -994,15 +1141,29 @@ export async function invalidateCatalogCaches(
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];
   await invalidateGroups(groups, c.env?.CACHE);
-  triggerStorefrontPurgeForPrefixes(
+  const body = buildStorefrontPrefixPurgeBody(
     getStorefrontPrefixesForGroups(groups),
-    c.env,
     {
       groups,
       bumpVersion: shouldBumpStorefrontVersion(groups),
       htmlPaths: getCatalogStorefrontHtmlPaths(domain, options.htmlPaths),
     },
-    getOptionalExecutionContext(c),
+  );
+  const executionCtx = getOptionalExecutionContext(c);
+  if (!body || !hasStorefrontPurgeConfig(c.env)) return;
+
+  await enqueueStorefrontCachePurgeOrFallback(
+    createStorefrontCachePurgeMessage(body, `catalog:${domain}`),
+    c.env,
+    executionCtx,
+    () =>
+      purgeStorefrontForPrefixes(body.prefixes, c.env, {
+        groups: body.groups,
+        bumpVersion: body.bumpVersion,
+        exactKeys: body.exactKeys,
+        htmlPaths: body.htmlPaths,
+      }),
+    "[Cache] Storefront prefix purge failed:",
   );
 }
 

@@ -35,7 +35,7 @@ Deep API readiness is exposed at:
 curl -fsS https://api.scalius.com/api/v1/readyz
 ```
 
-Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`, `status: "ready"`, and `checks` entries for `d1`, `api_cache_kv`, `shared_auth_kv`, `r2`, `widget_design_agent_do`, `payment_events_queue`, `order_notifications_queue`, `auth_otp_queue`, and `runtime_config` all reporting `status: "ok"`.
+Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`, `status: "ready"`, and `checks` entries for `d1`, `api_cache_kv`, `shared_auth_kv`, `r2`, `widget_design_agent_do`, `payment_events_queue`, `order_notifications_queue`, `auth_otp_queue`, `storefront_cache_queue`, and `runtime_config` all reporting `status: "ok"`. Runtime config includes the storefront purge URL/token because cache freshness is now a deploy-readiness dependency.
 
 Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, and a per-check `status` of `missing`, `error`, or `timeout`. The endpoint must stay read-only: D1 uses `SELECT 1`, KV uses a read probe, R2 uses `list({ limit: 1 })`, and Queue/DO checks are binding-shape checks only.
 

@@ -589,6 +589,89 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
   });
 
+  it("enqueues scheduled storefront purges when the durable cache queue is configured", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const queueSend = vi.fn<(message: unknown) => Promise<void>>(async () => undefined);
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await invalidateApiAndScheduleStorefrontGroups(["layout"], {
+      env: {
+        CACHE: kv,
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+        STOREFRONT_CACHE_QUEUE: { send: queueSend },
+      } as unknown as Env,
+      executionCtx: { waitUntil } as unknown as ExecutionContext,
+    }, {
+      htmlPaths: ["/about-us?utm_source=test"],
+    });
+
+    expect(queueSend).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(queueSend.mock.calls[0]?.[0]).toMatchObject({
+      type: "storefront.cache_purge",
+      operationId: expect.any(String),
+      groups: ["layout"],
+      prefixes: expect.arrayContaining(["storefront_layout_", "global_header_data"]),
+      htmlPaths: ["/about-us"],
+      bumpVersion: true,
+      source: "api-groups",
+      requestedAt: expect.any(Number),
+    });
+  });
+
+  it("falls back to direct scheduled purge when the durable cache queue send fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      invalidateApiAndScheduleStorefrontGroups(["checkout"], {
+        env: {
+          CACHE: kv,
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+          STOREFRONT_CACHE_QUEUE: {
+            send: vi.fn(async () => {
+              throw new Error("queue unavailable");
+            }),
+          },
+        } as unknown as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      "[Cache] Failed to enqueue storefront cache purge:",
+      expect.any(Error),
+    );
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      groups: ["checkout"],
+      prefixes: expect.arrayContaining(["checkout_config"]),
+      bumpVersion: false,
+    });
+  });
+
   it("does not fail scheduled non-catalog writes when the storefront purge rejects", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("Network connection lost"));
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);

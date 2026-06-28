@@ -13,7 +13,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
     return app.fetch(request, this.env, this.ctx);
   }
 
-  // Queues: payment events, OTP, notifications
+  // Queues: payment events, OTP, notifications, storefront cache purge
   async queue(batch: MessageBatch<Record<string, unknown>>) {
     return handleQueueBatch(batch as Parameters<typeof handleQueueBatch>[0], this.env, this.ctx);
   }

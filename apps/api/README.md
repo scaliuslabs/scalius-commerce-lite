@@ -9,7 +9,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | Handler | Purpose |
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
-| `queue(batch)` | Queues -- payment events, order ingest, OTP, notifications |
+| `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge |
 | `scheduled(controller)` | Cron -- releases orphaned reservation movements, archives stale hosted-payment orders, prunes old/empty abandoned-checkout rows, expired customer OTP challenges, expired/old customer sessions, and expired/old scanner QR claims, and flushes notification outbox records every 15 minutes |
 
 ## Route Organization
@@ -272,15 +272,15 @@ It returns `200` with `status: "ready"` only when required platform dependencies
 - API KV and shared auth KV: bounded read-only probe.
 - R2: bounded `list({ limit: 1 })` probe.
 - Durable Object and Queue bindings: binding-shape checks only; no messages are sent.
-- Runtime config: required public URLs are present.
+- Runtime config: required public URLs and purge credentials are present.
 
 It returns `503` with `status: "degraded"` when a required dependency is missing, errors, or times out. Deployment and smoke scripts should keep `/health` as a shallow liveness check and use `/readyz` for platform readiness.
 
 ## Queue Consumer
 
-`src/queue-consumer.ts` dispatches payment, notification, and OTP messages by type. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.
+`src/queue-consumer.ts` dispatches payment, notification, OTP, and storefront cache purge messages by type. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.
 
-### Payment/Notification/OTP Queues
+### Payment/Notification/OTP/Cache Queues
 
 Messages processed independently with `Promise.allSettled`. Successful messages are acked; failed messages retry with 30-second delay.
 
@@ -297,6 +297,7 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 | `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund (can originate from Polar dashboard) |
 | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status notifications across enabled channels (email, SMS via 4 providers, Meta WhatsApp template message, FCM push). Queue messages with `outboxId` create per-channel delivery receipts so retries skip accepted/skipped targets and keep the parent outbox retryable while any enabled target is retryable. |
 | `auth.send_otp` | Email / WhatsApp / SMS | Claim `auth_otp_delivery_receipts`, skip terminal/expired OTP attempts, then send via email (`sendEmail()` with Cloudflare Email Service default and Resend fallback), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers). Resend receives `deliveryKey` as `Idempotency-Key`; GenNet receives a deterministic receipt-derived `csms_id`. |
+| `storefront.cache_purge` | `purgeStorefrontForPrefixes()` | Replay the normalized storefront purge payload through `/api/purge-cache`; non-2xx/missing-config failures retry through Cloudflare Queues/DLQ instead of being lost in `waitUntil()` logs. |
 
 ## How to Add a New Endpoint
 

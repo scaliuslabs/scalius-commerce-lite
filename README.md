@@ -72,7 +72,7 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Auth | Better Auth (email/password + optional 2FA with TOTP/email OTP) |
 | Caching | Cloudflare KV + in-memory L1 + Cache API L2 (storefront) |
 | Storage | Cloudflare R2 for media + Cloudflare Image Resizing |
-| Queues | Cloudflare Queues (payments, notifications, OTP) |
+| Queues | Cloudflare Queues (payments, notifications, OTP, storefront cache purge) |
 | Payments | Stripe, SSLCommerz, Polar, COD |
 | Delivery | Pathao, Steadfast (webhook-driven tracking) |
 | Notifications | Email (Cloudflare Email default, Resend fallback), SMS (4 providers), Firebase Cloud Messaging |
@@ -103,7 +103,7 @@ flowchart TB
     subgraph API ["API Worker (Hono)"]
         direction TB
         HonoApp["261 OpenAPI paths / 359 operations<br/>(@hono/zod-openapi)"]
-        QueueConsumer["Queue Consumer<br/>(payments, notifications, OTP)"]
+        QueueConsumer["Queue Consumer<br/>(payments, notifications,<br/>OTP, cache purge)"]
         CoreModules["@scalius/core<br/>(domain services)"]
     end
 
@@ -111,7 +111,7 @@ flowchart TB
         D1[(D1 Database<br/>Drizzle schema)]
         KV[(KV Namespaces<br/>cache + sessions + auth)]
         R2[(R2 Bucket<br/>media storage)]
-        Queues["3 Queues<br/>(payment-events, notifications,<br/>auth-otp)"]
+        Queues["4 Queues<br/>(payment-events, notifications,<br/>auth-otp, storefront-cache)"]
     end
 
     subgraph External ["External Services"]
@@ -312,6 +312,7 @@ The generated OpenAPI spec and `packages/api-client/openapi.json` are the source
 | `payment-events` | `payment.stripe.*`, `payment.sslcommerz.*`, `payment.polar.*` | 10 |
 | `order-notifications` | `order.notification` (9 types) | 20 |
 | `auth-otp` | `auth.send_otp` (email, SMS, WhatsApp) | 10 |
+| `storefront-cache` | `storefront.cache_purge` (durable purge retry) | 10 |
 
 ### Response Contract
 

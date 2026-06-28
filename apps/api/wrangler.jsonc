@@ -74,6 +74,10 @@
       {
         "binding": "AUTH_OTP_QUEUE",
         "queue": "auth-otp"
+      },
+      {
+        "binding": "STOREFRONT_CACHE_QUEUE",
+        "queue": "storefront-cache"
       }
     ],
     "consumers": [
@@ -103,6 +107,13 @@
         "max_batch_timeout": 2,
         "max_retries": 5,
         "dead_letter_queue": "auth-otp-dlq"
+      },
+      {
+        "queue": "storefront-cache",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "storefront-cache-dlq"
       }
     ]
   },
