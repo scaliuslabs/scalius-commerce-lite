@@ -762,12 +762,16 @@ describe("admin route graph boundaries", () => {
     expect(loaderSource).toContain(
       "void queryClient.prefetchQuery(dashboardSummaryQueryOptions())",
     );
+    expect(loaderSource).not.toContain("dashboardActivityQueryOptions()");
     expect(loaderSource).not.toContain(
       "await queryClient.ensureQueryData(dashboardSummaryQueryOptions())",
     );
     expect(loaderSource).not.toContain("await warmRouteQuery");
     expect(source).toContain("isSummaryInitialLoading");
     expect(source).toContain("DashboardSummaryLoading");
+    expect(source).toContain("useDashboardActivityEnabled");
+    expect(source).toContain("enabled: shouldFetchActivity");
+    expect(source).toContain("requestIdleCallback");
     expect(currencyHookSource).toContain(
       "~/lib/api-query-options/currency",
     );
