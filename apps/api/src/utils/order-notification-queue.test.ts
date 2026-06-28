@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     recordAndEnqueueOrderNotification: vi.fn(),
+    buildOrderBalancePaidNotificationDedupeKey: vi.fn((orderId: string) => `payment_balance_paid:${orderId}`),
     buildOrderCreatedNotificationDedupeKey: vi.fn((orderId: string) => `order_created:${orderId}`),
     buildOrderStatusNotificationDedupeKey: vi.fn((options: {
         orderId: string;
@@ -12,12 +13,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/notifications", () => ({
+    buildOrderBalancePaidNotificationDedupeKey: mocks.buildOrderBalancePaidNotificationDedupeKey,
     buildOrderCreatedNotificationDedupeKey: mocks.buildOrderCreatedNotificationDedupeKey,
     buildOrderStatusNotificationDedupeKey: mocks.buildOrderStatusNotificationDedupeKey,
     recordAndEnqueueOrderNotification: mocks.recordAndEnqueueOrderNotification,
 }));
 
 import {
+    enqueueOrderBalancePaidNotificationForOrder,
     enqueueOrderCreatedNotificationForOrder,
     enqueueOrderNotificationsForStatus,
     enqueueOrderRefundedNotificationForOrder,
@@ -213,6 +216,39 @@ describe("order notification queue helpers", () => {
                 dedupeKey: "refund:order_1:refund_order_1_4:full",
                 notificationType: "order_refunded",
                 source: "orders-refund",
+            }),
+        }));
+    });
+
+    it("enqueues balance-paid notifications with order-level dedupe", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+        ]);
+        const queue = { send: vi.fn(async () => undefined) };
+
+        const result = await enqueueOrderBalancePaidNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            source: "payment-sslcommerz-balance-paid",
+            amount: 75,
+            gateway: "sslcommerz",
+        });
+
+        expect(result).toEqual({ orderId: "order_1", outboxId: "outbox_order_1", enqueued: true });
+        expect(queue.send).toHaveBeenCalledWith({
+            type: "order.notification",
+            orderId: "order_1",
+            customerEmail: "buyer@example.com",
+            customerName: "Buyer",
+            notificationType: "payment_balance_paid",
+            data: { amount: 75, gateway: "sslcommerz" },
+        });
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(expect.objectContaining({
+            notification: expect.objectContaining({
+                dedupeKey: "payment_balance_paid:order_1",
+                notificationType: "payment_balance_paid",
+                source: "payment-sslcommerz-balance-paid",
             }),
         }));
     });

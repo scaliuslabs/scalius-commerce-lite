@@ -33,7 +33,10 @@ import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/c
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
-import { enqueueOrderCreatedNotificationForOrder } from "./utils/order-notification-queue";
+import {
+  enqueueOrderBalancePaidNotificationForOrder,
+  enqueueOrderCreatedNotificationForOrder,
+} from "./utils/order-notification-queue";
 import {
   claimAuthOtpDeliveryReceipt,
   createAuthOtpDeliveryTarget,
@@ -58,6 +61,7 @@ import {
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
 type PaymentWebhookCompletionStatus = "processed" | "manual_reconciliation";
+type ConfirmedPaymentType = "full" | "deposit" | "balance";
 
 // Mirrors apps/api/wrangler*.jsonc for PAYMENT_EVENTS_QUEUE. Cloudflare delivers
 // the first attempt plus max_retries additional attempts before DLQ/deletion.
@@ -82,6 +86,10 @@ function assertPaymentConfirmed(
   return "processed";
 }
 
+function normalizeConfirmedPaymentType(value: unknown): ConfirmedPaymentType {
+  return value === "deposit" || value === "balance" || value === "full" ? value : "full";
+}
+
 async function enqueueOrderCreatedAfterPaymentConfirmed(
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -99,6 +107,38 @@ async function enqueueOrderCreatedAfterPaymentConfirmed(
   if (!result.enqueued) {
     console.warn(
       `[Queue] order_created notification for confirmed ${gateway} order ${orderId} recorded but not enqueued: ${result.skippedReason}`,
+    );
+  }
+}
+
+async function enqueueOrderNotificationAfterPaymentConfirmed(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  options: {
+    orderId: string;
+    gateway: "stripe" | "sslcommerz" | "polar";
+    paymentType: ConfirmedPaymentType;
+    amount: number;
+  },
+): Promise<void> {
+  if (options.paymentType !== "balance") {
+    await enqueueOrderCreatedAfterPaymentConfirmed(db, env, options.orderId, options.gateway);
+    return;
+  }
+
+  const result = await enqueueOrderBalancePaidNotificationForOrder({
+    db,
+    queue: env.ORDER_NOTIFICATIONS_QUEUE,
+    orderId: options.orderId,
+    source: `payment-${options.gateway}-balance-paid`,
+    amount: options.amount,
+    gateway: options.gateway,
+    retryOnQueueFailure: true,
+  });
+
+  if (!result.enqueued) {
+    console.warn(
+      `[Queue] payment_balance_paid notification for confirmed ${options.gateway} order ${options.orderId} recorded but not enqueued: ${result.skippedReason}`,
     );
   }
 }
@@ -342,10 +382,11 @@ async function processQueueMessage(
       // e.g. USD/BDT: ÷100, JPY: ÷1, BHD: ÷1000
       const stripeDecimals = getDecimalPlaces(payload.currency);
       const amountInMajor = payload.amount / Math.pow(10, stripeDecimals);
+      const paymentType = normalizeConfirmedPaymentType(payload.metadata?.paymentType);
       const result = await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "stripe",
-        paymentType: (payload.metadata?.paymentType as "full" | "deposit" | "balance") ?? "full",
+        paymentType,
         stripePaymentIntentId: payload.paymentIntentId,
         stripeChargeId: payload.chargeId,
         amount: amountInMajor,
@@ -354,7 +395,12 @@ async function processQueueMessage(
       const completionStatus = assertPaymentConfirmed(result, "stripe", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
-        await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "stripe");
+        await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
+          orderId: payload.orderId,
+          gateway: "stripe",
+          paymentType,
+          amount: amountInMajor,
+        });
       }
       paymentWebhookStatus = completionStatus;
       paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
@@ -407,10 +453,11 @@ async function processQueueMessage(
     // ── SSLCommerz ─────────────────────────────────────────────────────────
 
     case "payment.sslcommerz.confirmed": {
+      const paymentType = normalizeConfirmedPaymentType(payload.paymentType);
       const result = await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "sslcommerz",
-        paymentType: (payload.paymentType as "full" | "deposit" | "balance") ?? "full",
+        paymentType,
         sslcommerzTranId: payload.tranId,
         sslcommerzValId: payload.valId,
         sslcommerzBankTranId: payload.bankTranId,
@@ -420,7 +467,12 @@ async function processQueueMessage(
       const completionStatus = assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
-        await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "sslcommerz");
+        await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
+          orderId: payload.orderId,
+          gateway: "sslcommerz",
+          paymentType,
+          amount: payload.amount,
+        });
       }
       paymentWebhookStatus = completionStatus;
       paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
@@ -462,11 +514,12 @@ async function processQueueMessage(
       const recordAmount = originalAmount != null && !isNaN(originalAmount)
         ? originalAmount
         : gatewayAmountMajor;
+      const paymentType = normalizeConfirmedPaymentType(payload.paymentType);
 
       const result = await processPaymentConfirmed(db, {
         orderId: payload.orderId,
         paymentGateway: "polar",
-        paymentType: (payload.paymentType as "full" | "deposit" | "balance") ?? "full",
+        paymentType,
         polarCheckoutId: payload.checkoutId,
         amount: recordAmount,
         metadata: {
@@ -479,7 +532,12 @@ async function processQueueMessage(
       const completionStatus = assertPaymentConfirmed(result, "polar", payload.orderId);
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
-        await enqueueOrderCreatedAfterPaymentConfirmed(db, env, payload.orderId, "polar");
+        await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
+          orderId: payload.orderId,
+          gateway: "polar",
+          paymentType,
+          amount: recordAmount,
+        });
       }
       paymentWebhookStatus = completionStatus;
       paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {

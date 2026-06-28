@@ -254,7 +254,7 @@ export function NotificationChannelsBuilder() {
             <div>
               <CardTitle className="text-base">Customer Notification Channels</CardTitle>
               <CardDescription className="mt-1">
-                Choose how your <strong>customers</strong> are notified about their order status changes.
+                Choose how your <strong>customers</strong> are notified about order events.
                 These notifications are sent directly to the customer via their preferred channel.
               </CardDescription>
             </div>
@@ -319,7 +319,7 @@ export function NotificationChannelsBuilder() {
               <thead>
                 <tr className="bg-muted/50 border-b">
                   <th className="text-left py-3 px-4 font-medium">
-                    Order Status
+                    Order Event
                   </th>
                   {CHANNELS.map((ch) => (
                     <th
@@ -393,7 +393,7 @@ export function NotificationChannelsBuilder() {
                   <thead>
                     <tr className="bg-muted/50 border-b">
                       <th className="text-left py-3 px-4 font-medium">
-                        Order Status
+                        Order Event
                       </th>
                       {ADMIN_CHANNELS.map((ch) => (
                         <th

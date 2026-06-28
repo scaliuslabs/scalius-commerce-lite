@@ -61,6 +61,10 @@ export function buildOrderCreatedNotificationDedupeKey(orderId: string): string 
     return `order_created:${orderId}`;
 }
 
+export function buildOrderBalancePaidNotificationDedupeKey(orderId: string): string {
+    return `payment_balance_paid:${orderId}`;
+}
+
 export function buildOrderStatusNotificationDedupeKey(options: {
     orderId: string;
     notificationType: OrderNotificationType;

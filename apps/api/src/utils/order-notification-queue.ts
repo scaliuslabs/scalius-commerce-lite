@@ -1,6 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import {
+    buildOrderBalancePaidNotificationDedupeKey,
     buildOrderCreatedNotificationDedupeKey,
     buildOrderStatusNotificationDedupeKey,
     recordAndEnqueueOrderNotification,
@@ -91,6 +92,52 @@ export async function enqueueOrderCreatedNotificationForOrder(options: {
         enqueued: result.enqueued,
         skippedReason: result.skippedReason,
     };
+}
+
+export async function enqueueOrderBalancePaidNotificationForOrder(options: {
+    db: Database;
+    queue: OrderNotificationQueue | undefined;
+    orderId: string;
+    source: string;
+    amount?: number;
+    gateway?: string;
+    retryOnQueueFailure?: boolean;
+}): Promise<EnqueueOrderNotificationResult> {
+    const orderRows = await selectSingleOrder(options.db, options.orderId);
+    const order = orderRows[0];
+    if (!order) {
+        console.warn(`[${options.source}] Skipped payment_balance_paid notification for missing order ${options.orderId}`);
+        return {
+            orderId: options.orderId,
+            enqueued: false,
+            skippedReason: "order_missing",
+        };
+    }
+
+    const data = {
+        ...(typeof options.amount === "number" && Number.isFinite(options.amount) ? { amount: options.amount } : {}),
+        ...(options.gateway ? { gateway: options.gateway } : {}),
+    };
+    const result = await enqueueOrderNotificationMessage({
+        db: options.db,
+        queue: options.queue,
+        message: {
+            type: "order.notification",
+            orderId: options.orderId,
+            customerEmail: order.customerEmail ?? undefined,
+            customerName: order.customerName || "Customer",
+            notificationType: "payment_balance_paid",
+            data: Object.keys(data).length > 0 ? data : undefined,
+        },
+        dedupeKey: buildOrderBalancePaidNotificationDedupeKey(options.orderId),
+        source: options.source,
+    });
+
+    if (options.retryOnQueueFailure && result.skippedReason === "queue_failed") {
+        throw new Error(`payment_balance_paid notification queue send failed for ${options.orderId}`);
+    }
+
+    return result;
 }
 
 export async function enqueueOrderRefundedNotificationForOrder(options: {

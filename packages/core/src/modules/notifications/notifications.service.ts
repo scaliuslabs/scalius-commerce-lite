@@ -363,6 +363,7 @@ export async function sendOrderNotificationEmail(
         order_cancelled: `Order #${orderId} Cancelled`,
         order_returned: `Order #${orderId} Returned`,
         order_refunded: `Order #${orderId} Refunded`,
+        payment_balance_paid: `Order #${orderId} Balance Paid`,
     };
 
     const htmlMessages: Record<OrderNotificationType, string> = {
@@ -375,6 +376,7 @@ export async function sendOrderNotificationEmail(
         order_cancelled: `Your order <strong>#${orderId}</strong> has been cancelled, ${safeName}. If you have questions, please contact our support team.`,
         order_returned: `Your order <strong>#${orderId}</strong> has been marked as returned, ${safeName}. If you have questions, please contact our support team.`,
         order_refunded: `Your order <strong>#${orderId}</strong> has been refunded, ${safeName}. The refund will be processed to your original payment method. If you have questions, please contact our support team.`,
+        payment_balance_paid: `We've received the remaining payment for your order <strong>#${orderId}</strong>, ${safeName}. Your order is now fully paid.`,
     };
 
     const smsMessages: Record<OrderNotificationType, string> = {
@@ -387,6 +389,7 @@ export async function sendOrderNotificationEmail(
         order_cancelled: `Hi ${name}, your order #${orderId} has been cancelled. Contact us if you have questions.`,
         order_returned: `Hi ${name}, your order #${orderId} has been marked as returned. Contact us if you have questions.`,
         order_refunded: `Hi ${name}, your order #${orderId} has been refunded. Contact us if you have questions.`,
+        payment_balance_paid: `Hi ${name}, we received the remaining payment for order #${orderId}. Your order is now fully paid.`,
     };
 
     const receiptEnabled = Boolean(db && options.outboxId);
