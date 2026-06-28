@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   getEncryptionKey: vi.fn(() => "test-key"),
   getCredentialEncryptionKey: vi.fn(() => "credential-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
+  enqueueOrderBalancePaidNotificationForOrder: vi.fn(),
   enqueueOrderCreatedNotificationForOrder: vi.fn(),
   getAdminNotificationChannels: vi.fn(),
   claimOrderNotificationOutboxForProcessing: vi.fn(),
@@ -99,6 +100,7 @@ vi.mock("./utils/cache-invalidation", () => ({
 }));
 
 vi.mock("./utils/order-notification-queue", () => ({
+  enqueueOrderBalancePaidNotificationForOrder: mocks.enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder: mocks.enqueueOrderCreatedNotificationForOrder,
 }));
 
@@ -227,6 +229,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
       outboxId: "outbox_order_1",
       enqueued: true,
     });
+    mocks.enqueueOrderBalancePaidNotificationForOrder.mockResolvedValue({
+      orderId: "order_1",
+      outboxId: "outbox_balance_1",
+      enqueued: true,
+    });
     mocks.claimOrderNotificationOutboxForProcessing.mockResolvedValue({
       claimed: true,
       outboxId: "outbox_1",
@@ -341,6 +348,130 @@ describe("handleQueueBatch payment confirmation retries", () => {
       }),
     );
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
+  });
+
+  it("enqueues balance-paid notifications instead of order-created notifications for balance payments", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    const notificationQueue = { send: vi.fn(async () => undefined) };
+
+    const message = createMessage({
+      type: "payment.sslcommerz.confirmed",
+      orderId: "order-balance",
+      tranId: "tran_balance",
+      valId: "val_balance",
+      bankTranId: "bank_balance",
+      amount: 750,
+      currency: "BDT",
+      paymentType: "balance",
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+    } as unknown as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.processPaymentConfirmed).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({
+        orderId: "order-balance",
+        paymentGateway: "sslcommerz",
+        paymentType: "balance",
+        amount: 750,
+      }),
+    );
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderBalancePaidNotificationForOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: { id: "db" },
+        queue: notificationQueue,
+        orderId: "order-balance",
+        source: "payment-sslcommerz-balance-paid",
+        amount: 750,
+        gateway: "sslcommerz",
+        retryOnQueueFailure: true,
+      }),
+    );
+  });
+
+  it("enqueues Stripe balance-paid notifications using major currency amount", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    const notificationQueue = { send: vi.fn(async () => undefined) };
+
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      orderId: "order-stripe-balance",
+      paymentIntentId: "pi_balance",
+      amount: 6500,
+      currency: "bdt",
+      metadata: { paymentType: "balance" },
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+    } as unknown as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.processPaymentConfirmed).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({
+        orderId: "order-stripe-balance",
+        paymentGateway: "stripe",
+        paymentType: "balance",
+        amount: 65,
+      }),
+    );
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderBalancePaidNotificationForOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queue: notificationQueue,
+        orderId: "order-stripe-balance",
+        source: "payment-stripe-balance-paid",
+        amount: 65,
+        gateway: "stripe",
+        retryOnQueueFailure: true,
+      }),
+    );
+  });
+
+  it("enqueues Polar balance-paid notifications using the original local amount", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    const notificationQueue = { send: vi.fn(async () => undefined) };
+
+    const message = createMessage({
+      type: "payment.polar.confirmed",
+      orderId: "order-polar-balance",
+      checkoutId: "polar_checkout_1",
+      amount: 840,
+      currency: "usd",
+      paymentType: "balance",
+      metadata: { originalAmount: "1000", exchangeRate: "0.0084" },
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+    } as unknown as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.processPaymentConfirmed).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({
+        orderId: "order-polar-balance",
+        paymentGateway: "polar",
+        paymentType: "balance",
+        amount: 1000,
+      }),
+    );
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderBalancePaidNotificationForOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queue: notificationQueue,
+        orderId: "order-polar-balance",
+        source: "payment-polar-balance-paid",
+        amount: 1000,
+        gateway: "polar",
+        retryOnQueueFailure: true,
+      }),
+    );
   });
 
   it("marks webhook events processed after confirmed payment side effects succeed", async () => {
@@ -553,6 +684,44 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.objectContaining({
         orderId: "order-ssl",
         source: "payment-sslcommerz-confirmed",
+        retryOnQueueFailure: true,
+      }),
+    );
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  });
+
+  it("retries confirmed balance payment messages when balance-paid notification enqueue fails", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
+    mocks.enqueueOrderBalancePaidNotificationForOrder.mockRejectedValue(new Error("queue unavailable"));
+
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      orderId: "order-balance",
+      paymentIntentId: "pi_balance",
+      amount: 6500,
+      currency: "bdt",
+      metadata: { paymentType: "balance" },
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.processPaymentConfirmed).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({
+        orderId: "order-balance",
+        paymentGateway: "stripe",
+        paymentType: "balance",
+        amount: 65,
+      }),
+    );
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderBalancePaidNotificationForOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "order-balance",
+        source: "payment-stripe-balance-paid",
+        amount: 65,
+        gateway: "stripe",
         retryOnQueueFailure: true,
       }),
     );

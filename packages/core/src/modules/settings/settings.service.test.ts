@@ -59,6 +59,17 @@ describe("notification channel settings", () => {
         });
     });
 
+    it("adds new notification events with email defaults when reading older saved settings", async () => {
+        const db = createSettingsDb(JSON.stringify({
+            order_created: ["email"],
+        }));
+
+        await expect(getNotificationChannels(db as never)).resolves.toMatchObject({
+            order_created: ["email"],
+            payment_balance_paid: ["email"],
+        });
+    });
+
     it("rejects customer push notification saves until customer push exists end to end", async () => {
         const db = createSettingsDb();
 

@@ -1,6 +1,6 @@
 # Notifications
 
-Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp, and admin FCM push. Channel preferences are per-status configurable.
+Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp, and admin FCM push. Channel preferences are per order event configurable.
 
 ## Connection Status
 
@@ -51,9 +51,9 @@ Sends FCM push notifications to all active admin devices about a new order.
 
 Sends transactional order emails to customers. Connected via queue.
 
-**Channel Preference Checking**: When a `db` parameter is provided, the function checks notification channel preferences via `getNotificationChannels()` from the settings service before sending. If the email channel is disabled for the given status, the email is silently skipped. If the check fails, it defaults to sending email.
+**Channel Preference Checking**: When a `db` parameter is provided, the function checks notification channel preferences via `getNotificationChannels()` from the settings service before sending. If the email channel is disabled for the given event, the email is silently skipped. If the check fails, it defaults to sending email.
 
-**Supported email types** (9 total):
+**Supported email types** (10 total):
 - `order_created` -- "We've received your order"
 - `order_confirmed` -- "Your order has been confirmed"
 - `order_processing` -- "Your order is being processed"
@@ -63,12 +63,13 @@ Sends transactional order emails to customers. Connected via queue.
 - `order_cancelled` -- "Your order has been cancelled"
 - `order_returned` -- "Your order return has been processed"
 - `order_refunded` -- "Your refund has been processed"
+- `payment_balance_paid` -- "Your remaining payment has been received"
 
 Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Cloudflare Email by default, Resend fallback). Receipt-mode email sends pass the deterministic receipt key to Resend as `Idempotency-Key`; Cloudflare Email returns `messageId`, which is stored on the receipt.
 
-**SMS channel dispatch**: When SMS is enabled for a status, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. Receipt-mode SMS stores provider refs; GenNet receives a deterministic receipt-derived `csms_id` so provider retries can dedupe.
+**SMS channel dispatch**: When SMS is enabled for an event, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. Receipt-mode SMS stores provider refs; GenNet receives a deterministic receipt-derived `csms_id` so provider retries can dedupe.
 
-**WhatsApp channel dispatch**: When WhatsApp is enabled for a status, the function reads the order's normalized `customerPhone`, resolves the shared encrypted Meta Cloud API credentials from `settings.whatsapp/access_token` with legacy plaintext fallback, reads the order template settings from `settings.notifications`, and sends a template message through `sendWhatsAppTemplateMessage()`. Reads may use the tolerant credential key for old rows, but migration/legacy cleanup is gated by the dedicated `migrationEncryptionKey` passed from the API queue consumer. The reusable order template receives 4 body variables: customer name, order ID, order status label, and tracking ID or `-`. Missing/invalid order phones, missing Meta credentials, paused templates, and non-retryable provider validation errors become skipped receipts; malformed 200 responses, 5xx, 408/409/429, and network failures remain retryable.
+**WhatsApp channel dispatch**: When WhatsApp is enabled for an event, the function reads the order's normalized `customerPhone`, resolves the shared encrypted Meta Cloud API credentials from `settings.whatsapp/access_token` with legacy plaintext fallback, reads the order template settings from `settings.notifications`, and sends a template message through `sendWhatsAppTemplateMessage()`. Reads may use the tolerant credential key for old rows, but migration/legacy cleanup is gated by the dedicated `migrationEncryptionKey` passed from the API queue consumer. The reusable order template receives 4 body variables: customer name, order ID, event label, and tracking ID or `-`. Missing/invalid order phones, missing Meta credentials, paused templates, and non-retryable provider validation errors become skipped receipts; malformed 200 responses, 5xx, 408/409/429, and network failures remain retryable.
 
 **Current provider gaps**: Email has a Cloudflare-native default and external fallback. Admin push is still Firebase-only, SMS is Bangladesh-provider-only, and Meta WhatsApp has no first-class upstream idempotency key; local D1 receipts fence retries but a Worker crash after provider acceptance and before receipt persistence can still duplicate on Meta.
 
@@ -77,7 +78,7 @@ Uses inline HTML templates with basic responsive styling. Customer names and tra
 The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification-related message types:
 
 ### `order.notification`
-- Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
+- Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, confirmed balance-payment queue messages, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
 - Handler: Calls `sendOrderNotificationEmail()` with `db` for channel checking and delivery receipts, and `sendOrderNotification()` for FCM push to admin devices when push is enabled
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: Cloudflare auto-retry up to 3 times, 30s delay on failure

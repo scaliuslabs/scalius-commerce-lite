@@ -15,6 +15,7 @@ export {
   markOrderNotificationDeliveryReceiptSkipped,
 } from "./order-notification-delivery-receipts";
 export {
+  buildOrderBalancePaidNotificationDedupeKey,
   buildOrderCreatedNotificationDedupeKey,
   buildOrderStatusNotificationDedupeKey,
   claimOrderNotificationOutboxForProcessing,

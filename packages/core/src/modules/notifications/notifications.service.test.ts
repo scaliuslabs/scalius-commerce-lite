@@ -186,6 +186,7 @@ describe("order notification dispatch", () => {
             "order_cancelled",
             "order_returned",
             "order_refunded",
+            "payment_balance_paid",
         ]);
     });
 
@@ -218,6 +219,52 @@ describe("order notification dispatch", () => {
             to: "+8801700000000",
             message:
                 "Hi SMS Customer, your order #order_1 has been refunded. Contact us if you have questions.",
+        });
+    });
+
+    it("renders balance-paid customer copy for email and SMS", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            payment_balance_paid: ["email", "sms"],
+        });
+        mocks.sendEmail.mockResolvedValue({
+            success: true,
+            provider: "cloudflare",
+            providerRef: "cf_msg_1",
+            rawStatus: "accepted",
+        });
+        mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_1" });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "Test SMS",
+            sendSms: mocks.sendSms,
+        });
+
+        await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Balance Buyer",
+            "order_balance",
+            "payment_balance_paid",
+            { amount: 75 },
+            db,
+            { encryptionKey: "credential-key" },
+        );
+
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                to: "buyer@example.com",
+                subject: "Order #order_balance Balance Paid",
+                html: expect.stringContaining("remaining payment"),
+            }),
+            {
+                db,
+                env: undefined,
+                encryptionKey: "credential-key",
+            },
+        );
+        expect(mocks.sendSms).toHaveBeenCalledWith({
+            to: "+8801700000000",
+            message:
+                "Hi Balance Buyer, we received the remaining payment for order #order_balance. Your order is now fully paid.",
         });
     });
 
