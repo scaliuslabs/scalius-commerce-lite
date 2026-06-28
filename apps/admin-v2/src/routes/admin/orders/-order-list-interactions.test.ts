@@ -221,4 +221,35 @@ describe("order list interactions", () => {
     expect(source).not.toContain("shiftKey");
     expect(source).toContain("onToggleSelection: (id: string) => void");
   });
+
+  it("keeps order list actions aligned with granular order permissions", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
+    const columnsSource = readFileSync(ORDER_COLUMNS_SOURCE, "utf8");
+    const mobileSource = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
+
+    expect(routeSource).toContain("useOrderActionPermissions");
+    expect(routeSource).toContain("orderActions={orderActions}");
+    expect(routeSource).toContain("orderActions.canBulkDeleteOrders");
+    expect(routeSource).toContain("orderActions.canBulkShipOrders");
+    expect(routeSource).toContain("orderActions.canChangeOrderStatus");
+
+    expect(toolbarSource).toContain("orderActions.canCreateOrders");
+    expect(toolbarSource).toContain("orderActions.canBulkDeleteOrders");
+    expect(toolbarSource).toContain("orderActions.canBulkShipOrders");
+
+    expect(columnsSource).toContain("opts.orderActions.canEditOrders");
+    expect(columnsSource).toContain("opts.orderActions.canDeleteOrders");
+    expect(columnsSource).toContain("opts.orderActions.canRestoreOrders");
+    expect(columnsSource).toContain("opts.orderActions.canChangeOrderStatus");
+    expect(columnsSource).toContain("opts.orderActions.canManageOrderShipments");
+    expect(columnsSource).toContain("opts.orderActions.canSelectOrdersForBulkActions");
+
+    expect(mobileSource).toContain("orderActions.canSelectOrdersForBulkActions");
+    expect(mobileSource).toContain("orderActions.canEditOrders");
+    expect(mobileSource).toContain("orderActions.canDeleteOrders");
+    expect(mobileSource).toContain("orderActions.canRestoreOrders");
+    expect(mobileSource).toContain("orderActions.canChangeOrderStatus");
+    expect(mobileSource).toContain("orderActions.canManageOrderShipments");
+  });
 });

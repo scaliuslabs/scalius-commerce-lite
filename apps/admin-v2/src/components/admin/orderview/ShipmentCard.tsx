@@ -23,6 +23,7 @@ import { useCreateOrderShipment } from "@/lib/api-mutations/orders";
 import { queryKeys } from "@/lib/query-keys";
 import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
 import { formatOrderDate } from "./formatters";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 
 interface ShipmentCardProps {
   order: Order;
@@ -120,10 +121,12 @@ const ShipmentHistoryItem = ({
   shipment,
   orderId,
   onStatusUpdated,
+  canManageShipments,
 }: {
   shipment: OrderShipment;
   orderId: string;
   onStatusUpdated: () => void;
+  canManageShipments: boolean;
 }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
 
@@ -149,7 +152,7 @@ const ShipmentHistoryItem = ({
                     : undefined,
             }}
             onStatusUpdated={onStatusUpdated}
-            canRefresh={Boolean(shipment.providerId)}
+            canRefresh={canManageShipments && Boolean(shipment.providerId)}
           />
         </div>
         <Button
@@ -224,12 +227,14 @@ const ShipmentHistoryItem = ({
 
 export function ShipmentCard({ order }: ShipmentCardProps) {
   const queryClient = useQueryClient();
+  const orderActions = useOrderActionPermissions();
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
   };
 
-  const hasCreateShipmentActions = order.items.length > 0;
+  const hasCreateShipmentActions =
+    orderActions.canManageOrderShipments && order.items.length > 0;
   const hasShipments = order.shipments && order.shipments.length > 0;
 
   return (
@@ -254,6 +259,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                   shipment={shipment}
                   orderId={order.id}
                   onStatusUpdated={handleRefresh}
+                  canManageShipments={orderActions.canManageOrderShipments}
                 />
               ))}
             </div>

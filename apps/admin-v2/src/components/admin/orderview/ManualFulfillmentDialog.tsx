@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateFulfillmentShipment } from "@/lib/api-mutations/orders";
 import type { Order, OrderItem } from "./types";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 
 const FULFILLMENT_READY_ORDER_STATUSES = new Set(["confirmed", "shipped"]);
 const FULFILLABLE_ITEM_STATUSES = new Set(["pending", "picked", "packed"]);
@@ -55,6 +56,7 @@ function cleanOptional(value: string) {
 }
 
 export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps) {
+  const orderActions = useOrderActionPermissions();
   const [open, setOpen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [courierName, setCourierName] = useState("Own courier");
@@ -75,6 +77,7 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
   );
   const orderStatus = normalizeStatus(order.status);
   const canCreateShipment =
+    orderActions.canManageOrderShipments &&
     FULFILLMENT_READY_ORDER_STATUSES.has(orderStatus) &&
     fulfillableItemIds.length > 0 &&
     !refundLocked;
@@ -106,6 +109,12 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!orderActions.canManageOrderShipments) {
+      toast.error("Fulfillment unavailable", {
+        description: "Your role can view orders but cannot manage shipments.",
+      });
+      return;
+    }
     if (refundLocked) {
       toast.error("Order locked", { description: "Complete or reconcile the active refund before creating fulfillments." });
       return;
@@ -144,7 +153,9 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
 
   const triggerTitle = canCreateShipment
     ? "Create own courier fulfillment"
-    : refundLocked
+    : !orderActions.canManageOrderShipments
+      ? "Requires shipment management permission"
+      : refundLocked
       ? "Refund recovery is active"
       : "Confirm the order before fulfillment";
 

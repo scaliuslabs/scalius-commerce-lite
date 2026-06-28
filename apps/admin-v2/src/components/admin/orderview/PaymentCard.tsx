@@ -50,8 +50,7 @@ import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { queryKeys } from "@/lib/query-keys";
 import { useUpdateOrderCod, useRefundOrder } from "@/lib/api-mutations/orders";
 import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
-import { usePermissions } from "@/contexts/PermissionContext";
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
 import { useHydrated } from "@/hooks/use-hydrated";
 
@@ -202,8 +201,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const queryClient = useQueryClient();
   const { symbol } = useCurrency();
   const isHydrated = useHydrated();
-  const { hasPermission } = usePermissions();
-  const canRefund = hasPermission(PERMISSIONS.ORDERS_REFUND);
+  const orderActions = useOrderActionPermissions();
+  const canRefund = orderActions.canRefundOrders;
+  const canUpdateCod = orderActions.canUpdateOrderCod;
   const [historyExpanded, setHistoryExpanded] = React.useState(false);
 
   // Refund state
@@ -266,6 +266,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
   function submitCODAction() {
     if (!codAction) return;
+    if (!canUpdateCod) {
+      toast.error("COD update unavailable", {
+        description: "Your role can view orders but cannot update COD status.",
+      });
+      return;
+    }
     if (isRefundLocked) {
       toast.error("Order locked", { description: "Complete or reconcile the active refund before changing COD status." });
       return;
@@ -592,7 +598,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               )}
 
               {/* COD action buttons -- only when not yet collected/returned */}
-              {(!codTracking || !["collected", "returned"].includes(codTracking.codStatus)) && (
+              {canUpdateCod && (!codTracking || !["collected", "returned"].includes(codTracking.codStatus)) && (
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -781,7 +787,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button onClick={submitCODAction} disabled={codMutation.isPending}>
+            <Button onClick={submitCODAction} disabled={codMutation.isPending || !canUpdateCod}>
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Confirm Collection
             </Button>
@@ -828,7 +834,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending}>
+            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canUpdateCod}>
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Record Failure
             </Button>
@@ -847,7 +853,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending}>
+            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canUpdateCod}>
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Mark Returned
             </Button>

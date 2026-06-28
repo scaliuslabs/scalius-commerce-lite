@@ -13,6 +13,7 @@ interface OrderStatusSelectorProps {
   orderId: string;
   isLoading: boolean;
   showTrashed: boolean;
+  canChangeStatus?: boolean;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
 }
 
@@ -111,20 +112,32 @@ export function OrderStatusSelector({
   orderId,
   isLoading,
   showTrashed,
+  canChangeStatus = true,
   onStatusUpdate,
 }: OrderStatusSelectorProps) {
   const baseClasses =
     "text-xs font-medium transition-all border px-2.5 py-1 shadow-sm rounded-full";
   const hoverClasses = "hover:shadow-md hover:-translate-y-px";
   const { variantClasses, iconColor, dotColor } = getStatusClasses(status);
+  const canOpenMenu = canChangeStatus && !showTrashed && !isLoading;
+  const disabledReason = showTrashed
+    ? "Deleted orders cannot change status."
+    : !canChangeStatus
+      ? "Status changes require order status permission."
+      : undefined;
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={isLoading || showTrashed}>
+      <DropdownMenuTrigger asChild disabled={!canOpenMenu}>
         <button
           type="button"
-          className={`inline-flex items-center ${baseClasses} ${variantClasses} ${!showTrashed ? hoverClasses + " cursor-pointer group" : "cursor-default"} ${isLoading ? "opacity-75 animate-pulse" : ""}`}
-          aria-label={`Current status: ${status}. Click to change status.`}
+          className={`inline-flex items-center ${baseClasses} ${variantClasses} ${canOpenMenu ? hoverClasses + " cursor-pointer group" : "cursor-default"} ${isLoading ? "opacity-75 animate-pulse" : ""}`}
+          aria-label={
+            canOpenMenu
+              ? `Current status: ${status}. Click to change status.`
+              : `Current status: ${status}. ${disabledReason ?? "Status change unavailable."}`
+          }
+          title={disabledReason}
         >
           {isLoading ? (
             <LoaderCircle
@@ -136,12 +149,12 @@ export function OrderStatusSelector({
             ></span>
           )}
           {status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-          {!showTrashed && !isLoading && (
+          {canOpenMenu && (
             <ChevronDown className="ml-1 h-3 w-3 opacity-70 group-hover:opacity-100 transition-opacity" />
           )}
         </button>
       </DropdownMenuTrigger>
-      {!showTrashed && (
+      {canChangeStatus && !showTrashed && (
         <DropdownMenuContent align="start" className="w-48">
           <DropdownMenuRadioGroup
             value={status}

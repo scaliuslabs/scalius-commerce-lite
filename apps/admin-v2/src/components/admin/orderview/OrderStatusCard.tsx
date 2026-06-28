@@ -30,16 +30,16 @@ import { AlertTriangle, Receipt, Loader2, Undo2 } from "lucide-react";
 import type { Order } from "./types";
 import { getAvailableTransitions } from "./types";
 import { useUpdateOrderStatus, useReturnOrder } from "@/lib/api-mutations/orders";
-import { usePermissions } from "@/contexts/PermissionContext";
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 
 interface OrderStatusCardProps {
   order: Order;
 }
 
 export function OrderStatusCard({ order }: OrderStatusCardProps) {
-  const { hasPermission } = usePermissions();
-  const canRefund = hasPermission(PERMISSIONS.ORDERS_REFUND);
+  const orderActions = useOrderActionPermissions();
+  const canRefund = orderActions.canRefundOrders;
+  const canChangeStatus = orderActions.canChangeOrderStatus;
   const [returnReason, setReturnReason] = useState("");
   const [autoRefund, setAutoRefund] = useState(false);
   const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false);
@@ -50,6 +50,12 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const refundLocked = Boolean(activeRefundOperation?.active);
 
   const handleStatusChange = (newStatus: string) => {
+    if (!canChangeStatus) {
+      toast.error("Status change unavailable", {
+        description: "Your role can view orders but cannot change order status.",
+      });
+      return;
+    }
     if (refundLocked) {
       toast.error("Order locked", { description: "Complete or reconcile the active refund before changing order status." });
       return;
@@ -58,6 +64,12 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   };
 
   const handleReturnOrder = () => {
+    if (!canChangeStatus) {
+      toast.error("Return unavailable", {
+        description: "Your role can view orders but cannot change order status.",
+      });
+      return;
+    }
     if (!returnReason.trim()) {
       toast.error("Error", { description: "Return reason is required." });
       return;
@@ -96,7 +108,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           <Select
             defaultValue={order.status.toLowerCase()}
             onValueChange={handleStatusChange}
-            disabled={statusMutation.isPending || refundLocked}
+            disabled={statusMutation.isPending || refundLocked || !canChangeStatus}
           >
             <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
               {statusMutation.isPending ? (
@@ -128,6 +140,11 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
               ))}
             </SelectContent>
           </Select>
+          {!canChangeStatus && (
+            <p className="text-xs text-muted-foreground">
+              Status changes require order status permission.
+            </p>
+          )}
         </div>
 
         {activeRefundOperation && (
@@ -142,7 +159,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           </div>
         )}
 
-        {isReturnable && (
+        {isReturnable && canChangeStatus && (
           <Dialog open={isReturnDialogOpen} onOpenChange={setIsReturnDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="w-full mt-2" size="sm" disabled={refundLocked}>
