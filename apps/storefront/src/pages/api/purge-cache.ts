@@ -364,6 +364,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   }
 
   let body: {
+    operationId?: string;
     groups?: string[];
     prefixes?: string[];
     exactKeys?: string[];
@@ -380,6 +381,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   }
 
   const {
+    operationId,
     groups = [],
     prefixes = [],
     exactKeys = [],
@@ -424,7 +426,9 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       const currentVersion = currentVersionStr ? parseInt(currentVersionStr, 10) : 0;
       newVersion = currentVersion + 1;
       await kv.put(cacheKey, newVersion.toString());
-      console.log(`[SelectivePurge] Bumped storefront cache version to ${newVersion} for ${hostname}`);
+      console.log(`[SelectivePurge] Bumped storefront cache version to ${newVersion} for ${hostname}`, {
+        operationId: operationId ?? null,
+      });
     } else if (exactGenerationKeys.length > 0 || htmlPaths.length > 0) {
       currentVersionForExactDeletes = await kv.get(cacheKey);
       currentExactGenerations = await readCurrentExactGenerations({
@@ -484,6 +488,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         success: true,
         message: `Selective cache purge for ${hostname} completed.`,
         details: {
+          operationId: operationId ?? null,
           groups,
           cacheVersionBumped: shouldBumpCacheVersion,
           htmlVersionBumped: shouldBumpCacheVersion,

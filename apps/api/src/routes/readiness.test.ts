@@ -55,11 +55,14 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     PAYMENT_EVENTS_QUEUE: createQueue(),
     ORDER_NOTIFICATIONS_QUEUE: createQueue(),
     AUTH_OTP_QUEUE: createQueue(),
+    STOREFRONT_CACHE_QUEUE: createQueue(),
     BETTER_AUTH_SECRET: "test-secret",
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://storefront.example.test",
     BETTER_AUTH_URL: "https://dashboard.example.test",
     R2_PUBLIC_URL: "https://cloud.example.test",
+    PURGE_URL: "https://storefront.example.test/api/purge-cache",
+    PURGE_TOKEN: "purge-secret",
     ...overrides,
   } as Env;
 }
@@ -88,6 +91,7 @@ describe("API readiness route", () => {
       payment_events_queue: { status: "ok" },
       order_notifications_queue: { status: "ok" },
       auth_otp_queue: { status: "ok" },
+      storefront_cache_queue: { status: "ok" },
       runtime_config: { status: "ok" },
     });
   });
@@ -97,7 +101,9 @@ describe("API readiness route", () => {
     const env = createEnv({
       DB: createDb({ fail: true }),
       PAYMENT_EVENTS_QUEUE: undefined as unknown as Queue,
+      STOREFRONT_CACHE_QUEUE: undefined as unknown as Queue,
       STOREFRONT_URL: "",
+      PURGE_TOKEN: "",
     });
 
     const response = await app.request("/api/v1/readyz", {}, env);
@@ -119,9 +125,13 @@ describe("API readiness route", () => {
       status: "missing",
       detail: "queue binding is not configured",
     });
+    expect(json.checks?.storefront_cache_queue).toMatchObject({
+      status: "missing",
+      detail: "queue binding is not configured",
+    });
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
-      detail: "missing STOREFRONT_URL",
+      detail: "missing STOREFRONT_URL, PURGE_TOKEN",
     });
   });
 });

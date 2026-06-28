@@ -153,6 +153,8 @@ function configCheck(env: Env): CheckResult {
     "STOREFRONT_URL",
     "BETTER_AUTH_URL",
     "R2_PUBLIC_URL",
+    "PURGE_URL",
+    "PURGE_TOKEN",
   ] as const;
   const missingVars = requiredVars.filter((key) => !String(env[key] ?? "").trim());
 
@@ -193,6 +195,7 @@ app.get("/readyz", async (c) => {
     queueBindingCheck("payment_events_queue", env.PAYMENT_EVENTS_QUEUE),
     queueBindingCheck("order_notifications_queue", env.ORDER_NOTIFICATIONS_QUEUE),
     queueBindingCheck("auth_otp_queue", env.AUTH_OTP_QUEUE),
+    queueBindingCheck("storefront_cache_queue", env.STOREFRONT_CACHE_QUEUE),
     configCheck(env),
   ];
   const ready = isReady(checks);

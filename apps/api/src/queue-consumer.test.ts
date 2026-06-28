@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getEncryptionKey: vi.fn(() => "test-key"),
   getCredentialEncryptionKey: vi.fn(() => "credential-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
+  purgeStorefrontForPrefixes: vi.fn(),
   enqueueOrderBalancePaidNotificationForOrder: vi.fn(),
   enqueueOrderCreatedNotificationForOrder: vi.fn(),
   enqueueOrderRefundNotificationForOrder: vi.fn(),
@@ -93,6 +94,7 @@ vi.mock("./utils/encryption-key", () => ({
 
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+  purgeStorefrontForPrefixes: mocks.purgeStorefrontForPrefixes,
 }));
 
 vi.mock("./utils/order-notification-queue", () => ({
@@ -118,7 +120,11 @@ vi.mock("./utils/webhook-idempotency", () => ({
   recordPaymentWebhookDlqEvidence: mocks.recordPaymentWebhookDlqEvidence,
 }));
 
-import { handleQueueBatch, type PaymentQueueMessage } from "./queue-consumer";
+import {
+  handleQueueBatch,
+  type PaymentQueueMessage,
+  type StorefrontCacheQueueMessage,
+} from "./queue-consumer";
 
 function createMessage(body: PaymentQueueMessage, attempts?: number): Message<PaymentQueueMessage>;
 function createMessage<T>(body: T, attempts?: number): Message<T>;
@@ -161,6 +167,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     mocks.sendOrderNotificationEmail.mockResolvedValue(undefined);
     mocks.sendOrderNotification.mockResolvedValue(undefined);
+    mocks.purgeStorefrontForPrefixes.mockResolvedValue({
+      attempted: true,
+      ok: true,
+      status: 200,
+    });
     mocks.sendEmail.mockResolvedValue({
       success: true,
       provider: "cloudflare",
@@ -863,6 +874,64 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
     expect(payment.ack).toHaveBeenCalledTimes(1);
     expect(staleOrderIngest.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("acks storefront cache purge messages after the purge endpoint succeeds", async () => {
+    const message = createMessage<StorefrontCacheQueueMessage>({
+      type: "storefront.cache_purge",
+      operationId: "purge_op_1",
+      groups: ["products"],
+      prefixes: ["product_slug_fish"],
+      exactKeys: ["product_variants_prod_1"],
+      htmlPaths: ["/products/fish"],
+      bumpVersion: false,
+      source: "catalog:products",
+      requestedAt: 1_790_000_000_000,
+    });
+
+    await handleQueueBatch(createBatch([message], "storefront-cache"), {
+      PURGE_URL: "https://storefront.example.test/api/purge-cache",
+      PURGE_TOKEN: "secret",
+    } as Env);
+
+    expect(mocks.purgeStorefrontForPrefixes).toHaveBeenCalledWith(
+      ["product_slug_fish"],
+      expect.objectContaining({
+        PURGE_URL: "https://storefront.example.test/api/purge-cache",
+        PURGE_TOKEN: "secret",
+      }),
+      {
+        groups: ["products"],
+        bumpVersion: false,
+        exactKeys: ["product_variants_prod_1"],
+        htmlPaths: ["/products/fish"],
+        operationId: "purge_op_1",
+      },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("retries storefront cache purge messages when the purge endpoint fails", async () => {
+    mocks.purgeStorefrontForPrefixes.mockResolvedValue({
+      attempted: true,
+      ok: false,
+      status: 503,
+    });
+    const message = createMessage<StorefrontCacheQueueMessage>({
+      type: "storefront.cache_purge",
+      operationId: "purge_op_2",
+      groups: ["checkout"],
+      prefixes: ["checkout_config"],
+      bumpVersion: false,
+      source: "api-groups",
+      requestedAt: 1_790_000_000_000,
+    });
+
+    await handleQueueBatch(createBatch([message], "storefront-cache"), {} as Env);
+
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
   it("dispatches order notifications without requiring customer email and passes encryption key", async () => {
