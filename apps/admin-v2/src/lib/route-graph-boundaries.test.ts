@@ -1019,6 +1019,8 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("<RichContent content={content} variant=\"compact\" />");
     expect(source).toContain("const TiptapEditor = lazy(");
     expect(source).toContain("loadTiptapEditorModule");
+    expect(source).toContain("loadTiptapEditorModule().finally");
+    expect(source).toContain("mountRequestedRef");
     expect(source).toContain("IntersectionObserver");
     expect(source).toContain("requestIdleCallback");
     expect(source).not.toContain("from \"./TiptapEditor\"");
@@ -1026,6 +1028,13 @@ describe("admin route graph boundaries", () => {
     expect(source).not.toContain("PencilLine");
     expect(source).not.toContain("editLabel");
     expect(source).not.toContain("setIsEditing");
+
+    const editorSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapEditor.tsx"),
+      "utf8",
+    );
+    expect(editorSource).not.toContain("setIsMounted");
+    expect(editorSource).not.toContain("if (!isMounted)");
   });
 
   it("keeps order payment history failures local to the payment card", () => {

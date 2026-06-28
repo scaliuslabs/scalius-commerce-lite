@@ -66,13 +66,26 @@ export function DeferredTiptapEditor({
   compact = false,
 }: DeferredTiptapEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isAliveRef = useRef(true);
+  const mountRequestedRef = useRef(false);
   const [shouldMountEditor, setShouldMountEditor] = useState(false);
   const [autoFocusEditor, setAutoFocusEditor] = useState(false);
   const hasContent = hasRenderableContent(content);
 
   const mountEditor = useCallback(() => {
     setAutoFocusEditor(true);
-    setShouldMountEditor(true);
+    if (shouldMountEditor || mountRequestedRef.current) return;
+
+    mountRequestedRef.current = true;
+    void loadTiptapEditorModule().finally(() => {
+      if (isAliveRef.current) {
+        setShouldMountEditor(true);
+      }
+    });
+  }, [shouldMountEditor]);
+
+  useEffect(() => () => {
+    isAliveRef.current = false;
   }, []);
 
   useEffect(() => {
